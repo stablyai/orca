@@ -14,7 +14,10 @@ import type {
   PluginSyntaxPayload
 } from '../../shared/plugins/artifacts/plugin-syntax-artifact'
 import type { PluginTerminalThemeRegistration } from '../../shared/plugins/artifacts/plugin-terminal-theme-artifact'
-import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type {
+  PluginFrameEntry,
+  PluginPanelMessage
+} from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginLanguagePackRegistration } from '../../shared/plugins/artifacts/plugin-language-pack-artifact'
@@ -212,6 +215,8 @@ export type PluginsApi = {
   /** Re-discovers after settings edits (feature flag, dev paths). */
   refresh: () => Promise<PluginHostListEntry[]>
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
+  /** A worker's `panel.post`, for the panel frame it names. Absent on older preloads. */
+  onPanelMessage?: (callback: (message: PluginPanelMessage) => void) => () => void
   /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
   /** Held updates not yet told to the user, each returned once per version; never approves. */

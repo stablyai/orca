@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { PLUGIN_MANIFEST_V2_SINCE } from './plugin-schema-field-docs'
+import { PLUGIN_MANIFEST_V2_SINCE, PLUGIN_PANEL_MESSAGING_SINCE } from './plugin-schema-field-docs'
 import {
   PLUGIN_COMMAND_LIMIT,
   PLUGIN_ID_MAX_LENGTH,
@@ -163,6 +163,29 @@ describe('pluginManifestSchema boundaries', () => {
         })
       ).ok
     ).toBe(false)
+  })
+
+  it('accepts a panel.action subscription when panel:own is declared, and refuses it otherwise', () => {
+    const base = {
+      manifestVersion: 2,
+      execution: 'trusted-worker',
+      engines: { orca: `>=${PLUGIN_PANEL_MESSAGING_SINCE}` },
+      main: 'main.mjs',
+      contributes: {
+        panels: [{ id: 'board', title: 'Board', entry: 'panel.html' }],
+        events: [{ on: 'panel.action' }]
+      }
+    }
+
+    expect(
+      parsePluginManifest(manifest({ ...base, capabilities: [{ kind: 'panel:own' }] })).ok
+    ).toBe(true)
+
+    const refused = parsePluginManifest(manifest({ ...base, capabilities: [] }))
+    expect(refused.ok).toBe(false)
+    if (!refused.ok) {
+      expect(refused.error).toContain('panel.action requires the panel:own capability')
+    }
   })
 })
 

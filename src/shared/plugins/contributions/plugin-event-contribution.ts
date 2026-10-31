@@ -3,6 +3,7 @@ import { PLUGIN_ENUM_SINCE_KEY } from '../manifest/plugin-engine-floor-keys'
 import {
   pluginFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE,
+  PLUGIN_PANEL_MESSAGING_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from '../manifest/plugin-schema-field-docs'
 import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
@@ -12,7 +13,8 @@ import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
 export const PLUGIN_EVENT_NAMES = [
   'workspace.created',
   'workspace.removed',
-  'agent.status.changed'
+  'agent.status.changed',
+  'panel.action'
 ] as const
 export const PLUGIN_EVENT_SUBSCRIPTION_LIMIT = PLUGIN_EVENT_NAMES.length
 
@@ -22,7 +24,8 @@ export type PluginEventName = (typeof PLUGIN_EVENT_NAMES)[number]
 export const PLUGIN_EVENT_SINCE: Record<PluginEventName, string> = {
   'workspace.created': PLUGIN_MANIFEST_V2_SINCE,
   'workspace.removed': PLUGIN_MANIFEST_V2_SINCE,
-  'agent.status.changed': PLUGIN_SCHEMA_SINCE_V1
+  'agent.status.changed': PLUGIN_SCHEMA_SINCE_V1,
+  'panel.action': PLUGIN_PANEL_MESSAGING_SINCE
 }
 
 /** Format 1 event names, rewritten on parse and still dispatched to handlers registered under them. */
@@ -35,7 +38,8 @@ export const PLUGIN_V1_EVENT_ALIASES: ReadonlyMap<string, PluginEventName> = new
 export const PLUGIN_EVENT_CAPABILITY: Record<PluginEventName, PluginCapabilityKind> = {
   'workspace.created': 'workspace:read',
   'workspace.removed': 'workspace:read',
-  'agent.status.changed': 'agent:read'
+  'agent.status.changed': 'agent:read',
+  'panel.action': 'panel:own'
 }
 
 export const pluginEventContributionSchema = z
@@ -49,7 +53,7 @@ export const pluginEventContributionSchema = z
   .meta({
     id: 'EventContribution',
     description:
-      "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+      "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events, `panel:own` for `panel.action`."
   })
 
 export type PluginEventContribution = z.infer<typeof pluginEventContributionSchema>

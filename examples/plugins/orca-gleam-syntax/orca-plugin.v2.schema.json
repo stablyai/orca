@@ -208,9 +208,9 @@
         },
         "events": {
           "default": [],
-          "description": "Events delivered to the plugin worker. At most 3.",
+          "description": "Events delivered to the plugin worker. At most 4.",
           "x-orca-since": "1.4.160",
-          "maxItems": 3,
+          "maxItems": 4,
           "type": "array",
           "items": {
             "$ref": "#/$defs/EventContribution"
@@ -618,14 +618,16 @@
           "enum": [
             "workspace.created",
             "workspace.removed",
-            "agent.status.changed"
+            "agent.status.changed",
+            "panel.action"
           ],
           "description": "Event delivered to the plugin worker.",
           "x-orca-since": "1.4.160",
           "x-orca-enum-since": {
             "workspace.created": "1.4.245",
             "workspace.removed": "1.4.245",
-            "agent.status.changed": "1.4.160"
+            "agent.status.changed": "1.4.160",
+            "panel.action": "1.4.245"
           }
         }
       },
@@ -633,7 +635,7 @@
         "on"
       ],
       "additionalProperties": false,
-      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events."
+      "description": "An event subscription. Requires `main`, the `trusted-worker` execution profile and the capability of the event's domain: `workspace:read` for workspace events, `agent:read` for agent events, `panel:own` for `panel.action`."
     },
     "LanguagePackContribution": {
       "type": "object",
@@ -1073,7 +1075,8 @@
             "notifications:show",
             "storage:own",
             "secrets:own",
-            "settings:own"
+            "settings:own",
+            "panel:own"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1084,7 +1087,8 @@
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",
-            "settings:own": "1.4.160"
+            "settings:own": "1.4.160",
+            "panel:own": "1.4.245"
           }
         }
       },

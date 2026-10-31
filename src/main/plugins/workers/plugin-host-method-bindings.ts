@@ -56,6 +56,19 @@ export type PluginHostServices = {
       value: PluginJsonValue
     ): { ok: true } | { ok: false; error: string }
   }
+  panels: {
+    post(
+      pluginId: string,
+      panelId: string,
+      payload: PluginJsonValue
+    ): Promise<{ delivered: boolean }>
+    action(
+      pluginId: string,
+      panelId: string,
+      action: string,
+      params: PluginJsonValue | undefined
+    ): Promise<void>
+  }
 }
 
 type PluginHostMethodContext = { pluginId: string; services: PluginHostServices }
@@ -171,6 +184,16 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   })),
   'settings.set': bind(api['settings.set'], async ({ key, value }, { pluginId, services }) =>
     okOrThrow(services.settings.set(pluginId, key, value))
+  ),
+  'panel.post': bind(api['panel.post'], async ({ panelId, payload }, { pluginId, services }) =>
+    services.panels.post(pluginId, panelId, payload)
+  ),
+  'panel.action': bind(
+    api['panel.action'],
+    async ({ panelId, action, params }, { pluginId, services }) => {
+      await services.panels.action(pluginId, panelId, action, params)
+      return OK
+    }
   )
 }
 

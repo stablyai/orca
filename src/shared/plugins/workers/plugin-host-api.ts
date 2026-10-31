@@ -1,5 +1,7 @@
 import { z } from 'zod'
 import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
+import { PANEL_MESSAGE_MAX_BYTES } from '../frames/plugin-frame-bridge'
+import { structuredCloneMessageBytes } from '../frames/plugin-panel-message-budget'
 import type { PluginSurface } from '../frames/plugin-protocol'
 
 /**
@@ -64,7 +66,7 @@ const storageKeySchema = z
   .min(1)
   .max(256)
   .refine((key) => !RESERVED_STORAGE_KEYS.has(key), 'reserved storage key')
-const pluginJsonValueSchema = z.json()
+export const pluginJsonValueSchema = z.json()
 export type PluginJsonValue = z.infer<typeof pluginJsonValueSchema>
 /** Caps keep per-plugin storage an honest key-value store, not a database. */
 export const PLUGIN_STORAGE_VALUE_MAX_BYTES = 256 * 1024
@@ -92,6 +94,27 @@ const settingsGetResult = z.object({ settings: z.record(z.string(), pluginJsonVa
 const settingsSetParams = z.strictObject({ key: storageKeySchema, value: pluginJsonValueSchema })
 const settingsSetResult = z.object({ ok: z.literal(true) })
 
+export const PLUGIN_PANEL_ID_MAX_LENGTH = 256
+export const PLUGIN_PANEL_ACTION_MAX_LENGTH = 128
+const panelIdSchema = z.string().min(1).max(PLUGIN_PANEL_ID_MAX_LENGTH)
+// Why the frame budget: a post lands in the frame as one structured-clone message, so it must fit one.
+const fitsPanelMessage = (value: PluginJsonValue): boolean =>
+  structuredCloneMessageBytes(value) <= PANEL_MESSAGE_MAX_BYTES
+
+const panelPostParams = z
+  .strictObject({ panelId: panelIdSchema, payload: pluginJsonValueSchema })
+  .refine(
+    (params) => fitsPanelMessage(params.payload),
+    'payload exceeds the panel message size limit'
+  )
+const panelPostResult = z.object({ delivered: z.boolean() })
+const panelActionParams = z.strictObject({
+  panelId: panelIdSchema,
+  action: z.string().min(1).max(PLUGIN_PANEL_ACTION_MAX_LENGTH),
+  params: pluginJsonValueSchema.optional()
+})
+const panelActionResult = z.object({ ok: z.literal(true) })
+
 export type PluginHostMethodSpec<
   P extends z.ZodType = z.ZodType,
   R extends z.ZodType = z.ZodType
@@ -115,6 +138,7 @@ export type PluginHostMethodSpec<
 
 const ALL_SURFACES = ['worker', 'panel', 'editor'] as const
 const WORKER_ONLY = ['worker'] as const
+const PANEL_ONLY = ['panel'] as const
 
 const spec = <P extends z.ZodType, R extends z.ZodType>(
   entry: PluginHostMethodSpec<P, R>
@@ -242,6 +266,30 @@ export const PLUGIN_HOST_API = {
     surfaces: WORKER_ONLY,
     params: settingsSetParams,
     result: settingsSetResult
+  }),
+  'panel.post': spec({
+    summary:
+      "Sends a JSON message to one of the plugin's own panels, at most 30 per 10 s per plugin; `delivered` is false when no window currently hosts that panel.",
+    since: 1,
+    scope: 'plugin-private',
+    capability: 'panel:own',
+    // Why not a mutation: traffic stays inside the plugin's own worker and panels, and auditing 30 messages per 10 s would drown the log.
+    mutation: false,
+    // Why worker only: a panel reaches its worker through `panel.action`, never another panel.
+    surfaces: WORKER_ONLY,
+    params: panelPostParams,
+    result: panelPostResult
+  }),
+  'panel.action': spec({
+    summary:
+      "Sends an action from a panel to the plugin's worker, delivered as a `panel.action` event.",
+    since: 1,
+    scope: 'plugin-private',
+    capability: 'panel:own',
+    mutation: false,
+    surfaces: PANEL_ONLY,
+    params: panelActionParams,
+    result: panelActionResult
   })
 }
 

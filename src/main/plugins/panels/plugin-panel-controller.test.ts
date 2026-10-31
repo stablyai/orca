@@ -86,6 +86,41 @@ describe('PluginPanelController identity binding', () => {
     ).resolves.toMatchObject({ ok: false, code: 'invalid_request' })
   })
 
+  it("binds panel.action to the calling panel's own id", async () => {
+    const plugin = await createPlugin()
+    const executeHostCall = vi.fn().mockResolvedValue({ ok: true, value: { ok: true } })
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall,
+      log: () => vi.fn()
+    })
+    const entry = await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'panel.action',
+        params: { panelId: 'other', action: 'ping' }
+      })
+    ).resolves.toMatchObject({ ok: false, code: 'invalid_params' })
+    expect(executeHostCall).not.toHaveBeenCalled()
+
+    await expect(
+      controller.execute('runtime:one', {
+        sessionToken: entry!.sessionToken,
+        action: 'panel.action',
+        params: { panelId: 'dashboard', action: 'ping' }
+      })
+    ).resolves.toMatchObject({ ok: true })
+    expect(executeHostCall).toHaveBeenCalledWith(
+      plugin.pluginKey,
+      'panel.action',
+      { panelId: 'dashboard', action: 'ping' },
+      'panel'
+    )
+  })
+
   it('charges raw malformed and oversized calls before strict parsing', async () => {
     const plugin = await createPlugin()
     const executeHostCall = vi.fn()
@@ -178,5 +213,26 @@ describe('PluginPanelController identity binding', () => {
       })
     ).resolves.toMatchObject({ ok: false, code: 'unavailable' })
     expect(executeHostCall).not.toHaveBeenCalled()
+  })
+})
+
+describe('PluginPanelController open frames', () => {
+  it('reports a frame open after it is issued and closed after its owner is revoked', async () => {
+    const plugin = await createPlugin()
+    const controller = new PluginPanelController({
+      resolveApprovedPlugin: (pluginKey) => (pluginKey === plugin.pluginKey ? plugin : null),
+      contentVerifier: { verify: vi.fn().mockResolvedValue(undefined) },
+      executeHostCall: vi.fn(),
+      log: () => vi.fn()
+    })
+    expect(controller.hasOpenFrame(plugin.pluginKey, 'dashboard')).toBe(false)
+
+    await controller.open('runtime:one', plugin.pluginKey, 'dashboard')
+    expect(controller.hasOpenFrame(plugin.pluginKey, 'dashboard')).toBe(true)
+    expect(controller.hasOpenFrame(plugin.pluginKey, 'other')).toBe(false)
+    expect(controller.hasOpenFrame('samples.other', 'dashboard')).toBe(false)
+
+    controller.revokeOwner('runtime:one')
+    expect(controller.hasOpenFrame(plugin.pluginKey, 'dashboard')).toBe(false)
   })
 })

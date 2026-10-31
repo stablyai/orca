@@ -11964,6 +11964,7 @@
             "storage": "Store its own data",
             "secrets": "Store its own encrypted secrets",
             "settingsOwn": "Read and change its own settings",
+            "panelOwn": "Send messages to its own panels and receive their actions",
             "agentsRead": "Get notified when agent status changes",
             "terminalRun": "Run commands in your terminals, including SSH"
           },
@@ -13341,6 +13342,7 @@
           "worktreeCreated": "When a workspace is created",
           "worktreeRemoved": "When a workspace is removed",
           "agentStatusChanged": "When an agent’s status changes",
+          "panelAction": "When one of its panels sends an action",
           "detail": "Background code runs"
         },
         "pluginInstallAction": {

@@ -1,5 +1,8 @@
 import { ipcRenderer } from 'electron'
-import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type {
+  PluginFrameEntry,
+  PluginPanelMessage
+} from '../../shared/plugins/frames/plugin-frame-bridge'
 import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
 import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
@@ -71,6 +74,14 @@ export const pluginsApi = {
     ipcRenderer.on('plugins:changed', listener)
     return () => {
       ipcRenderer.removeListener('plugins:changed', listener)
+    }
+  },
+  onPanelMessage: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, message: PluginPanelMessage): void =>
+      callback(message)
+    ipcRenderer.on('plugins:panelMessage', listener)
+    return () => {
+      ipcRenderer.removeListener('plugins:panelMessage', listener)
     }
   },
   getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),

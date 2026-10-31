@@ -67,6 +67,24 @@ export class PluginPanelSessions {
     }
   }
 
+  /** Whether a live owner holds a session for this contribution; a session outlives a closed tab until its owner is revoked. */
+  has(
+    pluginKey: string,
+    surface: PluginPanelSessionBinding['surface'],
+    contributionId: string
+  ): boolean {
+    for (const session of this.sessions.values()) {
+      if (
+        session.pluginKey === pluginKey &&
+        session.surface === surface &&
+        session.contributionId === contributionId
+      ) {
+        return true
+      }
+    }
+    return false
+  }
+
   revokeOwner(ownerKey: string): void {
     for (const [token, session] of this.sessions) {
       if (session.ownerKey === ownerKey) {

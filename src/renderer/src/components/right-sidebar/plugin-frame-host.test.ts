@@ -5,7 +5,11 @@ import {
   createPanelMessageBudget,
   type PanelMessageBudget
 } from '../../../../shared/plugins/frames/plugin-panel-message-budget'
-import { createPluginFrameMessageHandler, type PluginFrameHostOptions } from './plugin-frame-host'
+import {
+  createPluginFrameMessageHandler,
+  forwardPanelMessage,
+  type PluginFrameHostOptions
+} from './plugin-frame-host'
 
 vi.mock('./plugin-panel-design-token-css', () => ({
   currentPluginFrameTheme: () => ({ colorScheme: 'dark', tokens: '--orca-background:#000' })
@@ -93,7 +97,7 @@ describe('createPluginFrameMessageHandler', () => {
       payload: {
         protocol: 1,
         surface: 'editor',
-        api: { major: 1, minor: 0 },
+        api: { major: 1, minor: 1 },
         theme: { colorScheme: 'dark', tokens: '--orca-background:#000' }
       }
     })
@@ -334,5 +338,38 @@ describe('createPluginFrameMessageHandler', () => {
     expect(callHostMethod).not.toHaveBeenCalled()
     expect(onEvent).toHaveBeenCalledWith(expect.objectContaining({ event: 'editor.keydown' }))
     expect(onResponse).toHaveBeenCalledWith(expect.objectContaining({ id: 0 }))
+  })
+})
+
+describe('forwardPanelMessage', () => {
+  const target = { pluginKey: 'samples.board', panelId: 'board' }
+
+  it('posts the payload into the frame as a panel.message event', () => {
+    const frame = createFakeFrameWindow()
+    expect(forwardPanelMessage(target, { ...target, payload: { n: 1 } }, frame)).toBe(true)
+    expect(frame.postMessage).toHaveBeenCalledWith(
+      { orca: 1, kind: 'evt', event: 'panel.message', payload: { n: 1 } },
+      '*'
+    )
+  })
+
+  it('ignores messages for another panel or plugin, and a missing frame', () => {
+    const frame = createFakeFrameWindow()
+    expect(
+      forwardPanelMessage(
+        target,
+        { pluginKey: 'samples.board', panelId: 'other', payload: 1 },
+        frame
+      )
+    ).toBe(false)
+    expect(
+      forwardPanelMessage(
+        target,
+        { pluginKey: 'samples.other', panelId: 'board', payload: 1 },
+        frame
+      )
+    ).toBe(false)
+    expect(forwardPanelMessage(target, { ...target, payload: 1 }, null)).toBe(false)
+    expect(frame.postMessage).not.toHaveBeenCalled()
   })
 })

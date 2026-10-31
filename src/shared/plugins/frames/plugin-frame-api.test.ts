@@ -53,9 +53,11 @@ describe('window.orca', () => {
     expect(Object.isFrozen(orca)).toBe(true)
     expect(Object.isFrozen(orca.host)).toBe(true)
     expect(posted()).toEqual([{ orca: 1, kind: 'evt', event: 'ready', payload: { protocol: 1 } }])
-    expect(orca.api).toEqual({ major: 1, minor: 0 })
+    expect(orca.api).toEqual({ major: 1, minor: 1 })
     expect(orca.host.has('workspace.readContext')).toBe(true)
     expect(orca.host.has('terminal.sendText')).toBe(false)
+    expect(orca.host.has('panel.action')).toBe(true)
+    expect(orca.host.has('panel.post')).toBe(false)
     expect(orca.document).toBeUndefined()
   })
 
@@ -137,6 +139,14 @@ describe('window.orca', () => {
     expect(onTheme).toHaveBeenCalledTimes(1)
     expect(onTheme).toHaveBeenCalledWith({ colorScheme: 'dark' })
   })
+
+  it('delivers a panel.message event to orca.on handlers', () => {
+    const { orca, fromHost } = mountShell()
+    const seen = vi.fn()
+    orca.on('panel.message', seen)
+    fromHost({ orca: 1, kind: 'evt', event: 'panel.message', payload: { card: 'c1' } })
+    expect(seen).toHaveBeenCalledWith({ card: 'c1' })
+  })
 })
 
 describe('window.orca.document', () => {
@@ -149,6 +159,7 @@ describe('window.orca.document', () => {
 
   it('gets the latest document, reports changes and applies versioned edits', async () => {
     const { orca, fromHost, posted } = mountShell('editor')
+    expect(orca.host.has('panel.action')).toBe(false)
     const document = orca.document!
     const first = document.get()
     fromHost(doc(1, 'a'))

@@ -19,13 +19,11 @@ import {
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
 import { PluginAuditLog, type PluginAuditEntry } from './plugin-audit-log'
-import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
 import { PluginContentVerifier } from './plugin-content-integrity'
-import {
-  bindPluginHostServices,
-  type PluginRuntimeDelegate
-} from './workers/plugin-host-service-bindings'
+import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
+import { PluginHostCallBinding } from './plugin-host-call-binding'
 import { PluginPanelController } from './panels/plugin-panel-controller'
+import type { PluginPanelMessageSink } from './panels/plugin-panel-messaging'
 import { PluginWorkerController } from './workers/plugin-worker-controller'
 import { PluginServiceHousekeeping } from './plugin-service-housekeeping'
 import {
@@ -56,7 +54,7 @@ export class PluginService {
   readonly panels: PluginPanelController
   private readonly changeListeners = new Set<(event: PluginChangeEvent) => void>()
   private readonly housekeeping = new PluginServiceHousekeeping()
-  private runtimeDelegate: PluginRuntimeDelegate | null = null
+  private readonly hostCalls: PluginHostCallBinding
   private initPromise: Promise<void> | null = null
   private refreshChain: Promise<void> = Promise.resolve()
   private contentPacksReady = false
@@ -73,6 +71,17 @@ export class PluginService {
       Boolean(this.options.getPluginKillListEntry?.(pluginKey))
     )
     this.audit = new PluginAuditLog(getPluginsDataDir(options.userDataPath))
+    this.hostCalls = new PluginHostCallBinding({
+      userDataPath: options.userDataPath,
+      audit: this.audit,
+      resolveApprovedPlugin: (pluginKey) => this.findApprovedPlugin(pluginKey),
+      grantedCapabilities: (pluginKey) => this.getGrantedCapabilities(pluginKey),
+      hasOpenFrame: (pluginKey, panelId) => this.panels.hasOpenFrame(pluginKey, panelId),
+      deliverToWorker: async (plugin, event, payload) => {
+        const handle = await this.workerController.ensure(plugin)
+        handle.deliverEvent(event, payload)
+      }
+    })
     const resolveApproved = (pluginKey: string, allowRefreshPause = false) =>
       this.findApprovedPlugin(pluginKey, allowRefreshPause)
     this.panels = new PluginPanelController({
@@ -99,7 +108,12 @@ export class PluginService {
   }
 
   setRuntimeDelegate(delegate: PluginRuntimeDelegate | null): void {
-    this.runtimeDelegate = delegate
+    this.hostCalls.setRuntimeDelegate(delegate)
+  }
+
+  /** Where `panel.post` messages go: the desktop binds a broadcast to its windows. */
+  setPanelMessageSink(sink: PluginPanelMessageSink | null): void {
+    this.hostCalls.setPanelMessageSink(sink)
   }
 
   onChanged(listener: (event: PluginChangeEvent) => void): () => void {
@@ -250,21 +264,7 @@ export class PluginService {
     params: unknown,
     surface: PluginSurface
   ): Promise<PluginHostCallOutcome> {
-    return executePluginHostCallRequest({
-      pluginKey,
-      request: { method, params },
-      surface,
-      resolvePolicy: (boundPluginKey) => ({
-        grantedCapabilities: this.getGrantedCapabilities(boundPluginKey),
-        services: this.runtimeDelegate
-          ? bindPluginHostServices({
-              delegate: this.runtimeDelegate,
-              pluginsDataDir: getPluginsDataDir(this.options.userDataPath)
-            })
-          : null,
-        audit: this.audit
-      })
-    })
+    return this.hostCalls.execute(pluginKey, method, params, surface)
   }
 
   async invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {

@@ -106,6 +106,16 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     hostEntryPath: resolvePluginHostEntryPath(app.getAppPath(), app.isPackaged)
   })
   const pluginService = state.pluginService
+  pluginService.setPanelMessageSink((message) => {
+    let delivered = false
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('plugins:panelMessage', message)
+        delivered = true
+      }
+    }
+    return delivered
+  })
   const pluginAutoUpdater = new PluginAutoUpdater({
     pluginService,
     installer: state.pluginMarketplaceInstaller,

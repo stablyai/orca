@@ -31,8 +31,9 @@ export type PluginRuntimeDelegate = {
 export function bindPluginHostServices(input: {
   delegate: PluginRuntimeDelegate
   pluginsDataDir: string
+  panels: PluginHostServices['panels']
 }): PluginHostServices {
-  const { delegate, pluginsDataDir } = input
+  const { delegate, pluginsDataDir, panels } = input
   return {
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
@@ -78,6 +79,7 @@ export function bindPluginHostServices(input: {
       getAll: (key) => new PluginKvStore(pluginsDataDir, key, 'settings.json').getAll(),
       set: (key, itemKey, value) =>
         new PluginKvStore(pluginsDataDir, key, 'settings.json').set(itemKey, value)
-    }
+    },
+    panels
   }
 }

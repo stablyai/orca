@@ -349,7 +349,7 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 7,
+          "maxItems": 8,
           "type": "array",
           "items": {
             "type": "string",
@@ -360,7 +360,8 @@
               "notifications:show",
               "storage:own",
               "secrets:own",
-              "settings:own"
+              "settings:own",
+              "panel:own"
             ]
           }
         },

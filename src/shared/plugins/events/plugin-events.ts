@@ -2,12 +2,19 @@ import { z } from 'zod'
 import { AGENT_STATUS_STATES } from '../../agent-status-types'
 import { AGENT_TURN_OUTCOMES } from '../../agent-turn-outcome'
 import type { PluginEventName } from '../manifest/plugin-manifest'
+import {
+  PLUGIN_PANEL_ACTION_MAX_LENGTH,
+  PLUGIN_PANEL_ID_MAX_LENGTH,
+  pluginJsonValueSchema
+} from '../workers/plugin-host-api'
 
 /**
- * Payload contracts for the v0 plugin event set (workspace lifecycle + agent
- * status only). Payloads are bounded projections — never raw runtime
- * objects — so nothing sensitive (absolute repo paths beyond the worktree's
- * own, remotes, credentials) can leak through the event stream.
+ * Payload contracts for the plugin event set (workspace lifecycle, agent
+ * status, panel actions). Workspace and agent payloads are bounded
+ * projections — never raw runtime objects — so nothing sensitive (absolute
+ * repo paths beyond the worktree's own, remotes, credentials) can leak
+ * through the event stream. `panel.action` carries panel-chosen JSON, bounded
+ * at the host call by the panel message byte limit.
  */
 
 /** Plugins see `main`, not the `refs/heads/main` Orca tracks internally. */
@@ -58,10 +65,19 @@ export const agentStatusChangedPayloadSchema = z.object({
     .optional()
 })
 
+/** What a panel sent through `panel.action`; `params` is whatever JSON the panel chose.
+ *  The byte bound is enforced at the host call, not here. */
+export const panelActionPayloadSchema = z.object({
+  panelId: z.string().min(1).max(PLUGIN_PANEL_ID_MAX_LENGTH),
+  action: z.string().min(1).max(PLUGIN_PANEL_ACTION_MAX_LENGTH),
+  params: pluginJsonValueSchema.optional()
+})
+
 export const PLUGIN_EVENT_PAYLOAD_SCHEMAS = {
   'workspace.created': workspaceCreatedPayloadSchema,
   'workspace.removed': workspaceRemovedPayloadSchema,
-  'agent.status.changed': agentStatusChangedPayloadSchema
+  'agent.status.changed': agentStatusChangedPayloadSchema,
+  'panel.action': panelActionPayloadSchema
 } satisfies Record<PluginEventName, z.ZodType>
 
 export type PluginEventPayload<E extends PluginEventName> = z.infer<

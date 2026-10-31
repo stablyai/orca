@@ -72,6 +72,10 @@ export class PluginPanelController {
     return this.openFrame(ownerKey, pluginKey, 'editor', editorId, isCurrent)
   }
 
+  hasOpenFrame(pluginKey: string, panelId: string): boolean {
+    return this.sessions.has(pluginKey, 'panel', panelId)
+  }
+
   async execute(ownerKey: string, call: unknown): Promise<PluginHostCallOutcome> {
     const sessionToken = this.extractSessionToken(call)
     if (!sessionToken) {
@@ -97,6 +101,14 @@ export class PluginPanelController {
       !findFrameContribution(plugin, binding.surface, binding.contributionId)
     ) {
       return { ok: false, code: 'unavailable', error: 'panel session is no longer available' }
+    }
+    // Why here: the method schema accepts any panelId; only the session knows which panel is calling,
+    // and a panel may speak for itself alone.
+    if (
+      parsed.data.action === 'panel.action' &&
+      !namesCallingPanel(parsed.data.params, binding.contributionId)
+    ) {
+      return { ok: false, code: 'invalid_params', error: 'panelId must name the calling panel' }
     }
     return this.options.executeHostCall(
       binding.pluginKey,
@@ -215,6 +227,14 @@ export class PluginPanelController {
       return null
     }
   }
+}
+
+function namesCallingPanel(params: unknown, contributionId: string): boolean {
+  return (
+    typeof params === 'object' &&
+    params !== null &&
+    (params as { panelId?: unknown }).panelId === contributionId
+  )
 }
 
 function findFrameContribution(

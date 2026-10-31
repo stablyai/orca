@@ -29,6 +29,11 @@ function eventTitle(event: PluginEventName): string {
         'auto.components.settings.PluginContributionActionEvents.agentStatusChanged',
         'When an agent’s status changes'
       )
+    case 'panel.action':
+      return translate(
+        'auto.components.settings.PluginContributionActionEvents.panelAction',
+        'When one of its panels sends an action'
+      )
   }
 }
 

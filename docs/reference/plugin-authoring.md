@@ -65,7 +65,7 @@ Before any plugin code runs, the frame shell defines a frozen `window.orca`. It 
 supported way to talk to Orca; the messages underneath are internal and change without notice.
 
 ```js
-orca.api // { major: 1, minor: 0 }: the host API this Orca implements
+orca.api // { major: 1, minor: 1 }: the host API this Orca implements
 if (orca.host.has('workspace.readContext')) {
   // Synchronous: is the method offered to this surface by this Orca?
   const controller = new AbortController()
@@ -90,6 +90,21 @@ Workers get the same calls on the `orca` object passed to `activate(orca)`:
 both return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it. In
 `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`.
+
+### Panel messaging
+
+A worker and its panels talk through two host methods behind the `panel:own` capability. The
+worker calls `orca.host.call('panel.post', { panelId, payload })`; every open frame of that panel
+receives the payload through `orca.on('panel.message', handler)`. `delivered` is true when a window
+currently holds a session for that panel, not proof that a frame rendered the message; remote
+clients are not reached yet. A panel calls `panel.action` with `{ panelId, action, params }`; the
+worker receives the same object through `orca.events.on('panel.action', handler)`, which the
+manifest must list under `contributes.events`. Payloads are JSON and must fit one panel message
+(64 KiB), and each direction admits 30 calls per 10 s per plugin; a refused call fails with
+`rate_limited` and a `retryAfterMs` to wait. A panel's `panelId` must be its own: the host refuses
+a `panel.action` that names another panel. Older Orcas lack these methods, so the worker checks `orca.host.has('panel.post')` and a
+panel checks `orca.host.has('panel.action')` before relying on them; a panel opened before its
+worker starts should send one action first so the worker knows to post its current state.
 
 ### Custom editors
 

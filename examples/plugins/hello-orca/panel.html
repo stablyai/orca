@@ -40,6 +40,7 @@
     <p>Panel + worker command + events, gated by consent.</p>
     <button id="ctx">Read workspace context</button>
     <button id="notify">Show a notification</button>
+    <button id="count">Ask the worker for the ping count</button>
     <p class="status" id="status"></p>
     <script>
       'use strict'
@@ -74,6 +75,21 @@
             statusEl.textContent = `notify failed: ${error.code}: ${error.message}`
           }
         )
+      })
+
+      orca.on('panel.message', function (payload) {
+        statusEl.textContent = `The worker counts ${payload.pings} pings.`
+      })
+      document.getElementById('count').addEventListener('click', function () {
+        if (!orca.host.has('panel.action')) {
+          statusEl.textContent = 'This Orca has no panel messaging.'
+          return
+        }
+        orca.host
+          .call('panel.action', { panelId: 'hello', action: 'count' })
+          .catch(function (error) {
+            statusEl.textContent = `action failed: ${error.code}: ${error.message}`
+          })
       })
     </script>
   </body>

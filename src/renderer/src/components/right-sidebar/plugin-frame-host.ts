@@ -2,7 +2,8 @@ import {
   FRAME_EVENTS,
   PANEL_CONTROL_MESSAGE_MAX_BYTES,
   readPanelPongId,
-  type PluginFrameHello
+  type PluginFrameHello,
+  type PluginPanelMessage
 } from '../../../../shared/plugins/frames/plugin-frame-bridge'
 import {
   PLUGIN_PROTOCOL_VERSION,
@@ -218,4 +219,22 @@ export function createPluginFrameMessageHandler(
         )
       )
   }
+}
+
+/** Posts a worker's `panel.post` payload into the frame; false when it names another panel or no frame is open. */
+export function forwardPanelMessage(
+  target: { pluginKey: string; panelId: string },
+  message: PluginPanelMessage,
+  frameWindow: Window | null
+): boolean {
+  if (
+    !frameWindow ||
+    message.pluginKey !== target.pluginKey ||
+    message.panelId !== target.panelId
+  ) {
+    return false
+  }
+  // Opaque origins require targetOrigin=*; the frame shell checks event.source itself.
+  frameWindow.postMessage(pluginEvent(FRAME_EVENTS.panelMessage, message.payload), '*')
+  return true
 }
