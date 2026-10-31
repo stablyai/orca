@@ -83,9 +83,9 @@ export function formatAutomationShow(result: AutomationShowPayload): string {
     `nextRunAt: ${new Date(automation.nextRunAt).toISOString()}`,
     ...projectLines,
     `workspaceMode: ${automation.workspaceMode}`,
-    // Runs launch with the saved choice or skip; existing workspaces never run setup.
+    // The saved choice only: what an unset choice does depends on the host's Orca version.
     ...(automation.workspaceMode === 'new_per_run'
-      ? [`setup: ${automation.setupDecision ?? 'skip'}`]
+      ? [`setup: ${automation.setupDecision ?? 'not set'}`]
       : []),
     `workspaceId: ${automation.workspaceId ?? 'null'}`,
     `baseBranch: ${automation.baseBranch ?? 'null'}`,

@@ -75,11 +75,11 @@ describe('formatAutomationShow reports the host the authority projects', () => {
   })
 })
 
-describe('formatAutomationShow reports the setup choice runs launch with', () => {
+describe('formatAutomationShow reports the saved setup choice', () => {
   it.each([
     ['run', 'setup: run'],
     ['skip', 'setup: skip'],
-    [undefined, 'setup: skip']
+    [undefined, 'setup: not set']
   ] as const)('shows saved %s as %s for new-per-run automations', (setupDecision, line) => {
     const output = formatAutomationShow({ automation: automation({ setupDecision }) })
 

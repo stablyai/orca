@@ -50,15 +50,9 @@ import {
   getSourceContextFlag,
   getWorkspaceModeFlag
 } from './automation-handler-flags'
-import {
-  assertExtraAgentArgsSupported,
-  getExtraAgentArgsFlag
-} from './automation-extra-agent-args-flag'
-import {
-  assertAutomationSetupMode,
-  checkAutomationSetupSaved,
-  getAutomationSetupFlag
-} from './automation-setup-flag'
+import { getExtraAgentArgsFlag } from './automation-extra-agent-args-flag'
+import { assertAutomationFieldsSupported } from './automation-host-support'
+import { assertAutomationSetupMode, getAutomationSetupFlag } from './automation-setup-flag'
 
 type AutomationCreateParams = Omit<AutomationCreateInput, 'projectId' | 'timezone'> & {
   destination?: AutomationDestination
@@ -183,7 +177,7 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
     const sourceContext = getSourceContextFlag(flags)
     const workspaceMode =
       getWorkspaceModeFlag(flags) ?? (target.workspace ? 'existing' : 'new_per_run')
-    assertAutomationSetupMode(setupDecision, workspaceMode, 'create')
+    assertAutomationSetupMode(setupDecision, workspaceMode, flags)
     // Built before the destination read so a contradictory flag still fails without a runtime call.
     const create = {
       name: getRequiredStringFlag(flags, 'name'),
@@ -204,13 +198,13 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
     } satisfies AutomationCreateParams
-    await assertExtraAgentArgsSupported(client, create.extraAgentArgs)
+    await assertAutomationFieldsSupported(client, create)
     const destination = await resolveAutomationDestination(client, target)
     const result = await client.call<{ automation: Automation }>('automation.create', {
       ...create,
       ...(destination ? { destination } : {})
     })
-    printResult(checkAutomationSetupSaved(result, setupDecision), json, formatAutomationShow)
+    printResult(result, json, formatAutomationShow)
   },
   'automations edit': async ({ flags, client, cwd, json }) => {
     const setupDecision = getAutomationSetupFlag(flags)
@@ -238,15 +232,14 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       missedRunGraceMinutes: getOptionalPositiveIntegerFlag(flags, 'missed-run-grace-minutes'),
       ...schedule
     } satisfies AutomationUpdateParams
-    await assertExtraAgentArgsSupported(client, updates.extraAgentArgs)
+    await assertAutomationFieldsSupported(client, updates)
     const { owner: expectedOwner, automation: current } = await resolveAutomationMutationState(
       client,
       id
     )
     assertAutomationSetupMode(
       setupDecision,
-      updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode),
-      'edit'
+      updates.workspaceMode ?? (target.workspace ? 'existing' : current.workspaceMode)
     )
     // Owner fencing covers the source host; moves must fence the destination too.
     const destination = await resolveAutomationDestination(client, target)
@@ -254,9 +247,11 @@ export const AUTOMATION_HANDLERS: Record<string, CommandHandler> = {
       id,
       ...(expectedOwner ? { expectedOwner } : {}),
       ...(destination ? { destination } : {}),
+      // A setup choice that relies on the current mode must not land after a switch to existing.
+      ...(setupDecision && !updates.workspaceMode ? { expectedWorkspaceMode: 'new_per_run' } : {}),
       updates
     })
-    printResult(checkAutomationSetupSaved(result, setupDecision), json, formatAutomationShow)
+    printResult(result, json, formatAutomationShow)
   },
   'automations remove': async ({ flags, client, json }) => {
     const id = getRequiredStringFlag(flags, 'id')

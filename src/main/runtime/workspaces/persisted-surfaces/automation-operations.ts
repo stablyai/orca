@@ -4,7 +4,8 @@ import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import { OrcaRuntimeWithPtyForegroundProcessReads } from '../../client/runtime-client-state'
 import type {
   AutomationOwnerPrecondition,
-  AutomationDestination
+  AutomationDestination,
+  AutomationUpdatePreconditions
 } from '../../../../shared/automation-owner-precondition'
 import type { Automation, AutomationRun } from '../../../../shared/automations-types'
 import type {
@@ -111,7 +112,7 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
   updateAutomation(
     id: string,
     updates: RuntimeAutomationUpdateInput,
-    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+    options?: AutomationUpdatePreconditions
   ): Promise<Automation> {
     return this.automation.withExternalProbePriority(() => {
       const source = this.automationChangeSelector(id)

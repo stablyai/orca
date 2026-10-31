@@ -159,7 +159,7 @@ describe('automation RPC methods', () => {
     ).resolves.toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
   })
 
-  it('preserves null baseBranch update values through the RPC boundary', async () => {
+  it('preserves null baseBranch and the workspace-mode precondition through the RPC boundary', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       updateAutomation: vi.fn().mockResolvedValue({ id: 'auto-1', baseBranch: null })
@@ -169,14 +169,15 @@ describe('automation RPC methods', () => {
     await dispatcher.dispatch(
       makeRequest('automation.update', {
         id: 'auto-1',
-        updates: { baseBranch: null }
+        updates: { baseBranch: null },
+        expectedWorkspaceMode: 'new_per_run'
       })
     )
 
     expect(runtime.updateAutomation).toHaveBeenCalledWith(
       'auto-1',
       { baseBranch: null },
-      { expectedOwner: undefined, destination: undefined }
+      { expectedOwner: undefined, destination: undefined, expectedWorkspaceMode: 'new_per_run' }
     )
   })
 })
