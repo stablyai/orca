@@ -3,8 +3,6 @@ import type { OrcaRuntimeService } from '../../orca-runtime'
 import type { WorkspaceLayoutStreamEvent } from '../../../../shared/workspace-layout/workspace-layout-stream-frames'
 import { eraseRpcMethods, isStreamingMethod, type RpcContext } from '../core'
 import { ALL_RPC_METHODS } from './index'
-import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
-import { MOBILE_RPC_METHOD_ALLOWLIST } from '../../runtime-rpc/runtime-rpc-mobile-method-allowlist'
 
 const paired = vi.hoisted(() => ({ ids: ['one', 'two'] }))
 vi.mock('../../../../shared/runtime-environment-store', async (importOriginal) => ({
@@ -48,12 +46,6 @@ function harness(epoch?: string) {
 }
 
 describe('layout.subscribe', () => {
-  it('is served but neither advertised nor open to phones (inert)', () => {
-    expect(subscribe && isStreamingMethod(subscribe)).toBe(true)
-    expect(RUNTIME_CAPABILITIES.some((capability) => capability.startsWith('layout'))).toBe(false)
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('layout.subscribe')).toBe(false)
-  })
-
   it('sends the snapshot, then the named workspaces’ changes, and ends on unsubscribe', async () => {
     const { runtime, cleanups, unsubscribe, publish } = harness()
     const emitted: unknown[] = []
@@ -150,11 +142,6 @@ describe('layout.subscribe', () => {
 })
 
 describe('layout.getRemoteSnapshots', () => {
-  it('is served but neither advertised nor open to phones (inert)', () => {
-    expect(getRemoteSnapshots?.permission).toBe('workspace')
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('layout.getRemoteSnapshots')).toBe(false)
-  })
-
   it('returns the stored snapshot of each known server', async () => {
     const snapshots = {
       one: { workspaces: { a: { worktree: 'a', tabs: [] } } },

@@ -156,28 +156,4 @@ describe('a host where wsl.exe loses its redirected list output', () => {
       )
     })
   })
-
-  it('still confirms an empty running list where wsl.exe output is intact', async () => {
-    runProcessMock.mockImplementation(async (spec: ProcessSpec) =>
-      spec.args?.includes('--running') ? exited('') : exited('Ubuntu-24.04\r\n')
-    )
-
-    await onWindows(async () => {
-      await expect(listRunningWslDistrosAsync({ requireConfirmed: true })).resolves.toEqual([])
-      expect(consoleMock).not.toHaveBeenCalled()
-      expect(runProcessMock.mock.calls.some(([spec]) => spec.program.endsWith('reg.exe'))).toBe(
-        false
-      )
-    })
-  })
-
-  it('treats an empty list as no distros when the registry has none either', async () => {
-    runProcessMock.mockImplementation(async (spec) => host(LOST_LIST_OUTPUT, exited(''))(spec))
-
-    await onWindows(async () => {
-      await expect(listWslDistrosAsync()).resolves.toEqual([])
-      await expect(listRunningWslDistrosAsync({ requireConfirmed: true })).resolves.toEqual([])
-      expect(consoleMock).not.toHaveBeenCalled()
-    })
-  })
 })

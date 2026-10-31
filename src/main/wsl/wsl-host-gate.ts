@@ -108,6 +108,16 @@ export function wslHostsWindowArguments(): string[] {
 }
 
 /** The internal gate itself, less a remote policy block: adding hosts and starting moves need it. */
+/**
+ * Stage 1 is opt-in: work that changes behaviour for projects the user already has needs the
+ * WSL hosts setting on as well as the gate, so turning the setting off (rollback layer 1) undoes it.
+ */
+export function wslHostsOptedIn(
+  settings: { experimentalWslHosts?: boolean } | null | undefined
+): boolean {
+  return settings?.experimentalWslHosts === true && wslHostsGateOpen()
+}
+
 export function wslHostsGateOpen(): boolean {
   return isWslHostsInternalGateOpen(process.env) && !policyBlocked
 }

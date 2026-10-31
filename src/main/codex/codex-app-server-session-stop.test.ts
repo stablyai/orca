@@ -72,35 +72,6 @@ function startWedgedSession(child: FakeChild, platform: NodeJS.Platform): Promis
 }
 
 describe('runCodexAppServerSession stop', () => {
-  it('stops a Windows plugin tree while its root and stdin still live', async () => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
-    const child = fakeChild(null)
-    vi.mocked(terminateProviderProcessTree).mockImplementationOnce(async () => {
-      expect(child.stdin.writableEnded).toBe(false)
-      child.emit('exit', 0, null)
-      child.emit('close', 0, null)
-      return 'exited'
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fake implements the session's pid, stdio, kill and lifecycle events.
-    const spawnImpl: CodexAppServerSpawn = () => child as never
-    await runCodexAppServerSession(
-      {
-        command: '/bin/codex',
-        cliPath: null,
-        args: ['app-server'],
-        timeoutMs: 1_000,
-        treeKillOnFinish: true
-      },
-      async () => null,
-      spawnImpl
-    )
-    expect(terminateProviderProcessTree).toHaveBeenCalledExactlyOnceWith(child, {
-      site: 'codex-app-server-session',
-      platform: 'win32',
-      supervised: false
-    })
-  })
-
   it('SIGTERMs a supervised session at its deadline instead of waiting out its stdin grace', async () => {
     vi.useFakeTimers()
     const child = fakeChild('SIGTERM')

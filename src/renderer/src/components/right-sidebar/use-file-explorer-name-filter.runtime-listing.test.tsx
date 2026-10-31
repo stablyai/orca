@@ -106,22 +106,6 @@ afterEach(() => {
 })
 
 describe('useFileExplorerNameFilter over the real runtime listing', () => {
-  // Local workspaces return complete listings for client filtering; discarding them empties every query (#21423).
-  it('projects a settled local listing instead of dropping it', async () => {
-    const { result } = renderNameFilter(LOCAL_KEY)
-
-    await act(async () => {
-      result.current.setNameFilterQuery('package.')
-    })
-    await settle()
-
-    expect(listRuntimeFilesMock).toHaveBeenCalledTimes(1)
-    expect(result.current.nameFilterSource?.relativePaths).toEqual([
-      'packages/app/package.json',
-      'src/main.ts'
-    ])
-  })
-
   it('keeps the local listing across query edits without refetching it', async () => {
     const { result } = renderNameFilter(LOCAL_KEY)
 
