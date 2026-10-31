@@ -1343,7 +1343,6 @@
 4 test-timeout-needs-reason:src/main/runtime/remote-runtime-request-connection.integration.test.ts
 1 test-timeout-needs-reason:src/main/runtime/rpc/ws-transport.test.ts
 3 test-timeout-needs-reason:src/main/runtime/runtime-rpc-device-revocation.test.ts
-1 test-timeout-needs-reason:src/main/runtime/sidebar-inputs/workspace-rows-publish-cost.test.ts
 1 test-timeout-needs-reason:src/main/runtime/terminal-close-slow-agent-exit.test.ts
 3 test-timeout-needs-reason:src/main/runtime/terminal-interactive-wait-visibility.test.ts
 1 test-timeout-needs-reason:src/main/runtime/terminal-tail-redraw-wall-time.test.ts
