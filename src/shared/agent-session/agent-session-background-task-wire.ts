@@ -1,6 +1,6 @@
 // Background task wire rows and roster; keep task equality consistent across host publication and client reduction.
 
-import type { AgentChildWorkView } from './agent-status-child-work-view'
+import type { AgentChildWorkView } from '../agent-status-child-work-view'
 
 /** Optional state uses dashboard vocabulary; older hosts fall back to kind-derived defaults. */
 export type AgentSessionBackgroundTaskRunState =

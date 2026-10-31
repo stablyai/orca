@@ -1,8 +1,8 @@
 // Decode child views once at client admission so equality and readers never consume raw wire rows.
 
-import type { AgentSessionBackgroundTaskState } from './agent-session-wire'
+import type { AgentSessionBackgroundTaskState } from './agent-session-background-task-wire'
 import { backgroundTaskStatesEqual } from './agent-session-background-task-state-equality'
-import { decodeAgentChildWorkViews } from './agent-status-child-work-view-wire'
+import { decodeAgentChildWorkViews } from '../agent-status-child-work-view-wire'
 
 /** Preserve identity on repeated rosters so memoized readers skip unchanged frames. */
 export function admitAgentSessionBackgroundTaskState(

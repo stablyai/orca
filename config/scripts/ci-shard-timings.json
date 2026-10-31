@@ -11434,7 +11434,7 @@
       "src/shared/agent-session-approval-subject.test.ts": 91,
       "src/shared/agent-session-attachments.test.ts": 64,
       "src/shared/agent-session-availability.test.ts": 120,
-      "src/shared/agent-session-background-task-state-admission.test.ts": 85,
+      "src/shared/agent-session/agent-session-background-task-state-admission.test.ts": 85,
       "src/shared/agent-session-context-clear.test.ts": 257,
       "src/shared/agent-session-context-usage-schema.test.ts": 91,
       "src/shared/agent-session-definitive-refusal.test.ts": 119,
