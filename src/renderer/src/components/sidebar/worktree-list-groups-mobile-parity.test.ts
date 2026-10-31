@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../../../shared/constants'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
@@ -146,7 +147,7 @@ async function servedCatalog(projectOrderBy: ProjectOrderBy): Promise<MobileProj
     repos,
     ...rows,
     projectOrderBy,
-    settings: {},
+    settings: getDefaultSettings('/tmp'),
     projectGroupingSettingsHydrated: true,
     localRepoCatalogHydrated: true
   })

@@ -1,31 +1,36 @@
-import '../../runtime/rpc/unused-default-rpc-methods.test-fixture'
+import '../../../main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import { EventEmitter } from 'node:events'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { createStore, closeTestStores, readDataFile, testState } from '../persistence-test-harness'
-import { OrcaRuntimeService } from '../../runtime/orca-runtime'
-import { OrcaRuntimeRpcServer } from '../../runtime/runtime-rpc'
-import { DeviceRegistry } from '../../runtime/device-registry'
+import {
+  createStore,
+  closeTestStores,
+  readDataFile,
+  testState
+} from '../../../main/persistence/persistence-test-harness'
+import { OrcaRuntimeService } from '../../../main/runtime/orca-runtime'
+import { OrcaRuntimeRpcServer } from '../../../main/runtime/runtime-rpc'
+import { DeviceRegistry } from '../../../main/runtime/device-registry'
 import {
   MobileSocketWiring,
   type MobileSocketTransport
-} from '../../runtime/rpc/mobile-socket-wiring'
-import { CLIENT_UI_METHODS } from '../../runtime/rpc/methods/client-ui'
-import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../runtime/rpc/methods/runtime-client-capabilities'
+} from '../../../main/runtime/rpc/mobile-socket-wiring'
+import { CLIENT_UI_METHODS } from '../../../main/runtime/rpc/methods/client-ui'
+import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../../../main/runtime/rpc/methods/runtime-client-capabilities'
 import { generateKeyPair, deriveSharedKey, encrypt } from '../../../shared/e2ee-crypto'
 import { WEB_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/web-runtime-client-capabilities'
 import { mobileRuntimeClientCapabilityUpdateParams } from '../../../../mobile/src/transport/mobile-runtime-client-capabilities'
 import WebSocket, { WebSocketServer } from 'ws'
-import { STATUS_METHODS } from '../../runtime/rpc/methods/status'
-import { installBrowserGlobals } from '../../../renderer/src/web/web-preload-api-test-harness'
+import { STATUS_METHODS } from '../../../main/runtime/rpc/methods/status'
+import { installBrowserGlobals } from './web-preload-api-test-harness'
 
 vi.mock('electron', () => ({
   app: { getPath: () => testState.dir },
   safeStorage: { isEncryptionAvailable: () => false }
 }))
-vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
+vi.mock('../../../main/telemetry/client', () => ({ track: vi.fn() }))
 
 it.each(['web', 'mobile', 'old'] as const)(
   'carries the %s capability producer through a real mobile authenticated socket into persisted filter edits',
@@ -251,8 +256,8 @@ it.each([100, 1000])(
       })
     )
     vi.resetModules()
-    const session = await import('../../../renderer/src/web/preload-api/web-runtime-session')
-    const { createWebUiApi } = await import('../../../renderer/src/web/preload-api/web-ui-api')
+    const session = await import('./preload-api/web-runtime-session')
+    const { createWebUiApi } = await import('./preload-api/web-ui-api')
     const Q = 'runtime:server\0same'
     try {
       store.updateUI({ filterRepoIds: ['same', Q], agentsFilterRepoIds: [Q] })
@@ -313,7 +318,7 @@ it.each([100, 1000])(
       expect(authLists[0]).not.toContain('ui.project-repo-filter-exact.v1')
       store.flush()
       expect(readDataFile()).toHaveProperty('ui.filterRepoIds', [])
-      expect(readDataFile().ui).not.toHaveProperty('filterRepoIdsMode')
+      expect(readDataFile()).not.toHaveProperty('ui.filterRepoIdsMode')
       await closeTestStores()
       expect(createStore().getUI()).toMatchObject({ filterRepoIds: [], agentsFilterRepoIds: [Q] })
     } finally {

@@ -69,7 +69,7 @@ export function registerProjectGroupingPersistenceTests(createStore: () => Promi
       store.updateUI({ [field]: ['a', 'local\0a', 'runtime:server\0a', 'offline'] })
       // Explicit legacy-context contract; trusted local Store writes are exact.
       store.updateUI({
-        [field]: reconcileProjectRepoFilterEdit(store.getUI()[field], [
+        [field]: reconcileProjectRepoFilterEdit(store.getUI()[field] ?? [], [
           'local\0a',
           'runtime:server\0a',
           'offline'
@@ -77,8 +77,8 @@ export function registerProjectGroupingPersistenceTests(createStore: () => Promi
       })
       expect(store.getUI()[field]).toEqual(['offline'])
       store.updateUI({ [field]: ['runtime:server\0a', 'offline'] })
-      expect(projectRepoFilterMatcher(store.getUI()[field])('a', 'local')).toBe(false)
-      expect(projectRepoFilterMatcher(store.getUI()[field])('a', 'runtime:server')).toBe(true)
+      expect(projectRepoFilterMatcher(store.getUI()[field] ?? [])('a', 'local')).toBe(false)
+      expect(projectRepoFilterMatcher(store.getUI()[field] ?? [])('a', 'runtime:server')).toBe(true)
     }
     store.flush()
     const reloaded = await createStore()

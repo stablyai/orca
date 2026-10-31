@@ -555,6 +555,9 @@ it.each(['repository', 'host', 'folder'] as const)(
           : 2
       )
       for (const option of options) {
+        if (option.kind !== 'project') {
+          throw new Error('Expected a project option')
+        }
         expect(
           resolveWorkspaceCreationTarget({ ...input, projectId: option.projectId })
         ).toMatchObject({ status: 'ready' })

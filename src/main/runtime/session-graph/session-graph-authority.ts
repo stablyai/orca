@@ -47,8 +47,6 @@ export abstract class OrcaRuntimeWithTransitionGraphReloadToTerminalState extend
     ResolveBrowserNetworkExecutionHostForWorktreeMethods['resolveBrowserNetworkExecutionHostForWorktree']
   >
 
-  abstract notifyReposChangedForRemoteClients(): void
-
   shouldRelayTerminalBrowserOpens(): boolean {
     return this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }

@@ -288,7 +288,7 @@ it('keeps source-chip exact host/first record, missing fallback and meaningful s
     badgeColor: 'gray',
     addedAt: 0
   }
-  const rows = [
+  const rows: Repo[] = [
     { ...first, executionHostId: 'local', displayName: 'Wrong local' },
     first,
     { ...first, displayName: 'Later server' }

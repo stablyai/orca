@@ -5,7 +5,7 @@ import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { SmartSourceSelection } from './source-selection-decisions'
@@ -70,7 +70,7 @@ export function useReviewBaseSelectionFixture(
   targetInputs: { hosts?: ExecutionHostRegistryEntry[]; projectId?: string } = {}
 ) {
   const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null)
-  const [selectedSetupHost, setSelectedSetupHost] = useState<string | null>(null)
+  const [selectedSetupHost, setSelectedSetupHost] = useState<ExecutionHostId | null>(null)
   const [name, setName] = useState('')
   const [linkedWorkItem, setLinkedWorkItem] = useState<LinkedWorkItemSummary | null>(
     initialReview ?? null

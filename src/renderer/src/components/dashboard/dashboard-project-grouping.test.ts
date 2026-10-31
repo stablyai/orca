@@ -51,11 +51,11 @@ it.each(['repository', 'host', 'folder'] as const)(
       },
       NOW
     )
-    const workspaceKeys = new Set(snapshot.workspaces.map((workspace) => workspace.repoId))
+    const workspaceKeys = new Set(snapshot.workspaces!.map((workspace) => workspace.repoId))
     expect(workspaceKeys.size).toBe(
       projectGroupingMode === 'repository' ? 1 : projectGroupingMode === 'host' ? 2 : 3
     )
-    expect(new Set(snapshot.filterOptions.projects.map((option) => option.id))).toEqual(
+    expect(new Set(snapshot.filterOptions!.projects.map((option) => option.id))).toEqual(
       workspaceKeys
     )
   }

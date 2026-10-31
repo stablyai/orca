@@ -9,12 +9,12 @@ export async function readWebRuntimeStatus(
   transport: WebRuntimeConnectionTransport,
   signal: AbortSignal
 ): Promise<RuntimeHostStatusResponse> {
-  const epoch = transport.connectionEpoch
+  const epoch = transport.requestRegistry.connectionEpoch
   const response = await transport.call('status.get', undefined, {
     timeoutMs: 15_000,
     signal
   })
-  if (epoch !== transport.connectionEpoch) {
+  if (epoch !== transport.requestRegistry.connectionEpoch) {
     return runtimeHostStatusFailure('runtime_unavailable', 'Runtime connection changed.')
   }
   if (!response.ok) {

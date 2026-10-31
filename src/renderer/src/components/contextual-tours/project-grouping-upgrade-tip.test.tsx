@@ -16,6 +16,7 @@ import type { SettingsInteractionController } from '../settings/use-settings-int
 import type { SettingsNavigationModel } from '../settings/use-settings-navigation-model'
 import type { SettingsTerminalModel } from '../settings/use-settings-terminal-model'
 import { useProjectGroupingUpgradeTip } from './use-project-grouping-upgrade-tip'
+import { getLocalizedContextualTourStepCopy } from './contextual-tour-step-copy'
 
 const audience = {
   version: 1 as const,
@@ -67,6 +68,7 @@ beforeEach(() => {
 })
 afterEach(() => {
   cleanup()
+  vi.useRealTimers()
   vi.restoreAllMocks()
   document.querySelectorAll('[data-project-grouping-key]').forEach((element) => element.remove())
   useAppStore.setState(useAppStore.getInitialState(), true)
@@ -76,7 +78,9 @@ it.each(['Got it', 'Dismiss tour', 'Group checkouts in Settings'])(
   'dismisses the actual upgrade overlay permanently through %s',
   async (action) => {
     const scrollTo = vi.spyOn(HTMLElement.prototype, 'scrollTo')
-    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function () {
+    vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(function (
+      this: HTMLElement
+    ) {
       return DOMRect.fromRect({ y: this.id === 'general-projects' ? 320 : 10, height: 100 })
     })
     vi.spyOn(HTMLElement.prototype, 'scrollHeight', 'get').mockReturnValue(1000)
@@ -108,9 +112,10 @@ it.each(['Got it', 'Dismiss tour', 'Group checkouts in Settings'])(
         contextualToursSeenIds: [...seen]
       })
     )
+    vi.useFakeTimers()
     render(<Tip />)
     await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 50))
+      await vi.advanceTimersByTimeAsync(1000)
     })
     expect(screen.queryByText('App is now one project')).toBeNull()
   }
@@ -216,3 +221,42 @@ function SettingsDestination() {
     </div>
   )
 }
+
+it('uses the runtime environment name and retains explicit host-copy precedence', () => {
+  useAppStore.setState({
+    projectGroupingUpgradeTipAudience: { ...audience, hostId: 'runtime:server' },
+    runtimeEnvironments: [
+      {
+        id: 'server',
+        name: 'Build server',
+        createdAt: 1,
+        updatedAt: 1,
+        lastUsedAt: null,
+        runtimeId: null,
+        endpoints: [
+          {
+            id: 'socket',
+            kind: 'websocket',
+            label: 'Server',
+            endpoint: 'ws://server',
+            deviceToken: 'fixture',
+            publicKeyB64: 'fixture'
+          }
+        ],
+        preferredEndpointId: 'socket'
+      }
+    ]
+  })
+  expect(getLocalizedContextualTourStepCopy('project-grouping-upgrade')?.body).toContain(
+    'on Build server'
+  )
+  useAppStore.setState({
+    settings: {
+      ...getDefaultSettings(''),
+      hostSettingOverrides: { 'runtime:server': { displayLabel: 'My server' } }
+    }
+  })
+  expect(getLocalizedContextualTourStepCopy('project-grouping-upgrade')?.body).toContain(
+    'on My server'
+  )
+})

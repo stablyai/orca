@@ -1,4 +1,4 @@
-import type { RpcClient } from '../transport/rpc-client'
+import type { RpcClient } from '../transport/types'
 import {
   projectSectionsRead,
   readServedProjectSections,
@@ -86,6 +86,7 @@ function createProjectSectionsResource(client: RpcClient) {
         if (listeners.size && dirty) {
           return refresh()
         }
+        return undefined
       })
     return inFlight
   }

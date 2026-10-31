@@ -301,7 +301,7 @@ it.each(['github', 'gitlab'] as const)(
     expect(selected).toEqual([server])
     view.unmount()
     owner.flush()
-    expect(readDataFile().settings.defaultRepoSelection).toEqual(['runtime:server\0same'])
+    expect(readDataFile()).toHaveProperty('settings.defaultRepoSelection', ['runtime:server\0same'])
     await closeTestStores()
     owner = createStore()
     saved = owner.getSettings()
@@ -377,7 +377,7 @@ it.each(['github', 'gitlab'] as const)(
     act(() => useAppStore.setState({ repos: [base, server, other] }))
     expect(selected).toEqual([server])
     await user.click(screen.getByRole('combobox'))
-    await user.click(screen.getByRole('button', { name: 'All projects', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'All projects' }))
     await waitFor(() => expect(saved.defaultRepoSelection).toBeNull())
     expect(selected).toHaveLength(2)
     const late: Repo = {
@@ -491,7 +491,7 @@ it.each(['local', 'runtime:server'] as const)(
     }
     await user.click(screen.getByRole('button', { name: 'New issue' }))
     await user.type(screen.getByPlaceholderText('Short summary'), 'Concrete source')
-    await user.click(screen.getByRole('button', { name: 'Create issue', exact: true }))
+    await user.click(screen.getByRole('button', { name: 'Create issue' }))
     await waitFor(() =>
       expect(detail).toHaveBeenCalledWith(
         expect.objectContaining({ number: 42, repoId: 'same', title: 'Concrete source' })
@@ -592,11 +592,62 @@ it('shows and edits the selected concrete fork source in the actual issue dialog
   )
   expect(screen.getByText('Filing in server-fork/app')).toBeTruthy()
   expect(screen.getByRole('group', { name: 'Issue source' })).toBeTruthy()
-  await userEvent.setup().click(screen.getByRole('button', { name: 'Origin', exact: true }))
+  await userEvent.setup().click(screen.getByRole('button', { name: 'Origin' }))
   expect(setIssueSourcePreference).toHaveBeenCalledExactlyOnceWith(
     'same',
     '/server/app',
     'origin',
     'runtime:server'
   )
+})
+
+it('initializes the real store and keeps prefetch and page source-context exports on the same pure product', async () => {
+  const { getTaskPageRepoSourceContext: pureSource } =
+    await import('./task-page-repo-source-context')
+  expect(getTaskPageRepoSourceContext).toBe(pureSource)
+  const repo: Repo = {
+    id: 'same',
+    path: '/server/app',
+    executionHostId: 'runtime:server',
+    displayName: 'App',
+    badgeColor: '',
+    addedAt: 0,
+    upstream: { owner: 'org', repo: 'app' }
+  }
+  const projection = projectHostSetupProjectionFromRepos([repo])
+  const prefetchWorkItems = vi.fn()
+  Object.assign(window, {
+    api: { ui: { set: vi.fn(async () => {}), recordFeatureInteraction: vi.fn(async () => ({})) } }
+  })
+  useAppStore.setState({
+    repos: [repo],
+    projects: projection.projects,
+    projectHostSetups: projection.setups,
+    settings: { ...getDefaultSettings(''), defaultRepoSelection: ['runtime:server\0same'] },
+    prefetchWorkItems
+  })
+  useAppStore.getState().openTaskPage({ taskSource: 'github' }, { recordTasksInteraction: false })
+  const source = getTaskPageRepoSourceContext(repo, 'github')
+  expect(source).toMatchObject({
+    provider: 'github',
+    hostId: 'runtime:server',
+    repoId: 'same',
+    providerIdentity: { provider: 'github', owner: 'org', repo: 'app' }
+  })
+  expect(prefetchWorkItems).toHaveBeenCalledExactlyOnceWith(
+    'same',
+    '/server/app',
+    expect.any(Number),
+    expect.any(String),
+    { sourceContext: source }
+  )
+  expect(
+    getTaskPageRepoSourceContext(repo, 'gitlab', { host: 'gitlab.example', path: 'team/app' })
+  ).toMatchObject({
+    provider: 'gitlab',
+    hostId: 'runtime:server',
+    repoId: 'same',
+    providerIdentity: { provider: 'gitlab', projectId: 'team/app' }
+  })
+  expect(getTaskPageRepoSourceContext(null, 'github')).toBeNull()
 })

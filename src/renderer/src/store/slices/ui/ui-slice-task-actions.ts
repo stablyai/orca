@@ -2,7 +2,7 @@ import {
   resolveTaskSelectedRepos,
   getTaskEligibleRepos
 } from '../../../components/task-page/task-page-default-repo-selection'
-import { getTaskPageRepoSourceContext } from '../../../components/task-page/task-page-source-context'
+import { getTaskPageRepoSourceContext } from '../../../components/task-page/task-page-repo-source-context'
 import { getProjectGroupingIndexFromState } from '../../project-host-setup-selector'
 import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'

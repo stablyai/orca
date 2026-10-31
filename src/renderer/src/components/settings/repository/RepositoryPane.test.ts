@@ -98,7 +98,7 @@ describe('RepositoryPane search entries', () => {
       { ...repo, id: 'windows-b', path: 'D:\\repos\\app' },
       { ...repo, id: 'wsl', path: '\\\\wsl.localhost\\Ubuntu\\home\\app' },
       { ...repo, id: 'posix', path: '/repos/app' },
-      { ...repo, id: 'ssh', path: '/repos/app', executionHostId: 'ssh:box' }
+      { ...repo, id: 'ssh', path: '/repos/app', executionHostId: 'ssh:box' as const }
     ].map((entry) => ({
       ...entry,
       gitRemoteIdentity: {

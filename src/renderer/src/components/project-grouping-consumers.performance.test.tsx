@@ -44,7 +44,7 @@ it.each([100, 1000])(
         makeWorktree({
           id: `${repo.id}::${row}`,
           repoId: repo.id,
-          hostId: repo.executionHostId,
+          hostId: repo.executionHostId ?? undefined,
           createdAt: row
         })
       )

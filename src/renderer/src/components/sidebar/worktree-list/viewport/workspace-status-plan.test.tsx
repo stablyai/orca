@@ -65,7 +65,8 @@ function headerContext(rows: GroupHeaderRow[], statuses: readonly WorkspaceStatu
     projectGroupHeaderSectionEndByGroupId: new Map()
   }
   // SAFETY: header-only fixture supplies the real builder's inputs; drag/item/virtualizer methods are inert boundary seams, never rendered controls.
-  const args = {
+  type BuildArgs = Parameters<typeof buildWorktreeVirtualRowContext>[0]
+  const partialArgs: { [K in keyof BuildArgs]?: Partial<BuildArgs[K]> } = {
     props: {
       groupBy: 'workspace-status',
       workspaceStatuses: statuses,
@@ -99,7 +100,10 @@ function headerContext(rows: GroupHeaderRow[], statuses: readonly WorkspaceStatu
     toggleGroupWithScrollAnchor: noop,
     onRowClickCapture: noop,
     onRowPointerDown: noop
-  } as Parameters<typeof buildWorktreeVirtualRowContext>[0]
+  }
+  // SAFETY: header-only fixture supplies every field read by the production header builder.
+  // oxlint-disable-next-line typescript/consistent-type-assertions
+  const args = partialArgs as BuildArgs
   return buildWorktreeVirtualRowContext(args)
 }
 
@@ -187,7 +191,7 @@ it.each([
     <TooltipProvider>
       {headers.map((row, index) =>
         renderWorktreeVirtualRow(ctx, row, {
-          key: `${row.key}:${index}`,
+          key: `${row.type === 'header' ? row.key : row.type}:${index}`,
           index,
           start: index * 35,
           size: 35,
@@ -242,7 +246,7 @@ it('retains first definition, decoder/default behavior and real header invalidat
       <TooltipProvider>
         {ctx.renderRows.map((row, index) =>
           renderWorktreeVirtualRow(ctx, row, {
-            key: `${row.key}:${index}`,
+            key: `${row.type === 'header' ? row.key : row.type}:${index}`,
             index,
             start: index * 35,
             size: 35,
@@ -263,7 +267,9 @@ it('retains first definition, decoder/default behavior and real header invalidat
   const settled = renders
   act(() => useAppStore.setState({ activeRepoId: 'unrelated' }))
   expect(renders).toBe(settled)
-  act(() => useAppStore.setState({ settings: { ...initial.settings, projectGrouping: 'folder' } }))
+  act(() =>
+    useAppStore.setState({ settings: { ...initial.settings, projectGroupingMode: 'folder' } })
+  )
   expect(renders).toBe(settled)
   act(() => useAppStore.setState({ repos: [{ ...repo, executionHostId: 'runtime:other' }] }))
   expect(renders).toBe(settled)

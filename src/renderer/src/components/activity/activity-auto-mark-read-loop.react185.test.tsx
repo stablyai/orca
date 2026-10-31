@@ -242,7 +242,7 @@ it('keeps saved Projects intent/count distinct from Agents unavailable-ID suspen
       threads: useAgentPaneThreads({
         query: '',
         readFilter: 'all',
-        groupBy: 'repo',
+        groupBy: 'project',
         selectedPaneKey: selected
       }),
       count: useActivityScopeFilterCount()

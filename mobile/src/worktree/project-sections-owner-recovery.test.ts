@@ -142,6 +142,14 @@ it.each([false, true])(
         return true
       }
     })
+    const subscribeMethod = CLIENT_EVENT_METHODS[0]
+    const unsubscribeMethod = CLIENT_EVENT_METHODS[1]
+    if (
+      subscribeMethod.name !== 'runtime.clientEvents.subscribe' ||
+      unsubscribeMethod.name !== 'runtime.clientEvents.unsubscribe'
+    ) {
+      throw new Error('Missing expected client event methods')
+    }
     const streams = new RpcClientStreamRegistry({
       nextId: () => String(++sequence),
       getState: () => 'connected',
@@ -149,7 +157,7 @@ it.each([false, true])(
         sent.push(frame)
         if (frame.method === 'runtime.clientEvents.subscribe') {
           tasks.push(
-            CLIENT_EVENT_METHODS[0].handler(null, context, (result) => {
+            subscribeMethod.handler(undefined, context, (result) => {
               const reply = {
                 ...successResponse(frame.id, { runtimeId: 'owner' }, result),
                 streaming: true as const
@@ -167,8 +175,8 @@ it.each([false, true])(
             })
           )
         } else if (frame.method === 'runtime.clientEvents.unsubscribe') {
-          const params = CLIENT_EVENT_METHODS[1].params!.parse(frame.params)
-          tasks.push(Promise.resolve(CLIENT_EVENT_METHODS[1].handler(params, context)))
+          const params = unsubscribeMethod.params.parse(frame.params)
+          tasks.push(Promise.resolve(unsubscribeMethod.handler(params, context)))
         }
         return true
       }

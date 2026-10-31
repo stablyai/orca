@@ -83,8 +83,7 @@ it.each(['host', 'folder'] as const)(
         sectionId: 'repo-same',
         hostId
       } as const)
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies every field read by the production page effects and project-section renderer.
-      const model = {
+      const partialModel: Partial<SettingsStoreModel> = {
         ...state,
         settings,
         settingsProjectList: entries,
@@ -106,9 +105,11 @@ it.each(['host', 'folder'] as const)(
         setQuickCommandAddIntentSignal: noop,
         setRemoteServerAddIntentSignal: noop,
         setSshHostAddIntentSignal: noop
-      } as SettingsStoreModel
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: supplies the effect's refs/callbacks; unrelated interaction fields are never read.
-      const interactions = {
+      }
+      // SAFETY: this existing boundary fixture supplies the fields consumed below.
+      // oxlint-disable-next-line typescript/consistent-type-assertions
+      const model = partialModel as SettingsStoreModel
+      const partialInteractions: Partial<SettingsInteractionController> = {
         pendingNavSectionRef,
         pendingScrollTargetRef,
         searchInputRef: useRef<HTMLInputElement | null>(null),
@@ -116,16 +117,33 @@ it.each(['host', 'folder'] as const)(
         hasUnsavedSourceControlAiPromptChangesRef: useRef(false),
         closeSettingsPageWithPromptGuard: fetch,
         promptDiscardSourceControlAiPromptChanges: fetch
-      } as SettingsInteractionController
+      }
+      // SAFETY: unrelated interactions are outside this fixture boundary.
+      // oxlint-disable-next-line typescript/consistent-type-assertions
+      const interactions = partialInteractions as SettingsInteractionController
       useSettingsPageEffects(model, interactions)
       scrollTarget = pendingScrollTargetRef.current
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this renderer reads only model, navigation, terminal capabilities and isSectionMounted.
-      const context = {
-        model: { ...model, activeSectionId: pendingNavSectionRef.current ?? model.activeSectionId },
+      const partialContext: {
+        [K in keyof SettingsRenderContext]?: Partial<SettingsRenderContext[K]>
+      } = {
+        model: {
+          ...model,
+          settings,
+          activeSectionId: pendingNavSectionRef.current ?? model.activeSectionId
+        },
         navigation: { getSectionSearchEntries: () => [] },
-        terminal: { windowsTerminalCapabilities: {}, isWindowsTerminalHost: false },
+        terminal: {
+          // SAFETY: the existing mocked RepositoryPane does not consume capability values.
+          // oxlint-disable-next-line typescript/consistent-type-assertions
+          windowsTerminalCapabilities:
+            {} as SettingsRenderContext['terminal']['windowsTerminalCapabilities'],
+          isWindowsTerminalHost: false
+        },
         view: { isSectionMounted: (id: string) => mounted.has(id) }
-      } as SettingsRenderContext
+      }
+      // SAFETY: only the project-section renderer is exercised by this existing boundary fixture.
+      // oxlint-disable-next-line typescript/consistent-type-assertions
+      const context = partialContext as SettingsRenderContext
       return (
         <ActiveSettingsSectionProvider value={pendingNavSectionRef.current}>
           {renderProjectSettingsSections(context)}
@@ -184,8 +202,14 @@ it('forwards qualified first representative metadata through the shipping naviga
     isWebClient: false,
     repos
   })
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: builder consumes these supplied fields only.
-  const model = { repos, settingsSearchQuery: '', activeSectionId: 'general' } as SettingsStoreModel
+  const partialModel: Partial<SettingsStoreModel> = {
+    repos,
+    settingsSearchQuery: '',
+    activeSectionId: 'general'
+  }
+  // SAFETY: this existing boundary fixture supplies the fields consumed below.
+  // oxlint-disable-next-line typescript/consistent-type-assertions
+  const model = partialModel as SettingsStoreModel
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all builder inputs supplied.
   const navigation = {
     visibleNavSections: sections,
@@ -391,12 +415,14 @@ it('measures qualified preparation and actual view forwarding with independent c
                 }
               })
           )
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: builder's exact read fields supplied.
-        const model = {
+        const partialModel: Partial<SettingsStoreModel> = {
           repos: catalog,
           settingsSearchQuery: query,
           activeSectionId: 'general'
-        } as SettingsStoreModel
+        }
+        // SAFETY: this existing boundary fixture supplies the fields consumed below.
+        // oxlint-disable-next-line typescript/consistent-type-assertions
+        const model = partialModel as SettingsStoreModel
         // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: builder's exact read fields supplied.
         const navigation = {
           visibleNavSections: visible,

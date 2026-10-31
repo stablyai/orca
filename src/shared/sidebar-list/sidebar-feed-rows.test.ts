@@ -427,7 +427,8 @@ it.each(['repository', 'host', 'folder'] as const)(
     const options = view({ groupBy: 'repo', pinnedDisplayPolicy: 'duplicate-in-groups' })
     const built = buildSidebarFeedRows(feed, groupedCatalog, options)
     const headers = built.rows.filter(
-      (candidate) => candidate.type === 'header' && candidate.icon.kind === 'project'
+      (candidate): candidate is Extract<typeof candidate, { type: 'header' }> =>
+        candidate.type === 'header' && candidate.icon.kind === 'project'
     )
     expect(headers).toHaveLength(mode === 'repository' ? 2 : 3)
     expect(headers.find((header) => header.key === 'project:repo:plain')?.repo).toEqual(plain)
@@ -469,7 +470,8 @@ it.each(['repository', 'host', 'folder'] as const)(
       options
     )
     const lateHeaders = lateBuilt.rows.filter(
-      (candidate) => candidate.type === 'header' && candidate.icon.kind === 'project'
+      (candidate): candidate is Extract<typeof candidate, { type: 'header' }> =>
+        candidate.type === 'header' && candidate.icon.kind === 'project'
     )
     expect(lateHeaders).toHaveLength(headers.length + 1)
     if (mode !== 'repository') {

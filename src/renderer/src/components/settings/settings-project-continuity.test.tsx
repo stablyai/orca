@@ -297,7 +297,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   await user.type(template(), 'unsaved command')
   await user.type(args(), '--unsaved-args')
   await user.click(screen.getByRole('button', { name: 'New Preset' }))
-  await user.type(screen.getByRole('textbox', { name: 'Name', exact: true }), 'unsaved preset')
+  await user.type(screen.getByRole('textbox', { name: 'Name' }), 'unsaved preset')
   await user.click(screen.getByRole('combobox', { name: 'Add a folder' }))
   await user.type(screen.getByPlaceholderText('Find a folder, or type any path…'), 'src')
   await user.keyboard('{Enter}')
@@ -309,10 +309,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   await choose('Separate by folder')
   expect(template().value).toBe('unsaved command')
   expect(args().value).toBe('--unsaved-args')
-  expect(screen.getByRole('textbox', { name: 'Name', exact: true })).toHaveProperty(
-    'value',
-    'unsaved preset'
-  )
+  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByPlaceholderText('example.com')).toHaveProperty(
     'value',
     'https://harbor.example'
@@ -331,10 +328,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   await waitFor(() =>
     expect(document.getElementById('repo-a-source-control-ai-commitMessage')).toBeNull()
   )
-  expect(screen.getByRole('textbox', { name: 'Name', exact: true })).toHaveProperty(
-    'value',
-    'unsaved preset'
-  )
+  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
   // Keep the actual setting-title query through a source-only gap: neither search nor navigation changed.
   const beforeGapSection = selectedSection
   const explicitWritesBeforeGap = writeRepo.mock.calls.filter(
@@ -351,10 +345,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   expect(document.getElementById('repo-a-source-control-ai-commitMessage')).toBeNull()
   const unavailableDuringGap = screen.queryByText('Available Hosts') !== null
   act(() => useAppStore.setState({ repos: [first, twin] }))
-  expect(screen.getByRole('textbox', { name: 'Name', exact: true })).toHaveProperty(
-    'value',
-    'unsaved preset'
-  )
+  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByText('src', { exact: true })).toBeTruthy()
   expect(unavailableDuringGap).toBe(true)
   expect(savePreset).not.toHaveBeenCalled()
@@ -368,13 +359,8 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   expect(screen.getByText('No settings found for "no-match-pg9-current-session"')).toBeTruthy()
   expect(document.querySelector('input[id^="repo-display-name-"]')).toBeNull()
   act(() => useAppStore.getState().setSettingsSearchQuery('sparse checkout presets'))
-  await waitFor(() =>
-    expect(screen.getByRole('textbox', { name: 'Name', exact: true })).toBeTruthy()
-  )
-  expect(screen.getByRole('textbox', { name: 'Name', exact: true })).toHaveProperty(
-    'value',
-    'unsaved preset'
-  )
+  await waitFor(() => expect(screen.getByRole('textbox', { name: 'Name' })).toBeTruthy())
+  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByText('src', { exact: true })).toBeTruthy()
   expect(savePreset).not.toHaveBeenCalled()
   expect(writeRepo.mock.calls.filter(([args]) => args.updates.sourceControlAi)).toHaveLength(
@@ -439,10 +425,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   )
   expect(template().value).toBe('unsaved command')
   expect(args().value).toBe('--unsaved-args')
-  expect(screen.getByRole('textbox', { name: 'Name', exact: true })).toHaveProperty(
-    'value',
-    'unsaved preset'
-  )
+  expect(screen.getByRole('textbox', { name: 'Name' })).toHaveProperty('value', 'unsaved preset')
   expect(screen.getByRole('textbox', { name: 'Custom GitHub Issue Command' })).toHaveProperty(
     'value',
     'pending issue'
@@ -619,19 +602,19 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
   await choose('Separate by folder')
   await user.clear(template())
   await user.type(template(), 'retire only on committed removal')
-  await user.click(screen.getByRole('button', { name: 'Remove Project', exact: true }))
+  await user.click(screen.getByRole('button', { name: 'Remove Project' }))
   await user.click(screen.getByText('Identity', { selector: 'h3' }))
   expect(removeForHost).not.toHaveBeenCalled()
   expect(template().value).toBe('retire only on committed removal')
   removeForHost.mockRejectedValueOnce(new Error('host refused removal'))
   const quietRemoval = vi.spyOn(console, 'error').mockImplementation(() => {})
-  await user.click(screen.getByRole('button', { name: 'Remove Project', exact: true }))
-  await user.click(screen.getByRole('button', { name: 'Confirm Remove Project', exact: true }))
+  await user.click(screen.getByRole('button', { name: 'Remove Project' }))
+  await user.click(screen.getByRole('button', { name: 'Confirm Remove Project' }))
   await waitFor(() => expect(removeForHost).toHaveBeenCalledTimes(1))
   quietRemoval.mockRestore()
   expect(template().value).toBe('retire only on committed removal')
-  await user.click(screen.getByRole('button', { name: 'Remove Project', exact: true }))
-  await user.click(screen.getByRole('button', { name: 'Confirm Remove Project', exact: true }))
+  await user.click(screen.getByRole('button', { name: 'Remove Project' }))
+  await user.click(screen.getByRole('button', { name: 'Confirm Remove Project' }))
   await waitFor(() =>
     expect(
       useAppStore
@@ -652,7 +635,7 @@ it('keeps the actual implicit and explicitly chosen checkout through control sav
     useAppStore.getState().openSettingsTarget({ pane: 'repo', repoId: first.id, hostId: 'local' })
   )
   expect(template().value).not.toBe('retire only on committed removal')
-  expect(screen.queryByRole('textbox', { name: 'Name', exact: true })).toBeNull()
+  expect(screen.queryByRole('textbox', { name: 'Name' })).toBeNull()
   await user.clear(template())
   await user.type(template(), 'retire on Settings close')
   act(() => markGlobalDirty())

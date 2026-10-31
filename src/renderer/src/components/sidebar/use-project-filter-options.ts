@@ -5,7 +5,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
-import { getRepoHostIdentity } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity, getRepoHostIdentityForParts } from '@/store/slices/repo-host-identity'
 import {
   projectFilterSelection,
   editProjectFilter
@@ -47,7 +47,9 @@ export function useProjectFilterOptions(filterRepoIds: readonly string[], pairin
   const groupedRepos = useMemo(() => {
     const byIdentity = new Map(repos.map((repo) => [getRepoHostIdentity(repo), repo]))
     return index.groups.flatMap((group) => {
-      const repo = byIdentity.get(`${group.representative.hostId}\0${group.representative.repoId}`)
+      const repo = byIdentity.get(
+        getRepoHostIdentityForParts(group.representative.repoId, group.representative.hostId)
+      )
       return repo ? [{ ...repo, id: group.key, displayName: group.label }] : []
     })
   }, [repos, index])

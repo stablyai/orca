@@ -29,7 +29,7 @@ const LOCALIZED_STEP_COPY: Partial<Record<string, StepCopyThunk>> = {
         (parsed.kind === 'ssh'
           ? state.sshTargetLabels.get(parsed.targetId)
           : parsed.kind === 'runtime'
-            ? state.runtimeEnvironments.find((entry) => entry.id === parsed.environmentId)?.label
+            ? state.runtimeEnvironments.find((entry) => entry.id === parsed.environmentId)?.name
             : null) ??
         getExecutionHostLabel(parsed.id))
       : ''

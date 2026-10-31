@@ -107,12 +107,14 @@ it('partitions full current ownership once, retaining opaque envelope and runtim
 
 it('routes a rendered concrete Show through mounted action/rollback adapters and rereads exact KeepHidden state after refresh', async () => {
   const updateRepo = vi.fn<AppState['updateRepo']>(async () => true)
-  const fetchWorktrees = vi.fn<AppState['fetchWorktrees']>(async () => false)
+  const fetchWorktrees = vi.fn(async () => false)
   useAppStore.setState({
     repos: [local, remote],
     settings: getDefaultSettings('/tmp'),
     updateRepo,
-    fetchWorktrees
+    // SAFETY: this fixture invokes only local/runtime refresh; the direct-SSH overload is never reached.
+    // oxlint-disable-next-line typescript/consistent-type-assertions
+    fetchWorktrees: fetchWorktrees as AppState['fetchWorktrees']
   })
   let cards!: ReturnType<typeof useSidebarExternalWorktreeCards>
   let currentDetected = {
@@ -309,7 +311,7 @@ it('retains exact inbox dialog, failure and recovery identity across same-ID twi
     externalWorktreeVisibilityPromptDismissedAt: 1
   }))
   const updateRepo = vi.fn<AppState['updateRepo']>(async () => false)
-  const fetchWorktrees = vi.fn<AppState['fetchWorktrees']>(async () => false)
+  const fetchWorktrees = vi.fn(async () => false)
   const recovery = vi.fn()
   let cards!: ReturnType<typeof useSidebarExternalWorktreeCards>
   const source = {
@@ -322,7 +324,9 @@ it('retains exact inbox dialog, failure and recovery identity across same-ID twi
     repos: targets,
     settings: getDefaultSettings('/tmp'),
     updateRepo,
-    fetchWorktrees
+    // SAFETY: this fixture invokes only local/runtime refresh; the direct-SSH overload is never reached.
+    // oxlint-disable-next-line typescript/consistent-type-assertions
+    fetchWorktrees: fetchWorktrees as AppState['fetchWorktrees']
   })
   function Harness() {
     const repos = useAppStore((state) => state.repos)

@@ -1,3 +1,4 @@
+import type { ProjectHostSetupResult } from '../../../shared/project-types'
 // @vitest-environment happy-dom
 import { act, cleanup, render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -151,10 +152,10 @@ it('re-derives an untouched restored source, preserves edits through catalog cha
     }
   }
   const projection = projectHostSetupProjectionFromRepos([source, other])
-  let finish!: (result: { setup: { id: string } }) => void
+  let finish!: (result: ProjectHostSetupResult) => void
   const clone = vi.fn(
     () =>
-      new Promise<{ setup: { id: string } }>((resolve) => {
+      new Promise<ProjectHostSetupResult>((resolve) => {
         finish = resolve
       })
   )
@@ -245,7 +246,18 @@ it('re-derives an untouched restored source, preserves edits through catalog cha
     })
   )
   await user.keyboard('{Escape}')
-  await act(async () => finish({ setup: { id: 'finished-after-dismiss' } }))
+  await act(async () =>
+    finish({
+      project: projection.projects[1]!,
+      repo: { ...other, executionHostId: 'runtime:destination', path: '/destination/app' },
+      setup: {
+        ...projection.setups[1]!,
+        id: 'finished-after-dismiss',
+        hostId: 'runtime:destination',
+        path: '/destination/app'
+      }
+    })
+  )
   expect(ready).not.toHaveBeenCalled()
   await open()
   const reopened = screen.getByPlaceholderText('Repository URL')

@@ -65,7 +65,7 @@ describe('browser-local exact Tasks selection across remote replies', () => {
         })
       }
       expect((await pending).defaultRepoSelection).toEqual(exact)
-      expect(api.settings.getSync().defaultRepoSelection).toEqual(exact)
+      expect(api.settings.getSync()?.defaultRepoSelection).toEqual(exact)
       expect(
         JSON.parse(globals.storage.getItem('orca.web.settings.v1') ?? '{}').defaultRepoSelection
       ).toEqual(exact)

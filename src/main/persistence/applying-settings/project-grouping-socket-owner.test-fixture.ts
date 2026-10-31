@@ -121,7 +121,7 @@ export async function createProjectGroupingSocketOwner(
     lastUsedAt: null,
     runtimeId: null,
     preferredEndpointId: 'ws-owner',
-    sessionOnly: true,
+    sessionOnly: true as const,
     endpoints: [
       {
         id: 'ws-owner',

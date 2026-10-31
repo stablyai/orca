@@ -243,7 +243,8 @@ describe('sidebar list parity: desktop window and feed reader', () => {
       }
       const inspect = (model: ReturnType<typeof useGoldenSidebarPipeline>) => {
         const headers = model.rowModel.rows.filter(
-          (candidate) => candidate.type === 'header' && candidate.icon.kind === 'project'
+          (candidate): candidate is Extract<typeof candidate, { type: 'header' }> =>
+            candidate.type === 'header' && candidate.icon.kind === 'project'
         )
         expect(headers).toHaveLength(mode === 'repository' ? 2 : 3)
         expect(headers.find((header) => header.key === 'project:repo:plain')?.repo?.path).toBe(

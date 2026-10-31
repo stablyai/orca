@@ -131,7 +131,7 @@ it.each(['token', 'device-key', 'migration-fallback', 'strict-old'] as const)(
         )
       }
       owner.store.flush()
-      expect(readDataFile().ui).not.toHaveProperty('filterRepoIdsMode')
+      expect(readDataFile()).not.toHaveProperty('ui.filterRepoIdsMode')
       expect(JSON.parse(window.localStorage.getItem('orca.web.ui.v1') ?? '{}')).not.toHaveProperty(
         'filterRepoIdsMode'
       )
@@ -150,6 +150,7 @@ it.each(['token', 'device-key', 'migration-fallback', 'strict-old'] as const)(
   20_000
 )
 
+// Real encrypted owner handshakes and disk reopen run sequentially across three held settlements.
 it('fences encrypted A→B→A client cutover across separate owners and obsolete settlements while the successor stays in flight', async () => {
   const delayed: (() => void)[] = []
   let delay = true

@@ -65,6 +65,7 @@ it('roundtrips native exact Workspace/Agents and the real capability-update/raw-
   const update = await dispatcher.dispatch(
     {
       id: 'install',
+      authToken: '',
       method: 'runtime.clientCapabilities.update',
       params: mobileRuntimeClientCapabilityUpdateParams()
     },
@@ -100,6 +101,7 @@ it('roundtrips native exact Workspace/Agents and the real capability-update/raw-
     const exact = await dispatcher.dispatch(
       {
         id: 'exact',
+        authToken: '',
         method: 'ui.set',
         params: {
           filterRepoIds: [Q, 'offline'],
@@ -118,6 +120,7 @@ it('roundtrips native exact Workspace/Agents and the real capability-update/raw-
     const raw = await dispatcher.dispatch(
       {
         id: 'old',
+        authToken: '',
         method: 'ui.set',
         params: { filterRepoIds: initial.filter((id) => id !== 'same').concat('offline') }
       },
@@ -152,13 +155,14 @@ it('adapts real remote Task full-array edits against the current canonical owner
     runtime: runtime as unknown as OrcaRuntimeService,
     methods: CLIENT_UI_METHODS
   })
-  const read = await dispatcher.dispatch({ id: 'read', method: 'settings.get' })
+  const read = await dispatcher.dispatch({ id: 'read', authToken: '', method: 'settings.get' })
   expect(read).toMatchObject({
     ok: true,
     result: { settings: { defaultRepoSelection: ['same', 'unseen', 'other'] } }
   })
   const edit = await dispatcher.dispatch({
     id: 'edit',
+    authToken: '',
     method: 'settings.update',
     params: { defaultRepoSelection: ['same', 'unseen', 'new'] }
   })
@@ -171,12 +175,14 @@ it('adapts real remote Task full-array edits against the current canonical owner
   store.updateSettings({ defaultRepoSelection: ['runtime:new\0same', 'new'] })
   await dispatcher.dispatch({
     id: 'stale',
+    authToken: '',
     method: 'settings.update',
     params: { defaultRepoSelection: ['same', 'new', 'other'] }
   })
   expect(store.getSettings().defaultRepoSelection).toEqual(['runtime:new\0same', 'new', 'other'])
   await dispatcher.dispatch({
     id: 'unrelated',
+    authToken: '',
     method: 'settings.update',
     params: { machineName: 'Desk' }
   })
@@ -199,7 +205,7 @@ it('adapts real remote Task full-array edits against the current canonical owner
     expect(currentOwner.getSettings().defaultRepoSelection).toEqual(canonical)
     expect(remote.get().defaultRepoSelection).toEqual(canonical)
     currentOwner.flush()
-    expect(readDataFile().settings.defaultRepoSelection).toEqual(canonical)
+    expect(readDataFile()).toHaveProperty('settings.defaultRepoSelection', canonical)
     await closeTestStores()
     currentOwner = createStore()
     expect(currentOwner.getSettings().defaultRepoSelection).toEqual(canonical)
@@ -224,7 +230,7 @@ it('selects request meaning atomically before a single current-owner mutation, i
   })
   const send = (params: unknown, clientCapabilities: readonly string[] = []) =>
     dispatcher.dispatch(
-      { id: 'edit', method: 'ui.set', params },
+      { id: 'edit', authToken: '', method: 'ui.set', params },
       { clientKind: 'mobile', clientCapabilities }
     )
   for (const caps of [[], ['unrelated'], ['ui.project-repo-filter-exact.v1']]) {
@@ -268,7 +274,7 @@ it('selects request meaning atomically before a single current-owner mutation, i
   }
   store.flush()
   expect(readDataFile()).toHaveProperty('ui.filterRepoIds', [Q])
-  expect(readDataFile().ui).not.toHaveProperty('filterRepoIdsMode')
+  expect(readDataFile()).not.toHaveProperty('ui.filterRepoIdsMode')
   await closeTestStores()
   expect(createStore().getUI().filterRepoIds).toEqual([Q])
 })
