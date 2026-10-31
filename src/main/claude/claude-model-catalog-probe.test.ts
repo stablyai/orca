@@ -130,7 +130,7 @@ describe('claude model catalog probe', () => {
     expect(fastModeSupport).toEqual({ supported: true })
     expect(models[0]?.supportsFastMode).toBe(true)
     expect(
-      models[0] && discoveredModel(models[0], fastModeSupport?.supported === true).options
+      models[0] && discoveredModel(models[0], fastModeSupport?.supported === true, 'claude').options
     ).toContainEqual(expect.objectContaining({ id: 'fastMode' }))
     expect(
       models.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))

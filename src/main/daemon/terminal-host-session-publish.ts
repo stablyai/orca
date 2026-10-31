@@ -1,3 +1,4 @@
+import { terminalStartError } from '../../shared/terminal-start-failure'
 import type { PtyCreationDisposition } from '../../shared/claimed-agent-pty-owner'
 import type { SubprocessHandle } from './session-subprocess-handle'
 import { buildStartupCommandSubmission } from '../../shared/startup-command-submission'
@@ -127,6 +128,15 @@ export async function spawnAndPublishSession(
   })
   physical.useRecovery(recoverUnpublishedTerminalSession(session))
   opts.onPhysicalOwner?.(session.physicalCompletion, terminalSessionExitCode(session))
+  if (!session.isAlive) {
+    const error = terminalStartError(
+      'agent_session_exited_during_start',
+      session.exitCause,
+      session.incarnationId
+    )
+    session.dispose()
+    throw error
+  }
   recordSessionSpawnPaneKey(session, opts.env?.ORCA_PANE_KEY)
 
   try {

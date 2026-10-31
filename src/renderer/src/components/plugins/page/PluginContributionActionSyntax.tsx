@@ -1,7 +1,8 @@
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import { Button } from '../../ui/button'
-import { openPluginSampleFromSettings, pluginSyntaxSample } from '../state/plugin-try-action'
+import { openPluginSampleFromSettings } from '../state/plugin-try-action'
+import { pluginSyntaxSample } from '../state/plugin-syntax-samples'
 import { pluginPanelUnavailableReason } from './plugin-contribution-action-availability'
 
 /** A grammar shows the moment a matching file is open, so Try it opens a sample of one. */
