@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -52,7 +53,7 @@ beforeEach(() => {
   mocks.launch.mockResolvedValue(true)
   setLocalRuntimeCapabilitiesForTests([CHAT])
   useAppStore.setState({
-    settings: { ...getDefaultSettings('/test'), experimentalNativeChat: true },
+    settings: { ...getDefaultSettings('/test'), nativeChatProviders: EVERY_AGENT_CHAT },
     repos: [{ id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }],
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]

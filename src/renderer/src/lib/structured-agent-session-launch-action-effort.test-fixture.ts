@@ -45,7 +45,7 @@ export function registerActionEffortCreateTests(
       mocks.runtimeStatusByEnvironmentId.set('owner', {
         status: { capabilities, hostPlatform: 'linux' }
       })
-      mocks.settings = { experimentalNativeChat: true }
+      mocks.settings = { agentDefaultSurface: 'chat' }
       mocks.exactSupport.mockResolvedValue(true)
       const projection = projectSourceControlActionLaunch(
         {

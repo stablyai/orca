@@ -251,7 +251,7 @@ describe.each(['git', 'folder'] as const)('foreground %s implicit Chat decline',
       useAppStore.setState(({ settings }) => ({
         settings: settings && {
           ...settings,
-          experimentalNativeChat: true,
+          agentDefaultSurface: 'chat',
           agentCmdOverrides: { codex: 'cx' },
           agentDefaultArgs: { codex: '--search' },
           agentPermissionDefault: 'own'

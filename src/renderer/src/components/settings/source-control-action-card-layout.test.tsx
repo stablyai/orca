@@ -123,23 +123,20 @@ beforeEach(() => {
 afterEach(resetHostStructuredAgentsForTests)
 
 it.each([
-  ['chat on', 'claude', true, undefined, false],
-  ['chat off', 'claude', false, undefined, true],
-  ['provider off', 'claude', true, { claude: false }, true],
-  ['no chat support', 'goose', true, undefined, true]
-] as const)(
-  '%s: keeps launch setup behind the common picker',
-  (_name, agent, chat, providers, _visible) => {
-    configure({ experimentalNativeChat: chat, nativeChatProviders: providers })
-    render(<Row agent={agent} />)
-    expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
-    expect(screen.getByRole('button', { name: 'Select agent' })).toBeDefined()
-    expect(screen.getByText('Command template')).toBeDefined()
-  }
-)
+  ['chat on', 'claude', { claude: true }],
+  ['no saved choice', 'claude', undefined],
+  ['provider off', 'claude', { claude: false }],
+  ['no chat support', 'goose', { goose: true }]
+] as const)('%s: keeps launch setup behind the common picker', (_name, agent, providers) => {
+  configure({ nativeChatProviders: providers })
+  render(<Row agent={agent} />)
+  expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Select agent' })).toBeDefined()
+  expect(screen.getByText('Command template')).toBeDefined()
+})
 
 it('hides an unresolved launch even with chat off, but always shows text action Arguments', () => {
-  configure({ experimentalNativeChat: false })
+  configure({ nativeChatProviders: {} })
   useAppStore.setState({ localDetectedAgentIdsByContext: {} })
   const view = render(<Row />)
   expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
@@ -148,7 +145,7 @@ it('hides an unresolved launch even with chat off, but always shows text action 
 })
 
 it('edits launch arguments in the common setup and keeps the recipe when chat availability changes', async () => {
-  configure({ experimentalNativeChat: false })
+  configure({ nativeChatProviders: {} })
   render(<Row />)
   const trigger = screen.getByRole('button', { name: 'Select agent' })
   await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
@@ -158,9 +155,9 @@ it('edits launch arguments in the common setup and keeps the recipe when chat av
   expect(input).toHaveProperty('value', '--saved')
   fireEvent.change(input, { target: { value: '--draft' } })
   fireEvent.click(screen.getByRole('button', { name: 'Use' }))
-  act(() => configure({ experimentalNativeChat: true }))
+  act(() => configure({ nativeChatProviders: { claude: true } }))
   expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
-  act(() => configure({ experimentalNativeChat: false }))
+  act(() => configure({ nativeChatProviders: {} }))
   fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
   fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
   expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--draft')
@@ -185,14 +182,14 @@ it('reacts to the host registry without adding an inline launch editor', async (
 it('honors an explicit future surface only after an agent resolves', () => {
   const input = {
     agent: 'claude',
-    settings: { experimentalNativeChat: true },
+    settings: { nativeChatProviders: { claude: true } },
     chatAgents: ['claude']
   } as const
   expect(shouldShowSourceControlActionArguments({ ...input, launchKind: 'terminal' })).toBe(true)
   expect(
     shouldShowSourceControlActionArguments({
       ...input,
-      settings: { experimentalNativeChat: false },
+      settings: { nativeChatProviders: {} },
       launchKind: 'chat'
     })
   ).toBe(false)
@@ -204,7 +201,7 @@ it('honors an explicit future surface only after an agent resolves', () => {
 it.each(['', null, '--verbose', undefined])(
   'repository Args %s uses the shared controls, source and wrapping layout',
   (agentArgs) => {
-    configure({ experimentalNativeChat: false })
+    configure({ nativeChatProviders: {} })
     useAppStore.setState({
       repos: [{ id: 'repo', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }]
     })
@@ -262,13 +259,13 @@ it.each(['', null, '--verbose', undefined])(
     expect(controls.getByRole('button', { name: 'Select agent' })).toBeDefined()
     expect(controls.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
     expect(controls.getByText('Command template')).toBeDefined()
-    act(() => configure({ experimentalNativeChat: true }))
+    act(() => configure({ nativeChatProviders: { claude: true } }))
     expect(controls.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
   }
 )
 
 it('isolates equal-baseline row buffers and delegation, retains them on close, and invalidates both on Discard', async () => {
-  configure({ experimentalNativeChat: false })
+  configure({ nativeChatProviders: {} })
   render(
     <>
       <div data-testid="first-row">
@@ -317,7 +314,7 @@ it('isolates equal-baseline row buffers and delegation, retains them on close, a
 
 it('labels an own raw Sonnet recipe from the same source as its setup chips', async () => {
   configure({
-    experimentalNativeChat: false,
+    nativeChatProviders: {},
     agentPermissionDefault: 'own',
     agentLaunchChoices: { claude: { model: 'claude-opus-5-5' } }
   })
@@ -387,7 +384,7 @@ it('labels an own raw Sonnet recipe from the same source as its setup chips', as
 it.each([5, 50])(
   'isolates closed owner projection work across unrelated publications for %s actual rows',
   async (rows) => {
-    configure({ experimentalNativeChat: false, agentPermissionDefault: 'own' })
+    configure({ nativeChatProviders: {}, agentPermissionDefault: 'own' })
     const sources = vi.spyOn(sourceProjection, 'sourceControlPickerDraft')
     const analyses = vi.spyOn(choiceAnalysis, 'analyzeAgentChoiceArgs')
     const catalogs = vi.spyOn(pickerCatalog, 'getAgentSessionOptionLaunchCatalog')
@@ -470,7 +467,7 @@ it.each([5, 50])(
 )
 
 it('keeps the complete staged global setup across a template-only edit and applies Use onto the current card', async () => {
-  configure({ experimentalNativeChat: false })
+  configure({ nativeChatProviders: {} })
   render(<Row />)
   const trigger = screen.getByRole('button', { name: 'Select agent' })
   const open = async () => {
@@ -515,7 +512,7 @@ it.each([5, 50])(
         }
       }
     })
-    configure({ experimentalNativeChat: false, sourceControlAi: config })
+    configure({ nativeChatProviders: {}, sourceControlAi: config })
     const repo = {
       ...TEST_REPO,
       sourceControlAi: {

@@ -382,7 +382,7 @@ it.each(['ordinary', 'search'] as const)(
       worktreesByRepo: { repo1: [first, second] },
       settings: {
         ...getDefaultSettings('/synthetic'),
-        experimentalNativeChat: false,
+        nativeChatProviders: {},
         agentPermissionDefault: 'own'
       },
       localDetectedAgentIdsByContext: { host: ['codex'] },
@@ -471,7 +471,7 @@ it.each([3, 30])(
       worktreesByRepo: { repo1: [worktree] },
       settings: {
         ...getDefaultSettings('/synthetic'),
-        experimentalNativeChat: false,
+        nativeChatProviders: {},
         agentPermissionDefault: 'own'
       },
       localDetectedAgentIdsByContext: { host: ['codex'] },

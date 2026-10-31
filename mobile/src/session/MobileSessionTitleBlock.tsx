@@ -27,7 +27,7 @@ export function MobileSessionTitleBlock({
   const t = useMobileTranslation()
   return (
     <>
-      <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.active} />
+      <DetailCardFocusBoundary refs={details.boundaryRefs} index={0} active={details.titleActive} />
       <Fragment key="title">
         <Pressable
           style={[
@@ -37,7 +37,7 @@ export function MobileSessionTitleBlock({
           ref={details.openerRef}
           onLayout={details.onAnchorLayout}
           onPress={details.toggle}
-          aria-expanded={details.requestedOpen}
+          aria-expanded={details.titleRequestedOpen}
           accessibilityRole="button"
           accessibilityHint={t(
             'session.header.workspaceDetailsHint',
@@ -71,7 +71,7 @@ export function MobileSessionTitleBlock({
           </Pressable>
         </Pressable>
       </Fragment>
-      <DetailCardFocusBoundary refs={details.boundaryRefs} index={1} active={details.active} />
+      <DetailCardFocusBoundary refs={details.boundaryRefs} index={1} active={details.titleActive} />
     </>
   )
 }

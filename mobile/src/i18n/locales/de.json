@@ -961,7 +961,13 @@
       "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
       "resetDefaults": "Auf Standard zurücksetzen",
-      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen"
+      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
+      "moreKeys": "WEITERE TASTEN",
+      "moreKeysDescription": "Diese Tasten befinden sich unter ⋯ in der Terminal-Tastenleiste. Blende Tasten ein oder aus und halte den Griff gedrückt, um sie in die gewünschte Reihenfolge zu ziehen. Tasten, die bereits in der Leiste sind, etwa Esc oder die Pfeiltasten, erscheinen nicht unter ⋯.",
+      "directionPad": "STEUERKREUZ",
+      "showDirectionPad": "Steuerkreuz anzeigen",
+      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
+      "showShortcut": "Tastenkürzel {{label}} anzeigen"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",
@@ -1403,7 +1409,8 @@
       "reconnect": "Erneut verbinden",
       "searchWorkspaces": "Arbeitsbereiche durchsuchen",
       "tasks": "Aufgaben",
-      "workspaceOptions": "Arbeitsbereichsoptionen"
+      "workspaceOptions": "Arbeitsbereichsoptionen",
+      "newWorkspace": "Neuer Arbeitsbereich"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
@@ -1831,7 +1838,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Tastatur ausblenden",
-      "sendKey": "{{label}} senden"
+      "sendKey": "{{label}} senden",
+      "modifierHint": "Gilt für die nächste Taste. Doppeltippen zum Beibehalten.",
+      "typeCharacter": "{{character}} eingeben",
+      "interrupt": "Terminal unterbrechen",
+      "keysModeLabel": "Tastenmodus: Eingaben gehen direkt an das Terminal. Zum Nachrichtenmodus wechseln",
+      "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
+      "keysMode": "Tasten",
+      "messageMode": "Nachricht",
+      "moreKeys": "Weitere Tasten und Aktionen",
+      "showKeyboard": "Tastatur anzeigen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1943,7 +1959,10 @@
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
       "liveInputLabel": "Live-Eingabe im Terminal",
-      "sendCommand": "Befehl senden"
+      "sendCommand": "Befehl senden",
+      "messageAgentPlaceholder": "Nachricht an {{agent}}",
+      "writeCommandPlaceholder": "Befehl schreiben und dann senden",
+      "theAgent": "dem Agenten"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
@@ -2124,7 +2143,12 @@
       "openSourceControl": "Quellcodeverwaltung öffnen",
       "reconnectToDesktop": "Erneut mit dem Desktop verbinden",
       "showSidebar": "Seitenleiste anzeigen",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Terminal-Layout",
+      "fileExplorer": "Datei-Explorer",
+      "sourceControl": "Quellcodeverwaltung",
+      "newTab": "Neuen Tab erstellen",
+      "quickCommands": "Schnellbefehle"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agentenverlauf",
@@ -2324,7 +2348,8 @@
       "terminal": "Terminal",
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
-      "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen."
+      "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
+      "allowAutoClose": "Automatisches Schließen erlauben"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
@@ -2341,7 +2366,8 @@
       "checkingCapabilities": "Desktop-Funktionen werden geprüft – gleich erneut versuchen",
       "newTab": "Neuen Tab erstellen",
       "quickCommandsUpdateRequired": "Desktop-Update für Schnellbefehle erforderlich",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "Terminal-Layout"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Terminal leeren",
@@ -2603,6 +2629,56 @@
       "waitForStart": "Warten, bis der Agent vollständig gestartet ist.",
       "waitForTurn": "Warten, bis der Agent fertig geantwortet hat, oder ihn stoppen.",
       "waitMoment": "Einen Moment warten."
+    },
+    "workerAutoClose": {
+      "running": "Temporärer Orchestrierungs-Worker · Schließt sich 2 Minuten nach Abschluss",
+      "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt sich in {{countdown}}",
+      "keepOpen": "Offen halten"
+    },
+    "terminalLayoutSheet": {
+      "title": "Terminal-Layout",
+      "oneTerminal": "Ein Terminal",
+      "selected": "Ausgewählt",
+      "auto": "Automatisch",
+      "autoHint": "An den verfügbaren Platz angepasst teilen",
+      "sideBySide": "Nebeneinander",
+      "sideBySideHint": "Zwei Spalten, auch bei geöffneter Seitenleiste",
+      "stacked": "Untereinander",
+      "stackedHint": "Zwei Zeilen in jeder Ausrichtung",
+      "selectedHint": "Ausgewählt · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Layout konnte nicht gespeichert werden",
+      "saveFailedMessage": "Dieses Layout gilt vorerst. Wähle es erneut aus, um das Speichern zu wiederholen."
+    },
+    "terminalArrowPad": {
+      "label": "Pfeiltasten",
+      "hint": "Eine Seite antippen für einen Tastendruck oder gedrückt halten und ziehen zum Wiederholen",
+      "up": "Nach oben",
+      "down": "Nach unten",
+      "left": "Nach links",
+      "right": "Nach rechts"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}} senden",
+      "paste": "Einfügen",
+      "sending": "Wird gesendet…",
+      "photo": "Foto",
+      "file": "Datei",
+      "desktopWidth": "Desktopbreite",
+      "phoneWidth": "Telefonbreite",
+      "keys": "Tasten",
+      "combos": "Kombinationen",
+      "yourKeys": "Deine Tasten",
+      "deleteKeyHint": "Gedrückt halten, um diese Taste zu löschen",
+      "addCustomKey": "Benutzerdefinierte Taste hinzufügen",
+      "addKey": "Taste hinzufügen"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, fokussiert",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, zum Fokussieren tippen",
+      "inputPane": "{{title}} · Eingabe"
     }
   },
   "settings": {
@@ -2794,7 +2870,9 @@
       "cherryPickState": "Cherry-pick",
       "mergeState": "Merge",
       "rebaseState": "Rebase",
-      "stagedCount": "{{count}} vorgemerkt"
+      "stagedCount": "{{count}} vorgemerkt",
+      "completingMerge": "Wird abgeschlossen…",
+      "completeMerge": "Merge abschließen"
     },
     "branchCompare": {
       "commits_one": "{{count}} Commit",
@@ -3233,6 +3311,13 @@
       "branchUnavailable": "Branch-Status nicht verfügbar",
       "commitFailed": "Commit fehlgeschlagen",
       "waitingForDesktop": "Warten auf den Desktop…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Aktualisiere Orca auf dem Computer, auf dem dieser Arbeitsbereich ausgeführt wird, um Merge-Konflikte auf deinem Smartphone zu lösen.",
+      "markResolved": "Als gelöst markieren",
+      "keepFile": "Datei behalten",
+      "keepDeletion": "Löschung beibehalten",
+      "completeMergeFailed": "Merge konnte nicht abgeschlossen werden"
     }
   },
   "tasks": {
@@ -3899,6 +3984,15 @@
       "inProgress": "In Bearbeitung",
       "inReview": "Im Review",
       "pinned": "Angeheftet"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Steuerkreuz nach oben",
+      "left": "Steuerkreuz nach links",
+      "right": "Steuerkreuz nach rechts",
+      "down": "Steuerkreuz nach unten",
+      "hint": "Sendet eine Pfeiltaste. Gedrückt halten zum Wiederholen."
     }
   }
 }

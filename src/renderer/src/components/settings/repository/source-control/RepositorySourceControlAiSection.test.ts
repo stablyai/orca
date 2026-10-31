@@ -1,5 +1,6 @@
 import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent, screen, within, waitFor } from '@testing-library/react'
 import '../../__fixtures__/settings-persistence-test-fixture'
@@ -147,7 +148,7 @@ describe('RepositorySourceControlAiActionRows', () => {
         repos: [{ ...TEST_REPO, id: 'repo-1' }],
         settings: {
           ...settings,
-          experimentalNativeChat: false,
+          nativeChatProviders: {},
           defaultTuiAgent: 'claude',
           sourceControlAi: source
         },
@@ -199,10 +200,13 @@ describe('RepositorySourceControlAiActionRows', () => {
       expect(triggers().every((trigger) => trigger.disabled)).toBe(true)
       await act(async () => finish([...detected]))
       expect(triggers().every((trigger) => !trigger.disabled)).toBe(true)
-      for (const experimentalNativeChat of [true, false]) {
+      for (const chat of [true, false]) {
         await act(() =>
           useAppStore.setState({
-            settings: { ...useAppStore.getState().settings!, experimentalNativeChat }
+            settings: {
+              ...useAppStore.getState().settings!,
+              nativeChatProviders: chat ? EVERY_AGENT_CHAT : {}
+            }
           })
         )
         for (const card of cards) {
@@ -313,7 +317,7 @@ it.each(['own', 'parent'] as const)(
     }
     const settings = {
       ...base,
-      experimentalNativeChat: false,
+      nativeChatProviders: {},
       agentPermissionDefault: 'own' as const,
       agentDefaultArgs: { claude: '--model opus --verbose' },
       sourceControlAi: source
@@ -420,7 +424,7 @@ it.each(['own', 'parent'] as const)(
 it('keeps default and missing-agent editors disabled only until the host inventory settles', async () => {
   const settings = useAppStore.getState().settings!
   useAppStore.setState({
-    settings: { ...settings, experimentalNativeChat: false },
+    settings: { ...settings, nativeChatProviders: {} },
     detectedAgentIds: null,
     ensureDetectedAgents: vi.fn(() => new Promise<TuiAgent[]>(() => {}))
   })
@@ -485,7 +489,7 @@ it.each([1, 10])(
     useAppStore.setState({
       settings: {
         ...settings,
-        experimentalNativeChat: false,
+        nativeChatProviders: {},
         defaultTuiAgent: 'claude',
         disabledTuiAgents: ['codex']
       },
@@ -627,7 +631,7 @@ it.each([
     const own = { actionOverrides: { resolveConflicts: { commandInputTemplate: '{basePrompt}' } } }
     const parentBefore = structuredClone(source.actions.resolveConflicts)
     useAppStore.setState({
-      settings: { ...base, experimentalNativeChat: false, sourceControlAi: source },
+      settings: { ...base, nativeChatProviders: {}, sourceControlAi: source },
       repos: [TEST_REPO],
       localDetectedAgentIdsByContext: { host: ['claude', 'codex'] }
     })
@@ -726,7 +730,7 @@ it.each([
 
 it('keeps staged repository setup through template edits and saves/reopens only current own fields', async () => {
   useAppStore.setState(({ settings }) => ({
-    settings: settings && { ...settings, experimentalNativeChat: false },
+    settings: settings && { ...settings, nativeChatProviders: {} },
     localDetectedAgentIdsByContext: { host: ['claude'] }
   }))
   const repo = {

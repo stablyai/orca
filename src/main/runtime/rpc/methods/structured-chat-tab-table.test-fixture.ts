@@ -191,10 +191,7 @@ beforeEach(async () => {
   closeSession = vi.fn(async () => true)
   directory = await mkdtemp(join(tmpdir(), 'orca-chat-tab-table-'))
   runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'getClientSettings').mockReturnValue(
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the structured-chat policy reads only this one setting on these paths.
-    { experimentalNativeChat: true } as ReturnType<OrcaRuntimeService['getClientSettings']>
-  )
+
   dispatcher = new RpcDispatcher({
     runtime,
     methods: [...STRUCTURED_AGENT_SESSION_METHODS, ...SESSION_TAB_METHODS]

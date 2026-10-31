@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
 import type { AgentLaunchRouteStore } from './agent-launch-route-input'
@@ -237,7 +238,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
 
   it.each([true, false])('answers from feasibility alone (supported=%s)', (supported) => {
     mocks.structuredAgentLaunchSupported.mockReturnValue(supported)
-    const settings = { experimentalNativeChat: true }
+    const settings = { nativeChatProviders: EVERY_AGENT_CHAT }
 
     expect(
       structuredAgentSessionLaunchFeasible(store, {
@@ -251,7 +252,7 @@ describe('structuredAgentSessionLaunchFeasible', () => {
   })
 
   it('builds the input from the named settings, not the store copy', () => {
-    const settings = { experimentalNativeChat: true }
+    const settings = { nativeChatProviders: EVERY_AGENT_CHAT }
     structuredAgentSessionLaunchFeasible(store, {
       agent: 'codex',
       workspace: { kind: 'git-worktree', worktreeId: 'wt-1' },

@@ -187,7 +187,7 @@ beforeEach(() => {
     activeWorktreeId: 'one',
     settings: {
       ...getDefaultSettings('/home/me'),
-      experimentalNativeChat: true,
+      nativeChatProviders: { claude: true, codex: true },
       disabledTuiAgents: []
     },
     localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
@@ -315,8 +315,7 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             activeWorkspaceExecutionHostId: 'local',
             settings: {
               ...getDefaultSettings('/home/me'),
-              experimentalNativeChat: true,
-              nativeChatProviders: { opencode: false, pi: false, omp: false },
+              nativeChatProviders: { claude: true, codex: true },
               disabledTuiAgents: []
             }
           })
@@ -486,6 +485,30 @@ it('shows an older host from client facts and never asks it per agent', () => {
   })
   expect(mocks.subscribe).not.toHaveBeenCalled()
   expect(mocks.support).not.toHaveBeenCalled()
+})
+
+it('updates the real menu when the global default changes and retains opposite overrides', async () => {
+  useAppStore.setState((state) => ({
+    settings: { ...state.settings!, agentDefaultSurface: 'terminal', nativeChatProviders: {} }
+  }))
+  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
+  const row = () =>
+    hook.result.current.state === 'settled'
+      ? hook.result.current.rows.find((item) => item.agent === 'claude')
+      : undefined
+  expect(row()?.kind).toBe('cli')
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, agentDefaultSurface: 'chat' }
+    }))
+  })
+  expect(row()?.kind).toBe('chat')
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      settings: { ...state.settings!, nativeChatProviders: { claude: false } }
+    }))
+  })
+  expect(row()?.kind).toBe('cli')
 })
 
 it('offers a chat on the CLI row of an agent set to open as a CLI', () => {
@@ -661,7 +684,7 @@ it('preserves per-agent published answers and direct route inputs across context
   }
 })
 
-it('keeps global Chat authority separate from provider defaults and pending/CLI support', () => {
+it('keeps explicit Chat separate from provider defaults and pending/CLI support', () => {
   const input = {
     agent: 'codex' as const,
     inventoryReady: true,
@@ -669,7 +692,7 @@ it('keeps global Chat authority separate from provider defaults and pending/CLI 
     chatPending: false,
     plain: false
   }
-  const settings = { experimentalNativeChat: true, nativeChatProviders: { codex: false } }
+  const settings = { agentDefaultSurface: 'chat' as const, nativeChatProviders: { codex: false } }
   expect(resolveAgentMenuSelection({ ...input, settings, surface: 'chat' }).choice?.route).toBe(
     'structured-native-chat'
   )
@@ -678,12 +701,11 @@ it('keeps global Chat authority separate from provider defaults and pending/CLI 
   )
   const off = resolveAgentMenuSelection({
     ...input,
-    settings: { experimentalNativeChat: false },
-    surface: 'chat'
+    settings: { agentDefaultSurface: 'terminal' }
   })
   expect(off).toMatchObject({
     ready: true,
-    choice: { route: 'terminal-tui', requestedSurface: 'terminal' }
+    choice: { route: 'terminal-tui' }
   })
   expect(resolveAgentMenuSelection({ ...input, settings: null, surface: 'chat' }).ready).toBe(false)
   expect(resolveAgentMenuSelection({ ...input, settings: null, surface: 'terminal' }).ready).toBe(
@@ -692,8 +714,7 @@ it('keeps global Chat authority separate from provider defaults and pending/CLI 
   expect(
     resolveAgentMenuSelection({
       ...input,
-      settings: { experimentalNativeChat: false },
-      surface: 'chat',
+      settings: { agentDefaultSurface: 'terminal' },
       cliMissing: true
     }).ready
   ).toBe(false)

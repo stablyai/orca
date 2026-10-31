@@ -74,7 +74,7 @@ it('projects live shortcuts only in the + picker and preserves its loading prese
         settings: {
           ...getDefaultSettings('/tmp'),
           defaultTuiAgent: 'blank',
-          experimentalNativeChat: false
+          nativeChatProviders: {}
         },
         detectedAgentIds: ['codex'],
         keybindings: { 'tab.newAgent': ['Mod+Alt+T'], 'tab.newAgent.codex': ['Mod+Shift+X'] }

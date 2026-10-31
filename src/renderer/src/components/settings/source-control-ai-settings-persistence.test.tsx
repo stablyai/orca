@@ -140,7 +140,7 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
     })),
     settings: {
       ...settings,
-      experimentalNativeChat: false,
+      nativeChatProviders: { claude: false, codex: false },
       sourceControlAi: normalizeSourceControlAiSettings({
         ...getDefaultSourceControlAiSettings(),
         enabled: true,
@@ -271,7 +271,7 @@ it('isolates equal recipe drafts, invalidates Discard and saves permission-only 
     localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
     settings: {
       ...settings,
-      experimentalNativeChat: false,
+      nativeChatProviders: {},
       agentDefaultArgs: { claude: '--verbose' },
       agentPermissionDefault: 'own',
       sourceControlAi: normalizeSourceControlAiSettings({
