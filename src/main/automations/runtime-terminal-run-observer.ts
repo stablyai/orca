@@ -1,3 +1,5 @@
+import { delayUnlessAborted } from '../../shared/abort-aware-delay'
+import { AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH } from '../../shared/agent-status-types'
 import { createHeadlessAutomationOutputSnapshotBuffer } from './headless-dispatch'
 import type {
   AutomationRunCompletionObservation,
@@ -12,6 +14,7 @@ import {
 import {
   hasHeldRunTurnDone,
   judgeIdleRun,
+  runAssistantReply,
   type AutomationRunAgentEvidence
 } from './automation-run-agent-evidence'
 
@@ -46,24 +49,45 @@ async function readTail(runtime: AutomationRunTerminalHost, handle: string): Pro
   }
 }
 
-function snapshotOf(tail: readonly string[]): AutomationRunOutputSnapshot | null {
+function snapshotOf(tail: readonly string[] | string): AutomationRunOutputSnapshot | null {
   const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
-  snapshotBuffer.append(tail.join('\n'))
+  snapshotBuffer.append(typeof tail === 'string' ? tail : tail.join('\n'))
   return snapshotBuffer.snapshot()
+}
+
+type JudgedRun = { evidence: AutomationRunAgentEvidence; run: AutomationRun }
+
+/** Completed runs keep what the agent answered, like desktop runs; the screen is the fallback for agents without hooks. */
+async function completedSnapshot(
+  tail: readonly string[],
+  judged: JudgedRun,
+  runStartedAt: number,
+  signal: AbortSignal
+): Promise<AutomationRunOutputSnapshot | null> {
+  const reply = await runAssistantReply(judged.evidence, judged.run, runStartedAt, signal)
+  const snapshot = snapshotOf(reply ?? tail)
+  return snapshot && reply && reply.length >= AGENT_STATUS_ASSISTANT_MESSAGE_MAX_LENGTH
+    ? { ...snapshot, truncated: true }
+    : snapshot
 }
 
 async function judgeIdleTail(
   tail: readonly string[],
   evidence: AutomationRunAgentEvidence,
   run: AutomationRun,
-  runStartedAt: number
+  runStartedAt: number,
+  signal: AbortSignal
 ): Promise<AutomationRunCompletionObservation | null> {
   const verdict = judgeIdleRun(evidence, run, tail, runStartedAt, Date.now())
   if (verdict.kind === 'wait') {
     return null
   }
   return verdict.kind === 'completed'
-    ? { status: 'completed', outputSnapshot: snapshotOf(tail), error: null }
+    ? {
+        status: 'completed',
+        outputSnapshot: await completedSnapshot(tail, { evidence, run }, runStartedAt, signal),
+        error: null
+      }
     : { status: 'dispatch_failed', outputSnapshot: snapshotOf(tail), error: verdict.error }
 }
 
@@ -82,7 +106,7 @@ async function settleIdlePane(
     if (tail.join('\n') !== idleTail) {
       return null
     }
-    const observation = await judgeIdleTail(tail, judged.evidence, judged.run, runStartedAt)
+    const observation = await judgeIdleTail(tail, judged.evidence, judged.run, runStartedAt, signal)
     if (observation) {
       return observation
     }
@@ -96,21 +120,10 @@ function isTerminalWaitTimeout(error: unknown): boolean {
 }
 
 async function sleep(ms: number, signal: AbortSignal): Promise<void> {
-  await new Promise<void>((resolve, reject) => {
-    if (signal.aborted) {
-      reject(new Error('request_aborted'))
-      return
-    }
-    const onAbort = (): void => {
-      clearTimeout(timer)
-      reject(new Error('request_aborted'))
-    }
-    const timer = setTimeout(() => {
-      signal.removeEventListener('abort', onAbort)
-      resolve()
-    }, ms)
-    signal.addEventListener('abort', onAbort, { once: true })
-  })
+  await delayUnlessAborted(ms, signal)
+  if (signal.aborted) {
+    throw new Error('request_aborted')
+  }
 }
 
 /** Reuse runtime idle detection across sticky status, pane titles and ready shell prompts. */
@@ -161,14 +174,7 @@ async function readTerminalSnapshot(
   runtime: AutomationRunTerminalHost,
   handle: string
 ): Promise<AutomationRunOutputSnapshot | null> {
-  const snapshotBuffer = createHeadlessAutomationOutputSnapshotBuffer()
-  try {
-    const read = await runtime.readTerminal(handle, { limit: TERMINAL_SNAPSHOT_LIMIT })
-    snapshotBuffer.append(read.tail.join('\n'))
-  } catch {
-    // A terminal may exit after the wait succeeds; snapshot failure must not change its outcome.
-  }
-  return snapshotBuffer.snapshot()
+  return snapshotOf(await readTail(runtime, handle))
 }
 
 async function buildObservation(
@@ -176,10 +182,14 @@ async function buildObservation(
   handle: string,
   wait: { satisfied: boolean; blockedReason?: string }
 ): Promise<AutomationRunCompletionObservation> {
-  const outputSnapshot = await readTerminalSnapshot(runtime, handle)
   if (wait.satisfied) {
-    return { status: 'completed', outputSnapshot, error: null }
+    return {
+      status: 'completed',
+      outputSnapshot: await readTerminalSnapshot(runtime, handle),
+      error: null
+    }
   }
+  const outputSnapshot = await readTerminalSnapshot(runtime, handle)
   return {
     status: 'dispatch_failed',
     outputSnapshot,
@@ -268,7 +278,12 @@ export function createRuntimeAutomationRunTerminalObserver(
           ) {
             return {
               status: 'completed',
-              outputSnapshot: snapshotOf(await readTail(runtime, handle)),
+              outputSnapshot: await completedSnapshot(
+                await readTail(runtime, handle),
+                judged,
+                runStartedAt,
+                signal
+              ),
               error: null
             }
           }
