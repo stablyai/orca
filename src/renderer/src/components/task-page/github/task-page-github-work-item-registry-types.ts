@@ -15,7 +15,7 @@ export type PendingListOp = {
   users?: GitHubAssignableUser[]
 }
 export type PendingOp = {
-  settleAccepted?: (success: boolean) => GitHubWorkItem | null
+  settleAccepted?: (success: boolean) => GitHubWorkItem
   generation: number
   key: TaskPageGitHubMutationKey
   previous: Partial<GitHubWorkItem>

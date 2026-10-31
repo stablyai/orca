@@ -187,14 +187,11 @@ describe('opened issue assignee ownership', () => {
   it('publishes a confirmed dialog assignment to the Tasks row without Refresh', async () => {
     await render()
     await click()
-    expect(mocks.patchWorkItem).toHaveBeenCalledWith(
-      item.id,
-      expect.objectContaining({
-        assignees: [expect.objectContaining({ login: 'candidate-user' })]
-      }),
-      item.repoId,
-      expect.anything()
-    )
+    const [id, patch, repoId] = mocks.patchWorkItem.mock.calls[0]
+    expect([id, repoId]).toEqual([item.id, item.repoId])
+    expect(patch({ ...item, assignees: [] })).toEqual({
+      assignees: [expect.objectContaining({ login: 'candidate-user' })]
+    })
   })
 
   it('accepts external assignees while the edited dialog stays open', async () => {
@@ -357,14 +354,24 @@ describe('opened issue assignee ownership', () => {
       expect(container.querySelector(`[data-field="${field}"]`)?.textContent).toBe(expected)
       await act(async () => rejectUpdate(new Error('held edit failed')))
       expect(container.querySelector(`[data-field="${field}"]`)?.textContent).toBe(expected)
-      expect(mocks.patchWorkItem).toHaveBeenLastCalledWith(
+      const [id, patch, repoId, options] = mocks.patchWorkItem.mock.lastCall!
+      expect([id, repoId, options]).toEqual([
         item.id,
-        field === 'labels' ? { labels: ['upstream-original-label'] } : { state: 'open' },
         item.repoId,
         {
           sourceContext: undefined,
           ownerRepo: { owner: 'upstream', repo: 'widgets', host: 'github.com' }
         }
+      ])
+      // The rollback removes only this edit's change from the upstream copy's current value.
+      expect(
+        patch({
+          ...item,
+          state: 'closed',
+          labels: ['upstream-original-label', 'candidate-label', 'other']
+        })
+      ).toEqual(
+        field === 'labels' ? { labels: ['upstream-original-label', 'other'] } : { state: 'open' }
       )
     }
   )

@@ -135,10 +135,10 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
         (input.intent.type === 'setState' || input.intent.type === 'toggleAssignee')
       const currentItem = cache?.projectItem(input.item) ?? input.item
       const built = buildTaskPageGitHubWorkItemMutationPatch(currentItem, input.intent)
-      let settle: ((success: boolean) => GitHubWorkItem | null) | undefined
+      let settle: ((success: boolean) => GitHubWorkItem) | undefined
       const settleAccepted =
-        common && binding && cache.canTrack(binding)
-          ? (success: boolean) => settle?.(success) ?? null
+        common && binding && cache.canTrack(binding, input.item)
+          ? (success: boolean) => settle?.(success) ?? currentItem
           : undefined
       const began = beginTaskPageGitHubWorkItemMutation({
         item: currentItem,

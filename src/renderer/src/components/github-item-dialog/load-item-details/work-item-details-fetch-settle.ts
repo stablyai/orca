@@ -42,6 +42,8 @@ export async function loadCanonicalGitHubTaskDetails(
 }
 
 type FetchAcceptance = {
+  /** A user-started read reports its own failure, so it never installs an inline load error. */
+  userAction?: boolean
   accepts?: (result: GitHubWorkItemDetails | null) => boolean
   onAccepted?: (result: GitHubWorkItemDetails) => void
 }
@@ -77,7 +79,9 @@ export async function settleWorkItemDetailsFetch(
     touchWorkItemDetailsCache(detailsCacheKey, {
       ...prev,
       pending: undefined,
-      error: error ?? (prev.details ? undefined : WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE)
+      ...(args.userAction
+        ? {}
+        : { error: error ?? (prev.details ? undefined : WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE) })
     })
     return { status: 'failed', error: error ?? WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE } as const
   }

@@ -11,7 +11,6 @@ import { runIssueUpdate } from '@/components/github/github-work-item-edit-mutati
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import type { GitHubOwnerRepo } from '../../../../../shared/github/pull-request-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { GitHubPatchWorkItemOptions } from '@/store/github/cache-model'
 import type { GitHubItemDialogProjectOrigin } from '../load-item-details/github-item-dialog-types'
 
 export type GHEditProjectRowPatch = {
@@ -40,7 +39,6 @@ export function runGHEditStateChange({
   newState,
   closeAction,
   localState,
-  itemId,
   itemNumber,
   itemRepoId,
   repoPath,
@@ -49,32 +47,20 @@ export function runGHEditStateChange({
   issueRepo,
   run,
   onStateChange,
-  patchWorkItem,
   patchProjectRowIfNeeded,
   onMutated
 }: GHEditMutationBase & {
-  itemId: GitHubWorkItem['id']
   newState: 'open' | 'closed'
   closeAction?: TaskPageGitHubCloseAction
   localState: GitHubWorkItem['state']
   onStateChange: (state: GitHubWorkItem['state']) => void
-  patchWorkItem: (
-    id: string,
-    patch: { state: GitHubWorkItem['state'] },
-    repoId: string | undefined,
-    options: GitHubPatchWorkItemOptions
-  ) => void
 }): void {
   // Why: a close reason still has to reach GitHub even when the item already reads as closed locally.
   if (newState === localState && !closeAction) {
     return
   }
-  let settle: (success: boolean) => GitHubWorkItem | null = () => item
-  const patchState = (state: GitHubWorkItem['state']) =>
-    patchWorkItem(itemId, { state }, itemRepoId, {
-      sourceContext,
-      ownerRepo: projectOrigin ?? issueRepo
-    })
+  // The record publishes Tasks copies; the dialog patches only its own state and Project origin row.
+  let settle: (success: boolean) => GitHubWorkItem = () => item
   void run('state', {
     mutate: () =>
       runIssueUpdate({
@@ -92,25 +78,16 @@ export function runGHEditStateChange({
     onOptimistic: () => {
       settle = beginEdit(item, sourceContext, (base) => ({ ...base, state: newState }))
       onStateChange(newState)
-      patchState(newState)
       patchProjectRowIfNeeded({ state: newState })
     },
     onRevert: () => {
       const current = settle(false)
-      if (!current) {
-        return
-      }
       onStateChange(current.state)
-      patchState(current.state)
       patchProjectRowIfNeeded({ state: current.state })
     },
     onSuccess: () => {
       const current = settle(true)
-      if (!current) {
-        return
-      }
       useAppStore.getState().recordFeatureInteraction('github-tasks')
-      patchState(current.state)
       patchProjectRowIfNeeded({ state: current.state })
       onMutated()
     },
@@ -124,7 +101,6 @@ export function runGHEditLabelToggle({
   item,
   label,
   localLabels,
-  itemId,
   itemNumber,
   itemRepoId,
   repoPath,
@@ -133,23 +109,15 @@ export function runGHEditLabelToggle({
   issueRepo,
   run,
   onLabelsChange,
-  patchWorkItem,
   patchProjectRowIfNeeded,
   onMutated
 }: GHEditMutationBase & {
-  itemId: GitHubWorkItem['id']
   label: string
   localLabels: string[]
   onLabelsChange: (labels: string[]) => void
-  patchWorkItem: (
-    id: string,
-    patch: { labels: string[] },
-    repoId: string | undefined,
-    options: GitHubPatchWorkItemOptions
-  ) => void
 }): void {
   const isAdding = !localLabels.includes(label)
-  let settle: (success: boolean) => GitHubWorkItem | null = () => item
+  let settle: (success: boolean) => GitHubWorkItem = () => item
   const prevLabels = localLabels
   const newLabels = isAdding ? [...prevLabels, label] : prevLabels.filter((l) => l !== label)
 
@@ -172,22 +140,11 @@ export function runGHEditLabelToggle({
           : base.labels.filter((value) => value !== label)
       }))
       onLabelsChange(newLabels)
-      patchWorkItem(itemId, { labels: newLabels }, itemRepoId, {
-        sourceContext,
-        ownerRepo: projectOrigin ?? issueRepo
-      })
       patchProjectRowIfNeeded({ labels: newLabels })
     },
     onRevert: () => {
       const current = settle(false)
-      if (!current) {
-        return
-      }
       onLabelsChange(current.labels)
-      patchWorkItem(itemId, { labels: current.labels }, itemRepoId, {
-        sourceContext,
-        ownerRepo: projectOrigin ?? issueRepo
-      })
       patchProjectRowIfNeeded({ labels: current.labels })
     },
     onSuccess: () => {
@@ -235,7 +192,7 @@ export function runGHEditAssigneeToggle({
           : [...current, { login, name: null, avatarUrl: '' }]
     }
   }
-  let settle: (success: boolean) => GitHubWorkItem | null = () => item
+  let settle: (success: boolean) => GitHubWorkItem = () => item
   void run('assignees', {
     mutate: () =>
       runIssueUpdate({
@@ -268,17 +225,12 @@ export function runGHEditAssigneeToggle({
     },
     onRevert: () => {
       const accepted = settle(false)
-      if (!accepted) {
-        return
-      }
       const current = accepted.assignees?.map((user) => user.login) ?? prevAssignees
       setLocalAssignees(current)
       patchProjectRowIfNeeded({ assignees: current })
     },
     onSuccess: () => {
-      if (!settle(true)) {
-        return
-      }
+      settle(true)
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       onMutated()
     },

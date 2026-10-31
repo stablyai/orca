@@ -243,7 +243,8 @@ export type GitHubSlice = {
   ) => void
   patchWorkItem: (
     itemId: string,
-    patch: Partial<GitHubWorkItem>,
+    /** A function patch applies one operation's change to each matching copy's current value. */
+    patch: Partial<GitHubWorkItem> | ((row: GitHubWorkItem) => Partial<GitHubWorkItem>),
     repoId?: string | null,
     options?: GitHubPatchWorkItemOptions
   ) => void

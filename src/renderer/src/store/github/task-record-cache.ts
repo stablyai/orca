@@ -14,6 +14,7 @@ import {
 import { githubTaskIdentity } from '@/lib/github-task-target'
 import { lookupGitHubWorkItemByOwnerRepoForSource } from '@/lib/github-work-item-source-lookup'
 import { getWorkItemRepo } from '@/lib/work-item-repo-row'
+import { lookupReposBySlugFromCache } from '@/lib/repo-slug-cache'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { parseGitHubIssueOrPRLink } from '../../../../shared/github/links'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
@@ -72,6 +73,84 @@ function withFacts(row: GitHubWorkItem, visible: GitHubWorkItem): GitHubWorkItem
       : { assignees: visible.assignees.map((user) => users.get(login(user.login)) ?? user) }),
     ...(version(visible) > version(row) ? { updatedAt: visible.updatedAt } : {})
   }
+}
+function fold(record: AcceptedTask) {
+  let visible = record.base
+  for (const delta of record.pending.values()) {
+    visible = delta(visible)
+  }
+  return visible
+}
+type CopyPatch = (row: GitHubWorkItem) => Partial<GitHubWorkItem>
+function members<T>(from: readonly T[] = [], to: readonly T[] = [], id: (value: T) => string) {
+  const before = new Set(from.map(id)),
+    after = new Set(to.map(id))
+  const removed = new Set([...before].filter((key) => !after.has(key)))
+  const added = to.filter((value) => !before.has(id(value)))
+  const changed = removed.size > 0 || added.length > 0
+  const apply = (list: readonly T[]) => {
+    const kept = list.filter((value) => !removed.has(id(value)))
+    return [...kept, ...added.filter((value) => !kept.some((entry) => id(entry) === id(value)))]
+  }
+  return { changed, apply }
+}
+/** One operation's own change, applied to a copy's current value: unrelated facts and list members survive. */
+function change(from: GitHubWorkItem, to: GitHubWorkItem): CopyPatch | undefined {
+  const labels = members(from.labels, to.labels, (name) => name)
+  const users = members(from.assignees, to.assignees, (user) => login(user.login))
+  if (from.title === to.title && from.state === to.state && !labels.changed && !users.changed) {
+    return undefined
+  }
+  return (row) => ({
+    ...(from.title === to.title ? {} : { title: to.title }),
+    ...(from.state === to.state ? {} : { state: to.state }),
+    ...(labels.changed ? { labels: labels.apply(row.labels) } : {}),
+    ...(users.changed && row.assignees ? { assignees: users.apply(row.assignees) } : {})
+  })
+}
+function publishChange(
+  store: Pick<StoreApi<AppState>, 'getState'>,
+  from: GitHubWorkItem,
+  to: GitHubWorkItem,
+  sources: readonly (TaskSourceContext | null | undefined)[]
+) {
+  const patch = change(from, to)
+  if (!patch) {
+    return
+  }
+  const ownerRepo = parseGitHubIssueOrPRLink(to.url)?.slug
+  for (const source of sources) {
+    store.getState().patchWorkItem(to.id, patch, to.repoId, { sourceContext: source, ownerRepo })
+  }
+}
+/** Without a tracked owner (no binding, unsupported server), copies get only this operation's change. */
+export function untrackedTaskOperation(
+  store: Pick<StoreApi<AppState>, 'getState'>,
+  item: GitHubWorkItem,
+  delta: TaskDelta,
+  sources: readonly (TaskSourceContext | null | undefined)[]
+) {
+  const value = delta(item)
+  publishChange(store, item, value, sources)
+  return (success: boolean) => {
+    if (!success) {
+      publishChange(store, value, item, sources)
+    }
+    return success ? value : item
+  }
+}
+/** Panel rule: an ISSUE row with a concrete URL whose repository and number agree on the board's host. */
+function projectIssueLink(row: GitHubProjectRow, host: string | undefined) {
+  const link = row.content.url ? parseGitHubIssueOrPRLink(row.content.url) : null
+  const [owner, repo] = row.content.repository?.split('/') ?? []
+  return row.itemType === 'ISSUE' &&
+    link?.type === 'issue' &&
+    link.number === row.content.number &&
+    owner &&
+    repo &&
+    githubRepoIdentityKey(link.slug) === githubRepoIdentityKey({ owner, repo, host })
+    ? link
+    : null
 }
 /** A full-length Project list may be truncated, so only a name it carries that the record lacks conflicts. */
 function projectListConflicts(partial: string[], full: string[], limit: number) {
@@ -194,10 +273,7 @@ export class GitHubTaskRecordCache {
     return record
   }
   private emit(record: AcceptedTask) {
-    let visible = record.base
-    for (const delta of record.pending.values()) {
-      visible = delta(visible)
-    }
+    const visible = fold(record)
     const changed = !sameFacts(visible, record.visible, false)
     record.visible = visible
     const { associations, hostId } = record.binding.observation
@@ -297,22 +373,21 @@ export class GitHubTaskRecordCache {
       return this.projectWith(item, record)
     })
   }
-  canTrack(binding: TaskBinding) {
-    return this.current(binding) && !this.unsupported.has(binding.incarnation)
+  /** A live record keeps tracking its started edits even after its server proves unsupported. */
+  canTrack(binding: TaskBinding, item?: GitHubWorkItem) {
+    return (
+      !!(item && this.record(item, binding)) ||
+      (this.current(binding) && !this.unsupported.has(binding.incarnation))
+    )
   }
   operation(
     item: GitHubWorkItem,
     binding: TaskBinding,
     delta: TaskDelta
-  ): (success: boolean) => GitHubWorkItem | null {
-    if (item.type !== 'issue' || !this.canTrack(binding)) {
-      return (success: boolean) => {
-        const value = success ? delta(item) : item
-        if (success) {
-          this.publish(value, binding.observation)
-        }
-        return value
-      }
+  ): (success: boolean) => GitHubWorkItem {
+    if (item.type !== 'issue' || !this.canTrack(binding, item)) {
+      const sources = binding.observation.associations.map(({ source }) => source)
+      return untrackedTaskOperation(this.store, item, delta, sources)
     }
     const record = this.remember(item, binding)
     const token = {}
@@ -322,21 +397,31 @@ export class GitHubTaskRecordCache {
     let settled = false
     return (success: boolean) => {
       if (settled) {
-        return this.current(binding) ? record.visible : null
+        return record.visible
       }
       settled = true
-      if (this.record(item, binding) !== record) {
-        // Disposed mid-flight (reconnect, account switch): settle the copies its begin patched, as main does.
-        const value = success ? delta(item) : item
-        this.publish(value, binding.observation)
-        return value
-      }
+      const live = this.record(item, record.binding) === record
+      const before = record.visible
       if (success) {
         record.base = delta(record.base)
         record.needsRead = true
       }
       record.pending.delete(token)
       record.revision = nextProviderRequestId()
+      if (!live) {
+        // Disposed mid-flight: the owner still settles through its reducer, but only its own change
+        // reaches copies, and a replacement record reconciles through its own canonical read.
+        record.visible = fold(record)
+        const replacement = this.records.get(this.key(item, binding.observation.hostId))
+        if (replacement && this.current(replacement.binding)) {
+          replacement.needsRead = true
+          void this.verify(replacement)
+        } else {
+          const sources = binding.observation.associations.map(({ source }) => source)
+          publishChange(this.store, before, record.visible, sources)
+        }
+        return record.visible
+      }
       this.emit(record)
       if (this.unsupported.has(binding.incarnation) && !record.pending.size) {
         // A server without the item route keeps no unresolved record once its last edit settles.
@@ -364,27 +449,28 @@ export class GitHubTaskRecordCache {
     return this.readCanonical(
       record.base,
       record.binding,
-      async (accepts) => {
-        const { repoId, hostId, source } = record.binding.observation
-        const repo = (this.store.getState().repos ?? []).find(
-          (r) => r.id === repoId && getRepoExecutionHostId(r) === hostId
-        )
-        const link = parseGitHubIssueOrPRLink(record.base.url)
-        if (!repo || !link) {
-          return null
-        }
-        return lookupGitHubWorkItemByOwnerRepoForSource({
-          repoPath: repo.path,
-          repoId: repo.id,
-          sourceContext: source,
-          accepts,
-          ...link.slug,
-          number: link.number,
-          type: link.type
-        })
-      },
+      (accepts) => this.itemRead(record.base.url, record.binding, accepts),
       true
     )
+  }
+  private async itemRead(url: string, binding: TaskBinding, accepts: () => boolean) {
+    const { repoId, hostId, source } = binding.observation
+    const repo = (this.store.getState().repos ?? []).find(
+      (r) => r.id === repoId && getRepoExecutionHostId(r) === hostId
+    )
+    const link = parseGitHubIssueOrPRLink(url)
+    if (!repo || !link) {
+      return null
+    }
+    return lookupGitHubWorkItemByOwnerRepoForSource({
+      repoPath: repo.path,
+      repoId: repo.id,
+      sourceContext: source,
+      accepts,
+      ...link.slug,
+      number: link.number,
+      type: link.type
+    })
   }
   async readCanonical(
     item: GitHubWorkItem,
@@ -461,57 +547,124 @@ export class GitHubTaskRecordCache {
     })()
     return attempt.promise
   }
+  /** A Project issue edit is a record producer for every current repo binding of that issue on its source. */
   projectOperation(
     row: GitHubProjectRow,
+    host: string | undefined,
     target: RuntimeClientTarget,
     updates: Parameters<AppState['patchProjectIssueOrPr']>[2]
   ) {
-    const identity = row.content.url && githubTaskIdentity({ url: row.content.url })
-    const finishes =
-      row.itemType !== 'ISSUE' || !identity
-        ? []
-        : [...this.records.values()]
-            .filter(
-              (record) =>
-                this.current(record.binding) &&
-                record.binding.observation.hostId === projectViewSourceScope(target) &&
-                githubTaskIdentity(record.base) === identity
-            )
-            .map((record) =>
-              this.operation(record.base, record.binding, (base) => {
-                const labels = new Set(base.labels)
-                for (const label of updates.addLabels ?? []) {
-                  labels.add(label)
-                }
-                for (const label of updates.removeLabels ?? []) {
-                  labels.delete(label)
-                }
-                const users = new Map(base.assignees?.map((user) => [login(user.login), user]))
-                for (const value of updates.addAssignees ?? []) {
-                  if (!users.has(login(value))) {
-                    users.set(login(value), { login: value, name: null, avatarUrl: '' })
-                  }
-                }
-                for (const value of updates.removeAssignees ?? []) {
-                  users.delete(login(value))
-                }
-                return {
-                  ...base,
-                  ...(updates.title === undefined ? {} : { title: updates.title }),
-                  labels: [...labels],
-                  ...(base.assignees === undefined &&
-                  !updates.addAssignees &&
-                  !updates.removeAssignees
-                    ? {}
-                    : { assignees: [...users.values()] })
-                }
-              })
-            )
+    const link = projectIssueLink(row, host)
+    const delta: TaskDelta = (base) => {
+      const labels = new Set(base.labels)
+      for (const label of updates.addLabels ?? []) {
+        labels.add(label)
+      }
+      for (const label of updates.removeLabels ?? []) {
+        labels.delete(label)
+      }
+      const users = new Map(base.assignees?.map((user) => [login(user.login), user]))
+      for (const value of updates.addAssignees ?? []) {
+        if (!users.has(login(value))) {
+          users.set(login(value), { login: value, name: null, avatarUrl: '' })
+        }
+      }
+      for (const value of updates.removeAssignees ?? []) {
+        users.delete(login(value))
+      }
+      return {
+        ...base,
+        ...(updates.title === undefined ? {} : { title: updates.title }),
+        labels: [...labels],
+        ...(base.assignees === undefined && !updates.addAssignees && !updates.removeAssignees
+          ? {}
+          : { assignees: [...users.values()] })
+      }
+    }
+    const owners = link ? this.projectOwners(link, host, projectViewSourceScope(target)) : []
+    const finishes = owners.map(({ binding, seed }) => {
+      if (seed) {
+        return this.operation(seed, binding, delta)
+      }
+      // Never seeded from the partial board row: once the edit lands, an item read establishes it.
+      return (success: boolean) => {
+        if (success) {
+          this.establish(row.content.url!, binding)
+        }
+      }
+    })
     return (success: boolean) => {
       for (const finish of finishes) {
         finish(success)
       }
     }
+  }
+  /** Current repo bindings for this issue on the board's source, each with its newest complete copy. */
+  private projectOwners(
+    link: NonNullable<ReturnType<typeof projectIssueLink>>,
+    host: string | undefined,
+    scope: string
+  ) {
+    const { repos = [], workItemsCache } = this.store.getState()
+    const identity = `${githubRepoIdentityKey(link.slug)}\0issue:${link.number}`
+    const owners = new Map<string, { repo: Repo; seed?: GitHubWorkItem }>()
+    const add = (repo: Repo | undefined, seed?: GitHubWorkItem) => {
+      const known = repo && owners.get(bindingKey(repo))?.seed
+      if (repo && (!known || (seed && version(seed) > version(known)))) {
+        owners.set(bindingKey(repo), { repo, seed: seed ?? known })
+      }
+    }
+    for (const repo of lookupReposBySlugFromCache(
+      repos,
+      `${link.slug.owner}/${link.slug.repo}`,
+      host
+    )) {
+      add(repo)
+    }
+    for (const record of this.records.values()) {
+      const { hostId, repoId } = record.binding.observation
+      if (this.current(record.binding) && githubTaskIdentity(record.base) === identity) {
+        add(
+          repos.find((r) => r.id === repoId && getRepoExecutionHostId(r) === hostId),
+          record.base
+        )
+      }
+    }
+    for (const entry of Object.values(workItemsCache)) {
+      for (const item of entry?.data ?? []) {
+        if (item.type === 'issue' && githubTaskIdentity(item) === identity) {
+          // A copy without its assignee list names the owner but is not complete enough to seed it.
+          add(getWorkItemRepo(repos, item), item.assignees === undefined ? undefined : item)
+        }
+      }
+    }
+    return [...owners.values()].flatMap(({ repo, seed }) => {
+      const binding = getRepoExecutionHostId(repo) === scope ? this.capture(repo) : undefined
+      return binding ? [{ binding, seed }] : []
+    })
+  }
+  private establish(url: string, binding: TaskBinding) {
+    if (!this.canTrack(binding)) {
+      return
+    }
+    // A failed or unsupported item read keeps main's board-only publication.
+    void this.itemRead(url, binding, () => this.current(binding)).then(
+      (result) => {
+        const item = result && { ...result, repoId: binding.observation.repoId }
+        if (
+          item?.type === 'issue' &&
+          item.assignees !== undefined &&
+          githubTaskIdentity(item) === githubTaskIdentity({ url }) &&
+          this.canTrack(binding) &&
+          !this.record(item, binding)
+        ) {
+          // The new record starts at this reading, so its copies take it before the usual emit.
+          this.publish(item, binding.observation)
+          this.emit(this.remember(item, binding))
+        }
+      },
+      () => {}
+    )
   }
   /** Matching records per Project row: execution source, GitHub host, owner/repo and issue number. */
   private projectRecords(table: GitHubProjectTable, scope: string) {
@@ -523,18 +676,8 @@ export class GitHubTaskRecordCache {
       }
     }
     return (row: GitHubProjectRow) => {
-      const link = row.content.url ? parseGitHubIssueOrPRLink(row.content.url) : null
-      const [owner, repo] = row.content.repository?.split('/') ?? []
-      if (
-        row.itemType !== 'ISSUE' ||
-        !link ||
-        link.type !== 'issue' ||
-        link.number !== row.content.number ||
-        !owner ||
-        !repo ||
-        githubRepoIdentityKey(link.slug) !==
-          githubRepoIdentityKey({ owner, repo, host: table.project.host })
-      ) {
+      const link = projectIssueLink(row, table.project.host)
+      if (!link) {
         return []
       }
       const key = `${githubRepoIdentityKey(link.slug)}\0issue:${link.number}`

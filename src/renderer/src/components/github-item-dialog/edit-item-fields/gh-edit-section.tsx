@@ -74,14 +74,13 @@ function GHEditSectionItem({
     acceptedRefresh: number
   } | null>(null)
   const mountedRef = useMountedRef()
-  const patchWorkItem = useAppStore((s) => s.patchWorkItem)
   const patchProjectRowContent = useAppStore((s) => s.patchProjectRowContent)
   const duplicateIssueCandidates = useGitHubDuplicateIssueCandidates(item, duplicatePickerOpen)
   const ownerTarget = useAppStore(
     useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
-  // Patch Project rows too; patchWorkItem updates only workItemsCache, leaving projectViewCache stale.
+  // Patch Project rows too; the task record updates only workItemsCache, leaving projectViewCache stale.
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {
@@ -191,7 +190,6 @@ function GHEditSectionItem({
         newState,
         closeAction,
         localState,
-        itemId: item.id,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath,
@@ -204,7 +202,6 @@ function GHEditSectionItem({
             onStateChange(state)
           }
         },
-        patchWorkItem,
         patchProjectRowIfNeeded,
         onMutated
       })
@@ -216,7 +213,6 @@ function GHEditSectionItem({
       sourceContext,
       projectOrigin,
       issueRepo,
-      patchWorkItem,
       patchProjectRowIfNeeded,
       run,
       mountedRef,
@@ -263,7 +259,6 @@ function GHEditSectionItem({
         item,
         label,
         localLabels,
-        itemId: item.id,
         itemNumber: item.number,
         itemRepoId: item.repoId,
         repoPath,
@@ -276,7 +271,6 @@ function GHEditSectionItem({
             onLabelsChange(labels)
           }
         },
-        patchWorkItem,
         patchProjectRowIfNeeded,
         onMutated
       })
@@ -288,7 +282,6 @@ function GHEditSectionItem({
       sourceContext,
       projectOrigin,
       issueRepo,
-      patchWorkItem,
       patchProjectRowIfNeeded,
       run,
       mountedRef,

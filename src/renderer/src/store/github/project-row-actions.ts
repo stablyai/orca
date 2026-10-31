@@ -98,7 +98,12 @@ export const createProjectRowActions = (
       table.project.host,
       projectViewCacheKeyTarget(cacheKey)
     )
-    const settle = get().githubTaskCache.projectOperation(previousRow, target, updates)
+    const settle = get().githubTaskCache.projectOperation(
+      previousRow,
+      table.project.host,
+      target,
+      updates
+    )
     try {
       if (
         previousRow.itemType === 'PULL_REQUEST' &&

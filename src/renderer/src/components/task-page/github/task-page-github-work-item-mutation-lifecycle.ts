@@ -116,18 +116,14 @@ export function confirmTaskPageGitHubWorkItemMutation(
     }
   }
   deletePendingTaskPageGitHubOp(key)
-  const accepted = pending.settleAccepted?.(true)
-  if (pending.settleAccepted && !accepted) {
-    notifyTaskPageGitHubMutationRegistry()
-    return 'stale'
-  }
-  const item = accepted ?? opts.item
+  const item = pending.settleAccepted?.(true) ?? opts.item
   if (!pending.settleAccepted) {
     applyServerEntityIfPresent(key, opts)
   }
   const remaining = listPendingTaskPageGitHubOpsForItem(key.repoId, key.itemId, key.sourceScope)
   const merged = getRegistryMergedTaskPageGitHubWorkItem(item, key.sourceScope)
-  if (opts.patchWorkItem && remaining.some((op) => op.listOp)) {
+  // A record-owned edit already published every surviving operation; re-patching would write a stale list.
+  if (opts.patchWorkItem && !pending.settleAccepted && remaining.some((op) => op.listOp)) {
     opts.patchWorkItem(
       key.itemId,
       { assignees: merged.assignees, reviewRequests: merged.reviewRequests },
@@ -171,12 +167,7 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
   }
   const { skipMeQualifiers, listOp } = pending
   deletePendingTaskPageGitHubOp(args.key)
-  const accepted = pending.settleAccepted?.(false)
-  if (pending.settleAccepted && !accepted) {
-    notifyTaskPageGitHubMutationRegistry()
-    return 'stale'
-  }
-  const item = accepted ?? args.item
+  const item = pending.settleAccepted?.(false) ?? args.item
   const merged = getRegistryMergedTaskPageGitHubWorkItem(item, args.key.sourceScope)
   if (pending.settleAccepted) {
     // The common base has already published the surviving operations.

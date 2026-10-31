@@ -180,13 +180,24 @@ export function useGitHubTaskRefresh({
           })
           continue
         }
+        const loading = workItemDetailsCache.get(detailsCacheKey)?.pending
+        if (loading) {
+          // The ordinary load keeps its lenient result; the strict read runs once it settles.
+          await Promise.race([
+            loading.catch(() => null),
+            new Promise<void>((resolve) => {
+              wake = resolve
+            })
+          ])
+          continue
+        }
         const revision = cache.readRevision(target.item, binding)
         const accepts = () => alive() && cache.readRevision(target.item, binding) === revision
-        const shown = !!workItemDetailsCache.get(detailsCacheKey)?.details
         attempt = startWorkItemDetailsFetch(
           detailsCacheKey,
           () => loadCanonicalGitHubTaskDetails(cache, binding, target, accepts),
           {
+            userAction: true,
             accepts,
             onAccepted: (result) => {
               onAcceptedRef.current?.(result.item)
@@ -207,8 +218,8 @@ export function useGitHubTaskRefresh({
         ) {
           continue
         }
-        // With nothing loaded yet, the body's existing load error is this failure's one message.
-        if (outcome.status !== 'accepted' && shown) {
+        // Each failed click reports once here; the entry keeps whatever it already showed.
+        if (outcome.status !== 'accepted') {
           toast.error(
             translate(
               'auto.components.GitHubItemDialog.refreshTaskFailed',

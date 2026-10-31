@@ -13,6 +13,7 @@ import type { Repo } from '../../../../../shared/repo-types'
 import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
+import { toast } from 'sonner'
 import { workItemDetailsCache } from '../load-item-details/work-item-details-cache'
 import GitHubItemDialog from './github-item-dialog'
 
@@ -62,11 +63,21 @@ vi.mock('./github-item-dialog-issue-header', () => ({
   GitHubItemDialogIssueHeader: (props: {
     workItem: GitHubWorkItem
     handleOpenOrUseIssueWorkspace: (item: GitHubWorkItem) => void
-  }) => <button onClick={() => props.handleOpenOrUseIssueWorkspace(props.workItem)}>Start</button>
+    refreshTask?: () => Promise<void>
+    refreshing: boolean
+  }) => (
+    <>
+      <button onClick={() => props.handleOpenOrUseIssueWorkspace(props.workItem)}>Start</button>
+      <button onClick={() => void props.refreshTask?.()}>Refresh</button>
+      <output data-field="refreshing">{String(props.refreshing)}</output>
+    </>
+  )
 }))
 vi.mock('./github-item-dialog-pr-header', () => ({ GitHubItemDialogPRHeader: () => null }))
 vi.mock('./github-item-dialog-pr-tabs', () => ({ GitHubItemDialogPRTabs: () => null }))
-vi.mock('../discuss-item/conversation-tab', () => ({ ConversationTab: () => null }))
+vi.mock('../discuss-item/conversation-tab', () => ({
+  ConversationTab: (props: { body: string }) => <output data-field="body">{props.body}</output>
+}))
 vi.mock('../edit-item-fields/gh-edit-section-top-columns', () => ({
   GHEditSectionTopColumns: (props: {
     localAssignees: string[]
@@ -109,6 +120,34 @@ const alice = { login: 'alice', name: null, avatarUrl: 'alice.png' }
 const source = buildTaskSourceContextFromRepo({ provider: 'github', projectId: repo.id, repo })!
 let root: Root, node: HTMLDivElement
 
+function deferred<T>() {
+  let resolve!: (value: T) => void
+  const promise = new Promise<T>((r) => {
+    resolve = r
+  })
+  return { promise, resolve }
+}
+async function settle() {
+  await act(async () => {
+    for (let tick = 0; tick < 10; tick++) {
+      await Promise.resolve()
+    }
+  })
+}
+function renderDialog() {
+  return act(async () => {
+    root.render(
+      <GitHubItemDialog
+        workItem={row}
+        repoPath={repo.path}
+        repoId={repo.id}
+        sourceContext={source}
+        onUse={mocks.onUse}
+        onClose={() => {}}
+      />
+    )
+  })
+}
 function TasksRow({ rows }: { rows: GitHubWorkItem[] }) {
   const [projected] = useGitHubTaskItems(rows)
   return <output data-field="tasks">{projected.assignees?.map((u) => u.login).join(',')}</output>
@@ -177,5 +216,36 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
     expect(stale[0].assignees?.map((u) => u.login)).toEqual(['alice'])
     await click('Start')
     expect(mocks.onUse).toHaveBeenCalledWith(expect.objectContaining({ id: row.id }))
+  })
+
+  it('keeps the first ordinary load when Refresh is clicked during it and reports a strict failure once', async () => {
+    const ordinary = deferred<unknown>()
+    mocks.details.mockReturnValueOnce(ordinary.promise).mockRejectedValueOnce(new Error('timeline'))
+    await renderDialog()
+    await click('Refresh')
+    expect(text('refreshing')).toBe('true')
+    expect(mocks.details).toHaveBeenCalledOnce()
+    ordinary.resolve({ item: row, body: 'Ordinary body', comments: [], assignees: [] })
+    await settle()
+    expect(mocks.details).toHaveBeenCalledTimes(2)
+    expect(mocks.details.mock.calls[1][0]).toEqual(expect.objectContaining({ canonical: true }))
+    expect(text('body')).toBe('Ordinary body')
+    expect(node.textContent).not.toContain('Unable to load details')
+    expect(text('refreshing')).toBe('false')
+    expect(toast.error).toHaveBeenCalledExactlyOnceWith('Unable to refresh this task. Try again.')
+  })
+
+  it('ends a Refresh waiting on the first load when the dialog closes, keeping that load', async () => {
+    const ordinary = deferred<unknown>()
+    mocks.details.mockReturnValueOnce(ordinary.promise)
+    await renderDialog()
+    await click('Refresh')
+    await act(async () => root.unmount())
+    ordinary.resolve({ item: row, body: 'Ordinary body', comments: [], assignees: [] })
+    await settle()
+    expect(mocks.details).toHaveBeenCalledOnce()
+    expect([...workItemDetailsCache.values()][0]?.details?.body).toBe('Ordinary body')
+    expect(toast.error).not.toHaveBeenCalled()
+    root = createRoot(node)
   })
 })

@@ -18,11 +18,7 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
-import {
-  WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
-  patchCachedWorkItemBody,
-  workItemDetailsCache
-} from './work-item-details-cache'
+import { patchCachedWorkItemBody, workItemDetailsCache } from './work-item-details-cache'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 
 const mocks = vi.hoisted(() => ({
@@ -144,15 +140,16 @@ describe('Refresh task with real shared record and mounted copy', () => {
 
   it('retains visible data while loading, publishes all metadata and keeps data on retryable failure', async () => {
     await render()
-    // With nothing loaded yet, the body's existing load error is the one message for a failed Refresh.
+    // A failed click reports once in its toast, even with nothing loaded, and installs no inline error.
     mocks.details.mockRejectedValueOnce(new Error('raw provider detail'))
     await act(async () => {
       await model.refreshTask()
     })
-    expect(workItemDetailsCache.get(model.detailsCacheKey!)?.error).toBe(
-      WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE
+    expect(workItemDetailsCache.get(model.detailsCacheKey!)?.error).toBeUndefined()
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      'Unable to refresh this task. Try again.'
     )
-    expect(mocks.toastError).not.toHaveBeenCalled()
+    mocks.toastError.mockClear()
     const response = deferred<GitHubWorkItemDetails>()
     mocks.details.mockReturnValueOnce(response.promise)
     let refresh!: Promise<void>
@@ -194,7 +191,7 @@ describe('Refresh task with real shared record and mounted copy', () => {
       await Promise.resolve()
     })
     const cache = mocks.store!.getState().githubTaskCache
-    let settle!: (success: boolean) => GitHubWorkItem | null
+    let settle!: (success: boolean) => GitHubWorkItem
     await act(async () => {
       settle = cache.operation(row, cache.capture(repo, source)!, (base) => ({
         ...base,
