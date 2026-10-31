@@ -7,7 +7,7 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { Translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
-import { ListRow } from './list/ListRow'
+import { ListRow } from './list/ListGroup'
 
 type Props = {
   row: SourceRow

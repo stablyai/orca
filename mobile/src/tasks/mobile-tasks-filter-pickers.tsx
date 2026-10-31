@@ -8,8 +8,7 @@ import {
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
-import { ListGroup } from '../components/list/ListGroup'
-import { ListRow } from '../components/list/ListRow'
+import { ListGroup, ListRow } from '../components/list/ListGroup'
 import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
 import { styles } from './mobile-tasks-legacy-styles'
 import { JIRA_FILTER_OPTIONS } from './mobile-task-view-options'

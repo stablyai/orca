@@ -85,7 +85,8 @@ export function DragReorderRow({
   } = shared
   // Read on the JS thread: capturing the live `colors` in a worklet would freeze it.
   const activeBackground = colors.bgRaised
-  const restingBackground = colors.bgPanel
+  // Settings rows rest on their ListGroup's surface.
+  const restingBackground = colors.sheetGroup
 
   const pan = Gesture.Pan()
     .enabled(ready && movable && !disabled)
