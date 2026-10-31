@@ -53,7 +53,6 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => expectedTarget,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -155,7 +154,6 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => target,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -212,7 +210,6 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => target,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput,
-        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -291,7 +288,6 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => currentTarget,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive
@@ -416,7 +412,6 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => ({ ...expectedTarget, processIncarnation: 'inc-replaced' }),
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()
@@ -474,7 +469,6 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => null,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readDrivingInputRevision: () => null,
         writePty: vi.fn(settledWriteStub()),
         settle,
         redrive
@@ -545,7 +539,6 @@ describe('orchestration mailbox pointer submit', () => {
         replaced?: boolean
         shellInFront?: boolean
         dialogOpen?: boolean
-        userTypedAfterStage?: boolean
       } = {}
     ) {
       const db = new OrchestrationDb(':memory:')
@@ -582,7 +575,6 @@ describe('orchestration mailbox pointer submit', () => {
             options.replaced ? { terminal, processIncarnation: 'inc-replaced' } : expectedTarget,
           isLeafPtyProvenAbsent: async () => options.absent ?? false,
           isPtyAwaitingUserInput: () => options.dialogOpen ?? false,
-          readDrivingInputRevision: () => (options.userTypedAfterStage ? 1_000 : null),
           writePty,
           settle,
           redrive: vi.fn()
@@ -615,8 +607,7 @@ describe('orchestration mailbox pointer submit', () => {
     it.each([
       ['the PTY is gone', { absent: true }],
       ['the process was replaced', { replaced: true }],
-      ['a shell is in front', { shellInFront: true }],
-      ['the user typed after the pointer', { userTypedAfterStage: true }]
+      ['a shell is in front', { shellInFront: true }]
     ])('sends no Enter when %s', async (_name, options) => {
       const { db, writePty, settle } = submitAfterRead(options)
 
@@ -669,7 +660,6 @@ describe('orchestration mailbox pointer submit', () => {
         resolveSubmitTarget: () => expectedTarget,
         isLeafPtyProvenAbsent: async () => false,
         isPtyAwaitingUserInput: () => false,
-        readDrivingInputRevision: () => null,
         writePty,
         settle,
         redrive: vi.fn()

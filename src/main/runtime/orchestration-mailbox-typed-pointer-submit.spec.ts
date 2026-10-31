@@ -8,7 +8,6 @@ import {
   driveToLiveIdle,
   insertDirectRunMessage,
   pointerCount,
-  PTY_ID,
   temporaryDirectories,
   TERMINAL_HANDLE
 } from './orchestration-mailbox-notification-test-harness'
@@ -58,33 +57,6 @@ describe('orchestration typed pointer submission', () => {
     await vi.advanceTimersByTimeAsync(500)
     expect(pointerCount(harness.write)).toBe(2)
     expect(enterCount()).toBe(2)
-    db.close()
-  })
-
-  it.each([
-    ['after', false],
-    ['in the same millisecond as', true]
-  ])('leaves the line to the user when they type %s staging', async (_name, typedBeforeStage) => {
-    vi.useFakeTimers()
-    const db = new OrchestrationDb(':memory:')
-    const harness = createRuntime(db)
-    const run = createBoundRun(db, 'User-input Run')
-    const message = insertDirectRunMessage(db, run.id, 'Typed over before Enter')
-    const inputAt = Date.now()
-    if (typedBeforeStage) {
-      harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'earlier', inputAt)
-    }
-
-    await driveToLiveIdle(harness.runtime)
-    expect(pointerCount(harness.write)).toBe(1)
-    const checked = await checkBoundMailbox(harness.runtime)
-    await checkBoundMailbox(harness.runtime, { ack: checked.deliveryId! })
-    harness.runtime.terminalRunFacts.recordInput(PTY_ID, 'driving', 'my own draft', inputAt)
-
-    await vi.advanceTimersByTimeAsync(500)
-    // An Enter now could submit the user's draft, or the wake line a second time.
-    expect(harness.write.mock.calls.filter(([, payload]) => payload === '\r')).toHaveLength(0)
-    expect(db.getMessageById(message.id)?.pointer_enter_pending).toBe(0)
     db.close()
   })
 })

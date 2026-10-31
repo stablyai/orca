@@ -4,8 +4,6 @@ export type OrchestrationMailboxDeliveryFlight = {
   submitEnter: (() => void) | null
   deferredUntilIdle: boolean
   idleObservedWhileDeferred: boolean
-  /** User input revision when the pointer was staged; later input means the typed line may no longer be ours. */
-  userInputRevisionAtStage: number | null
   /** The incarnation that staged this flight, so retirement can name the rows it owns. */
   processIncarnation?: string
 }
@@ -33,8 +31,7 @@ export class OrchestrationMailboxPointerState {
       stagedMessageIds: [],
       submitEnter: null,
       deferredUntilIdle: false,
-      idleObservedWhileDeferred: false,
-      userInputRevisionAtStage: null
+      idleObservedWhileDeferred: false
     }
     this.flightsByPtyId.set(ptyId, flight)
     return flight
