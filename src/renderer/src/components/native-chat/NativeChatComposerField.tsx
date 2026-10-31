@@ -24,7 +24,10 @@ import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
 } from '../../../../shared/native-chat/input/native-chat-session-options'
-import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import type {
+  NativeChatComposerSendIntent,
+  NativeChatOptionPickerRequest
+} from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
@@ -84,7 +87,7 @@ export type NativeChatComposerFieldProps = {
   onDictationToggle: () => void
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
-  onSend: () => void
+  onSend: (intent?: NativeChatComposerSendIntent) => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]

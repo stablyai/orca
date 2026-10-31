@@ -18964,6 +18964,7 @@
         "steerMessage": "Enviar mensaje ahora",
         "queueHint": "Poner en cola para después de este turno",
         "steerHint": "Enviar al turno en curso",
+        "clickKey": "Clic",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",
         "placeholder": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",

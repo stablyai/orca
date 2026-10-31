@@ -19184,6 +19184,7 @@
         "steerMessage": "Envoyer le message maintenant",
         "queueHint": "Mettre en file d’attente pour après ce tour",
         "steerHint": "Envoyer dans le tour en cours",
+        "clickKey": "Clic",
         "noPty": "Aucun terminal actif — rebasculez pour vous reconnecter.",
         "locked": "La saisie est détenue par un autre appareil.",
         "placeholder": "Posez votre question, @ pour référencer des fichiers, / pour les commandes",

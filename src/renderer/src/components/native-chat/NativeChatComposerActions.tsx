@@ -20,6 +20,8 @@ import type {
   NativeChatSendFollowUp
 } from '../../../../shared/native-chat-follow-up-behavior'
 import { isMacPlatform } from './native-chat-shortcut'
+import type { NativeChatComposerSendIntent } from './native-chat-composer-types'
+import { usePlatformModifierHeld } from './use-platform-modifier-held'
 
 /** `held`: the idle Send would be disabled here, so this control is too, with the same reason. */
 export type NativeChatComposerFollowUp = NativeChatSendFollowUp & { held: boolean }
@@ -44,7 +46,7 @@ export type NativeChatComposerActionsProps = {
   onDictationToggle: () => void
   onDictationHoldStart: () => void
   onDictationHoldEnd: () => void
-  onSend: () => void
+  onSend: (intent?: NativeChatComposerSendIntent) => void
   onStop?: () => void
   sessionOptionsSurface: SessionOptionsSurface | null
   sessionOptionsSnapshot: SessionOptionDescriptor[]
@@ -238,7 +240,7 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
 
 const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 
-/** Sends exactly as Enter does; its tooltip names Enter and, when it would differ, Cmd/Ctrl+Enter. */
+/** A click sends as Enter does and, when it would differ, a Cmd/Ctrl-click as Cmd/Ctrl+Enter does. */
 function NativeChatFollowUpSendButton({
   followUp,
   reason,
@@ -246,7 +248,7 @@ function NativeChatFollowUpSendButton({
 }: {
   followUp: NativeChatComposerFollowUp
   reason: string | null
-  onSend: () => void
+  onSend: (intent?: NativeChatComposerSendIntent) => void
 }): React.JSX.Element {
   const label = {
     queue: translate('components.native-chat.composer.queueMessage', 'Queue message'),
@@ -258,16 +260,26 @@ function NativeChatFollowUpSendButton({
   }
   const alternate: NativeChatFollowUpBehavior = followUp.action === 'queue' ? 'steer' : 'queue'
   const isMac = isMacPlatform()
-  const Icon = FOLLOW_UP_ICON[followUp.action]
+  const offersChoice = followUp.offersChoice && !followUp.held
+  // While the modifier is held, the button shows what a click would do now.
+  const shown = usePlatformModifierHeld(offersChoice, isMac) ? alternate : followUp.action
+  const Icon = FOLLOW_UP_ICON[shown]
+  const click = translate('components.native-chat.composer.clickKey', 'Click')
+  const modifier = isMac ? '⌘' : 'Ctrl'
   const button = (
     <Button
       type="button"
-      aria-label={reason ?? label[followUp.action]}
+      aria-label={reason ?? label[shown]}
       disabled={followUp.held}
       // A press keeps focus in the draft, and a double-click's second press sends nothing more.
       onMouseDown={(event) => event.preventDefault()}
       onClick={(event) => {
-        if (event.detail <= 1) {
+        if (event.detail > 1) {
+          return
+        }
+        if (offersChoice && (isMac ? event.metaKey : event.ctrlKey)) {
+          onSend({ alternate: true })
+        } else {
           onSend()
         }
       }}
@@ -288,17 +300,37 @@ function NativeChatFollowUpSendButton({
         <span className="flex flex-col gap-1">
           <span className="flex items-center justify-between gap-2">
             <span>{hint[followUp.action]}</span>
-            <ShortcutKeyCombo keys={isMac ? ['⏎'] : ['Enter']} />
+            <FollowUpKeys keys={[isMac ? '⏎' : 'Enter']} click={offersChoice ? [click] : null} />
           </span>
-          {followUp.offersChoice ? (
+          {offersChoice ? (
             <span className="flex items-center justify-between gap-2">
               <span>{hint[alternate]}</span>
-              <ShortcutKeyCombo keys={isMac ? ['⌘', '⏎'] : ['Ctrl', 'Enter']} />
+              <FollowUpKeys keys={[modifier, isMac ? '⏎' : 'Enter']} click={[modifier, click]} />
             </span>
           ) : null}
         </span>
       </TooltipContent>
     </Tooltip>
+  )
+}
+
+/** One way to send: its keys and, when a click differs from another way, the click too. */
+function FollowUpKeys({
+  keys,
+  click
+}: {
+  keys: string[]
+  click: string[] | null
+}): React.JSX.Element {
+  if (!click) {
+    return <ShortcutKeyCombo keys={keys} />
+  }
+  return (
+    <span className="inline-flex items-center gap-1">
+      <ShortcutKeyCombo keys={keys} />
+      <span className="text-xs text-muted-foreground">/</span>
+      <ShortcutKeyCombo keys={click} />
+    </span>
   )
 }
 

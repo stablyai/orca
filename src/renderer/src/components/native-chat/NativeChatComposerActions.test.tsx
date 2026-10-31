@@ -151,6 +151,49 @@ describe('NativeChatComposerActions', () => {
     expect(container.textContent).not.toContain('Queue for after this turn')
   })
 
+  it('a Cmd-click on the follow-up control sends the other way, only when that differs', () => {
+    const onSend = vi.fn()
+    const props = {
+      attachDisabled: false,
+      dictationDisabled: false,
+      sendDisabled: false,
+      isWorking: true,
+      isDictating: false,
+      isDictationHoldMode: false,
+      onAttach: vi.fn(),
+      onDictationToggle: vi.fn(),
+      onDictationHoldStart: vi.fn(),
+      onDictationHoldEnd: vi.fn(),
+      onSend,
+      onStop: vi.fn(),
+      sessionOptionsSurface: null,
+      sessionOptionsSnapshot: [],
+      followUp: { action: 'queue' as const, offersChoice: true, held: false }
+    }
+    const { rerender, container } = render(<NativeChatComposerActions {...props} />)
+    expect(container.textContent).toContain('Send into the running turn⌘+⏎/⌘+Click')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }))
+    expect(onSend).toHaveBeenLastCalledWith()
+    // Holding the modifier shows what a click does now.
+    fireEvent.keyDown(window, { key: 'Meta', metaKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Steer message' }), { metaKey: true })
+    expect(onSend).toHaveBeenLastCalledWith({ alternate: true })
+    fireEvent.keyUp(window, { key: 'Meta', metaKey: false })
+    expect(screen.getByRole('button', { name: 'Queue message' })).toBeTruthy()
+
+    rerender(
+      <NativeChatComposerActions
+        {...props}
+        followUp={{ action: 'queue', offersChoice: false, held: false }}
+      />
+    )
+    fireEvent.keyDown(window, { key: 'Meta', metaKey: true })
+    fireEvent.click(screen.getByRole('button', { name: 'Queue message' }), { metaKey: true })
+    expect(onSend).toHaveBeenLastCalledWith()
+    expect(onSend).toHaveBeenCalledTimes(3)
+  })
+
   it('marks the streaming Stop control as the critical hit target', () => {
     render(
       <NativeChatComposerActions
