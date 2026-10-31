@@ -31,19 +31,13 @@ describe('files.open', () => {
     const { openMobileFile, response } = dispatchOpen({ relativePath: 'docs/readme.md' })
 
     expect(await response).toMatchObject({ ok: true, result: { kind: 'markdown', opened: true } })
-    expect(openMobileFile).toHaveBeenCalledWith(
-      'id:wt-1',
-      'docs/readme.md',
-      undefined,
-      undefined,
-      undefined
-    )
+    expect(openMobileFile).toHaveBeenCalledWith('id:wt-1', 'docs/readme.md', 'caller')
   })
 
   it('threads preview to the runtime', async () => {
     const { openMobileFile, response } = dispatchOpen({ relativePath: 'a.html', preview: true })
 
     await response
-    expect(openMobileFile).toHaveBeenCalledWith('id:wt-1', 'a.html', undefined, undefined, true)
+    expect(openMobileFile).toHaveBeenCalledWith('id:wt-1', 'a.html', 'caller', undefined, true)
   })
 })
