@@ -1,4 +1,5 @@
 import type { CrashReportDetailValue } from '../../shared/crash-reporting'
+import { readKernelOomKillCount } from './kernel-oom-kill-count'
 import { readSwapVolumeFreeSpace } from './swap-volume-free-space'
 import {
   getSystemMemoryDetails,
@@ -17,6 +18,7 @@ type PreGoneSystemMemorySample = {
   sampledAtMs: number
   /** Time of the tick that issued statfs, even if it resolved on a later tick. */
   swapVolumeSampledAtMs?: number
+  kernelOomKillCount?: number
 }
 
 let preGoneSample: PreGoneSystemMemorySample | null = null
@@ -52,7 +54,11 @@ function commitHostMemorySample(nowMs: number): boolean {
     if (!Object.keys(details).some((key) => key !== PRESSURE_SIGNAL_KEY)) {
       return false
     }
-    preGoneSample = withCarriedSwapVolume({ details, sampledAtMs: nowMs })
+    preGoneSample = withCarriedSwapVolume({
+      details,
+      sampledAtMs: nowMs,
+      kernelOomKillCount: readKernelOomKillCount()
+    })
     return true
   } catch {
     // Preserve the last good sample on read failure.
@@ -138,4 +144,17 @@ export function preGoneSystemMemoryDetails(nowMs: number): CrashReportDetails {
       value
   }
   return details
+}
+
+/**
+ * Kernel OOM kills on the host since the pre-gone sample: 0 on a SIGKILL means
+ * the kernel OOM killer (global or memory-cgroup) did not send it.
+ */
+export function kernelOomKillsSincePreGoneDetails(): CrashReportDetails {
+  const before = preGoneSample?.kernelOomKillCount
+  const now = before === undefined ? undefined : readKernelOomKillCount()
+  if (before === undefined || now === undefined) {
+    return {}
+  }
+  return { [`${SYSTEM_MEMORY_KEY_PREFIX}KernelOomKillsSincePreGone`]: Math.max(0, now - before) }
 }
