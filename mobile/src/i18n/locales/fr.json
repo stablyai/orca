@@ -14,7 +14,8 @@
       "switchFailed": "Impossible de changer de compte",
       "title": "Comptes",
       "useReset": "Utiliser une réinitialisation",
-      "weeklyWindow": "7 j"
+      "weeklyWindow": "7 j",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {

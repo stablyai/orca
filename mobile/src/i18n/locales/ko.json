@@ -14,7 +14,8 @@
       "switchFailed": "계정을 전환하지 못했습니다.",
       "title": "계정",
       "useReset": "재설정권 사용",
-      "weeklyWindow": "7일"
+      "weeklyWindow": "7일",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {

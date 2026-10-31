@@ -273,7 +273,8 @@
       "connecting": "Connecting to host…",
       "loadingAccounts": "Loading accounts…",
       "manageAccountsHint": "Add or re-authenticate accounts from desktop Settings → Accounts.",
-      "useReset": "Use reset"
+      "useReset": "Use reset",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {

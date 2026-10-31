@@ -14,7 +14,8 @@
       "switchFailed": "Не удалось переключить учётную запись",
       "title": "Учётные записи",
       "useReset": "Сбросить лимиты",
-      "weeklyWindow": "7 дн."
+      "weeklyWindow": "7 дн.",
+      "antigravity": "Antigravity"
     }
   },
   "agentHistory": {
