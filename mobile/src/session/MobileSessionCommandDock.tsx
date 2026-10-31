@@ -26,6 +26,7 @@ import {
   resolveMobileTerminalTabOwnedAgentId
 } from './mobile-terminal-tab-agent'
 import { terminalDockStyles as dockStyles } from './terminal-dock-styles'
+import { ComposerUsageSlot } from '../composer-usage/ComposerUsageMeter'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -242,6 +243,7 @@ export function MobileSessionCommandDock({ controller }: { controller: MobileSes
                 disabledButtonStyle={inputStyles.disabled}
               />
             }
+            middle={<ComposerUsageSlot agent={agentId} />}
             trailing={
               <>
                 <MobileTerminalDictationButton

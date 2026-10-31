@@ -292,6 +292,7 @@ describe('prompt cards through the production controller, send contract and view
 vi.mock('./MobileQueuedMessageComposer', () => ({
   MobileQueuedMessageComposer: 'QueuedMessageComposer'
 }))
+vi.mock('../composer-usage/ComposerUsageMeter', () => ({ ComposerUsageSlot: () => null }))
 
 describe('async occurrences through the phone controller and rendered card actions', () => {
   const row = (id: string, title = 'Q1?', callId?: string): NativeChatMessage => ({

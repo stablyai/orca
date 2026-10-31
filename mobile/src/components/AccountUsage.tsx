@@ -24,6 +24,17 @@ export {
   hasRenderableUsage
 } from './account-usage-state'
 
+// Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
+export function usageBandColor(used: number | null): string {
+  return used == null
+    ? colors.textMuted
+    : used >= 80
+      ? colors.statusRed
+      : used >= 60
+        ? colors.statusAmber
+        : colors.statusGreen
+}
+
 // Match desktop/harness consumption meters: fresh empty/green, depleted full/red.
 export function UsageBar({
   label,
@@ -41,15 +52,7 @@ export function UsageBar({
   useMobileColorScheme()
   // Why: round then clamp so bar width, color, and label share one value (desktop parity).
   const used = usedPercent == null ? null : Math.max(0, Math.min(100, Math.round(usedPercent)))
-  // Why: same consumption bands as desktop barColor (green <60, amber <80, red ≥80).
-  const barColor =
-    used == null
-      ? colors.textMuted
-      : used >= 80
-        ? colors.statusRed
-        : used >= 60
-          ? colors.statusAmber
-          : colors.statusGreen
+  const barColor = usageBandColor(used)
   return (
     <View style={styles.usageBarColumn}>
       <View style={styles.usageBar}>

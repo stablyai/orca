@@ -5,6 +5,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { SettingsScreen, SettingsSection } from './settings-screen-frame'
+import { ComposerUsageWindowPicker } from '../composer-usage/ComposerUsageWindowPicker'
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   useMobileColorScheme()
@@ -44,6 +45,15 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
             />
           }
         />
+      </SettingsSection>
+      <SettingsSection
+        title={t('settings.nativeChatSettingsScreen.composerUsageHeading', 'COMPOSER USAGE')}
+        footer={t(
+          'settings.nativeChatSettingsScreen.composerUsageDescription',
+          'Chat and agent terminal composers show how much of your agent plan is used. Tap the meter for every window, reset times and pace.'
+        )}
+      >
+        <ComposerUsageWindowPicker inSettings />
       </SettingsSection>
     </SettingsScreen>
   )
