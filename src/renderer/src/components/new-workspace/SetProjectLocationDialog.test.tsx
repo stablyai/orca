@@ -240,3 +240,42 @@ describe('SetProjectLocationDialog', () => {
     expect(onClose).toHaveBeenCalled()
   })
 })
+
+it('updates an untouched late clone seed, preserves typed URL across late/reordered/removed catalog answers, and allows manual URL without source', async () => {
+  const onReady = vi.fn()
+  const props = {
+    option,
+    projectName: 'App',
+    projectKind: 'git' as const,
+    defaultCloneUrl: '',
+    onClose: vi.fn(),
+    onReady
+  }
+  const view = render(<SetProjectLocationDialog {...props} />)
+  const user = userEvent.setup()
+  await user.click(screen.getByRole('button', { name: /Clone from URL/ }))
+  const url = screen.getByPlaceholderText('Repository URL')
+  if (!(url instanceof HTMLInputElement)) {
+    throw new Error('Repository URL input missing')
+  }
+  view.rerender(
+    <SetProjectLocationDialog {...props} defaultCloneUrl="https://github.com/late/app.git" />
+  )
+  expect(url.value).toBe('https://github.com/late/app.git')
+  await user.clear(url)
+  await user.type(url, 'https://github.com/typed/app.git')
+  view.rerender(
+    <SetProjectLocationDialog {...props} defaultCloneUrl="https://github.com/reordered/app.git" />
+  )
+  expect(url.value).toBe('https://github.com/typed/app.git')
+  view.rerender(<SetProjectLocationDialog {...props} defaultCloneUrl="" />)
+  await user.type(screen.getByPlaceholderText('/destination/on/host'), '/manual/app')
+  await user.click(screen.getByRole('button', { name: 'Clone' }))
+  expect(storeMocks.setupProjectClone).toHaveBeenCalledWith(
+    expect.objectContaining({
+      url: 'https://github.com/typed/app.git',
+      destination: '/manual/app',
+      hostId: option.hostId
+    })
+  )
+})

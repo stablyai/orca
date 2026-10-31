@@ -8439,7 +8439,6 @@
           "b0a0c14a1c": "側邊欄和分頁的專案特定顯示詳細資訊。",
           "removeProjectAllHosts": "從所有已設定主機的 Orca 中刪除該專案。",
           "removeProjectCheckout": "從 Orca 中刪除此檢出。此專案的其他檢出將保留。",
-          "removeProjectKeepCheckouts": "從 Orca 中刪除該專案。擁有獨立設定的檢出將保留。",
           "0909e5d650": "刪除專案",
           "ee5a290616": "作為資料夾開啟。 Git 功能對此工作區不可用。",
           "323debba71": "類型：",

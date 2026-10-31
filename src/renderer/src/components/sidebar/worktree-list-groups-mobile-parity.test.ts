@@ -1,9 +1,11 @@
+import { getDefaultSettings } from '../../../../shared/constants'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { applyManualRepoOrder } from '../../../../shared/manual-repo-order'
 import { mergeFetchedHostProjectCatalog } from '../../../../shared/project-compatibility-host-merge'
 import type { ProjectCatalogRows } from '../../../../shared/project-compatibility-merge'
 import {
   buildProjectGroupingIndex,
+  buildRepoProjectGroupingIndex,
   buildProjectSections
 } from '../../../../shared/project-section-grouping'
 import {
@@ -141,7 +143,14 @@ async function desktopHeaders(projectOrderBy: ProjectOrderBy) {
 /** Round-trip the published catalog through JSON as main serves it to the phone. */
 async function servedCatalog(projectOrderBy: ProjectOrderBy): Promise<MobileProjectSectionCatalog> {
   const { repos, rows } = await desktopCatalog()
-  const published = getProjectSectionCatalogFromState({ repos, ...rows, projectOrderBy })
+  const published = getProjectSectionCatalogFromState({
+    repos,
+    ...rows,
+    projectOrderBy,
+    settings: getDefaultSettings('/tmp'),
+    projectGroupingSettingsHydrated: true,
+    localRepoCatalogHydrated: true
+  })
   if (!published) {
     throw new Error('the renderer published no catalog')
   }
@@ -186,4 +195,94 @@ describe('the phone groups by Project exactly as the paired desktop sidebar', ()
       expect(phoneHeaders(served)).toEqual(PROJECT_SECTION_PARITY_HEADERS[projectOrderBy])
     }
   )
+})
+
+it('keeps resolved display labels separate from unresolved raw ordering twins', () => {
+  const repo: Repo = {
+    id: 'api',
+    displayName: 'api',
+    path: '/api',
+    badgeColor: '',
+    addedAt: 0,
+    executionHostId: 'runtime:server'
+  }
+  const repoMap = new Map([[repo.id, repo]])
+  const result = withRepoSectionDisplayLabels(
+    buildProjectSections({
+      items: [{ repoId: 'api', hostId: 'runtime:server', lastActivityAt: 1 }],
+      repoIdOf: (row) => row.repoId,
+      hostIdOf: (row) => row.hostId,
+      repoMap,
+      repos: [repo],
+      projectIndex: buildRepoProjectGroupingIndex([repo]),
+      placeholderRepoIds: [],
+      pendingRepoIds: ['local\0api'],
+      repoOrder: new Map([['api', 0]]),
+      projectOrderBy: 'manual'
+    })
+  )
+  expect(result.map(([key, section]) => [key, section.label])).toEqual([
+    ['project:repo:api', 'api'],
+    ['repo:api', 'Unknown']
+  ])
+  expect(result[1][1].pendingBucketRefs).toEqual(['local\0api'])
+  expect(result[1][1].repo).toBe(repo)
+})
+
+it('retains the best manual display context from its own resolved registrations without borrowing the raw ordering twin', () => {
+  const a: Repo = {
+    id: 'a',
+    displayName: 'Harbor',
+    path: '/a/harbor',
+    badgeColor: '',
+    addedAt: 0,
+    gitRemoteIdentity: {
+      canonicalKey: 'github.com/org/harbor',
+      remoteName: 'origin',
+      remoteUrl: 'https://github.com/org/harbor'
+    }
+  }
+  const b = { ...a, id: 'b', path: '/preferred/harbor' }
+  const foreign = {
+    ...b,
+    path: '/foreign/harbor',
+    executionHostId: 'runtime:foreign' as const,
+    gitRemoteIdentity: { ...b.gitRemoteIdentity!, canonicalKey: 'github.com/other/harbor' }
+  }
+  const repos = [a, b, foreign]
+  const repoMap = new Map(repos.map((repo) => [repo.id, repo]))
+  const projectIndex = buildRepoProjectGroupingIndex(repos)
+  for (const [order, expected] of [
+    [
+      new Map([
+        ['a', 1],
+        ['b', 0]
+      ]),
+      b
+    ],
+    [
+      new Map([
+        ['a', 0],
+        ['b', 0]
+      ]),
+      a
+    ],
+    [new Map(), a]
+  ] as const) {
+    const sections = buildProjectSections({
+      items: [{ repoId: 'a', hostId: 'local', lastActivityAt: 1 }],
+      repoIdOf: (row) => row.repoId,
+      hostIdOf: (row) => row.hostId,
+      repoMap,
+      repos,
+      projectIndex,
+      placeholderRepoIds: [],
+      repoOrder: order,
+      projectOrderBy: 'manual'
+    })
+    expect(sections).toHaveLength(1)
+    expect(sections[0][1].displayRepo).toBe(expected)
+    expect(withRepoSectionDisplayLabels(sections)[0][1].label).toBe('Harbor')
+    expect(sections[0][1].repoIds).toEqual(new Set(['a']))
+  }
 })

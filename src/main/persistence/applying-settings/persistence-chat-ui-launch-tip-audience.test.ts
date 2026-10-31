@@ -371,3 +371,58 @@ it('keeps frozen imported originals separate for each Store and prepared export'
     original: false
   })
 })
+
+describe('project grouping upgrade tip cohort', () => {
+  const checkouts = [0, 1].map((index) => ({
+    id: `checkout-${index}`,
+    path: `/work/app-${index}`,
+    displayName: 'App',
+    badgeColor: '',
+    addedAt: index,
+    upstream: { owner: 'org', repo: 'app' }
+  }))
+  it('freezes the actual old same-host split once, and keeps dismissal across restart and stale writers', async () => {
+    writeDataFile({ repos: checkouts, settings: {} })
+    const store = createStore()
+    const audience = store.getProjectGroupingUpgradeTipAudience()
+    expect(audience).toMatchObject({ membership: 'eligible', hostId: 'local', checkoutCount: 2 })
+    store.updateUI({ contextualToursSeenIds: ['project-grouping-upgrade'] })
+    store.updateUI({ contextualToursSeenIds: [] })
+    store.updateSettings({ projectGroupingMode: 'folder' })
+    store.flush()
+    const loaded = await reopen()
+    expect(loaded.getProjectGroupingUpgradeTipAudience()).toEqual(audience)
+    expect(loaded.getUI().contextualToursSeenIds).toContain('project-grouping-upgrade')
+  })
+  it.each([
+    ['one checkout', checkouts.slice(0, 1), {}],
+    ['physical aliases', checkouts.map((repo) => ({ ...repo, path: '/same' })), {}],
+    ['different hosts', [checkouts[0], { ...checkouts[1], executionHostId: 'runtime:server' }], {}],
+    ['plain folders', checkouts.map((repo) => ({ ...repo, kind: 'folder' })), {}],
+    ['prior host mode', checkouts, { projectGroupingMode: 'host' }],
+    [
+      'prior repository override',
+      checkouts,
+      { projectGroupingOverrides: { 'github:org/app': 'folder' } }
+    ]
+  ])('excludes %s without enrolling later', async (_, repos, settings) => {
+    writeDataFile({ repos, settings })
+    const store = createStore()
+    expect(store.getProjectGroupingUpgradeTipAudience()).toEqual({
+      version: 1,
+      membership: 'excluded'
+    })
+    store.updateSettings({ projectGroupingMode: 'repository', projectGroupingOverrides: {} })
+    store.flush()
+    expect((await reopen()).getProjectGroupingUpgradeTipAudience()).toEqual({
+      version: 1,
+      membership: 'excluded'
+    })
+  })
+  it('excludes new profiles permanently', async () => {
+    const store = createStore()
+    expect(store.getProjectGroupingUpgradeTipAudience().membership).toBe('excluded')
+    store.flush()
+    expect((await reopen()).getProjectGroupingUpgradeTipAudience().membership).toBe('excluded')
+  })
+})

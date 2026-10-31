@@ -1,6 +1,6 @@
 // Labels and order of the desktop sidebar's project sections, shared so the paired phone matches.
 import type { ProjectSectionEntry, ProjectSectionRepo } from './project-section-grouping'
-import { getRepoDisplayLabelKey, getRepoDisplayLabelsByPath } from './repo-display-labels'
+import { getRepoDisplayLabelsByPath } from './repo-display-labels'
 import type { ProjectOrderBy } from './ui-chrome-types'
 import { compareCodePoints, compareSidebarText } from './sidebar-list/text-order'
 
@@ -11,18 +11,16 @@ export type ActivityItem = { lastActivityAt?: number }
 export function withRepoSectionDisplayLabels<
   E extends ProjectSectionEntry<ActivityItem, ProjectSectionRepo>
 >(entries: readonly [string, E][]): [string, E][] {
-  const labelItems = entries.flatMap(([, group]) =>
-    group.repo ? [{ ...group.repo, displayName: group.label }] : []
+  const labelItems = entries.flatMap(([key, group]) =>
+    group.displayRepo ? [{ ...group.displayRepo, displayName: group.label, sectionKey: key }] : []
   )
   if (labelItems.length === 0) {
     return [...entries]
   }
-  const labelsByPath = getRepoDisplayLabelsByPath(labelItems)
+  const labelsByPath = getRepoDisplayLabelsByPath(labelItems, (item) => item.sectionKey)
   return entries.map(([key, group]) => [
     key,
-    group.repo
-      ? { ...group, label: labelsByPath.get(getRepoDisplayLabelKey(group.repo)) ?? group.label }
-      : group
+    group.displayRepo ? { ...group, label: labelsByPath.get(key) ?? group.label } : group
   ])
 }
 

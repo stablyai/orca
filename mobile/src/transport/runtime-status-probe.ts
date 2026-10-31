@@ -14,14 +14,25 @@ export function startRuntimeStatusProbe(
   client: UnvalidatedRpcRequestPort,
   onStatus: (status: HostStatusReply | null) => void,
   onAttemptFailed?: () => void
-): () => void {
+): (() => void) & { wake: () => void } {
   let cancelled = false
   let retryTimer: ReturnType<typeof setTimeout> | null = null
   let failureRetries = 0
+  let inFlight = false
+  let dirty = false
 
   function attempt(): void {
+    if (cancelled) {
+      return
+    }
+    if (inFlight) {
+      dirty = true
+      return
+    }
+    inFlight = true
     void hostStatusProbe.request(client).then(
       (reply) => {
+        inFlight = false
         if (cancelled) {
           return
         }
@@ -31,8 +42,13 @@ export function startRuntimeStatusProbe(
           return
         }
         onStatus(landed.status)
+        if (dirty) {
+          dirty = false
+          attempt()
+        }
       },
       (error: unknown) => {
+        inFlight = false
         if (cancelled) {
           return
         }
@@ -46,15 +62,31 @@ export function startRuntimeStatusProbe(
     const delay = cutover
       ? CUTOVER_RETRY_DELAY_MS
       : Math.min(FAILURE_RETRY_BASE_DELAY_MS * 2 ** failureRetries++, FAILURE_RETRY_MAX_DELAY_MS)
-    retryTimer = setTimeout(attempt, delay)
+    dirty = false
+    retryTimer = setTimeout(() => {
+      retryTimer = null
+      attempt()
+    }, delay)
     onAttemptFailed?.()
   }
 
   attempt()
-  return () => {
+  const stop = () => {
     cancelled = true
     if (retryTimer) {
       clearTimeout(retryTimer)
     }
   }
+  return Object.assign(stop, {
+    wake: () => {
+      if (cancelled) {
+        return
+      }
+      if (retryTimer) {
+        clearTimeout(retryTimer)
+        retryTimer = null
+      }
+      attempt()
+    }
+  })
 }

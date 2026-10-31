@@ -1,3 +1,4 @@
+import { readWebRuntimeStatus } from './web-runtime-status-request'
 import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import type { PairedE2EEClientHandshake } from '../../../shared/paired-e2ee-client-handshake'
 import { throwIfSignalAborted, waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
@@ -31,6 +32,9 @@ export class WebRuntimeClient {
   private readonly transport: WebRuntimeConnectionTransport
   private readonly fileWatchTeardownRetries = new Map<string, Set<() => Promise<void>>>()
   private readonly childClients = new Set<WebRuntimeClient>()
+
+  private lastStatusEpoch = -1
+  private releaseStatusWake?: () => void
 
   readonly statusOwner?: RuntimeHostStatusOwner
 
@@ -66,6 +70,10 @@ export class WebRuntimeClient {
           if (state === 'auth-failed') {
             this.statusOwner?.authenticationRejected()
           }
+          if (state === 'connected' && this.lastStatusEpoch !== this.connectionEpoch) {
+            this.lastStatusEpoch = this.connectionEpoch
+            this.statusOwner?.connectionChanged('connecting')
+          }
           this.statusOwner?.connectionChanged(
             state === 'connected'
               ? 'ready'
@@ -81,11 +89,7 @@ export class WebRuntimeClient {
       this.statusOwner = new RuntimeHostStatusOwner({
         ...status,
         persistent: true,
-        request: (signal) =>
-          this.transport.call('status.get', undefined, {
-            timeoutMs: 15_000,
-            signal
-          }) as Promise<RuntimeHostStatusResponse>,
+        request: (signal) => readWebRuntimeStatus(this.transport, signal),
         verified: (response) => {
           status.verified(response)
           return true
@@ -95,6 +99,15 @@ export class WebRuntimeClient {
         this.transport.state === 'connected' ? 'ready' : 'connecting'
       )
       this.statusOwner.activate()
+      const foreground = () => {
+        if (this.isDocumentVisible()) {
+          this.statusOwner?.wake()
+        }
+      }
+      if (typeof document !== 'undefined') {
+        document.addEventListener('visibilitychange', foreground)
+        this.releaseStatusWake = () => document.removeEventListener('visibilitychange', foreground)
+      }
     }
   }
 
@@ -173,6 +186,8 @@ export class WebRuntimeClient {
   }
 
   close(options: { notifySubscriptions?: boolean } = {}): void {
+    this.releaseStatusWake?.()
+    this.releaseStatusWake = undefined
     this.statusOwner?.dispose()
     const shouldNotifySubscriptions = options.notifySubscriptions ?? true
     for (const child of Array.from(this.childClients)) {

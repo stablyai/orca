@@ -8616,7 +8616,6 @@
           "b0a0c14a1c": "Projektspezifische Anzeigedetails für die Seitenleiste und Tabs.",
           "removeProjectAllHosts": "Dieses Projekt auf allen konfigurierten Hosts aus Orca entfernen.",
           "removeProjectCheckout": "Diesen Checkout aus Orca entfernen. Andere Checkouts dieses Projekts bleiben erhalten.",
-          "removeProjectKeepCheckouts": "Dieses Projekt aus Orca entfernen. Checkouts mit eigenen Einstellungen bleiben erhalten.",
           "0909e5d650": "Projekt entfernen",
           "ee5a290616": "Als Ordner geöffnet. Git-Funktionen sind für diesen Arbeitsbereich nicht verfügbar.",
           "323debba71": "Typ:",

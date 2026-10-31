@@ -32,6 +32,7 @@ export class RuntimeHostStatusOwner {
   private attempt = 0
   private retry: ReturnType<typeof setTimeout> | null = null
   private request: AbortController | null = null
+  private wakeAfterRequest = false
   private readonly waiters = new Set<Waiter>()
   private response: RuntimeHostStatusResponse = runtimeHostStatusFailure(
     'runtime_unavailable',
@@ -158,6 +159,25 @@ export class RuntimeHostStatusOwner {
     }
   }
 
+  /** Revalidate on a real foreground/reentry signal without changing authentication or protocol refusal. */
+  wake(): void {
+    if (this.disposed) {
+      return
+    }
+    if (
+      this.snapshot.verification === 'blocked' &&
+      !this.response.ok &&
+      this.response.error.code === 'invalid_runtime_response'
+    ) {
+      this.update({ verification: 'checking' })
+    }
+    if (this.request) {
+      this.wakeAfterRequest = true
+      return
+    }
+    this.startRequest()
+  }
+
   authenticationRejected(message = 'Pair this client again.'): void {
     if (this.disposed) {
       return
@@ -212,6 +232,10 @@ export class RuntimeHostStatusOwner {
     }
     this.request = null
     this.complete(response)
+    if (this.wakeAfterRequest) {
+      this.wakeAfterRequest = false
+      this.wake()
+    }
   }
 
   private complete(response: RuntimeHostStatusResponse): void {
@@ -259,6 +283,7 @@ export class RuntimeHostStatusOwner {
   private retireRequest(): void {
     const request = this.request
     this.request = null
+    this.wakeAfterRequest = false
     request?.abort()
   }
 

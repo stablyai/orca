@@ -1,3 +1,5 @@
+import { isWebClientLocation } from '@/lib/web-client-location'
+import { PROJECT_REPO_FILTER_EXACT_CAPABILITY } from '../../../../../shared/project-repo-filter-capability'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { workspaceHostScopeForVisibleHosts } from '../../../../../shared/workspace-view/workspace-host-visibility'
 import { createAgentsViewPreferenceActions } from './ui-slice-agents-view-preference-actions'
@@ -153,11 +155,50 @@ export function createUiPreferenceActions(set: UISliceSet, get: UISliceGet): Par
       }),
 
     filterRepoIds: [],
-    setFilterRepoIds: (ids) => set({ filterRepoIds: ids }),
+    setFilterRepoIds: (ids) => {
+      const state = get()
+      const environment =
+        isWebClientLocation() && state.runtimeEnvironments.length === 1
+          ? state.runtimeEnvironments[0]
+          : null
+      const snapshot = environment
+        ? state.runtimeStatusByEnvironmentId.get(environment.id)?.snapshot
+        : null
+      const readable =
+        snapshot?.verification === 'verified' &&
+        snapshot.transport === 'ready' &&
+        !snapshot.retired &&
+        snapshot.pairingRevision === (environment!.pairingRevision ?? environment!.createdAt)
+      set({
+        filterRepoIds: ids,
+        persistedUIProjectFilterWrite: environment
+          ? {
+              ids,
+              intent: {
+                environmentId: environment.id,
+                pairingRevision: environment.pairingRevision ?? environment.createdAt,
+                exact:
+                  !readable ||
+                  snapshot.status?.capabilities?.includes(PROJECT_REPO_FILTER_EXACT_CAPABILITY) ===
+                    true
+              }
+            }
+          : undefined
+      })
+    },
 
     ...createAgentsViewPreferenceActions(set),
 
     collapsedGroups: new Set<string>(),
+    removeCollapsedGroups: (matches) =>
+      set((s) => {
+        const next = new Set([...s.collapsedGroups].filter((key) => !matches(key)))
+        if (next.size === s.collapsedGroups.size) {
+          return s
+        }
+        window.api.ui.set({ collapsedGroups: [...next] }).catch(console.error)
+        return { collapsedGroups: next }
+      }),
     toggleCollapsedGroup: (key) =>
       set((s) => {
         const next = new Set(s.collapsedGroups)

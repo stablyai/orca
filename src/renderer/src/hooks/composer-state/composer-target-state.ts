@@ -24,6 +24,7 @@ export function useComposerTargetState(
     initialRepoId: composerTargetStore.initialRepoId,
     initialTaskSourceContext: composerTargetStore.initialTaskSourceContext,
     initialWorkspaceTarget: composerTargetStore.initialWorkspaceTarget,
+    initialProjectScope: composerTargetStore.initialProjectScope,
     initialWorkspaceStatus: composerTargetStore.initialWorkspaceStatus,
     newWorkspaceDraft: composerTargetStore.newWorkspaceDraft,
     persistDraft: composerTargetStore.persistDraft,

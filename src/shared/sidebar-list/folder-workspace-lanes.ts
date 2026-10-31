@@ -34,11 +34,14 @@ export function getRenderableFolderWorkspaces(
 export function getFolderWorkspaceLaneKey(
   pair: RenderableFolderWorkspace,
   groupBy: Exclude<WorktreeGroupBy, 'repo'>,
-  workspaceStatuses: readonly WorkspaceStatusDefinition[]
+  workspaceStatuses: readonly WorkspaceStatusDefinition[],
+  workspaceStatusById?: ReadonlyMap<string, WorkspaceStatusDefinition>
 ): string {
   switch (groupBy) {
     case 'workspace-status':
-      return getWorkspaceStatusGroupKey(getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses))
+      return getWorkspaceStatusGroupKey(
+        getWorkspaceStatus(pair.folderWorkspace, workspaceStatuses, workspaceStatusById)
+      )
     case 'pr-status':
       // Folders cannot resolve a PR; match worktrees without one in the in-progress lane.
       return getPRLaneKey('in-progress')

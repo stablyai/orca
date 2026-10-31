@@ -1,5 +1,8 @@
 /** @vitest-environment happy-dom */
 import { act } from 'react'
+import { renderHook, cleanup } from '@testing-library/react'
+import { useAgentPaneThreads } from './use-agent-pane-threads'
+import { useActivityScopeFilterCount } from './activity-scope-filter-controls'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -66,6 +69,7 @@ beforeEach(() => {
 })
 
 afterEach(() => {
+  cleanup()
   act(() => root?.unmount())
   useAppStore.setState(initialState, true)
   document.body.replaceChildren()
@@ -226,4 +230,38 @@ describe('Activity auto mark-read loop (React #185)', () => {
 
     expect(useAppStore.getState().acknowledgedAgentsByPaneKey[PANE_A]).toBeUndefined()
   })
+})
+
+it('keeps saved Projects intent/count distinct from Agents unavailable-ID suspension and pane exemption', async () => {
+  seedThreadStampedByLocalClock()
+  const saved = ['offline']
+  useAppStore.setState({ agentsFilterRepoIds: saved })
+  const initialProps: { selected: string | null } = { selected: null }
+  const hook = renderHook(
+    ({ selected }: { selected: string | null }) => ({
+      threads: useAgentPaneThreads({
+        query: '',
+        readFilter: 'all',
+        groupBy: 'project',
+        selectedPaneKey: selected
+      }),
+      count: useActivityScopeFilterCount()
+    }),
+    { initialProps }
+  )
+  expect(hook.result.current.count).toBe(1)
+  expect(hook.result.current.threads.visibleThreads.map((thread) => thread.paneKey)).toContain(
+    PANE_A
+  )
+  expect(useAppStore.getState().agentsFilterRepoIds).toBe(saved)
+  // A known but nonmatching host is an effective restriction; the selected pane keeps its existing exemption.
+  await act(async () => useAppStore.setState({ agentsFilterRepoIds: ['runtime:server\0repo-1'] }))
+  expect(hook.result.current.count).toBe(1)
+  expect(hook.result.current.threads.visibleThreads).toHaveLength(0)
+  hook.rerender({ selected: PANE_A })
+  expect(hook.result.current.threads.visibleThreads.map((thread) => thread.paneKey)).toContain(
+    PANE_A
+  )
+  await act(async () => useAppStore.setState({ agentsFilterRepoIds: [] }))
+  expect(hook.result.current.count).toBe(0)
 })

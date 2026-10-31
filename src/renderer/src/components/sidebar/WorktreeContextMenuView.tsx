@@ -85,7 +85,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
     menuOpen,
     menuPoint,
     onContextMenuSelect,
-    projectGroups,
+    groupOperation,
     removesProject,
     repo,
     scopeRef,
@@ -209,7 +209,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       'Mark Unread'
                     )}
               </DropdownMenuItem>
-              {repo ? (
+              {groupOperation ? (
                 <>
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onSelect={handleCreateGroupFromRepo} disabled={isDeleting}>
@@ -219,7 +219,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       'New group from project'
                     )}
                   </DropdownMenuItem>
-                  {projectGroups.length > 0 ? (
+                  {groupOperation.destinations.length > 0 ? (
                     <DropdownMenuSub>
                       <DropdownMenuSubTrigger disabled={isDeleting}>
                         <FolderInput className="size-3.5" />
@@ -229,10 +229,10 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                         )}
                       </DropdownMenuSubTrigger>
                       <DropdownMenuSubContent>
-                        {projectGroups.map((group) => (
+                        {groupOperation.destinations.map((group) => (
                           <DropdownMenuItem
                             key={group.id}
-                            disabled={repo.projectGroupId === group.id}
+                            disabled={groupOperation.uniformGroupId === group.id}
                             onSelect={() => handleMoveProjectToGroup(group.id)}
                           >
                             <span className="max-w-48 truncate">{group.name}</span>
@@ -241,7 +241,7 @@ export default function WorktreeContextMenuView({ model }: { model: WorktreeCont
                       </DropdownMenuSubContent>
                     </DropdownMenuSub>
                   ) : null}
-                  {repo.projectGroupId ? (
+                  {groupOperation.grouped ? (
                     <DropdownMenuItem onSelect={handleRemoveProjectFromGroup} disabled={isDeleting}>
                       <CircleX className="size-3.5" />
                       {translate(

@@ -1,3 +1,4 @@
+import type { ProjectGroupingUpgradeTipAudience } from './project-grouping-upgrade-tip-audience'
 import type { ExecutionHostId } from './execution-host'
 import type {
   RemovedSshTargetTombstone,
@@ -121,5 +122,6 @@ export type PersistedState = {
   /** Main-owned reset mutation journal. Never expose this through renderer settings APIs. */
   codexResetCreditAttemptLedger?: CodexResetCreditAttemptLedger
   /** Main-owned, decided once on the first load of the upgrade; never derived from live settings. */
+  projectGroupingUpgradeTipAudience?: ProjectGroupingUpgradeTipAudience
   chatUiLaunchTipAudience?: ChatUiLaunchTipAudience
 }

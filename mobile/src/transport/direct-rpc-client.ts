@@ -49,7 +49,7 @@ export class DirectRpcClient implements RpcClient {
     serverPublicKeyB64: string,
     private readonly options: ConnectOptions
   ) {
-    this.connectionLog = new DirectConnectionLog(endpoint, options.onLog)
+    this.connectionLog = new DirectConnectionLog(this.endpoint, this.options.onLog)
     this.reconnect = new RpcClientReconnectSchedule({
       openConnection: () => this.openConnection(),
       rejectConnectWaiters: (reason) => this.connectionState.rejectWaiters(reason),

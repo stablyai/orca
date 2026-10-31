@@ -60,7 +60,13 @@ function createPersistedUIWriteController(): PersistedUIWriteController {
     try {
       // Use acknowledged writes when available; older preloads fall back to set, which web may silently reject.
       const send = window.api.ui.setWithAck ?? window.api.ui.set
-      request = send(persistedUIWriteFieldsToWireUpdate(changed))
+      const authored = state.persistedUIProjectFilterWrite
+      request = send(
+        persistedUIWriteFieldsToWireUpdate(changed),
+        authored && authored.ids === changed.filterRepoIds
+          ? { projectFilter: authored.intent }
+          : undefined
+      )
     } catch {
       // Settle even synchronous failure so fields cannot stay pinned against hydration forever.
       useAppStore.getState().notePersistedUIWriteSettled(fields, null)

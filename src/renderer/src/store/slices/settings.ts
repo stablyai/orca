@@ -3,13 +3,8 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { toast } from 'sonner'
-import {
-  clearRuntimeCompatibilityCache,
-  markRuntimeEnvironmentCompatible
-} from '@/runtime/runtime-rpc-client'
-import { unwrapRuntimeRpcResult } from '@/runtime/runtime-rpc-result'
-import { assertRuntimeStatusCompatible } from '@/runtime/runtime-protocol-compat'
-import type { RuntimeStatus } from '../../../../shared/runtime-types'
+import { clearRuntimeCompatibilityCache } from '@/runtime/runtime-rpc-client'
+import { verifyRuntimeEnvironmentReachable } from './runtime-preference-reachability'
 import { normalizeTerminalQuickCommands } from '../../../../shared/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../../shared/terminal-quick-command-prompt-limit'
 import { normalizeTerminalCustomThemes } from '../../../../shared/terminal-custom-themes'
@@ -36,16 +31,21 @@ import { persistVisibilityAwareSettings } from './worktree-visibility-settings-w
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 
+export type SettingsUpdate =
+  | Partial<GlobalSettings>
+  | ((current: GlobalSettings) => Partial<GlobalSettings>)
+
 export type SettingsSlice = SettingsSearchState & {
   settings: GlobalSettings | null
+  projectGroupingSettingsHydrated: boolean
   worktreeVisibilityDefaultsByHost: WorktreeVisibilityDefaultsByHost
   worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: string | null
   worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: string | null
   fetchSettings: (options?: ownerHydration.FetchSettingsOptions) => Promise<void>
   awaitOwnerWorktreeVisibilityDefaultsHydration: () => Promise<void>
-  updateSettings: (updates: Partial<GlobalSettings>) => Promise<void>
+  updateSettings: (updates: SettingsUpdate) => Promise<void>
   updateSettingsOrThrow: (
-    updates: Partial<GlobalSettings>,
+    updates: SettingsUpdate,
     onAcknowledged?: (settings: GlobalSettings) => void
   ) => Promise<void>
   setActiveRuntimeEnvironmentPreference: (environmentId: string | null) => Promise<boolean>
@@ -160,141 +160,150 @@ function hasCompleteRuntimeStatusCoverage(
   )
 }
 
-async function verifyRuntimeEnvironmentReachable(environmentId: string | null): Promise<void> {
-  if (!environmentId) {
-    return
-  }
-  const response = await window.api.runtimeEnvironments.getStatus({
-    selector: environmentId,
-    timeoutMs: 15_000
-  })
-  const status = unwrapRuntimeRpcResult<RuntimeStatus>(response)
-  assertRuntimeStatusCompatible(status)
-  // Switch already proved compatibility; avoid the heavier generic RPC re-probe during hydration.
-  markRuntimeEnvironmentCompatible(environmentId)
-}
-
-export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => ({
-  settings: null,
-  worktreeVisibilityDefaultsByHost: {},
-  worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
-  worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null,
-  ...createSettingsSearchState((state) => set(state)),
-
-  fetchSettings: async (options) => {
-    await ownerHydration.fetchSettingsWithOwnerHydration({ options, set, get })
-    const { runtimeEnvironmentCatalogHydrated, runtimeEnvironments, runtimeStatusByEnvironmentId } =
-      get()
-    // Probe all hosts only for incomplete/stale coverage; a recorded null still counts as checked.
-    if (
-      !runtimeEnvironmentCatalogHydrated ||
-      !hasCompleteRuntimeStatusCoverage(runtimeEnvironments, runtimeStatusByEnvironmentId) ||
-      // Why: coverage is blind to catalog edits from another client or the orca CLI.
-      isRuntimeCatalogListingStale()
-    ) {
-      void get().hydrateRuntimeEnvironmentStatuses()
-    }
-  },
-
-  awaitOwnerWorktreeVisibilityDefaultsHydration: () =>
-    ownerHydration.awaitOwnerWorktreeVisibilityDefaultsHydration(get),
-
-  updateSettings: async (updates) => {
-    const shouldPublish = ownerHydration.createSettingsPublicationFence(
-      'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
-    )
-    const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
-    try {
+export const createSettingsSlice: StateCreator<AppState, [], [], SettingsSlice> = (set, get) => {
+  let writes: Promise<void> | null = null
+  const write = (
+    update: SettingsUpdate,
+    onAcknowledged?: (settings: GlobalSettings) => void
+  ): Promise<void> => {
+    const execute = async () => {
+      const current = get().settings
+      if (typeof update === 'function' && !current) {
+        throw new Error('Settings are not loaded.')
+      }
+      const updates = typeof update === 'function' ? update(current!) : update
+      const shouldPublish = ownerHydration.createSettingsPublicationFence(
+        'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
+      )
+      const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(current)
       await persistSettingsUpdates(
         set,
         updates,
-        get().settings,
+        current,
         get().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId,
         get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
-        shouldPublish
+        shouldPublish,
+        onAcknowledged
       )
       if ('worktreeVisibilityDefaults' in updates) {
         await get().fetchAllWorktrees({ visibilityOwnerHostId })
       }
-    } catch (err) {
-      console.error('Failed to update settings:', err)
     }
-  },
+    const result = writes ? writes.then(execute, execute) : execute()
+    writes = result
+    void result
+      .finally(() => {
+        if (writes === result) {
+          writes = null
+        }
+      })
+      .catch(() => {})
+    return result
+  }
+  return {
+    settings: null,
+    projectGroupingSettingsHydrated: false,
+    worktreeVisibilityDefaultsByHost: {},
+    worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId: null,
+    worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId: null,
+    ...createSettingsSearchState((state) => set(state)),
 
-  updateSettingsOrThrow: async (updates, onAcknowledged) => {
-    const shouldPublish = ownerHydration.createSettingsPublicationFence(
-      'activeRuntimeEnvironmentId' in updates || 'worktreeVisibilityDefaults' in updates
-    )
-    const visibilityOwnerHostId = getSettingsFocusedExecutionHostId(get().settings)
-    await persistSettingsUpdates(
-      set,
-      updates,
-      get().settings,
-      get().worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId,
-      get().worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId,
-      shouldPublish,
-      onAcknowledged
-    )
-    if ('worktreeVisibilityDefaults' in updates) {
-      await get().fetchAllWorktrees({ visibilityOwnerHostId })
-    }
-  },
+    fetchSettings: async (options) => {
+      if (writes) {
+        await writes.catch(() => undefined)
+      }
+      await ownerHydration.fetchSettingsWithOwnerHydration({ options, set, get })
+      const {
+        runtimeEnvironmentCatalogHydrated,
+        runtimeEnvironments,
+        runtimeStatusByEnvironmentId
+      } = get()
+      // Probe all hosts only for incomplete/stale coverage; a recorded null still counts as checked.
+      if (
+        !runtimeEnvironmentCatalogHydrated ||
+        !hasCompleteRuntimeStatusCoverage(runtimeEnvironments, runtimeStatusByEnvironmentId) ||
+        // Why: coverage is blind to catalog edits from another client or the orca CLI.
+        isRuntimeCatalogListingStale()
+      ) {
+        void get().hydrateRuntimeEnvironmentStatuses()
+      }
+    },
 
-  setActiveRuntimeEnvironmentPreference: async (environmentId) => {
-    const nextId = normalizeRuntimeEnvironmentId(environmentId)
-    const previousId = normalizeRuntimeEnvironmentId(get().settings?.activeRuntimeEnvironmentId)
-    if (previousId === nextId) {
-      return true
-    }
-    const shouldPublish = ownerHydration.createSettingsPublicationFence(true)
-    try {
-      clearRuntimeCompatibilityCache(nextId)
-      await verifyRuntimeEnvironmentReachable(nextId)
-      if (!shouldPublish()) {
+    awaitOwnerWorktreeVisibilityDefaultsHydration: () =>
+      ownerHydration.awaitOwnerWorktreeVisibilityDefaultsHydration(get),
+
+    updateSettings: async (updates) => {
+      try {
+        await write(updates)
+      } catch (err) {
+        console.error('Failed to update settings:', err)
+      }
+    },
+
+    updateSettingsOrThrow: (updates, onAcknowledged) => write(updates, onAcknowledged),
+
+    setActiveRuntimeEnvironmentPreference: async (environmentId) => {
+      if (writes) {
+        await writes.catch(() => undefined)
+      }
+      const nextId = normalizeRuntimeEnvironmentId(environmentId)
+      const previousId = normalizeRuntimeEnvironmentId(get().settings?.activeRuntimeEnvironmentId)
+      if (previousId === nextId) {
         return true
       }
-      const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
-        environmentId: nextId
-      })
-      bumpProviderRuntimeSessionGeneration()
-      // Why: this is a focus change, so keep other host state while hydrating only the new owner's default.
-      const focusedSettings =
-        (nextSettings as GlobalSettings | undefined) ??
-        (get().settings ? { ...get().settings!, activeRuntimeEnvironmentId: nextId } : null)
-      if (focusedSettings) {
-        const hydrated = await hydrateOwnerWorktreeVisibilityDefaults(
-          focusedSettings,
-          get().worktreeVisibilityDefaultsByHost
-        )
+      const shouldPublish = ownerHydration.createSettingsPublicationFence(true)
+      try {
+        clearRuntimeCompatibilityCache(nextId)
+        await verifyRuntimeEnvironmentReachable(nextId)
         if (!shouldPublish()) {
           return true
         }
-        set((state) => ({
-          settings: hydrated.settings,
-          worktreeVisibilityDefaultsByHost: {
-            ...state.worktreeVisibilityDefaultsByHost,
-            ...hydrated.defaultsByHost
-          },
-          worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId:
-            hydrated.supportedRuntimeEnvironmentId,
-          worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
-            hydrated.sourceDefaultsSupportedRuntimeEnvironmentId
-        }))
-      } else {
-        set({ settings: null })
+        const nextSettings = await window.api.settings.setActiveRuntimeEnvironmentPreference({
+          environmentId: nextId
+        })
+        bumpProviderRuntimeSessionGeneration()
+        // Why: this is a focus change, so keep other host state while hydrating only the new owner's default.
+        const focusedSettings =
+          (nextSettings as GlobalSettings | undefined) ??
+          (get().settings ? { ...get().settings!, activeRuntimeEnvironmentId: nextId } : null)
+        if (focusedSettings) {
+          const hydrated = await hydrateOwnerWorktreeVisibilityDefaults(
+            focusedSettings,
+            get().worktreeVisibilityDefaultsByHost
+          )
+          if (!shouldPublish()) {
+            return true
+          }
+          set((state) => ({
+            settings: hydrated.settings,
+            worktreeVisibilityDefaultsByHost: {
+              ...state.worktreeVisibilityDefaultsByHost,
+              ...hydrated.defaultsByHost
+            },
+            worktreeVisibilityDefaultsSupportedRuntimeEnvironmentId:
+              hydrated.supportedRuntimeEnvironmentId,
+            worktreeVisibilitySourceDefaultsSupportedRuntimeEnvironmentId:
+              hydrated.sourceDefaultsSupportedRuntimeEnvironmentId
+          }))
+        } else {
+          set({ settings: null })
+        }
+        // Hydrate only the newly focused host’s catalog; downstream host merges preserve other hosts.
+        await get().fetchRepos({ runtimeEnvironmentId: nextId })
+        await get().fetchAllWorktrees()
+        await get().fetchWorktreeLineage()
+        await get().fetchBrowserSessionProfiles()
+        return true
+      } catch (err) {
+        console.error('Failed to switch runtime environment:', err)
+        toast.error(
+          translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'),
+          {
+            description: err instanceof Error ? err.message : String(err)
+          }
+        )
+        return false
       }
-      // Hydrate only the newly focused host’s catalog; downstream host merges preserve other hosts.
-      await get().fetchRepos({ runtimeEnvironmentId: nextId })
-      await get().fetchAllWorktrees()
-      await get().fetchWorktreeLineage()
-      await get().fetchBrowserSessionProfiles()
-      return true
-    } catch (err) {
-      console.error('Failed to switch runtime environment:', err)
-      toast.error(translate('auto.store.slices.settings.e12dab333b', 'Failed to switch servers'), {
-        description: err instanceof Error ? err.message : String(err)
-      })
-      return false
     }
   }
-})
+}

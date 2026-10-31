@@ -1,3 +1,4 @@
+import { useConcreteProjectContinuity } from './settings-view-model'
 import { useCallback, useMemo } from 'react'
 import { applyDocumentTheme } from '@/lib/document-theme'
 import { useSettingsNavigationMetadata } from '@/hooks/useSettingsNavigationMetadata'
@@ -7,7 +8,6 @@ import {
   getAgentSkillNavInstallStatus,
   getLinearAgentSkillNavInstallStatus
 } from '@/lib/agent-skill-nav-install-status'
-import { getProjectHostSetupProjectionFromState } from '../../store/selectors'
 import { getSettingsSectionSearchEntries, rankSettingsSearchItems } from './settings-search'
 import { deriveNeededSectionIds } from './settings-load-performance'
 import { SCROLLBACK_PRESETS_ROWS } from './SettingsConstants'
@@ -156,34 +156,19 @@ export function useSettingsNavigationModel(
     () => new Set(visibleNavSections.map((section) => section.id)),
     [visibleNavSections]
   )
-  const projectByRepoId = useMemo(() => {
-    const projection = getProjectHostSetupProjectionFromState({
-      repos: model.repos,
-      projects: model.projects,
-      projectHostSetups: model.projectHostSetups
-    })
-    const projectById = new Map(projection.projects.map((project) => [project.id, project]))
-    const nextProjectByRepoId = new Map<string, (typeof projection.projects)[number]>()
-    for (const setup of projection.setups) {
-      const project = projectById.get(setup.projectId)
-      if (project && setup.repoId.trim()) {
-        nextProjectByRepoId.set(setup.repoId, project)
-      }
-    }
-    return nextProjectByRepoId
-  }, [model.projectHostSetups, model.projects, model.repos])
+  const currentModel = useConcreteProjectContinuity(model, interactions)
   const neededSectionIds = useMemo(
     () =>
       deriveNeededSectionIds({
         navSectionIds: navSections.map((section) => section.id),
         mountedSectionIds: model.mountedSectionIds,
-        activeSectionId: model.activeSectionId,
+        activeSectionId: currentModel.activeSectionId,
         pendingSectionId: interactions.pendingNavSectionRef.current,
         query: model.settingsSearchQuery,
         visibleSectionIds
       }),
     [
-      model.activeSectionId,
+      currentModel.activeSectionId,
       model.mountedSectionIds,
       interactions.pendingNavSectionRef,
       navSections,
@@ -193,13 +178,13 @@ export function useSettingsNavigationModel(
   )
 
   return {
+    model: currentModel,
     applyTheme,
     displayedGitUsername,
     navSections,
     getSectionSearchEntries,
     visibleNavSections,
     visibleSectionIds,
-    projectByRepoId,
     neededSectionIds
   }
 }

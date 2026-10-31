@@ -1,6 +1,7 @@
 import React from 'react'
 import { translate } from '@/i18n/i18n'
-import { findRepoForHost } from '@/store/slices/repo-host-identity'
+import { getRepoHostIdentity } from '../../../../../../shared/repo-host-identity'
+import { getProjectSectionRepoLookup } from '../../../../../../shared/project-section-reveal'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { ProjectGroupNameDialog } from '../../ProjectGroupNameDialog'
@@ -12,7 +13,6 @@ import type { ProjectGroupDialogs } from './use-project-group-dialogs'
 export function SidebarWorktreeListDialogs({
   dialogs,
   repos,
-  settings,
   suppressExternalWorktreeInboxRepoId,
   setSuppressExternalWorktreeInboxRepoId,
   newExternalWorktreeInboxActionState,
@@ -22,8 +22,8 @@ export function SidebarWorktreeListDialogs({
   dialogs: ProjectGroupDialogs
   repos: readonly Repo[]
   settings: AppState['settings']
-  suppressExternalWorktreeInboxRepoId: string | null
-  setSuppressExternalWorktreeInboxRepoId: (repoId: string | null) => void
+  suppressExternalWorktreeInboxRepoId: Repo | null
+  setSuppressExternalWorktreeInboxRepoId: (repo: Repo | null) => void
   newExternalWorktreeInboxActionState: ReadonlyMap<string, NewExternalWorktreesInboxActionState>
   onConfirmSuppressExternalWorktreeInbox: () => void
   onOpenWorktreeVisibility: (repo: Repo) => void
@@ -33,6 +33,7 @@ export function SidebarWorktreeListDialogs({
     <>
       <ProjectGroupNameDialog
         open={nameDialog !== null}
+        sessionKey={nameDialog ?? undefined}
         title={
           nameDialog?.type === 'rename'
             ? translate('auto.components.sidebar.WorktreeList.f9dc6cc5d3', 'Rename Project Group')
@@ -75,15 +76,13 @@ export function SidebarWorktreeListDialogs({
       <SuppressExternalWorktreeInboxDialog
         open={suppressExternalWorktreeInboxRepoId !== null}
         repoDisplayName={
-          suppressExternalWorktreeInboxRepoId
-            ? (repos.find((repo) => repo.id === suppressExternalWorktreeInboxRepoId)?.displayName ??
-              '')
-            : ''
+          suppressExternalWorktreeInboxRepoId ? suppressExternalWorktreeInboxRepoId.displayName : ''
         }
         pending={
           suppressExternalWorktreeInboxRepoId
-            ? (newExternalWorktreeInboxActionState.get(suppressExternalWorktreeInboxRepoId)
-                ?.pending ?? false)
+            ? (newExternalWorktreeInboxActionState.get(
+                getRepoHostIdentity(suppressExternalWorktreeInboxRepoId)
+              )?.pending ?? false)
             : false
         }
         onOpenChange={(open) => {
@@ -96,7 +95,9 @@ export function SidebarWorktreeListDialogs({
           if (!suppressExternalWorktreeInboxRepoId) {
             return
           }
-          const repo = findRepoForHost(repos, suppressExternalWorktreeInboxRepoId, { settings })
+          const repo = getProjectSectionRepoLookup(repos).get(
+            getRepoHostIdentity(suppressExternalWorktreeInboxRepoId)
+          )
           setSuppressExternalWorktreeInboxRepoId(null)
           if (repo) {
             onOpenWorktreeVisibility(repo)

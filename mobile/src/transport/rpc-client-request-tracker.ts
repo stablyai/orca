@@ -1,6 +1,6 @@
 import { markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
 import { openRpcRequestBudget, resolvePostConnectRequestTimeout } from './rpc-request-budget'
-import type { SendRequestOptions } from './rpc-client'
+import type { SendRequestOptions } from './unvalidated-rpc-request-port'
 import type { RpcEnvelopeFields, RpcRequestFrame } from './rpc-envelope-fields'
 import type { ConnectionState, RpcResponse } from './types'
 

@@ -22,3 +22,19 @@ export function pruneDeregisteredRepoUiResidue(
     }
   }
 }
+
+export function retireRemovedProjectGroupingState(
+  state: Pick<PersistedState, 'projects' | 'settings' | 'ui'>,
+  removedProjectIds: ReadonlySet<string>
+): void {
+  for (const projectId of removedProjectIds) {
+    if (!state.projects?.some((project) => project.id === projectId)) {
+      delete state.settings.projectGroupingOverrides?.[projectId]
+      if (state.ui?.collapsedGroups) {
+        state.ui.collapsedGroups = state.ui.collapsedGroups.filter(
+          (key) => key !== `project:${projectId}` && !key.startsWith(`project:${projectId}::host:`)
+        )
+      }
+    }
+  }
+}

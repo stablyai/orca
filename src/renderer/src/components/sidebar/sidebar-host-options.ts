@@ -1,3 +1,5 @@
+import type { AppState } from '@/store/types'
+import { persistedUIValuesEqual } from '../../../../shared/persisted-ui-equality'
 import { shallow } from 'zustand/shallow'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -238,6 +240,50 @@ export function createSidebarHostLabelsSelector() {
   return (hosts: readonly SidebarHostOption[]): ReadonlyMap<ExecutionHostId, string> => {
     const next = new Map(hosts.map((host) => [host.id, host.label]))
     if (!shallow(result, next)) {
+      result = next
+    }
+    return result
+  }
+}
+
+export function createSidebarHostOptionsSelector() {
+  let inputs: readonly unknown[] = []
+  let result: SidebarHostOption[] = []
+  return (
+    state: AppState,
+    repos: readonly Repo[],
+    settings: AppState['settings'],
+    hostLabelOverrides: Parameters<typeof buildSidebarHostOptions>[0]['hostLabelOverrides']
+  ): SidebarHostOption[] => {
+    const nextInputs = [
+      repos,
+      state.sshTargetLabels,
+      state.sshConnectionStates,
+      settings,
+      state.runtimeStatusByEnvironmentId,
+      state.runtimeEnvironments,
+      hostLabelOverrides,
+      state.wslHostStatuses,
+      settings?.experimentalWslHosts === true,
+      state.wslHostServerFiles === 'missing'
+    ]
+    if (shallow(inputs, nextInputs)) {
+      return result
+    }
+    inputs = nextInputs
+    const next = buildSidebarHostOptions({
+      repos,
+      sshTargetLabels: state.sshTargetLabels,
+      sshConnectionStates: state.sshConnectionStates,
+      settings,
+      runtimeEnvironments: state.runtimeEnvironments,
+      runtimeStatusByEnvironmentId: state.runtimeStatusByEnvironmentId,
+      hostLabelOverrides,
+      wslHostStatuses: state.wslHostStatuses,
+      wslHostsEnabled: settings?.experimentalWslHosts === true,
+      wslHostServerFilesMissing: state.wslHostServerFiles === 'missing'
+    })
+    if (!persistedUIValuesEqual(result.map(sidebarHostSemantics), next.map(sidebarHostSemantics))) {
       result = next
     }
     return result

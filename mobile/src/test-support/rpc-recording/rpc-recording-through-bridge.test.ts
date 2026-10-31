@@ -1,5 +1,7 @@
 import { strictReplayVerdict, type BridgedReplay } from '../bridged-parity/replay-verdict'
 import { resolve } from 'node:path'
+import { mkdirSync, writeFileSync } from 'node:fs'
+import { recordingDifferences } from './golden-difference'
 import { describe, expect, it } from 'vitest'
 import { readBridgeHostMessage } from '../../mobile-web-shell/bridge/bridge-envelope'
 import {
@@ -49,7 +51,7 @@ import { runRecording } from './run-recording'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 
 // Replay every golden through the page bridge; RPC_FOUNDATION_BRIDGE=0 skips locally.
-// Certify complete residuals for changed History goldens; unchanged corpus members retain legacy labels.
+// Certify complete residuals for changed recordings; unchanged corpus members retain legacy labels.
 // Preserve raw recordings and reply-meta counterfactuals; pin per-id verdicts, closure membership and totals.
 
 const root = resolve(import.meta.dirname, '../../../..')
@@ -174,7 +176,9 @@ async function verdict(
   const expected = readGolden(directory, id)
   const certified =
     Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history'] ?? {}, id) ||
-    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history-screen'] ?? {}, id)
+    Object.hasOwn(C5_PAGE_CLOSURE['aiVault.history-screen'] ?? {}, id) ||
+    id === 'new-workspace-repositories-fulfilled' ||
+    id === 'matrix-components.new-workspace-repositories-repo.list-1'
   const fields = run.recording === null ? [] : divergingFields(expected.recording, run.recording)
   if (!certified && run.recording !== null && fields.length === 0) {
     // Not redundant with the field walk: this one also pins the encoding.
@@ -185,6 +189,44 @@ async function verdict(
   }
   const asIf = await replay(id, scenarios, withReplyMeta)
   if (certified) {
+    const destination = process.env.RPC_FOUNDATION_RESIDUAL_CERTIFICATE
+    if (
+      destination &&
+      (id === 'new-workspace-repositories-fulfilled' ||
+        id === 'matrix-components.new-workspace-repositories-repo.list-1')
+    ) {
+      mkdirSync(destination, { recursive: true })
+      const evidence = (candidate: Replay, replyMeta: boolean) => ({
+        recording: candidate.recording,
+        thrown: candidate.thrown instanceof Error ? candidate.thrown.message : candidate.thrown,
+        differences: candidate.recording
+          ? recordingDifferences(
+              expected.recording,
+              replyMeta ? recordingWithoutRpcMeta(candidate.recording, true) : candidate.recording,
+              true
+            )
+          : null,
+        ports: candidate.pairs.map((pair) => ({
+          toShell: pair.toShell,
+          toPage: pair.toPage,
+          diagnostics: pair.diagnostics
+        }))
+      })
+      writeFileSync(
+        resolve(destination, `${id}.json`),
+        JSON.stringify(
+          {
+            id,
+            scenarios,
+            native: expected,
+            bridge: evidence(run, false),
+            replyMeta: evidence(asIf, true)
+          },
+          null,
+          2
+        )
+      )
+    }
     const result = strictReplayVerdict(expected.recording, scenarios, run, asIf)
     if (result.name === 'unclassified') {
       throw new Error(

@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import type { Worktree } from '../../../shared/worktree/types'
 import { useAppStore } from '@/store'
 import {
@@ -14,7 +15,12 @@ export function liftSidebarFiltersHidingWorktree(wt: Worktree): void {
   if (state.sidebarBody === 'agents') {
     return
   }
-  revealRepoInProjectFilter(state, wt.repoId)
+  revealRepoInProjectFilter(
+    state,
+    wt.repoId,
+    wt.hostId ?? 'local',
+    getProjectGroupingIndexFromState(state)
+  )
   if (state.hideAutomationGeneratedWorkspaces && isAutomationGeneratedWorkspace(wt)) {
     state.setHideAutomationGeneratedWorkspaces(false)
   }

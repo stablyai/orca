@@ -1,8 +1,15 @@
+import type { ExecutionHostId } from '../execution-host'
+import { ALL_GROUP_KEY, getWorktreeLineageGroupKey } from './group-keys'
+import { getLaneHostWorktreeCounts, getLaneHostWorktreeIds } from './host-labels'
+import { compareFolderWorkspacesForDisplay } from './folder-workspace-lanes'
+import { getRepoExecutionHostId, getWorktreeExecutionHostId } from '../execution-host'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'
-import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
-import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrencePlan
@@ -23,13 +30,19 @@ import type {
 
 export function buildPendingCreationRow(
   creation: PendingCreationRef,
-  repoMap: Map<string, Repo>
+  repoMap: Map<string, Repo>,
+  repoByHost?: ReadonlyMap<string, Repo>
 ): PendingCreationRow {
   return {
     type: 'pending-creation',
     key: `pending:${creation.creationId}`,
     creationId: creation.creationId,
-    repo: repoMap.get(creation.repoId)
+    repo: creation.hostId
+      ? (repoByHost?.get(`${creation.hostId}\0${creation.repoId}`) ??
+        (getRepoExecutionHostId(repoMap.get(creation.repoId) ?? {}) === creation.hostId
+          ? repoMap.get(creation.repoId)
+          : undefined))
+      : repoMap.get(creation.repoId)
   }
 }
 
@@ -40,7 +53,7 @@ export function buildImportedWorktreesCardRow(
 ): ImportedWorktreesCardRow {
   return {
     type: 'imported-worktrees-card',
-    key: `imported-worktrees-card:${placement}:${candidate.repo.id}`,
+    key: `imported-worktrees-card:${placement}:${composeWorktreeHostIdentity(getRepoExecutionHostId(candidate.repo), candidate.repo.id)}`,
     repo: candidate.repo,
     hiddenWorktrees: candidate.hiddenWorktrees,
     placement,
@@ -56,7 +69,7 @@ export function buildNewExternalWorktreesInboxRow(
 ): NewExternalWorktreesInboxRow {
   return {
     type: 'new-external-worktrees-inbox',
-    key: `new-external-worktrees-inbox:${candidate.repo.id}`,
+    key: `new-external-worktrees-inbox:${composeWorktreeHostIdentity(getRepoExecutionHostId(candidate.repo), candidate.repo.id)}`,
     repo: candidate.repo,
     inboxWorktrees: candidate.inboxWorktrees,
     ...(hostContext
@@ -73,7 +86,8 @@ export function appendWorktreeRows(
     collapsedGroups: Set<string>
     groupDepth: number
     sectionKey: string
-    hostContextLabelByRepoId?: ReadonlyMap<string, string>
+    hostContextLabelByHostId?: ReadonlyMap<ExecutionHostId, string>
+    defaultHostId?: ExecutionHostId
     hostContextLabelByWorktreeIdentity?: ReadonlyMap<string, string>
   }
 ): void {
@@ -97,7 +111,9 @@ export function appendWorktreeRows(
       showProjectName: occurrence.showProjectName,
       hostContextLabel:
         options.hostContextLabelByWorktreeIdentity?.get(getWorktreeHostIdentity(worktree)) ??
-        options.hostContextLabelByRepoId?.get(worktree.repoId),
+        options.hostContextLabelByHostId?.get(
+          getWorktreeExecutionHostId(worktree, repoOf(worktree), options.defaultHostId ?? 'local')
+        ),
       ...(occurrence.childCount > 0
         ? {
             lineageGroupKey: getWorktreeLineageGroupKey(worktree),
@@ -120,5 +136,61 @@ export function buildFolderWorkspaceRow(
     projectGroup: pair.projectGroup,
     depth: 0,
     groupDepth
+  }
+}
+
+export function appendUngroupedWorkspaceRows({
+  naturalWorktrees,
+  renderableFolderWorkspaces,
+  repoOf,
+  defaultHostId,
+  collapsedGroups,
+  occurrencePlan,
+  mixedWorktreeHostContextLabels,
+  result
+}: {
+  naturalWorktrees: readonly Worktree[]
+  renderableFolderWorkspaces: readonly RenderableFolderWorkspace[]
+  repoOf: RepoOfWorktree
+  defaultHostId: ExecutionHostId
+  collapsedGroups: Set<string>
+  occurrencePlan: WorktreeOccurrencePlan<Worktree>
+  mixedWorktreeHostContextLabels?: ReadonlyMap<string, string>
+  result: Row[]
+}): void {
+  // Folder-only accounts must still render flat rows (#15362).
+  if (naturalWorktrees.length > 0 || renderableFolderWorkspaces.length > 0) {
+    result.push({
+      type: 'header',
+      key: ALL_GROUP_KEY,
+      count: naturalWorktrees.length + renderableFolderWorkspaces.length,
+      icon: { kind: 'all' },
+      hostWorktreeCounts: getLaneHostWorktreeCounts(
+        naturalWorktrees,
+        renderableFolderWorkspaces,
+        repoOf,
+        defaultHostId
+      ),
+      hostWorktreeIds: getLaneHostWorktreeIds(
+        naturalWorktrees,
+        renderableFolderWorkspaces,
+        repoOf,
+        defaultHostId
+      ),
+      worktreeIds: naturalWorktrees.map((worktree) => worktree.id)
+    })
+    if (!collapsedGroups.has(ALL_GROUP_KEY)) {
+      appendWorktreeRows(result, repoOf, occurrencePlan, {
+        collapsedGroups,
+        groupDepth: 0,
+        sectionKey: ALL_GROUP_KEY,
+        hostContextLabelByWorktreeIdentity: mixedWorktreeHostContextLabels
+      })
+      for (const pair of [...renderableFolderWorkspaces].sort((left, right) =>
+        compareFolderWorkspacesForDisplay(left.folderWorkspace, right.folderWorkspace)
+      )) {
+        result.push(buildFolderWorkspaceRow(pair, 0))
+      }
+    }
   }
 }

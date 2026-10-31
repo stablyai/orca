@@ -1,3 +1,7 @@
+import {
+  parseProjectGroupingUpgradeTipAudience,
+  type ProjectGroupingUpgradeTipAudience
+} from '../../../shared/project-grouping-upgrade-tip-audience'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { retireAtRestCommandSettings } from '../../native-chat/agent-session-wire/at-rest-command-context'
 import { createAgentModelCatalogSettingsExpiry } from '../../native-chat/agent-model-catalog/agent-model-catalog-account-expiry'
@@ -186,6 +190,14 @@ export class ProfilePreferences {
       parseChatUiLaunchTipAudience(
         this[profilePreferencesContext].runtime.state.chatUiLaunchTipAudience
       )
+    )
+  }
+
+  getProjectGroupingUpgradeTipAudience(): ProjectGroupingUpgradeTipAudience {
+    return (
+      parseProjectGroupingUpgradeTipAudience(
+        this[profilePreferencesContext].runtime.state.projectGroupingUpgradeTipAudience
+      ) ?? { version: 1, membership: 'excluded' }
     )
   }
 

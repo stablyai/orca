@@ -1,4 +1,8 @@
 import { describe, expect, it } from 'vitest'
+import {
+  buildProjectSections,
+  buildRepoProjectGroupingIndex
+} from '../../../../../../shared/project-section-grouping'
 import { sortProjectEntries } from '../../../../../../shared/project-section-order'
 import { appendProjectGroupSections } from '../../../../../../shared/sidebar-list/project-group-sections'
 import type { SectionAppendContext } from '../../../../../../shared/sidebar-list/group-sections'
@@ -61,20 +65,41 @@ describe('recent project rank scan budget', () => {
 
   it('reuses workspace ranks within a project group while preserving every header', () => {
     const { entries, readCount } = countedEntries()
-    const grouped: OrderedGroupEntry[] = entries.map(([key, group]) => [
-      key,
-      { ...group, repo: { ...repo, id: key, path: `/${key}`, projectGroupId: 'parent' } }
-    ])
+    const repos = entries.map(([key]) => ({
+      ...repo,
+      id: key,
+      displayName: key,
+      path: `/${key}`,
+      projectGroupId: 'parent'
+    }))
+    const repoMap = new Map(repos.map((owner) => [owner.id, owner]))
+    const projectIndex = buildRepoProjectGroupingIndex(repos)
+    const items = entries.flatMap(([repoId, group]) =>
+      group.items.map((item) => {
+        item.repoId = repoId
+        return item
+      })
+    )
+    const grouped: OrderedGroupEntry[] = buildProjectSections({
+      items,
+      repoIdOf: (item) => item.repoId,
+      repoMap,
+      repos,
+      projectIndex,
+      placeholderRepoIds: [],
+      repoOrder: undefined,
+      projectOrderBy: 'manual'
+    })
     const ctx: SectionAppendContext = {
       result: [],
       groupBy: 'repo',
       collapsedGroups: new Set(grouped.map(([key]) => key)),
       workspaceStatuses: [],
-      repoMap: new Map(),
-      repoOf: () => undefined,
+      repoMap,
+      repoOf: (item) => repoMap.get(item.repoId),
       defaultHostId: 'local',
       hostLabelById: undefined,
-      projectIndex: null,
+      projectIndex,
       importedWorktreesByRepo: new Map(),
       newExternalWorktreesInboxByRepo: new Map(),
       pendingByRepo: new Map(),
@@ -103,7 +128,7 @@ describe('recent project rank scan budget', () => {
       repoOrder: undefined
     })
     const expected = grouped.toSorted(
-      (left, right) => ((Number(right[0]) * 73) % 128) - ((Number(left[0]) * 73) % 128)
+      (left, right) => ((Number(right[1].label) * 73) % 128) - ((Number(left[1].label) * 73) % 128)
     )
     expect(ctx.result).toHaveLength(129)
     expect(ctx.result[0]).toMatchObject({ type: 'header', count: 128, projectGroupDepth: 0 })
@@ -115,6 +140,27 @@ describe('recent project rank scan budget', () => {
         count: 32,
         icon: { kind: 'project' },
         repo: group.repo,
+        displayRepo: repoMap.get(group.label),
+        contextRepo: repoMap.get(group.label),
+        projectScope: {
+          key,
+          catalogHostId: 'local',
+          registrations: [
+            {
+              id: group.label,
+              projectId: `repo:${group.label}`,
+              hostId: 'local',
+              repoId: group.label,
+              path: `/${group.label}`,
+              displayName: group.label,
+              setupState: 'ready',
+              setupMethod: 'legacy-repo',
+              createdAt: 0,
+              updatedAt: 0
+            }
+          ],
+          context: { repoId: group.label, hostId: 'local', setupId: group.label }
+        },
         projectGroupDepth: 1
       }))
     )

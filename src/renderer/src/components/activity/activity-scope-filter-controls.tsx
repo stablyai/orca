@@ -1,3 +1,5 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { projectFilterSelection } from '../../../../shared/project-repo-filter-selection'
 import React from 'react'
 import { useAppStore } from '@/store'
 import { DropdownMenuCheckboxItem, DropdownMenuItem } from '@/components/ui/dropdown-menu'
@@ -110,7 +112,8 @@ export function useActivityScopeFilterCount(): number {
   return useAppStore(
     (state) =>
       (state.agentsVisibleHostIds !== null ? 1 : 0) +
-      state.agentsFilterRepoIds.length +
+      projectFilterSelection(getProjectGroupingIndexFromState(state), state.agentsFilterRepoIds)
+        .badgeCount +
       (state.agentsHideWorkspacesFromOtherDevices ? 1 : 0) +
       (state.agentsHideAutomationGeneratedWorkspaces ? 1 : 0) +
       (state.agentsHideCliCreatedWorkspaces ? 1 : 0)

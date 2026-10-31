@@ -1,3 +1,4 @@
+import type { Repo } from '../../../../../../shared/repo-types'
 import React from 'react'
 import type { VirtualItem } from '@tanstack/react-virtual'
 import type { Row } from '../../../../../../shared/sidebar-list/row-types'
@@ -50,8 +51,8 @@ export function renderImportedWorktreesVirtualRow(args: {
   vItem: VirtualItem
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   actionState: ImportedWorktreeCardActionState | undefined
-  onShow: (projectId: string) => void
-  onKeepHidden: (projectId: string) => void
+  onShow: (repo: Repo) => void
+  onKeepHidden: (repo: Repo) => void
 }): React.JSX.Element {
   const { row, actionState } = args
   return (
@@ -68,10 +69,10 @@ export function renderImportedWorktreesVirtualRow(args: {
         placement={row.placement}
         pending={actionState?.pending ?? false}
         error={actionState?.error ?? null}
-        onShow={() => args.onShow(row.repo.id)}
+        onShow={() => args.onShow(row.repo)}
         onKeepHidden={
           canKeepImportedWorktreesHidden(row, actionState)
-            ? () => args.onKeepHidden(row.repo.id)
+            ? () => args.onKeepHidden(row.repo)
             : undefined
         }
       />
@@ -85,7 +86,7 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
   measureVirtualRowElement: (element: HTMLDivElement | null) => void
   actionState: NewExternalWorktreesInboxActionState | undefined
   onReview: (repo: Extract<Row, { type: 'new-external-worktrees-inbox' }>['repo']) => void
-  onSuppress: (projectId: string) => void
+  onSuppress: (repo: Repo) => void
 }): React.JSX.Element {
   const { row, actionState } = args
   return (
@@ -102,7 +103,7 @@ export function renderNewExternalWorktreesInboxVirtualRow(args: {
         pending={actionState?.pending ?? false}
         error={actionState?.error ?? null}
         onReview={() => args.onReview(row.repo)}
-        onSuppress={() => args.onSuppress(row.repo.id)}
+        onSuppress={() => args.onSuppress(row.repo)}
       />
     </NoticeRowFrame>
   )

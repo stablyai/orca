@@ -1,7 +1,10 @@
 import {
-  getRepoDisplayLabelKey,
-  getRepoDisplayLabelsByPath
+  getRepoDisplayLabelsByPath,
+  getRepoDisplayLabelKey
 } from '../../../../shared/repo-display-labels'
+import { getRepoHostIdentityForParts } from '../../../../shared/repo-host-identity'
+import { normalizeRuntimePathForComparison } from '../../../../shared/cross-platform-path'
+import type { GroupingSetup, ProjectGroupingSettings } from '../../../../shared/project-grouping'
 import {
   getRepoExecutionHostId,
   getWorktreeExecutionHostId,
@@ -11,8 +14,12 @@ import {
 import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
-import { getProjectHeaderRevealTarget } from '../../../../shared/project-section-grouping'
-import type { ProjectGroupingModel } from '../../../../shared/project-section-grouping'
+import {
+  buildProjectGroupingIndex,
+  getProjectGroupingForRepo,
+  getProjectSectionRepoLookup,
+  type ProjectGroupingIndex
+} from '../../../../shared/project-section-grouping'
 import type { SidebarHostOption } from '../sidebar/sidebar-host-options'
 import {
   expandEquivalentExecutionHostIds,
@@ -50,6 +57,8 @@ function toFilterOption({
 }
 
 export type PaletteFilterModel = {
+  projectIndex?: ProjectGroupingIndex
+  membersByProjectKey?: ReadonlyMap<string, readonly GroupingSetup[]>
   hosts: readonly PaletteFilterOption[]
   repositories: readonly PaletteFilterOption[]
   /** Repository IDs represented by each project row in the sidebar grouping. */
@@ -90,14 +99,27 @@ export function resolveWorktreeFilterHostId(
 function buildRepoIdsByProjectKey(
   repos: readonly Repo[],
   repoById: Map<string, Repo>,
-  grouping: ProjectGroupingModel
+  grouping: ProjectGroupingIndex
 ): Map<string, string[]> {
   const repoIdsByProjectKey = new Map<string, string[]>()
+  const seen = new Set<string>()
+  const repoByHost = getProjectSectionRepoLookup(repos)
   for (const repo of repos) {
-    const target = getProjectHeaderRevealTarget(repo.id, repoById, grouping)
+    const target = getProjectGroupingForRepo(
+      repo.id,
+      repoById,
+      grouping,
+      getRepoExecutionHostId(repo),
+      repoByHost
+    )
     if (!target.repo) {
       continue
     }
+    const membership = JSON.stringify([target.key, repo.id])
+    if (seen.has(membership)) {
+      continue
+    }
+    seen.add(membership)
     const repoIds = repoIdsByProjectKey.get(target.key)
     if (repoIds) {
       repoIds.push(repo.id)
@@ -114,6 +136,8 @@ export function buildPaletteFilterModel({
   hostOptions,
   projects,
   projectHostSetups,
+  settings,
+  projectIndex,
   defaultHostId = LOCAL_EXECUTION_HOST_ID
 }: {
   repos: readonly Repo[]
@@ -121,27 +145,33 @@ export function buildPaletteFilterModel({
   hostOptions: readonly SidebarHostOption[]
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
+  settings?: ProjectGroupingSettings | null
+  projectIndex?: ProjectGroupingIndex
   defaultHostId?: ExecutionHostId
 }): PaletteFilterModel {
   const repoById = new Map(repos.map((repo) => [repo.id, repo]))
   const hostIdsByRepoId = buildRepoHostIndex(repos, defaultHostId)
-  const repoIdsByProjectKey = buildRepoIdsByProjectKey([...repoById.values()], repoById, {
-    projects,
-    projectHostSetups
-  })
+  const index = projectIndex ?? buildProjectGroupingIndex({ projects, projectHostSetups, settings })
+  const repoIdsByProjectKey = buildRepoIdsByProjectKey(repos, repoById, index)
 
   const worktreeCountByHostId = new Map<string, number>()
-  const worktreeCountByRepoId = new Map<string, number>()
+  const worktreeCountByProjectKey = new Map<string, number>()
+  const seenWorktrees = new Set<string>()
   for (const worktree of worktrees) {
     if (worktree.isArchived) {
       continue
     }
     const hostId = resolveWorktreeFilterHostId(worktree, repoById, defaultHostId)
+    const identity = `${hostId}\0${worktree.path ? normalizeRuntimePathForComparison(worktree.path) : worktree.id}`
+    if (seenWorktrees.has(identity)) {
+      continue
+    }
+    seenWorktrees.add(identity)
     worktreeCountByHostId.set(hostId, (worktreeCountByHostId.get(hostId) ?? 0) + 1)
-    worktreeCountByRepoId.set(
-      worktree.repoId,
-      (worktreeCountByRepoId.get(worktree.repoId) ?? 0) + 1
-    )
+    const key =
+      index.groupByRepoHost.get(getRepoHostIdentityForParts(worktree.repoId, hostId))?.key ??
+      `repo:${worktree.repoId}`
+    worktreeCountByProjectKey.set(key, (worktreeCountByProjectKey.get(key) ?? 0) + 1)
   }
 
   // Registry order (local first, then SSH/runtime) matches the sidebar host headers.
@@ -164,23 +194,49 @@ export function buildPaletteFilterModel({
       .map((host) => [host.id, expandEquivalentExecutionHostIds(hostOptions, [host.id])] as const)
   )
 
-  // Keep repository IDs aligned with the sidebar; project grouping remains a row concern.
-  const repositoryLabels = getRepoDisplayLabelsByPath([...repoById.values()])
-  const repositories = [...repoById.values()]
-    .map((repo) =>
+  const optionsByKey = new Map(
+    index.groups.map((group) => [
+      group.key,
       toFilterOption({
-        id: repo.id,
-        label: repositoryLabels.get(getRepoDisplayLabelKey(repo)) ?? repo.displayName,
-        detail: repo.path,
-        count: worktreeCountByRepoId.get(repo.id) ?? 0
+        id: group.key,
+        label: group.label,
+        detail: group.representative.path ?? '',
+        count: worktreeCountByProjectKey.get(group.key) ?? 0
       })
+    ])
+  )
+  const fallbackLabels = getRepoDisplayLabelsByPath(repos)
+  const repoByHost = getProjectSectionRepoLookup(repos)
+  for (const repo of repos) {
+    const target = getProjectGroupingForRepo(
+      repo.id,
+      repoById,
+      index,
+      getRepoExecutionHostId(repo),
+      repoByHost
     )
-    .sort((a, b) => b.count - a.count || a.label.localeCompare(b.label) || a.id.localeCompare(b.id))
+    if (!optionsByKey.has(target.key)) {
+      optionsByKey.set(
+        target.key,
+        toFilterOption({
+          id: target.key,
+          label: fallbackLabels.get(getRepoDisplayLabelKey(repo)) ?? target.label,
+          detail: repo.path,
+          count: worktreeCountByProjectKey.get(target.key) ?? 0
+        })
+      )
+    }
+  }
+  const repositories = [...optionsByKey.values()].sort(
+    (a, b) => b.count - a.count || a.label.localeCompare(b.label) || a.id.localeCompare(b.id)
+  )
 
   return {
+    projectIndex: index,
     hosts,
     repositories,
     repoIdsByProjectKey,
+    membersByProjectKey: new Map(index.groups.map((group) => [group.key, group.registrations])),
     hostIdsByRepoId,
     repoById,
     defaultHostId,

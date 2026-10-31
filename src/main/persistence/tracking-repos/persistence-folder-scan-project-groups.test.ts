@@ -13,6 +13,7 @@ import {
 import { getDefaultPersistedState } from '../../../shared/constants'
 import { createProjectGroup } from '../../../shared/project-groups'
 import { normalizeRuntimePathSeparators } from '../../../shared/cross-platform-path'
+import { FolderWorkspacePersistenceOperations } from '../restoring-sessions/folder-workspace-operations'
 import { LoadedStateAdaptationOperations } from '../loading-store/loaded-state-adaptation'
 
 vi.mock('electron', () => ({
@@ -222,4 +223,61 @@ describe('Flat folder-scan project groups adaptation', () => {
     expect(reloaded.getProjectGroups()).toEqual(groups)
     expect(reloaded.getRepos()).toEqual(store.getRepos())
   })
+})
+
+it('rejects a destination deleted after menu acceptance before any membership/rank/save, retaining explicit-rank singleton writes', async () => {
+  testState.dir = mkdtempSync(join(tmpdir(), 'orca-pr35595-group-race-'))
+  const directory = testState.dir
+  try {
+    const store = createStore()
+    const previous = store.createProjectGroup({ name: 'Previous', createdFrom: 'manual' })
+    const destination = store.createProjectGroup({ name: 'Destination', createdFrom: 'manual' })
+    store.addRepo(makeRepo({ id: 'a', projectGroupId: previous.id, projectGroupOrder: 9 }))
+    store.addRepo(
+      makeRepo({ id: 'b', path: '/b', projectGroupId: previous.id, projectGroupOrder: 12 })
+    )
+    store.flush()
+    store.deleteProjectGroup(destination.id)
+    expect(
+      store.moveProjectToGroup({ id: 'a', executionHostId: 'local' }, destination.id)
+    ).toBeNull()
+    expect(store.getRepo('a')).toMatchObject({ projectGroupId: previous.id, projectGroupOrder: 9 })
+    // Bucket-fenced drag supplies an explicit rank; it stays a singleton even at the same membership.
+    expect(
+      store.moveProjectToGroup({ id: 'a', executionHostId: 'local' }, previous.id, 42)
+    ).toMatchObject({ projectGroupOrder: 42 })
+    expect(store.getRepo('b')).toMatchObject({ projectGroupId: previous.id, projectGroupOrder: 12 })
+    store.flush()
+    await closeTestStores()
+    const reloaded = createStore()
+    expect(reloaded.getRepo('a')).toMatchObject({
+      projectGroupId: previous.id,
+      projectGroupOrder: 42
+    })
+    expect(reloaded.getRepo('b')).toMatchObject({
+      projectGroupId: previous.id,
+      projectGroupOrder: 12
+    })
+  } finally {
+    await closeTestStores()
+    rmSync(directory, { recursive: true, force: true })
+  }
+})
+
+it('does not schedule a save or hydrate on a missing destination at the actual receiving operation', () => {
+  const state = getDefaultPersistedState('/tmp/orca-pr35595-receiving')
+  state.repos = [makeRepo({ id: 'a', projectGroupId: null, projectGroupOrder: 7 })]
+  const scheduleSave = vi.fn()
+  const hydrateRepo = vi.fn((repo: (typeof state.repos)[number]) => repo)
+  const receiving = new FolderWorkspacePersistenceOperations({
+    state,
+    scheduleSave,
+    hydrateRepo,
+    removeWorkspaceLineageForFolderParent: () => {},
+    pruneMobileClientTabSelections: () => {}
+  })
+  expect(receiving.moveProjectToGroup({ id: 'a', executionHostId: 'local' }, 'deleted')).toBeNull()
+  expect(state.repos[0]).toMatchObject({ projectGroupId: null, projectGroupOrder: 7 })
+  expect(scheduleSave).not.toHaveBeenCalled()
+  expect(hydrateRepo).not.toHaveBeenCalled()
 })

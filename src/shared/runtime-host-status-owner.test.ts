@@ -240,3 +240,36 @@ it('does not label a transient failure or a retired owner with a blocked reason'
   })
   expect(owner.read()).not.toHaveProperty('blockedReason')
 })
+
+it.each([100, 1000])(
+  'coalesces %i lifecycle wakes and recovers undecodable status without unblocking access refusal',
+  async (count) => {
+    const { owner, request } = createOwner(true)
+    request.mockResolvedValueOnce(
+      runtimeHostStatusFailure('invalid_runtime_response', 'Malformed response')
+    )
+    owner.activate()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(owner.read().verification).toBe('blocked')
+    const pending = deferred()
+    request.mockReturnValueOnce(pending.promise)
+    owner.wake()
+    for (let n = 0; n < count; n++) {
+      owner.wake()
+    }
+    expect(request).toHaveBeenCalledTimes(2)
+    pending.resolve(success())
+    await Promise.resolve()
+    await Promise.resolve()
+    await Promise.resolve()
+    expect(owner.read().verification).toBe('verified')
+    expect(request).toHaveBeenCalledTimes(3)
+    owner.authenticationRejected()
+    owner.wake()
+    expect(request).toHaveBeenCalledTimes(3)
+    expect(owner.read().blockedReason).toBe('access-revoked')
+    owner.dispose()
+    expect(vi.getTimerCount()).toBe(0)
+  }
+)

@@ -1,6 +1,6 @@
 === groupBy=none pinnedInGroups=false ===
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 ITEM rowKey=pinned:|orca::/w/feat-a depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=pinned owning=project:p-orca
 HEADER key=all label="All" count=8 tone="text-foreground" icon=List hostCounts={local:5 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
@@ -20,7 +20,7 @@ cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=api::/
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-review folder:fw-notes folder:fw-remote
 -- collapsed: pinned --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=all label="All" count=8 tone="text-foreground" icon=List hostCounts={local:5 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
 ITEM rowKey=all:|orca::/orca depth=0 groupDepth=0 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca
@@ -40,7 +40,7 @@ cmd1-9 unmounted: 1=orca::/orca 2=orca-ssh::/orca-ssh 3=api::/api@runtime:env-1 
 cmd ids unmounted: orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-review folder:fw-notes folder:fw-remote
 === groupBy=none pinnedInGroups=true ===
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 ITEM rowKey=pinned:|orca::/w/feat-a depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=pinned owning=project:p-orca
 HEADER key=all label="All" count=9 tone="text-foreground" icon=List hostCounts={local:6 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/w/feat-a,orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/w/feat-a,orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
@@ -62,7 +62,7 @@ cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=api::/
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-review folder:fw-notes folder:fw-remote
 -- collapsed: pinned --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=all label="All" count=9 tone="text-foreground" icon=List hostCounts={local:6 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/w/feat-a,orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/w/feat-a,orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
 ITEM rowKey=all:|orca::/w/feat-a depth=0 groupDepth=0 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca
@@ -99,20 +99,22 @@ FOLDER key=folder-workspace:local|folder:fw-notes projectGroup=pg-folders depth=
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
 HEADER key=project:repo:api label="api" count=1 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
-PENDING key=pending:creation-1 creation=creation-1 repo=api
 ITEM rowKey=project:repo:api:runtime:env-1|api::/api depth=0 groupDepth=0 lastChild=true children=0 hostLabel="env-1" placement=natural owning=project:repo:api
+HEADER key=repo:api label="Unknown" count=0 tone="text-foreground" icon=FolderTree projectGroupDepth=0
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=project:repo:empty label="empty" count=0 tone="text-foreground" icon=FolderTree repo=empty projectGroupDepth=0
 HEADER key=project:repo:ext label="ext" count=1 tone="text-foreground" icon=FolderTree repo=ext projectGroupDepth=0
-IMPORTED key=imported-worktrees-card:repo-group:ext repo=ext placement=repo-group hidden=ext::/w/detected-hidden
+IMPORTED key=imported-worktrees-card:repo-group:local|ext repo=ext placement=repo-group hidden=ext::/w/detected-hidden
 ITEM rowKey=project:repo:ext:|ext::/ext depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:repo:ext
+SECTION repo:api: -
 SECTION project:repo:empty: -
-renderedKeys: 24
-placeholders: empty
+renderedKeys: 25
+placeholders: local empty
 selectionOrder: |orca::/w/feat-a |orca::/orca |orca-ssh::/orca-ssh |lab::/lab local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote runtime:env-1|api::/api |ext::/ext
 cmd1-9 mounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=lab::/lab 5=folder:fw-review@local 6=folder:fw-notes@local 7=folder:fw-remote@ssh:gpu-vm 8=api::/api@runtime:env-1 9=ext::/ext
 cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=lab::/lab 5=folder:fw-review@local 6=folder:fw-notes@local 7=folder:fw-remote@ssh:gpu-vm 8=api::/api@runtime:env-1 9=ext::/ext
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh lab::/lab folder:fw-review folder:fw-notes folder:fw-remote api::/api ext::/ext
--- collapsed: pinned project:p-orca project:repo:lab project-group:pg-remote-folders project:repo:empty --
+-- collapsed: pinned project:p-orca project:repo:lab project-group:pg-remote-folders repo:api project:repo:ext --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=project-group:pg-work label="Work" count=2 tone="text-foreground" icon=FolderTree projectGroup=pg-work projectGroupDepth=0
@@ -124,22 +126,22 @@ FOLDER key=folder-workspace:local|folder:fw-review projectGroup=pg-folders depth
 FOLDER key=folder-workspace:local|folder:fw-notes projectGroup=pg-folders depth=0 groupDepth=1
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 HEADER key=project:repo:api label="api" count=1 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
-PENDING key=pending:creation-1 creation=creation-1 repo=api
 ITEM rowKey=project:repo:api:runtime:env-1|api::/api depth=0 groupDepth=0 lastChild=true children=0 hostLabel="env-1" placement=natural owning=project:repo:api
+HEADER key=repo:api label="Unknown" count=0 tone="text-foreground" icon=FolderTree projectGroupDepth=0
 HEADER key=project:repo:empty label="empty" count=0 tone="text-foreground" icon=FolderTree repo=empty projectGroupDepth=0
 HEADER key=project:repo:ext label="ext" count=1 tone="text-foreground" icon=FolderTree repo=ext projectGroupDepth=0
-IMPORTED key=imported-worktrees-card:repo-group:ext repo=ext placement=repo-group hidden=ext::/w/detected-hidden
-ITEM rowKey=project:repo:ext:|ext::/ext depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:repo:ext
 SECTION pinned: pinned:|orca::/w/feat-a
 SECTION project:p-orca: project:p-orca:|orca::/orca project:p-orca:|orca-ssh::/orca-ssh
+SECTION repo:api: -
 SECTION project:repo:lab: project:repo:lab:|lab::/lab
 SECTION project:repo:empty: -
-renderedKeys: 18
-placeholders: empty
-selectionOrder: local|folder:fw-review local|folder:fw-notes runtime:env-1|api::/api |ext::/ext
-cmd1-9 mounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1 4=ext::/ext
-cmd1-9 unmounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1 4=ext::/ext
-cmd ids unmounted: folder:fw-review folder:fw-notes api::/api ext::/ext
+SECTION project:repo:ext: project:repo:ext:|ext::/ext
+renderedKeys: 16
+placeholders: local empty
+selectionOrder: local|folder:fw-review local|folder:fw-notes runtime:env-1|api::/api
+cmd1-9 mounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1
+cmd1-9 unmounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1
+cmd ids unmounted: folder:fw-review folder:fw-notes api::/api
 === groupBy=repo pinnedInGroups=true ===
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
@@ -158,21 +160,23 @@ FOLDER key=folder-workspace:local|folder:fw-notes projectGroup=pg-folders depth=
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
 HEADER key=project:repo:api label="api" count=1 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
-PENDING key=pending:creation-1 creation=creation-1 repo=api
 ITEM rowKey=project:repo:api:runtime:env-1|api::/api depth=0 groupDepth=0 lastChild=true children=0 hostLabel="env-1" placement=natural owning=project:repo:api
+HEADER key=repo:api label="Unknown" count=0 tone="text-foreground" icon=FolderTree projectGroupDepth=0
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=project:repo:empty label="empty" count=0 tone="text-foreground" icon=FolderTree repo=empty projectGroupDepth=0
 HEADER key=project:repo:ext label="ext" count=1 tone="text-foreground" icon=FolderTree repo=ext projectGroupDepth=0
-IMPORTED key=imported-worktrees-card:repo-group:ext repo=ext placement=repo-group hidden=ext::/w/detected-hidden
+IMPORTED key=imported-worktrees-card:repo-group:local|ext repo=ext placement=repo-group hidden=ext::/w/detected-hidden
 ITEM rowKey=project:repo:ext:|ext::/ext depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:repo:ext
+SECTION repo:api: -
 SECTION project:repo:empty: -
 PREFERRED |orca::/w/feat-a -> project:p-orca:|orca::/w/feat-a
-renderedKeys: 25
-placeholders: empty
+renderedKeys: 26
+placeholders: local empty
 selectionOrder: |orca::/orca |orca-ssh::/orca-ssh |orca::/w/feat-a |lab::/lab local|folder:fw-review local|folder:fw-notes ssh:gpu-vm|folder:fw-remote runtime:env-1|api::/api |ext::/ext
 cmd1-9 mounted: 1=orca::/orca 2=orca-ssh::/orca-ssh 3=orca::/w/feat-a 4=lab::/lab 5=folder:fw-review@local 6=folder:fw-notes@local 7=folder:fw-remote@ssh:gpu-vm 8=api::/api@runtime:env-1 9=ext::/ext
 cmd1-9 unmounted: 1=orca::/orca 2=orca-ssh::/orca-ssh 3=orca::/w/feat-a 4=lab::/lab 5=folder:fw-review@local 6=folder:fw-notes@local 7=folder:fw-remote@ssh:gpu-vm 8=api::/api@runtime:env-1 9=ext::/ext
 cmd ids unmounted: orca::/orca orca-ssh::/orca-ssh orca::/w/feat-a lab::/lab folder:fw-review folder:fw-notes folder:fw-remote api::/api ext::/ext
--- collapsed: pinned project:p-orca project:repo:lab project-group:pg-remote-folders project:repo:empty --
+-- collapsed: pinned project:p-orca project:repo:lab project-group:pg-remote-folders repo:api project:repo:ext --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=project-group:pg-work label="Work" count=2 tone="text-foreground" icon=FolderTree projectGroup=pg-work projectGroupDepth=0
@@ -184,26 +188,26 @@ FOLDER key=folder-workspace:local|folder:fw-review projectGroup=pg-folders depth
 FOLDER key=folder-workspace:local|folder:fw-notes projectGroup=pg-folders depth=0 groupDepth=1
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 HEADER key=project:repo:api label="api" count=1 tone="text-foreground" icon=FolderTree repo=api projectGroupDepth=0
-PENDING key=pending:creation-1 creation=creation-1 repo=api
 ITEM rowKey=project:repo:api:runtime:env-1|api::/api depth=0 groupDepth=0 lastChild=true children=0 hostLabel="env-1" placement=natural owning=project:repo:api
+HEADER key=repo:api label="Unknown" count=0 tone="text-foreground" icon=FolderTree projectGroupDepth=0
 HEADER key=project:repo:empty label="empty" count=0 tone="text-foreground" icon=FolderTree repo=empty projectGroupDepth=0
 HEADER key=project:repo:ext label="ext" count=1 tone="text-foreground" icon=FolderTree repo=ext projectGroupDepth=0
-IMPORTED key=imported-worktrees-card:repo-group:ext repo=ext placement=repo-group hidden=ext::/w/detected-hidden
-ITEM rowKey=project:repo:ext:|ext::/ext depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:repo:ext
 SECTION pinned: pinned:|orca::/w/feat-a
 SECTION project:p-orca: project:p-orca:|orca::/orca project:p-orca:|orca-ssh::/orca-ssh project:p-orca:|orca::/w/feat-a
+SECTION repo:api: -
 SECTION project:repo:lab: project:repo:lab:|lab::/lab
 SECTION project:repo:empty: -
+SECTION project:repo:ext: project:repo:ext:|ext::/ext
 PREFERRED |orca::/w/feat-a -> project:p-orca:|orca::/w/feat-a
-renderedKeys: 18
-placeholders: empty
-selectionOrder: local|folder:fw-review local|folder:fw-notes runtime:env-1|api::/api |ext::/ext
-cmd1-9 mounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1 4=ext::/ext
-cmd1-9 unmounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1 4=ext::/ext
-cmd ids unmounted: folder:fw-review folder:fw-notes api::/api ext::/ext
+renderedKeys: 16
+placeholders: local empty
+selectionOrder: local|folder:fw-review local|folder:fw-notes runtime:env-1|api::/api
+cmd1-9 mounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1
+cmd1-9 unmounted: 1=folder:fw-review@local 2=folder:fw-notes@local 3=api::/api@runtime:env-1
+cmd ids unmounted: folder:fw-review folder:fw-notes api::/api
 === groupBy=workspace-status pinnedInGroups=false ===
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 ITEM rowKey=pinned:|orca::/w/feat-a depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=pinned owning=project:p-orca
 HEADER key=workspace-status:in-progress label="In progress" count=7 tone="text-[#d4a300]" icon=ConductorProgressIcon hostCounts={local:4 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
@@ -225,7 +229,7 @@ cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=api::/
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-notes folder:fw-remote folder:fw-review
 -- collapsed: pinned workspace-status:in-review --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=workspace-status:in-progress label="In progress" count=7 tone="text-[#d4a300]" icon=ConductorProgressIcon hostCounts={local:4 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
 ITEM rowKey=workspace-status:in-progress:|orca::/orca depth=0 groupDepth=0 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca
@@ -246,7 +250,7 @@ cmd1-9 unmounted: 1=orca::/orca 2=orca-ssh::/orca-ssh 3=api::/api@runtime:env-1 
 cmd ids unmounted: orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-notes folder:fw-remote
 === groupBy=workspace-status pinnedInGroups=true ===
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 ITEM rowKey=pinned:|orca::/w/feat-a depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=pinned owning=project:p-orca
 HEADER key=workspace-status:in-progress label="In progress" count=8 tone="text-[#d4a300]" icon=ConductorProgressIcon hostCounts={local:5 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/w/feat-a,orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/w/feat-a,orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
@@ -270,7 +274,7 @@ cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=api::/
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-notes folder:fw-remote folder:fw-review
 -- collapsed: pinned workspace-status:in-review --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=workspace-status:in-progress label="In progress" count=8 tone="text-[#d4a300]" icon=ConductorProgressIcon hostCounts={local:5 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/w/feat-a,orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/w/feat-a,orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
 ITEM rowKey=workspace-status:in-progress:|orca::/w/feat-a depth=0 groupDepth=0 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca
@@ -293,7 +297,7 @@ cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=api::/
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-notes folder:fw-remote
 === groupBy=pr-status pinnedInGroups=false ===
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 ITEM rowKey=pinned:|orca::/w/feat-a depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=pinned owning=project:p-orca
 HEADER key=pr:in-progress label="In progress" count=8 tone="text-workspace-status-progress" icon=ConductorProgressIcon hostCounts={local:5 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
@@ -313,7 +317,7 @@ cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=api::/
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-review folder:fw-notes folder:fw-remote
 -- collapsed: pinned --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=pr:in-progress label="In progress" count=8 tone="text-workspace-status-progress" icon=ConductorProgressIcon hostCounts={local:5 ssh:gpu-vm:2 runtime:env-1:1} hostIds={local:[orca::/orca,lab::/lab,ext::/ext] ssh:gpu-vm:[orca-ssh::/orca-ssh] runtime:env-1:[api::/api]} ids=[orca::/orca,orca-ssh::/orca-ssh,api::/api,lab::/lab,ext::/ext]
 ITEM rowKey=pr:in-progress:|orca::/orca depth=0 groupDepth=0 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca
@@ -333,7 +337,7 @@ cmd1-9 unmounted: 1=orca::/orca 2=orca-ssh::/orca-ssh 3=api::/api@runtime:env-1 
 cmd ids unmounted: orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-review folder:fw-notes folder:fw-remote
 === groupBy=pr-status pinnedInGroups=true ===
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 ITEM rowKey=pinned:|orca::/w/feat-a depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=pinned owning=project:p-orca
 HEADER key=pr:in-review label="In review" count=1 tone="text-workspace-status-review" icon=ConductorReviewIcon hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
@@ -356,7 +360,7 @@ cmd1-9 unmounted: 1=orca::/w/feat-a 2=orca::/orca 3=orca-ssh::/orca-ssh 4=api::/
 cmd ids unmounted: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext folder:fw-review folder:fw-notes folder:fw-remote
 -- collapsed: pinned pr:in-progress --
 visible: orca::/w/feat-a orca::/orca orca-ssh::/orca-ssh api::/api lab::/lab ext::/ext
-PENDING key=pending:creation-1 creation=creation-1 repo=api
+PENDING key=pending:creation-1 creation=creation-1
 HEADER key=pinned label="Pinned" count=1 tone="text-foreground" icon=Pin hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 HEADER key=pr:in-review label="In review" count=1 tone="text-workspace-status-review" icon=ConductorReviewIcon hostCounts={local:1} hostIds={local:[orca::/w/feat-a]} ids=[orca::/w/feat-a]
 ITEM rowKey=pr:in-review:|orca::/w/feat-a depth=0 groupDepth=0 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca

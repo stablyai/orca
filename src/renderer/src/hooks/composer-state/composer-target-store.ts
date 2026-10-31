@@ -1,3 +1,4 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
 import { useShallow } from 'zustand/react/shallow'
@@ -13,7 +14,10 @@ import type { WorkspaceStatus } from '../../../../shared/worktree/types'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../../shared/workspace-source'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { ComposerDecisions } from './composer-decisions'
-import type { WorkspaceCreationTargetHint } from '@/lib/project-host-workspace-target'
+import type {
+  WorkspaceCreationTargetHint,
+  WorkspaceCreationProjectScope
+} from '@/lib/project-host-workspace-target'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 import { selectAllKnownWorkspaceStatuses } from '@/store/host-workspace-status-columns'
 
@@ -26,6 +30,7 @@ export type ComposerStateInput = {
   initialLinkedWorkItem?: LinkedWorkItemSummary | null
   initialGitHubWorkItem?: GitHubWorkItem | null
   initialTaskSourceContext?: TaskSourceContext | null
+  initialProjectScope?: WorkspaceCreationProjectScope | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialWorkspaceStatus?: WorkspaceStatus
   initialBaseBranch?: string
@@ -50,6 +55,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialGitHubWorkItem = null,
     initialTaskSourceContext = null,
     initialWorkspaceTarget = null,
+    initialProjectScope = null,
     initialWorkspaceStatus,
     initialBaseBranch,
     persistDraft,
@@ -92,6 +98,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     fetchSparsePresets
   } = actions
 
+  const grouping = useAppStore(getProjectGroupingIndexFromState)
   const repos = useAppStore((s) => s.repos)
 
   const projects = useAppStore((s) => s.projects)
@@ -155,8 +162,8 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
   )
 
   const seedActiveRepoId = useMemo(
-    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId),
-    [repos, eligibleRepos, activeRepoId]
+    () => resolveComposerActiveRepoId(repos, eligibleRepos, activeRepoId, settings, grouping),
+    [repos, eligibleRepos, activeRepoId, settings, grouping]
   )
 
   return {
@@ -168,6 +175,7 @@ export function useComposerTargetStore(options: ComposerStateInput, decisions: C
     initialGitHubWorkItem,
     initialTaskSourceContext,
     initialWorkspaceTarget,
+    initialProjectScope,
     initialWorkspaceStatus,
     initialBaseBranch,
     persistDraft,

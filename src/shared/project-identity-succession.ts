@@ -1,3 +1,4 @@
+import type { ProjectGroupingMode } from './project-grouping'
 import type { Project } from './project-types'
 
 export type ProjectIdentitySuccession = {
@@ -32,9 +33,8 @@ export function carryProjectStateThroughIdentityChange(
   const projectedIds = new Set(projectedProjects.map((project) => project.id))
   // Why: a prior row that still exists under its own id is live, not a predecessor.
   const orphanedPrevious = previousProjects.filter((project) => !projectedIds.has(project.id))
-  const unmatched = projectedProjects.filter((project) => !previousById.has(project.id))
   const previousIndicesByRepo = new Map<string, number[]>()
-  if (unmatched.length > 0) {
+  if (projectedProjects.length > 0) {
     orphanedPrevious.forEach((previous, index) => {
       for (const repoId of previous.sourceRepoIds) {
         const indices = previousIndicesByRepo.get(repoId)
@@ -46,7 +46,7 @@ export function carryProjectStateThroughIdentityChange(
       }
     })
   }
-  const candidates = unmatched.flatMap((project) => {
+  const candidates = projectedProjects.flatMap((project) => {
     const overlaps = new Map<number, number>()
     for (const repoId of new Set(project.sourceRepoIds)) {
       for (const index of previousIndicesByRepo.get(repoId) ?? []) {
@@ -71,8 +71,13 @@ export function carryProjectStateThroughIdentityChange(
   )
   const claimedPreviousIds = new Set<string>()
   const predecessorByProjectId = new Map<string, Project>()
+  const remappedProjectIds = new Map<string, string>()
   for (const candidate of candidates) {
+    if (!remappedProjectIds.has(candidate.previous.id)) {
+      remappedProjectIds.set(candidate.previous.id, candidate.project.id)
+    }
     if (
+      previousById.has(candidate.project.id) ||
       claimedPreviousIds.has(candidate.previous.id) ||
       predecessorByProjectId.has(candidate.project.id)
     ) {
@@ -81,7 +86,6 @@ export function carryProjectStateThroughIdentityChange(
     claimedPreviousIds.add(candidate.previous.id)
     predecessorByProjectId.set(candidate.project.id, candidate.previous)
   }
-  const remappedProjectIds = new Map<string, string>()
   const projects = projectedProjects.map((project) => {
     const exact = previousById.get(project.id)
     if (exact) {
@@ -91,8 +95,21 @@ export function carryProjectStateThroughIdentityChange(
     if (!predecessor) {
       return project
     }
-    remappedProjectIds.set(predecessor.id, project.id)
     return carryUserState(project, predecessor)
   })
   return { projects, remappedProjectIds }
+}
+
+export function carryProjectGroupingOverrides(
+  overrides: Readonly<Record<string, ProjectGroupingMode>>,
+  remappedProjectIds: ReadonlyMap<string, string>
+): Record<string, ProjectGroupingMode> {
+  const next = { ...overrides }
+  for (const [previous, current] of remappedProjectIds) {
+    if (next[previous] !== undefined) {
+      next[current] ??= next[previous]
+      delete next[previous]
+    }
+  }
+  return next
 }

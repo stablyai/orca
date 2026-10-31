@@ -2,6 +2,12 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from './rpc-client'
+import { FakeSession } from './mobile-endpoint-supervisor-test-fakes'
+
+vi.mock('react-native', () => ({ AppState: { addEventListener: () => ({ remove: () => {} }) } }))
+function withLifecycle(overrides: Pick<RpcClient, 'sendRequest'>): FakeSession {
+  return Object.assign(new FakeSession('connected'), overrides)
+}
 import { useHostStatusGates, type HostStatusGates } from './host-status-gates'
 
 const recordHostAppVersionMock = vi.hoisted(() => vi.fn().mockResolvedValue(undefined))
@@ -26,7 +32,7 @@ describe('useHostStatusGates', () => {
       resolveOldStatus = resolve
     })
     const oldSendRequest = vi.fn().mockReturnValue(pendingOldStatus)
-    const oldClient = { sendRequest: oldSendRequest } as unknown as RpcClient
+    const oldClient = withLifecycle({ sendRequest: oldSendRequest })
     const newSendRequest = vi.fn().mockResolvedValue({
       ok: true,
       result: {
@@ -34,7 +40,7 @@ describe('useHostStatusGates', () => {
         floatingWorkspaceEnabled: true
       }
     })
-    const newClient = { sendRequest: newSendRequest } as unknown as RpcClient
+    const newClient = withLifecycle({ sendRequest: newSendRequest })
     let gates: HostStatusGates | undefined
     const firstRenderByHost = new Map<string, HostStatusGates>()
     let renderer: ReactTestRenderer | undefined
@@ -98,7 +104,7 @@ describe('useHostStatusGates', () => {
         hostPlatform: 'darwin'
       }
     })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = withLifecycle({ sendRequest })
     let gates: HostStatusGates | undefined
     let renderer: ReactTestRenderer | undefined
 
@@ -141,7 +147,7 @@ describe('useHostStatusGates', () => {
         result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
       })
       .mockReturnValueOnce(pendingReconnect)
-    const client = { sendRequest } as unknown as RpcClient
+    const client = withLifecycle({ sendRequest })
     let gates: HostStatusGates | undefined
     let renderer: ReactTestRenderer | undefined
 
@@ -158,6 +164,7 @@ describe('useHostStatusGates', () => {
       expect(gates?.floatingWorkspaceEnabled).toBe(true)
 
       await act(async () => {
+        client.publishState('disconnected')
         renderer?.update(createElement(Probe, { connState: 'disconnected' }))
       })
       // Retain proven capabilities through drops while awaiting re-verification.
@@ -168,6 +175,7 @@ describe('useHostStatusGates', () => {
       })
 
       await act(async () => {
+        client.publishState('connected')
         renderer?.update(createElement(Probe, { connState: 'connected' }))
       })
       expect(gates).toMatchObject({
@@ -194,15 +202,15 @@ describe('useHostStatusGates', () => {
   })
 
   it('fails closed when the same host reconnects on a replaced client', async () => {
-    const firstClient = {
+    const firstClient = withLifecycle({
       sendRequest: vi.fn().mockResolvedValue({
         ok: true,
         result: { capabilities: ['browser.screencast.v1'], floatingWorkspaceEnabled: true }
       })
-    } as unknown as RpcClient
-    const secondClient = {
+    })
+    const secondClient = withLifecycle({
       sendRequest: vi.fn().mockReturnValue(new Promise(() => {}))
-    } as unknown as RpcClient
+    })
     let gates: HostStatusGates | undefined
     let renderer: ReactTestRenderer | undefined
 
@@ -240,7 +248,7 @@ describe('useHostStatusGates', () => {
           machineName: 'studio'
         }
       })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = withLifecycle({ sendRequest })
     let gates: HostStatusGates | undefined
     let renderer: ReactTestRenderer | undefined
 
@@ -287,7 +295,7 @@ describe('useHostStatusGates', () => {
       .fn()
       .mockResolvedValueOnce({ ok: false, error: { code: 'unavailable', message: 'busy' } })
       .mockResolvedValueOnce({ ok: true, result: { capabilities: ['browser.screencast.v1'] } })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = withLifecycle({ sendRequest })
     let gates: HostStatusGates | undefined
     let renderer: ReactTestRenderer | undefined
 
@@ -320,7 +328,7 @@ describe('useHostStatusGates', () => {
   it('settles closed and stops on a status this app cannot decode', async () => {
     vi.useFakeTimers()
     const sendRequest = vi.fn().mockResolvedValue({ ok: true, result: 'not a status' })
-    const client = { sendRequest } as unknown as RpcClient
+    const client = withLifecycle({ sendRequest })
     let gates: HostStatusGates | undefined
     let renderer: ReactTestRenderer | undefined
 
@@ -348,7 +356,7 @@ describe('useHostStatusGates', () => {
   it('stops re-reading once the host screen unmounts', async () => {
     vi.useFakeTimers()
     const sendRequest = vi.fn().mockRejectedValue(new Error('request timed out'))
-    const client = { sendRequest } as unknown as RpcClient
+    const client = withLifecycle({ sendRequest })
     let renderer: ReactTestRenderer | undefined
 
     function Probe(): null {
@@ -375,3 +383,26 @@ describe('useHostStatusGates', () => {
     }
   })
 })
+
+it.each([null, new FakeSession('connected')])(
+  'treats an unstamped server initial snapshot as unknown without dereferencing it (%s)',
+  async (client) => {
+    recordDescriptorFromStatusMock.mockClear()
+    let gates!: HostStatusGates
+    function Probe() {
+      gates = useHostStatusGates({ hostId: undefined, client, connState: 'connected' })
+      return null
+    }
+    let renderer: ReactTestRenderer | undefined
+    try {
+      await act(async () => {
+        renderer = create(createElement(Probe))
+      })
+      expect(gates.exactProjectRepoFilters).toBe(false)
+      expect(gates.hostCapabilities).toEqual([])
+      expect(recordDescriptorFromStatusMock).not.toHaveBeenCalled()
+    } finally {
+      await act(async () => renderer?.unmount())
+    }
+  }
+)

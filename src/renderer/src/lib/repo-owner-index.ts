@@ -96,18 +96,22 @@ export function getIndexedRepoExecutionHostLookup(
   return repoExecutionHostLookupCache.get(repos) ?? EMPTY_EXECUTION_HOST_LOOKUP
 }
 
-export function resolveQualifiedIndexedRepoOwnerForHost(
-  repos: readonly RepoOwnerRecord[] | undefined,
+export function resolveQualifiedIndexedRepoOwnerForHost<T extends RepoOwnerRecord>(
+  repos: readonly T[] | undefined,
   repoId: string,
   hostId: ExecutionHostId,
   connectionId?: string | null
-): IndexedRepoOwnerResolution {
+): { kind: 'resolved'; owner: T } | { kind: 'missing' | 'ambiguous' } {
   if (!repos) {
     return { kind: 'missing' }
   }
   resolveIndexedRepoOwner(repos, repoId)
   const key = `${repoId}\0${hostId}${connectionId === undefined ? '' : `\0${connectionId ?? ''}`}`
-  return qualifiedRepoOwnerIndexCache.get(repos)?.get(key) ?? { kind: 'missing' }
+  const result = qualifiedRepoOwnerIndexCache.get(repos)?.get(key)
+  return result?.kind === 'resolved'
+    ? // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the index retains rows from this exact input array.
+      { kind: 'resolved', owner: result.owner as T }
+    : (result ?? { kind: 'missing' })
 }
 
 export function findIndexedRepoOwner(

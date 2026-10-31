@@ -1,15 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, renderHook } from '@testing-library/react'
-import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import {
-  getRepoMapFromState,
-  useAllWorktrees,
-  useProjectHostSetupProjection,
-  useRepoMap,
-  useWorktreeMap
-} from '@/store/selectors'
+import { getRepoMapFromState, useAllWorktrees, useRepoMap, useWorktreeMap } from '@/store/selectors'
+import { getProjectGroupingModelFromState } from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 import { getSettingsFocusedExecutionHostId } from '../../../../shared/execution-host'
 import { getPinnedWorktreeDisplayPolicy } from '../../../../shared/sidebar-list/row-types'
@@ -71,11 +65,7 @@ export function useGoldenSidebarPipeline(
   )
   const pinnedDisplayPolicy = getPinnedWorktreeDisplayPolicy(settings)
   const defaultHostId = getSettingsFocusedExecutionHostId(settings)
-  const projection = useProjectHostSetupProjection()
-  const projectGrouping = useMemo(
-    () => ({ projects: projection.projects, projectHostSetups: projection.setups }),
-    [projection]
-  )
+  const projectGrouping = useAppStore(getProjectGroupingModelFromState)
   const agentSendTargetWorktreeId = useAgentSendTargetWorktreeId()
   const { filterState } = useSidebarWorktreeFilters()
   const { visibleWorktrees, rowModel } = useListModel({
@@ -112,6 +102,14 @@ function captureGolden(state: Partial<AppState>): string {
   const { result, unmount } = renderHook(() => useGoldenSidebarPipeline())
   const { visibleWorktrees, rowModel, selection } = result.current
   const statuses = useAppStore.getState().workspaceStatuses
+  for (const row of rowModel.sectionRows) {
+    if (
+      row.type === 'header' &&
+      ['project:repo:api', 'project:repo:shared', 'project:repo:r-angstrom'].includes(row.key)
+    ) {
+      expect(row.label).not.toBe('Unknown')
+    }
+  }
   const lines = [
     `visible: ${visibleWorktrees.map((worktree) => worktree.id).join(' ') || '-'}`,
     ...rowModel.sectionRows.map((row) => serializeSidebarRow(row, statuses))

@@ -7,6 +7,10 @@ export function registerOnboardingHandlers(store: Store): void {
   ipcMain.removeHandler('onboarding:get')
   ipcMain.removeHandler('onboarding:update')
   ipcMain.removeHandler('onboarding:getChatUiLaunchTipVariant')
+  ipcMain.removeHandler('onboarding:getProjectGroupingUpgradeTipAudience')
+  ipcMain.handle('onboarding:getProjectGroupingUpgradeTipAudience', () =>
+    store.getProjectGroupingUpgradeTipAudience()
+  )
 
   ipcMain.handle('onboarding:get', (): OnboardingState => store.getOnboarding())
   // Sanitize untyped IPC keys and values before persisting onboarding state.

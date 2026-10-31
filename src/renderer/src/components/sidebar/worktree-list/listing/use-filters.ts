@@ -1,3 +1,5 @@
+import { getProjectGroupingIndexFromState } from '@/store/project-host-setup-selector'
+import { revealRepoInProjectFilter } from '../../project-filter-reveal'
 import { useCallback } from 'react'
 import { useAppStore } from '@/store'
 import {
@@ -53,9 +55,14 @@ type RevealContext = {
 
 /** Require every shared filter key to provide a reveal action so new filters cannot omit recovery. */
 const REVEAL_WORKSPACE: Record<keyof WorkspaceRowFilters, (context: RevealContext) => void> = {
-  filterRepoIds: ({ state, worktree }) => {
-    if (!worktree.id.startsWith('folder:') && !state.filterRepoIds.includes(worktree.repoId)) {
-      state.setFilterRepoIds([...state.filterRepoIds, worktree.repoId])
+  filterRepoIds: ({ state, worktree, targetHostId }) => {
+    if (!worktree.id.startsWith('folder:')) {
+      revealRepoInProjectFilter(
+        state,
+        worktree.repoId,
+        targetHostId,
+        getProjectGroupingIndexFromState(state)
+      )
     }
   },
   visibleHostIds: ({ state, targetHostId }) => {

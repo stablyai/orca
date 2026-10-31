@@ -2,8 +2,20 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
+const appStateListeners = vi.hoisted(() => new Set<(state: string) => void>())
+
 vi.mock('react-native', () => ({
-  AppState: { currentState: 'active' },
+  AppState: {
+    currentState: 'active',
+    addEventListener: (_type: string, listener: (state: string) => void) => {
+      appStateListeners.add(listener)
+      return {
+        remove: () => {
+          appStateListeners.delete(listener)
+        }
+      }
+    }
+  },
   Linking: { openURL: vi.fn() },
   Platform: { OS: 'ios', select: (options: { ios?: unknown }) => options.ios },
   Pressable: 'Pressable',
@@ -36,6 +48,7 @@ let renderer: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+  expect(appStateListeners.size).toBe(0)
 })
 
 async function renderSheet(row: Partial<Worktree>) {

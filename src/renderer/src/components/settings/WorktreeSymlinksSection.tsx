@@ -15,6 +15,7 @@ import { translate } from '@/i18n/i18n'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 
 type WorktreeSymlinksSectionProps = {
+  input?: ReturnType<typeof useWorktreeSymlinkInput>
   repo: Repo
   updateRepo: (repoId: string, updates: Partial<Repo>) => void
 }
@@ -26,12 +27,30 @@ type DirectorySuggestionState = {
 
 const EMPTY_WORKTREE_SYMLINK_PATHS: readonly string[] = []
 
-export function WorktreeSymlinksSection({
-  repo,
-  updateRepo
-}: WorktreeSymlinksSectionProps): React.JSX.Element {
+export function useWorktreeSymlinkInput() {
   const [open, setOpen] = useState(false)
   const [query, setQuery] = useState('')
+  return { open, setOpen, query, setQuery }
+}
+export function WorktreeSymlinksSection(props: WorktreeSymlinksSectionProps): React.JSX.Element {
+  return props.input ? (
+    <WorktreeSymlinksView {...props} input={props.input} />
+  ) : (
+    <LocalWorktreeSymlinks {...props} />
+  )
+}
+function LocalWorktreeSymlinks(props: WorktreeSymlinksSectionProps): React.JSX.Element {
+  const input = useWorktreeSymlinkInput()
+  return <WorktreeSymlinksView {...props} input={input} />
+}
+function WorktreeSymlinksView({
+  input,
+  repo,
+  updateRepo
+}: WorktreeSymlinksSectionProps & {
+  input: ReturnType<typeof useWorktreeSymlinkInput>
+}): React.JSX.Element {
+  const { open, setOpen, query, setQuery } = input
 
   const paths = repo.symlinkPaths ?? EMPTY_WORKTREE_SYMLINK_PATHS
   // Only local selected repos may inspect this filesystem; focused host is not ownership evidence.

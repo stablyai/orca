@@ -1,3 +1,10 @@
+import type { ProjectGroupingSettings } from '../../../../shared/project-grouping'
+import {
+  buildRepoProjectGroupingIndex,
+  getProjectGroupForRepo,
+  type ProjectGroupingIndex
+} from '../../../../shared/project-section-grouping'
+import type { Repo } from '../../../../shared/repo-types'
 import type { AgentDotState } from '@/components/AgentStateDot'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
@@ -36,7 +43,9 @@ function activityStatusRank(thread: AgentPaneThread): number {
 
 export function getActivityThreadGroup(
   thread: AgentPaneThread,
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  settings?: ProjectGroupingSettings | null,
+  projectIndex?: ProjectGroupingIndex
 ): { key: string; label: string; state?: AgentDotState } {
   if (groupBy === 'none') {
     return { key: 'all', label: '' }
@@ -48,7 +57,14 @@ export function getActivityThreadGroup(
   }
   if (groupBy === 'project') {
     return thread.repo
-      ? { key: `project:${thread.repo.id}`, label: thread.repo.displayName }
+      ? {
+          key:
+            getProjectGroupForRepo(
+              projectIndex ?? buildRepoProjectGroupingIndex([thread.repo], settings),
+              thread.repo
+            )?.key ?? `project:repo:${thread.repo.id}`,
+          label: thread.repo.displayName
+        }
       : {
           key: 'project:unknown',
           label: translate(
@@ -65,15 +81,19 @@ export function getActivityThreadGroup(
 
 export function buildActivityThreadGroups(
   threads: AgentPaneThread[],
-  groupBy: ActivityGroupBy
+  groupBy: ActivityGroupBy,
+  settings?: ProjectGroupingSettings | null,
+  repos: readonly Repo[] = threads.flatMap((thread) => (thread.repo ? [thread.repo] : [])),
+  grouping?: ProjectGroupingIndex
 ): ActivityThreadGroup[] {
   if (groupBy === 'none') {
     return threads.length > 0 ? [{ key: 'all', label: '', threads }] : []
   }
+  const projectIndex = grouping ?? buildRepoProjectGroupingIndex(repos, settings)
   const groups: ActivityThreadGroup[] = []
   const groupIndexByKey = new Map<string, number>()
   for (const thread of threads) {
-    const group = getActivityThreadGroup(thread, groupBy)
+    const group = getActivityThreadGroup(thread, groupBy, settings, projectIndex)
     const existingIndex = groupIndexByKey.get(group.key)
     if (existingIndex === undefined) {
       groups.push({ ...group, threads: [thread] })

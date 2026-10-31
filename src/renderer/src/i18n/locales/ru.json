@@ -9036,7 +9036,6 @@
           "addingProject": "Добавление…",
           "creatingPendingSetup": "Добавление…",
           "removeProjectCheckout": "Удалить эту рабочую копию из Orca. Другие рабочие копии этого проекта останутся.",
-          "removeProjectKeepCheckouts": "Этот проект будет удалён из Orca. Рабочие копии с собственными настройками останутся.",
           "setupHost": "Добавить проект"
         },
         "RepositorySourceControlAiActionRows": {

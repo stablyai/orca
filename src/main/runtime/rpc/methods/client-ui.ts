@@ -1,3 +1,4 @@
+import { reconcileProjectRepoFilterEdit } from '../../../../shared/project-grouping'
 import { normalizeJiraQuickFilterState } from '../../../../shared/jira/jira-quick-filters'
 import { JiraQuickFilterStateParam } from '../../../../shared/rpc-contract/jira-quick-filter-params'
 import {
@@ -169,13 +170,20 @@ export const CLIENT_UI_METHODS = [
           ? { hideWorkspacesFromOtherDevices: params.hideWorkspacesFromOtherDevices }
           : {}
       // Why: the wire schema keeps workspaceHostScope a plain string for older clients; drop unknown scopes.
-      const { workspaceHostScope, ...uiUpdates } = omitPairingLocalUiFields(params)
+      const { filterRepoIdsMode, workspaceHostScope, ...uiUpdates } =
+        omitPairingLocalUiFields(params)
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: keys match PersistedUIState (ui-state-schema-parity-checks.ts); wider wire values such as host-id lists are not narrowed here.
       const updates = {
         ...uiUpdates,
         ...(isWorkspaceHostScope(workspaceHostScope) ? { workspaceHostScope } : {}),
         ...ownPhoneFilter
       } as Partial<PersistedUIState>
+      if (updates.filterRepoIds !== undefined && filterRepoIdsMode !== 'exact') {
+        updates.filterRepoIds = reconcileProjectRepoFilterEdit(
+          context.runtime.getUIState().filterRepoIds ?? [],
+          updates.filterRepoIds
+        )
+      }
       return { ui: uiForCaller(context.runtime.updateUIState(updates), context) }
     }
   }),

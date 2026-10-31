@@ -1,3 +1,4 @@
+import { carryFetchedProjectGroupingOverrides } from './project-grouping-preferences'
 import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { Repo } from '../../../../shared/repo-types'
@@ -101,6 +102,7 @@ export function createRepoCatalogActions(
         if (!isHostCatalogFenceCurrent(get, fence)) {
           return
         }
+        const previousProjects = get().projects
         let finalizedHostRepos: Repo[] = []
         set((s) => {
           // Why: an in-flight fetch for a just-removed env would re-add purged repos and stick; skip only when the env was tombstoned, not merely unhydrated (#8881).
@@ -108,7 +110,7 @@ export function createRepoCatalogActions(
             return s
           }
           // Why: re-adoption leaves a stale row on the old SSH target id (a ghost that fails "SSH target not found"); drop rows a live-host sibling supersedes.
-          const result = mergeFetchedRepoCatalog(catalog, s.repos)
+          const result = mergeFetchedRepoCatalog(catalog, s.repos, s.settings, s)
           const reconciliation = reconcileSupersededSshRepos(result.repos, s)
           const prunedRepos = applyManualRepoOrder(reconciliation.repos, s.manualRepoOrder)
           const validRepoIds = new Set(prunedRepos.map((repo) => repo.id))
@@ -131,6 +133,7 @@ export function createRepoCatalogActions(
           )
           return {
             repos: prunedRepos,
+            ...(target.kind === 'local' ? { localRepoCatalogHydrated: true } : {}),
             pendingSshRepoReadoptions: reconciliation.pendingReadoptions,
             ...reconcileFetchedCatalogWorktreeState(s, catalog, prunedRepos),
             ...mergedProjectCompatibility,
@@ -153,6 +156,7 @@ export function createRepoCatalogActions(
             )
           }
         })
+        carryFetchedProjectGroupingOverrides(get, previousProjects)
         scheduleSafeAutoForkSync(finalizedHostRepos)
       } catch (err) {
         localCatalogOutcome = { status: 'rejected', reason: err }

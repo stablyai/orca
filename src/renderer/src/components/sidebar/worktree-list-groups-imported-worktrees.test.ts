@@ -1,4 +1,6 @@
-import { describe, expect, it } from 'vitest'
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
+import { describe, expect, it, vi } from 'vitest'
+import { planSidebarRows } from '../../../../shared/sidebar-list/sidebar-row-plan'
 import { buildRows } from './worktree-list/grouping/build-rows.test-fixture'
 import { PINNED_GROUP_KEY } from '../../../../shared/sidebar-list/group-keys'
 import { repo, worktree, repoMap, makeDetectedWorktree } from './worktree-list-groups-test-fixtures'
@@ -26,14 +28,14 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: hidden }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: hidden }]])
     )
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'repo:repo-1' },
       {
         type: 'imported-worktrees-card',
-        key: 'imported-worktrees-card:repo-group:repo-1',
+        key: 'imported-worktrees-card:repo-group:local|repo-1',
         placement: 'repo-group',
         repo: { id: 'repo-1' },
         hiddenWorktrees: [{ id: 'hidden-1' }, { id: 'hidden-2' }, { id: 'hidden-3' }]
@@ -58,7 +60,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
     expect(rows).toMatchObject([{ type: 'header', key: 'repo:repo-1' }])
@@ -80,14 +82,14 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'repo:repo-1' },
       {
         type: 'imported-worktrees-card',
-        key: 'imported-worktrees-card:repo-group:repo-1',
+        key: 'imported-worktrees-card:repo-group:local|repo-1',
         placement: 'repo-group'
       }
     ])
@@ -109,14 +111,14 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set([repo.id]),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
     expect(rows).toMatchObject([
       { type: 'header', key: 'repo:repo-1', label: 'orca' },
       {
         type: 'imported-worktrees-card',
-        key: 'imported-worktrees-card:repo-group:repo-1',
+        key: 'imported-worktrees-card:repo-group:local|repo-1',
         placement: 'repo-group'
       }
     ])
@@ -159,7 +161,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
     expect(rows.some((row) => row.type === 'imported-worktrees-card')).toBe(false)
@@ -200,9 +202,12 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map([
-        [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }],
         [
-          repoTwo.id,
+          getRepoHostIdentity(repo),
+          { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }
+        ],
+        [
+          getRepoHostIdentity(repoTwo),
           {
             repo: repoTwo,
             hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })]
@@ -264,9 +269,12 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map([
-        [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }],
         [
-          repoTwo.id,
+          getRepoHostIdentity(repo),
+          { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }
+        ],
+        [
+          getRepoHostIdentity(repoTwo),
           {
             repo: repoTwo,
             hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })]
@@ -310,7 +318,7 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'header', key: 'repo:repo-1' },
       {
         type: 'new-external-worktrees-inbox',
-        key: 'new-external-worktrees-inbox:repo-1',
+        key: 'new-external-worktrees-inbox:local|repo-1',
         repo: { id: 'repo-1' },
         inboxWorktrees: [{ id: 'inbox-1' }, { id: 'inbox-2' }]
       },
@@ -365,7 +373,7 @@ describe('buildRows with pinned worktrees', () => {
       { type: 'header', key: 'repo:repo-1' },
       {
         type: 'new-external-worktrees-inbox',
-        key: 'new-external-worktrees-inbox:repo-1'
+        key: 'new-external-worktrees-inbox:local|repo-1'
       }
     ])
   })
@@ -401,7 +409,7 @@ describe('buildRows with pinned worktrees', () => {
         expect.objectContaining({ type: 'header', key: `repo:${repo.id}` }),
         expect.objectContaining({
           type: 'new-external-worktrees-inbox',
-          key: `new-external-worktrees-inbox:${repo.id}`
+          key: `new-external-worktrees-inbox:local|${repo.id}`
         })
       ])
     )
@@ -472,9 +480,12 @@ describe('buildRows with pinned worktrees', () => {
       [],
       new Set(),
       new Map([
-        [repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }],
         [
-          repoTwo.id,
+          getRepoHostIdentity(repo),
+          { repo, hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-one' })] }
+        ],
+        [
+          getRepoHostIdentity(repoTwo),
           {
             repo: repoTwo,
             hiddenWorktrees: [makeDetectedWorktree({ id: 'hidden-two', repoId: repoTwo.id })]
@@ -485,11 +496,11 @@ describe('buildRows with pinned worktrees', () => {
 
     expect(rows.filter((row) => row.type === 'imported-worktrees-card')).toMatchObject([
       {
-        key: 'imported-worktrees-card:repo-group:repo-1',
+        key: 'imported-worktrees-card:repo-group:local|repo-1',
         placement: 'repo-group'
       },
       {
-        key: 'imported-worktrees-card:repo-group:repo-2',
+        key: 'imported-worktrees-card:repo-group:local|repo-2',
         placement: 'repo-group'
       }
     ])
@@ -534,7 +545,7 @@ describe('buildRows with pinned worktrees', () => {
       { showPinnedWorktreesInGroups: true } as never,
       [],
       new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
     expect(rows).toEqual(
@@ -555,7 +566,9 @@ describe('buildRows with pinned worktrees', () => {
 
   it('suppresses duplicate-mode imported fallback only when a natural anchor renders', () => {
     const pinnedWorktree = { ...worktree, id: 'wt-pinned', isPinned: true }
-    const imported = new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+    const imported = new Map([
+      [getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]
+    ])
     const expanded = buildRows(
       'none',
       [pinnedWorktree],
@@ -619,7 +632,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
     expect(rows.filter((row) => row.type === 'imported-worktrees-card')).toMatchObject([
@@ -644,7 +657,7 @@ describe('buildRows with pinned worktrees', () => {
       undefined,
       [],
       new Set(),
-      new Map([[repo.id, { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
+      new Map([[getRepoHostIdentity(repo), { repo, hiddenWorktrees: [makeDetectedWorktree()] }]])
     )
 
     expect(rows).toMatchObject([
@@ -656,4 +669,98 @@ describe('buildRows with pinned worktrees', () => {
       rows.filter((row) => row.type === 'item' && row.sectionKey !== PINNED_GROUP_KEY)
     ).toEqual([])
   })
+})
+
+it('retains exact same-ID pinned owners and last-occurrence fallback sequence at N/10N, including collapse and natural suppression', () => {
+  for (const n of [100, 1000]) {
+    const repos = Array.from({ length: n }, (_, i) => ({
+      ...repo,
+      path: `/host-${i}/repo`,
+      executionHostId: `runtime:host-${i}` as const
+    }))
+    const pinned = repos.map((target, i) => ({
+      ...worktree,
+      id: `pinned-${i}`,
+      hostId: target.executionHostId,
+      isPinned: true
+    }))
+    pinned.push({ ...pinned[0], id: 'last-first-owner' })
+    const notices = new Map(
+      repos.map((target, i) => [
+        getRepoHostIdentity(target),
+        { repo: target, hiddenWorktrees: [makeDetectedWorktree({ id: `hidden-${i}` })] }
+      ])
+    )
+    const first = repos[0]
+    const input = {
+      groupBy: 'none' as const,
+      worktrees: pinned,
+      repos,
+      repoMap: new Map([[repo.id, first]]),
+      repoOfWorktree: (row: typeof worktree) =>
+        row.hostId ? repos[Number(row.hostId.split('-').at(-1))] : first,
+      prGroupOf: () => 'in-progress' as const,
+      workspaceStatuses: [],
+      projectOrderBy: 'manual' as const,
+      lineageById: {},
+      worktreeMap: new Map(pinned.map((row) => [row.id, row])),
+      nestLineage: false,
+      projectGroups: [],
+      placeholderRepoIds: new Set<string>(),
+      importedWorktreesByRepo: notices,
+      newExternalWorktreesInboxByRepo: new Map(),
+      pendingCreations: [],
+      folderWorkspaces: [],
+      defaultHostId: 'runtime:host-0' as const,
+      pinnedDisplayPolicy: 'single-location' as const,
+      filterRepoIds: []
+    }
+    const get = Map.prototype.get
+    let operations = 0
+    const probe = vi.spyOn(Map.prototype, 'get').mockImplementation(function (
+      this: Map<unknown, unknown>,
+      key: unknown
+    ) {
+      operations++
+      return get.call(this, key)
+    })
+    try {
+      const plan = planSidebarRows(input)
+      const expanded = plan.render(new Set())
+      const rows = expanded.filter(
+        (row) => row.type === 'item' || row.type === 'imported-worktrees-card'
+      )
+      expect(rows.length).toBe(2 * n + 1)
+      expect(
+        rows.slice(0, 4).map((row) => (row.type === 'item' ? row.worktree.id : row.key))
+      ).toEqual([
+        'pinned-0',
+        'pinned-1',
+        'imported-worktrees-card:pinned-fallback:runtime:host-1|repo-1',
+        'pinned-2'
+      ])
+      expect(rows.slice(-2)).toMatchObject([
+        { type: 'item', worktree: { id: 'last-first-owner' } },
+        { type: 'imported-worktrees-card', repo: first }
+      ])
+      const collapsed = plan.render(new Set([PINNED_GROUP_KEY]))
+      expect(
+        collapsed.filter((row) => row.type === 'imported-worktrees-card').map((row) => row.repo)
+      ).toEqual(repos)
+      expect(operations).toBeGreaterThan(n)
+      expect(operations).toBeLessThan(70 * n)
+      process.stdout.write(
+        `PG8 pinned operations ${JSON.stringify({ n, operations, expanded: rows.length, collapsed: collapsed.length })}\n`
+      )
+      const duplicated = planSidebarRows({ ...input, pinnedDisplayPolicy: 'duplicate-in-groups' })
+      expect(
+        duplicated.render(new Set()).some((row) => row.type === 'imported-worktrees-card')
+      ).toBe(false)
+      expect(
+        duplicated.render(new Set(['all'])).filter((row) => row.type === 'imported-worktrees-card')
+      ).toHaveLength(n)
+    } finally {
+      probe.mockRestore()
+    }
+  }
 })

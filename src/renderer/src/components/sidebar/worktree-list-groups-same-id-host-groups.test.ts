@@ -111,8 +111,12 @@ describe('a project group both hosts publish under one id', () => {
     expect(
       getSidebarRowRevealAncestorKeys({
         rowKey: 'project-group:group-shared',
-        repoMap: new Map(),
-        projectGroups: groups
+        headerRevealPlacements: new Map([
+          [
+            'project-group:group-shared',
+            { parent: getProjectGroupOccurrencePaths(groups).get('group-shared')?.parent }
+          ]
+        ])
       })
     ).toEqual(['project-group:parent'])
     expect(getProjectGroupOccurrencePaths(groups).get('group-shared')?.parent?.key).toBe(

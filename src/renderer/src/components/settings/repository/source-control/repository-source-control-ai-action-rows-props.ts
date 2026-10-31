@@ -1,3 +1,4 @@
+import type { Repo } from '../../../../../../shared/repo-types'
 import type { ActionArgumentChoices } from '../../../../../../shared/source-control-action-argument-choices'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import type {
@@ -12,6 +13,7 @@ import type {
 
 export type RepositorySourceControlAiActionRowsProps = {
   repoId: string
+  repo: Repo
   repoAi: RepoSourceControlAiOverrides
   source: SourceControlAiSettings
   defaultTuiAgent: TuiAgent | 'blank' | null | undefined

@@ -122,8 +122,12 @@ describe('buildDashboardWorktreeLaunchOptions', () => {
         runtimeDetectedAgentIds: { 'hub-1': ['aider'] }
       }),
       [
-        card({ repoId: 'repo-ssh', worktreeId: 'ssh-worktree', agentType: 'grok' }),
-        card({ repoId: 'repo-runtime', worktreeId: 'runtime-worktree', agentType: 'aider' })
+        card({ repoId: 'project:github:org/app', worktreeId: 'ssh-worktree', agentType: 'grok' }),
+        card({
+          repoId: 'project:github:org/app',
+          worktreeId: 'runtime-worktree',
+          agentType: 'aider'
+        })
       ]
     )
 

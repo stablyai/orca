@@ -42,6 +42,30 @@ export function useOnboardingAndFeatureTips() {
     }))
   )
 
+  useEffect(() => {
+    if (!persistedUIReady) {
+      return
+    }
+    let cancelled = false
+    void window.api.onboarding
+      .getProjectGroupingUpgradeTipAudience()
+      .then((audience) => {
+        if (!cancelled) {
+          useAppStore.getState().setProjectGroupingUpgradeTipAudience(audience)
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          useAppStore
+            .getState()
+            .setProjectGroupingUpgradeTipAudience({ version: 1, membership: 'excluded' })
+        }
+      })
+    return () => {
+      cancelled = true
+    }
+  }, [persistedUIReady])
+
   const applyStartupOnboardingState = useCallback((state: OnboardingState): void => {
     setOnboarding(state)
     setOnboardingLoaded(true)

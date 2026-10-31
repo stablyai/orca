@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react'
 import { Keyboard } from 'react-native'
 import { getComposerRepoWorktreeBranches } from '../../../src/shared/composer-branch-selection'
 import { getRepoExecutionHostId, parseExecutionHostId } from '../../../src/shared/execution-host'
-import { getProjectIdentityKey } from '../../../src/shared/project-host-setup-projection'
+import { getProjectGroupForRepo } from '../../../src/shared/project-section-grouping'
 import { shouldPreserveWorkspaceSourceOnRepoChange } from '../../../src/shared/new-workspace/workspace-source'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { SmartModeAvailabilityInput } from '../tasks/mobile-smart-source-modes'
@@ -71,12 +71,13 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     onCreated,
     onClose
   } = props
-  const { repos, allRepos, selectedRepo, setSelectedRepo, loading } = useNewWorkspaceRepositories({
-    client: desktopClient,
-    serverClients,
-    hostId,
-    visible
-  })
+  const { repos, allRepos, selectedRepo, setSelectedRepo, loading, grouping } =
+    useNewWorkspaceRepositories({
+      client: desktopClient,
+      serverClients,
+      hostId,
+      visible
+    })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined
   const client = repoServer ? (serverClients?.get(repoServer) ?? null) : desktopClient
@@ -187,25 +188,44 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
       })),
     [hostRepos]
   )
-  const projectPickerItems = useMemo(() => buildNewWorkspaceProjectOptions(repos), [repos, t])
-  const selectedProjectId = selectedRepo ? getProjectIdentityKey(selectedRepo) : null
+  const projectPickerItems = useMemo(
+    () =>
+      grouping
+        ? buildNewWorkspaceProjectOptions(repos, undefined, grouping, hostPlatform, hostLabelById)
+        : [],
+    [repos, grouping, hostPlatform, hostLabelById, t]
+  )
+  const selectedProjectId =
+    selectedRepo && grouping ? (getProjectGroupForRepo(grouping, selectedRepo)?.key ?? null) : null
   const selectedProject =
     projectPickerItems.find((project) => project.id === selectedProjectId) ?? null
   const runTargetPickerItems = useMemo(
-    () => buildNewWorkspaceRunTargetOptions(repos, selectedProjectId, hostPlatform, hostLabelById),
-    [hostLabelById, hostPlatform, repos, selectedProjectId, t]
+    () =>
+      buildNewWorkspaceRunTargetOptions(
+        repos,
+        selectedProjectId,
+        hostPlatform,
+        hostLabelById,
+        undefined,
+        grouping ?? undefined
+      ),
+    [hostLabelById, hostPlatform, repos, selectedProjectId, grouping, t]
   )
   const selectedRunTarget = selectedRepo
     ? getNewWorkspaceRunTarget(selectedRepo, hostPlatform, hostLabelById)
     : null
   const needsSetupChoice = Boolean(setupScript.setupCommand) && setupScript.setupRunPolicy === 'ask'
   const canCreate =
+    grouping != null &&
     selectedRepo != null &&
     !createSubmit.creating &&
     !executionTarget.sshGate.requiresConnection &&
     (!needsSetupChoice || setupScript.setupDecisionChoice != null)
 
   function openPicker(view: 'project' | 'runTarget' | 'agent'): void {
+    if ((view === 'project' || view === 'runTarget') && !grouping) {
+      return
+    }
     Keyboard.dismiss()
     navigation.transitionDrawer(view)
   }
@@ -238,6 +258,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
         visible={navigation.formSheetVisible}
         interactive={navigation.formSheetInteractive}
         loading={loading}
+        projectsReady={grouping != null}
         hasRepos={repos.length > 0}
         project={selectedProject}
         runTarget={selectedRunTarget}

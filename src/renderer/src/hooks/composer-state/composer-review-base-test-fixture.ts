@@ -1,10 +1,11 @@
+import type { ExecutionHostRegistryEntry } from '../../../../shared/execution-host-registry'
 import { useRef, useState } from 'react'
 import { vi } from 'vitest'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
 import type { ProjectGroup } from '../../../../shared/project-group-types'
-import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
+import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { GitPushTarget } from '../../../../shared/worktree/types'
 import type { CreateWorktreeArgs } from '../../../../shared/worktree/create-types'
 import type { SmartSourceSelection } from './source-selection-decisions'
@@ -64,7 +65,12 @@ export const mr: GitLabWorkItem = {
   state: 'opened',
   url: 'https://gitlab.com/fixture/repo/-/merge_requests/2'
 }
-export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
+export function useReviewBaseSelectionFixture(
+  initialReview?: GitHubWorkItem,
+  targetInputs: { hosts?: ExecutionHostRegistryEntry[]; projectId?: string } = {}
+) {
+  const [selectedSetupId, setSelectedSetupId] = useState<string | null>(null)
+  const [selectedSetupHost, setSelectedSetupHost] = useState<ExecutionHostId | null>(null)
   const [name, setName] = useState('')
   const [linkedWorkItem, setLinkedWorkItem] = useState<LinkedWorkItemSummary | null>(
     initialReview ?? null
@@ -149,15 +155,17 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
     repoId,
     setRepoId,
     folderSourceRepos: selectedProjectGroupId ? [repo, replacementRepo] : [],
-    hostOptions: [],
+    hostOptions: targetInputs.hosts ?? [],
     projectHostSetupOptions: [],
-    selectedRepoProjectId: null,
-    setSelectedProjectHostSetupOverrideId: vi.fn(),
-    setSelectedProjectHostSetupOverrideHostId: vi.fn()
+    selectedRepoProjectId: targetInputs.projectId ?? null,
+    setSelectedProjectHostSetupOverrideId: setSelectedSetupId,
+    setSelectedProjectHostSetupOverrideHostId: setSelectedSetupHost
   })
   const project = useProjectTargetActions({
     ...common,
     handleRepoChange: target.handleRepoChange,
+    setSelectedProjectHostSetupOverrideId: setSelectedSetupId,
+    setSelectedProjectHostSetupOverrideHostId: setSelectedSetupHost,
     actionableHostIds: new Set([LOCAL_EXECUTION_HOST_ID]),
     projectGroups: [folderGroup],
     projectHostSetups: [],
@@ -177,6 +185,8 @@ export function useReviewBaseSelectionFixture(initialReview?: GitHubWorkItem) {
   const gitlab = useGitLabProviderSelection({ ...common, ...identity, ...branch })
   const submit = useGitHubSubmitResolution(common)
   return {
+    selectedSetupId,
+    selectedSetupHost,
     ...github,
     ...gitlab,
     ...identity,

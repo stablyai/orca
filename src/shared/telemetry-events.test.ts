@@ -571,3 +571,28 @@ describe('remote_outbound_budget_close schema', () => {
     ).toBe(false)
   })
 })
+
+describe('approved project grouping contextual tip telemetry', () => {
+  it('admits the existing shown/outcome payload shape and still refuses unknown tours', () => {
+    const shown = {
+      tour_id: 'project-grouping-upgrade',
+      source: 'unknown',
+      was_feature_previously_interacted: false
+    }
+    const outcome = {
+      tour_id: 'project-grouping-upgrade',
+      source: 'unknown',
+      outcome: 'completed',
+      steps_seen: 1,
+      total_steps: 1
+    }
+    expect(eventSchemas.contextual_tour_shown.safeParse(shown).success).toBe(true)
+    expect(eventSchemas.contextual_tour_outcome.safeParse(outcome).success).toBe(true)
+    expect(
+      eventSchemas.contextual_tour_shown.safeParse({ ...shown, tour_id: 'unplanned-tour' }).success
+    ).toBe(false)
+    expect(
+      eventSchemas.contextual_tour_outcome.safeParse({ ...outcome, path: '/private' }).success
+    ).toBe(false)
+  })
+})

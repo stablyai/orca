@@ -1,4 +1,4 @@
-import type { RpcClient } from './rpc-client'
+import type { RpcClient } from './types'
 
 /** A connected RpcClient whose behaviour is only the members a test supplies; an unscripted request rejects. */
 export function stubRpcClient(members: Partial<RpcClient> = {}): RpcClient {

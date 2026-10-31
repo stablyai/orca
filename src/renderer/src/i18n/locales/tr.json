@@ -8602,7 +8602,6 @@
           "b0a0c14a1c": "Kenar çubuğu ve sekmeler için projeye özel görünüm ayrıntıları.",
           "removeProjectAllHosts": "Bu projeyi yapılandırılmış tüm sunuculardaki Orca'dan kaldırın.",
           "removeProjectCheckout": "Bu checkout'u Orca'dan kaldırın. Bu projenin diğer checkout'ları korunur.",
-          "removeProjectKeepCheckouts": "Bu projeyi Orca'dan kaldırın. Kendi ayarları olan checkout'lar korunur.",
           "0909e5d650": "Projeyi Kaldır",
           "ee5a290616": "Klasör olarak açıldı. Bu çalışma alanı için Git özellikleri kullanılamaz.",
           "323debba71": "Tür:",

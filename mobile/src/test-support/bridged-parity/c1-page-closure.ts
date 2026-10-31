@@ -129,7 +129,7 @@ export const C1_PAGE_CLOSURE: PageClosurePins = {
   },
   'components.new-workspace-repositories': {
     'matrix-components.new-workspace-repositories-repo.list-1': 'result-absent-settlement',
-    'new-workspace-repositories-fulfilled': 'identical'
+    'new-workspace-repositories-fulfilled': 'write-ordinal'
   },
   'components.setup-script': {
     'components-setup-ask': 'identical',

@@ -1,4 +1,3 @@
-import { readFileSync } from 'node:fs'
 import { createRequire } from 'node:module'
 import { resolve } from 'node:path'
 import { normalizePath, transformWithOxc, type Plugin } from 'vite'
@@ -11,6 +10,7 @@ import { nodeRuntimePool } from './scripts/vitest-node-runtime-pool'
 import { readRunFilters } from './scripts/vitest-run-filters.mjs'
 import { createWorkspaceSourceResolver } from './scripts/workspace-source-exports.mjs'
 import { moduleCacheResolutionKey } from './scripts/vitest-module-cache-resolution-key'
+import { rendererTestAssets } from './scripts/renderer-test-assets'
 
 const nodeRuntimeInclude = process.versions.bun
   ? getNodeRuntimeInclude({ filters: readRunFilters() })
@@ -44,18 +44,7 @@ const transforms = {
       }
     } satisfies Plugin,
     ...(moduleCachePath ? [moduleCacheResolutionKey()] : []),
-    {
-      // Unit tests have no asset server; retain real catalog parsing through fetch(data:).
-      name: 'locale-catalog-test-assets',
-      enforce: 'pre' as const,
-      load(id: string) {
-        if (/\/i18n\/locales\/[A-Za-z-]+\.json\?url$/.test(id)) {
-          const catalog = readFileSync(id.slice(0, -4)).toString('base64')
-          return `export default ${JSON.stringify(`data:application/json;base64,${catalog}`)}`
-        }
-        return null
-      }
-    }
+    rendererTestAssets()
   ],
   define: {
     ORCA_FEATURE_WALL_ENABLED: 'true',

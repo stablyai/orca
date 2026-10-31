@@ -1,3 +1,10 @@
+import {
+  resolveTaskSelectedRepos,
+  getTaskEligibleRepos
+} from '../../../components/task-page/task-page-default-repo-selection'
+import { getTaskPageRepoSourceContext } from '../../../components/task-page/task-page-repo-source-context'
+import { getProjectGroupingIndexFromState } from '../../project-host-setup-selector'
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { findPrevLiveNonTaskStackHistoryIndex } from '../worktree-nav-history'
 import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
@@ -7,7 +14,6 @@ import {
   resolveVisibleTaskProvider
 } from '../../../../../shared/task-providers'
 import { PER_REPO_FETCH_LIMIT } from '../../../../../shared/work-items'
-import { isGitRepoKind } from '../../../../../shared/repo-kind'
 import { presetToQuery } from './ui-slice-hydration-sanitizers'
 
 const LINEAR_TASK_PREFETCH_LIMIT = 36
@@ -123,22 +129,20 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
       )
       const resolvedMode = state.taskResumeState?.githubMode ?? 'items'
       if (resolvedSource === 'github' && resolvedMode === 'items') {
-        const eligibleRepos = state.repos.filter((repo) => isGitRepoKind(repo) && repo.path)
-        const selectedRepos = (() => {
-          const preferred = data.preselectedRepoId
-          if (preferred) {
-            const repo = eligibleRepos.find((r) => r.id === preferred)
-            return repo ? [repo] : []
-          }
-          const persisted = state.settings?.defaultRepoSelection
-          if (Array.isArray(persisted)) {
-            const selected = eligibleRepos.filter((repo) => persisted.includes(repo.id))
-            if (selected.length > 0) {
-              return selected
-            }
-          }
-          return eligibleRepos
-        })()
+        const eligibleRepos = getTaskEligibleRepos(state.repos).filter((repo) => repo.path)
+        const source = data.openGitHubSourceContext
+        const preferred = data.preselectedRepoId
+        const intent = preferred
+          ? new Set([
+              source?.repoId === preferred ? `${source.hostId}\0${source.repoId}` : preferred
+            ])
+          : new Set(state.settings?.defaultRepoSelection ?? [])
+        const selectedRepos = resolveTaskSelectedRepos(
+          eligibleRepos,
+          intent,
+          state.settings,
+          getProjectGroupingIndexFromState(state)
+        )
 
         const resume = state.taskResumeState
         const defaultPreset = state.settings?.defaultTaskViewPreset ?? 'all'
@@ -151,9 +155,10 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
           state.prefetchWorkItems(repo.id, repo.path, PER_REPO_FETCH_LIMIT, query, {
             sourceContext:
               data.openGitHubSourceContext?.provider === 'github' &&
-              data.openGitHubSourceContext.repoId === repo.id
+              `${data.openGitHubSourceContext.hostId}\0${data.openGitHubSourceContext.repoId}` ===
+                getRepoHostIdentity(repo)
                 ? data.openGitHubSourceContext
-                : null
+                : getTaskPageRepoSourceContext(repo, 'github')
           })
         }
       }

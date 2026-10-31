@@ -1,3 +1,9 @@
+import { buildProjectSetupRepoLookup } from './project-setup-repo-lookup'
+import type { ProjectGroupingSettings } from '../../../shared/project-grouping'
+import {
+  buildProjectGroupingIndex,
+  type ProjectGroupingIndex
+} from '../../../shared/project-section-grouping'
 import { projectHostSetupProjectionFromRepos } from '../../../shared/project-host-setup-projection'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
@@ -42,6 +48,8 @@ export function isNewWorkspaceProjectOptionQueryTooLarge(
 }
 
 type BuildNewWorkspaceProjectOptionsInput = {
+  settings?: ProjectGroupingSettings | null
+  grouping?: ProjectGroupingIndex
   projects: readonly Project[]
   projectHostSetups: readonly ProjectHostSetup[]
   eligibleRepos: readonly Repo[]
@@ -85,7 +93,7 @@ export function buildNewWorkspaceProjectOptions(
 ): NewWorkspaceProjectOption[] {
   const { eligibleRepos } = input
   const { projects, projectHostSetups } = getProjectModel(input)
-  const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
+  const repoLookup = buildProjectSetupRepoLookup(eligibleRepos)
   const hostLabelById = new Map((input.hosts ?? []).map((host) => [host.id, host.label]))
   const liveHostIds = input.hosts ? new Set(input.hosts.map((host) => host.id)) : null
   const readySetupCountsByProjectId = new Map<string, number>()
@@ -94,7 +102,7 @@ export function buildNewWorkspaceProjectOptions(
   for (const setup of projectHostSetups) {
     if (
       setup.setupState !== 'ready' ||
-      !eligibleRepoIds.has(setup.repoId) ||
+      !repoLookup.resolve(setup) ||
       (liveHostIds && !liveHostIds.has(setup.hostId))
     ) {
       continue
@@ -108,17 +116,51 @@ export function buildNewWorkspaceProjectOptions(
     setupDirectoriesByProjectId.set(setup.projectId, directories)
   }
 
-  const options = projects
-    .filter((project) => (readySetupCountsByProjectId.get(project.id) ?? 0) > 0)
-    .map((project) => ({
-      kind: 'project' as const,
-      id: project.id,
-      projectId: project.id,
-      displayName: project.displayName,
-      badgeColor: project.badgeColor,
-      detail: getProjectDetail(project, readySetupCountsByProjectId.get(project.id) ?? 0),
-      detailSource: project.providerIdentity ? ('provider' as const) : ('generic' as const)
-    }))
+  const index =
+    input.grouping ??
+    buildProjectGroupingIndex({ projects, projectHostSetups, settings: input.settings })
+  const projectById = new Map(projects.map((project) => [project.id, project]))
+  const projectHostSetupsById = new Map(
+    projectHostSetups.map((setup) => [`${setup.hostId}\0${setup.id}`, setup])
+  )
+  const groups = index.groups
+  const options = groups
+    .filter((group) =>
+      group.registrations.some(
+        (setup) =>
+          projectHostSetupsById.get(`${setup.hostId}\0${setup.id}`)?.setupState === 'ready' &&
+          repoLookup.resolve(setup) &&
+          (!liveHostIds || liveHostIds.has(setup.hostId))
+      )
+    )
+    .flatMap((group) => {
+      const project = projectById.get(group.representative.projectId)
+      if (!project) {
+        return []
+      }
+      setupDirectoriesByProjectId.set(
+        group.key,
+        group.registrations
+          .filter(
+            (setup) =>
+              projectHostSetupsById.get(`${setup.hostId}\0${setup.id}`)?.setupState === 'ready' &&
+              repoLookup.resolve(setup) &&
+              (!liveHostIds || liveHostIds.has(setup.hostId))
+          )
+          .map((setup) => ({ path: setup.path, hostId: setup.hostId }))
+      )
+      return [
+        {
+          kind: 'project' as const,
+          id: group.key,
+          projectId: group.key,
+          displayName: group.label,
+          badgeColor: project.badgeColor,
+          detail: getProjectDetail(project, readySetupCountsByProjectId.get(project.id) ?? 0),
+          detailSource: project.providerIdentity ? ('provider' as const) : ('generic' as const)
+        }
+      ]
+    })
 
   const duplicateProjectDetailsById = getDuplicateProjectDetailsById(
     options,

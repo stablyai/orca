@@ -1,3 +1,4 @@
+import { getRepoHostIdentity } from '../../../../shared/repo-host-identity'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -102,7 +103,7 @@ describe('buildImportedWorktreesCardCandidates', () => {
       detectedWorktreesByRepo: { [repo.id]: detectedResult([detectedWorktree()]) }
     })
 
-    expect(candidates.get(repo.id)).toMatchObject({
+    expect(candidates.get(getRepoHostIdentity(repo))).toMatchObject({
       repo: { id: repo.id },
       hiddenWorktrees: [{ id: 'repo-1::/repo-worktree' }]
     })
@@ -164,10 +165,10 @@ describe('buildImportedWorktreesCardCandidates', () => {
       repos: [{ ...repo, externalWorktreeVisibility: 'show' }],
       visibleWorktrees: [visibleWorktree],
       detectedWorktreesByRepo: { [repo.id]: detectedResult([detectedWorktree()]) },
-      forceVisibleRepoIds: new Set([repo.id])
+      forceVisibleRepoIds: new Set([getRepoHostIdentity(repo)])
     })
 
-    expect(candidates.get(repo.id)).toMatchObject({
+    expect(candidates.get(getRepoHostIdentity(repo))).toMatchObject({
       repo: { id: repo.id },
       hiddenWorktrees: [{ id: 'repo-1::/repo-worktree' }]
     })
@@ -179,6 +180,6 @@ describe('buildImportedWorktreesCardCandidates', () => {
       detectedWorktreesByRepo: { [repo.id]: detectedResult([detectedWorktree()]) }
     })
 
-    expect(candidates.has(repo.id)).toBe(true)
+    expect(candidates.has(getRepoHostIdentity(repo))).toBe(true)
   })
 })

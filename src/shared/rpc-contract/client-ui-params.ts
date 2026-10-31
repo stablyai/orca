@@ -269,7 +269,14 @@ export const UiUpdateFields = z
   .strict()
 
 export const UiUpdate = z
-  .object(tolerateUnknownValues(UiUpdateFields.shape))
+  .object({
+    ...tolerateUnknownValues(UiUpdateFields.shape),
+    filterRepoIdsMode: z.literal('exact').optional()
+  })
   .strict()
   .default({})
+  .refine((value) => value.filterRepoIdsMode === undefined || Array.isArray(value.filterRepoIds), {
+    message: 'Exact project filters require a valid filterRepoIds array',
+    path: ['filterRepoIds']
+  })
   .transform(omitUndefinedValues)

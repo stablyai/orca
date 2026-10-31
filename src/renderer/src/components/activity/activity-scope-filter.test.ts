@@ -64,6 +64,46 @@ import {
     }
   }
 
+  it.each([100, 1000])(
+    'builds membership once for a %i-thread Activity pass, retaining qualified scope',
+    (count) => {
+      let reads = 0
+      const filters = Array.from({ length: count }, (_, i) => `runtime:server\0repo-${i}`)
+      for (const [index, value] of filters.entries()) {
+        Object.defineProperty(filters, index, {
+          get() {
+            reads++
+            return value
+          }
+        })
+      }
+      const threads = Array.from({ length: count }, (_, i) =>
+        makeThread({
+          repo: { ...makeRepo(), id: `repo-${i}` },
+          worktree: { ...makeWorktree(), hostId: 'runtime:server' }
+        })
+      )
+      const ids = resolveActivityScopeRepoIds(
+        filters,
+        new Map(threads.map((thread) => [thread.repo!.id, thread.repo!]))
+      )
+      expect(ids).toHaveLength(count)
+      reads = 0
+      const result = filterThreadsByActivityScope({
+        threads,
+        scope: makeScope({ filterRepoIds: filters }),
+        exemptPaneKey: null
+      })
+      expect(result.matchingThreads).toBe(threads)
+      expect(reads).toBeLessThanOrEqual(2 * count)
+      const local = {
+        ...threads[0],
+        worktree: { ...threads[0].worktree, hostId: 'local' as const }
+      }
+      expect(threadMatchesActivityScope(local, makeScope({ filterRepoIds: ids }))).toBe(false)
+    }
+  )
+
   describe('threadMatchesActivityScope', () => {
     it('matches everything when no scope is active', () => {
       expect(threadMatchesActivityScope(makeThread(), makeScope())).toBe(true)

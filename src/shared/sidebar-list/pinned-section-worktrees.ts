@@ -1,3 +1,4 @@
+import { projectRepoFilterMatcher } from '../project-grouping'
 import type { WorktreeLineage } from '../worktree/lineage-types'
 import type { Worktree } from '../worktree/types'
 import { getWorktreeHostIdentity } from '../worktree/host-qualified-identity'
@@ -23,14 +24,15 @@ export function getSidebarLineageChildren(
   filterRepoIds: readonly string[] = []
 ): Map<string, Worktree[]> {
   const rowsByIdentity = getSidebarLineageRowsByIdentity(worktrees, worktreeMap)
-  const allowedRepoIds = filterRepoIds.length > 0 ? new Set(filterRepoIds) : null
+  const matchesRepo = projectRepoFilterMatcher(filterRepoIds)
   const parentByIdentity = getSidebarLineageParentsByIdentity(lineageById, rowsByIdentity)
   const childrenByParentIdentity = new Map<string, Worktree[]>()
   for (const [childIdentity, child] of rowsByIdentity) {
     const parent = parentByIdentity.get(childIdentity)
     if (
       !parent ||
-      (allowedRepoIds && (!allowedRepoIds.has(child.repoId) || !allowedRepoIds.has(parent.repoId)))
+      !matchesRepo(child.repoId, child.hostId ?? 'local') ||
+      !matchesRepo(parent.repoId, parent.hostId ?? 'local')
     ) {
       continue
     }

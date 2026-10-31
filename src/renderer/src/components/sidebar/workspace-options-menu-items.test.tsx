@@ -77,6 +77,7 @@ function setState(context: WorkspaceViewOptionContext, catalogHydrated = true): 
   const noop = vi.fn()
   mocks.state = {
     repos: Array.from({ length: context.projectCount }, (_, i) => ({ id: `repo-${i}` })),
+    filterRepoIds: context.hasProjectFilter ? ['offline'] : [],
     groupBy: context.groupBy,
     setGroupBy: noop,
     sortBy: 'name',

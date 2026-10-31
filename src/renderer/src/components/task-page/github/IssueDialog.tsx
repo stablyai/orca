@@ -1,3 +1,4 @@
+import { getRepoHostIdentity } from '../../../../../shared/repo-host-identity'
 import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import {
   Dialog,
@@ -106,7 +107,9 @@ export function TaskPageGitHubIssueDialog({
             if (!newIssueTargetRepo) {
               return null
             }
-            const entry = perRepoSourceState.find((s) => s.repoId === newIssueTargetRepo.id)
+            const entry = perRepoSourceState.find((s) =>
+              repoMatchesHostIdentity(newIssueTargetRepo, s.repoId, s.hostId)
+            )
             if (!entry || !entry.sources?.upstreamCandidate || !entry.sources?.originCandidate) {
               return null
             }
@@ -159,7 +162,7 @@ export function TaskPageGitHubIssueDialog({
                 </SelectTrigger>
                 <SelectContent>
                   {selectedRepos.map((r) => (
-                    <SelectItem key={r.id} value={r.id}>
+                    <SelectItem key={getRepoHostIdentity(r)} value={getRepoHostIdentity(r)}>
                       <RepoBadgeLabel name={r.displayName} color={r.badgeColor} />
                     </SelectItem>
                   ))}

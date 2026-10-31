@@ -63,100 +63,56 @@ function selectedRepo(store: ReturnType<typeof createUIStore>, repos: Repo[], re
   return result
 }
 
-describe('Settings project selection across local checkout regrouping', () => {
-  it('keeps a newer native pick instead of an older project-level WSL pick after removal', () => {
+describe('Settings grouping changes', () => {
+  it('keeps the exact selected checkout when switching from repository to folder and back', () => {
+    const repos = [nativeA, nativeB, wslA, wslB]
+    const projection = projectHostSetupProjectionFromRepos(repos)
     const store = createUIStore()
-    pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
-    pickRepo(store, buildSettingsProjectList([nativeA, nativeB, wslA]), nativeA)
-
-    expect(selectedRepo(store, [nativeA, wslA], nativeA).path).toBe(nativeA.path)
+    pickRepo(store, buildSettingsProjectList(repos), nativeB)
+    const split = buildSettingsProjectList(repos, {
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      settings: { projectGroupingMode: 'folder' }
+    })
+    const entry = split.find((candidate) =>
+      candidate.setups.some((setup) => setup.repoId === nativeB.id)
+    )
+    if (!entry) {
+      throw new Error('Missing selected checkout')
+    }
+    const state = store.getState()
+    const selection = getSettingsEntryHostSelection(
+      entry,
+      state.settingsProjectHostSelection,
+      state.settingsProjectSetupSelection
+    )
+    expect(
+      getSettingsProjectHostRepo(entry, repos, selection.hostId, selection.setupId)?.path
+    ).toBe(nativeB.path)
+    pickRepo(store, split, wslA)
+    expect(selectedRepo(store, repos, nativeA).path).toBe(wslA.path)
   })
 
-  it('keeps a newer project-level WSL pick when an older checkout selection still exists', () => {
-    const store = createUIStore()
-    pickRepo(store, buildSettingsProjectList([nativeA, nativeB, wslA]), nativeA)
-    pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
-
-    expect(selectedRepo(store, [nativeA, nativeB, wslA], nativeA).path).toBe(nativeA.path)
-    expect(selectedRepo(store, [nativeA, nativeB, wslA], wslA).path).toBe(wslA.path)
-    expect(selectedRepo(store, [nativeA, wslA], nativeA).path).toBe(wslA.path)
-  })
-
-  it('refreshes recency when the same checkout is picked again after a project pick', () => {
-    const store = createUIStore()
-    const split = buildSettingsProjectList([nativeA, nativeB, wslA])
-    pickRepo(store, split, nativeA)
-    pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
-    pickRepo(store, split, nativeA)
-
-    expect(selectedRepo(store, [nativeA, wslA], nativeA).path).toBe(nativeA.path)
-  })
-
-  it('does not carry a sibling checkout pick into the remaining project', () => {
-    const store = createUIStore()
-    const split = buildSettingsProjectList([nativeA, nativeB, wslA])
-    pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
-    pickRepo(store, split, nativeA)
-    pickRepo(store, split, nativeB)
-
-    expect(selectedRepo(store, [nativeA, nativeB, wslA], nativeA).path).toBe(nativeA.path)
-    expect(selectedRepo(store, [nativeA, nativeB, wslA], nativeB).path).toBe(nativeB.path)
-    expect(selectedRepo(store, [nativeA, wslA], nativeA).path).toBe(nativeA.path)
-  })
-
-  it('skips a removed setup and keeps the latest selection still in the entry', () => {
-    const store = createUIStore()
-    pickRepo(store, buildSettingsProjectList([nativeA, nativeB, wslA]), nativeA)
-    pickRepo(store, buildSettingsProjectList([nativeA, wslA]), wslA)
-
-    expect(selectedRepo(store, [nativeA], nativeA).path).toBe(nativeA.path)
-  })
-})
-
-describe('Settings provided local setup grouping', () => {
-  it('keeps provided provisioned metadata aligned with the sidebar', () => {
-    const provisioned = makeRepo('provisioned-copy', 'C:\\projects\\provisioned')
-    const repos = [nativeA, nativeB, provisioned]
+  it('keeps non-checkout setups in their host group in folder mode, matching the sidebar', () => {
+    const repos = [nativeA, nativeB, wslA]
     const projection = projectHostSetupProjectionFromRepos(repos)
     const grouping = {
+      settings: { projectGroupingMode: 'folder' as const },
       projects: projection.projects,
       projectHostSetups: projection.setups.map((setup) =>
-        setup.repoId === provisioned.id ? { ...setup, setupMethod: 'provisioned' as const } : setup
+        setup.repoId === nativeA.id ? { ...setup, setupMethod: 'provisioned' as const } : setup
       )
     }
-    const sidebarEntry = getProjectGroupingForRepo(
-      provisioned.id,
+    const sidebar = getProjectGroupingForRepo(
+      nativeA.id,
       new Map(repos.map((repo) => [repo.id, repo])),
       buildProjectGroupingIndex(grouping)
     )
-    const entries = buildSettingsProjectList(repos, grouping)
-    const provisionedEntry = entries.find((entry) =>
-      entry.setups.some((setup) => setup.repoId === provisioned.id)
+    const entry = buildSettingsProjectList(repos, grouping).find((candidate) =>
+      candidate.setups.some((setup) => setup.repoId === nativeA.id)
     )
-
-    expect(sidebarEntry.key).toBe(`project:${projection.projects[0].id}`)
-    expect(entries.filter((entry) => entry.checkoutLabel !== undefined)).toHaveLength(2)
-    expect(provisionedEntry?.checkoutLabel).toBeUndefined()
-    expect(provisionedEntry?.selectionKey).toBe(projection.projects[0].id)
-  })
-
-  it('classifies native and WSL setups separately even when their repo ids match', () => {
-    const twin = { ...wslA, id: nativeA.id }
-    const repos = [nativeA, nativeB, twin, wslB]
-    const projection = projectHostSetupProjectionFromRepos(repos)
-    const grouping = {
-      projects: projection.projects,
-      projectHostSetups: projection.setups.map((setup) =>
-        setup.path === twin.path ? { ...setup, setupMethod: 'provisioned' as const } : setup
-      )
-    }
-    const entries = buildSettingsProjectList(repos, grouping)
-
-    expect(entries.find((entry) => entry.representativeRepoId === nativeA.id)?.checkoutLabel).toBe(
-      nativeA.displayName
-    )
-    expect(
-      entries.find((entry) => entry.representativeRepoId === wslB.id)?.checkoutLabel
-    ).toBeUndefined()
+    expect(entry?.selectionKey).toBe(sidebar.key)
+    expect(sidebar.key).toContain('::host:')
+    expect(sidebar.key).not.toContain('::setup:')
   })
 })

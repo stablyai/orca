@@ -1,3 +1,4 @@
+import type { HostSectionRow } from '../../../../shared/sidebar-list/host-section-rows'
 import type { GroupHeaderRow } from '../../../../shared/sidebar-list/row-types'
 import type { SidebarHostOption } from './sidebar-host-options'
 import { getExecutionHostLabel } from '../../../../shared/execution-host'
@@ -137,4 +138,20 @@ export function collapsedSameNameProjectHeaders() {
   const repoMap = new Map([local, paired].map((value) => [value.id, value]))
   const rows = [header(local), header(paired)]
   return { local, paired, hosts, header, repoMap, rows }
+}
+
+export function describeHostSectionRow(row: HostSectionRow): string {
+  switch (row.type) {
+    case 'host-header':
+      return `${row.key} (${row.count})`
+    case 'header':
+      return `${row.key} @${row.repo?.id} (${row.count})`
+    case 'item':
+      return row.worktree.id
+    case 'folder-workspace':
+    case 'imported-worktrees-card':
+    case 'new-external-worktrees-inbox':
+    case 'pending-creation':
+      return row.type
+  }
 }

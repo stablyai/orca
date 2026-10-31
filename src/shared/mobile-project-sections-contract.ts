@@ -1,6 +1,12 @@
+import type { ProjectGroupingSettings } from './project-grouping'
+import {
+  buildProjectGroupingIndex,
+  type ProjectGroupingIndex,
+  type ProjectSectionProject,
+  type ProjectSectionSetup
+} from './project-section-grouping'
 import type { ProjectGroup } from './project-group-types'
 import type { ProjectHostSetupProjection } from './project-host-setup-projection'
-import type { ProjectSectionProject, ProjectSectionSetup } from './project-section-grouping'
 import type { RepoIcon } from './repo-icon'
 import type { Repo } from './repo-types'
 import type { ProjectOrderBy } from './ui-chrome-types'
@@ -56,12 +62,28 @@ export function buildMobileProjectSectionCatalog(
   repos: readonly Repo[],
   projection: ProjectHostSetupProjection,
   projectOrderBy: ProjectOrderBy,
-  projectGroups?: readonly ProjectGroup[]
+  projectGroups?: readonly ProjectGroup[],
+  settings?: ProjectGroupingSettings | null,
+  grouping?: ProjectGroupingIndex
 ): MobileProjectSectionCatalog {
+  const index =
+    grouping ??
+    buildProjectGroupingIndex({
+      projects: projection.projects,
+      projectHostSetups: projection.setups,
+      settings
+    })
+  const containing = new Map<ProjectSectionSetup, string>()
+  for (const group of index.groups) {
+    for (const setup of group.registrations) {
+      containing.set(setup, group.key)
+    }
+  }
   return {
     repos: repos.map(sectionRepo),
     projects: projection.projects.map(({ id, displayName }) => ({ id, displayName })),
     setups: projection.setups.map((setup) => ({
+      groupKey: containing.get(setup),
       id: setup.id,
       projectId: setup.projectId,
       hostId: setup.hostId,

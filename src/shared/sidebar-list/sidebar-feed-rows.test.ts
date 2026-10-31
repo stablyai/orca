@@ -1,3 +1,4 @@
+import { projectHostSetupProjectionFromRepos } from '../project-host-setup-projection'
 import { describe, expect, it } from 'vitest'
 import { LOCAL_EXECUTION_HOST_ID } from '../execution-host'
 import type { ProjectGroup } from '../project-group-types'
@@ -383,3 +384,100 @@ describe('buildSidebarFeedRows reads a row’s own registration of a repo two ho
     expect(header).toMatchObject({ hostWorktreeIds: new Map([['local', ['r::/w/a']]]) })
   })
 })
+
+it.each(['repository', 'host', 'folder'] as const)(
+  'keeps host-qualified empty twin headers and concrete bindings through the real feed producer and %s row plan',
+  (mode) => {
+    const local = repo('same', {
+      path: '/local/app',
+      executionHostId: 'local',
+      displayName: 'App',
+      upstream: { owner: 'org', repo: 'app' }
+    })
+    const remote = repo('same', {
+      path: '/server/app',
+      executionHostId: 'runtime:server',
+      displayName: 'App',
+      upstream: { owner: 'org', repo: 'app' }
+    })
+    const plain = repo('plain', { kind: 'folder', path: '/plain', displayName: 'Plain' })
+    const repos = [local, remote, plain]
+    const projection = projectHostSetupProjectionFromRepos(repos)
+    const row = worktree('same::/local/feature', {
+      hostId: 'local',
+      repoId: 'same',
+      isPinned: true
+    })
+    const workspaces = buildWorkspaceRows({
+      worktrees: [row],
+      folderWorkspaces: [],
+      repos,
+      lineageById: {}
+    })
+    const feed = domains({ workspaces })
+    const groupedCatalog = {
+      repos,
+      projectGroups: [],
+      projectGrouping: {
+        projects: projection.projects,
+        projectHostSetups: projection.setups,
+        settings: { projectGroupingMode: mode }
+      }
+    }
+    const options = view({ groupBy: 'repo', pinnedDisplayPolicy: 'duplicate-in-groups' })
+    const built = buildSidebarFeedRows(feed, groupedCatalog, options)
+    const headers = built.rows.filter(
+      (candidate): candidate is Extract<typeof candidate, { type: 'header' }> =>
+        candidate.type === 'header' && candidate.icon.kind === 'project'
+    )
+    expect(headers).toHaveLength(mode === 'repository' ? 2 : 3)
+    expect(headers.find((header) => header.key === 'project:repo:plain')?.repo).toEqual(plain)
+    if (mode !== 'repository') {
+      const serverHeader = headers.find(
+        (header) => header.repo?.executionHostId === 'runtime:server'
+      )
+      expect(serverHeader?.repo).toEqual(remote)
+      expect(serverHeader?.count).toBe(0)
+      expect(headers.find((header) => header.repo?.executionHostId === 'local')?.repo).toEqual(
+        local
+      )
+    }
+    expect(built.rows.filter((candidate) => candidate.type === 'item')).toHaveLength(2)
+    const index = indexSidebarFeed(feed, repos)
+    const plan = planSidebarFeedRows(
+      feed,
+      index,
+      groupedCatalog,
+      options,
+      rankSidebarFeedWorktrees(index, options.sortBy)
+    )
+    expect(plan.placeholderRepoIds.has('runtime:server\0same')).toBe(true)
+    expect(plan.placeholderRepoIds.has('local\0same')).toBe(false)
+    // Empty remote membership must survive an unrelated late local checkout and a different catalog order.
+    const late = repo('late', { path: '/late', upstream: { owner: 'org', repo: 'late' } })
+    const lateProjection = projectHostSetupProjectionFromRepos([late, remote, local, plain])
+    const lateBuilt = buildSidebarFeedRows(
+      feed,
+      {
+        repos: [late, remote, local, plain],
+        projectGroups: [],
+        projectGrouping: {
+          projects: lateProjection.projects,
+          projectHostSetups: lateProjection.setups,
+          settings: { projectGroupingMode: mode }
+        }
+      },
+      options
+    )
+    const lateHeaders = lateBuilt.rows.filter(
+      (candidate): candidate is Extract<typeof candidate, { type: 'header' }> =>
+        candidate.type === 'header' && candidate.icon.kind === 'project'
+    )
+    expect(lateHeaders).toHaveLength(headers.length + 1)
+    if (mode !== 'repository') {
+      expect(
+        lateHeaders.find((header) => header.repo?.executionHostId === 'runtime:server')?.repo?.path
+      ).toBe('/server/app')
+    }
+  }
+)

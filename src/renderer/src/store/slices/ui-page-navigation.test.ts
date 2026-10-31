@@ -166,15 +166,20 @@ describe('createUISlice settings navigation', () => {
         }
       ],
       settings: {
+        ...getDefaultSettings('/tmp'),
         visibleTaskProviders: ['linear'],
         defaultTaskSource: 'github',
         defaultTaskViewPreset: 'all'
-      } as unknown as AppState['settings'],
-      linearStatus: { connected: true } as AppState['linearStatus'],
-      preflightStatus: { glab: { installed: false } } as AppState['preflightStatus'],
+      },
+      linearStatus: { connected: true, viewer: null },
+      preflightStatus: {
+        git: { installed: true },
+        gh: { installed: true, authenticated: true },
+        glab: { installed: false, authenticated: false }
+      },
       prefetchWorkItems,
       prefetchLinearIssues
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().openTaskPage()
 
@@ -183,7 +188,18 @@ describe('createUISlice settings navigation', () => {
       '/repo',
       expect.any(Number),
       'is:issue is:open',
-      { sourceContext: null }
+      {
+        sourceContext: {
+          kind: 'task-source',
+          provider: 'github',
+          projectId: 'repo:repo-1',
+          hostId: 'local',
+          projectHostSetupId: 'repo-1',
+          repoId: 'repo-1',
+          providerIdentity: null,
+          accountLabel: null
+        }
+      }
     )
     expect(prefetchLinearIssues).not.toHaveBeenCalled()
   })
@@ -210,16 +226,44 @@ describe('createUISlice settings navigation', () => {
           displayName: 'Repo',
           badgeColor: 'blue',
           addedAt: 1,
-          kind: 'git'
+          kind: 'git',
+          executionHostId: 'ssh:devbox',
+          connectionId: 'devbox'
+        }
+      ],
+      projects: [
+        {
+          id: 'project-1',
+          displayName: 'Repo',
+          badgeColor: 'blue',
+          providerIdentity: { provider: 'github', owner: 'acme', repo: 'repo' },
+          sourceRepoIds: ['repo-1'],
+          createdAt: 1,
+          updatedAt: 1
+        }
+      ],
+      projectHostSetups: [
+        {
+          id: 'setup-1',
+          projectId: 'project-1',
+          hostId: 'ssh:devbox',
+          repoId: 'repo-1',
+          path: '/repo',
+          displayName: 'Repo',
+          setupState: 'ready',
+          setupMethod: 'legacy-repo',
+          createdAt: 1,
+          updatedAt: 1
         }
       ],
       settings: {
+        ...getDefaultSettings('/tmp'),
         visibleTaskProviders: ['github'],
         defaultTaskSource: 'github',
         defaultTaskViewPreset: 'all'
-      } as unknown as AppState['settings'],
+      },
       prefetchWorkItems
-    } as unknown as Partial<AppState>)
+    })
 
     store.getState().openTaskPage({
       taskSource: 'github',
@@ -235,6 +279,21 @@ describe('createUISlice settings navigation', () => {
       'is:issue is:open',
       { sourceContext }
     )
+    const exactRepo = store.getState().repos[0]!
+    for (const repos of [
+      [],
+      [{ ...exactRepo, executionHostId: 'local' as const, connectionId: null }]
+    ]) {
+      prefetchWorkItems.mockClear()
+      store.setState({ repos })
+      store.getState().openTaskPage({
+        taskSource: 'github',
+        preselectedRepoId: 'repo-1',
+        openGitHubWorkItem: workItem,
+        openGitHubSourceContext: sourceContext
+      })
+      expect(prefetchWorkItems).not.toHaveBeenCalled()
+    }
   })
 
   it('prefetches direct Linear task opens with their source context', () => {

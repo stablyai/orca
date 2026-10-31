@@ -1,3 +1,4 @@
+import { registerSettingsGroupingPreferenceTests } from './settings-grouping-preferences.spec'
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import { createTestStore, makeWorktree } from './store-test-helpers'
 import type { AppState } from '../types'
@@ -181,6 +182,8 @@ beforeEach(() => {
 })
 
 describe('createSettingsSlice checked persistence', () => {
+  registerSettingsGroupingPreferenceTests(settingsSet, settingsGet)
+
   it('stores the authoritative settings after a successful checked update', async () => {
     const authoritativeSettings = {
       pluginSystemEnabled: true,

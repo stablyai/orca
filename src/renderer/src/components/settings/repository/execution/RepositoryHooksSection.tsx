@@ -31,6 +31,10 @@ import { useRepositoryHookSettingsDraft } from '../../use-repository-hook-settin
 import { useRepositoryIssueCommand } from '../../use-repository-issue-command'
 
 type RepositoryHooksSectionProps = {
+  controller?: {
+    hooks: ReturnType<typeof useRepositoryHookSettingsDraft>
+    issue: ReturnType<typeof useRepositoryIssueCommand>
+  }
   repo: Repo
   yamlHooks: OrcaHooks | null
   hasHooksFile: boolean
@@ -42,7 +46,30 @@ type RepositoryHooksSectionProps = {
   onUpdateHookSettings: (settings: RepoHookSettings) => void
 }
 
-export function RepositoryHooksSection({
+export function RepositoryHooksSection(props: RepositoryHooksSectionProps): React.JSX.Element {
+  return props.controller ? (
+    <RepositoryHooksView {...props} controller={props.controller} />
+  ) : (
+    <LocalRepositoryHooks {...props} />
+  )
+}
+function LocalRepositoryHooks(props: RepositoryHooksSectionProps): React.JSX.Element {
+  const selectedHostId = getRepoExecutionHostId(props.repo)
+  const repoHostIdentity = `${selectedHostId}\0${props.repo.id}`
+  const hooks = useRepositoryHookSettingsDraft({
+    repo: props.repo,
+    repoHostIdentity,
+    onUpdateHookSettings: props.onUpdateHookSettings
+  })
+  const issue = useRepositoryIssueCommand({
+    repoId: props.repo.id,
+    repoHostIdentity,
+    selectedHostId
+  })
+  return <RepositoryHooksView {...props} controller={{ hooks, issue }} />
+}
+function RepositoryHooksView({
+  controller,
   repo,
   yamlHooks,
   hasHooksFile,
@@ -51,12 +78,12 @@ export function RepositoryHooksSection({
   copiedTemplate,
   forceVisible = false,
   onCopyTemplate,
-  onUpdateHookSettings
-}: RepositoryHooksSectionProps): React.JSX.Element {
+  onUpdateHookSettings: _onUpdateHookSettings
+}: RepositoryHooksSectionProps & {
+  controller: NonNullable<RepositoryHooksSectionProps['controller']>
+}): React.JSX.Element {
   useTranslation()
   const settingsSearchQuery = useAppStore((state) => state.settingsSearchQuery)
-  const selectedHostId = getRepoExecutionHostId(repo)
-  const repoHostIdentity = `${selectedHostId}\0${repo.id}`
   const yamlState = yamlHooks
     ? 'loaded'
     : hasHooksFile
@@ -64,18 +91,9 @@ export function RepositoryHooksSection({
         ? 'update-available'
         : 'invalid'
       : 'missing'
-  const {
-    hookSettingsDraft,
-    updateScriptDraft,
-    commitScriptDraft,
-    flushScriptDraftOnUnmount,
-    updateHookSettingsPolicyDraft
-  } = useRepositoryHookSettingsDraft({ repo, repoHostIdentity, onUpdateHookSettings })
-  const issueCommand = useRepositoryIssueCommand({
-    repoId: repo.id,
-    repoHostIdentity,
-    selectedHostId
-  })
+  const { hookSettingsDraft, updateScriptDraft, commitScriptDraft, updateHookSettingsPolicyDraft } =
+    controller.hooks
+  const issueCommand = controller.issue
   const localHookFields = getLocalHookFields()
   const selectedSetupRunPolicy: SetupRunPolicy =
     hookSettingsDraft.setupRunPolicy ?? 'run-by-default'
@@ -103,7 +121,7 @@ export function RepositoryHooksSection({
   const [isAdvancedOpen, setIsAdvancedOpen] = useState(false)
 
   return (
-    <section ref={flushScriptDraftOnUnmount} className="space-y-6">
+    <section className="space-y-6">
       <div className="space-y-1">
         <h2 className="text-sm font-semibold">
           {translate(

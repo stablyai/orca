@@ -240,7 +240,7 @@ export function sidebarInputsFeedDomains(
           sources.store()?.onUIChanged?.(() => changed()),
           // Catalog writes are full saves, and some (a project rename) announce no event.
           sources.store()?.onStateWritten?.((domains) => {
-            if (domains === undefined) {
+            if (domains === undefined || domains.includes('settings')) {
               changed()
             }
           })

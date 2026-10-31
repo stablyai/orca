@@ -4,6 +4,7 @@ import type { PersistedState } from '../../shared/persisted-state-types'
 import type { Project, ProjectHostSetup } from '../../shared/project-types'
 import type { Repo } from '../../shared/repo-types'
 import { rebuildRepoBackedProjectState } from './profile-project-state-file'
+import { mergeProjectHostSetupCompatibilityState } from '../persistence/tracking-repos/project-host-compatibility'
 
 const upstreamIdentity = {
   canonicalKey: 'git.example.com/acme/app-upstream',
@@ -49,6 +50,53 @@ function makeState(overrides: Partial<PersistedState>): PersistedState {
 }
 
 describe('rebuildRepoBackedProjectState', () => {
+  it('carries every retiring override into an existing destination on live synchronization and profile reload', () => {
+    const destination = 'git:git.example.com/acme/app-upstream'
+    for (const destinationMode of [undefined, 'host'] as const) {
+      const state = makeState({
+        repos: [
+          makeRepo({ id: 'r1', gitRemoteIdentity: upstreamIdentity }),
+          makeRepo({ id: 'r2', path: '/other', gitRemoteIdentity: upstreamIdentity })
+        ],
+        projects: [
+          makeProject({
+            id: 'repo:r1',
+            sourceRepoIds: ['r1'],
+            localWindowsRuntimePreference: { kind: 'windows-host' }
+          }),
+          makeProject({
+            id: destination,
+            sourceRepoIds: ['r2'],
+            localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+          })
+        ]
+      })
+      state.settings.projectGroupingOverrides = {
+        'repo:r1': 'folder',
+        offline: 'folder',
+        ...(destinationMode ? { [destination]: destinationMode } : {})
+      }
+      for (const result of [
+        mergeProjectHostSetupCompatibilityState(state, state.repos),
+        rebuildRepoBackedProjectState(JSON.parse(JSON.stringify(state)))
+      ]) {
+        expect(result.settings?.projectGroupingOverrides).toEqual({
+          [destination]: destinationMode ?? 'folder',
+          offline: 'folder'
+        })
+        expect(result.projects).toHaveLength(1)
+        expect(result.projects[0]).toMatchObject({
+          id: destination,
+          localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
+        })
+        const reloaded = rebuildRepoBackedProjectState({ ...state, ...result })
+        expect(reloaded.settings.projectGroupingOverrides).toEqual(
+          result.settings?.projectGroupingOverrides
+        )
+      }
+    }
+  })
+
   it('carries project state and independent setups across a repo remote identity change', () => {
     const originProjectId = 'git:git.example.com/acme/app'
     const rebuilt = rebuildRepoBackedProjectState(

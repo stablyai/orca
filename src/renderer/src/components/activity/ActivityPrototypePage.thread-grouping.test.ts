@@ -1,3 +1,5 @@
+import { getProjectGroupingIndexFromState } from '../../store/project-host-setup-selector'
+import { getDefaultSettings } from '../../../../shared/constants'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { describe, expect, it } from 'vitest'
@@ -78,6 +80,45 @@ describe('ThreadAgentStateIndicator for a turn that ended without finishing', ()
 })
 
 describe('activity thread grouping', () => {
+  it.each(['repository', 'host', 'folder'] as const)(
+    'groups visible threads using the catalog owner membership in %s mode',
+    (projectGroupingMode) => {
+      const original = makeThreads(
+        makeActivityResult({ entries: { [PANE_KEY]: makeWorkingEntryWithoutHistory() } })
+      )[0]
+      const repos = [
+        { ...makeRepo(), id: 'first', path: '/app', upstream: { owner: 'org', repo: 'app' } },
+        { ...makeRepo(), id: 'second', path: '/copy', upstream: { owner: 'org', repo: 'app' } },
+        {
+          ...makeRepo(),
+          id: 'remote',
+          path: '/remote',
+          upstream: { owner: 'org', repo: 'app' },
+          executionHostId: 'runtime:remote' as const
+        }
+      ]
+      const threads = repos.map((repo) => ({
+        ...original,
+        paneKey: repo.id,
+        repo,
+        worktree: { ...original.worktree, repoId: repo.id, hostId: repo.executionHostId ?? 'local' }
+      }))
+      const index = getProjectGroupingIndexFromState({
+        repos,
+        settings: { ...getDefaultSettings('/tmp'), projectGroupingMode }
+      })
+      const groups = buildActivityThreadGroups(threads, 'project', undefined, repos, index)
+      expect(groups).toHaveLength(
+        projectGroupingMode === 'repository' ? 1 : projectGroupingMode === 'host' ? 2 : 3
+      )
+      expect(groups.flatMap((group) => group.threads.map((thread) => thread.paneKey))).toEqual([
+        'first',
+        'second',
+        'remote'
+      ])
+    }
+  )
+
   it('status grouping separates interrupted done from normal done and keeps Interrupted label', () => {
     const repo = makeRepo()
     const worktree = makeWorktree()

@@ -59,7 +59,7 @@ export class RelayReconnectController {
   assertHostReachability = (reachability: RelayHostReachability): void =>
     this.evidence.assert(reachability)
 
-  handleForeground(logical: StableLogicalRpcClient, wasForeground: boolean): void {
+  handleForeground(_logical: StableLogicalRpcClient, wasForeground: boolean): void {
     if (!wasForeground) {
       // Availability also returns after iOS inactive interruptions; only app-resume proves background.
       this.activeSession?.notifyForeground('focus')

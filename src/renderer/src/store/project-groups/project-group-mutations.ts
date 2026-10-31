@@ -1,6 +1,13 @@
-import type { StateCreator } from 'zustand'
-import type { AppState } from '../types'
+import type { RepoSlice, ProjectRemovalFailure } from '../repos/repo-state'
+
 import type { ProjectGroup } from '../../../../shared/project-group-types'
+import type { AppState } from '../types'
+import type { StateCreator } from 'zustand'
+import {
+  notifyProjectGroupMoveFailed,
+  notifyProjectGroupOnOtherHost
+} from './project-group-move-feedback'
+
 import type { Repo } from '../../../../shared/repo-types'
 import { selectProjectGroupRemovalTargets } from '../slices/project-group-removal-targets'
 import {
@@ -18,24 +25,10 @@ import {
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
 import { ipcOrRuntimeTargetForHostId } from '../../runtime/runtime-client-target'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
-import type { ProjectRemovalFailure, RepoSlice } from '../repos/repo-state'
+
 import { mergeProjectCompatibilityForHostRepoChange } from '../repos/repo-catalog-identity'
 import { applyProjectGroupDeleteCascade } from './project-group-removal-state'
 import { adoptFromEndpoint } from '../adopt-from-endpoint'
-import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-
-function notifyProjectGroupOnOtherHost(): void {
-  toast.error(
-    translate('auto.store.slices.repos.moveToGroupOtherHost', 'Could not move project to group'),
-    {
-      description: translate(
-        'auto.store.slices.repos.moveToGroupOtherHostDesc',
-        'The computer this project runs on does not have this group. A project can only join groups saved on its own computer.'
-      )
-    }
-  )
-}
 
 export function createProjectGroupMutationActions(
   set: Parameters<StateCreator<AppState>>[0],
@@ -261,6 +254,7 @@ export function createProjectGroupMutationActions(
         const repoHostId = repo ? getRepoExecutionHostId(repo) : null
         const target = repoHostId ? ipcOrRuntimeTargetForHostId(repoHostId) : null
         if (!repo || !repoHostId || !target) {
+          notifyProjectGroupMoveFailed()
           return false
         }
         if (groupId && !isProjectGroupJoinableFromCatalog(get().projectGroups, groupId, target)) {
@@ -285,6 +279,7 @@ export function createProjectGroupMutationActions(
                 )
               ).repo
         if (!moved) {
+          notifyProjectGroupMoveFailed()
           return false
         }
         const ownedMoved = adoptFromEndpoint(target, { kind: 'repo', row: moved })
@@ -304,13 +299,18 @@ export function createProjectGroupMutationActions(
           }
         })
         // Why: hosts store an unknown group id as "no group" and still return the row (#13699).
-        if (groupId && (moved.projectGroupId ?? null) !== groupId) {
-          notifyProjectGroupOnOtherHost()
+        if ((moved.projectGroupId ?? null) !== groupId) {
+          if (groupId) {
+            notifyProjectGroupOnOtherHost()
+          } else {
+            notifyProjectGroupMoveFailed()
+          }
           return false
         }
         return true
       } catch (err) {
         console.error('Failed to move repo to group:', err)
+        notifyProjectGroupMoveFailed()
         return false
       }
     }

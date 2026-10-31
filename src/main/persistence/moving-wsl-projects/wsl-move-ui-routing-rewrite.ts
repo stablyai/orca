@@ -8,6 +8,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { PersistedUIState } from '../../../shared/persisted-ui-state-types'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { rewriteWslMoveProjectFilters } from './wsl-move-ui-project-filters'
 import type {
   ManualRepoOrderEntry,
   VisibleWorkspaceHostIds,
@@ -37,7 +38,8 @@ export type WslMoveUiRoutingState = Pick<
   | 'workspaceHostOrder'
   | 'setupScriptPromptDismissedRepoIds'
   | 'collapsedGroups'
->
+> &
+  Partial<Pick<PersistedUIState, 'filterRepoIds' | 'agentsFilterRepoIds'>>
 
 // Mirrors the renderer's keys (setup-script-prompt.ts, group-keys.ts); main cannot import them.
 const SETUP_SCRIPT_DISMISSAL_PREFIX = 'generation-v1:'
@@ -103,7 +105,10 @@ export function rewriteWslMoveUiRouting(
   if (setupDismissals) {
     updates.setupScriptPromptDismissedRepoIds = setupDismissals
   }
-  const collapsed = addHostLineageGroups(ui.collapsedGroups, scope)
+  Object.assign(updates, rewriteWslMoveProjectFilters(ui, scope))
+  const projectGroups = addHostProjectGroups(ui.collapsedGroups, scope)
+  const collapsed =
+    addHostLineageGroups(projectGroups ?? ui.collapsedGroups, scope) ?? projectGroups
   if (collapsed) {
     updates.collapsedGroups = collapsed
   }
@@ -238,6 +243,7 @@ function addHostSetupDismissals(
     return null
   }
   const added: string[] = []
+  const present = new Set(entries)
   for (const entry of entries) {
     if (!entry.startsWith(SETUP_SCRIPT_DISMISSAL_PREFIX)) {
       continue
@@ -250,7 +256,8 @@ function addHostSetupDismissals(
       continue
     }
     const hostEntry = `${SETUP_SCRIPT_DISMISSAL_PREFIX}${getRepoHostIdentityForParts(repoId, scope.destinationHostId)}`
-    if (!entries.includes(hostEntry) && !added.includes(hostEntry)) {
+    if (!present.has(hostEntry)) {
+      present.add(hostEntry)
       added.push(hostEntry)
     }
   }
@@ -266,6 +273,7 @@ function addHostLineageGroups(
     return null
   }
   const added: string[] = []
+  const present = new Set(groups)
   for (const key of groups) {
     if (!key.startsWith(LINEAGE_GROUP_PREFIX)) {
       continue
@@ -283,9 +291,36 @@ function addHostLineageGroups(
       continue
     }
     const hostKey = `${LINEAGE_GROUP_PREFIX}${composeWorktreeHostIdentity(scope.destinationHostId, hostWorktreeId)}`
-    if (!groups.includes(hostKey) && !added.includes(hostKey)) {
+    if (!present.has(hostKey)) {
+      present.add(hostKey)
       added.push(hostKey)
     }
   }
   return added.length > 0 ? [...groups, ...added] : null
+}
+
+function addHostProjectGroups(
+  groups: string[] | undefined,
+  scope: WslMoveRewriteScope
+): string[] | null {
+  const present = new Set(groups)
+  const added: string[] = []
+  for (const key of groups ?? []) {
+    const match = /^(project:.+?)::host:local::local::wsl:([^:]+)(::setup:(.+))?$/.exec(key)
+    if (
+      !match ||
+      match[2].trim().toLowerCase() !== scope.sourceDistro ||
+      (match[4]
+        ? !scope.repoInScope(match[4])
+        : !scope.projectInScope?.(match[1].slice('project:'.length)))
+    ) {
+      continue
+    }
+    const hostKey = `${match[1]}::host:${scope.destinationHostId}::${scope.destinationHostId}::default${match[3] ?? ''}`
+    if (!present.has(hostKey)) {
+      present.add(hostKey)
+      added.push(hostKey)
+    }
+  }
+  return added.length ? [...(groups ?? []), ...added] : null
 }

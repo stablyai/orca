@@ -1,3 +1,6 @@
+import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/agent-session-attachments'
+import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
+import { requireActiveEnvironmentOrNull } from './web-runtime-session'
 import {
   CLIPBOARD_IMAGE_MAX_BASE64_CHARS,
   CLIPBOARD_IMAGE_MAX_PIXELS,
@@ -182,4 +185,28 @@ export async function clipboardHasImage(): Promise<boolean | null> {
   }
   const items = await navigator.clipboard.read()
   return items.some((item) => clipboardFormatsIncludeImage(item.types))
+}
+
+export async function saveWebClipboardImageAsTempFile(args?: {
+  connectionId?: string | null
+  runtimeEnvironmentId?: string | null
+  agentSessionAttachment?: AgentSessionAttachmentClipboardTarget
+}): Promise<string | null> {
+  if (!requireActiveEnvironmentOrNull()) {
+    return null
+  }
+  const contentBase64 = await readClipboardImagePngBase64()
+  if (!contentBase64) {
+    return null
+  }
+  if (args?.agentSessionAttachment) {
+    if (!args.runtimeEnvironmentId) {
+      throw new Error('A chat attachment needs the server the chat runs on.')
+    }
+    return saveClipboardImageAsWebAgentSessionAttachment(contentBase64, {
+      ...args.agentSessionAttachment,
+      environmentId: args.runtimeEnvironmentId
+    })
+  }
+  return saveClipboardImageAsTempFileInRuntime(contentBase64, args)
 }

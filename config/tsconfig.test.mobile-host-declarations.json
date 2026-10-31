@@ -1,0 +1,27 @@
+{
+  "extends": "./tsconfig.test.pane-launch.json",
+  "files": [
+    "../src/main/persistence/applying-settings/mobile-project-controls-host.test-fixture.ts",
+    "../src/main/persistence/applying-settings/project-grouping-socket-owner.test-fixture.ts",
+    "../src/main/persistence/persistence-test-harness.ts",
+    "../src/main/runtime/mobile-project-sections-snapshot.ts",
+    "../src/renderer/src/runtime/project-grouping-owner-publication.test-fixture.tsx",
+    "../src/renderer/src/env.d.ts",
+    "../src/preload/api-types.ts",
+    "../src/types/build-constants.d.ts"
+  ],
+  "include": [],
+  "exclude": [],
+  "compilerOptions": {
+    "composite": false,
+    "incremental": false,
+    "noEmit": false,
+    "declaration": true,
+    "emitDeclarationOnly": true,
+    "noEmitOnError": true,
+    "declarationMap": false,
+    "sourceMap": false,
+    "rootDir": "..",
+    "outDir": "../.cache/typecheck/mobile-project-controls-host"
+  }
+}

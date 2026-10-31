@@ -187,7 +187,7 @@ describe('ActivityThreadOptionsMenu', () => {
   })
 
   it.each(['removed host', 'single project', 'stale project'] as const)(
-    'resets a %s scope even when its filter menu is hidden',
+    'resets a %s scope and keeps active project selections discoverable',
     async (scenario) => {
       const originalState = useAppStore.getState()
       const persist = vi.fn().mockResolvedValue(undefined)
@@ -207,7 +207,12 @@ describe('ActivityThreadOptionsMenu', () => {
         await act(async () => {
           trigger?.dispatchEvent(new KeyboardEvent('keydown', { bubbles: true, key: 'Enter' }))
         })
-        expect(document.querySelector('[data-slot="dropdown-menu-sub-trigger"]')).toBeNull()
+        const projectMenu = document.querySelector('[data-slot="dropdown-menu-sub-trigger"]')
+        if (scenario === 'removed host') {
+          expect(projectMenu).toBeNull()
+        } else {
+          expect(projectMenu?.textContent).toContain('Project')
+        }
         const reset = Array.from(document.querySelectorAll<HTMLElement>('[role="menuitem"]')).find(
           (item) => item.textContent === 'Show all hosts and projects'
         )

@@ -31,7 +31,7 @@ describe('selectPendingWorktreeCreationKeys', () => {
     }
 
     const first = selectPendingWorktreeCreationKeys(pending)
-    expect(first).toEqual(['creation-1 repo with space'])
+    expect(first).toEqual(['creation-1 local\0repo with space'])
     expect(selectPendingWorktreeCreationKeys(pending)).toBe(first)
   })
 })

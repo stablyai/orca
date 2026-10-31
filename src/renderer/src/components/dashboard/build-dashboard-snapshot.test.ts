@@ -156,7 +156,7 @@ describe('buildDashboardSnapshot', () => {
     expect(snapshot.cards).toEqual([])
     expect(snapshot.workspaces).toEqual([
       expect.objectContaining({
-        repoId: 'r1',
+        repoId: 'project:repo:r1',
         worktreeId: 'w1',
         repoName: 'Repo One',
         worktreeName: 'wt-one',
@@ -165,7 +165,7 @@ describe('buildDashboardSnapshot', () => {
         workspaceKind: 'worktree'
       }),
       expect.objectContaining({
-        repoId: 'r2',
+        repoId: 'project:repo:r2',
         worktreeId: 'w2',
         repoName: 'Repo Two',
         worktreeName: 'wt-two'
@@ -173,8 +173,8 @@ describe('buildDashboardSnapshot', () => {
     ])
     expect(snapshot.filterOptions).toEqual({
       projects: [
-        { id: 'r1', label: 'Repo One' },
-        { id: 'r2', label: 'Repo Two' }
+        { id: 'project:repo:r1', label: 'Repo One' },
+        { id: 'project:repo:r2', label: 'Repo Two' }
       ],
       workspaceStatuses: [
         { id: 'planned', label: 'Planned', color: 'neutral' },
@@ -465,7 +465,9 @@ describe('buildDashboardSnapshot', () => {
       NOW
     )
     // r2 has a worktree but no agent card, so its icon never ships.
-    expect(snapshot.repoIconsByRepoId).toEqual({ r1: { type: 'lucide', name: 'Rocket' } })
+    expect(snapshot.repoIconsByRepoId).toEqual({
+      'project:repo:r1': { type: 'lucide', name: 'Rocket' }
+    })
   })
 
   it('records a null icon for a card-bearing repo that has none', () => {
@@ -473,7 +475,7 @@ describe('buildDashboardSnapshot', () => {
       baseState({ agentStatusByPaneKey: { [PANE_KEY]: entry({}) } }),
       NOW
     )
-    expect(snapshot.repoIconsByRepoId).toEqual({ r1: null })
+    expect(snapshot.repoIconsByRepoId).toEqual({ 'project:repo:r1': null })
   })
 
   it('nulls ptyId when the layout entry points at a dead pty', () => {

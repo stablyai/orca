@@ -14,6 +14,22 @@ const ERROR_LINE = /^(\S.*?)\(\d+,\d+\): error TS\d+:/
 // Require every on-disk test in program except these explicit exclusions: error-only diff cannot see excluded/shadowed tests.
 export const TESTS_OUTSIDE_PROGRAM = new Map([
   [
+    'src/mobile-web-shell/mobile-web-shell-project-controls.test.ts',
+    'Real persistence/socket/bridge joins: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Node role'
+  ],
+  [
+    'src/mobile-web-shell/mobile-web-shell-nested-project-filter.test.ts',
+    'Normal publisher/persistence/socket join: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Node role'
+  ],
+  [
+    'src/components/new-workspace-owner-controls.test.tsx',
+    'Real publisher/controller creation joins: checked whole by config/tsconfig.test.mobile-project-controls.json after checked host declaration emit and both installs; executed by the Mobile CI Bun role'
+  ],
+  [
+    'src/worktree/project-sections-owner-recovery.test.ts',
+    'Node-side: imports the desktop runtime and RPC handlers; checked by config/tsconfig.node.json against Node libraries'
+  ],
+  [
     'src/components/WorktreeAgentList.runtime-lineage.test.tsx',
     'Node-side: renders the mobile consumer of real desktop SQLite assignment projection, against Node rather than RN libs'
   ],

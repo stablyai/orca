@@ -1,4 +1,5 @@
 export type FeatureInteractionId =
+  | 'project-grouping-upgrade'
   | 'workspace-board'
   | 'workspace-agent-sessions'
   | 'workspace-board-actions'
@@ -62,6 +63,7 @@ export type FeatureInteractionDefinition = {
 
 // These IDs persist in product state; changing them breaks discovery tracking.
 export const FEATURE_INTERACTIONS = [
+  { id: 'project-grouping-upgrade', interaction: 'project grouping upgrade education opened' },
   { id: 'workspace-board', interaction: 'workspace board opened' },
   {
     id: 'workspace-agent-sessions',
