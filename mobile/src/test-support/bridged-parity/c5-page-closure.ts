@@ -129,14 +129,14 @@ export const C5_PAGE_CLOSURE: PageClosurePins = {
     'tw-paste-lookup-slug-unsupported': 'identical'
   },
   'tasks.smart-source-search': {
-    'matrix-tasks.smart-source-search-github.listworkitems-1': 'params-undefined',
-    'matrix-tasks.smart-source-search-gitlab.listworkitems-1': 'params-undefined',
-    'matrix-tasks.smart-source-search-linear.listissues-1': 'params-undefined',
-    'matrix-tasks.smart-source-search-linear.searchissues-1': 'params-undefined',
-    'matrix-tasks.smart-source-search-repo.searchrefs-1': 'params-undefined',
-    'tw-smart-search-all-providers': 'params-undefined',
+    'matrix-tasks.smart-source-search-github.listworkitems-1': 'result-absent-settlement',
+    'matrix-tasks.smart-source-search-gitlab.listworkitems-1': 'result-absent-settlement',
+    'matrix-tasks.smart-source-search-linear.listissues-1': 'result-absent-settlement',
+    'matrix-tasks.smart-source-search-linear.searchissues-1': 'result-absent-settlement',
+    'matrix-tasks.smart-source-search-repo.searchrefs-1': 'result-absent-settlement',
+    'tw-smart-search-all-providers': 'identical',
     'tw-smart-search-gitlab-provider-error': 'identical',
-    'tw-smart-search-linear-listed': 'params-undefined'
+    'tw-smart-search-linear-listed': 'identical'
   },
   'transport.host-status-gates': {
     'matrix-transport.host-status-gates-status.get-1': 'result-absent-settlement',

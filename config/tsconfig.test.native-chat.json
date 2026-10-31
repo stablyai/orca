@@ -1,5 +1,6 @@
 {
   "extends": "./tsconfig.test.pane-launch.json",
+  "files": ["../src/shared/mobile-bridge-request-retention.test.ts"],
   "include": [
     "../src/renderer/src/components/native-chat/NativeChatForm.contract.test.tsx",
     "../src/main/codex/codex-form-transport-envelope.test.ts",

@@ -2604,6 +2604,7 @@
     },
     "permission": {
       "reason": "Reason: ",
+      "openLink": "Open link",
       "needsAccessTo": "Needs access to: ",
       "planFile": "Plan file: {{filePath}}",
       "newerVersionRequired": "This request needs a newer version of Orca."

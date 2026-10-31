@@ -116,12 +116,12 @@ export const BRIDGED_PARITY_EXCLUSIONS: Readonly<Partial<Record<BridgedParityCla
 
 // Pin strict History verdicts and unchanged legacy counts in both directions.
 export const BRIDGED_PARITY_BASELINE: Readonly<Record<BridgedParityClass | 'identical', number>> = {
-  identical: 387,
+  identical: 396,
   'reply-meta-required': 0,
-  'result-absent-settlement': 337,
+  'result-absent-settlement': 355,
   'result-absent-observation': 3,
   'result-absent-stream-release': 6,
-  'params-undefined': 27,
+  'params-undefined': 0,
   'write-ordinal': 12,
   unclassified: 0
 }
