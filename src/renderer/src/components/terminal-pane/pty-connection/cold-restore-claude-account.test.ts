@@ -62,6 +62,7 @@ function coldRestoreAccountId(record: SleepingAgentSessionRecord): string | unde
     connectionId: null,
     executionHostId: null,
     worktree: { path: '/repo' },
+    deps: { worktreeId: 'repo-1::/repo' },
     shellOverride: undefined,
     transport: { getRuntimeEnvironmentId: () => null }
   }
