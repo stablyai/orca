@@ -544,6 +544,40 @@ describe('orca file CLI handlers', () => {
     })
   })
 
+  it('resolves remote dotted relatives against the explicit worktree, not client cwd', async () => {
+    queueFixtures(
+      callMock,
+      okFixture('req_show', { worktree: buildWorktree('/home/deploy/repo', 'feature') }),
+      okFixture('req_open', {
+        worktree: 'wt-1',
+        relativePath: 'src/App.tsx',
+        kind: 'text',
+        opened: true
+      })
+    )
+
+    await main(
+      [
+        'file',
+        'open',
+        '--path',
+        'src/lib/../App.tsx',
+        '--worktree',
+        'id:wt-1',
+        '--pairing-code',
+        'remote-runtime'
+      ],
+      '/tmp'
+    )
+
+    expect(callMock).toHaveBeenNthCalledWith(1, 'worktree.show', { worktree: 'id:wt-1' })
+    expect(callMock).toHaveBeenNthCalledWith(2, 'files.open', {
+      worktree: 'id:wt-1',
+      relativePath: 'src/App.tsx',
+      navigation: 'caller'
+    })
+  })
+
   it('requires an explicit worktree for remote file commands', async () => {
     const priorExitCode = process.exitCode
 
