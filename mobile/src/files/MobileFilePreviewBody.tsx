@@ -102,6 +102,11 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
         // A writable artifact previews its unsaved draft, as desktop does.
         markup={options.editable ? options.draftContent : preview.content}
         title={options.title}
+        notice={
+          options.editable && options.saveError ? (
+            <Text style={styles.previewSaveErrorText}>{options.saveError}</Text>
+          ) : null
+        }
         renderSource={() =>
           options.editable ? (
             <EditablePreviewSource {...options} />

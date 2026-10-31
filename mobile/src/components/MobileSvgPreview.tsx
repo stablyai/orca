@@ -11,9 +11,11 @@ type Props = {
   title: string
   // Rendered when the user flips to "Source" (the existing syntax view).
   renderSource: () => React.ReactNode
+  /** Shown above the drawing, e.g. a save failure the Source view would otherwise only show. */
+  notice?: React.ReactNode
 }
 
-export function MobileSvgPreview({ markup, title, renderSource }: Props) {
+export function MobileSvgPreview({ markup, title, renderSource, notice }: Props) {
   const t = useMobileTranslation()
   const [mode, setMode] = useState<MobilePreviewMode>('preview')
   const uri = useMemo(() => svgMarkupDataUri(markup), [markup])
@@ -43,7 +45,14 @@ export function MobileSvgPreview({ markup, title, renderSource }: Props) {
         previewLabel={t('components.svgPreview.previewDrawing', 'Preview drawing')}
         sourceLabel={t('components.svgPreview.viewSource', 'View SVG source')}
       />
-      {mode === 'preview' ? preview : renderSource()}
+      {mode === 'preview' ? (
+        <>
+          {notice}
+          {preview}
+        </>
+      ) : (
+        renderSource()
+      )}
     </View>
   )
 }
