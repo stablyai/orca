@@ -84,6 +84,18 @@ export const composerInputStyles = themedStyleSheet(() => ({
     ...roundControl,
     backgroundColor: colors.surfaceBright
   },
+  textButton: {
+    width: 'auto',
+    height: 'auto',
+    minWidth: COMPOSER_CONTROL_SIZE,
+    minHeight: COMPOSER_CONTROL_SIZE,
+    maxWidth: '100%',
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm
+  },
+  editActionRow: {
+    flexWrap: 'wrap'
+  },
   sendButtonDisabled: {
     backgroundColor: colors.composerControl
   },
