@@ -657,7 +657,6 @@
       "tryDifferentFilter": "別のレビューフィルターを試してください。"
     },
     "diffReviewDrawers": {
-      "actionsTitle": "レビュー操作",
       "addNote": "メモを追加",
       "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
@@ -764,11 +763,6 @@
       "moveUp": "上に移動",
       "reorderHint": "「上に移動」「下に移動」の操作で、ドラッグせずに並べ替えられます。"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新規ワークスペース",
-      "pairDesktop": "デスクトップのペアリング",
-      "title": "クイック操作"
-    },
     "hostCard": {
       "hostActions": "「{{title}}」の操作",
       "openHost": "「{{title}}」を開く",
@@ -808,9 +802,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "新規ワークスペース"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "フック",
@@ -1302,17 +1293,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "アカウントの使用状況",
-      "sessionWindow": "5時間",
-      "systemDefault": "システムのデフォルト",
-      "weeklyWindow": "7日"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
-      "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。",
-      "updateHint": "タップして更新"
+      "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。"
     },
     "emptyState": {
       "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
@@ -1320,28 +1304,16 @@
       "description": "コンピュータ上の Orca とペアリングすると、スマートフォンから Agent の状況を確認したり、任意のターミナルを操作したりして、作業を進められます。",
       "openDesktopDescription": "「設定」→「モバイル」を開き、ペアリング用の QR コードを生成してください。",
       "openDesktopTitle": "デスクトップで Orca を開く",
-      "pairDesktop": "デスクトップのペアリング",
-      "scanCodeDescription": "上のボタンをタップしてスキャナーを開いてください。画面の QR コードにカメラを向けてください。",
       "scanCodeTitle": "コードをスキャン",
-      "stepsHeading": "使い方",
       "title": "デスクトップに接続"
     },
     "listFooter": {
       "hostPickerTitle": "タスクを開くホスト",
-      "resumeHeading": "再開",
-      "tasksHeading": "タスク",
       "automationsHeading": "自動化",
       "automationsHostPickerTitle": "オートメーションを開くホスト"
     },
     "listHeader": {
-      "agentTime": "Agent 時間",
-      "agentsSpawned": "Agent が生成されました",
-      "daysHours": "{{days}}日 {{hours}}時間",
-      "desktopsHeading": "デスクトップ",
-      "hoursMinutes": "{{hours}}時間 {{minutes}}分",
-      "minutes": "{{minutes}}分",
-      "prsCreated": "作成された PR",
-      "title": "おかえり"
+      "desktopsHeading": "デスクトップ"
     },
     "screen": {
       "pairingCheckFailed": "ペアリングを確認できませんでした",
@@ -1349,11 +1321,6 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "removeHostTitle": "ホストを削除",
       "tryAgain": "再試行してください。"
-    },
-    "tasksCard": {
-      "noSources": "タスクの連携先が接続されていません",
-      "openProviderTasks": "{{provider}} のタスクを開く",
-      "title": "タスク"
     }
   },
   "hooks": {
@@ -1398,17 +1365,11 @@
     },
     "hostScreenHeader": {
       "accounts": "アカウント",
-      "activeFilters_one": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
-      "activeFilters_other": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
       "backToHosts": "ホスト一覧に戻る",
-      "closeSearch": "検索を閉じる",
       "floatingWorkspace": "フローティングワークスペース",
       "hideSidebar": "サイドバーを非表示",
       "reconnect": "再接続",
-      "searchWorkspaces": "ワークスペースの検索",
       "tasks": "タスク",
-      "workspaceOptions": "ワークスペースのオプション",
-      "newWorkspace": "新しいワークスペース",
       "automations": "自動化"
     },
     "hostScreenOverlays": {
@@ -1420,10 +1381,6 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
       "unpin": "固定を解除する"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "ワークスペースを検索…",
-      "searchWorkspaces": "ワークスペースの検索"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",
@@ -1482,7 +1439,6 @@
       "backToOptions": "ワークスペースのオプションに戻る",
       "cardDisplay": "カード表示",
       "cardLayout": "カードのレイアウト",
-      "clearFilters": "フィルターをクリア",
       "exceptDefaultBranch": "デフォルトのブランチを除く",
       "filters": "フィルター",
       "groupBy": "グループ化",
@@ -2139,7 +2095,6 @@
       "workspaceDetailsHint": "ワークスペースの完全な名前と場所を表示します",
       "backToWorktrees": "ワークツリー一覧に戻る",
       "moreActions": "セッションのその他の操作",
-      "openFileExplorer": "ファイルエクスプローラーを開く",
       "openSourceControl": "ソース管理を開く",
       "reconnectToDesktop": "デスクトップに再接続",
       "showSidebar": "サイドバーを表示",
@@ -2306,9 +2261,6 @@
       "title": "クイックコマンド",
       "untitled": "無題"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "クイックコマンド"
-    },
     "routeHelpers": {
       "connected": "接続済み",
       "connecting": "接続中",
@@ -2366,8 +2318,7 @@
       "checkingCapabilities": "デスクトップの対応機能を確認中です。少し待ってから再試行してください。",
       "newTab": "新規タブ",
       "quickCommandsUpdateRequired": "クイックコマンドの利用にはデスクトップの更新が必要です。",
-      "tabStatus": "{{title}}、{{status}}",
-      "terminalLayout": "ターミナルのレイアウト"
+      "tabStatus": "{{title}}、{{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "ターミナルをクリア",
@@ -3036,7 +2987,8 @@
       "openNumberedPrWeb": "PR #{{number}} をウェブで開く",
       "openPrWeb": "PR をウェブで開く",
       "refresh": "ソース管理を更新",
-      "title": "ソース管理"
+      "title": "ソース管理",
+      "moreActions": "ソース管理のその他の操作"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3392,17 +3344,13 @@
       "recent": "最近の",
       "retryHint": "タップして再試行してください。",
       "searchProjects": "プロジェクトを検索する",
-      "sort": "プロジェクトの並べ替え",
       "subtitle": "「タスク」ページで使うプロジェクトビューを選択してください。",
       "title": "GitHub Projects",
       "unsupportedLayout": "Orca はこの GitHub プロジェクトのレイアウトにまだ対応していません。",
       "view": "プロジェクトビュー"
     },
     "githubViewControls": {
-      "fields": "フィールド: {{fields}}",
-      "openView": "GitHub でビューを開く",
-      "sort": "並べ替え: {{sort}}",
-      "source": "ソース: {{source}}"
+      "openView": "GitHub でビューを開く"
     },
     "itemActions": {
       "changeStatus": "ステータスを変更",
@@ -3492,17 +3440,8 @@
     "linearList": {
       "changeStatusFrom": "状態を「{{status}}」から変更"
     },
-    "linearViewControls": {
-      "displayButton": "表示",
-      "groupLabel": "グループ化：{{group}}",
-      "orderLabel": "並べ替え：{{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "表示項目",
-      "linearGroupTitle": "Linear の Issue をグループ化",
-      "linearOrderTitle": "Linear の Issue を並べ替え",
-      "linearViewTitle": "Linear の表示",
-      "sortTasksTitle": "タスクを並べ替え"
+      "displayPropertiesTitle": "表示項目"
     },
     "listSurface": {
       "connectLinearButton": "Linear に接続",
@@ -3571,8 +3510,6 @@
       "allSites": "すべてのサイト",
       "currentlyAscending": "現在は昇順・タップで降順に変更",
       "currentlyDescending": "現在は降順・タップで昇順に変更",
-      "fieldAscending": "{{field}} 昇順",
-      "fieldDescending": "{{field}} 降順",
       "fields": "フィールド",
       "repos_one": "{{count}} 件のリポジトリ",
       "repos_other": "{{count}} 件のリポジトリ",
@@ -3681,8 +3618,7 @@
     },
     "providerControls": {
       "myTodos": "自分の ToDo",
-      "projectMergeRequests": "プロジェクトの MR",
-      "sort": "並べ替え：{{sortLabel}}"
+      "projectMergeRequests": "プロジェクトの MR"
     },
     "providerItemList": {
       "intoBranch": "{{base}} へ",
@@ -3710,7 +3646,6 @@
       "queryingSource": "検索対象: {{source}}",
       "repoDescription": "検索対象のリポジトリを選択してください。",
       "repos": "リポジトリ",
-      "taskSource": "タスクソース",
       "upstream": "upstream"
     },
     "providerViewProjection": {
@@ -3722,10 +3657,7 @@
       "default": "デフォルト",
       "defaultSubtitle": "{{subtitle}} · デフォルト",
       "issues": "Issue",
-      "list": "リスト",
-      "noGrouping": "グループ化なし",
       "openState": "オープン",
-      "priority": "優先度",
       "projects": "プロジェクト",
       "pullRequests": "PR",
       "teams_one": "{{count}} チーム",
@@ -3737,7 +3669,6 @@
       "unassigned": "未割り当て"
     },
     "screenChrome": {
-      "connectLinear": "Linear に接続",
       "newGitHubIssue": "GitHub の新規 Issue",
       "newLinearIssue": "新規 Linear Issue",
       "refreshGitHub": "GitHub の作業を更新する",

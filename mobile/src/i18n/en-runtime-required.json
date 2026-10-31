@@ -159,7 +159,7 @@
     }
   },
   "hostScreen": {
-    "hostScreenHeader": {
+    "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"
     }
@@ -320,6 +320,10 @@
     "filterPickers": {
       "teams_one": "{{count}} team",
       "teams_other": "{{count}} teams"
+    },
+    "filterSheet": {
+      "projectItems_one": "{{count}} item",
+      "projectItems_other": "{{count}} items"
     },
     "githubProjectList": {
       "moreFields_one": "+{{count}} field",

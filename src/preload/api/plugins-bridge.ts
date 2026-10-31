@@ -42,6 +42,7 @@ export const pluginsApi = {
     action: string
     params?: unknown
   }): Promise<PluginHostCallOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
+  resolveGitSource: (args) => ipcRenderer.invoke('plugins:resolveGitSource', args),
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),
   listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),

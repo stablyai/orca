@@ -697,7 +697,6 @@
       "tryDifferentFilter": "Essayez un autre filtre de revue."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "Actions de revue",
       "addNote": "Ajouter une note",
       "cancelNote": "Annuler la note",
       "clearSentNotes": "Effacer les notes envoyées",
@@ -810,11 +809,6 @@
       "moveUp": "Monter",
       "reorderHint": "Utilisez les actions « Monter » et « Descendre » pour réordonner sans faire glisser"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Nouvel espace de travail",
-      "pairDesktop": "Appairer l'ordinateur",
-      "title": "Actions rapides"
-    },
     "hostCard": {
       "hostActions": "Actions pour {{title}}",
       "openHost": "Ouvrir {{title}}",
@@ -854,9 +848,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fermer le panneau"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "Nouvel espace de travail"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "HOOKS",
@@ -1349,17 +1340,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Utilisation du compte",
-      "sessionWindow": "5 h",
-      "systemDefault": "Valeur par défaut du système",
-      "weeklyWindow": "7 j"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",
-      "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour",
-      "updateHint": "Touchez pour mettre à jour"
+      "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour"
     },
     "emptyState": {
       "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
@@ -1367,28 +1351,16 @@
       "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
       "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
       "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "pairDesktop": "Appairer l'ordinateur",
-      "scanCodeDescription": "Touchez le bouton ci-dessus pour ouvrir le scanner. Visez le QR code affiché à l'écran.",
       "scanCodeTitle": "Scanner le code",
-      "stepsHeading": "Fonctionnement",
       "title": "Connectez votre ordinateur"
     },
     "listFooter": {
       "hostPickerTitle": "Ouvrir les tâches sur",
-      "resumeHeading": "Reprendre",
-      "tasksHeading": "Tâches",
       "automationsHeading": "Automatisations",
       "automationsHostPickerTitle": "Ouvrir les automatisations sur"
     },
     "listHeader": {
-      "agentTime": "Temps agent",
-      "agentsSpawned": "Agents lancés",
-      "daysHours": "{{days}} j {{hours}} h",
-      "desktopsHeading": "Ordinateurs",
-      "hoursMinutes": "{{hours}} h {{minutes}} min",
-      "minutes": "{{minutes}} min",
-      "prsCreated": "PRs créées",
-      "title": "Bon retour"
+      "desktopsHeading": "Ordinateurs"
     },
     "screen": {
       "pairingCheckFailed": "Impossible de vérifier l'appairage",
@@ -1396,11 +1368,6 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "removeHostTitle": "Supprimer l'hôte",
       "tryAgain": "Veuillez réessayer."
-    },
-    "tasksCard": {
-      "noSources": "Aucune source de tâches connectée",
-      "openProviderTasks": "Ouvrir les tâches de {{provider}}",
-      "title": "Tâches"
     }
   },
   "hooks": {
@@ -1445,18 +1412,11 @@
     },
     "hostScreenHeader": {
       "accounts": "Comptes",
-      "activeFilters_many": "Options des espaces de travail ({{count}} filtres actifs)",
-      "activeFilters_one": "Options des espaces de travail ({{count}} filtre actif)",
-      "activeFilters_other": "Options des espaces de travail ({{count}} filtres actifs)",
       "backToHosts": "Retour aux hôtes",
-      "closeSearch": "Fermer la recherche",
       "floatingWorkspace": "Espace de travail flottant",
       "hideSidebar": "Masquer la barre latérale",
       "reconnect": "Reconnecter",
-      "searchWorkspaces": "Rechercher des espaces de travail",
       "tasks": "Tâches",
-      "workspaceOptions": "Options des espaces de travail",
-      "newWorkspace": "Nouvel espace de travail",
       "automations": "Automatisations"
     },
     "hostScreenOverlays": {
@@ -1468,10 +1428,6 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "sleep": "Mettre en veille",
       "unpin": "Désépingler"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Rechercher des espaces de travail…",
-      "searchWorkspaces": "Rechercher des espaces de travail"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -1530,7 +1486,6 @@
       "backToOptions": "Retour aux options des espaces de travail",
       "cardDisplay": "Affichage des cartes",
       "cardLayout": "Disposition en cartes",
-      "clearFilters": "Réinitialiser les filtres",
       "exceptDefaultBranch": "Sauf la branche par défaut",
       "filters": "Filtres",
       "groupBy": "Grouper par",
@@ -2217,7 +2172,6 @@
       "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
-      "openFileExplorer": "Ouvrir l'explorateur de fichiers",
       "openSourceControl": "Ouvrir le contrôle de code source",
       "reconnectToDesktop": "Se reconnecter à l'ordinateur",
       "showSidebar": "Afficher la barre latérale",
@@ -2385,9 +2339,6 @@
       "title": "Commandes rapides",
       "untitled": "Sans titre"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "Commandes rapides"
-    },
     "routeHelpers": {
       "connected": "Connecté",
       "connecting": "Connexion",
@@ -2445,8 +2396,7 @@
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
       "newTab": "Nouvel onglet",
       "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides",
-      "tabStatus": "{{title}}, {{status}}",
-      "terminalLayout": "Disposition du terminal"
+      "tabStatus": "{{title}}, {{status}}"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Effacer le terminal",
@@ -3136,7 +3086,8 @@
       "openNumberedPrWeb": "Ouvrir la pull request #{{number}} sur le Web",
       "openPrWeb": "Ouvrir la pull request sur le Web",
       "refresh": "Actualiser le contrôle de code source",
-      "title": "Contrôle de code source"
+      "title": "Contrôle de code source",
+      "moreActions": "Autres actions du contrôle de code source"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3496,17 +3447,13 @@
       "recent": "Récents",
       "retryHint": "Touchez pour réessayer.",
       "searchProjects": "Rechercher des projets",
-      "sort": "Tri du projet",
       "subtitle": "Choisissez une vue de projet pour la page Tâches.",
       "title": "GitHub Projects",
       "unsupportedLayout": "Orca ne prend pas encore en charge cette disposition de projet GitHub.",
       "view": "Vue de projet"
     },
     "githubViewControls": {
-      "fields": "Champs : {{fields}}",
-      "openView": "Ouvrir la vue dans GitHub",
-      "sort": "Tri : {{sort}}",
-      "source": "Source : {{source}}"
+      "openView": "Ouvrir la vue dans GitHub"
     },
     "itemActions": {
       "changeStatus": "Changer le statut",
@@ -3597,17 +3544,8 @@
     "linearList": {
       "changeStatusFrom": "Changer le statut actuel : {{status}}"
     },
-    "linearViewControls": {
-      "displayButton": "Affichage",
-      "groupLabel": "Grouper par : {{group}}",
-      "orderLabel": "Trier par : {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriétés affichées",
-      "linearGroupTitle": "Grouper les issues Linear",
-      "linearOrderTitle": "Trier les issues Linear",
-      "linearViewTitle": "Vue Linear",
-      "sortTasksTitle": "Trier les tâches"
+      "displayPropertiesTitle": "Propriétés affichées"
     },
     "listSurface": {
       "connectLinearButton": "Connecter Linear",
@@ -3676,8 +3614,6 @@
       "allSites": "Tous les sites",
       "currentlyAscending": "Tri croissant · touchez pour passer en décroissant",
       "currentlyDescending": "Tri décroissant · touchez pour passer en croissant",
-      "fieldAscending": "{{field}} · ordre croissant",
-      "fieldDescending": "{{field}} · ordre décroissant",
       "fields": "Champs",
       "repos_many": "{{count}} dépôts",
       "repos_one": "{{count}} dépôt",
@@ -3789,8 +3725,7 @@
     },
     "providerControls": {
       "myTodos": "Mes tâches à faire",
-      "projectMergeRequests": "MR du projet",
-      "sort": "Tri : {{sortLabel}}"
+      "projectMergeRequests": "MR du projet"
     },
     "providerItemList": {
       "intoBranch": "vers {{base}}",
@@ -3818,7 +3753,6 @@
       "queryingSource": "Recherche dans {{source}}",
       "repoDescription": "Choisissez les dépôts à interroger.",
       "repos": "Dépôts",
-      "taskSource": "Source des tâches",
       "upstream": "Upstream"
     },
     "providerViewProjection": {
@@ -3830,10 +3764,7 @@
       "default": "Par défaut",
       "defaultSubtitle": "{{subtitle}} · Par défaut",
       "issues": "Tickets",
-      "list": "Liste",
-      "noGrouping": "Aucun regroupement",
       "openState": "Ouvert",
-      "priority": "Priorité",
       "projects": "Projets",
       "pullRequests": "PRs",
       "teams_many": "{{count}} équipes",
@@ -3846,7 +3777,6 @@
       "unassigned": "Non assigné"
     },
     "screenChrome": {
-      "connectLinear": "Connecter Linear",
       "newGitHubIssue": "Nouveau ticket GitHub",
       "newLinearIssue": "Nouveau ticket Linear",
       "refreshGitHub": "Actualiser le travail GitHub",

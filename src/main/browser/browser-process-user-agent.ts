@@ -4,6 +4,8 @@ import type { BrowserUserAgentMode } from '../../shared/browser-user-agent-mode'
 export type BrowserProcessUserAgentIdentity = Readonly<{
   mode: BrowserUserAgentMode
   userAgent: string
+  /** Electron's own UA before cleaning; Google sign-in rejects any identity claiming another browser. */
+  electronUserAgent: string
 }>
 
 let identity: BrowserProcessUserAgentIdentity | null = null
@@ -31,10 +33,11 @@ export function initializeBrowserProcessUserAgent(
   if (app.isReady()) {
     throw new Error('Browser process user agent must be initialized before Electron readiness')
   }
+  const electronUserAgent = app.userAgentFallback
   if (mode === 'clean') {
-    app.userAgentFallback = cleanElectronUserAgent(app.userAgentFallback)
+    app.userAgentFallback = cleanElectronUserAgent(electronUserAgent)
   }
-  identity = Object.freeze({ mode, userAgent: app.userAgentFallback })
+  identity = Object.freeze({ mode, userAgent: app.userAgentFallback, electronUserAgent })
   return identity
 }
 
