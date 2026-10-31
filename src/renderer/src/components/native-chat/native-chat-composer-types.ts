@@ -1,3 +1,4 @@
+import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
 import type { CaptureStructuredAgentSessionPresentation } from './use-structured-agent-session-mutate'
 import type { StructuredAgentSessionSendRequest } from './structured-agent-session-send-slot'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
@@ -152,6 +153,7 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  insertAgentReferences: (references: OrchestrationAgentReference[]) => boolean
   isComposing?: () => boolean
   focus: () => boolean
   insertTypedText: (text: string) => boolean

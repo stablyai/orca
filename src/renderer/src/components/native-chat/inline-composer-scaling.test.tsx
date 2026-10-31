@@ -176,6 +176,7 @@ it.each([20, 200])(
     const handle: NativeChatComposerHandle = {
       focus: () => true,
       insertTypedText: () => true,
+      insertAgentReferences: () => false,
       acceptsText: () => true,
       appendText: () => {},
       handlePasteEvent: () => {},
@@ -270,6 +271,7 @@ it.each([20, 200])(
     const handle: NativeChatComposerHandle = {
       focus: () => true,
       insertTypedText: inserted,
+      insertAgentReferences: () => false,
       acceptsText: () => true,
       appendText: () => {},
       handlePasteEvent: () => {},

@@ -1,3 +1,4 @@
+import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import { useCallback, useMemo, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { applyPickerSuggestion } from '../../../../shared/native-chat/input/native-chat-picker-triggers'
@@ -17,10 +18,7 @@ import {
   structuredAgentSessionGoalObjective
 } from '../../../../shared/structured-agent-session-composer'
 
-import {
-  admitNativeChatPastedText,
-  resolveNativeChatPastedText
-} from './native-chat-composer-pasted-text-references'
+import { admitNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 
 const GOAL_COMMAND = 'goal'
 
@@ -81,8 +79,9 @@ export function useNativeChatComposerSubmit(args: {
 
   // Clear only the submitted draft after host acceptance; the goal controller refuses concurrent submissions.
   const setGoal = useCallback(() => {
+    const submitted = readNativeChatComposerDraft(draftScopeKey)
     const objective = structuredAgentSessionGoalObjective(
-      resolveNativeChatPastedText(draftScopeKey, draft)
+      serializeNativeChatAgentReferences(draft, submitted.document, submitted.pastedTextFiles)
     )
     if (!threadGoal || !structuredTransport || objective === '') {
       return
@@ -98,7 +97,6 @@ export function useNativeChatComposerSubmit(args: {
     }
     structuredTransport.onSubmitted?.()
     const isCurrent = structuredTransport.capturePresentation()
-    const submitted = readNativeChatComposerDraft(draftScopeKey)
     void threadGoal.setObjective(objective).then((accepted) => {
       if (!accepted) {
         return

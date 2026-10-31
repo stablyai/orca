@@ -1,20 +1,15 @@
-import { focusPanePreservingOverlays } from './pane-overlay-focus'
 import type {
   PaneManagerOptions,
   PaneStyleOptions,
   ManagedPane,
   ManagedPaneInternal,
   PaneRenderingDiagnostics,
-  DropZone
+  DropZone,
+  PaneActivationOptions
 } from './pane-manager-types'
 import type { SplitPaneAroundLeafIdsOptions } from './pane-subtree-split'
 import type { PaneManagerHost } from './pane-manager-host'
-import {
-  applyDividerStyles,
-  applyPaneOpacity,
-  applyRootBackground,
-  disposeDividersIn
-} from './pane-divider'
+import { disposeDividersIn } from './pane-divider'
 import { cancelActivePaneDrag, createDragReorderState, handlePaneDrop } from './pane-drag-reorder'
 import { beginPaneDragFromPointerDown } from './pane-drag-pointer'
 import { setLigaturesEnabled, disposePane } from './pane-lifecycle'
@@ -46,6 +41,8 @@ import {
   splitPaneOnManager
 } from './pane-manager-tree-mutations'
 import {
+  activateManagedPane,
+  applyManagedPaneStyles,
   createInitialManagedPane,
   createManagedPaneInternal,
   publishManagedPaneCreated
@@ -223,29 +220,17 @@ export class PaneManager {
     return this.identities.adoptPaneLeafId(numericPaneId, pane, leafId)
   }
 
-  setActivePane(paneId: number, opts?: { focus?: boolean }): void {
+  setActivePane(paneId: number, opts?: PaneActivationOptions): void {
     const pane = this.panes.get(paneId)
     if (!pane) {
       return
     }
-    const changed = this.activePaneId !== paneId
-    this.activePaneId = paneId
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
-
-    if (opts?.focus !== false) {
-      focusPanePreservingOverlays(pane)
-    }
-
-    if (changed) {
-      this.options.onActivePaneChange?.(toPublicPane(pane))
-    }
+    activateManagedPane(this.host, pane, opts)
   }
 
   setPaneStyleOptions(opts: PaneStyleOptions): void {
     this.styleOptions = { ...opts }
-    applyPaneOpacity(this.panes.values(), this.activePaneId, this.styleOptions)
-    applyDividerStyles(this.root, this.styleOptions)
-    applyRootBackground(this.root, this.styleOptions)
+    applyManagedPaneStyles(this.host)
   }
 
   private withPane<T>(paneId: number, apply: (pane: ManagedPaneInternal) => T): T | undefined {

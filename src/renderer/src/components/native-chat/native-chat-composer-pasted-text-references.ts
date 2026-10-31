@@ -26,27 +26,87 @@ export function nativeChatPastedTextState(scope: string, token: string): string 
 
 /** Only completed paths need boundaries; copied source bytes remain literal. */
 export function resolveNativeChatPastedText(scope: string, text: string, copy = false): string {
-  let resolved = ''
+  return projectPastedText([text], (token) => nativeChatPastedTextState(scope, token), copy).join(
+    ''
+  )
+}
+
+/** Capture completed file facts with the submitted document, before any send body is built. */
+export function projectNativeChatPastedText(
+  text: string,
+  files: Readonly<Record<string, string>> = {}
+): string {
+  return projectNativeChatPastedTextParts([text], files).join('')
+}
+
+/** Opaque inline parts start nonspace; their tail preserves the existing whitespace edge. */
+export type PastedTextPart<T> = string | { opaque: T; tail: string }
+
+export function projectNativeChatPastedTextParts<T>(
+  parts: readonly PastedTextPart<T>[],
+  files: Readonly<Record<string, string>> = {}
+): PastedTextPart<T>[] {
+  return projectPastedText(parts, (token) => files[nativeChatPastedTextId(token) ?? ''] ?? null)
+}
+
+function projectPastedText<T>(
+  parts: readonly PastedTextPart<T>[],
+  stateOf: (token: string) => string | null,
+  copy = false
+): PastedTextPart<T>[] {
+  const resolved: PastedTextPart<T>[] = []
+  let ordinary: string[] = []
+  let projected: string[] = []
   let pathBefore = false
-  text.split(NATIVE_CHAT_PASTED_TEXT_TOKEN).forEach((part, index) => {
-    const state = index % 2 === 1 ? nativeChatPastedTextState(scope, part) : null
-    const path = state !== null && state !== 'saving' && state !== 'unsaved'
-    const piece = path
-      ? formatNativeChatFileReference(state)
-      : !copy || state === null
-        ? part
-        : state === 'saving'
-          ? (operations.get(nativeChatPastedTextId(part) ?? '')?.text ?? '')
-          : translate('components.native-chat.composer.pasteNotSavedLabel', 'Paste not saved')
-    if (!piece) {
-      return
+  let nonspaceBefore = false
+  const flushProjected = () => {
+    if (projected.length) {
+      resolved.push(projected.join(''))
+      projected = []
     }
-    if ((path || pathBefore) && /\S$/.test(resolved) && /^\S/.test(piece)) {
-      resolved += ' '
+  }
+  const flushOrdinary = () => {
+    ordinary
+      .join('')
+      .split(NATIVE_CHAT_PASTED_TEXT_TOKEN)
+      .forEach((part, index) => {
+        const state = index % 2 === 1 ? stateOf(part) : null
+        const path = state !== null && state !== 'saving' && state !== 'unsaved'
+        const piece = path
+          ? formatNativeChatFileReference(state)
+          : !copy || state === null
+            ? part
+            : state === 'saving'
+              ? (operations.get(nativeChatPastedTextId(part) ?? '')?.text ?? '')
+              : translate('components.native-chat.composer.pasteNotSavedLabel', 'Paste not saved')
+        if (!piece) {
+          return
+        }
+        if ((path || pathBefore) && nonspaceBefore && /^\S/.test(piece)) {
+          projected.push(' ')
+        }
+        projected.push(piece)
+        nonspaceBefore = /\S$/.test(piece)
+        pathBefore = path
+      })
+    ordinary = []
+  }
+  for (const part of parts) {
+    if (typeof part === 'string') {
+      ordinary.push(part)
+    } else {
+      flushOrdinary()
+      if (pathBefore && nonspaceBefore) {
+        projected.push(' ')
+      }
+      flushProjected()
+      resolved.push(part)
+      nonspaceBefore = part.tail.length === 0
+      pathBefore = false
     }
-    resolved += piece
-    pathBefore = path
-  })
+  }
+  flushOrdinary()
+  flushProjected()
   return resolved
 }
 

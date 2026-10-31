@@ -147,7 +147,7 @@ it('ends only the native menu lifetime on hide, retaining disclosure and the sub
   const view = render(content(true))
   await user.click(screen.getByRole('button', { name: 'Show crew: 1 workers' }))
   const panel = screen.getByRole('complementary', { name: 'Agent crew' })
-  const disclosure = screen.getByRole('button', { name: /Worker Check the result/ })
+  const disclosure = screen.getByRole('button', { name: "Show Worker's task and latest message" })
   await user.click(disclosure)
   const composer = screen.getByRole('textbox', { name: 'Message' })
   await user.type(composer, 'Keep this draft')

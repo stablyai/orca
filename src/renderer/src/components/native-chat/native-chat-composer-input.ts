@@ -1,3 +1,4 @@
+import type { OrchestrationAgentReference } from '../../../../shared/orchestration-agent-reference'
 import type { HTMLAttributes, RefObject } from 'react'
 
 /** Text coordinates keep transport, attachments, and picker logic independent of the editor. */
@@ -11,6 +12,7 @@ export type NativeChatComposerInput = Pick<
   | 'select'
   | 'setSelectionRange'
 > & {
+  insertAgentReferences?: (references: OrchestrationAgentReference[]) => void
   contains?: (node: Node | null) => boolean
   insertText?: (text: string) => void
   insertSkill?: (from: number, to: number, token: string, path?: string) => void

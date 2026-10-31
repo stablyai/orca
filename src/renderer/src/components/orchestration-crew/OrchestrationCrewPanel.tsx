@@ -37,9 +37,20 @@ function IconButton({
   )
 }
 
+function runningWorker(row: OrchestrationCrewRow): boolean {
+  return Boolean(
+    row.sendAddress &&
+    row.task &&
+    !['completed', 'failed'].includes(row.task.state) &&
+    (row.task.state === 'dispatched' || ['working', 'waiting', 'blocked'].includes(row.status))
+  )
+}
+
 type PanelProps = {
   target: RuntimeClientTarget
   party: string
+  canMention: boolean
+  mention: (rows: OrchestrationCrewRow[]) => void
   isVisible?: boolean
 }
 export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | null {
@@ -49,6 +60,8 @@ export function OrchestrationCrewPanel(props: PanelProps): React.JSX.Element | n
 
 export function CrewPanelContent({
   target,
+  canMention,
+  mention,
   snapshot,
   isVisible = true
 }: PanelProps & { snapshot: OrchestrationCrewSnapshot }): React.JSX.Element | null {
@@ -159,9 +172,20 @@ export function CrewPanelContent({
             {sections.map(([key, title, rows]) =>
               rows.length > 0 ? (
                 <section key={key} aria-label={title}>
-                  <div className="flex items-center gap-1.5 px-3 pb-1 pt-3 text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
-                    <span>{title}</span>
-                    <span>{rows.length}</span>
+                  <div className="flex items-center gap-1.5 px-3 pb-1 pt-3 text-2xs font-semibold text-muted-foreground">
+                    <span className="uppercase tracking-wider">{title}</span>
+                    <span className="tracking-wider">{rows.length}</span>
+                    {key === 'Managing' ? (
+                      <Button
+                        variant="ghost"
+                        size="xs"
+                        className="ml-auto"
+                        disabled={!canMention || !rows.some(runningWorker)}
+                        onClick={() => mention(rows.filter(runningWorker))}
+                      >
+                        {translate('components.orchestrationCrew.mentionAll', 'Mention all')}
+                      </Button>
+                    ) : null}
                   </div>
                   {rows.map((row) => (
                     <CrewRowView
@@ -169,6 +193,8 @@ export function CrewPanelContent({
                       row={row}
                       target={target}
                       isVisible={isVisible}
+                      canMention={canMention}
+                      mention={() => mention([row])}
                     />
                   ))}
                 </section>
@@ -227,10 +253,14 @@ export function CrewPanelContent({
 function CrewRowView({
   row,
   target,
+  canMention,
+  mention,
   isVisible
 }: {
   row: OrchestrationCrewRow
   target: RuntimeClientTarget
+  canMention: boolean
+  mention: () => void
   isVisible: boolean
 }) {
   const [disclosure, setDisclosure] = useState<{ question?: string; expanded: boolean }>()
@@ -249,8 +279,9 @@ function CrewRowView({
           variant="ghost"
           size="xs"
           className="h-auto min-w-0 flex-1 justify-start text-left"
-          aria-expanded={expanded}
-          onClick={() => setDisclosure({ question, expanded: !expanded })}
+          disabled={!canMention || !row.sendAddress}
+          onPointerDown={(event) => event.preventDefault()}
+          onClick={mention}
         >
           <CrewAgentAvatar row={row} target={target} tooltip />
           <span className="min-w-0 flex-1">
@@ -282,7 +313,9 @@ function CrewRowView({
             >
               <ExternalLink />
             </IconButton>
-            {isVisible ? <CrewRowMenu row={row} open={open} /> : null}
+            {isVisible ? (
+              <CrewRowMenu row={row} open={open} canMention={canMention} mention={mention} />
+            ) : null}
             <IconButton
               label={translate(
                 'components.orchestrationCrew.showDetails',

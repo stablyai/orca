@@ -1,7 +1,60 @@
 import { Badge } from '@/components/ui/badge'
 import { translate } from '@/i18n/i18n'
+import { AgentIcon, getAgentLabel } from '@/lib/agent-catalog'
+import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
+import { isAgentStatusState } from '../../../../shared/agent-status-types'
+import { mapAgentStatusStateToVisualStatus } from '@/lib/agent-status'
+import StatusIndicator from '../sidebar/StatusIndicator'
+import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 
+export function CrewRowAvatar({
+  row,
+  tooltip = false
+}: {
+  row: OrchestrationCrewRow
+  tooltip?: boolean
+}) {
+  const agent = isTuiAgent(row.agentKind) ? row.agentKind : null
+  const label = agent ? getAgentLabel(agent) : formatAgentTypeLabel(row.agentKind)
+  const description = row.hostLabel ? `${label} · ${row.hostLabel}` : label
+  const icon = (
+    <span
+      aria-hidden={tooltip ? undefined : true}
+      role={tooltip ? 'img' : undefined}
+      aria-label={tooltip ? description : undefined}
+      className="inline-flex size-6 shrink-0 items-center justify-center rounded-full border border-border bg-muted text-muted-foreground"
+    >
+      <AgentIcon agent={agent} />
+    </span>
+  )
+  return tooltip ? (
+    <Tooltip>
+      <TooltipTrigger asChild>{icon}</TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {description}
+      </TooltipContent>
+    </Tooltip>
+  ) : (
+    icon
+  )
+}
+export function CrewRowStatusDot({ row }: { row: OrchestrationCrewRow }) {
+  return (
+    <StatusIndicator
+      aria-label={row.status}
+      showTooltip={false}
+      status={
+        row.pendingQuestion
+          ? 'permission'
+          : isAgentStatusState(row.status)
+            ? mapAgentStatusStateToVisualStatus(row.status)
+            : 'inactive'
+      }
+    />
+  )
+}
 export function CrewRowTime({ at }: { at?: string }) {
   if (!at) {
     return null

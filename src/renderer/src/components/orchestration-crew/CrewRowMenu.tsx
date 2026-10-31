@@ -11,7 +11,17 @@ import { translate } from '@/i18n/i18n'
 import type { OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { useCrewMenuFocus } from './use-crew-menu-focus'
 
-export function CrewRowMenu({ row, open }: { row: OrchestrationCrewRow; open: () => void }) {
+export function CrewRowMenu({
+  row,
+  open,
+  canMention,
+  mention
+}: {
+  row: OrchestrationCrewRow
+  open: () => void
+  canMention: boolean
+  mention: () => void
+}) {
   const menu = useCrewMenuFocus()
   return (
     <DropdownMenu modal={false} open={menu.open} onOpenChange={menu.onOpenChange}>
@@ -33,6 +43,9 @@ export function CrewRowMenu({ row, open }: { row: OrchestrationCrewRow; open: ()
         onPointerDownOutside={menu.onPointerDownOutside}
         onCloseAutoFocus={menu.onCloseAutoFocus}
       >
+        <DropdownMenuItem disabled={!canMention || !row.sendAddress} onSelect={mention}>
+          {translate('components.orchestrationCrew.mentionInMessage', 'Mention in message')}
+        </DropdownMenuItem>
         <DropdownMenuItem onSelect={open}>
           {translate('components.orchestrationCrew.openChat', 'Open its chat')}
         </DropdownMenuItem>

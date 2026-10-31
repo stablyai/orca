@@ -34,14 +34,26 @@ export const keyboardPanes = defineFixture({
           Terminal destination A
           <input aria-label="Terminal destination A" />
         </label>
-        <CrewPanelContent target={{ kind: 'local' }} party="term_a" snapshot={snapshot('Alpha')} />
+        <CrewPanelContent
+          target={{ kind: 'local' }}
+          party="term_a"
+          canMention={false}
+          mention={() => {}}
+          snapshot={snapshot('Alpha')}
+        />
       </div>
       <div data-native-chat-root className="relative overflow-hidden" data-testid="crew-pane-b">
         <label>
           Native destination B
           <input aria-label="Native destination B" />
         </label>
-        <CrewPanelContent target={{ kind: 'local' }} party="term_b" snapshot={snapshot('Beta')} />
+        <CrewPanelContent
+          target={{ kind: 'local' }}
+          party="term_b"
+          canMention={false}
+          mention={() => {}}
+          snapshot={snapshot('Beta')}
+        />
       </div>
     </div>
   )

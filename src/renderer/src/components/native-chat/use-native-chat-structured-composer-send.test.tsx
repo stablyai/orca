@@ -8,7 +8,7 @@ import {
   nativeChatComposerDraftWritesSettled,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
+import { act, cleanup, fireEvent, render, renderHook, screen } from '@testing-library/react'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
@@ -334,7 +334,9 @@ import {
 import { useNativeChatDraft } from './use-native-chat-draft'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
-import { promptSkillRefs } from './native-chat-prompt-document'
+import { promptSkillRefs, promptText } from './native-chat-prompt-document'
+import { mountNativeChatQueuedEditLifetime } from './native-chat-queued-edit-lifetime.test-fixture'
+import type { NativeChatComposerInput } from './native-chat-composer-input'
 
 describe('complete handback acceptance', () => {
   const scope = 'agent-session:rich-return'
@@ -442,6 +444,103 @@ describe('complete handback acceptance', () => {
       }
     }
   }
+
+  it('keeps agent-offset handback after queued-edit lifetime cleanup, obsolete Goal acceptance and editor remount/next Send', async () => {
+    const fixture = acceptanceFixture()
+    const submitted = '/goal @Worker (Orca agent term_worker) ship'
+    updateNativeChatComposerDraft(
+      scope,
+      {
+        text: submitted,
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: '/goal ' },
+                {
+                  type: 'nativeChatAgentReference',
+                  attrs: { label: 'Worker', address: 'term_worker', hostKey: 'local' }
+                },
+                { type: 'text', text: ' ship' }
+              ]
+            }
+          ]
+        }
+      },
+      'immediate'
+    )
+    const hook = fixture.mount()
+    let pending: Promise<void> | undefined
+    act(() => {
+      pending = hook.result.current.send(submitted, [])
+    })
+    const draft = createNativeChatQueuedEditDraft(
+      {
+        kind: 'message',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'queued' }]
+      },
+      scope
+    )
+    updateNativeChatComposerDraft(
+      draft.scopeKey,
+      {
+        text: 'later',
+        document: {
+          type: 'doc',
+          content: [{ type: 'paragraph', content: [{ type: 'text', text: 'later' }] }]
+        }
+      },
+      'immediate'
+    )
+    const { lifetime, edit, close, active } = mountNativeChatQueuedEditLifetime(draft, scope)
+    // The actual effect cleanup returns dirty work; explicit Cancel would discard it.
+    act(() => lifetime.unmount())
+    expect(close).toHaveBeenCalledWith(edit)
+    expect(active.current).toBeNull()
+    expect(readNativeChatComposerDraft(scope).text).toBe(`${submitted}\n\nlater`)
+    fixture.depart()
+    hook.unmount()
+    await act(async () => {
+      fixture.goal.resolve(true)
+      await pending
+    })
+    expect(readNativeChatComposerDraft(scope).text).toBe('\n\nlater')
+    expect(fixture.caret).not.toHaveBeenCalled()
+    expect(fixture.transport.send).not.toHaveBeenCalled()
+    fixture.arrive()
+    const inputRef = createRef<NativeChatComposerInput>()
+    function Reopened() {
+      const next = fixture.useSend(scope)
+      return (
+        <>
+          <NativeChatPromptEditor
+            scopeKey={scope}
+            inputRef={inputRef}
+            initialValue={next.draft}
+            disabled={false}
+            placeholder="Returned agent draft"
+            onChange={(input) => next.setDraft(input.value)}
+            onSelect={() => {}}
+          />
+          <button onClick={() => void next.send(next.draft, [])}>Send returned work</button>
+        </>
+      )
+    }
+    render(<Reopened />)
+    const editor = promptEditor(screen.getByRole('textbox'))
+    expect(promptText(editor.state.doc)).toBe('\n\nlater')
+    act(() => {
+      editor.commands.insertContentAt(editor.state.doc.content.size - 1, ' edited')
+    })
+    expect(inputRef.current?.value).toBe('\n\nlater edited')
+    fireEvent.click(screen.getByRole('button', { name: 'Send returned work' }))
+    await vi.waitFor(() =>
+      expect(fixture.transport.send).toHaveBeenCalledExactlyOnceWith('\n\nlater edited', [])
+    )
+  })
 
   it.each(['current', 'obsolete'] as const)(
     'retains accepted handback node identity through %s presentation and the next actual Send',

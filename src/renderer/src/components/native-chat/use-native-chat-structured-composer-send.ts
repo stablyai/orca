@@ -1,3 +1,4 @@
+import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { formatAgentTypeLabel } from '../../../../shared/agent-type-label'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
@@ -30,7 +31,7 @@ import {
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
 import {
   admitNativeChatPastedText,
-  resolveNativeChatPastedText
+  projectNativeChatPastedText
 } from './native-chat-composer-pasted-text-references'
 
 export type UseNativeChatStructuredComposerSendArgs = {
@@ -82,7 +83,9 @@ export function useNativeChatStructuredComposerSend({
       if (!admitNativeChatPastedText(draftScopeKey, text, structuredTransport.onError)) {
         return
       }
-      text = resolveNativeChatPastedText(draftScopeKey, text)
+      const submitted = readNativeChatComposerDraft(draftScopeKey)
+      const submittedText = text
+      text = projectNativeChatPastedText(text, submitted.pastedTextFiles)
       const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
@@ -111,7 +114,16 @@ export function useNativeChatStructuredComposerSend({
         structuredTransport.onSubmitted?.()
       }
       const isCurrent = structuredTransport.capturePresentation()
-      const submitted = readNativeChatComposerDraft(draftScopeKey)
+      if (
+        !hostCommand ||
+        (structuredTransport.threadGoal && isStructuredAgentSessionGoalCommand(text))
+      ) {
+        text = serializeNativeChatAgentReferences(
+          submittedText,
+          submitted.document,
+          submitted.pastedTextFiles
+        )
+      }
       let completeAddition = false
       const stopObservingAppend = subscribeToNativeChatComposerDraftAppend(
         draftScopeKey,
