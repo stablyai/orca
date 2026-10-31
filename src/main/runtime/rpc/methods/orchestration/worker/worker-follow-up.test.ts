@@ -7,7 +7,7 @@ import {
   getFollowUpDispatch,
   readWorkerResumeSession
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
-import { captureMovedWorkerResumeSessions } from './worker-resume-session-capture'
+import { watchMovedWorkerResumeSessions } from './worker-resume-session-capture'
 import {
   continueAllUnreadWorkerMail,
   continueUnreadWorkerMail
@@ -289,10 +289,27 @@ describe('a follow-up to a finished terminal worker', () => {
       observedAt: 1
     })
 
-    captureMovedWorkerResumeSessions(h.runtime, h.db, [{ paneKey: h.workerPaneKey }])
+    watchMovedWorkerResumeSessions(
+      h.runtime,
+      () => h.db
+    )([{ paneKey: h.workerPaneKey, sessionId: 'after-clear' }])
 
     expect(
       readWorkerResumeSession(h.db.getWorkerTerminalResourceByOwner(dispatchId))
     ).toMatchObject({ agent: 'claude', providerSession: { id: 'after-clear' } })
+  })
+
+  it('saves nothing again when a status change repeats the same conversations', async () => {
+    h.setup()
+    await h.startSettledWorker()
+    const read = vi.mocked(h.runtime.getExactWorkerProviderSession)
+    const notify = watchMovedWorkerResumeSessions(h.runtime, () => h.db)
+    const sessions = [{ paneKey: h.workerPaneKey, sessionId: 'after-clear' }]
+
+    notify(sessions)
+    read.mockClear()
+    notify(sessions)
+
+    expect(read).not.toHaveBeenCalled()
   })
 })

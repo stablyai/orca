@@ -1,4 +1,4 @@
-import { captureMovedWorkerResumeSessions } from './rpc/methods/orchestration/worker/worker-resume-session-capture'
+import { watchMovedWorkerResumeSessions } from './rpc/methods/orchestration/worker/worker-resume-session-capture'
 import { AgentTransitionDetector } from '../agent-hooks/agent-transition-detector'
 import type { ConnectorCloud } from '../connector-cloud/connector-cloud'
 import type { ExternalConversationSeam } from '../external-conversations/external-conversation-seam'
@@ -84,9 +84,13 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithMig
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
     this.agentTransitions.subscribe((change) => this.terminalWorkerTurnStops.observe(change))
     this.agentTransitions.subscribe((change) => this.workerAutoReleaseActivity.observePane(change))
+    const saveMovedWorkerSessions = watchMovedWorkerResumeSessions(
+      this,
+      () => this._orchestrationDb
+    )
     this.subscribeAgentProviderSessionChangesFn?.((sessions) => {
       try {
-        captureMovedWorkerResumeSessions(this, this._orchestrationDb, sessions)
+        saveMovedWorkerSessions(sessions)
       } catch (error) {
         console.warn('[orchestration] a worker conversation change was not saved', error)
       }
