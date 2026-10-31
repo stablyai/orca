@@ -9,6 +9,7 @@ import {
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { ActivityThreadListToolbar } from './activity-thread-list-toolbar'
+import { useActivityProjectLabels } from './use-activity-project-labels'
 import {
   getActiveStickyHeaderIndex,
   getActiveStickyHeaderIndexForScroll,
@@ -119,6 +120,7 @@ export function ActivityThreadListPane({
   /** Optional view-local scroll memory; updated without triggering React renders. */
   scrollTopRef?: React.MutableRefObject<number>
 }): React.JSX.Element {
+  const projectLabelsByRepoId = useActivityProjectLabels()
   const [internalCollapsedGroupKeys, setInternalCollapsedGroupKeys] = useState<Set<string>>(
     () => new Set()
   )
@@ -362,6 +364,7 @@ export function ActivityThreadListPane({
                 >
                   <ActivityThreadVirtualRow
                     item={item}
+                    projectLabelsByRepoId={projectLabelsByRepoId}
                     collapsed={
                       item.type === 'header' && effectiveCollapsedGroupKeys.has(item.group.key)
                     }

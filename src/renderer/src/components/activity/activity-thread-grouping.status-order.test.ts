@@ -4,7 +4,8 @@ import type { AgentTurnOutcome } from '../../../../shared/agent-turn-outcome'
 import {
   buildActivityThreadGroups,
   getActivityThreadGroup,
-  activityThreadMatchesSearchQuery
+  activityThreadMatchesSearchQuery,
+  getActivityProjectLabelsByRepoId
 } from './activity-thread-grouping'
 import { activityThreadStatusId, activityThreadRowCopy } from './activity-thread-presentation'
 import type { AgentPaneThread } from './activity-thread-types'
@@ -18,6 +19,12 @@ import {
   PANE_KEY_3,
   makeTab
 } from './ActivityPrototypePage-test-fixtures'
+import {
+  project,
+  projectHostSetups,
+  repo,
+  remoteRepo
+} from '../sidebar/worktree-list-groups-test-fixtures'
 import { buildActivityEvents } from './activity-event-builder'
 import { buildAgentPaneThreads } from './activity-thread-builder'
 import { formatShortTimeAgo } from '@/lib/short-time-ago'
@@ -223,6 +230,24 @@ import { formatShortTimeAgo } from '@/lib/short-time-ago'
       expect(activityThreadMatchesSearchQuery({ thread, searchQuery: 'zzz-no-match' })).toBe(false)
       expect(activityThreadMatchesSearchQuery({ thread, searchQuery: '' })).toBe(true)
     })
+  })
+
+  it('uses the logical project name for local and remote checkouts', () => {
+    const labels = getActivityProjectLabelsByRepoId([repo, remoteRepo], {
+      projects: [project],
+      projectHostSetups
+    })
+    expect(labels.get(repo.id)).toBe('Orca')
+    expect(labels.get(remoteRepo.id)).toBe('Orca')
+  })
+
+  it('uses the registered folder name when no logical project catalog row exists', () => {
+    const folder = { ...repo, id: 'folder-1', kind: 'folder' as const, displayName: 'Client notes' }
+    const labels = getActivityProjectLabelsByRepoId([folder], {
+      projects: [],
+      projectHostSetups: []
+    })
+    expect(labels.get(folder.id)).toBe('Client notes')
   })
 }
 
