@@ -100,7 +100,7 @@ describe('Kitty virtual placement ownership and rendering', () => {
     }
   })
 
-  it('invalidates virtual placement bookkeeping when the pixel budget evicts it', async () => {
+  it('retains virtual placement metadata when the pixel budget evicts its bitmap', async () => {
     const h = createPlaceholderTerminal()
     try {
       await writeKitty(h.terminal, 'a=T,f=100,i=7,U=1,c=2,r=2', PNG)
@@ -109,7 +109,7 @@ describe('Kitty virtual placement ownership and rendering', () => {
       await writeKitty(h.terminal, 'a=T,f=100,i=8,U=1,c=2,r=2', PNG)
       expect(render(h)).toHaveLength(0)
       expect(h.bitmaps[0].close).toHaveBeenCalledOnce()
-      expect(h.kitty._virtualPlacements.has(7)).toBe(false)
+      expect(h.kitty._virtualPlacements.has(7)).toBe(true)
     } finally {
       h.terminal.dispose()
     }
