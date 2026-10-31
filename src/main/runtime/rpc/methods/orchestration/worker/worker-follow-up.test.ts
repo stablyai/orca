@@ -229,6 +229,9 @@ describe('a follow-up to a finished terminal worker', () => {
     for (const marker of ['first', 'second', 'third']) {
       await send(dispatchId, `${marker} ${large}`)
     }
+    // The worker was woken for this mail before it reported, as a live worker is.
+    const held = h.db.getUnreadMessages(`dispatch:${dispatchId}`).map((message) => message.id)
+    h.db.markAsDelivered(held, `dispatch:${dispatchId}`)
     h.settle(taskId, dispatchId, 'succeeded')
 
     continueAllUnreadWorkerMail(h.runtime, h.db)
@@ -237,6 +240,7 @@ describe('a follow-up to a finished terminal worker', () => {
       expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
     )
     const followUp = getFollowUpDispatch(h.db, dispatchId)!
+    expect(h.db.getUndeliveredUnreadMessages(`dispatch:${followUp.id}`)).toHaveLength(2)
     expect(h.db.getTask(followUp.task_id)?.spec).toContain('first ')
     expect(h.db.getTask(followUp.task_id)?.spec).not.toContain('second ')
     expect(
