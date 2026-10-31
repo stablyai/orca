@@ -1,4 +1,9 @@
-import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
+import {
+  beginDesktopNavigation,
+  captureDesktopNavigation,
+  navigateDesktopGroup,
+  openDesktopWorkbench
+} from '@/lib/desktop-navigation-request'
 import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -35,6 +40,7 @@ vi.mock('@/runtime/runtime-layout-client', async (importOriginal) =>
 )
 
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
+import { publishStructuredSessionSummaries } from '@/components/native-chat/structured-session-summary-store'
 
 const mockApi = createStoreCascadesMockApi()
 const forgetLocal = vi.fn().mockResolvedValue({})
@@ -69,6 +75,7 @@ function setup() {
     activeView: 'terminal'
   })
   storeAccess.getState.mockImplementation(store.getState)
+  openDesktopWorkbench(store.getState(), active.id)
   dispose = installActiveWorktreeRemovalSuccessor(store)
   return store
 }
@@ -88,10 +95,17 @@ const resolution = {
 describe('deleting the active workspace', () => {
   it('hands off from a browser-only workspace after returning from Settings', async () => {
     const store = setup()
+    const localActive = { ...active, hostId: 'local' as const }
+    store.setState({
+      worktreesByRepo: { repo1: [localActive, sibling, main] },
+      activeWorkspaceExecutionHostId: 'local'
+    })
+    layoutMain = await drawTabsFromMain(store)
     store.getState().createBrowserTab(active.id, 'https://example.com')
+    await layoutMain.settle()
     store.getState().openSettingsPage()
     store.getState().closeSettingsPage()
-    expect(await forget(store, active)).toEqual({ ok: true })
+    expect(await forget(store, localActive)).toEqual({ ok: true })
     expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
     expect(vi.mocked(activateAndRevealWorktree).mock.calls[0][0]).toBe(sibling.id)
   })
@@ -211,5 +225,158 @@ it.each(['empty-workbench', 'newer-draft', 'user-clear'] as const)(
     expect(vi.mocked(activateAndRevealWorktree).mock.calls.length).toBe(
       input === 'empty-workbench' ? 1 : 0
     )
+  }
+)
+
+import { navigateDesktopTab } from '@/lib/desktop-navigation-request'
+import { makeUnifiedTab, makeTabGroup } from '@/store/slices/store-test-helpers'
+it.each([
+  { path: 'automatic-drop', navigate: true },
+  { path: 'actual-forget', navigate: true },
+  { path: 'automatic-drop', navigate: false },
+  { path: 'actual-forget', navigate: false }
+] as const)(
+  'ordinary same-W navigation before removal preserves successor: %j',
+  async ({ path, navigate }) => {
+    const store = setup()
+    Object.assign(window.api, { ephemeralVm: { listRuntimes: vi.fn().mockResolvedValue([]) } })
+    store.setState({ settings: { ...store.getState().settings!, experimentalThreads: false } })
+    const t = makeUnifiedTab({
+      id: 'nav-target',
+      entityId: 'nav-target',
+      worktreeId: active.id,
+      groupId: 'nav-g',
+      contentType: 'agent-session',
+      executionHostId: 'ssh:host'
+    })
+    const r = { ...t, id: 'before-navigation', entityId: 'before-navigation' }
+    store.setState({
+      unifiedTabsByWorktree: { [active.id]: [r, t] },
+      groupsByWorktree: {
+        [active.id]: [
+          makeTabGroup({
+            id: 'nav-g',
+            worktreeId: active.id,
+            tabOrder: [r.id, t.id],
+            activeTabId: r.id
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [active.id]: 'nav-g' }
+    })
+    if (navigate) {
+      expect(navigateDesktopTab(store.getState(), t.id, { worktreeId: active.id })).toBe(true)
+    }
+    expect(store.getState().activeWorktreeId).toBe(active.id)
+    if (path === 'actual-forget') {
+      expect(await forget(store, active)).toEqual({ ok: true })
+    } else {
+      runAsAutomaticDeselection(() =>
+        store.setState({
+          worktreesByRepo: { repo1: [sibling, main] },
+          activeWorktreeId: null,
+          activeWorkspaceExecutionHostId: null
+        })
+      )
+    }
+    await Promise.resolve()
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[0]).toBe(sibling.id)
+  }
+)
+
+it.each(['already-installed', 'install-while-pending'] as const)(
+  'does not adopt an in-flight compose request from catalog writes: %s',
+  async (installation) => {
+    const store = setup()
+    store.setState({ settings: { ...store.getState().settings!, experimentalThreads: true } })
+    const projects = await import('@/components/threads/thread-projects')
+    const held =
+      Promise.withResolvers<Awaited<ReturnType<typeof projects.eligibleThreadProjects>>>()
+    const spy = vi.spyOn(projects, 'eligibleThreadProjects').mockReturnValue(held.promise)
+    const { openNewThread } = await import('@/components/threads/thread-actions')
+    const pending = openNewThread()
+    const original = captureDesktopNavigation(store.getState())
+    if (installation === 'install-while-pending') {
+      dispose?.()
+      dispose = installActiveWorktreeRemovalSuccessor(store)
+    }
+    store.setState({ worktreesByRepo: { ...store.getState().worktreesByRepo } })
+    runAsAutomaticDeselection(() =>
+      store.setState({
+        worktreesByRepo: { repo1: [sibling, main] },
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null
+      })
+    )
+    await Promise.resolve()
+    expect(activateAndRevealWorktree).not.toHaveBeenCalled()
+    held.resolve([{ key: 'eligible-project', repo: TEST_REPO, worktree: sibling, hostId: 'local' }])
+    await pending
+    expect(store.getState().activeView).toBe('thread-draft')
+    expect(captureDesktopNavigation(store.getState()).id).toBe(original.id)
+    spy.mockRestore()
+  }
+)
+
+it.each(['same-id', 'other-group', 'classified'] as const)(
+  'committed same-workspace navigation wakes the listed origin: %s',
+  async (selection) => {
+    const store = setup()
+    const tab = makeUnifiedTab({
+      id: 'selected',
+      worktreeId: active.id,
+      groupId: 'g',
+      executionHostId: 'ssh:host',
+      ...(selection === 'classified' ? { contentType: 'agent-session' as const } : {})
+    })
+    const other = { ...tab, id: 'other-group', groupId: 'g2' }
+    store.setState({
+      unifiedTabsByWorktree: { [active.id]: [tab, other] },
+      groupsByWorktree: {
+        [active.id]: [
+          makeTabGroup({ id: 'g', worktreeId: active.id, activeTabId: tab.id, tabOrder: [tab.id] }),
+          makeTabGroup({
+            id: 'g2',
+            worktreeId: active.id,
+            activeTabId: other.id,
+            tabOrder: [other.id]
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [active.id]: 'g' }
+    })
+    if (selection === 'classified') {
+      store.setState({ settings: { ...store.getState().settings!, experimentalThreads: true } })
+      publishStructuredSessionSummaries([
+        {
+          tabId: tab.id,
+          tab,
+          summary: {
+            sessionId: tab.entityId,
+            workspaceId: active.id,
+            agent: 'codex',
+            status: 'idle',
+            surface: 'thread',
+            updatedAt: 1
+          }
+        }
+      ])
+    }
+    if (selection !== 'other-group') {
+      navigateDesktopTab(store.getState(), tab.id)
+    } else {
+      navigateDesktopGroup(store.getState(), active.id, 'g2')
+    }
+    runAsAutomaticDeselection(() =>
+      store.setState({
+        worktreesByRepo: { repo1: [sibling, main] },
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null
+      })
+    )
+    await Promise.resolve()
+    expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
   }
 )

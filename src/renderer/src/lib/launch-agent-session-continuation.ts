@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from './desktop-navigation'
 import { toast } from 'sonner'
 import { getAgentLabel } from '@/lib/agent-catalog'
 import { ensureDetectedAgentsForWorktree } from '@/lib/agent-detection-target-inventory'
@@ -103,10 +104,12 @@ export async function launchAgentSessionContinuation({
   launchSource,
   signal
 }: LaunchAgentSessionContinuationArgs): Promise<boolean> {
+  const navigation = beginDesktopNavigation()
   const label = getAgentLabel(agent)
   // Blind PTY writes do not prove prompt delivery; claiming success can hide a lost handoff (#22479).
   let deliveryUnconfirmed = false
   const delivery = {
+    navigation,
     agent,
     worktreeId,
     ...(groupId ? { groupId } : {}),

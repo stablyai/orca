@@ -1,4 +1,4 @@
-import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
+import { beginDesktopNavigation, commitDesktopNavigation } from '@/lib/desktop-navigation-request'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { findPrevLiveNonTaskStackHistoryIndex } from '../worktree-nav-history'
 import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
@@ -41,7 +41,7 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
     githubTaskDrawerWorkItem: null,
     newWorkspaceDraft: null,
     openTaskPage: (data = {}, options = {}) => {
-      beginDesktopNavigation(get())
+      const navigation = beginDesktopNavigation(get())
       if (options.recordTasksInteraction !== false) {
         const wasTasksPreviouslyInteracted = hasFeatureInteraction(
           get().featureInteractions,
@@ -108,12 +108,14 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
       if (detailEntry) {
         get().recordViewVisit(detailEntry)
       }
-      set((state) => ({
-        activeView: 'tasks',
-        previousViewBeforeTasks:
-          state.activeView === 'tasks' ? state.previousViewBeforeTasks : state.activeView,
-        taskPageData: data
-      }))
+      commitDesktopNavigation(navigation, () =>
+        set((state) => ({
+          activeView: 'tasks',
+          previousViewBeforeTasks:
+            state.activeView === 'tasks' ? state.previousViewBeforeTasks : state.activeView,
+          taskPageData: data
+        }))
+      )
       // Warm work-item SWR cache during first render so the page effect joins it (~300–800ms saved).
       const state = get()
       const preferredVisibleTaskProviders = normalizeVisibleTaskProviders(

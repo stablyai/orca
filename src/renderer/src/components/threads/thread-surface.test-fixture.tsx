@@ -1,7 +1,7 @@
 import { workspaceView } from '@/lib/renderer-view'
 import { setThreadTestPage } from './thread-page.test-fixture'
-import { cleanup, screen } from '@testing-library/react'
-import { afterEach, beforeEach, vi } from 'vitest'
+import { act, cleanup, screen } from '@testing-library/react'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
 
@@ -211,3 +211,71 @@ export function replaceMain(next: TabsDrawnFromMain) {
   main = next
 }
 export { W, ordinary, first, second, repo, worktree, classify, Desktop, visibleConversation, main }
+
+export async function pendingPhoneClose(tabId: string, beforeRequest?: () => void) {
+  const { layoutApplyTestTransport } =
+    await import('@/runtime/layout-apply-test-transport.test-fixture')
+  const { isTabClosePending } = await import('@/runtime/layout-owner-pending-tabs')
+  const { registerSessionTabIpcBridge } = await import('@/hooks/ipc-events/session-tab-ipc-bridge')
+  let requestClose: Parameters<typeof window.api.ui.onSessionTabCloseRequest>[0] = () => {}
+  const respond = vi.fn()
+  Object.assign(window.api.ui, {
+    onCloseSessionTab: vi.fn(() => () => {}),
+    onSessionTabCloseRequest: (listener: typeof requestClose) => {
+      requestClose = listener
+      return () => {}
+    },
+    onMoveSessionTab: vi.fn(() => () => {}),
+    respondSessionTabClose: respond
+  })
+  const unsubs: (() => void)[] = []
+  registerSessionTabIpcBridge(unsubs)
+  layoutApplyTestTransport.answerWith('pending')
+  act(() => {
+    beforeRequest?.()
+    requestClose({ requestId: 'retire', worktreeId: W, tabId })
+  })
+  expect(isTabClosePending(tabId)).toBe(true)
+  return async () => {
+    await act(async () => {
+      layoutApplyTestTransport.answerWith('apply')
+      layoutApplyTestTransport.answerPending()
+      await main.settle()
+    })
+    expect(isTabClosePending(tabId)).toBe(false)
+    expect(useAppStore.getState().getTab(tabId)).toBeNull()
+    expect(respond).toHaveBeenCalledExactlyOnceWith({ requestId: 'retire' })
+    unsubs.forEach((fn) => fn())
+  }
+}
+
+export function countRetirementDiscovery(phase: 'capture' | 'settlement' = 'settlement') {
+  const find = Array.prototype.find
+  const counts = { target: 0, otherWorkspace: 0, group: 0 }
+  const spy = vi.spyOn(Array.prototype, 'find').mockImplementation(function (
+    this: unknown[],
+    predicate,
+    thisArg
+  ) {
+    // Charge the selected production phase, excluding frame, render and repair work.
+    const validating = new Error('Retirement discovery counter').stack?.includes(
+      phase === 'capture' ? 'captureDesktopRetirement' : 'hasNewerDesktopSelection'
+    )
+    const targetBucket = this === useAppStore.getState().unifiedTabsByWorktree[W]
+    return find.call(this, (value, index, array) => {
+      if (validating && value && typeof value === 'object') {
+        if ('contentType' in value && 'worktreeId' in value) {
+          if (targetBucket) {
+            counts.target++
+          } else {
+            counts.otherWorkspace++
+          }
+        } else if ('tabOrder' in value) {
+          counts.group++
+        }
+      }
+      return predicate.call(thisArg, value, index, array)
+    })
+  })
+  return { counts, restore: () => spy.mockRestore() }
+}

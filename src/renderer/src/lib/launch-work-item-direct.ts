@@ -49,7 +49,7 @@ import { loadProjectLaunchContext } from '@/lib/agent-detection-target-inventory
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
 export async function launchWorkItemDirect(args: LaunchWorkItemDirectArgs): Promise<boolean> {
   const { item, repoId, openModalFallback, baseBranch, telemetrySource, launchSource } = args
-  const navigation = beginDesktopNavigation()
+  const navigation = args.navigation ?? beginDesktopNavigation()
   let agentArgs = args.agentArgs
   const store = useAppStore.getState()
   const owner = resolveDirectLaunchOwnerRow(store.repos, repoId)

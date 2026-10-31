@@ -1,6 +1,7 @@
 import { effectiveWorkspaceView } from './renderer-view'
 import {
-  captureDesktopNavigation,
+  captureCommittedDesktopNavigation,
+  committedDesktopNavigationId,
   canPresentDesktopNavigation,
   type DesktopNavigationRequest
 } from './desktop-navigation-request'
@@ -150,8 +151,11 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       eligibleRemovalView(state) && state.activePendingCreationId === null
         ? listedActiveRow(state)
         : null
-    return row && !isScoped(row) ? { ...row, navigation: captureDesktopNavigation(state) } : null
+    return row && !isScoped(row)
+      ? { ...row, navigation: captureCommittedDesktopNavigation(state) }
+      : null
   }
+  let observedCommit = committedDesktopNavigationId()
   witness = observe()
   const unsubscribeIntent = subscribeWorktreeDeselectionIntent((scope, entering) => {
     if (!scope || entering) {
@@ -171,7 +175,11 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
     }
   })
   const unsubscribe = store.subscribe((next, prev) => {
+    const committed = committedDesktopNavigationId()
+    const committedChanged = committed !== observedCommit
+    observedCommit = committed
     if (
+      !committedChanged &&
       next.activeWorktreeId === prev.activeWorktreeId &&
       next.activeWorkspaceExecutionHostId === prev.activeWorkspaceExecutionHostId &&
       selectWorktreesByRepo(next) === selectWorktreesByRepo(prev) &&
@@ -185,6 +193,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       (next.activeWorktreeId !== prev.activeWorktreeId ||
         next.activeWorkspaceExecutionHostId !== prev.activeWorkspaceExecutionHostId)
     const navigated =
+      committedChanged ||
       selectionChanged ||
       effectiveWorkspaceView(next) !== effectiveWorkspaceView(prev) ||
       next.activePendingCreationId !== prev.activePendingCreationId
@@ -218,6 +227,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       return
     }
     const removed = witness
+    witness = null
     const scheduled = ++generation
     // Let removal’s synchronous follow-up writes finish before rechecking.
     queueMicrotask(() => {

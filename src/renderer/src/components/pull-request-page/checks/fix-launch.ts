@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { startFixChecksAgent } from '@/lib/fix-checks-agent-launch'
@@ -33,6 +34,7 @@ export async function saveFixChecksActionDefault(
 }
 
 export async function startFixChecksFromDialog(args: {
+  navigation?: DesktopNavigationRequest
   targetRepoId: string | null
   item: GitHubWorkItem
   agent: Parameters<typeof launchWorkItemDirect>[0]['agentOverride']
@@ -48,6 +50,7 @@ export async function startFixChecksFromDialog(args: {
     return false
   }
   return await launchWorkItemDirect({
+    navigation: args.navigation,
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
     launchSource: 'task_page',

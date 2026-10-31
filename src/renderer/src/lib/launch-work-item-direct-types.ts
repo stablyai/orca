@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation'
 import type { AgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
 import type { LinkedWorkItemContext } from '@/lib/linked-work-item-context'
 import type { TaskProvider } from '../../../shared/task-providers'
@@ -24,6 +25,7 @@ export type LaunchableWorkItem = {
 }
 
 export type LaunchWorkItemDirectArgs = {
+  navigation?: DesktopNavigationRequest
   item: LaunchableWorkItem
   repoId: string
   openModalFallback: () => void

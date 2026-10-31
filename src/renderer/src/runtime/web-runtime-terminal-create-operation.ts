@@ -75,7 +75,7 @@ export async function createWebRuntimeSessionTerminalResult(
   let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
   if (args.selectWorktree !== false && maySelect()) {
     const previous = readActiveWorkspaceSelection()
-    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
+    selectWebRuntimeSessionWorktree(args.worktreeId, environmentId, args.navigation)
     workspaceSelectionRollback = {
       previous,
       applied: {

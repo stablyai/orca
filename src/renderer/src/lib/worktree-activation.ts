@@ -1,5 +1,6 @@
 import {
   presentDesktopWorkspace,
+  commitDesktopNavigation,
   beginDesktopNavigation,
   canPresentDesktopNavigation
 } from './desktop-navigation'
@@ -110,16 +111,18 @@ export function activateAndRevealWorktree(
   }
   noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
-  state.setActiveWorktree(
-    worktreeId,
-    opts?.executionHostId,
-    buildActivationStateTransition(state, worktreeId, {
-      repoId: wt.repoId,
-      // Why: Cmd+J focus recency (docs/cmd-j-empty-query-ordering.md); a plain reselect must not restamp it.
-      stampsVisit: !isPlainAlreadyActiveTerminal,
-      nextHostId: opts?.executionHostId ?? null
-    })
-  )
+  commitDesktopNavigation(navigation, () => {
+    state.setActiveWorktree(
+      worktreeId,
+      opts?.executionHostId,
+      buildActivationStateTransition(state, worktreeId, {
+        repoId: wt.repoId,
+        // Why: Cmd+J focus recency (docs/cmd-j-empty-query-ordering.md); a plain reselect must not restamp it.
+        stampsVisit: !isPlainAlreadyActiveTerminal,
+        nextHostId: opts?.executionHostId ?? null
+      })
+    )
+  })
   const postActivationState = useAppStore.getState()
   const ownerRuntimeEnvironmentId =
     opts && 'runtimeEnvironmentId' in opts

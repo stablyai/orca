@@ -10,7 +10,9 @@ const mocks = vi.hoisted(() => {
       activeGroupIdByWorktree,
       groupsByWorktree: {},
       settings: { floatingTerminalEnabled: true },
-      floatingWorkspacePanelOpen: true
+      floatingWorkspacePanelOpen: true,
+      setActiveTabForWorktree: vi.fn(),
+      activateTab: vi.fn()
     },
     launchAgentInNewTab: vi.fn(),
     cancelFocusIntent: vi.fn()
@@ -25,6 +27,7 @@ vi.mock('@/components/native-chat/use-native-chat-composer-reveal-focus', () => 
     cancel: mocks.cancelFocusIntent
   })
 }))
+vi.mock('@/lib/focus-terminal-tab-surface', () => ({ focusTerminalTabSurface: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn(), message: vi.fn() } }))
 
 function pendingDetection(): {
@@ -66,6 +69,15 @@ describe('launchFloatingWorkspaceAgentShortcut while detection is pending', () =
         groupId: 'group-a'
       })
     )
+    expect(mocks.launchAgentInNewTab.mock.calls[0][0]).toMatchObject({
+      navigation: null,
+      activate: false
+    })
+    expect(mocks.state.setActiveTabForWorktree).toHaveBeenCalledWith(
+      FLOATING_TERMINAL_WORKTREE_ID,
+      't'
+    )
+    expect(mocks.state.activateTab).toHaveBeenCalledWith('t')
   })
 
   it('drops the launch when the panel closed before detection settled', async () => {

@@ -14,6 +14,7 @@ export type DesktopNavigationRequest = {
 }
 let sequence = 0
 let experimentalGeneration = 0
+let committedId = 0
 type CommittedSelection = {
   id: number
   worktreeId: string
@@ -28,6 +29,15 @@ export function captureDesktopNavigation(
   state: Pick<AppState, 'activeView'>
 ): DesktopNavigationRequest {
   return { originView: state.activeView, id: latest.id, experimental: true, experimentalGeneration }
+}
+
+/** Only accepted interaction commits may refresh maintenance's listed origin. */
+export function captureCommittedDesktopNavigation(state: Pick<AppState, 'activeView'>) {
+  return { ...captureDesktopNavigation(state), id: committedId }
+}
+
+export function committedDesktopNavigationId(): number {
+  return committedId
 }
 
 /** A verified semantic destination can protect a live slot; a frame fallback cannot. */
@@ -77,12 +87,18 @@ function recordSelection(
 
 export function isExperimentalDesktopNavigation(
   state: AppState,
-  destinationIsExperimental = false
+  destinationIsExperimental = false,
+  selected?: ReturnType<AppState['getActiveTab']>
 ): boolean {
   if (state.settings?.experimentalThreads !== true) {
     return false
   }
-  const selected = state.activeWorktreeId ? state.getActiveTab?.(state.activeWorktreeId) : null
+  selected =
+    selected === undefined
+      ? state.activeWorktreeId
+        ? state.getActiveTab?.(state.activeWorktreeId)
+        : null
+      : selected
   const context = desktopWorkspaceContextView(state)
   return (
     destinationIsExperimental ||
@@ -119,6 +135,8 @@ export function commitDesktopNavigation(
   if (!canPresentDesktopNavigation(request)) {
     return false
   }
+  // Publish with the synchronous destination write, including a same-ID selection.
+  committedId = Math.max(committedId, request.id)
   commit()
   return true
 }

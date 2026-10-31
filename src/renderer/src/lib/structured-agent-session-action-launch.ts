@@ -36,7 +36,11 @@ export function openDeclinedTerminal(
   if (args.onHostDeclined) {
     return args.onHostDeclined(target, activate)
   }
-  const terminal = { ...args.declinedTerminal, ...(activate === false ? { activate } : {}) }
+  const terminal = {
+    ...args.declinedTerminal,
+    navigation: args.navigation,
+    ...(activate === false ? { activate } : {})
+  }
   return openDeclinedStructuredLaunchTerminal({
     plan: args.plan,
     worktreeId,

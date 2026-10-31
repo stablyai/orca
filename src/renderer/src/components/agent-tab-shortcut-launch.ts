@@ -1,3 +1,6 @@
+import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
+import { beginDesktopNavigation, type DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import { toast } from 'sonner'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -15,9 +18,12 @@ import type { TerminalAgentTabShortcut } from './terminal-agent-tab-shortcut'
 function launchAgentTab(
   worktreeId: string,
   agent: TuiAgent,
-  { groupId, focusIntent }: AgentTabLaunchContext
+  { groupId, focusIntent }: AgentTabLaunchContext,
+  navigation: DesktopNavigationRequest | null
 ): void {
   const result = launchAgentInNewTab({
+    navigation,
+    ...(isFloatingWorkspaceId(worktreeId) ? { activate: false } : {}),
     requestId: newAgentLaunchRequestId(),
     focusIntent,
     agent,
@@ -25,6 +31,12 @@ function launchAgentTab(
     groupId,
     launchSource: 'shortcut'
   })
+  if (isFloatingWorkspaceId(worktreeId) && result?.surface.kind === 'local-terminal') {
+    const state = useAppStore.getState()
+    state.setActiveTabForWorktree(worktreeId, result.surface.tabId)
+    state.activateTab(result.surface.tabId)
+    focusTerminalTabSurface(result.surface.tabId)
+  }
   if (!result) {
     toast.error(
       translate(
@@ -42,16 +54,17 @@ export function launchAgentTabShortcut(
   { agent, pendingAgent }: Pick<TerminalAgentTabShortcut, 'agent' | 'pendingAgent'>,
   isTargetCurrent: () => boolean
 ): void {
+  const navigation = isFloatingWorkspaceId(worktreeId) ? null : beginDesktopNavigation()
   const context = captureAgentTabLaunchContext(worktreeId)
   if (agent) {
-    launchAgentTab(worktreeId, agent, context)
+    launchAgentTab(worktreeId, agent, context, navigation)
     return
   }
   void pendingAgent?.then((settledAgent) => {
     // Why: a slow host probe must not open a tab in a pane (or on a host) the user has since left.
     const targetCurrent = isTargetCurrent()
     if (settledAgent && targetCurrent) {
-      launchAgentTab(worktreeId, settledAgent, context)
+      launchAgentTab(worktreeId, settledAgent, context, navigation)
       return
     }
     context.focusIntent.cancel()

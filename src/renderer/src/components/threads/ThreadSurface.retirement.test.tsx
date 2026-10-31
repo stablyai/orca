@@ -9,7 +9,9 @@ import {
   visibleConversation,
   main,
   replaceMain,
-  worktree
+  worktree,
+  pendingPhoneClose,
+  countRetirementDiscovery
 } from '@/components/threads/thread-surface.test-fixture'
 import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-launch-surface'
 import { act, render, renderHook, screen } from '@testing-library/react'
@@ -18,7 +20,7 @@ import { useAppStore } from '@/store'
 import { makeTabGroup, makeWorktree } from '@/store/slices/store-test-helpers'
 import { openNewThread } from '@/components/threads/thread-actions'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { navigateDesktopTab } from '@/lib/desktop-navigation'
+import { navigateDesktopGroup, navigateDesktopTab } from '@/lib/desktop-navigation'
 import { registerTerminalUiRoutingIpcBridge } from '@/hooks/ipc-events/terminal-ui-routing-ipc-bridge'
 import { drawTabsFromMain } from '@/store/slices/tabs-drawn-from-main.test-fixture'
 import { useThreadDraft } from '@/components/threads/thread-navigation'
@@ -367,43 +369,6 @@ it.each(['store', 'direct-shell', 'group-shell'] as const)(
   }
 )
 
-async function pendingPhoneClose(tabId: string, beforeRequest?: () => void) {
-  const { layoutApplyTestTransport } =
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
-  const { isTabClosePending } = await import('@/runtime/layout-owner-pending-tabs')
-  const { registerSessionTabIpcBridge } = await import('@/hooks/ipc-events/session-tab-ipc-bridge')
-  let requestClose: Parameters<typeof window.api.ui.onSessionTabCloseRequest>[0] = () => {}
-  const respond = vi.fn()
-  Object.assign(window.api.ui, {
-    onCloseSessionTab: vi.fn(() => () => {}),
-    onSessionTabCloseRequest: (listener: typeof requestClose) => {
-      requestClose = listener
-      return () => {}
-    },
-    onMoveSessionTab: vi.fn(() => () => {}),
-    respondSessionTabClose: respond
-  })
-  const unsubs: (() => void)[] = []
-  registerSessionTabIpcBridge(unsubs)
-  layoutApplyTestTransport.answerWith('pending')
-  act(() => {
-    beforeRequest?.()
-    requestClose({ requestId: 'retire', worktreeId: W, tabId })
-  })
-  expect(isTabClosePending(tabId)).toBe(true)
-  return async () => {
-    await act(async () => {
-      layoutApplyTestTransport.answerWith('apply')
-      layoutApplyTestTransport.answerPending()
-      await main.settle()
-    })
-    expect(isTabClosePending(tabId)).toBe(false)
-    expect(useAppStore.getState().getTab(tabId)).toBeNull()
-    expect(respond).toHaveBeenCalledExactlyOnceWith({ requestId: 'retire' })
-    unsubs.forEach((fn) => fn())
-  }
-}
-
 it.each(['draft', 'settings', 'tasks', 'empty', 'new-empty-off-settings'] as const)(
   'genuine-empty maintenance and page retirement have distinct scopes: %s',
   async (destination) => {
@@ -599,200 +564,102 @@ it.each([
   }
 )
 
-function countRetirementDiscovery() {
-  const find = Array.prototype.find
-  const counts = { target: 0, otherWorkspace: 0, group: 0 }
-  const spy = vi.spyOn(Array.prototype, 'find').mockImplementation(function (
-    this: unknown[],
-    predicate,
-    thisArg
-  ) {
-    // Charge only the production validator, excluding frame, render and legitimate repair work.
-    const validating = new Error('Retirement discovery counter').stack?.includes(
-      'hasNewerDesktopSelection'
-    )
-    const targetBucket = this === useAppStore.getState().unifiedTabsByWorktree[W]
-    return find.call(this, (value, index, array) => {
-      if (validating && value && typeof value === 'object') {
-        if ('contentType' in value && 'worktreeId' in value) {
-          if (targetBucket) {
-            counts.target++
-          } else {
-            counts.otherWorkspace++
-          }
-        } else if ('tabOrder' in value) {
-          counts.group++
-        }
-      }
-      return predicate.call(thisArg, value, index, array)
-    })
+it.each([false, true])('repairs W1 local MRU while protected other-W empty=%s', async (empty) => {
+  main.close()
+  const W2 = 'repo::/w2'
+  const other = {
+    ...ordinary,
+    id: 'w2-thread',
+    entityId: 'w2-thread',
+    worktreeId: W2,
+    groupId: 'g2'
+  }
+  useAppStore.setState({
+    worktreesByRepo: {
+      repo: [worktree, makeWorktree({ id: W2, repoId: 'repo', path: '/w2', hostId: 'local' })]
+    },
+    unifiedTabsByWorktree: { [W]: [ordinary, first, second], [W2]: [other] },
+    groupsByWorktree: {
+      [W]: [
+        makeTabGroup({
+          id: 'g',
+          worktreeId: W,
+          activeTabId: second.id,
+          tabOrder: [ordinary.id, first.id, second.id],
+          recentTabIds: [ordinary.id, first.id, second.id]
+        })
+      ],
+      [W2]: [
+        makeTabGroup({ id: 'g2', worktreeId: W2, activeTabId: other.id, tabOrder: [other.id] })
+      ]
+    },
+    activeGroupIdByWorktree: { [W]: 'g', [W2]: 'g2' }
   })
-  return { counts, restore: () => spy.mockRestore() }
-}
+  replaceMain(await drawTabsFromMain(useAppStore))
+  render(<Desktop />)
+  const finish = await pendingPhoneClose(second.id)
+  act(() => {
+    if (empty) {
+      classify(other, { workspaceId: W2 })
+    }
+    activateAndRevealWorktree(W2, { executionHostId: 'local', navigationIntent: 'user-open' })
+  })
+  expect(useAppStore.getState().activeWorktreeId).toBe(W2)
+  expect(useAppStore.getState().activeView).toBe(empty ? 'empty-workbench' : 'terminal')
+  await finish()
+  expect(useAppStore.getState().activeWorktreeId).toBe(W2)
+  expect(useAppStore.getState().activeView).toBe(empty ? 'empty-workbench' : 'terminal')
+  expect.soft(useAppStore.getState().getActiveTab(W)?.id).toBe(first.id)
+  act(() =>
+    activateAndRevealWorktree(W, { executionHostId: 'local', navigationIntent: 'user-open' })
+  )
+  expect(visibleConversation()).toEqual([first.entityId])
+})
 
-it.each([20, 200])(
-  'pending retirement discovers one current scoped target at N=%i',
-  async (count) => {
-    for (const thenDraft of [false, true]) {
-      main.close()
-      const fillers = Array.from({ length: count - 2 }, (_, i) => ({
-        ...first,
-        id: `filler-${i}`,
-        entityId: `filler-${i}`
-      }))
-      const tabs = [...fillers, first, second, ordinary]
-      useAppStore.setState({
-        activeView: 'terminal',
-        unifiedTabsByWorktree: { [W]: tabs },
-        groupsByWorktree: {
-          [W]: [
-            makeTabGroup({
-              id: 'g',
-              worktreeId: W,
-              activeTabId: second.id,
-              tabOrder: tabs.map((t) => t.id),
-              recentTabIds: [ordinary.id, first.id, second.id]
-            })
-          ]
-        }
-      })
-      replaceMain(await drawTabsFromMain(useAppStore))
-      useAppStore.setState({
-        unifiedTabsByWorktree: {
-          prefix: fillers.map((t) => ({ ...t, worktreeId: 'prefix' })),
-          ...useAppStore.getState().unifiedTabsByWorktree
-        }
-      })
-      classify(ordinary)
-      const rendered = render(<Desktop />)
-      const finish = await pendingPhoneClose(second.id)
-      act(() => navigateDesktopTab(ordinary.id))
-      if (thenDraft) {
-        await act(async () => openNewThread())
-      }
-      const discovery = countRetirementDiscovery()
-      try {
-        await finish()
-      } finally {
-        discovery.restore()
-      }
-      expect(useAppStore.getState().unifiedTabsByWorktree[W]).toHaveLength(count)
-      expect(useAppStore.getState().getActiveTab(W)?.id).toBe(ordinary.id)
-      if (thenDraft) {
-        expect(screen.getByText(`Draft ${useThreadDraft.getState().draft!.draftId}`)).toBeTruthy()
-      } else {
-        expect(visibleConversation()).toEqual([ordinary.entityId])
-      }
-      console.info('retirement discovery', { count, thenDraft, ...discovery.counts })
-      expect.soft(discovery.counts.target).toBe(count)
-      expect.soft(discovery.counts.otherWorkspace).toBe(0)
-      expect.soft(discovery.counts.group).toBe(1)
-      rendered.unmount()
-    }
+it('repairs a nonfocused group while retaining the focused explicit-empty slot', async () => {
+  main.close()
+  const hidden = {
+    ...ordinary,
+    id: 'other-group-thread',
+    entityId: 'other-group-thread',
+    groupId: 'g2'
   }
-)
-
-it.each([
-  'missing',
-  'moved-workspace',
-  'moved-bucket',
-  'moved-group',
-  'moved-host',
-  'deselected',
-  'missing-group',
-  'other-workspace',
-  'other-group'
-] as const)(
-  'pending retirement revalidates current target after frame/settlement: %s',
-  async (change) => {
-    render(<Desktop />)
-    const finish = await pendingPhoneClose(second.id)
-    act(() => {
-      if (change === 'other-workspace' || change === 'other-group') {
-        const target = {
-          ...ordinary,
-          id: 'elsewhere',
-          worktreeId: change === 'other-workspace' ? 'elsewhere' : W,
-          groupId: 'elsewhere'
-        }
-        useAppStore.setState((s) => ({
-          unifiedTabsByWorktree: {
-            ...s.unifiedTabsByWorktree,
-            [target.worktreeId]: [...(s.unifiedTabsByWorktree[target.worktreeId] ?? []), target]
-          },
-          groupsByWorktree: {
-            ...s.groupsByWorktree,
-            [target.worktreeId]: [
-              ...(s.groupsByWorktree[target.worktreeId] ?? []),
-              makeTabGroup({
-                id: 'elsewhere',
-                worktreeId: target.worktreeId,
-                tabOrder: [target.id]
-              })
-            ]
-          }
-        }))
-        navigateDesktopTab(target.id)
-      } else {
-        navigateDesktopTab(ordinary.id)
-      }
-    })
-    await act(async () => openNewThread())
-    const { afterPendingTab } = await import('@/runtime/layout-owner-pending-tabs')
-    afterPendingTab(second.id, () => {
-      const s = useAppStore.getState()
-      if (change === 'other-workspace' || change === 'other-group') {
-        return
-      }
-      useAppStore.setState({
-        unifiedTabsByWorktree: {
-          ...s.unifiedTabsByWorktree,
-          ...(change === 'moved-bucket'
-            ? { elsewhere: [{ ...ordinary, worktreeId: 'elsewhere' }] }
-            : {}),
-          [W]: s.unifiedTabsByWorktree[W]
-            .filter(
-              (t) => (change !== 'missing' && change !== 'moved-bucket') || t.id !== ordinary.id
-            )
-            .map((t) =>
-              t.id !== ordinary.id
-                ? t
-                : {
-                    ...t,
-                    worktreeId: change === 'moved-workspace' ? 'elsewhere' : t.worktreeId,
-                    groupId: change === 'moved-group' ? 'elsewhere' : t.groupId,
-                    executionHostId: change === 'moved-host' ? 'other-host' : t.executionHostId
-                  }
-            )
-        },
-        groupsByWorktree: {
-          ...s.groupsByWorktree,
-          [W]:
-            change === 'missing-group'
-              ? []
-              : s.groupsByWorktree[W].map((g) => ({
-                  ...g,
-                  activeTabId: change === 'deselected' ? first.id : g.activeTabId
-                }))
-        }
-      })
-    })
-    const discovery = countRetirementDiscovery()
-    try {
-      await finish()
-    } finally {
-      discovery.restore()
+  useAppStore.setState({
+    unifiedTabsByWorktree: { [W]: [ordinary, first, second, hidden] },
+    groupsByWorktree: {
+      [W]: [
+        makeTabGroup({
+          id: 'g',
+          worktreeId: W,
+          activeTabId: second.id,
+          tabOrder: [ordinary.id, first.id, second.id],
+          recentTabIds: [ordinary.id, first.id, second.id]
+        }),
+        makeTabGroup({ id: 'g2', worktreeId: W, activeTabId: hidden.id, tabOrder: [hidden.id] })
+      ]
     }
-    expect(useAppStore.getState().getActiveTab(W)?.id ?? null).toBe(
-      change === 'missing-group' ? null : first.id
-    )
-    expect(screen.getByText(`Draft ${useThreadDraft.getState().draft!.draftId}`)).toBeTruthy()
-    if (change === 'other-workspace' || change === 'other-group') {
-      expect(discovery.counts).toEqual({ target: 0, otherWorkspace: 0, group: 0 })
-    } else {
-      expect(discovery.counts.target).toBeLessThanOrEqual(2)
-      expect(discovery.counts.otherWorkspace).toBe(0)
-      expect(discovery.counts.group).toBeLessThanOrEqual(1)
-    }
-  }
-)
+  })
+  replaceMain(await drawTabsFromMain(useAppStore))
+  render(<Desktop />)
+  act(() => {
+    classify(hidden)
+    navigateDesktopGroup(W, 'g2')
+    activateAndRevealWorktree(W, { executionHostId: 'local', navigationIntent: 'user-open' })
+  })
+  const activePrefix =
+    useAppStore.getState().unifiedTabsByWorktree[W].findIndex((tab) => tab.id === hidden.id) + 1
+  let capture: ReturnType<typeof countRetirementDiscovery> | undefined
+  const finish = await pendingPhoneClose(second.id, () => {
+    capture = countRetirementDiscovery('capture')
+  })
+  capture!.restore()
+  expect(capture!.counts).toEqual({ target: activePrefix, otherWorkspace: 0, group: 3 })
+  expect(useAppStore.getState().activeView).toBe('empty-workbench')
+  await finish()
+  const state = useAppStore.getState()
+  expect(state.groupsByWorktree[W].find((g) => g.id === 'g')?.activeTabId).toBe(first.id)
+  expect(state.activeGroupIdByWorktree[W]).toBe('g2')
+  expect(state.getActiveTab(W)?.id).toBe(hidden.id)
+  expect(state.activeView).toBe('empty-workbench')
+  expect(screen.getByTestId('strip-g2').textContent).toBe('Empty workbench')
+})

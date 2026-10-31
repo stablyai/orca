@@ -55,3 +55,15 @@ export type LaunchAgentInNewTabArgs = LaunchAgentInNewTabRequest & {
   /** Opens instead of this agent's terminal when the host declines its structured chat. */
   onStructuredHostDeclined?: () => StructuredLaunchTerminal
 }
+
+/** What the caller's own terminal launch would have carried beyond the plan's agent and prompt. */
+export type DeclinedStructuredLaunchTerminalOptions = Pick<
+  LaunchAgentInNewTabArgs,
+  | 'navigation'
+  | 'agentArgs'
+  | 'sessionOptionsYieldToAgentArgs'
+  | 'launchPlatform'
+  | 'launchSource'
+  | 'initialCwd'
+  | 'activate'
+>

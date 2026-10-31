@@ -1,5 +1,6 @@
 import {
   presentDesktopWorkspace,
+  commitDesktopNavigation,
   beginDesktopNavigation,
   canPresentDesktopNavigation
 } from './desktop-navigation'
@@ -110,7 +111,9 @@ export function activateAndRevealFolderWorkspace(
   }
 
   const previousActive = readPreviousActive(state)
-  state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
+  commitDesktopNavigation(navigation, () => {
+    state.setActiveFolderWorkspace(folderWorkspaceId, opts?.executionHostId)
+  })
 
   const workspaceKey = folderWorkspaceKey(folderWorkspaceId)
   const providesInitialSurface = activationProvidesInitialSurface(opts)

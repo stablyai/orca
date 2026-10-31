@@ -160,6 +160,7 @@ export function launchAgentInNewTabWithOutcome(
       return null
     }
     const webHostDelivery = launchAgentInWebHostTab({
+      navigation,
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,

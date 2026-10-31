@@ -1,4 +1,9 @@
 import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from '@/lib/desktop-navigation'
+import {
   sourceControlActionRecipeEntry,
   type SelectedSourceControlActionRecipe
 } from '../../../../shared/source-control-action-selection'
@@ -29,6 +34,7 @@ import { projectSelectedSourceControlActionLaunch } from '../../../../shared/sou
 import { admitSourceControlRecovery } from './source-control-recovery-admission'
 
 export type RunSourceControlAgentActionStartArgs = {
+  navigation?: DesktopNavigationRequest
   selectedAgent: TuiAgent
   trimmedCommandInput: string
   /** The picker's choice: a deliberate surface stays explicit, a saved replay requests terminal only. */
@@ -48,6 +54,7 @@ export type RunSourceControlAgentActionStartArgs = {
   recoveryContext?: RuntimeGitContext | null
   signal?: AbortSignal
   onStart?: (args: {
+    navigation: DesktopNavigationRequest
     agentLaunchPreferences?: AgentLaunchPreferences
     agent: TuiAgent
     commandInput: string
@@ -72,6 +79,7 @@ export type RunSourceControlAgentActionStartArgs = {
 }
 
 export async function runSourceControlAgentActionStart({
+  navigation = beginDesktopNavigation(),
   selectedAgent,
   trimmedCommandInput,
   launchChoice,
@@ -179,6 +187,7 @@ export async function runSourceControlAgentActionStart({
   }
   if (onStart) {
     launched = await onStart({
+      navigation,
       agentLaunchPreferences,
       agent: selectedAgent,
       commandInput: trimmedCommandInput,
@@ -191,6 +200,7 @@ export async function runSourceControlAgentActionStart({
     }
   } else if (worktreeId) {
     const result = launchAgentInNewTab({
+      navigation,
       requestId: newAgentLaunchRequestId(),
       agent: selectedAgent,
       worktreeId,
@@ -205,7 +215,7 @@ export async function runSourceControlAgentActionStart({
       launchSource
     })
     launched = Boolean(result)
-    if (result?.surface.kind === 'local-terminal') {
+    if (result?.surface.kind === 'local-terminal' && canPresentDesktopNavigation(navigation)) {
       focusTerminalTabSurface(result.surface.tabId)
     }
     // Park launch state before slow submit-after-ready completes; host writes still wait for delivery.
