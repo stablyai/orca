@@ -81,6 +81,7 @@ const props: ComponentProps<typeof DiffSectionBody> = {
   },
   index: 0,
   sectionBodyHeight: 300,
+  onContentHeightChange: vi.fn(),
   useIntrinsicImageHeight: false,
   isBranchMode: false,
   sideBySide: true,

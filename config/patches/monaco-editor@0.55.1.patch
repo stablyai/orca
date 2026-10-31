@@ -18,3 +18,154 @@ index cbe9bb8e8bb97ca69e1026d2335857ec7ae32a16..86c4f393b76a4d433be297833188058c
          this._domNode.className = 'gutter monaco-editor';
          const scrollDecoration = this._domNode.appendChild(h('div.scroll-decoration', { role: 'presentation', ariaHidden: 'true', style: { width: '100%' } })
              .root);
+diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
+--- a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
++++ b/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js
+@@ -29,6 +29,7 @@
+ import { ILanguageFeaturesService } from '../../../common/services/languageFeatures.js';
+ import { MonospaceLineBreaksComputerFactory } from '../../../common/viewModel/monospaceLineBreaksComputer.js';
+ import { ViewModel } from '../../../common/viewModel/viewModelImpl.js';
++import { ViewEventHandler } from '../../../common/viewEventHandler.js';
+ import { localize } from '../../../../nls.js';
+ import { IAccessibilityService } from '../../../../platform/accessibility/common/accessibility.js';
+ import { ICommandService } from '../../../../platform/commands/common/commands.js';
+@@ -86,6 +87,8 @@
+         //#region Eventing
+         this._deliveryQueue = createEventDeliveryQueue();
+         this._contributions = this._register(new CodeEditorContributions());
++        this._onDidRequestReveal = this._register(new Emitter());
++        this.onDidRequestReveal = this._onDidRequestReveal.event;
+         this._onDidDispose = this._register(new Emitter());
+         this.onDidDispose = this._onDidDispose.event;
+         this._onDidChangeModelContent = this._register(new Emitter({ deliveryQueue: this._deliveryQueue }));
+@@ -716,11 +719,13 @@
+         const contributionsState = this._contributions.saveViewState();
+         const cursorState = this._modelData.viewModel.saveCursorState();
+         const viewState = this._modelData.viewModel.saveState();
+-        return {
++        const state = {
+             cursorState: cursorState,
+             viewState: viewState,
+             contributionsState: contributionsState
+         };
++        this._onDidRequestReveal.fire({ kind: 'save', model: this.getModel(), state });
++        return state;
+     }
+     restoreViewState(s) {
+         if (!this._modelData || !this._modelData.hasRealView) {
+@@ -741,6 +746,7 @@
+             this._contributions.restoreViewState(codeEditorState.contributionsState || {});
+             const reducedState = this._modelData.viewModel.reduceRestoreState(codeEditorState.viewState);
+             this._modelData.view.restoreState(reducedState);
++            this._onDidRequestReveal.fire({ kind: 'restore', model: this.getModel(), state: codeEditorState });
+         }
+     }
+     handleInitialized() {
+@@ -1358,6 +1364,25 @@
+             }
+         }));
+         const [view, hasRealView] = this._createView(viewModel);
++        // Observe after local reveal, before outgoing scroll events, even for unchanged targets.
++        const revealHandler = new ViewEventHandler();
++        revealHandler.onRevealRangeRequest = (e) => {
++            const ranges = e.range ? [e.range] : (e.selections || []);
++            if (ranges.length) {
++                this._onDidRequestReveal.fire({
++                    kind: 'range', model, source: e.source, minimal: e.minimalReveal,
++                    top: viewModel.viewLayout.getVerticalOffsetForLineNumber(Math.min(...ranges.map(r => r.startLineNumber))),
++                    bottom: viewModel.viewLayout.getVerticalOffsetAfterLineNumber(Math.max(...ranges.map(r => r.endLineNumber))),
++                    verticalType: e.verticalType
++                });
++            }
++            return false;
++        };
++        viewModel.addViewEventHandler(revealHandler);
++        listenersToRemove.push({ dispose: () => {
++            viewModel.removeViewEventHandler(revealHandler);
++            revealHandler.dispose();
++        } });
+         if (hasRealView) {
+             this._domElement.appendChild(view.domNode.domNode);
+             let keys = Object.keys(this._contentWidgets);
+diff --git a/esm/vs/editor/contrib/find/browser/findController.js b/esm/vs/editor/contrib/find/browser/findController.js
+--- a/esm/vs/editor/contrib/find/browser/findController.js
++++ b/esm/vs/editor/contrib/find/browser/findController.js
+@@ -279,7 +279,14 @@
+         }
+     }
+     start(opts, newState) {
+-        return this._start(opts, newState);
++        const model = this._editor.getModel();
++        return this._start(opts, newState).then((result) => {
++            // Explicit completion only; model-driven restarts call _start directly.
++            if (model && model === this._editor.getModel() && this._widget) {
++                this._editor._onDidRequestReveal.fire({ kind: 'find', model, height: this._widget._getHeight() });
++            }
++            return result;
++        });
+     }
+     moveToNextMatch() {
+         if (this._model) {
+diff --git a/monaco.d.ts b/monaco.d.ts
+--- a/monaco.d.ts
++++ b/monaco.d.ts
+@@ -5967,7 +5967,18 @@
+ 	/**
+ 	 * A rich code editor.
+ 	 */
++	/** Repository-owned navigation and view-state notifications; state identity is not serialized. */
++	export type IEditorRevealRequest = { kind: 'find'; model: ITextModel; height: number } |
++	{ kind: 'anchor'; model: ITextModel; delta: number } |
++	{ kind: 'save'; model: ITextModel; state: ICodeEditorViewState } |
++	{ kind: 'restore'; model: ITextModel; state: ICodeEditorViewState } | {
++		kind: 'range'; model: ITextModel; source: string | null; minimal: boolean;
++		top: number; bottom: number; verticalType: number;
++	};
++
+ 	export interface ICodeEditor extends IEditor {
++		readonly onDidRequestReveal: IEvent$1<IEditorRevealRequest>;
++
+ 		/**
+ 		 * An event emitted when the content of the current model has changed.
+ 		 * @event
+diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
+--- a/esm/vs/editor/editor.api.d.ts
++++ b/esm/vs/editor/editor.api.d.ts
+@@ -5967,7 +5967,18 @@
+ 	/**
+ 	 * A rich code editor.
+ 	 */
++	/** Repository-owned navigation and view-state notifications; state identity is not serialized. */
++	export type IEditorRevealRequest = { kind: 'find'; model: ITextModel; height: number } |
++	{ kind: 'anchor'; model: ITextModel; delta: number } |
++	{ kind: 'save'; model: ITextModel; state: ICodeEditorViewState } |
++	{ kind: 'restore'; model: ITextModel; state: ICodeEditorViewState } | {
++		kind: 'range'; model: ITextModel; source: string | null; minimal: boolean;
++		top: number; bottom: number; verticalType: number;
++	};
++
+ 	export interface ICodeEditor extends IEditor {
++		readonly onDidRequestReveal: IEvent<IEditorRevealRequest>;
++
+ 		/**
+ 		 * An event emitted when the content of the current model has changed.
+ 		 * @event
+diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
+--- a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
++++ b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
+@@ -371,6 +371,7 @@
+                     ? editor.getContentHeight()
+                     : editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+                 editor.setScrollTop(editor.getScrollTop() + (top2 - top));
++                editor._onDidRequestReveal.fire({ kind: 'anchor', model: editor.getModel(), delta: top2 - top });
+             });
+             const mouseUpListener = addDisposableListener(window, 'mouseup', e => {
+                 this._unchangedRegion.isDragged.set(undefined, undefined);
+@@ -379,6 +380,7 @@
+                     this._unchangedRegion.showMoreBelow(this._options.hideUnchangedRegionsRevealLineCount.get(), undefined);
+                     const top2 = editor.getTopForLineNumber(this._unchangedRegionRange.endLineNumberExclusive);
+                     editor.setScrollTop(editor.getScrollTop() + (top2 - top));
++                editor._onDidRequestReveal.fire({ kind: 'anchor', model: editor.getModel(), delta: top2 - top });
+                 }
+                 this._nodes.bottom.classList.toggle('dragging', false);
+                 this._nodes.root.classList.toggle('dragging', false);

@@ -44,6 +44,7 @@ export function DiffSectionItem({
   inlineComments,
   getCommentableLineNumbers,
   setSectionHeights,
+  measureSection,
   setSections,
   modifiedEditorsRef,
   handleSectionSaveRef
@@ -163,6 +164,12 @@ export function DiffSectionItem({
     setSectionHeights
   })
 
+  const publishContentHeight = (contentHeight: number): void => {
+    setSectionHeights((prev) =>
+      prev[index] === contentHeight ? prev : { ...prev, [index]: contentHeight }
+    )
+  }
+
   const handleMount: DiffOnMount = (editor, _monaco) => {
     diffEditorRef.current = editor
     lineNumberOptionsSubRef.current?.dispose()
@@ -177,13 +184,11 @@ export function DiffSectionItem({
       if (!hasLayoutBox(editor.getContainerDomNode())) {
         return
       }
-      const contentHeight = editor.getModifiedEditor().getContentHeight()
-      setSectionHeights((prev) => {
-        if (prev[index] === contentHeight) {
-          return prev
-        }
-        return { ...prev, [index]: contentHeight }
-      })
+      const contentHeight = Math.max(
+        editor.getOriginalEditor().getContentHeight(),
+        modified.getContentHeight()
+      )
+      publishContentHeight(contentHeight)
     }
     const requestHeightUpdate = (): void => {
       if (pendingHeightFrame !== null) {
@@ -198,11 +203,14 @@ export function DiffSectionItem({
       diffLayoutReady = true
       requestHeightUpdate()
     }
-    const contentSizeSub = modified.onDidContentSizeChange(() => {
+    const onContentSizeChange = (): void => {
       if (diffLayoutReady) {
         requestHeightUpdate()
       }
-    })
+    }
+    const contentSizeSubs = [editor.getOriginalEditor(), modified].map((pane) =>
+      pane.onDidContentSizeChange(onContentSizeChange)
+    )
     const diffUpdateSub = editor.onDidUpdateDiff(markDiffLayoutReady)
     if (editor.getLineChanges() !== null) {
       markDiffLayoutReady()
@@ -211,7 +219,7 @@ export function DiffSectionItem({
     setModifiedEditor(modified)
     // Monaco disposes inner editors on unmount; clear state so decorators and drafts cannot retain a disposed instance.
     modified.onDidDispose(() => {
-      contentSizeSub.dispose()
+      contentSizeSubs.forEach((subscription) => subscription.dispose())
       diffUpdateSub.dispose()
       if (pendingHeightFrame !== null) {
         window.cancelAnimationFrame(pendingHeightFrame)
@@ -317,6 +325,8 @@ export function DiffSectionItem({
           section={section}
           index={index}
           sectionBodyHeight={sectionBodyHeight}
+          measureSection={measureSection}
+          onContentHeightChange={publishContentHeight}
           useIntrinsicImageHeight={useIntrinsicImageHeight}
           isBranchMode={isBranchMode}
           sideBySide={sideBySide}

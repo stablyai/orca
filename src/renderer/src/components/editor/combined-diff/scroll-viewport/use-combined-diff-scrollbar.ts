@@ -1,3 +1,4 @@
+import { scrollCombinedDiffTo } from '../../combined-diff-extent-dom'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type React from 'react'
 import {
@@ -109,14 +110,14 @@ export function useCombinedDiffScrollbar({
         : getLiveThumbHeight() / 2
 
       if (!thumb) {
-        container.scrollTop = getScrollTopForPointer(event.clientY, grabOffset)
+        scrollCombinedDiffTo(container, getScrollTopForPointer(event.clientY, grabOffset))
         updateScrollbar()
       }
 
       const handlePointerMove = (moveEvent: PointerEvent): void => {
         moveEvent.preventDefault()
         markDirectScrollInput()
-        container.scrollTop = getScrollTopForPointer(moveEvent.clientY, grabOffset)
+        scrollCombinedDiffTo(container, getScrollTopForPointer(moveEvent.clientY, grabOffset))
         updateScrollbar()
       }
       cleanupActiveScrollbarDrag()

@@ -1,6 +1,7 @@
 import { DiffTooLargeNotice } from './DiffTooLargeNotice'
-import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { editor } from 'monaco-editor'
+import { flushSync } from 'react-dom'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
 import { DiffEditor, type DiffOnMount } from '@monaco-editor/react'
@@ -19,7 +20,13 @@ import {
 } from './diff-editor-word-wrap-options'
 import { monacoFindOptions } from './monaco-find-options'
 import { installDiffEditorShiftWheelScroll } from './diff-editor-shift-wheel-scroll'
-import { installCombinedDiffCursorReveal } from './combined-diff-cursor-reveal'
+import { installCombinedDiffSlice } from './combined-diff-slice'
+import { createCombinedDiffOverflow } from './combined-diff-overflow'
+import {
+  COMBINED_DIFF_HEADER_SELECTOR,
+  COMBINED_DIFF_ROW_SELECTOR,
+  COMBINED_DIFF_VIEWPORT_SELECTOR
+} from './combined-diff-viewport'
 import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
 import {
   PLUGIN_SYNTAX_EDITOR_OPTIONS,
@@ -33,6 +40,8 @@ type DiffSectionBodyProps = {
   section: DiffSection
   index: number
   sectionBodyHeight: number | undefined
+  measureSection?: (node: Element | null) => void
+  onContentHeightChange: (height: number) => void
   useIntrinsicImageHeight: boolean
   isBranchMode: boolean
   sideBySide: boolean
@@ -54,6 +63,8 @@ export function DiffSectionBody({
   section,
   index,
   sectionBodyHeight,
+  measureSection,
+  onContentHeightChange,
   useIntrinsicImageHeight,
   isBranchMode,
   sideBySide,
@@ -73,6 +84,39 @@ export function DiffSectionBody({
   const language = usePluginSyntaxLanguage(section.path, coreLanguage)
   const monacoTheme = useMonacoTheme(isDark)
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
+  const bodyRef = useRef<HTMLDivElement>(null)
+  useLayoutEffect(() => {
+    measureSection?.(bodyRef.current?.closest(COMBINED_DIFF_ROW_SELECTOR) ?? null)
+  }, [measureSection, sectionBodyHeight])
+  const [surface, setSurface] = useState<{
+    overflow: HTMLElement | undefined
+    height: number
+  } | null>(null)
+  useLayoutEffect(() => {
+    const body = bodyRef.current
+    const viewport = body?.closest<HTMLElement>(COMBINED_DIFF_VIEWPORT_SELECTOR)
+    const row = body?.closest<HTMLElement>(COMBINED_DIFF_ROW_SELECTOR)
+    const owner = viewport && row ? createCombinedDiffOverflow(viewport, row) : null
+    setSurface({
+      overflow: owner?.node,
+      height: Math.max(
+        1,
+        (viewport?.clientHeight ?? 1) -
+          (row?.querySelector(COMBINED_DIFF_HEADER_SELECTOR)?.getBoundingClientRect().height ?? 0)
+      )
+    })
+    if (!owner) {
+      return
+    }
+    const resize = new ResizeObserver(owner.position)
+    if (viewport) {
+      resize.observe(viewport)
+    }
+    return () => {
+      resize.disconnect()
+      owner.dispose()
+    }
+  }, [])
   const diffEditorRef = useRef<editor.IStandaloneDiffEditor | null>(null)
   const wordWrapOptionsSubRef = useRef<{ dispose: () => void } | null>(null)
   const wordWrapMountFrameRef = useRef(0)
@@ -88,10 +132,14 @@ export function DiffSectionBody({
     diffEditorRef.current = diffEditor
     applyModelLanguage([diffEditor.getModel()?.original, diffEditor.getModel()?.modified], language)
     const cleanupShiftWheelScroll = installDiffEditorShiftWheelScroll(diffEditor)
-    const cleanupCursorReveal = installCombinedDiffCursorReveal(diffEditor)
+    const cleanupSlice = bodyRef.current
+      ? installCombinedDiffSlice(diffEditor, bodyRef.current, (height) => {
+          flushSync(() => onContentHeightChange(height))
+        })
+      : () => {}
     diffEditor.getModifiedEditor().onDidDispose(() => {
       cleanupShiftWheelScroll()
-      cleanupCursorReveal()
+      cleanupSlice()
       if (diffEditorRef.current !== diffEditor) {
         return
       }
@@ -133,7 +181,8 @@ export function DiffSectionBody({
 
   return (
     <div
-      className={cn('relative', useIntrinsicImageHeight && 'overflow-visible')}
+      ref={bodyRef}
+      className={cn('relative overflow-hidden', useIntrinsicImageHeight && 'overflow-visible')}
       style={sectionBodyHeight === undefined ? undefined : { height: sectionBodyHeight }}
     >
       {section.loadOnDemand ? (
@@ -220,41 +269,46 @@ export function DiffSectionBody({
               : undefined
           }
         />
-      ) : (
-        <DiffEditor
-          height="100%"
-          language={language}
-          original={section.originalContent}
-          modified={section.modifiedContent}
-          theme={monacoTheme}
-          onMount={handleEditorMount}
-          // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
-          originalModelPath={`${modelPathBase}:original`}
-          modifiedModelPath={`${modelPathBase}:modified`}
-          keepCurrentOriginalModel
-          keepCurrentModifiedModel
-          options={{
-            dropIntoEditor: { enabled: false },
-            // Native EditContext focus scrolls its hidden input into the combined viewport.
-            editContext: false,
-            readOnly: !isEditable,
-            originalEditable: false,
-            renderSideBySide: sideBySide,
-            minimap: { enabled: false },
-            scrollBeyondLastLine: false,
-            ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
-            fontSize: diffEditorFontSize,
-            fontFamily: editorFontFamily || 'monospace',
-            lineNumbers: 'on',
-            ...buildDiffEditorWordWrapOptions(diffWordWrap),
-            ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
-            automaticLayout: true,
-            renderOverviewRuler: false,
-            scrollbar: combinedDiffSectionScrollbarOptions,
-            hideUnchangedRegions: { enabled: true },
-            find: monacoFindOptions
-          }}
-        />
+      ) : !surface ? null : (
+        <div className="absolute left-0 top-0 w-full" style={{ height: surface.height }}>
+          <DiffEditor
+            height="100%"
+            language={language}
+            original={section.originalContent}
+            modified={section.modifiedContent}
+            theme={monacoTheme}
+            onMount={handleEditorMount}
+            // The React wrapper may dispose models before widgets; retain them through teardown and dispose unattached models next tick.
+            originalModelPath={`${modelPathBase}:original`}
+            modifiedModelPath={`${modelPathBase}:modified`}
+            keepCurrentOriginalModel
+            keepCurrentModifiedModel
+            options={{
+              dropIntoEditor: { enabled: false },
+              // Native EditContext focus scrolls its hidden input into the combined viewport.
+              editContext: false,
+              readOnly: !isEditable,
+              originalEditable: false,
+              renderSideBySide: sideBySide,
+              minimap: { enabled: false },
+              scrollBeyondLastLine: false,
+              ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
+              fontSize: diffEditorFontSize,
+              fontFamily: editorFontFamily || 'monospace',
+              lineNumbers: 'on',
+              ...buildDiffEditorWordWrapOptions(diffWordWrap),
+              ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
+              automaticLayout: false,
+              smoothScrolling: false,
+              fixedOverflowWidgets: true,
+              overflowWidgetsDomNode: surface.overflow,
+              renderOverviewRuler: false,
+              scrollbar: combinedDiffSectionScrollbarOptions,
+              hideUnchangedRegions: { enabled: true },
+              find: monacoFindOptions
+            }}
+          />
+        </div>
       )}
     </div>
   )

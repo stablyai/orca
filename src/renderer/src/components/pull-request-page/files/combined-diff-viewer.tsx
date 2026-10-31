@@ -1,3 +1,10 @@
+import { useCombinedDiffExtent } from '@/components/editor/use-combined-diff-extent'
+import {
+  publishCombinedDiffMeasurements,
+  scrollCombinedDiffTo,
+  scrollCombinedDiffToIndex
+} from '@/components/editor/combined-diff-extent-dom'
+import { useCombinedDiffFocusRange } from '@/components/editor/use-combined-diff-focus-range'
 import {
   combinedDiffViewportAttributes,
   combinedDiffRowAttributes
@@ -199,7 +206,16 @@ export function PRFilesCombinedDiffViewer({
     [files]
   )
 
+  const rangeExtractor = useCombinedDiffFocusRange(scrollContainerRef)
   const virtualizer = useVirtualizer({
+    rangeExtractor,
+    onChange: publishCombinedDiffMeasurements,
+    scrollToFn: (offset, options, instance) => {
+      publishCombinedDiffMeasurements(instance)
+      if (instance.scrollElement) {
+        scrollCombinedDiffTo(instance.scrollElement, offset + (options.adjustments ?? 0))
+      }
+    },
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index) => {
@@ -217,6 +233,8 @@ export function PRFilesCombinedDiffViewer({
         : `${index}:${entryRevision}`
     }
   })
+
+  useCombinedDiffExtent(scrollContainerRef, virtualizer)
 
   useLayoutEffect(() => {
     virtualizer.measure()
@@ -244,7 +262,7 @@ export function PRFilesCombinedDiffViewer({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
-        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+        scrollToIndex: (index) => scrollCombinedDiffToIndex(virtualizer, index)
       })
       if (navigatedIndex !== null) {
         setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)
@@ -335,10 +353,11 @@ export function PRFilesCombinedDiffViewer({
         />
         <div
           {...combinedDiffViewportAttributes}
+          style={{ overflowAnchor: 'none' }}
           ref={scrollContainerRef}
           className="min-w-0 flex-1 overflow-auto scrollbar-editor"
         >
-          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+          <div data-combined-diff-extent className="relative w-full">
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]
               if (!section) {
@@ -383,6 +402,7 @@ export function PRFilesCombinedDiffViewer({
                     )}
                     getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
+                    measureSection={virtualizer.measureElement}
                     setSections={setSections}
                     modifiedEditorsRef={modifiedEditorsRef}
                     handleSectionSaveRef={handleSectionSaveRef}

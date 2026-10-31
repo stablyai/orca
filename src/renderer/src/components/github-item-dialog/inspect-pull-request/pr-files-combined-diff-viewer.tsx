@@ -1,3 +1,10 @@
+import { useCombinedDiffExtent } from '@/components/editor/use-combined-diff-extent'
+import {
+  publishCombinedDiffMeasurements,
+  scrollCombinedDiffTo,
+  scrollCombinedDiffToIndex
+} from '@/components/editor/combined-diff-extent-dom'
+import { useCombinedDiffFocusRange } from '@/components/editor/use-combined-diff-focus-range'
 import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
@@ -233,7 +240,16 @@ function PRFilesCombinedDiffSections({
     [files]
   )
 
+  const rangeExtractor = useCombinedDiffFocusRange(scrollContainerRef)
   const virtualizer = useVirtualizer({
+    rangeExtractor,
+    onChange: publishCombinedDiffMeasurements,
+    scrollToFn: (offset, options, instance) => {
+      publishCombinedDiffMeasurements(instance)
+      if (instance.scrollElement) {
+        scrollCombinedDiffTo(instance.scrollElement, offset + (options.adjustments ?? 0))
+      }
+    },
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index) => {
@@ -250,6 +266,8 @@ function PRFilesCombinedDiffSections({
     }
   })
 
+  useCombinedDiffExtent(scrollContainerRef, virtualizer)
+
   useLayoutEffect(() => {
     virtualizer.measure()
   }, [sideBySide, virtualizer])
@@ -262,7 +280,7 @@ function PRFilesCombinedDiffSections({
         sections: sectionsRef.current,
         sectionIndexByKey,
         toggleSection,
-        scrollToIndex: (index) => virtualizer.scrollToIndex(index, { align: 'start' })
+        scrollToIndex: (index) => scrollCombinedDiffToIndex(virtualizer, index)
       })
       if (navigatedIndex !== null) {
         setActiveTreeSectionKey(sectionsRef.current[navigatedIndex]?.key ?? null)

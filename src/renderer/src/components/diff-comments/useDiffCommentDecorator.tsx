@@ -1,3 +1,4 @@
+import { revealCombinedDiffTarget } from '../editor/combined-diff-navigation'
 import { useCallback, useEffect, useMemo, useRef } from 'react'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { createRoot, type Root } from 'react-dom/client'
@@ -277,7 +278,16 @@ export function useDiffCommentDecorator({
         }
         const top = editor.getTopForLineNumber(entry.delegate.afterLineNumber, true)
         const editorHeight = editor.getLayoutInfo().height
-        editor.setScrollTop(Math.max(0, top - editorHeight / 2))
+        if (
+          !revealCombinedDiffTarget(
+            editor.getContainerDomNode(),
+            top,
+            top + (entry.delegate.heightInPx ?? ZONE_MIN_PX),
+            1
+          )
+        ) {
+          editor.setScrollTop(Math.max(0, top - editorHeight / 2))
+        }
         pendingScrollRef.current = null
         onPendingScrollConsumedRef.current?.()
       })

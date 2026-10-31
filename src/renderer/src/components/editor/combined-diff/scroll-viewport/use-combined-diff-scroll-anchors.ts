@@ -1,8 +1,12 @@
-import { useCallback, useMemo } from 'react'
+import {
+  getCombinedDiffExtent,
+  scrollCombinedDiffToIndex,
+  publishCombinedDiffMeasurements
+} from '../../combined-diff-extent-dom'
+import { useCallback, useMemo, useLayoutEffect, useRef } from 'react'
 import type React from 'react'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import {
-  useVirtualizedScrollAnchor,
   VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT,
   type VirtualizedScrollAnchor
 } from '@/hooks/useVirtualizedScrollAnchor'
@@ -27,16 +31,13 @@ export function useCombinedDiffScrollAnchors({
   generation,
   hasDirectScrollInput,
   latestDomScrollAnchorRef,
-  programmaticScrollMarks,
   scrollAnchorRef,
   scrollContainerRef,
   scrollOffsetRef,
   sectionIndexByKey,
-  sections,
   sectionsRef,
   sideBySide,
   structureRevision,
-  totalSize,
   memoryLeaseRef,
   virtualizer
 }: {
@@ -58,11 +59,6 @@ export function useCombinedDiffScrollAnchors({
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): CombinedDiffScrollAnchors {
   const getCombinedDiffSectionKey = useCallback((section: DiffSection): string => section.key, [])
-  const getCombinedDiffSectionElementKey = useCallback(
-    (element: Element): string | null =>
-      element instanceof HTMLElement ? (element.dataset.combinedDiffSectionKey ?? null) : null,
-    []
-  )
   const recordVirtualScrollAnchor = useCallback(
     (scrollTop: number): void => {
       scrollAnchorRef.current = getVirtualizedScrollAnchorForOffset({
@@ -144,30 +140,57 @@ export function useCombinedDiffScrollAnchors({
     [clampRestoreCount, generation, sideBySide, structureRevision]
   )
 
-  useVirtualizedScrollAnchor({
-    anchorRef: scrollAnchorRef,
-    getItemElementKey: getCombinedDiffSectionElementKey,
-    getRowKey: getCombinedDiffSectionKey,
+  const previousSignal = useRef<string | undefined>(undefined)
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    if (!container || previousSignal.current === combinedDiffRestoreSignal) {
+      return
+    }
+    previousSignal.current = combinedDiffRestoreSignal
+    if (hasDirectScrollInput()) {
+      return
+    }
+    publishCombinedDiffMeasurements(virtualizer)
+    const anchor = scrollAnchorRef.current
+    const key =
+      anchor &&
+      (sectionIndexByKey.has(anchor.key)
+        ? anchor.key
+        : anchor.fallbackKeys?.find((candidate) => sectionIndexByKey.has(candidate)))
+    const index = key ? sectionIndexByKey.get(key) : undefined
+    if (index !== undefined) {
+      scrollCombinedDiffToIndex(
+        virtualizer,
+        index,
+        anchor && key === anchor.key ? anchor.offset : 0
+      )
+    } else {
+      getCombinedDiffExtent(container).navigate(scrollOffsetRef.current)
+    }
+  }, [
+    combinedDiffRestoreSignal,
     hasDirectScrollInput,
-    itemElementSelector: '[data-combined-diff-section-row]',
-    programmaticScrollMarks,
-    recordAnchorOnCleanup: false,
-    recordAnchorOnScroll: false,
-    restoreSignal: combinedDiffRestoreSignal,
-    rowIndexByKey: sectionIndexByKey,
-    rows: sections,
-    scrollElementRef: scrollContainerRef,
-    shouldSkipRestore: hasDirectScrollInput,
+    scrollAnchorRef,
+    scrollContainerRef,
     scrollOffsetRef,
-    totalSize,
+    sectionIndexByKey,
     virtualizer
-  })
+  ])
+
+  useLayoutEffect(() => {
+    const container = scrollContainerRef.current
+    const record = (): void => {
+      recordDomScrollAnchor()
+    }
+    container?.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, record)
+    return () => container?.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, record)
+  }, [recordDomScrollAnchor, scrollContainerRef])
 
   const scrollToSectionIndex = useCallback(
     (index: number): void => {
       scrollAnchorRef.current = null
       latestDomScrollAnchorRef.current = null
-      virtualizer.scrollToIndex(index, { align: 'start' })
+      scrollCombinedDiffToIndex(virtualizer, index)
       // Programmatic jumps emit no anchor-recording scroll; snapshot the destination after layout settles.
       window.requestAnimationFrame(() => {
         scrollContainerRef.current?.dispatchEvent(new Event(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT))

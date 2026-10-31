@@ -87,13 +87,18 @@ export function CombinedDiffSectionList({
     <div className="relative min-w-0 flex-1">
       <div
         {...combinedDiffViewportAttributes}
+        style={{ overflowAnchor: 'none' }}
         ref={setScrollContainerRef}
         className="combined-diff-scroll-container h-full overflow-auto pr-5 scrollbar-editor"
         onWheel={markDirectScrollInput}
         onTouchMove={markDirectScrollInput}
       >
-        {skippedConflictNotice}
-        <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+        {skippedConflictNotice && (
+          <div data-combined-diff-prefix className="flow-root">
+            {skippedConflictNotice}
+          </div>
+        )}
+        <div data-combined-diff-extent className="relative w-full">
           {virtualizer.getVirtualItems().map((virtualItem) => {
             const section = sections[virtualItem.index]
             if (!section) {
@@ -146,6 +151,7 @@ export function CombinedDiffSectionList({
                       : undefined
                   }
                   setSectionHeights={setSectionHeights}
+                  measureSection={virtualizer.measureElement}
                   setSections={setSections}
                   modifiedEditorsRef={modifiedEditorsRef}
                   handleSectionSaveRef={handleSectionSaveRef}

@@ -1,6 +1,12 @@
+import { useCombinedDiffExtent } from '../../use-combined-diff-extent'
+import {
+  publishCombinedDiffMeasurements,
+  scrollCombinedDiffTo
+} from '../../combined-diff-extent-dom'
+import { useCombinedDiffFocusRange } from '../../use-combined-diff-focus-range'
 import { useLayoutEffect } from 'react'
 import type React from 'react'
-import { elementScroll, useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
+import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
 import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import type { DiffSection } from '../../diff-section-types'
@@ -34,33 +40,31 @@ export function useCombinedDiffVirtualizer({
     const section = sections[index]
     return section ? getDiffSectionRowEstimatedHeight(section, sectionHeights[index]) : 88
   }
+  const rangeExtractor = useCombinedDiffFocusRange(scrollContainerRef, (range) =>
+    getCombinedDiffRenderRange(range, estimateSize, scrollContainerRef.current?.clientHeight ?? 0)
+  )
   const virtualizer = useVirtualizer({
     count: sections.length,
+    onChange: publishCombinedDiffMeasurements,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize,
     // Retain visible heights while hidden rows measure zero so anchors survive reopening.
     measureElement: measureVirtualRowRetainingHiddenSize,
-    // Offscreen Monaco sections render their full height; bound that work by pixels, too.
-    rangeExtractor: (range) =>
-      getCombinedDiffRenderRange(
-        range,
-        estimateSize,
-        scrollContainerRef.current?.clientHeight ?? 0
-      ),
+    rangeExtractor,
     overscan: COMBINED_DIFF_OVERSCAN,
     initialOffset: () => scrollOffsetRef.current,
     // Mark virtualizer scrolls so their events cannot be mistaken for user intent.
     scrollToFn: (offset, options, instance) => {
-      const target = offset + (options.adjustments ?? 0)
-      // Writing the current position emits no event; an unused mark could later claim a real user scroll.
-      if (instance.scrollElement?.scrollTop !== target) {
-        programmaticScrollMarks.mark(target)
+      publishCombinedDiffMeasurements(instance)
+      if (instance.scrollElement) {
+        scrollCombinedDiffTo(instance.scrollElement, offset + (options.adjustments ?? 0))
       }
-      elementScroll(offset, options, instance)
     },
     // Prebuild keys per section change because TanStack requests every key on each measurement pass.
     getItemKey: (index) => rowKeys[index] ?? `${index}:${generation}`
   })
+
+  useCombinedDiffExtent(scrollContainerRef, virtualizer, programmaticScrollMarks.mark)
 
   // Publish onscreen indices after commit so retry can read them without making render impure or depending on the virtualizer.
   const virtualItems = virtualizer.getVirtualItems()

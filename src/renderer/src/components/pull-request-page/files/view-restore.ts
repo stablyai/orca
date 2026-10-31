@@ -1,3 +1,4 @@
+import { scrollCombinedDiffTo } from '@/components/editor/combined-diff-extent-dom'
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
 import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '@/components/editor/diff-section-types'
@@ -92,43 +93,19 @@ export function usePRFilesDiffViewPersistence(args: {
   useLayoutEffect(() => {
     const container = args.scrollContainerRef.current
     const targetScrollTop = args.pendingRestoreScrollTopRef.current
-    if (!container || targetScrollTop === null) {
+    if (
+      !container ||
+      targetScrollTop === null ||
+      (args.sections.length === 0 && args.entriesLength > 0)
+    ) {
       return
     }
 
-    let frameId = 0
-    let attempts = 0
-    const restoreScrollPosition = (): void => {
-      const liveContainer = args.scrollContainerRef.current
-      const liveTarget = args.pendingRestoreScrollTopRef.current
-      if (!liveContainer || liveTarget === null) {
-        return
-      }
-
-      const maxScrollTop = Math.max(0, liveContainer.scrollHeight - liveContainer.clientHeight)
-      const nextScrollTop = Math.min(liveTarget, maxScrollTop)
-      liveContainer.scrollTop = nextScrollTop
-
-      // Why: only cache once the restore lands; an intermediate clamp would overwrite the real target.
-      if (Math.abs(liveContainer.scrollTop - liveTarget) <= 1 || maxScrollTop >= liveTarget) {
-        setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, nextScrollTop)
-        args.pendingRestoreScrollTopRef.current = null
-        return
-      }
-
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(restoreScrollPosition)
-        return
-      }
-      // Why: cache what we actually reached; an unreachable target would replay this fight every visit.
-      setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, liveContainer.scrollTop)
-      args.pendingRestoreScrollTopRef.current = null
-    }
-
-    restoreScrollPosition()
-    return () => window.cancelAnimationFrame(frameId)
+    scrollCombinedDiffTo(container, targetScrollTop)
+    setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, container.scrollTop)
+    args.pendingRestoreScrollTopRef.current = null
   }, [
+    args.entriesLength,
     args.pendingRestoreScrollTopRef,
     args.scrollContainerRef,
     args.sectionHeights,

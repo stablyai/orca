@@ -10,6 +10,7 @@ import * as monaco from 'monaco-editor'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { getGutterPressLine, installDiffCommentRangeDrag } from './diff-comment-range-drag'
 import type { DiffCommentLineRange } from './diff-comment-line-range'
+import { registerCombinedDiffNavigation } from '../editor/combined-diff-navigation'
 
 vi.mock('monaco-editor', () => import('monaco-editor/esm/vs/editor/editor.api.js'))
 
@@ -140,6 +141,57 @@ function paintedRange(fake: FakeDiffCommentEditor): DiffCommentLineRange | null 
 }
 
 describe('diff comment gutter range drag', () => {
+  it('continues extending a partial following file held at the outer bottom edge', () => {
+    const drag = mountDrag()
+    const viewport = document.createElement('div')
+    viewport.dataset.combinedDiffViewport = ''
+    const row = document.createElement('div')
+    row.dataset.combinedDiffSectionRow = ''
+    const header = document.createElement('div')
+    header.dataset.combinedDiffSectionHeader = ''
+    header.getBoundingClientRect = () => new DOMRect(0, 0, 600, 32)
+    row.append(header, drag.fake.domNode)
+    viewport.append(row)
+    document.body.append(viewport)
+    Object.defineProperties(viewport, { clientHeight: { value: 700 }, clientWidth: { value: 600 } })
+    viewport.getBoundingClientRect = () => new DOMRect(0, 0, 600, 700)
+    let outer = 0
+    drag.fake.domNode.getBoundingClientRect = () => new DOMRect(0, 600 - outer, 600, 668)
+    drag.fake.editor.getTargetAtClientPoint = (_x, y) => ({
+      type: monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS,
+      position: new monaco.Position(Math.floor((y - 600 + outer) / 20) + 1, 1),
+      element: drag.fake.domNode,
+      mouseColumn: 1,
+      range: new monaco.Range(1, 1, 1, 1),
+      detail: {
+        isAfterLines: false,
+        glyphMarginLeft: 0,
+        glyphMarginWidth: 0,
+        lineNumbersWidth: 60,
+        offsetX: 0
+      }
+    })
+    const unregister = registerCombinedDiffNavigation(drag.fake.domNode, {
+      reveal: () => {},
+      scrollBy: (step) => {
+        outer += step
+        return true
+      }
+    })
+    firePointerEvent(drag.fake.domNode, 'pointerdown', { clientY: 601 })
+    firePointerEvent(document, 'pointermove', { clientY: 699 })
+    pumpFrame()
+    const firstOuter = outer
+    const firstEnd = paintedRange(drag.fake)?.endLine ?? 0
+    pumpFrame()
+    pumpFrame()
+    expect(outer).toBeGreaterThan(firstOuter)
+    expect(paintedRange(drag.fake)?.endLine).toBeGreaterThan(firstEnd)
+    drag.release()
+    unregister()
+    drag.handle.dispose()
+  })
+
   it('commits the swept range and lights it while the pointer is down', () => {
     const drag = mountDrag()
 

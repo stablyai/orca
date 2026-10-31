@@ -1,4 +1,8 @@
+import { getCombinedDiffCodeRect } from '../editor/combined-diff-slice-geometry'
+import { scrollCombinedDiffBy } from '../editor/combined-diff-navigation'
 import * as monaco from 'monaco-editor'
+import { getLineAtViewportY } from './diff-comment-drag-target'
+export { getGutterPressLine } from './diff-comment-drag-target'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { getDragAutoScrollStepPx, REFERENCE_FRAME_MS } from './diff-comment-drag-auto-scroll'
 import {
@@ -39,25 +43,6 @@ export type DiffCommentRangeDragHandle = {
   setPendingRange: (range: DiffCommentLineRange | null) => void
   /** True while a press owns the band, so keyboard paths can stand aside instead of racing it. */
   isDragging: () => boolean
-}
-
-// Claim line numbers only: decoration presses toggle folds. The external add button resolves separately.
-const GUTTER_PRESS_TARGET_TYPES: ReadonlySet<monacoEditor.MouseTargetType> = new Set([
-  monaco.editor.MouseTargetType.GUTTER_LINE_NUMBERS
-])
-
-// Far enough into the text column to clear the gutter, close enough to stay on every line.
-const CONTENT_PROBE_INSET_PX = 4
-
-export function getGutterPressLine(
-  editor: Pick<DiffCommentRangeDragEditor, 'getTargetAtClientPoint'>,
-  event: PointerEvent
-): number | null {
-  const target = editor.getTargetAtClientPoint(event.clientX, event.clientY)
-  if (!target || !GUTTER_PRESS_TARGET_TYPES.has(target.type)) {
-    return null
-  }
-  return target.position?.lineNumber ?? null
 }
 
 export function installDiffCommentRangeDrag({
@@ -119,17 +104,6 @@ export function installDiffCommentRangeDrag({
     }
   }
 
-  // Probe inside the text column: Monaco cannot resolve positions over the external add button.
-  const getLineAtViewportY = (editorLeft: number, clientY: number): number | null => {
-    const model = editor.getModel()
-    if (!model) {
-      return null
-    }
-    const probeX = editorLeft + editor.getLayoutInfo().contentLeft + CONTENT_PROBE_INSET_PX
-    const line = editor.getTargetAtClientPoint(probeX, clientY)?.position?.lineNumber
-    return line == null ? null : Math.max(1, Math.min(model.getLineCount(), line))
-  }
-
   const autoScroll = (rect: DOMRect, clientY: number, frameDeltaMs: number): boolean => {
     const step = getDragAutoScrollStepPx({
       editorTop: rect.top,
@@ -139,6 +113,10 @@ export function installDiffCommentRangeDrag({
     })
     if (step === 0) {
       return false
+    }
+    const combined = scrollCombinedDiffBy(editorDomNode, step)
+    if (combined !== undefined) {
+      return combined
     }
     const maxScrollTop = Math.max(0, editor.getScrollHeight() - editor.getLayoutInfo().height)
     const scrollTop = editor.getScrollTop()
@@ -153,7 +131,7 @@ export function installDiffCommentRangeDrag({
   // Clamp offscreen coordinates to the viewport edge so dragging beyond it keeps extending the range.
   const resolveFocusLine = (active: NonNullable<typeof drag>, rect: DOMRect): void => {
     const clampedY = Math.max(rect.top + 1, Math.min(rect.bottom - 1, active.clientY))
-    const probed = getLineAtViewportY(rect.left, clampedY)
+    const probed = getLineAtViewportY(editor, editorDomNode, clampedY)
     if (probed !== null) {
       const nextFocus = clampFocusLineToCommentable(active.anchorLine, probed, commentableLineSet)
       if (nextFocus !== active.focusLine) {
@@ -172,9 +150,9 @@ export function installDiffCommentRangeDrag({
     const frameDeltaMs =
       drag.lastFrameMs === null ? REFERENCE_FRAME_MS : timestampMs - drag.lastFrameMs
     drag.lastFrameMs = timestampMs
-    const rect = editorDomNode.getBoundingClientRect()
+    const rect = getCombinedDiffCodeRect(editorDomNode)
     const scrolling = autoScroll(rect, drag.clientY, frameDeltaMs)
-    resolveFocusLine(drag, rect)
+    resolveFocusLine(drag, getCombinedDiffCodeRect(editorDomNode))
     repaint()
     // Continue frames only while edge scrolling; a stationary interior pointer needs no work.
     if (scrolling) {
@@ -208,7 +186,7 @@ export function installDiffCommentRangeDrag({
     // Resolve pointerup before committing: it may precede the frame or contain unseen coordinates. Do not scroll after release.
     drag.clientY = event.clientY
     cancelFrame()
-    resolveFocusLine(drag, editorDomNode.getBoundingClientRect())
+    resolveFocusLine(drag, getCombinedDiffCodeRect(editorDomNode))
     const range = orderLineRange(drag.anchorLine, drag.focusLine)
     endDrag()
     onCommit(range)

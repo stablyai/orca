@@ -117,7 +117,12 @@ export function useCombinedDiffScrollPersistence({
       const shrank = scrollHeight < lastScrollHeight - 1
       lastScrollHeight = scrollHeight
       if (programmaticScrollMarks.consume(event, scrollTop, maxScrollTop)) {
-        updateScrollbar()
+        updateCachedScrollPosition({
+          recordDomAnchor: false,
+          scheduleSettled: false,
+          scrollTop,
+          writeAnchor: false
+        })
         return
       }
       if (shrank && scrollTop >= maxScrollTop - 1 && scrollOffsetRef.current > maxScrollTop + 1) {

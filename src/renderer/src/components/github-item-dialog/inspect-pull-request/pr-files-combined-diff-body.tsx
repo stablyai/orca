@@ -114,10 +114,11 @@ export function PRFilesCombinedDiffBody({
         />
         <div
           {...combinedDiffViewportAttributes}
+          style={{ overflowAnchor: 'none' }}
           ref={scrollContainerRef}
           className="min-w-0 flex-1 overflow-auto scrollbar-editor"
         >
-          <div className="relative w-full" style={{ height: `${virtualizer.getTotalSize()}px` }}>
+          <div data-combined-diff-extent className="relative w-full">
             {virtualizer.getVirtualItems().map((virtualItem) => {
               const section = sections[virtualItem.index]
               if (!section) {
@@ -162,6 +163,7 @@ export function PRFilesCombinedDiffBody({
                     )}
                     getCommentableLineNumbers={getCommentableLineNumbers}
                     setSectionHeights={setSectionHeights}
+                    measureSection={virtualizer.measureElement}
                     setSections={setSections}
                     modifiedEditorsRef={modifiedEditorsRef}
                     handleSectionSaveRef={handleSectionSaveRef}
