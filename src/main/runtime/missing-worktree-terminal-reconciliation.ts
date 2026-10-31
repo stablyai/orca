@@ -1,7 +1,7 @@
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import type { Repo } from '../../shared/repo-types'
-import { splitWorktreeId } from '../../shared/worktree/id'
+import { splitWorktreeId, worktreeIdentityKey } from '../../shared/worktree/id'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { killAllProcessesForWorktree, type WorktreeTeardownRuntime } from './worktree-teardown'
 
@@ -63,12 +63,13 @@ export async function stopMissingWorktreeTerminals(
   detectedWorktreeIds: readonly string[],
   deps: MissingWorktreeTerminalReconciliationDeps
 ): Promise<{ stoppedWorktreeIds: string[] }> {
-  const detectedIds = new Set(detectedWorktreeIds)
+  const detectedIds = new Set(detectedWorktreeIds.map(worktreeIdentityKey))
   const missingIds = [
     ...new Set(
       knownWorktreeIds.filter(
         (worktreeId) =>
-          splitWorktreeId(worktreeId)?.repoId === repo.id && !detectedIds.has(worktreeId)
+          splitWorktreeId(worktreeId)?.repoId === repo.id &&
+          !detectedIds.has(worktreeIdentityKey(worktreeId))
       )
     )
   ]

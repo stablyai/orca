@@ -33,13 +33,16 @@ import {
   selectWorktreesByRepo
 } from '@/store/workspace-record-selectors'
 
-const WORKTREE_RENAME_PURGE_GRACE_MS = 20_000
+import { worktreeIdentityKey } from '../../../../shared/worktree/id'
+import {
+  recentlyRenamedWorktreeIdExpiry,
+  rememberWorktreeRename
+} from '@/lib/worktree-rename-grace'
 
 // Why the subscription key: it changes on reconnect, re-pair and event-stream replay invalidation.
 function runtimeSortOrderFence(environmentId: string): string {
   return buildRuntimeClientEventEnvironmentKey([environmentId])
 }
-const recentlyRenamedWorktreeIdExpiry = new Map<string, number>()
 
 function getAuthoritativeDetectedWorktreeIds(state: AppState, repoId: string): Set<string> | null {
   const detected = selectDetectedWorktreesByRepo(state)[repoId]
@@ -131,9 +134,7 @@ export function createWorktreeEventRuntime(
     const selectionBeforeRename = captureWorkspaceSelection(useAppStore.getState())
     if (renamed) {
       // Shield both ids from the deletion diff across the rename's event burst — the worktree list lags the on-disk move.
-      const expiry = Date.now() + WORKTREE_RENAME_PURGE_GRACE_MS
-      recentlyRenamedWorktreeIdExpiry.set(renamed.oldWorktreeId, expiry)
-      recentlyRenamedWorktreeIdExpiry.set(renamed.newWorktreeId, expiry)
+      rememberWorktreeRename(renamed.oldWorktreeId, renamed.newWorktreeId)
       useAppStore.getState().migrateWorktreeIdentity(renamed.oldWorktreeId, renamed.newWorktreeId)
     }
     // Diff around refetch to purge externally deleted worktree state and prevent zombie PTY entries.
@@ -197,9 +198,10 @@ export function createWorktreeEventRuntime(
     if (!after) {
       return
     }
+    const afterIdentityKeys = new Set([...after].map(worktreeIdentityKey))
     const removed: string[] = []
     for (const id of before) {
-      if (after.has(id)) {
+      if (afterIdentityKeys.has(worktreeIdentityKey(id))) {
         continue
       }
       // A recently renamed worktree's old/new id isn't a deletion — its state moved to the new id; the list just lags.

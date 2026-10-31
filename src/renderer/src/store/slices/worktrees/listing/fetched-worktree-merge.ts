@@ -1,3 +1,4 @@
+import { mergeListedWorktreeSpellings } from '../session/worktree-spelling-merge'
 import type { StateCreator } from 'zustand'
 import { appliedWorktreeCatalogVersionPatch } from './worktree-catalog-version-state'
 import type { AppState } from '../../../types'
@@ -173,6 +174,14 @@ export function mergeFetchedWorktrees(
       return s
     }
     decision.outcome = 'applied'
+    const spellingPatch = mergeListedWorktreeSpellings(
+      s,
+      args.repoId,
+      args.hostId,
+      args.refresh.result
+    )
+    const spellingChanged = Object.keys(spellingPatch).length > 0
+    if (spellingChanged) s = { ...s, ...spellingPatch }
     const matchOptions = worktreeHostMatchOptions(s, args.repoId, args.hostId)
     const currentWorktrees = s.worktreesByRepo[args.repoId]
     const refreshResult = {
@@ -255,6 +264,7 @@ export function mergeFetchedWorktrees(
       args.refresh.result.catalogVersion
     )
     if (
+      !spellingChanged &&
       !worktreesChanged &&
       !detectedChanged &&
       removedIds.length === 0 &&
@@ -263,6 +273,7 @@ export function mergeFetchedWorktrees(
       return s
     }
     return {
+      ...spellingPatch,
       ...versionPatch,
       ...(worktreesChanged
         ? {

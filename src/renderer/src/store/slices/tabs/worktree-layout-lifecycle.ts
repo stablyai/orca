@@ -1,3 +1,4 @@
+import { ensureGroup } from '../tab-group-state'
 import type { AppState } from '../../types'
 import type { BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
 import type { TerminalTab } from '../../../../../shared/terminal-tab-types'
@@ -143,13 +144,16 @@ function rekeyWorktreeEntry<T>(
   map: Record<string, T> | undefined,
   oldWorktreeId: string,
   newWorktreeId: string,
-  mapValue: (value: T) => T = (value) => value
+  mapValue: (value: T) => T = (value) => value,
+  mergeExisting = false
 ): Record<string, T> | undefined {
   if (!map || !(oldWorktreeId in map)) {
     return undefined
   }
   const next = { ...map }
-  next[newWorktreeId] = mapValue(map[oldWorktreeId])
+  if (!mergeExisting || !(newWorktreeId in map)) {
+    next[newWorktreeId] = mapValue(map[oldWorktreeId])
+  }
   delete next[oldWorktreeId]
   return next
 }
@@ -159,12 +163,13 @@ export function renameWorktreeLayoutKeys(
   s: AppState,
   oldWorktreeId: string,
   newWorktreeId: string,
-  renameBrowserWorkspace: (workspace: BrowserWorkspace) => BrowserWorkspace
+  renameBrowserWorkspace: (workspace: BrowserWorkspace) => BrowserWorkspace,
+  mergeExisting = false
 ): Partial<WorktreeLayoutPatch> {
   const withNewWorktreeId = <T extends { worktreeId: string }>(value: T): T =>
     value.worktreeId === oldWorktreeId ? { ...value, worktreeId: newWorktreeId } : value
   const rekey = <T>(map: Record<string, T> | undefined, mapValue?: (value: T) => T) =>
-    rekeyWorktreeEntry(map, oldWorktreeId, newWorktreeId, mapValue)
+    rekeyWorktreeEntry(map, oldWorktreeId, newWorktreeId, mapValue, mergeExisting)
   const patch: Partial<WorktreeLayoutPatch> = {}
   const assign = <K extends keyof WorktreeLayoutPatch>(
     key: K,
@@ -199,6 +204,81 @@ export function renameWorktreeLayoutKeys(
   assign('activeGroupIdByWorktree', rekey(s.activeGroupIdByWorktree))
   if (s.openFiles?.some((f) => f.worktreeId === oldWorktreeId)) {
     assign('openFiles', s.openFiles.map(withNewWorktreeId))
+  }
+  if (mergeExisting) {
+    const union = <T extends { id: string }>(destination: T[], source: T[]): T[] => {
+      const seen = new Set(destination.map((item) => item.id))
+      return [
+        ...destination,
+        ...source.filter((item) => {
+          if (seen.has(item.id)) return false
+          seen.add(item.id)
+          return true
+        })
+      ]
+    }
+    const mergeRows = <T extends { id: string; worktreeId: string }>(
+      map: Record<string, T[]>,
+      remap: (row: T) => T = withNewWorktreeId
+    ) => ({
+      ...(rekey(map) ?? map),
+      [newWorktreeId]: union(map[newWorktreeId] ?? [], (map[oldWorktreeId] ?? []).map(remap))
+    })
+    patch.tabsByWorktree = mergeRows(s.tabsByWorktree)
+    patch.browserTabsByWorktree = mergeRows(s.browserTabsByWorktree, renameBrowserWorkspace)
+    const destinationTabs = s.unifiedTabsByWorktree[newWorktreeId] ?? []
+    const sourceTabs = s.unifiedTabsByWorktree[oldWorktreeId] ?? []
+    const { group, groupsByWorktree, activeGroupIdByWorktree } = ensureGroup(
+      s.groupsByWorktree,
+      s.activeGroupIdByWorktree,
+      newWorktreeId,
+      s.activeGroupIdByWorktree[newWorktreeId]
+    )
+    const mergedTabs = union(
+      destinationTabs,
+      sourceTabs.map((tab) => ({
+        ...withNewWorktreeId(tab),
+        groupId: group.id
+      }))
+    )
+    patch.unifiedTabsByWorktree = {
+      ...(rekey(s.unifiedTabsByWorktree) ?? s.unifiedTabsByWorktree),
+      [newWorktreeId]: mergedTabs
+    }
+    patch.groupsByWorktree = {
+      ...(rekey(groupsByWorktree) ?? groupsByWorktree),
+      [newWorktreeId]: groupsByWorktree[newWorktreeId].map((entry) =>
+        entry.id === group.id
+          ? {
+              ...entry,
+              tabOrder: [
+                ...new Set([
+                  ...entry.tabOrder,
+                  ...mergedTabs.filter((tab) => tab.groupId === group.id).map((tab) => tab.id)
+                ])
+              ]
+            }
+          : entry
+      )
+    }
+    patch.activeGroupIdByWorktree = rekey(activeGroupIdByWorktree) ?? activeGroupIdByWorktree
+    patch.layoutByWorktree = {
+      ...(rekey(s.layoutByWorktree) ?? s.layoutByWorktree),
+      [newWorktreeId]: s.layoutByWorktree[newWorktreeId] ?? { type: 'leaf', groupId: group.id }
+    }
+    patch.tabBarOrderByWorktree = {
+      ...(rekey(s.tabBarOrderByWorktree) ?? s.tabBarOrderByWorktree),
+      [newWorktreeId]: [
+        ...new Set([
+          ...(s.tabBarOrderByWorktree[newWorktreeId] ?? []),
+          ...(s.tabBarOrderByWorktree[oldWorktreeId] ?? [])
+        ])
+      ]
+    }
+    patch.openFiles = union(
+      s.openFiles.filter((file) => file.worktreeId !== oldWorktreeId),
+      s.openFiles.filter((file) => file.worktreeId === oldWorktreeId).map(withNewWorktreeId)
+    )
   }
   return patch
 }

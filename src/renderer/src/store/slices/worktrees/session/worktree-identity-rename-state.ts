@@ -15,7 +15,9 @@ import { renameWorktreeLayoutKeys } from '../../tabs/worktree-layout-lifecycle'
 import { renameCombinedDiffViewOwner } from '@/components/editor/combined-diff/remember-view/combined-diff-view-cache'
 
 // Inventory non-layout worktree-keyed maps; layout migrates separately, while surviving tab/file IDs keep their keys.
-const WORKTREE_ID_KEYED_MAP_KEYS = [
+export const WORKTREE_ID_KEYED_MAP_KEYS = [
+  'restoredRuntimeHostIdByWorkspaceSessionKey',
+  'contestedPrimaryHostBySessionKey',
   'worktreeLineageById',
   'deleteStateByWorktreeId',
   'baseStatusByWorktreeId',
@@ -47,7 +49,8 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
 export function buildWorktreeRenameState(
   s: AppState,
   oldWorktreeId: string,
-  newWorktreeId: string
+  newWorktreeId: string,
+  mergeExisting = false
 ): Partial<AppState> {
   if (oldWorktreeId === newWorktreeId) {
     return {}
@@ -63,7 +66,13 @@ export function buildWorktreeRenameState(
       return
     }
     const next = { ...map }
-    next[newWorktreeId] = mapValue(next[oldWorktreeId] as T)
+    // SAFETY: Each caller pairs its map value type with the mapper for that field.
+    const value = mapValue(next[oldWorktreeId] as T)
+    if (!mergeExisting || !(newWorktreeId in map)) {
+      next[newWorktreeId] = value
+    } else if (Array.isArray(next[newWorktreeId]) && Array.isArray(value)) {
+      next[newWorktreeId] = [...next[newWorktreeId], ...value]
+    }
     delete next[oldWorktreeId]
     renamed[key] = next
   }
@@ -114,7 +123,7 @@ export function buildWorktreeRenameState(
     }
     const nextKey =
       rawId === key ? newWorktreeId : `${key.slice(0, key.length - rawId.length)}${newWorktreeId}`
-    nextVisitRecency[nextKey] = value
+    nextVisitRecency[nextKey] = mergeExisting ? (nextVisitRecency[nextKey] ?? value) : value
     delete nextVisitRecency[key]
     visitRecencyChanged = true
   }
@@ -225,7 +234,13 @@ export function buildWorktreeRenameState(
     : s.sleepingAgentSessionsByPaneKey
 
   return {
-    ...renameWorktreeLayoutKeys(s, oldWorktreeId, newWorktreeId, withNewBrowserWorktreeId),
+    ...renameWorktreeLayoutKeys(
+      s,
+      oldWorktreeId,
+      newWorktreeId,
+      withNewBrowserWorktreeId,
+      mergeExisting
+    ),
     ...(renamed as Partial<AppState>),
     ...(browserPagesByWorkspace !== s.browserPagesByWorkspace ? { browserPagesByWorkspace } : {}),
     ...(recentlyClosedBrowserPagesByWorkspace !== s.recentlyClosedBrowserPagesByWorkspace
