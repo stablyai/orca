@@ -93,9 +93,9 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
-        {/* The tab bar runs into the status column above its clock; the strip below keeps clear. */}
-        <MobileSessionHeader controller={controller} details={details} />
+        {/* The status column's camera and clock take touches, so the header keeps clear of it. */}
         <View style={sideStripPadding(releasedStrip)}>
+          <MobileSessionHeader controller={controller} details={details} />
           <MobileWorkerAutoCloseStrip controller={controller} />
         </View>
         {contentRow}
