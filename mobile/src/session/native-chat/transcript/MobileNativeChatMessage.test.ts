@@ -428,14 +428,22 @@ describe('MobileNativeChatMessage', () => {
         ]
       }
     })
-    expect(tree.root.findAllByProps({ testID: 'agent-message-card' })).toHaveLength(1)
+    expect(
+      findAllByHostType(tree.root, 'View').filter(
+        (node) => node.props.testID === 'agent-message-card'
+      )
+    ).toHaveLength(1)
     expect(findAllByHostType(tree.root, 'Image')).toHaveLength(1)
     act(() =>
-      tree.root
-        .findByProps({ testID: 'agent-message-body' })
+      findAllByHostType(tree.root, 'View')
+        .find((node) => node.props.testID === 'agent-message-body')!
         .props.onLayout({ nativeEvent: { layout: { height: 0 } } })
     )
-    expect(tree.root.findByProps({ testID: 'agent-message-viewport' }).props.style.height).toBe(0)
+    expect(
+      findAllByHostType(tree.root, 'View').find(
+        (node) => node.props.testID === 'agent-message-viewport'
+      )!.props.style.height
+    ).toBe(0)
     expect(textIn(tree.root)).not.toContain('Show more')
     expect(tree.root.findAllByProps({ accessibilityLabel: 'Copy message' })).toHaveLength(0)
   })
