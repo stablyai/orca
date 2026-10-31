@@ -3,6 +3,7 @@ import { Smile } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { lazyWithPreload } from '@/lib/lazy-with-retry'
 import { insertWorkspaceEmojiAtSelection } from '@/lib/workspace-emoji-shortcodes'
 import { cn } from '@/lib/utils'
@@ -37,6 +38,8 @@ export const WorkspaceEmojiPickerButton = memo(function WorkspaceEmojiPickerButt
   onValueChange,
   portalContainer
 }: WorkspaceEmojiPickerButtonProps): React.JSX.Element {
+  // Why: memo would otherwise keep the label and tooltip in the previous UI language.
+  useUiLanguageRevision()
   const [open, setOpen] = useState(false)
   // Why: the input loses focus while the picker is open, so remember where to insert.
   const selectionRef = useRef<{ start: number; end: number } | null>(null)
