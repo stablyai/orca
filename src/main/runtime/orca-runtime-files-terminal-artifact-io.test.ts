@@ -238,6 +238,36 @@ describe('RuntimeFileCommands', () => {
       await expect(readFile(artifactPath, 'utf8')).resolves.toBe('{"ok":true}')
     })
 
+    it('pages a granted binary file whole, beyond the text read cap, for its client only', async () => {
+      const bytes = Buffer.alloc(3 * 1024 * 1024 + 7, 0xab)
+      bytes[0] = 0
+      const artifactPath = await tempFile('teste.mp4', '')
+      await writeFile(artifactPath, bytes)
+      const { commands } = createRuntimeFileCommands({ path: '/repo' })
+      resolveAuthorizedPathMock.mockImplementation(async (p: string) => p)
+      const target = absoluteFileTarget(await resolveTerminalArtifactPath(commands, artifactPath))
+      const readPage = (offset: number, clientId = 'client-a') =>
+        commands.readTerminalArtifactChunk(
+          'id:wt-1',
+          target.grantId,
+          target.absolutePath,
+          offset,
+          512 * 1024,
+          clientId
+        )
+
+      const pages: Buffer[] = []
+      for (let offset = 0, eof = false; !eof; ) {
+        const page = await readPage(offset)
+        pages.push(Buffer.from(page.contentBase64, 'base64'))
+        offset += page.bytesRead
+        eof = page.eof
+      }
+
+      expect(Buffer.concat(pages).equals(bytes)).toBe(true)
+      await expect(readPage(0, 'client-b')).rejects.toThrow()
+    })
+
     it('rejects stale absolute terminal artifact reads before returning changed content', async () => {
       const artifactPath = await tempFile('result.json', '{"ok":true}')
       const { commands } = createRuntimeFileCommands({ path: '/repo' })
