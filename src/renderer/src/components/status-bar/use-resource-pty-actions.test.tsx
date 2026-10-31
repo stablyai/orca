@@ -286,6 +286,64 @@ it('shares publication cadence across overlapping single-row invocations and res
   expect(vi.getTimerCount()).toBe(0)
 })
 
+it('publishes progress without listing until overlapping termination batches drain', async () => {
+  const sessions = Array.from({ length: 12 }, (_, index) => ({ ...session(), id: `pty-${index}` }))
+  let remaining = sessions
+  list.mockImplementation(async () => remaining)
+  const finishes: (() => void)[] = []
+  kill.mockImplementation(
+    ({ id }) =>
+      new Promise((resolve, reject) => {
+        finishes.push(() => {
+          if (id === 'pty-0') {
+            resolve({ outcome: 'refused', reason: 'claimed' })
+          } else if (id === 'pty-1') {
+            reject(new Error('Disconnected'))
+          } else {
+            remaining = remaining.filter((value) => value.id !== id)
+            resolve({ outcome: 'ended' })
+          }
+        })
+      })
+  )
+  const { result } = setup()
+  await act(async () => {})
+  expect(list).toHaveBeenCalledTimes(1)
+  const settled = vi.fn()
+  let first = Promise.resolve()
+  let second = Promise.resolve()
+  act(() => {
+    first = result.current.actions.endMany(sessions.slice(0, 6).map(row)).then(settled)
+    second = result.current.actions.endMany(sessions.slice(6).map(row))
+  })
+  for (let wave = 0; wave < 2; wave += 1) {
+    await act(async () => finishes.splice(0).forEach((finish) => finish()))
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(150)
+    })
+    expect(result.current.actions.ending.size).toBe(12 - (wave + 1) * 4)
+    expect(result.current.inventory.sessionInventory.count).toBe(14 - (wave + 1) * 4)
+    expect(result.current.actions.errors.size).toBe(2)
+    expect(list).toHaveBeenCalledTimes(1)
+  }
+  expect(settled).toHaveBeenCalledTimes(1)
+  const discovered = { ...session(), id: 'new-session' }
+  remaining = [...remaining, discovered]
+  await act(async () => {
+    finishes.splice(0).forEach((finish) => finish())
+    await Promise.all([first, second])
+    await vi.advanceTimersByTimeAsync(150)
+  })
+  expect(list).toHaveBeenCalledTimes(2)
+  expect(result.current.inventory.sessionInventory.sessions).toEqual([
+    sessions[0],
+    sessions[1],
+    discovered
+  ])
+  expect(result.current.actions.ending.size).toBe(0)
+  expect(vi.getTimerCount()).toBe(0)
+})
+
 it('bounds inventory publications and state copies for 10,000 staggered completions with exit events', async () => {
   const sessions = Array.from({ length: 10_000 }, (_, index) => ({
     ...session(),
