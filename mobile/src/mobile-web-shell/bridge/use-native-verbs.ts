@@ -1,5 +1,6 @@
 import { useMemo } from 'react'
 import { z } from 'zod'
+import { nativeMediaReleaseQueueFor } from './native-media-release-queue'
 import { usePageBridgeClient } from '../../transport/client-context.web'
 import {
   mediaNameResultSchema,
@@ -131,6 +132,11 @@ export function useNativeVerbs(): NativeVerbs {
       }
     }
 
+    const mediaReleases = nativeMediaReleaseQueueFor(
+      client,
+      async (handle) =>
+        (await call('native.media.release', { handle }, mediaReleaseResultSchema)).released
+    )
     const mime: BridgeClipboardMime = 'text'
     const canWriteClipboardText = has('native.clipboard.write')
     const canReadClipboardText = has('native.clipboard.read')
@@ -145,12 +151,13 @@ export function useNativeVerbs(): NativeVerbs {
         (await call('native.clipboard.write', { mime, value }, clipboardWriteResultSchema)).written,
       readClipboardText: async () =>
         (await call('native.clipboard.read', { mime }, clipboardReadResultSchema)).value,
-      pickMedia: async (source, multiple) =>
-        (await call('native.media.pick', { source, multiple }, mediaPickResultSchema)).items,
+      pickMedia: async (source, multiple) => {
+        await mediaReleases.retry()
+        return (await call('native.media.pick', { source, multiple }, mediaPickResultSchema)).items
+      },
       readMedia: (handle, offset, length) =>
         call('native.media.read', { handle, offset, length }, mediaReadResultSchema),
-      releaseMedia: async (handle) =>
-        (await call('native.media.release', { handle }, mediaReleaseResultSchema)).released,
+      releaseMedia: (handle) => mediaReleases.release(handle),
       nameMedia: async (handle) =>
         (await call('native.media.name', { handle }, mediaNameResultSchema)).name,
       startAudio: (sampleRate) =>
