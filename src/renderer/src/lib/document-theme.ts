@@ -157,7 +157,7 @@ function withFloatingSurfaces(tokens: Record<string, string>): Record<string, st
 
 /** Paints tokens that stay readable over this mode's built-ins; returns what was painted. */
 function paintPluginTokens(
-  tokens: Record<string, string>,
+  { tokens, base }: Pick<CachedPluginAppTheme, 'tokens' | 'base'>,
   options: PluginThemePaintOptions
 ): Record<string, string> {
   const root = options.root ?? document.documentElement
@@ -165,6 +165,7 @@ function paintPluginTokens(
   setPluginTokens(root, {})
   const safe = safePluginThemeTokens(
     tokens,
+    base,
     (options.builtIns ?? documentBuiltIns)(),
     options.probe ?? browserColorProbe
   )
@@ -196,7 +197,7 @@ export function applyPluginAppTheme(
     writeCache(storage, null)
     return
   }
-  const tokens = paintPluginTokens(theme.tokens, options)
+  const tokens = paintPluginTokens(theme, options)
   writeCache(storage, { id: theme.id, revision: theme.revision, base: theme.base, tokens })
 }
 
@@ -238,5 +239,5 @@ export function applyCachedPluginAppTheme(
   cached: CachedPluginAppTheme,
   options: PluginThemePaintOptions = {}
 ): void {
-  paintPluginTokens(cached.tokens, options)
+  paintPluginTokens(cached, options)
 }

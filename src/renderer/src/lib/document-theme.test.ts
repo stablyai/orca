@@ -244,6 +244,40 @@ describe('applyPluginAppTheme', () => {
     })
   })
 
+  it('drops only the status or link color that fails, never the shared surface', () => {
+    const sidebar = { '--sidebar': '#202020', '--sidebar-foreground': '#ffffff' }
+    expect(
+      painted({
+        ...sidebar,
+        '--git-decoration-ignored': '#303030',
+        '--git-decoration-added': '#4ec95a'
+      })
+    ).toEqual({ ...sidebar, '--git-decoration-added': '#4ec95a' })
+    expect(painted({ '--editor-surface': '#151515', '--text-link': '#1a1a40' })).toEqual({
+      '--editor-surface': '#151515'
+    })
+  })
+
+  it('checks a translucent row as painted over the sidebar it tints', () => {
+    const sidebar = { '--worktree-sidebar': '#202020', '--worktree-sidebar-foreground': '#f0f0f0' }
+    expect(painted({ ...sidebar, '--worktree-sidebar-active': '#ffffff1a' })).toEqual({
+      ...sidebar,
+      '--worktree-sidebar-active': '#ffffff1a'
+    })
+    expect(painted({ ...sidebar, '--worktree-sidebar-active': '#ffffffd0' })).toEqual(sidebar)
+  })
+
+  it('checks half of a pair against what main.css paints for the other half', () => {
+    // The badge text falls back to --muted-foreground, which this badge would hide.
+    expect(painted({ '--accent': '#303030', '--host-badge': '#a1a1a1' })).toEqual({
+      '--accent': '#303030'
+    })
+    // The inactive tab follows --card, so its text is checked on the theme's card.
+    expect(painted({ '--card': '#202020', '--tab-inactive-foreground': '#262626' })).toEqual({
+      '--card': '#202020'
+    })
+  })
+
   it('keeps the startup cache tied to the theme id and revision until cleared', () => {
     const storage = memoryStorage()
     applyPluginAppTheme(theme({ '--background': '#101018' }), { ...options(), storage })
