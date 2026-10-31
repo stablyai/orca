@@ -90,7 +90,10 @@ async function* pickFromLibrary(
     base64: false,
     allowsMultipleSelection: multiple,
     ...(multiple ? { selectionLimit: 0, orderedSelection: true } : {}),
-    quality: 1
+    quality: 1,
+    // iOS otherwise returns HEIC bytes, which agents can't read and the host names .png.
+    preferredAssetRepresentationMode:
+      ImagePicker.UIImagePickerPreferredAssetRepresentationMode.Compatible
   })
   if (result.canceled) {
     return

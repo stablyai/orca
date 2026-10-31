@@ -16,7 +16,8 @@ vi.mock('expo-clipboard', () => ({ getImageAsync: expo.getImageAsync }))
 vi.mock('expo-document-picker', () => ({ getDocumentAsync: expo.getDocumentAsync }))
 vi.mock('expo-image-picker', () => ({
   launchImageLibraryAsync: expo.launchImageLibraryAsync,
-  requestMediaLibraryPermissionsAsync: expo.requestMediaLibraryPermissionsAsync
+  requestMediaLibraryPermissionsAsync: expo.requestMediaLibraryPermissionsAsync,
+  UIImagePickerPreferredAssetRepresentationMode: { Compatible: 'compatible' }
 }))
 vi.mock('expo-file-system', () => ({
   File: class {
@@ -92,7 +93,8 @@ describe('how the pickers are launched', () => {
       expect.objectContaining({
         mediaTypes: ['images'],
         base64: false,
-        allowsMultipleSelection: false
+        allowsMultipleSelection: false,
+        preferredAssetRepresentationMode: 'compatible'
       })
     )
     // Omit selectionLimit for single picks; zero means unlimited.
