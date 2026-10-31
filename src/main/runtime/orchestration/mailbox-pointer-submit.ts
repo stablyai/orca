@@ -114,7 +114,11 @@ export function submitOrchestrationMailboxPointer(
           return
         }
         // Unverifiable Enter stays attempted: neither delivery nor safe resend is proven.
-        if (enterSettlement.outcome !== 'unverifiable' && !sameMailbox) {
+        if (
+          enterSettlement.outcome !== 'unverifiable' &&
+          // Re-resolved: a queued Enter can settle after the Run rebinds.
+          deps.mailboxOwner.resolve(terminal, input.mailboxHandle) !== input.mailboxHandle
+        ) {
           // Sent or refused, rebound mail goes on to its new owner.
           clearAndRedrive = true
         } else if (enterSettlement.outcome === 'refused') {

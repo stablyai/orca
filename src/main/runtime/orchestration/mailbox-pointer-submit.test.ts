@@ -635,7 +635,10 @@ describe('orchestration mailbox pointer submit', () => {
     })
   })
 
-  it('hands rebound mail to its new owner when the Enter is refused', async () => {
+  it.each([
+    ['before the Enter', false],
+    ['while the Enter is queued', true]
+  ])('hands mail rebound %s to its new owner when the Enter is refused', async (_name, queued) => {
     const db = new OrchestrationDb(':memory:')
     const message = db.insertMessage({
       runId: 'run_legacy_local',
@@ -658,13 +661,19 @@ describe('orchestration mailbox pointer submit', () => {
     state.setWatermark('run:run-1', 1, ptyId)
     expect(db.stageMailboxPointerEnter([message.id], reservation)).toBe(true)
     expect(db.markMailboxPointerWriteAttempted([message.id], reservation)).toBe(true)
-    const writePty = vi.fn(settledWriteStub(() => false))
+    let owner = queued ? 'run:run-1' : 'run:run-2'
+    const writePty = vi.fn(
+      settledWriteStub(() => {
+        owner = 'run:run-2'
+        return false
+      })
+    )
     const settle = vi.fn(() => state.settleFlight(ptyId, flight))
     const redrive = vi.fn()
 
     submitOrchestrationMailboxPointer(
       {
-        mailboxOwner: { resolve: () => 'run:run-2' },
+        mailboxOwner: { resolve: () => owner },
         state,
         getDb: () => db,
         resolveSubmitTarget: () => expectedTarget,
