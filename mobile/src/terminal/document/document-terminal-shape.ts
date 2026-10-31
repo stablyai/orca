@@ -58,6 +58,12 @@ export type TerminalDocumentTerminalOptions = {
   fontSize: number
 }
 
+export type TerminalDocumentDecoration = {
+  dispose: () => void
+  marker?: { dispose: () => void }
+  onRender: (callback: (element: HTMLElement) => void) => void
+}
+
 export type TerminalDocumentTerminal = {
   readonly cols: number
   readonly rows: number
@@ -103,6 +109,13 @@ export type TerminalDocumentTerminal = {
   loadAddon: (addon: TerminalDocumentWebglAddon) => void
   scrollToBottom: () => void
   scrollLines: (amount: number) => void
+  registerMarker?: (cursorLineOffset: number) => { dispose: () => void } | undefined
+  registerDecoration?: (options: {
+    marker: { dispose: () => void }
+    x: number
+    width: number
+    layer?: string
+  }) => TerminalDocumentDecoration | undefined
 }
 
 export type TerminalDocumentDisposable = { dispose?: () => void }

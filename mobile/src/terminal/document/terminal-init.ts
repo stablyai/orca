@@ -1,4 +1,5 @@
 import { parseTerminalKittyKeyboardFlags } from '../../../../src/shared/terminal-kitty-keyboard-flags'
+import { clearSizeDimDecorations } from './dir-listing-size-dim'
 import { resetSmoothScrollOffset } from './normal-buffer-smooth-scroll'
 import { stopSurfaceTouchGestures } from './surface-touch-gestures'
 import { clearLongPress } from './tap-dispatch'
@@ -245,6 +246,7 @@ export function resize(scope: TerminalDocumentScope, cols: number, rows: number)
 
 // Invalidate queued init frames by generation and dispose both committed and pending-swap engines, deduping identical instances.
 export function stopTerminalInit(scope: TerminalDocumentScope) {
+  clearSizeDimDecorations(scope)
   scope.terminalGeneration++
   for (const terminal of new Set([scope.term, scope.committedTerm])) {
     try {

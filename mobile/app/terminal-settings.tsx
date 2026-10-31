@@ -29,7 +29,9 @@ import { setTerminalSettingsScrollEnabled } from '../src/terminal/terminal-setti
 import { useTerminalTextScaleSetting } from '../src/terminal/use-terminal-text-scale-setting'
 import {
   loadTerminalAutocompleteEnabled,
-  saveTerminalAutocompleteEnabled
+  loadTerminalDimDirListingSizes,
+  saveTerminalAutocompleteEnabled,
+  saveTerminalDimDirListingSizes
 } from '../src/storage/preferences'
 import { MobileSwitch } from '../src/components/MobileSwitch'
 
@@ -210,6 +212,25 @@ export default function TerminalSettingsScreen() {
     void saveTerminalAutocompleteEnabled(next)
   }, [])
 
+  const [dimDirListingSizes, setDimDirListingSizes] = useState(false)
+  const userToggledDimSizesRef = useRef(false)
+  useEffect(() => {
+    let stale = false
+    void loadTerminalDimDirListingSizes().then((enabled) => {
+      if (!stale && !userToggledDimSizesRef.current) {
+        setDimDirListingSizes(enabled)
+      }
+    })
+    return () => {
+      stale = true
+    }
+  }, [])
+  const toggleDimDirListingSizes = useCallback((next: boolean) => {
+    userToggledDimSizesRef.current = true
+    setDimDirListingSizes(next)
+    void saveTerminalDimDirListingSizes(next)
+  }, [])
+
   useEffect(() => {
     let cancelled = false
     for (const host of hosts) {
@@ -388,6 +409,27 @@ export default function TerminalSettingsScreen() {
               )}
               value={autocompleteEnabled}
               onValueChange={toggleAutocomplete}
+            />
+          </View>
+        </View>
+
+        <Text style={[styles.groupHeading, styles.inputGroupGap]}>DIRECTORY LISTINGS</Text>
+        <Text style={styles.groupDescription}>
+          Dim trailing file-size tokens (1.4K, 738B, …) that coding agents print in directory
+          listings. Visual only — selection and copy still include the original text. Off by
+          default.
+        </Text>
+        <View style={[styles.section, styles.sectionTopGap]}>
+          <View style={styles.row}>
+            <View style={styles.rowContent}>
+              <Text style={styles.rowLabel}>Dim file sizes</Text>
+              <Text style={styles.rowSublabel}>{dimDirListingSizes ? 'On' : 'Off'}</Text>
+            </View>
+            <Switch
+              value={dimDirListingSizes}
+              onValueChange={toggleDimDirListingSizes}
+              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
+              thumbColor={colors.textPrimary}
             />
           </View>
         </View>
