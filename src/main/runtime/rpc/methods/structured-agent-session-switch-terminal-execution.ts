@@ -31,16 +31,23 @@ export async function executeStructuredSessionTerminalSwitch(
     })
   }
   const execution = SwitchToTerminalParams.parse(params).execution
-  // Admission before the chat stops, as in the other direction: a live agent the status store
-  // shows holding this conversation (a CLI resumed by hand) refuses. The chat being stopped has no
-  // pane, so every pane counts.
-  if (providerSessionId) {
-    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(agent, providerSessionId, undefined)
-  }
   // Saved turns are history the terminal must read: an unreadable transcript refuses before the
   // chat is stopped. A chat whose first reply is still landing is read after the stop.
-  if (nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved') {
-    await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
+  const saved =
+    nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved'
+      ? await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
+      : undefined
+  // Admission before the chat stops, as in the other direction: a live agent the status store
+  // shows holding this conversation (a CLI resumed by hand) refuses. The terminal this
+  // conversation's claim owns is the one the create below adopts (an earlier attempt's), not
+  // another writer.
+  if (providerSessionId) {
+    const claimed = await ctx.runtime.switchTerminalClaimOwnerPaneKey(record.location.workspaceId, {
+      agent,
+      source: saved,
+      commandOverride: execution?.commandOverride
+    })
+    await ctx.runtime.assertNoCliWriterOutsideSwitchSource(agent, providerSessionId, claimed)
   }
   deadline.check()
   const workCurrent = await host.stopForSwitch(

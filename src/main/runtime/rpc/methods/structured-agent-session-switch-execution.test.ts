@@ -36,6 +36,7 @@ import { DaemonRequestTimeoutError } from '../../../daemon/daemon-errors'
 import { chatTabId, withSelectedChatTab } from '../../agent-session/agent-session-tab-layout'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
+import type { AgentStatusIpcPayload } from '../../../../shared/agent-status-types'
 
 let rig: RestTestRig
 let releaseReceiverExit: (() => void) | undefined
@@ -632,6 +633,88 @@ it('re-issuing a switch whose first answer was lost adopts the terminal it start
       .tabsByWorktree[WORKTREE_ID]?.map((tab) => tab.id)
       .sort()
   ).toEqual([TAB_ID, lost.tabId].sort())
+})
+
+it('a retry after an uncertain answer adopts the terminal its first attempt left, live row and all', async () => {
+  await savedTranscript(rig)
+  vi.spyOn(cliTranscript, 'nativeConversationContent').mockReturnValue('saved')
+  const nativeId = rig.store.getRecord(id)!.providerHandleChain.at(-1)!.handle.nativeId
+  const rows: AgentStatusIpcPayload[] = []
+  const { runtime } = setupMainOwnedWorkspace({
+    runtimeDeps: {
+      readHookCliWriterObservation: () => ({
+        current: () => true,
+        presence: async () => 'live',
+        topology: 'pane-owned'
+      })
+    }
+  })
+  vi.spyOn(runtime, 'getAgentProviderSessionRows').mockImplementation(() => rows)
+  vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+    id: WORKTREE_ID,
+    path: rig.root,
+    connectionId: null,
+    repo: null,
+    folderWorkspace: null
+  })
+  // Answers as the daemon does: one live owner per conversation claim; a repeat adopts it.
+  const owners = new ClaimedAgentPtyOwnerRegistry()
+  let started = 0
+  runtime.setPtyController({
+    spawn: async (args) => {
+      const ensured = await owners.ensure({
+        claim: args.agentSessionEnsure!.claim,
+        surface: args.agentSessionEnsure!.surface,
+        spawn: async () => ({ ptyId: `switch-pty-${++started}` })
+      })
+      return {
+        id: ensured.owner.ptyId,
+        incarnationId: '44444444-4444-4444-8444-444444444444',
+        agentSessionEnsure: ensured,
+        ...(ensured.disposition === 'adopted' ? { isReattach: true } : {})
+      }
+    },
+    write: () => true,
+    kill: () => true,
+    stopAndWait: async () => true,
+    getForegroundProcess: async () => null
+  })
+  const spawn = runtime.spawnSwitchTerminal.bind(runtime)
+  const spawned: Awaited<ReturnType<typeof spawn>>[] = []
+  vi.spyOn(runtime, 'spawnSwitchTerminal').mockImplementation(async (...args) => {
+    const terminal = await spawn(...args)
+    spawned.push(terminal)
+    return terminal
+  })
+  vi.spyOn(runtime, 'placeSwitchTerminal').mockRejectedValueOnce(
+    new TerminalRevealUnconfirmedError('Terminal reveal timed out')
+  )
+  const first = await executeStructuredSessionSwitch(
+    { sessionId: id, execution: { invocationId: 'to-terminal-lost' } },
+    { runtime },
+    'terminal'
+  )
+  expect(first).toMatchObject({ status: 'uncertain' })
+  // The kept terminal's CLI reports in on the conversation.
+  rows.push({
+    paneKey: spawned[0]!.paneKey!,
+    worktreeId: WORKTREE_ID,
+    connectionId: null,
+    agentType: 'codex',
+    receivedAt: 1,
+    stateStartedAt: 1,
+    state: 'done',
+    prompt: '',
+    providerSession: { key: 'session_id', id: nativeId }
+  })
+  const retried = await executeStructuredSessionSwitch(
+    { sessionId: id, execution: { invocationId: 'to-terminal-retry' } },
+    { runtime },
+    'terminal'
+  )
+  expect(retried).toMatchObject({ status: 'completed', sessionId: id })
+  expect(started).toBe(1)
+  expect(spawned.map((terminal) => terminal.ptyId)).toEqual(['switch-pty-1', 'switch-pty-1'])
 })
 
 it('settles a kept source once when the switch fails after stopping it', async () => {

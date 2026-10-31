@@ -1,4 +1,5 @@
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
+import { cloneAgentSessionOwnerBinding } from '../../../../shared/claimed-agent-pty-owner-snapshot'
 import { recordTerminalLaunchMetadata, resolveTerminalLaunchResult } from './terminal-launch-result'
 import type { PaneSpawnOperation } from '../../../ipc/pty/pane/pane-spawn-operation'
 import { OrcaRuntimeWithTerminalCreateDeduplication } from './terminal-create-deduplication'
@@ -231,6 +232,12 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
         const pty = this.getOrCreatePtyWorktreeRecord(result.id)
         if (pty) {
           pty.runtimeSessionOwned = true
+          // The claim owner the spawn answered with, before an inventory refresh reports it.
+          if (result.agentSessionEnsure?.owner.ptyId === result.id) {
+            pty.agentSessionOwners = [
+              cloneAgentSessionOwnerBinding(result.agentSessionEnsure.owner)
+            ]
+          }
           if (!launch.adoptedStablePane) {
             seedPtyLaunchTitle(pty, launch.effectiveTitle, launchTitleAt, (title, at) =>
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)

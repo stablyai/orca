@@ -6,10 +6,12 @@ import {
 } from '../../../../shared/ai-vault-resume-startup'
 import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentProviderSessionMetadata } from '../../../../shared/agent-session-resume'
 import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import type { TerminalWorkspaceLaunchScope } from '../../runtime-legacy-worker-terminal-recovery-types'
 import type { MobileTerminalCommand } from '../../terminal/launch/mobile-terminal-startup'
 import { canonicalizeAgentSessionIdentity } from '../../agent-session/ownership/agent-session-claim-identity'
+import { agentSessionClaimKey } from '../../../../shared/claimed-agent-pty-owner-snapshot'
 import { OrcaRuntimeWithGetAgentSessionExecutionNamespace } from './get-agent-session-execution-namespace'
 
 export type SwitchTerminalSpawn = {
@@ -37,6 +39,75 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
     workspaceId: string,
     args: SwitchTerminalSpawn
   ): Promise<RuntimeTerminalCreate> {
+    const { workspace, launchRuntime, startup, providerSession } = await this.switchTerminalLaunch(
+      workspaceId,
+      args
+    )
+    // No claim when nothing can adopt by one: a chat that never saved a turn (no provider session
+    // to name), a route that cannot attest one (SSH), or an execution owner too old to adopt. A
+    // retry after a lost reply there starts a second CLI, which the user can close.
+    const claim =
+      providerSession &&
+      (await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', args.signal))
+        ? this.switchTerminalClaim(workspace, args.agent, providerSession)
+        : undefined
+    if (args.signal?.aborted) {
+      throw new Error('client_disconnected')
+    }
+    return this.createTerminal(`id:${workspace.id}`, {
+      wslUserAct: true,
+      command: startup.command,
+      env: startup.env,
+      envToDelete: startup.envToDelete,
+      launchConfig: startup.launchConfig,
+      startupCommandDelivery:
+        'startupCommandDelivery' in startup ? startup.startupCommandDelivery : undefined,
+      launchAgent: args.agent,
+      launchRuntime,
+      ...(providerSession ? { resumeProviderSession: providerSession } : {}),
+      resumeOrigin: 'switch',
+      presentation: 'background',
+      tabId: randomUUID(),
+      leafId: randomUUID(),
+      ...(claim ? { agentSessionClaim: claim } : {}),
+      persistHostSessionBinding: true,
+      deferMobileSessionPublish: true,
+      signal: args.signal
+    })
+  }
+
+  /**
+   * The pane of the live terminal this conversation's claim owns: the one a re-issued switch's
+   * create adopts. A first attempt whose answer was lost leaves it running for that retry.
+   */
+  async switchTerminalClaimOwnerPaneKey(
+    workspaceId: string,
+    args: SwitchTerminalSpawn
+  ): Promise<string | undefined> {
+    if (!args.source) {
+      return undefined
+    }
+    const { workspace, providerSession } = await this.switchTerminalLaunch(workspaceId, args)
+    const claim =
+      providerSession && this.switchTerminalClaim(workspace, args.agent, providerSession)
+    const key = claim && agentSessionClaimKey(claim)
+    for (const pty of key ? this.ptysById.values() : []) {
+      const owner = pty.connected
+        ? pty.agentSessionOwners.find(
+            (candidate) =>
+              candidate.phase === 'live' &&
+              candidate.ptyId === pty.ptyId &&
+              agentSessionClaimKey(candidate.claim) === key
+          )
+        : undefined
+      if (owner) {
+        return `${owner.surface.tabId}:${owner.surface.leafId}`
+      }
+    }
+    return undefined
+  }
+
+  private async switchTerminalLaunch(workspaceId: string, args: SwitchTerminalSpawn) {
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
       `id:${workspaceId}`,
       undefined,
@@ -63,43 +134,22 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
           sessionOptions: args.options
         })
     const providerSession = 'providerSession' in startup ? startup.providerSession : undefined
-    const namespace = this.getAgentSessionExecutionNamespace(workspace, args.agent)
-    // No claim when nothing can adopt by one: a chat that never saved a turn (no provider session
-    // to name), a route that cannot attest one (SSH), or an execution owner too old to adopt. A
-    // retry after a lost reply there starts a second CLI, which the user can close.
-    const claim =
-      providerSession &&
-      namespace &&
-      (await this.executionOwnerSupportsAgentSessionOperation(workspace, 'resume', args.signal))
-        ? this.agentSessionClaimSigner.createClaim({
-            namespace,
-            identity: canonicalizeAgentSessionIdentity(args.agent, providerSession),
-            canonicalWorktreeId: workspace.id
-          })
-        : undefined
-    if (args.signal?.aborted) {
-      throw new Error('client_disconnected')
-    }
-    return this.createTerminal(`id:${workspace.id}`, {
-      wslUserAct: true,
-      command: startup.command,
-      env: startup.env,
-      envToDelete: startup.envToDelete,
-      launchConfig: startup.launchConfig,
-      startupCommandDelivery:
-        'startupCommandDelivery' in startup ? startup.startupCommandDelivery : undefined,
-      launchAgent: args.agent,
-      launchRuntime,
-      ...(providerSession ? { resumeProviderSession: providerSession } : {}),
-      resumeOrigin: 'switch',
-      presentation: 'background',
-      tabId: randomUUID(),
-      leafId: randomUUID(),
-      ...(claim ? { agentSessionClaim: claim } : {}),
-      persistHostSessionBinding: true,
-      deferMobileSessionPublish: true,
-      signal: args.signal
-    })
+    return { workspace, launchRuntime, startup, providerSession }
+  }
+
+  private switchTerminalClaim(
+    workspace: TerminalWorkspaceLaunchScope,
+    agent: TuiAgent,
+    providerSession: AgentProviderSessionMetadata
+  ) {
+    const namespace = this.getAgentSessionExecutionNamespace(workspace, agent)
+    return namespace
+      ? this.agentSessionClaimSigner.createClaim({
+          namespace,
+          identity: canonicalizeAgentSessionIdentity(agent, providerSession),
+          canonicalWorktreeId: workspace.id
+        })
+      : undefined
   }
 
   /**
