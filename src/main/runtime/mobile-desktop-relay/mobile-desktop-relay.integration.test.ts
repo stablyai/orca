@@ -717,6 +717,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
         passthroughOpens.hostReplies.filter((frame) =>
           JSON.parse(frame).id?.startsWith('relay-github-authority:')
         )
+      const authorityRepliesBefore = authorityReplies().length
       for (const [index, optional] of [
         { params: legacyParams, source: undefined },
         { params, source: undefined },
@@ -742,7 +743,7 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
         expect((await phone.next(id)).ok).toBe(false)
         expect(aWrite).not.toHaveBeenCalled()
       }
-      expect(authorityReplies()).toHaveLength(0)
+      expect(authorityReplies()).toHaveLength(authorityRepliesBefore)
       expect(classifyExactGitHubOperation('github.listLabels', params, {})).toBeNull()
       phone.send('stable-a', 'github.updateIssue', params, TARGET, expectedA)
       expect(isOk(await phone.next('stable-a'))).toBe(true)
