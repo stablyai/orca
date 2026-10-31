@@ -1,3 +1,9 @@
+import { getRepoSshConnectionId } from '../../../shared/execution-host'
+import {
+  automationRequiresHostReselection,
+  findAutomationRepo
+} from '../../../shared/automation-repo-target'
+import type { Repo } from '../../../shared/repo-types'
 import type { Automation, AutomationRun } from '../../../shared/automations-types'
 import type { PersistedState } from '../../../shared/persisted-state-types'
 import {
@@ -105,8 +111,13 @@ export function automationProjectionContext(
   storageAuthority: AutomationStorageAuthority,
   withUsage: boolean
 ): AutomationProjectionContext {
+  const reposById = new Map<string, Repo[]>()
+  for (const repo of state.repos) {
+    const rows = reposById.get(repo.id) ?? []
+    rows.push(repo)
+    reposById.set(repo.id, rows)
+  }
   const usage = withUsage ? automationUsageSummaries(state) : null
-  const reposById = new Map(state.repos.map((repo) => [repo.id, repo]))
   const targetIdByGeneration = new Map(
     (state.sshTargets ?? []).flatMap((target) =>
       target.generation === undefined ? [] : [[target.generation, target.id] as const]
@@ -114,11 +125,18 @@ export function automationProjectionContext(
   )
   return {
     storageAuthority,
+    requiresHostReselection: (automation) =>
+      resolveAutomationWorkspaceHost(folderWorkspaceHostState(state), automation.workspaceId)
+        .kind === 'unpinned' &&
+      automationRequiresHostReselection(
+        automation,
+        reposById.get(automation.runContext?.repoId ?? automation.projectId) ?? []
+      ),
     sshTargetGeneration: (targetId) => sshTargetGenerationForConnection(state, targetId),
     sshTargetIdForGeneration: (generation) => targetIdByGeneration.get(generation),
-    repoConnectionId: (repoId) => {
-      const repo = reposById.get(repoId)
-      return repo ? repo.connectionId?.trim() || null : undefined
+    repoConnectionId: (repoId, automation) => {
+      const repo = findAutomationRepo(reposById.get(repoId) ?? [], repoId, automation?.runContext)
+      return repo ? getRepoSshConnectionId(repo) : undefined
     },
     workspaceHost: (automation) =>
       resolveAutomationWorkspaceHost(folderWorkspaceHostState(state), automation.workspaceId),

@@ -1,3 +1,4 @@
+// @protected-copy: skill install trust review.
 import type { ReactNode } from 'react'
 import { AlertTriangle, Check } from 'lucide-react'
 import { Button } from '@/components/ui/button'

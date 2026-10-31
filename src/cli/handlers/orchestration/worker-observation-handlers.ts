@@ -1,5 +1,7 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { printOrchestrationReceipt, printOrchestrationResult } from './agent-view'
+import { WORKER_SHOW_VIEW, type WorkerShowResult } from './worker-agent-views'
 import {
   getOptionalPositiveIntegerFlag,
   getOptionalStringFlag,
@@ -14,19 +16,13 @@ import { formatWorkerRead, type LegacyWorkerReadResult } from './worker-output'
 
 export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHandler> = {
   'orchestration worker-show': async ({ flags, client, json }) => {
-    const result = await client.call<{
-      dispatch: { id: string; taskId: string; status: string } | null
-      worker: { state: string; stage: string; agentTerminalHandle: string | null }
-      projection?: {
-        liveness: { verdict: string }
-        nextAction: { argv: string[] }
-        attention?: { categories: string[] }
-      } | null
-      observation?: { agentWait?: { source: string; reason?: string } | null }
-      autoReleaseAt?: string | null
-    }>('orchestration.workerShow', {
+    const result = await client.call<WorkerShowResult>('orchestration.workerShow', {
       dispatch: getRequiredStringFlag(flags, 'dispatch')
     })
+    if (!flags.has('full')) {
+      printOrchestrationResult(result, json, WORKER_SHOW_VIEW)
+      return
+    }
     printResult(result, json, (value) => {
       const lines = [
         `${value.dispatch?.id ?? 'unknown'} task=${value.dispatch?.taskId ?? 'unknown'} [${value.worker.state}] stage=${value.worker.stage}`
@@ -82,6 +78,6 @@ export const ORCHESTRATION_WORKER_OBSERVATION_HANDLERS: Record<string, CommandHa
         source: source as OrchestrationWorkerReadSource | undefined
       }
     )
-    printResult(result, json, formatWorkerRead)
+    printOrchestrationReceipt(result, { flags, json }, formatWorkerRead)
   }
 }

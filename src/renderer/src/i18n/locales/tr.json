@@ -11882,8 +11882,7 @@
         "PluginInstallDialog": {
           "localRequired": "Eklenti klasörü yolunu girin.",
           "gitUrlRequired": "Bir repository URL'si girin.",
-          "gitUrlInvalid": "HTTPS veya SSH Git URL'si kullanın. Çalıştırılabilir Git yardımcı protokollerine izin verilmez.",
-          "gitRefRequired": "Kurulumun sabitlenmesi için açık bir #ref (tag veya commit) ekleyin; örneğin #v0.1.0.",
+          "gitUrlInvalid": "https://github.com/owner/repo, owner/repo veya bir SSH URL'si gibi bir depo bağlantısı kullanın.",
           "title": "Eklenti yükle",
           "description": "Yükleme, eklentiyi Orca'ya kopyalar ve incelenmesi için izinlerini gösterir. Siz etkinleştirene kadar hiçbir eklenti kodu çalışmaz.",
           "source": "Yükleme kaynağı",
@@ -11893,12 +11892,23 @@
           "localPlaceholder": "/Users/you/plugins/my-plugin veya C:\\Users\\you\\plugins\\my-plugin",
           "localHelp": "Bu bilgisayarda orca-plugin.json içeren bir klasörün tam yolu. Yol girildiği gibi kullanılır.",
           "gitLabel": "#ref içeren repository URL'si",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "Kurulumun sabitlenmesi için açık bir #ref (bir tag veya commit) ekleyin. GitHub, GitLab ve herhangi bir git host'uyla çalışır.",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "Bir depo, sürüm veya etiket bağlantısı yapıştırın. #tag veya #commit olmadan Orca en son sürüm etiketini kullanır.",
           "cancel": "İptal",
           "installing": "Yükleniyor…",
           "install": "Yükle",
-          "installFailed": "Eklenti yüklemesi başarısız oldu. Kaynağı kontrol edin ve tekrar deneyin."
+          "installFailed": "Eklenti yüklemesi başarısız oldu. Kaynağı kontrol edin ve tekrar deneyin.",
+          "checking": "Denetleniyor…",
+          "continue": "Devam",
+          "gitUrlCredentials": "Kullanıcı adını veya belirteci URL'den kaldırın. Orca, Git oturum açma bilgilerinizi kullanır.",
+          "gitRefInvalid": "# işaretinden sonraki sürüm geçerli bir etiket, dal veya commit adı değil.",
+          "gitRefNotFound": "Bu depoda {{value0}} adında bir etiket veya dal yok.",
+          "gitUnreachable": "Bu depo okunamadı. URL'yi ve Git hesabınızın erişimi olup olmadığını denetleyin.",
+          "resolvedLatestTag": "En son sürüm olan {{value0}}, {{value1}} commit'inde yüklenir.",
+          "resolvedTag": "{{value0}}, {{value1}} commit'inde yüklenir.",
+          "resolvedBranch": "{{value0}} dalı şu anki hâliyle, {{value1}} commit'inde yüklenir.",
+          "resolvedCommit": "{{value0}} commit'i yüklenir.",
+          "resolvedDefaultBranch": "Sürüm etiketi bulunamadı; bu yüzden en son commit olan {{value0}} yüklenir."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "Yalnızca bir çalışma alanı etkinken çalışır."
@@ -12002,7 +12012,8 @@
           "invalidManifest": "orca-plugin.json geçersiz. Düzeltip eklentileri yenileyin.",
           "installedManifestUnloadable": "Bu sürüm bu Orca'da yüklenemiyor. Güncelleyin veya yeniden yükleyin.",
           "invalidArtifact": "Bildirilen bir worker veya panel dosyası eksik ya da güvenli değil. Eklenti dosyalarını düzeltip yenileyin.",
-          "consentChanged": "Eklenti, siz incelerken değişti. Bu iletişim kutusunu kapatıp güncellenmiş izinleri inceleyin."
+          "consentChanged": "Eklenti, siz incelerken değişti. Bu iletişim kutusunu kapatıp güncellenmiş izinleri inceleyin.",
+          "installGitMoved": "Orca denetledikten sonra depo değişti. Yeniden deneyin."
         },
         "plugins": {
           "search": {
@@ -12995,7 +13006,8 @@
           "previous": "Önceki",
           "updated": "Güncellendi",
           "license": "Lisans",
-          "whatsNew": "Yenilikler"
+          "whatsNew": "Yenilikler",
+          "installs": "Yüklemeler"
         },
         "PluginDetailPage": {
           "back": "Eklentiler",
@@ -15068,27 +15080,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7g",
-            "a3d5476811": "5 sa",
-            "8a350a4784": "Hesap kullanımı",
-            "e27fdaee51": "Yeni Çalışma Alanı",
-            "4405f3c440": "Masaüstünü Eşleştir",
-            "0b00c98506": "Hızlı İşlemler",
-            "0bad5b07c8": "GitHub ve Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "Görevler",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "Devam Et",
             "cf3f98fa3f": "Bağlantı Kesildi",
-            "091355da3d": "M1 Mini · ev",
-            "0bc1881bc4": "Bağlandı · 40 worktree · 5 etkin",
             "19c212e25e": "MacBook Pro",
             "2f1a1d10c4": "Masaüstleri",
-            "156db8a68a": "Oluşturulan PR'lar",
-            "4a40af029b": "Ajan süresi",
-            "00a6903322": "Oluşturulan ajanlar",
-            "c0e2e9dcd9": "Tekrar hoş geldiniz",
             "af761a0c0d": "Ayarlar",
             "5d94e8ddcc": "Orca"
           },
@@ -17562,7 +17557,8 @@
         },
         "capturedOwner": {
           "orphan": "Bu otomasyonun çalışacağı bir sunucusu yok. Silin veya ait olduğu sunucuyu yeniden ekleyin.",
-          "unfenced": "Çalıştırma geçmişini görüntülemeden veya bu otomasyonu yönetmeden önce bu sunucudaki Orca'nın güncellenmesi gerekiyor. Planlanan çalıştırmalar sunucuda devam edebilir."
+          "unfenced": "Çalıştırma geçmişini görüntülemeden veya bu otomasyonu yönetmeden önce bu sunucudaki Orca'nın güncellenmesi gerekiyor. Planlanan çalıştırmalar sunucuda devam edebilir.",
+          "hostReselection": "Otomasyonu düzenleyin ve çalıştırmadan önce ana makinesini yeniden seçin."
         },
         "hostStatus": {
           "authority": {
@@ -17740,6 +17736,9 @@
         "hostSummary": {
           "partialFailureOfHosts_one": "{{count}} sunucudan {{failed}} tanesi yüklenemedi",
           "partialFailureOfHosts_other": "{{count}} sunucudan {{failed}} tanesi yüklenemedi"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "Kaydedilen çalıştırma ana makinesi artık bu proje kurulumuyla eşleşmiyor."
         }
       },
       "agent": {
@@ -18644,6 +18643,9 @@
           "PluginsSectionDescription": {
             "openWith": "Birlikte aç (odak düzenlenebilir bir alanda değilken)"
           }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}} yükleme"
         }
       }
     },
@@ -19058,7 +19060,10 @@
         "orcaStopCrash": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca beklenmedik biçimde durdu.",
         "orcaStopRemote": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca durdu.",
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
-        "orcaStopUnnamedServer": "uzak sunucu"
+        "orcaStopUnnamedServer": "uzak sunucu",
+        "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
+        "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
         "send": "Gönder",

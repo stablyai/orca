@@ -21,8 +21,10 @@ import { pluginConsentRequestSchema } from '../../shared/plugins/approval/plugin
 import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
 import {
   isAllowedPluginGitUrl,
+  PLUGIN_COMMIT_PATTERN,
   type PluginLockfile
 } from '../../shared/plugins/installation/plugin-install-lockfile'
+import { resolvePluginGitSource } from '../plugins/installation/plugin-git-ref-resolution'
 import {
   registerPluginMarketplaceHandlers,
   type PluginMarketplaceHandlerServices
@@ -64,9 +66,16 @@ const installArgsSchema = z.discriminatedUnion('kind', [
     kind: z.literal('git'),
     url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
     // Why: installs must stay reproducible even when callers bypass renderer validation.
-    ref: z.string().trim().min(1)
+    ref: z.string().trim().min(1),
+    /** The commit the dialog showed; install fails if the ref moved since. */
+    expectedCommit: z.string().regex(PLUGIN_COMMIT_PATTERN).optional()
   })
 ])
+
+const resolveGitSourceArgsSchema = z.object({
+  url: z.string().trim().min(1).refine(isAllowedPluginGitUrl, 'git URL must use HTTPS or SSH'),
+  ref: z.string().trim().max(4096)
+})
 
 export function parsePluginInstallArgs(args: unknown): z.infer<typeof installArgsSchema> {
   return installArgsSchema.parse(args)
@@ -213,6 +222,10 @@ export function registerPluginHandlers(
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args)
   })
 
+  ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>
+    resolvePluginGitSource(resolveGitSourceArgsSchema.parse(args))
+  )
+
   ipcMain.handle('plugins:install', async (_event, args: unknown) => {
     await pluginService.whenReady()
     const parsed = parsePluginInstallArgs(args)
@@ -232,6 +245,7 @@ export function registerPluginHandlers(
             pluginsDir,
             url: parsed.url,
             ref: parsed.ref,
+            ...(parsed.expectedCommit ? { expectedCommit: parsed.expectedCommit } : {}),
             hostVersion,
             blockedPluginReason
           })

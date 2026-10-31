@@ -5,6 +5,7 @@ type PendingCreationListener = (state: PendingCreationState) => void
 type BeginArgs = {
   beforeOpen?: (sessionId: string) => boolean | void
   hooks?: { signal?: AbortSignal }
+  plan?: { prompt?: string; promptDelivery?: string; draftFromScope?: string }
 }
 const mocks = vi.hoisted(() => {
   let listener: PendingCreationListener | null = null
@@ -47,6 +48,7 @@ vi.mock('@/lib/worktree-activation', () => ({
 }))
 
 import { launchStructuredWorktreeSession } from './worktree-creation-structured-session'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
 
 const request = {
   repoId: 'repo-1',
@@ -132,5 +134,57 @@ describe('launchStructuredWorktreeSession', () => {
     )
     expect(mocks.unsubscribe).toHaveBeenCalled()
     consoleError.mockRestore()
+  })
+
+  it('sends what the user wrote while the worktree was created as the first message', async () => {
+    const launchInputs = projectSourceControlActionLaunch(
+      {
+        agentId: 'codex',
+        agentArgs: `-c 'model="true"'`,
+        launchPreferences: {
+          agentId: 'codex',
+          modelSelection: {
+            base: 'default',
+            options: { effort: { agentId: 'codex', value: 'high' } }
+          }
+        }
+      },
+      'codex',
+      { basePrompt: '' }
+    )
+    mocks.state.pendingWorktreeCreations = {
+      'creation-1': { phase: 'creating', heldChatMessage: 'Add a test', request }
+    }
+
+    await launchStructuredWorktreeSession({ ...baseArgs, request: { ...request, launchInputs } })
+
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch.mock.calls[0][0].plan).toMatchObject({
+      prompt: 'Add a test',
+      promptDelivery: 'auto-submit',
+      draftFromScope: 'pending-worktree-creation:creation-1',
+      launchOptions: { effort: 'high' },
+      chatLaunchOptions: { model: 'true', effort: 'high' }
+    })
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch.mock.calls[0][0]).toHaveProperty(
+      'declinedTerminal.agentArgs',
+      `-c 'model="true"'`
+    )
+  })
+
+  it('leaves a linked item draft to the pending composer draft the launch moves over', async () => {
+    const linked = {
+      ...request,
+      quickPrompt: '',
+      launchDraftPrompt: 'Issue #12',
+      promptDelivery: 'draft' as const
+    }
+    mocks.state.pendingWorktreeCreations = { 'creation-1': { phase: 'creating', request: linked } }
+
+    await launchStructuredWorktreeSession({ ...baseArgs, request: linked })
+
+    expect(mocks.beginStructuredAgentSessionProvisionalLaunch.mock.calls[0][0].plan).toMatchObject({
+      prompt: '',
+      draftFromScope: 'pending-worktree-creation:creation-1'
+    })
   })
 })
