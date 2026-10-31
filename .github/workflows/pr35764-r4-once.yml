@@ -1,4 +1,4 @@
-name: PR35764 R4 one held engine comparison
+name: PR35764 R4 decoder continuation one held comparison
 on:
   push:
     branches: [brennanb2025/sta-12544-md-find-anchor]
@@ -12,15 +12,17 @@ jobs:
   compare:
     if: >-
       github.run_attempt == 1 &&
-      github.event.before == '2dbb5681fad6542581f0d8802120faccb371a20f' &&
-      github.event.head_commit.message == 'PR35764 R4 one held engine comparison'
+      github.event.before == '33ac33e9ed25c206086afe561bfd2bf1ae694b0a' &&
+      github.event.after == github.sha &&
+      github.event.head_commit.id == github.sha &&
+      github.event.head_commit.message == 'PR35764 R4 decoder continuation one held comparison'
     runs-on: ubuntu-latest
     timeout-minutes: 60
     steps:
       - uses: actions/checkout@v6
         with:
           persist-credentials: false
-          fetch-depth: 2
+          fetch-depth: 3
       - name: Guard temporary commit and unchanged production inputs
         run: node config/ci/pr35764-r4/run-once.mjs guard
       - id: install

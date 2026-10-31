@@ -8,11 +8,18 @@ import {
   exists,
   links,
   scalar,
-  fields,
-  field
+  field,
+  readInstallationMetadata
 } from './installation-metadata.mjs'
 
-export function createPackageResolution({ root, canonicalRoot, require, sha, configFilename }) {
+export function createPackageResolution({
+  root,
+  canonicalRoot,
+  require,
+  sha,
+  configFilename,
+  output
+}) {
   const lockText = readFileSync(containedFile(root, resolve(root, 'pnpm-lock.yaml')), 'utf8')
   const lockDocument = lockText.split(/^---\s*$/m).at(-1)
   const frozenSnapshots = field(lockDocument, 0, 'snapshots').children
@@ -22,17 +29,24 @@ export function createPackageResolution({ root, canonicalRoot, require, sha, con
     throw new Error('N1 refuses borrowed/relocated whole node_modules')
   }
   const metadataFile = containedFile(nodeModules, resolve(nodeModules, '.modules.yaml'))
-  const metadataBytes = readFileSync(metadataFile),
-    metadata = metadataBytes.toString('utf8')
-  if (metadataBytes.length > 16 * 1024 * 1024) {
-    throw new Error('N1 generated metadata exceeds bounded targeted inspection')
-  }
-  const virtualStoreLogical = resolve(
+  const {
+    metadataBytes,
+    metadata,
+    virtualStoreDir,
+    hoistedDependencies,
+    metadataReceipt,
+    verifyParserRoute
+  } = readInstallationMetadata({
+    root,
     nodeModules,
-    scalar(field(metadata, 0, 'virtualStoreDir').value)
-  )
+    metadataFile,
+    output,
+    require,
+    lockDocument,
+    sha
+  })
+  const virtualStoreLogical = resolve(nodeModules, virtualStoreDir)
   const virtualStore = realpathSync(virtualStoreLogical)
-  const hoisted = field(metadata, 0, 'hoistedDependencies', false)?.children || ''
   const generatedLockPath = resolve(nodeModules, '.pnpm/lock.yaml')
   let generatedLock = null,
     generatedLockReceipt = null
@@ -83,14 +97,22 @@ export function createPackageResolution({ root, canonicalRoot, require, sha, con
     return hoistIdentity(name, 'public')
   }
   function hoistIdentity(name, visibility) {
-    const matches = fields(hoisted, 2).filter((item) => {
-      const nameEntry = field(item.children, 4, name, false)
-      return nameEntry && scalar(nameEntry.value) === visibility
-    })
+    const matches = [...hoistedDependencies].filter(
+      ([_key, names]) => names.get(name) === visibility
+    )
     if (matches.length !== 1) {
       throw new Error(`N1 missing/ambiguous generated ${visibility} hoist edge: ${name}`)
     }
-    return { key: matches[0].key, kind: `${visibility}-hoist`, evidence: matches[0].text }
+    return {
+      key: matches[0][0],
+      kind: `${visibility}-hoist`,
+      evidence: {
+        rawMetadataSha256: metadataReceipt.sha256,
+        packageKey: matches[0][0],
+        name,
+        visibility
+      }
+    }
   }
   function dependencyIdentity(origin, name) {
     for (const group of ['dependencies', 'optionalDependencies']) {
@@ -232,6 +254,7 @@ export function createPackageResolution({ root, canonicalRoot, require, sha, con
   function fromOwn(specifier) {
     return prove(own, specifier, require.resolve(specifier))
   }
+  verifyParserRoute(() => fromOwn('yaml'))
   // Prove the original origins before constructing their unchanged createRequire resolvers.
   const pmOrigin = fromOwn('@tiptap/pm/view'),
     reactOrigin = fromOwn('@tiptap/react'),
@@ -311,6 +334,7 @@ export function createPackageResolution({ root, canonicalRoot, require, sha, con
     metadataFile,
     metadataBytes,
     metadata,
+    metadataReceipt,
     virtualStoreLogical,
     virtualStore,
     generatedLockReceipt,

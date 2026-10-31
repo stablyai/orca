@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, realpathSync, lstatSync } from 'node:fs'
 import { resolve, isAbsolute } from 'node:path'
-import { containedFile, exists, within, same, field } from './installation-metadata.mjs'
+import { containedFile, exists, within, same } from './installation-metadata.mjs'
 
 export function createModuleObservation({
   root,
@@ -134,7 +134,7 @@ export function writeRuntimeReceipt({
   nodeModules,
   metadataFile,
   metadataBytes,
-  metadata,
+  metadataReceipt,
   virtualStoreLogical,
   virtualStore,
   generatedLockReceipt,
@@ -175,9 +175,10 @@ export function writeRuntimeReceipt({
             logical: resolve(nodeModules, '.modules.yaml'),
             canonical: metadataFile,
             sha256: sha(metadataBytes),
-            relevantFields: ['virtualStoreDir', 'nodeLinker', 'packageManager', 'layoutVersion']
-              .map((key) => field(metadata, 0, key, false)?.text)
-              .filter(Boolean)
+            rawFile: metadataReceipt.rawFile,
+            decodedFields: metadataReceipt.decoded,
+            parserBootstrap: metadataReceipt.parser,
+            receiptFile: 'installation-metadata-receipt.json'
           },
           virtualStore: { logical: virtualStoreLogical, canonical: virtualStore },
           generatedLock: generatedLockReceipt,

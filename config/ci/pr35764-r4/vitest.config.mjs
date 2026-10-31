@@ -54,7 +54,7 @@ const {
   nodeModules,
   metadataFile,
   metadataBytes,
-  metadata,
+  metadataReceipt,
   virtualStoreLogical,
   virtualStore,
   generatedLockReceipt,
@@ -72,7 +72,8 @@ const {
   canonicalRoot,
   require,
   sha,
-  configFilename: import.meta.filename
+  configFilename: import.meta.filename,
+  output
 })
 const tool = fromOwn('vitest/config')
 const toolEsmURL = import.meta.resolve('vitest/config')
@@ -364,7 +365,7 @@ writeRuntimeReceipt({
   nodeModules,
   metadataFile,
   metadataBytes,
-  metadata,
+  metadataReceipt,
   virtualStoreLogical,
   virtualStore,
   generatedLockReceipt,

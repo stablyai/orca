@@ -17,7 +17,16 @@ const packet = import.meta.dirname,
 const output = resolve(root, 'r4-evidence'),
   prefix = 'config/ci/pr35764-r4/'
 const productionHead = '2dbb5681fad6542581f0d8802120faccb371a20f'
-const subject = 'PR35764 R4 one held engine comparison'
+const subject = 'PR35764 R4 decoder continuation one held comparison'
+const continuationParent = '33ac33e9ed25c206086afe561bfd2bf1ae694b0a'
+const modifiedPaths = [
+  '.github/workflows/pr35764-r4-once.yml',
+  'config/ci/pr35764-r4/installation-metadata.mjs',
+  'config/ci/pr35764-r4/module-observation.mjs',
+  'config/ci/pr35764-r4/package-resolution.mjs',
+  'config/ci/pr35764-r4/run-once.mjs',
+  'config/ci/pr35764-r4/vitest.config.mjs'
+]
 const overlayFiles = [
   'engine/logging-only.diff',
   'engine/observed-index.source',
@@ -58,7 +67,7 @@ function identity() {
     process.env.GITHUB_EVENT_NAME !== 'push' ||
     process.env.GITHUB_REF !== 'refs/heads/brennanb2025/sta-12544-md-find-anchor'
   ) {
-    throw new Error('R4 hosted first-push identity refused')
+    throw new Error('R4 hosted continuation first-attempt push identity refused')
   }
   if (process.env.ORCA_PNPM_FORCE_GLOBAL_VIRTUAL_STORE_IN_CI === '1') {
     throw new Error('R4 requires ordinary CI store policy')
@@ -67,13 +76,16 @@ function identity() {
   const head = git('rev-parse', 'HEAD')
   if (
     head !== process.env.GITHUB_SHA ||
-    event.before !== productionHead ||
-    git('show', '-s', '--format=%P', 'HEAD') !== productionHead ||
+    event.before !== continuationParent ||
+    event.after !== head ||
+    event.head_commit?.id !== head ||
+    event.head_commit?.message !== subject ||
+    git('show', '-s', '--format=%P', 'HEAD') !== continuationParent ||
     git('show', '-s', '--format=%s', 'HEAD') !== subject
   ) {
-    throw new Error('R4 requires one temporary child commit of unchanged2db')
+    throw new Error('R4 requires the one decoder-continuation child of published33ac')
   }
-  const changed = git('diff-tree', '--no-commit-id', '--name-status', '-r', 'HEAD').split('\n')
+  const changed = git('diff', '--name-status', productionHead, 'HEAD').split('\n')
   if (
     changed.length !== allowedChanges.length ||
     changed.some((line) => {
@@ -82,6 +94,16 @@ function identity() {
     })
   ) {
     throw new Error('R4 temporary commit touched an original or unlisted source')
+  }
+  const modified = git('diff-tree', '--no-commit-id', '--name-status', '-r', 'HEAD').split('\n')
+  if (
+    modified.length !== modifiedPaths.length ||
+    modified.some((line) => {
+      const [status, path] = line.split('\t')
+      return status !== 'M' || !modifiedPaths.includes(path)
+    })
+  ) {
+    throw new Error('R4 continuation changed a path beyond the exact decoder/trigger inventory')
   }
   if (git('status', '--porcelain', '--untracked-files=no')) {
     throw new Error('R4 tracked/index inputs dirty')
@@ -97,6 +119,12 @@ function identity() {
   }
   return {
     head,
+    continuationParent,
+    continuationOrdinal: 2,
+    priorConsumedRun: '41157454166',
+    priorConsumedHead: continuationParent,
+    priorActualDirectCliInvocations: 1,
+    modified,
     productionHead,
     mainSelectionRouteHead: pins.mainSelectionRouteHead,
     changed,
