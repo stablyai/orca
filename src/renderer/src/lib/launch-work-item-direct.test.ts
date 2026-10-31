@@ -201,7 +201,13 @@ describe('launchWorkItemDirect', () => {
 
     const expectedDraft = [
       'Linked Linear issue: ENG-42',
-      'https://linear.app/acme/issue/ENG-42/ship-linear-parity'
+      'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
+      '',
+      'Finish the issue before you stop:',
+      '1. commit and push the changes, then open a PR/MR whose body names the issue key',
+      '2. attach the PR/MR link to the issue',
+      '3. post one completion comment with the link and a 2-4 sentence summary',
+      '4. move the issue to the review state'
     ].join('\n')
     expect(buildAgentDraftLaunchPlan).toHaveBeenCalledWith({
       agent: 'claude',
@@ -291,7 +297,17 @@ describe('launchWorkItemDirect', () => {
     expect(mocks.seedNativeChatLaunchDraft).toHaveBeenCalledWith({
       tabId: 'tab-1',
       agent: 'claude',
-      text: 'Linked Linear issue: ENG-42\nhttps://linear.app/acme/issue/ENG-42/ship-linear-parity\n',
+      text: [
+        'Linked Linear issue: ENG-42',
+        'https://linear.app/acme/issue/ENG-42/ship-linear-parity',
+        '',
+        'Finish the issue before you stop:',
+        '1. commit and push the changes, then open a PR/MR whose body names the issue key',
+        '2. attach the PR/MR link to the issue',
+        '3. post one completion comment with the link and a 2-4 sentence summary',
+        '4. move the issue to the review state',
+        ''
+      ].join('\n'),
       createdAt: expect.any(Number)
     })
   })

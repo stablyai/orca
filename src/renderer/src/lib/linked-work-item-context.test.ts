@@ -215,17 +215,26 @@ describe('getLaunchableWorkItemDraftContent', () => {
     ).toBe('explicit prompt')
   })
 
-  it('drafts a link-only Linear reference for Linear items', () => {
+  it('drafts the issue reference above the finish checklist for Linear items', () => {
     const draft = getLaunchableWorkItemDraftContent({
-      pasteContent: '   ',
+      pasteContent: ' ',
       ...LINEAR_ITEM
     })
 
     expect(draft).toBe(
-      ['Linked Linear issue: ENG-123', 'https://linear.app/acme/issue/ENG-123/test', ''].join('\n')
+      [
+        'Linked Linear issue: ENG-123',
+        'https://linear.app/acme/issue/ENG-123/test',
+        '',
+        'Finish the issue before you stop:',
+        '1. commit and push the changes, then open a PR/MR whose body names the issue key',
+        '2. attach the PR/MR link to the issue',
+        '3. post one completion comment with the link and a 2-4 sentence summary',
+        '4. move the issue to the review state',
+        ''
+      ].join('\n')
     )
     expectNoLinearTicketContent(draft)
-    expectNoProductWorkflowDirection(draft)
   })
 
   it('falls back to the URL for non-Linear items', () => {
@@ -236,14 +245,17 @@ describe('getLaunchableWorkItemDraftContent', () => {
       })
     ).toBe('https://github.com/acme/repo/issues/42')
   })
-  it('drafts a labeled Linear URL for provider-preserved items without an identifier', () => {
+  it('drafts a labeled Linear URL above the finish checklist when the identifier is missing', () => {
+    const draft = getLaunchableWorkItemDraftContent({
+      provider: 'linear',
+      pasteContent: '',
+      title: 'Do not inject this title',
+      url: 'https://linear.app/acme/issue/ENG-123/test'
+    })
+
     expect(
-      getLaunchableWorkItemDraftContent({
-        provider: 'linear',
-        pasteContent: '',
-        title: 'Do not inject this title',
-        url: 'https://linear.app/acme/issue/ENG-123/test'
-      })
-    ).toBe('Linked Linear issue\nhttps://linear.app/acme/issue/ENG-123/test\n')
+      draft.startsWith('Linked Linear issue\nhttps://linear.app/acme/issue/ENG-123/test\n\n')
+    ).toBe(true)
+    expect(draft).toContain('Finish the issue before you stop:')
   })
 })
