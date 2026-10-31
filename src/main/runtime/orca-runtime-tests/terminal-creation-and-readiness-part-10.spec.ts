@@ -499,7 +499,8 @@ describe('OrcaRuntimeService', () => {
     expect(read).toMatchObject({
       source: 'screen',
       tail: ['Build passed', '────────', '❯'],
-      draft: 'proceed with the release\nand close the pull request'
+      draft: 'proceed with the release\nand close the pull request',
+      draftOrigin: 'agent_suggestion'
     })
   })
 
@@ -526,7 +527,8 @@ describe('OrcaRuntimeService', () => {
     expect(read).toMatchObject({
       source: 'screen',
       tail: ['Build passed', '────────', '❯'],
-      draft: 'proceed with the release'
+      draft: 'proceed with the release',
+      draftOrigin: 'agent_suggestion'
     })
     expect(serializeBuffer).toHaveBeenCalledWith('pty-1', {
       scrollbackRows: 0
@@ -563,7 +565,8 @@ describe('OrcaRuntimeService', () => {
     expect(read).toMatchObject({
       source: 'screen',
       tail: ['Build passed', '────────', '❯'],
-      draft: 'proceed with the release'
+      draft: 'proceed with the release',
+      draftOrigin: 'agent_suggestion'
     })
     expect(serializeProviderBuffer).toHaveBeenCalledOnce()
   })

@@ -2,6 +2,7 @@ import type { RuntimeWorktreeScanResult } from './repo-worktree-resolution-scan'
 import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { ResolvedWorktree } from './runtime-worktree-path-identity'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
+import type { TerminalComposerDraftOrigin } from '../../shared/terminal-composer-draft'
 import { IMMEDIATE_KILL_REPLY_BUDGET_MS } from '../daemon/immediate-kill-reply-budget'
 import type {
   RuntimeTerminalDriverState,
@@ -83,6 +84,7 @@ export const TERMINAL_INTERACTIVE_WAIT_PROBE_TIMEOUT_MS = 2_000
 export type RuntimeTerminalProjection = {
   lines: string[]
   draft?: string
+  draftOrigin?: TerminalComposerDraftOrigin
   tailRows?: RuntimeTerminalRowMetadata[]
 }
 

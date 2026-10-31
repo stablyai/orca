@@ -1,7 +1,8 @@
-import { detectTerminalComposerDraft } from '../../shared/terminal-composer-draft'
+import { detectTerminalComposer } from '../../shared/terminal-composer-draft'
 import type { HeadlessEmulator } from '../daemon/headless-emulator'
 import type { HeadlessTerminalRow } from '../daemon/headless-terminal-rows'
 import type { RuntimeTerminalRowMetadata } from '../../shared/runtime-terminal-contracts'
+import type { RuntimeTerminalProjection } from './orca-runtime-core'
 
 type TerminalProjectionEmulator = Pick<
   HeadlessEmulator,
@@ -44,12 +45,12 @@ function projectTerminalRows(
 export function projectTerminalTailLines(
   emulator: TerminalProjectionEmulator,
   limit: number
-): { lines: string[]; tailRows: RuntimeTerminalRowMetadata[]; draft?: string } {
+): RuntimeTerminalProjection & { tailRows: RuntimeTerminalRowMetadata[] } {
   const tail = emulator.getBufferTailRows(limit)
   const visible = emulator.getVisibleRows()
   const visibleRange = emulator.getVisibleBufferRange()
-  const draft = detectTerminalComposerDraft(emulator.getCursorLineContext())
-  if (draft && visibleRange.endExclusive === visibleRange.totalLength) {
+  const draft = detectTerminalComposer(emulator.getCursorLineContext())
+  if (draft && !draft.placeholder && visibleRange.endExclusive === visibleRange.totalLength) {
     visible[draft.promptRow] = {
       text: draft.promptGlyph,
       metadata: { wrapped: false, trailingSpaces: 0 }
@@ -62,18 +63,17 @@ export function projectTerminalTailLines(
   }
   return {
     ...projectTerminalRows(tail, limit),
-    ...(draft ? { draft: draft.text } : {})
+    ...(draft?.text ? { draft: draft.text } : {}),
+    ...(draft ? { draftOrigin: draft.origin } : {})
   }
 }
 
-export function projectTerminalVisibleLines(emulator: TerminalProjectionEmulator): {
-  lines: string[]
-  tailRows: RuntimeTerminalRowMetadata[]
-  draft?: string
-} {
+export function projectTerminalVisibleLines(
+  emulator: TerminalProjectionEmulator
+): RuntimeTerminalProjection & { tailRows: RuntimeTerminalRowMetadata[] } {
   const visible = emulator.getVisibleRows()
-  const draft = detectTerminalComposerDraft(emulator.getCursorLineContext())
-  if (draft) {
+  const draft = detectTerminalComposer(emulator.getCursorLineContext())
+  if (draft && !draft.placeholder) {
     visible[draft.promptRow] = {
       text: draft.promptGlyph,
       metadata: { wrapped: false, trailingSpaces: 0 }
@@ -84,7 +84,8 @@ export function projectTerminalVisibleLines(emulator: TerminalProjectionEmulator
   }
   return {
     ...projectTerminalRows(visible),
-    ...(draft ? { draft: draft.text } : {})
+    ...(draft?.text ? { draft: draft.text } : {}),
+    ...(draft ? { draftOrigin: draft.origin } : {})
   }
 }
 

@@ -22,7 +22,12 @@ export type TerminalComposerDraft = {
   promptGlyph: '❯' | '›' | '»'
 }
 
-type TerminalComposerMatch = TerminalComposerDraft & { placeholder: boolean }
+export type TerminalComposerDraftOrigin = 'agent_suggestion' | 'user_input' | 'unknown'
+
+type TerminalComposerMatch = TerminalComposerDraft & {
+  placeholder: boolean
+  origin: TerminalComposerDraftOrigin
+}
 
 const COMPOSER_FRAME_LINE = /^[\u2500\u2501-]{8,}\s*$/
 const CODEX_FOOTER_LINE = /^\s*(?:gpt-\S+|o\d\S*)\s+[\u00B7\u2022]\s+\S.*$/i
@@ -127,7 +132,38 @@ function isStockPlaceholder(
   return /^Try\s+["\u201C]/.test(text) || STOCK_PLACEHOLDERS.has(text)
 }
 
-function detectTerminalComposer(
+function composerDraftOrigin(
+  context: TerminalCursorContext,
+  promptIndex: number,
+  continuationCount: number,
+  dimmedSuffix: boolean,
+  placeholder: boolean
+): TerminalComposerDraftOrigin {
+  if (promptIndex !== context.rows.length - 1) {
+    return 'unknown'
+  }
+  if (/^\s*[\u276F\u203A\u00BB]\s?$/.test(context.beforeCursor) && dimmedSuffix) {
+    return 'agent_suggestion'
+  }
+  if (!placeholder && context.rawAfterCursor.trim() !== context.afterCursor.trim()) {
+    return 'unknown'
+  }
+  if (
+    !placeholder &&
+    (context.rows[promptIndex] ?? '').replace(/^\s*[\u276F\u203A\u00BB]\s?/, '').trim() !==
+      (context.typedRows[promptIndex] ?? '').replace(/^\s*[\u276F\u203A\u00BB]\s?/, '').trim()
+  ) {
+    return 'unknown'
+  }
+  for (let index = 0; index < continuationCount; index += 1) {
+    if ((context.rowsBelow[index] ?? '').trim() !== (context.typedRowsBelow[index] ?? '').trim()) {
+      return 'unknown'
+    }
+  }
+  return 'user_input'
+}
+
+function detectFramedTerminalComposer(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerMatch | null {
   if (!context || context.cursorHidden || context.rows.length === 0) {
@@ -137,7 +173,11 @@ function detectTerminalComposer(
   const codexFooterIndex = findCodexFooterIndex(context)
   let afterCursor = context.afterCursor || context.rawAfterCursor
   let continuationRows = composerContinuationRows(context, afterCursor, codexFooterIndex)
-  const placeholder = isStockPlaceholder(afterCursor, continuationRows)
+  const dimmedSuffix =
+    !context.afterCursor.trim() &&
+    !!context.rawAfterCursor.trim() &&
+    continuationRows.every((_, index) => !(context.typedRowsBelow[index] ?? '').trim())
+  const placeholder = dimmedSuffix && isStockPlaceholder(afterCursor, continuationRows)
   if (placeholder) {
     afterCursor = ''
     continuationRows = []
@@ -199,7 +239,14 @@ function detectTerminalComposer(
         cursorRow: context.cursorViewportRow,
         endRow: context.cursorViewportRow + continuationRows.length,
         promptGlyph: glyph,
-        placeholder: !text && placeholder
+        placeholder: !text && placeholder,
+        origin: composerDraftOrigin(
+          context,
+          index,
+          continuationRows.length,
+          dimmedSuffix,
+          placeholder
+        )
       }
     }
     if (row.length > 0 && context.rowsWrapped?.[index] !== true && !/^\s/.test(row)) {
@@ -237,10 +284,6 @@ function detectBoxedComposerDraft(context: TerminalCursorContext): TerminalCompo
 export function detectTerminalComposerDraft(
   context: TerminalCursorContext | null | undefined
 ): TerminalComposerDraft | null {
-  const boxed = context ? detectBoxedComposerDraft(context) : null
-  if (boxed) {
-    return boxed
-  }
   const match = detectTerminalComposer(context)
   if (!match || match.placeholder) {
     return null
@@ -252,6 +295,15 @@ export function detectTerminalComposerDraft(
     endRow: match.endRow,
     promptGlyph: match.promptGlyph
   }
+}
+
+export function detectTerminalComposer(
+  context: TerminalCursorContext | null | undefined
+): TerminalComposerMatch | null {
+  const boxed = context ? detectBoxedComposerDraft(context) : null
+  return boxed
+    ? { ...boxed, placeholder: false, origin: 'user_input' }
+    : detectFramedTerminalComposer(context)
 }
 
 export function hasTerminalComposerPlaceholder(
