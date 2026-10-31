@@ -1,6 +1,6 @@
 import { win32 } from 'node:path'
 import { parseWslUncPath, toWindowsWslUncPath } from '../../shared/wsl-paths'
-import { knownWslAutomountRoots } from '../wsl/wsl-automount-root'
+import { knownWslAutomountRoots, wslDrivePathUnderRoots } from '../wsl/wsl-automount-root'
 import { gitExecFileAsync } from './command-runner/git-exec-file'
 import { readWorktreeGitPath } from './worktree-git-path'
 
@@ -12,8 +12,8 @@ export async function resolveWslWorktreeGitPath(
   worktreePath: string,
   relativePath: string
 ): Promise<string> {
-  const read = (): string | null =>
-    readWorktreeGitPath(worktreePath, relativePath, knownWslAutomountRoots())
+  const automountRoots = knownWslAutomountRoots()
+  const read = (): string | null => readWorktreeGitPath(worktreePath, relativePath, automountRoots)
   // A Windows stat over \\wsl.localhost can report a transient ENOENT.
   const fromLink = read() ?? read()
   if (fromLink) {
@@ -27,8 +27,9 @@ export async function resolveWslWorktreeGitPath(
     })
     const gitPath = stdout.trim()
     if (gitPath && distro) {
+      // A git dir on a mounted drive maps to the drive itself, as the link read does.
       return gitPath.startsWith('/')
-        ? toWindowsWslUncPath(gitPath, distro)
+        ? (wslDrivePathUnderRoots(gitPath, automountRoots) ?? toWindowsWslUncPath(gitPath, distro))
         : win32.join(worktreePath, gitPath)
     }
   } catch (error) {

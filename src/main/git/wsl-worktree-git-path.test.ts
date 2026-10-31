@@ -7,7 +7,10 @@ const { gitExecFileAsyncMock, readWorktreeGitPathMock } = vi.hoisted(() => ({
 
 vi.mock('./command-runner/git-exec-file', () => ({ gitExecFileAsync: gitExecFileAsyncMock }))
 vi.mock('./worktree-git-path', () => ({ readWorktreeGitPath: readWorktreeGitPathMock }))
-vi.mock('../wsl/wsl-automount-root', () => ({ knownWslAutomountRoots: () => ['/mnt/'] }))
+vi.mock('../wsl/wsl-automount-root', async (importOriginal) => ({
+  ...(await importOriginal<object>()),
+  knownWslAutomountRoots: () => ['/mnt/']
+}))
 
 import { resolveWslWorktreeGitPath } from './wsl-worktree-git-path'
 
@@ -57,6 +60,18 @@ describe('resolveWslWorktreeGitPath', () => {
     expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
       ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
       { cwd: WORKTREE }
+    )
+  })
+
+  it("maps Git's mounted-drive answer to the Windows drive", async () => {
+    readWorktreeGitPathMock.mockReturnValue(null)
+    gitExecFileAsyncMock.mockResolvedValue({
+      stdout: '/mnt/c/src/repo/.git/worktrees/feature/orca/setup-runner.sh\n',
+      stderr: ''
+    })
+
+    await expect(resolveWslWorktreeGitPath(WORKTREE, 'orca/setup-runner.sh')).resolves.toBe(
+      'C:\\src\\repo\\.git\\worktrees\\feature\\orca\\setup-runner.sh'
     )
   })
 
