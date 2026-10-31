@@ -3697,7 +3697,7 @@
             "chatNotOnHost": "此主机不支持聊天",
             "chatNotInWsl": "WSL 不支持聊天",
             "cliTag": "(CLI)",
-            "chatNotOverSsh": "SSH 连接不支持聊天"
+            "chatNotOverSsh": "主机尚未设置 Orca 服务器"
           },
           "RecentTabSwitcher": {
             "329638ff6f": "切换选项卡",
@@ -19048,7 +19048,7 @@
         "outdatedHost": "此主机运行的 Orca 版本较旧，会忽略聊天权限设置，因此 {{value0}} 将在未经询问的情况下运行。要使用 {{value1}}，请更新此主机上的 Orca。",
         "unverified": "Orca 无法确认主机对 {{value0}} 的权限。"
       },
-      "explicitChatSsh": "无法通过 SSH 进行聊天。请改为在终端中打开智能体。",
+      "explicitChatSsh": "此主机尚未使用 Orca 服务器。请重新连接以进行设置，或在终端中打开智能体。",
       "explicitChatWsl": "WSL 中无法使用聊天功能。请改为在终端中打开智能体。",
       "explicitChatUnavailable": "此工作区无法运行聊天。检查智能体安装或在终端中打开它。",
       "structuredSessionTerminalNotVisible": "Orca 已在终端中打开 {{value0}}，但启动完成后无法在此处显示。您的聊天草稿已保留。",

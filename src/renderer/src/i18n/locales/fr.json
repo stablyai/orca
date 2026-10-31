@@ -3980,7 +3980,7 @@
             "8dea9b5cdf": "Aucun agent activé",
             "chatNotInstalled": "Non installé",
             "startChat": "Démarrer un chat avec {{value0}}",
-            "chatNotOverSsh": "Chat indisponible via SSH",
+            "chatNotOverSsh": "Cet hôte n’a pas encore de serveur Orca",
             "chatCheckFailed": "Impossible de vérifier la disponibilité du chat",
             "chatUnavailableAfterSelection": "Impossible de démarrer une discussion {{value0}}.",
             "cliTag": "(CLI)",
@@ -19836,7 +19836,7 @@
         "unverified": "Orca n'a pas pu confirmer les autorisations de l'hôte pour {{value0}}.",
         "outdatedHost": "Cet hôte utilise une ancienne version d’Orca qui ignore les autorisations de chat. {{value0}} s’exécuterait donc ici sans demander confirmation. Mettez Orca à jour sur cet hôte pour utiliser {{value1}}."
       },
-      "explicitChatSsh": "Le chat n’est pas disponible via SSH. Ouvrez plutôt l’agent dans un terminal.",
+      "explicitChatSsh": "Cet hôte n’utilise pas encore le serveur Orca. Reconnectez-vous pour le configurer ou ouvrez l’agent dans un terminal.",
       "explicitChatWsl": "Le chat n'est pas disponible dans WSL. Ouvrez plutôt l'agent dans un terminal.",
       "structuredSessionTerminalNotVisible": "Orca a ouvert {{value0}} dans un terminal, mais n'a pas pu l'afficher ici une fois le lancement terminé. Votre brouillon de chat a été conservé.",
       "explicitChatUnavailable": "Cet espace de travail ne peut pas exécuter le chat. Vérifiez l'installation de l'agent ou ouvrez-le dans un terminal.",

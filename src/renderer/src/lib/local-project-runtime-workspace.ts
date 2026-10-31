@@ -77,3 +77,13 @@ export function getLocalProjectRuntimeWorkspace(
       }
     : null
 }
+
+export function getLocalProjectRuntimeProjectId(
+  state: RuntimeWorkspaceState & Pick<AppState, 'activeRepoId'>,
+  worktreeId?: string | null
+): string {
+  const activeWorktree = getLocalProjectRuntimeWorkspace(state, worktreeId)
+  return (
+    activeWorktree?.projectId ?? activeWorktree?.repoId ?? state.activeRepoId ?? 'local-project'
+  )
+}

@@ -2,6 +2,7 @@ import type {
   TerminalLayoutSnapshot,
   TerminalPaneLayoutNode
 } from '../../../../shared/terminal-tab-types'
+import type { NativeChatSavedDisposition } from '../../../../shared/native-chat-availability'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 
 function layoutNodeContainsLeaf(node: TerminalPaneLayoutNode | null, leafId: string): boolean {
@@ -82,15 +83,19 @@ export type NativeChatLeafRoute = {
 
 export function resolveNativeChatLeafRoute(args: {
   isChatViewMode: boolean
+  savedOwnerDisposition: NativeChatSavedDisposition
   chatLeafId: string | null
   activeLeafId: string | null
   chatLeafStillMounted: boolean
-  activeLeafIsEligible: boolean
+  activeLeafDisposition: NativeChatSavedDisposition
   chatLeafHasConfirmedAgentExit?: boolean
 }): NativeChatLeafRoute {
   const confirmedAgentExit = args.chatLeafHasConfirmedAgentExit
   if (!args.isChatViewMode) {
     return { chatLeafId: null, exitChat: false }
+  }
+  if (args.savedOwnerDisposition === 'retire') {
+    return { chatLeafId: null, exitChat: true }
   }
   if (args.chatLeafId && args.chatLeafStillMounted && !confirmedAgentExit) {
     // Missing reconnect evidence is not an agent exit; retain chat while its owning pane remains mounted.
@@ -104,8 +109,14 @@ export function resolveNativeChatLeafRoute(args: {
     // Closing the owner is explicit; do not transfer chat to the newly active sibling.
     return { chatLeafId: null, exitChat: true }
   }
-  if (args.activeLeafIsEligible && (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)) {
+  if (
+    args.activeLeafDisposition === 'recover' &&
+    (!confirmedAgentExit || args.activeLeafId !== args.chatLeafId)
+  ) {
     return { chatLeafId: args.activeLeafId, exitChat: false }
+  }
+  if (!confirmedAgentExit && args.activeLeafDisposition === 'pending') {
+    return { chatLeafId: args.chatLeafId, exitChat: false }
   }
   // Return to terminal after owner removal or confirmed agent exit so the composer cannot target a shell.
   return { chatLeafId: null, exitChat: true }

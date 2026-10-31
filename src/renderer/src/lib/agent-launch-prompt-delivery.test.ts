@@ -230,6 +230,41 @@ describe('deliverLaunchPromptToAgentTab', () => {
     expect(mocks.markNativeChatLaunchPromptFailed).not.toHaveBeenCalled()
   })
 
+  it.each(['openclaude', 'zcode'] as const)(
+    'delivers %s launch input once without a chat seed',
+    async (agent) => {
+      for (const submit of [false, true]) {
+        vi.clearAllMocks()
+        mocks.pasteDraftWhenAgentReady.mockResolvedValue(true)
+        expect(
+          await deliverLaunchPromptToAgentTab({
+            tabId: 'removed',
+            agent,
+            content: 'real draft',
+            submit,
+            forcePaste: true
+          })
+        ).toBe(true)
+        expect(mocks.pasteDraftWhenAgentReady).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({ agent, content: 'real draft', submit })
+        )
+        expect(mocks.seedNativeChatLaunchPrompt).not.toHaveBeenCalled()
+        expect(mocks.seedNativeChatLaunchDraft).not.toHaveBeenCalled()
+        mocks.pasteDraftWhenAgentReady.mockResolvedValue(false)
+        expect(
+          await deliverLaunchPromptToAgentTab({
+            tabId: 'removed',
+            agent,
+            content: 'real draft',
+            submit,
+            forcePaste: false
+          })
+        ).toBe(agent === 'openclaude')
+        expect(mocks.markNativeChatLaunchPromptFailed).not.toHaveBeenCalled()
+      }
+    }
+  )
+
   it('passes timeout options through to the paste transport', async () => {
     const onTimeout = vi.fn()
 

@@ -9,7 +9,7 @@ import {
   showLocalPathOpenBlockedToast,
   type LocalPathOpenOwner
 } from './local-path-open-guard'
-import { getResolvedExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
+import { getResolvedPhysicalExecutionHostIdForWorktree } from './resolved-worktree-execution-host'
 import type { WorktreeRuntimeOwnerState } from './worktree-runtime-owner-state'
 import { getConnectionIdFromState } from './connection-owner-resolution'
 import type { AppState } from '@/store/types'
@@ -45,7 +45,7 @@ export function getWorkspaceFileRevealOwner(
   if (routeOwner !== LOCAL_EXECUTION_HOST_ID || !worktreeId) {
     return routeOwner
   }
-  return getResolvedExecutionHostIdForWorktree(state, worktreeId) ?? 'unresolved'
+  return getResolvedPhysicalExecutionHostIdForWorktree(state, worktreeId) ?? 'unresolved'
 }
 
 /** Owner of an open editor file, as the editor header resolves it for Reveal and Copy Path. */

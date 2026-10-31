@@ -246,6 +246,27 @@ describe('useMobileNativeChatController handleNativeChatSend', () => {
     controller = null
   })
 
+  it.each(['openclaude', 'zcode', 'claude', 'codex'])(
+    'honors the saved phone chat preference with %s eligibility',
+    (agent) => {
+      viewMode.isTabChatView = () => true
+      const tab = {
+        type: 'terminal',
+        id: 'tab-1',
+        title: agent,
+        terminal: 'term-1',
+        isActive: true,
+        launchAgent: agent,
+        agentStatus: { agentType: agent, providerSession: { id: 'session-1' } }
+      }
+      act(() => renderer?.update(createElement(Harness, { tab })))
+      expect(controller?.showNativeChat).toBe(agent === 'claude' || agent === 'codex')
+      expect(controller?.nativeChatAgent).toBe(
+        agent === 'claude' || agent === 'codex' ? agent : null
+      )
+    }
+  )
+
   it('clears an orphaned image paste before a question-card answer (#10228)', async () => {
     markMobileNativeChatInputStale('term-1')
     clientStub.sendRequest.mockResolvedValue({

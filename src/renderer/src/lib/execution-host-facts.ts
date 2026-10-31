@@ -69,6 +69,13 @@ function resolveLocalPlatform(
   return workspacePath && isWslUncPath(workspacePath) ? 'linux' : CLIENT_PLATFORM
 }
 
+export function isWindowsHostWslWorkspace(
+  hostPlatform: NodeJS.Platform | null | undefined,
+  workspacePath: string | null | undefined
+): boolean {
+  return hostPlatform === 'win32' && Boolean(workspacePath && isWslUncPath(workspacePath))
+}
+
 function resolveHostPlatform(
   state: HostFactsState,
   args: {
@@ -112,10 +119,9 @@ function resolveHostPlatform(
     return { kind: 'withheld', reason }
   }
   // Why: a WSL UNC workspace on a Windows server runs its agents inside that distro.
-  const platform =
-    hostPlatform === 'win32' && args.workspacePath && isWslUncPath(args.workspacePath)
-      ? 'linux'
-      : hostPlatform
+  const platform = isWindowsHostWslWorkspace(hostPlatform, args.workspacePath)
+    ? 'linux'
+    : hostPlatform
   return {
     kind: 'known',
     platform,

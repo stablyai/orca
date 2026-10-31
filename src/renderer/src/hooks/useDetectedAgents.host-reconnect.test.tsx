@@ -7,11 +7,27 @@ import { useAppStore } from '@/store'
 import { useDetectedAgents, type UseDetectedAgentsResult } from './useDetectedAgents'
 import {
   MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION,
+  PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY,
   RUNTIME_PROTOCOL_VERSION
 } from '../../../shared/protocol-version'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
+import { makeRepo, makeWorktree } from '../components/worktree-jump-palette-test-fixtures'
+import {
+  getActiveWorkspaceOwnerTarget,
+  getResolvedWorktreeExecutionOwner
+} from '@/lib/resolved-worktree-execution-host'
+import { getWorkspaceFileRevealOwner } from '@/lib/reveal-in-file-manager'
+import { getLocalPreflightContext } from '@/lib/local-preflight-context'
+import { getEnvironmentRuntimeContextKey } from '@/lib/provider-runtime-context'
+import { selectNativeChatWslProject } from '../components/terminal-pane/terminal-pane-host-state'
+import {
+  getAgentDetectionTargetKeyForWorktree,
+  parseAgentDetectionTargetKey,
+  useAgentDetectionTargetForWorktree
+} from './useAgentDetectionTarget'
 
 globalThis.IS_REACT_ACT_ENVIRONMENT = true
 
@@ -20,8 +36,9 @@ const initialAppState = useAppStore.getInitialState()
 const roots: Root[] = []
 let latest: UseDetectedAgentsResult | null = null
 
-function HookProbe(): null {
-  latest = useDetectedAgents({ kind: 'runtime', environmentId: 'env-1' })
+function HookProbe({ worktreeId }: { worktreeId?: string }): null {
+  const target = useAgentDetectionTargetForWorktree(worktreeId ?? null)
+  latest = useDetectedAgents(worktreeId ? target : { kind: 'runtime', environmentId: 'env-1' })
   return null
 }
 
@@ -32,13 +49,13 @@ async function flushEffects(): Promise<void> {
   })
 }
 
-async function renderProbe(): Promise<void> {
+async function renderProbe(worktreeId?: string): Promise<void> {
   const container = document.createElement('div')
   document.body.appendChild(container)
   const root = createRoot(container)
   roots.push(root)
   await act(async () => {
-    root.render(createElement(HookProbe))
+    root.render(createElement(HookProbe, { worktreeId }))
   })
   await flushEffects()
 }
@@ -68,6 +85,7 @@ const STATUS = {
   authoritativeWindowId: null,
   liveTabCount: 0,
   liveLeafCount: 0,
+  capabilities: [PREFLIGHT_WORKSPACE_SCOPED_RUNTIME_CAPABILITY],
   runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
   minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
 }
@@ -122,6 +140,77 @@ function setHostContact(entry: { live: boolean; hostContactEpoch: number }): voi
 }
 
 describe('useDetectedAgents when the runtime host reconnects', () => {
+  it('wakes a proven runtime alias into addressed inventory while preserving its physical SSH owner', async () => {
+    mockHost((_call, method) => Promise.resolve(reply(method, ['codex'])))
+    useAppStore.getState().setRuntimeEnvironments([{ ...environment(1), id: 'hub' }])
+    const workspace = makeWorktree('repo::/work', 'Work', { repoId: 'repo', hostId: 'ssh:private' })
+    useAppStore.setState({
+      activeWorktreeId: workspace.id,
+      activeWorkspaceExecutionHostId: 'runtime:hub',
+      settings: createGlobalSettingsFixture({
+        ...useAppStore.getState().settings,
+        activeRuntimeEnvironmentId: 'elsewhere'
+      }),
+      repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'runtime:hub' }],
+      worktreesByRepo: { repo: [workspace] }
+    })
+    await renderProbe(workspace.id)
+    expect(getResolvedWorktreeExecutionOwner(useAppStore.getState(), workspace.id)).toBeNull()
+    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    const aliased = { ...workspace, runtimeOwnerEnvironmentId: 'hub' }
+    await act(async () => useAppStore.setState({ worktreesByRepo: { repo: [aliased] } }))
+    await flushEffects()
+    const state = useAppStore.getState()
+    expect(getResolvedWorktreeExecutionOwner(state, workspace.id)).toEqual({
+      hostId: 'ssh:private',
+      workspace: aliased
+    })
+    expect(getResolvedWorktreeExecutionOwner(state, workspace.id)?.workspace).toBe(aliased)
+    const key = getAgentDetectionTargetKeyForWorktree(state, workspace.id)
+    expect(key).toBe(`runtime:hub:${encodeURIComponent(workspace.id)}`)
+    expect(parseAgentDetectionTargetKey(key)).toEqual({
+      kind: 'runtime',
+      environmentId: 'hub',
+      worktreeId: workspace.id
+    })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+      expect.objectContaining({
+        selector: 'hub',
+        method: 'preflight.detectAgents',
+        params: { worktreeId: workspace.id }
+      })
+    )
+    expect(latest?.detectedIds).toEqual(['codex'])
+    expect(window.api.preflight.detectAgents).not.toHaveBeenCalled()
+    expect(window.api.preflight.detectRemoteAgents).not.toHaveBeenCalled()
+    expect(selectNativeChatWslProject(state, workspace.id)).toBe(false)
+    expect(getWorkspaceFileRevealOwner(state, workspace.id, {})).toBe('ssh:private')
+    expect(getActiveWorkspaceOwnerTarget(state)).toEqual({
+      kind: 'environment',
+      environmentId: 'hub'
+    })
+    expect(getLocalPreflightContext(state)).toEqual({
+      runtimeContextKey: getEnvironmentRuntimeContextKey('hub')
+    })
+
+    const calls = runtimeEnvironmentCall.mock.calls.length
+    await act(async () => useAppStore.setState({ activeWorkspaceExecutionHostId: 'runtime:rival' }))
+    expect(
+      getAgentDetectionTargetKeyForWorktree(useAppStore.getState(), workspace.id)
+    ).toBeUndefined()
+    await act(async () =>
+      useAppStore.setState({
+        activeWorkspaceExecutionHostId: 'runtime:hub',
+        worktreesByRepo: { repo: [aliased, { ...aliased, hostId: 'ssh:other' }] }
+      })
+    )
+    expect(getResolvedWorktreeExecutionOwner(useAppStore.getState(), workspace.id)).toBeNull()
+    expect(
+      getAgentDetectionTargetKeyForWorktree(useAppStore.getState(), workspace.id)
+    ).toBeUndefined()
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(calls)
+  })
+
   it('re-lists agents once contact returns after a failed probe, and not while the host is down', async () => {
     let hostUp = false
     const detectCalls = mockHost((_call, method) =>

@@ -44,7 +44,10 @@ type RecoveryRequest = {
   hasUndeliveredInput?: () => boolean
 }
 
-const activeTerminalRecoveryInstanceIds = new Set<number>()
+const activeTerminalRecoveryInstances = new Map<
+  number,
+  { tabId: string; canRemount?: () => boolean }
+>()
 const pendingRetryByTabId = new Map<
   string,
   {
@@ -91,16 +94,19 @@ export function captureTerminalPaneRecoveryGeneration(tabId: string): number {
   return captureTabRecoveryGeneration(locateTerminalTab(state.tabsByWorktree, tabId)?.tab)
 }
 
-export function registerTerminalPaneRecoveryInstance(tabId: string): {
+export function registerTerminalPaneRecoveryInstance(
+  tabId: string,
+  canRemount?: () => boolean
+): {
   id: number
   unregister: () => void
 } {
   const id = ++nextTerminalRecoveryInstanceId
-  activeTerminalRecoveryInstanceIds.add(id)
+  activeTerminalRecoveryInstances.set(id, { tabId, canRemount })
   return {
     id,
     unregister: () => {
-      activeTerminalRecoveryInstanceIds.delete(id)
+      activeTerminalRecoveryInstances.delete(id)
       const pendingRetry = pendingRetryByTabId.get(tabId)
       pendingRetry?.requestsByInstanceId.delete(id)
       if (pendingRetry?.requestsByInstanceId.size === 0) {
@@ -117,7 +123,27 @@ function isCurrentTerminalRecoveryRequest(request: RecoveryRequest): boolean {
       request.terminalRecoveryGeneration ===
         captureTerminalPaneRecoveryGeneration(request.tabId)) &&
     (request.terminalRecoveryInstanceId === undefined ||
-      activeTerminalRecoveryInstanceIds.has(request.terminalRecoveryInstanceId))
+      activeTerminalRecoveryInstances.get(request.terminalRecoveryInstanceId)?.tabId ===
+        request.tabId)
+  )
+}
+
+function canRemountCurrentRequest(request: RecoveryRequest): boolean {
+  if (!isCurrentTerminalRecoveryRequest(request)) {
+    return false
+  }
+  const instance =
+    request.terminalRecoveryInstanceId === undefined
+      ? undefined
+      : activeTerminalRecoveryInstances.get(request.terminalRecoveryInstanceId)
+  if (instance?.canRemount) {
+    return instance.canRemount()
+  }
+  const state = useAppStore.getState()
+  // Legacy/unregistered callers have no mounted ownership proof; retain both saved-mode gates.
+  return (
+    locateTerminalTab(state.tabsByWorktree, request.tabId)?.tab.viewMode !== 'chat' &&
+    state.getTab?.(request.tabId)?.viewMode !== 'chat'
   )
 }
 
@@ -180,28 +206,11 @@ function handleDeclinedRecovery(request: RecoveryRequest, decline: TerminalRecov
 
 /** Remount over the existing PTY and return whether requested. Probe input-undeliverable first so dead-session teardown owns actual process death; owner-certified write rejection needs no local probe. */
 export async function requestTerminalPaneRecovery(request: RecoveryRequest): Promise<boolean> {
-  if (
-    request.terminalRecoveryInstanceId !== undefined &&
-    !activeTerminalRecoveryInstanceIds.has(request.terminalRecoveryInstanceId)
-  ) {
+  if (!canRemountCurrentRequest(request)) {
     return false
   }
   const state = useAppStore.getState()
   const tab = locateTerminalTab(state.tabsByWorktree, request.tabId)?.tab
-  // A terminal-backed tab is intentionally hidden while native chat owns the
-  // provider. Late xterm callbacks from that hidden surface must not remount
-  // the tab and race the handoff's owner transition.
-  //
-  // Both indices, deliberately. The row is now the durable record (viewMode
-  // persists on it, and the local toggles patch it in the same set() as the
-  // unified tab), but a session written before that lives on disk with viewMode
-  // only on the unified tab, so the row reads undefined on the first load after
-  // upgrade. More generally this is a disjunction over two partly-redundant
-  // sources for a SAFETY check: a hole in either index errs toward refusing a
-  // heal on a hidden surface, never toward remounting a chat-owned one.
-  if (tab?.viewMode === 'chat' || state.getTab?.(request.tabId)?.viewMode === 'chat') {
-    return false
-  }
   // Fail before probing, then recheck authoritative admission inside the store write.
   const admission = admitTerminalRecoveryRemount(tab, toRemountRequest(request, Date.now()))
   if (!admission.admitted) {
@@ -235,6 +244,10 @@ export async function requestTerminalPaneRecovery(request: RecoveryRequest): Pro
   }
   // Why before the remount: it retires the transports that know what was typed.
   const undeliveredInput = request.endpointReplaced && request.hasUndeliveredInput?.() === true
+  // Ownership, instance disposal and generation can change during authoritative liveness.
+  if (!canRemountCurrentRequest(request)) {
+    return false
+  }
   let result: TerminalRecoveryRemountResult
   try {
     result = useAppStore
@@ -294,7 +307,7 @@ export function settleTerminalPaneRecovery(
 }
 
 export function _resetTerminalPaneRecoveryForTests(): void {
-  activeTerminalRecoveryInstanceIds.clear()
+  activeTerminalRecoveryInstances.clear()
   nextTerminalRecoveryInstanceId = 0
   for (const pendingRetry of pendingRetryByTabId.values()) {
     clearTimeout(pendingRetry.timer)

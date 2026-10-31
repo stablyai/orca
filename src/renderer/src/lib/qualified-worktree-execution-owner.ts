@@ -53,5 +53,7 @@ export function resolveQualifiedWorktreeExecutionOwner<W extends WorktreeOwnerRo
     hostId && hostId !== owner.hostId
       ? resolveWorktreeExecutionHost(lookup, { repoId: worktree.repoId, hostId })
       : owner
-  return selectedOwner.kind === 'resolved' ? { ...selectedOwner, worktree } : null
+  return selectedOwner.kind === 'resolved'
+    ? { ...selectedOwner, physicalHostId: owner.hostId, worktree }
+    : null
 }
