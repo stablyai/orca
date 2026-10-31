@@ -378,16 +378,22 @@ async function readOrcadStartupTiming() {
 /** SIGTERM the active orcad, as its idle exit ends it, and wait until it is gone; the distro stays up. */
 async function stopOrcadKeepingDistro(): Promise<void> {
   const pid = Number(
+    // Only a pid whose command line still names the active slot: a stale pid file must not
+    // signal whatever process reused that pid.
     (
       await guest(
-        `v=$(sed -n 's/.*"active": *"\\([^"]*\\)".*/\\1/p' "$HOME/.orca-remote/orcad-active.json") && cat "$HOME/.orca-remote/orcad-$v/.orcad-pid"`
+        `v=$(sed -n 's/.*"active": *"\\([^"]*\\)".*/\\1/p' "$HOME/.orca-remote/orcad-active.json") && ` +
+          `p=$(cat "$HOME/.orca-remote/orcad-$v/.orcad-pid") && ` +
+          `tr '\\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF "orcad-$v/" && echo "$p" || true`
       )
     ).trim()
   )
   if (!Number.isSafeInteger(pid) || pid <= 0) {
-    throw new Error('No active orcad pid to stop')
+    // No live orcad for the active slot: it already exited, which is the state being measured.
+    return
   }
-  await guest(`kill -TERM ${pid}`)
+  // It may already have idle-exited; the wait below is what decides.
+  await guest(`kill -TERM ${pid} 2>/dev/null || true`)
   await waitFor(
     'orcad to exit',
     async () =>
@@ -435,23 +441,38 @@ async function restartThroughHost(
       worktree: `path:${repoPath}`
     })
     const createdMs = Math.round(performance.now() - started)
+    const tail = async (): Promise<string> =>
+      (
+        (
+          await held.call<{ terminal: { tail?: unknown[] } }>('terminal.read', {
+            terminal: created.terminal.handle
+          })
+        ).terminal.tail ?? []
+      )
+        .map(String)
+        .join('\n')
+    // What a user sees first: the shell's prompt.
+    await waitFor(
+      'the shell prompt',
+      async () => ((await tail()).trim() ? true : null),
+      120_000,
+      25
+    )
+    const timeToPromptMs = Math.round(performance.now() - started)
     const probe = outputProbe()
     const sendStarted = performance.now()
+    // Enter inside the text, as typing delivers it: `enter: true` would add the 500 ms settle that
+    // protects agent TUIs from a pasted Enter, which no keystroke pays.
     await held.call('terminal.send', {
       terminal: created.terminal.handle,
-      text: probe.command,
-      enter: true
+      text: `${probe.command}\r`,
+      enter: false
     })
     await waitFor(
       'the host terminal to print the probe',
-      async () => {
-        const read = await held.call<{ terminal: { tail?: unknown[] } }>('terminal.read', {
-          terminal: created.terminal.handle
-        })
-        return (read.terminal.tail ?? []).map(String).join('\n').includes(probe.token) ? true : null
-      },
+      async () => ((await tail()).includes(probe.token) ? true : null),
       120_000,
-      100
+      25
     )
     const firstOutputMs = Math.round(performance.now() - started)
     const sendToFirstOutputMs = Math.round(performance.now() - sendStarted)
@@ -461,6 +482,7 @@ async function restartThroughHost(
     return {
       ensureMs,
       terminalCreatedMs: createdMs - ensureMs,
+      timeToPromptMs,
       sendToFirstOutputMs,
       firstOutputMs,
       phases: summarizeWslOrcadEnsurePhases(trace.events),
@@ -602,11 +624,21 @@ function startupGateFor(runs: Receipt[], targetP50Ms: number) {
     p90EnsureMs: percentile(values('ensureMs'), 0.9),
     p50TerminalCreatedMs: percentile(values('terminalCreatedMs'), 0.5),
     p50SendToFirstOutputMs: percentile(values('sendToFirstOutputMs'), 0.5),
+    p50TimeToPromptMs: percentile(values('timeToPromptMs'), 0.5),
+    p90TimeToPromptMs: percentile(values('timeToPromptMs'), 0.9),
     meetsTarget: p50FirstOutputMs <= targetP50Ms,
     runs: runs.map(
-      ({ ensureMs, terminalCreatedMs, sendToFirstOutputMs, firstOutputMs, phases }) => ({
+      ({
         ensureMs,
         terminalCreatedMs,
+        timeToPromptMs,
+        sendToFirstOutputMs,
+        firstOutputMs,
+        phases
+      }) => ({
+        ensureMs,
+        terminalCreatedMs,
+        timeToPromptMs,
         sendToFirstOutputMs,
         firstOutputMs,
         phases
