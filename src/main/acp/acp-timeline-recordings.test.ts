@@ -5,6 +5,8 @@ import {
   messageText
 } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import { openAcpFixtureRig, readAcpFixture } from './acp-timeline-fixture.test-support'
+import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
+import { catchUpAcpHistory } from './acp-history-catch-up'
 import { OPENCODE_ACP_DIALECT } from './acp-dialects/opencode-dialect'
 
 afterEach(closeProviderTimelineRigs)
@@ -167,4 +169,121 @@ describe('recorded ACP traffic through the journal', () => {
       'completed'
     ])
   })
+})
+
+it('uses actual suppressed requests and metadata without forcing named tails, then preserves explicit Plan and history finals', async () => {
+  const fixture = await openAcpFixtureRig(GENERIC_ACP_DIALECT)
+  const translator = fixture.lane()
+  fixture.apply(translator.openPrompt('prompt', 1).events)
+  const update = (sessionUpdate: string, text: string, messageId?: string) =>
+    translator.notification(
+      'session/update',
+      {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate,
+          content: { type: 'text', text },
+          ...(messageId ? { messageId } : {})
+        }
+      },
+      10
+    )
+  for (const channel of ['agent_message_chunk', 'agent_thought_chunk']) {
+    fixture.apply(update(channel, 'named', channel))
+    const request = translator.request('extension/delta', { sessionId: 'session-1' }, 7)
+    expect(request.presentation).toBeUndefined()
+    expect(request.events).toMatchObject([
+      { type: 'provider.frame', frameKind: 'request:extension/delta' }
+    ])
+    fixture.apply(request.events)
+    await fixture.rig.eventSink.written?.()
+    expect(
+      fixture.rig.journal.snapshot().items.filter((row) => row.body.kind === 'message')
+    ).toEqual([])
+  }
+  fixture.apply(
+    translator.notification(
+      'session/update',
+      {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'plan',
+          entries: [{ content: 'real plan', priority: 'medium', status: 'pending' }]
+        }
+      },
+      20
+    )
+  )
+  const before = await fixture.rig.rows()
+  expect(
+    before.filter((row) => row.body.kind === 'message').map((row) => messageText(row.body))
+  ).toEqual(['named', 'named'])
+  expect(before.at(-1)?.body).toMatchObject({
+    kind: 'status',
+    presentation: 'plan-document',
+    text: '- [ ] real plan'
+  })
+  fixture.apply(translator.promptResult('prompt', { stopReason: 'end_turn' }, 30))
+  const expected = structuredClone(await fixture.rig.rows())
+  const reopened = await fixture.rig.reopenJournal()
+  expect(reopened.snapshot().items).toEqual(expected)
+  expect(reopened.publicRead().snapshot.items).toEqual(expected)
+
+  // Existing schedule-disabled history translation must explicitly flush named and anonymous bodies.
+  const history = await openAcpFixtureRig(OPENCODE_ACP_DIALECT)
+  const frames = [
+    {
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'user_message_chunk',
+          messageId: 'user',
+          content: { type: 'text', text: 'question' }
+        }
+      }
+    },
+    {
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: {
+          sessionUpdate: 'agent_message_chunk',
+          messageId: 'reply',
+          content: { type: 'text', text: 'answer' }
+        }
+      }
+    },
+    {
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: { sessionUpdate: 'usage_update', used: 5, size: 1000 }
+      }
+    },
+    {
+      method: 'session/update',
+      params: {
+        sessionId: 'session-1',
+        update: { sessionUpdate: 'agent_thought_chunk', content: { type: 'text', text: 'reason' } }
+      }
+    }
+  ]
+  await catchUpAcpHistory({
+    frames,
+    identity: 'user-message-id',
+    sink: history.rig.eventSink,
+    sessionId: 'session-timeline',
+    agent: 'grok',
+    providerSessionId: 'session-1',
+    dialect: OPENCODE_ACP_DIALECT,
+    assertCurrent: () => {}
+  })
+  const saved = structuredClone(await history.rig.rows())
+  expect(
+    saved.filter((row) => row.body.kind === 'message').map((row) => messageText(row.body))
+  ).toEqual(['question', 'answer', 'reason'])
+  const reload = await history.rig.reopenJournal()
+  expect(reload.snapshot().items).toEqual(saved)
+  expect(reload.publicRead().snapshot.items).toEqual(saved)
 })

@@ -1,7 +1,8 @@
+import type * as DeltaCoalescerModule from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemIdentity
@@ -9,10 +10,55 @@ import {
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
+import type {
+  JournalItemRow,
+  JournalRow
+} from '../native-chat/agent-session-journal/journal-row-schema'
 import { createTrackedJournalOpener } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createCodexJournalTranslator } from './codex-structured-journal-translation'
+
+// Observe real full-value materialization at the public coalescer boundary; never replace admission.
+const fullValues = vi.hoisted(() => {
+  const state: { texts: string[] } = { texts: [] }
+  return state
+})
+vi.mock('../native-chat/agent-session-wire/agent-session-delta-coalescer', async (original) => {
+  const actual = await original<typeof DeltaCoalescerModule>()
+  const record = (text: string) => {
+    fullValues.texts.push(text)
+  }
+  return {
+    ...actual,
+    createAgentSessionDeltaCoalescer: (
+      deps: Parameters<typeof actual.createAgentSessionDeltaCoalescer>[0]
+    ) => {
+      const coalescer = actual.createAgentSessionDeltaCoalescer({
+        ...deps,
+        emit: (key, text, snapshot) => {
+          record(text)
+          return deps.emit(key, text, snapshot)
+        }
+      })
+      return {
+        ...coalescer,
+        snapshot: (key: string) => {
+          const value = coalescer.snapshot(key)
+          if (value) {
+            record(value.text)
+          }
+          return value
+        },
+        dirty: (...args: Parameters<typeof coalescer.dirty>) => {
+          const values = coalescer.dirty(...args)
+          values.forEach((value) => record(value.snapshot.text))
+          return values
+        }
+      }
+    }
+  }
+})
 
 const SESSION = 'session-codex-context'
 const THREAD = 'thread-main'
@@ -101,6 +147,7 @@ async function session() {
       })
     return {
       translator,
+      deferred,
       on,
       tokenUsage: (turnId: string, tokenUsage: unknown, threadId = THREAD) =>
         on('thread/tokenUsage/updated', { turnId, tokenUsage }, threadId),
@@ -244,4 +291,115 @@ describe('Codex context usage in the journal', () => {
     resumed.tokenUsage('turn-before-restart', FINAL_RESPONSE)
     expect(await resumed.contextUsage()).toMatchObject({ usedTokens: 17714, windowTokens: 475000 })
   })
+})
+
+it('metadata-barrier-class-confirmation', async () => {
+  const observations = []
+  for (const type of ['agentMessage', 'reasoning'] as const) {
+    for (const withUsage of [false, true]) {
+      const r = await session()
+      vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+      try {
+        vi.setSystemTime(100000)
+        const inputs: JournalRow[] = []
+        r.journal.observeCommits((rows) => inputs.push(...(rows ?? [])))
+        r.on('turn/started', { turn: { id: 'turn' } })
+        r.on('item/started', { turnId: 'turn', item: { type, id: 'text' } })
+        const delta =
+          type === 'agentMessage' ? 'item/agentMessage/delta' : 'item/reasoning/textDelta'
+        const prefix = 'P'.repeat(100),
+          tail = 'T'.repeat(40)
+        r.on(delta, { itemId: 'text', delta: prefix })
+        await vi.advanceTimersByTimeAsync(60)
+        await r.deferred.drained()
+        const first = r.journal.snapshot().items.find((item) => item.body.kind === 'message')!
+        expect(first.body).toMatchObject({ blocks: [{ type: 'text', text: prefix }] })
+        await vi.advanceTimersByTimeAsync(40)
+        r.on(delta, { itemId: 'text', delta: tail })
+        await vi.advanceTimersByTimeAsync(10)
+        const before = fullValues.texts.length
+        if (withUsage) {
+          r.tokenUsage('turn', FIRST_RESPONSE)
+        }
+        await r.deferred.drained()
+        const text = inputs.filter(
+          (row): row is JournalItemRow => row.kind === 'item' && row.body.kind === 'message'
+        )
+        observations.push({
+          type,
+          withUsage,
+          joins: fullValues.texts.length - before,
+          saves: text.length,
+          bodyBytes: text.reduce((n, row) => n + Buffer.byteLength(JSON.stringify(row.body)), 0),
+          context: await r.contextUsage()
+        })
+        r.translator.flush()
+        await r.deferred.drained()
+        expect(
+          r.journal.snapshot().items.find((item) => item.itemId === first.itemId)
+        ).toMatchObject({
+          ...first,
+          revision: first.revision + 1,
+          body: { blocks: [{ type: 'text', text: prefix + tail }] }
+        })
+      } finally {
+        r.translator.dispose()
+        vi.useRealTimers()
+      }
+    }
+  }
+  console.info('metadata-barrier-class-confirmation', JSON.stringify(observations))
+  expect(
+    observations.map(({ type, withUsage, joins, saves }) => ({ type, withUsage, joins, saves }))
+  ).toEqual(
+    ['agentMessage', 'reasoning'].flatMap((type) =>
+      [false, true].map((withUsage) => ({ type, withUsage, joins: 0, saves: 1 }))
+    )
+  )
+})
+
+it('usage leaves the existing autonomous plan wake and arrival-driven assistant tail independent', async () => {
+  const r = await session()
+  vi.useFakeTimers({ toFake: ['Date', 'performance', 'setTimeout', 'clearTimeout'] })
+  try {
+    r.tokenUsage('missing', FIRST_RESPONSE)
+    await r.deferred.drained()
+    expect(r.journal.snapshot().items).toEqual([])
+    r.on('turn/started', { turn: { id: 'turn' } })
+    r.on('item/plan/delta', { itemId: 'plan', delta: 'Plan' })
+    r.on('item/agentMessage/delta', { itemId: 'assistant', delta: 'Answer' })
+    await vi.advanceTimersByTimeAsync(60)
+    await r.deferred.drained()
+    const original = structuredClone(r.journal.snapshot().items)
+    await vi.advanceTimersByTimeAsync(40)
+    r.on('item/plan/delta', { itemId: 'plan', delta: ' tail' })
+    r.on('item/agentMessage/delta', { itemId: 'assistant', delta: ' tail' })
+    await vi.advanceTimersByTimeAsync(10)
+    r.tokenUsage('turn', FIRST_RESPONSE)
+    await r.deferred.drained()
+    expect(r.journal.snapshot().items.filter((item) => item.body.kind !== 'turn')).toEqual(
+      original.filter((item) => item.body.kind !== 'turn')
+    )
+    await vi.advanceTimersByTimeAsync(349)
+    await r.deferred.drained()
+    expect(
+      r.journal.snapshot().items.find((item) => item.body.kind === 'status')?.body
+    ).toMatchObject({ text: 'Plan' })
+    await vi.advanceTimersByTimeAsync(1)
+    await r.deferred.drained()
+    expect(
+      r.journal.snapshot().items.find((item) => item.body.kind === 'status')?.body
+    ).toMatchObject({ text: 'Plan tail' })
+    expect(
+      r.journal.snapshot().items.find((item) => item.body.kind === 'message')?.body
+    ).toMatchObject({ blocks: [{ type: 'text', text: 'Answer' }] })
+    r.on('turn/completed', { turn: { id: 'turn', status: 'completed' } })
+    await r.deferred.drained()
+    expect(
+      r.journal.snapshot().items.find((item) => item.body.kind === 'message')?.body
+    ).toMatchObject({ blocks: [{ type: 'text', text: 'Answer tail' }] })
+  } finally {
+    r.translator.dispose()
+    vi.useRealTimers()
+  }
 })

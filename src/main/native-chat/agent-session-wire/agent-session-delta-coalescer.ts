@@ -51,7 +51,9 @@ export type AgentSessionDeltaCoalescer = {
   forget: (key: string) => void
   dispose: () => void
   snapshot: (key: string) => AgentSessionDeltaSnapshot | null
-  dirty: () => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
+  dirty: (
+    select?: (key: string) => boolean
+  ) => { key: string; snapshot: AgentSessionDeltaSnapshot }[]
   /** External writes satisfy the current snapshot until more text arrives. */
   markFlushed: (key: string) => void
 }
@@ -257,9 +259,9 @@ export function createAgentSessionDeltaCoalescer(
           }
         : null
     },
-    dirty: () =>
+    dirty: (select) =>
       [...streams].flatMap(([key, stream]) =>
-        stream.dirty
+        stream.dirty && (select?.(key) ?? true)
           ? [
               {
                 key,

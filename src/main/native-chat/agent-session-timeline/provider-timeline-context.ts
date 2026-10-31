@@ -3,8 +3,12 @@ import type {
   AgentJournalTurnScope,
   AgentType
 } from '../../../shared/agent-session-journal-types'
-import type { ProviderTimelineJoin } from './provider-timeline-event'
-import { providerKey, type ProviderTimelineRows } from './provider-timeline-rows'
+import type { ProviderTimelineJoin, ProviderTimelineTextChannel } from './provider-timeline-event'
+import {
+  providerKey,
+  type ProviderTimelineRowId,
+  type ProviderTimelineRows
+} from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
 
 export type ProviderTimelineContext = {
@@ -14,6 +18,23 @@ export type ProviderTimelineContext = {
   rows: ProviderTimelineRows
   /** Other provider threads are subagent work. */
   ownThread?: () => string | null
+}
+
+export type ProviderTimelineStream = {
+  id: string
+  /** Named streams share their item’s budget slot. */
+  key: string
+  row: ProviderTimelineRowId
+  /** New rows use this scope; existing rows retain theirs. */
+  scope: AgentJournalTurnScope
+  named: boolean
+  channel: ProviderTimelineTextChannel
+  producer: AgentJournalProducerLinkage | undefined
+  /** Last accepted content time on the monotonic clock. */
+  acceptedAt?: number
+  bytes: number
+  /** Once a write finds a settled turn, later text cannot land. */
+  stoppedIn: string | null
 }
 
 export function providerTimelineSettlementId(

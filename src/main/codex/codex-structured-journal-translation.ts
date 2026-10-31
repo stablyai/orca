@@ -192,9 +192,11 @@ export function createCodexJournalTranslator(
           return publishActivity(event, streamResult.admission)
         }
       }
-      const streamAdmission = flushStreams('threadId' in event ? event.threadId : undefined)
-      if (!streamAdmission.accepted) {
-        return streamAdmission
+      if (event.type !== 'notification' || event.method !== CODEX_TOKEN_USAGE_METHOD) {
+        const streamAdmission = flushStreams('threadId' in event ? event.threadId : undefined)
+        if (!streamAdmission.accepted) {
+          return streamAdmission
+        }
       }
       if (event.type === 'prompt') {
         const suppressionAdmission = genericFrames.flush()

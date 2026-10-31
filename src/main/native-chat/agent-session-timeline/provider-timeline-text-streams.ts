@@ -5,8 +5,7 @@
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
-  type AgentJournalProducerLinkage,
-  type AgentJournalTurnScope
+  type AgentJournalProducerLinkage
 } from '../../../shared/agent-session-journal-types'
 import {
   AGENT_SESSION_TEXT_CHECKPOINT_MS,
@@ -18,6 +17,7 @@ import type { StructuredAgentSessionTransitionJournal } from '../agent-session-w
 import {
   providerTimelineEntryBytes,
   providerTimelinePlacement,
+  type ProviderTimelineStream,
   type ProviderTimelineContext
 } from './provider-timeline-context'
 import type { ProviderTimelineResolvedWrite } from './provider-timeline-decision'
@@ -28,30 +28,8 @@ import type {
 } from './provider-timeline-event'
 import { providerTimelineKeyPart } from './provider-timeline-identity'
 import { ProviderTimelinePlan, type ProviderTimelineSink } from './provider-timeline-plan'
-import {
-  providerKey,
-  providerTimelineTurnRowState,
-  turnOf,
-  type ProviderTimelineRowId
-} from './provider-timeline-rows'
+import { providerKey, providerTimelineTurnRowState, turnOf } from './provider-timeline-rows'
 import type { ProviderTimelineState } from './provider-timeline-state'
-
-export type ProviderTimelineStream = {
-  id: string
-  /** Named streams share their item’s budget slot. */
-  key: string
-  row: ProviderTimelineRowId
-  /** New rows use this scope; existing rows retain theirs. */
-  scope: AgentJournalTurnScope
-  named: boolean
-  channel: ProviderTimelineTextChannel
-  producer: AgentJournalProducerLinkage | undefined
-  /** Last accepted content time on the monotonic clock. */
-  acceptedAt?: number
-  bytes: number
-  /** Once a write finds a settled turn, later text cannot land. */
-  stoppedIn: string | null
-}
 
 /** Retain stopped keys until the turn boundary, within this bound. */
 const MAX_STOPPED_STREAMS = 128
@@ -166,10 +144,43 @@ export class ProviderTimelineTextStreams {
   }
 
   /** Flush preceding text before the event’s own writes. */
-  planFlush(plan: ProviderTimelinePlan, except?: ProviderTimelineStream): void {
-    for (const { key, snapshot } of this.coalescer.dirty()) {
+  planFlush(
+    plan: ProviderTimelinePlan,
+    except?: ProviderTimelineStream,
+    releasing?: (stream: ProviderTimelineStream) => boolean
+  ): void {
+    const ordered: ProviderTimelineStream[] = []
+    const selected = (key: string) => {
       const stream = this.byId.get(key)
-      if (stream && stream !== except) {
+      if (!stream || stream === except) {
+        return false
+      }
+      ordered.push(stream)
+      return releasing?.(stream) ?? true
+    }
+    const snapshots = new Map(
+      this.coalescer.dirty(selected).map(({ key, snapshot }) => [key, snapshot])
+    )
+    if (releasing) {
+      // Only a released first row needs its unpublished predecessors placed before it.
+      const last = ordered.findLastIndex(
+        (stream) => stream.acceptedAt === undefined && !!snapshots.get(stream.id)?.text.trim()
+      )
+      const predecessors = new Set(
+        ordered
+          .slice(0, Math.max(0, last))
+          .filter((stream) => stream.acceptedAt === undefined && stream !== except)
+          .map((stream) => stream.id)
+      )
+      for (const { key, snapshot } of this.coalescer.dirty(
+        (key) => !snapshots.has(key) && predecessors.has(key)
+      )) {
+        snapshots.set(key, snapshot)
+      }
+    }
+    for (const stream of ordered) {
+      const snapshot = snapshots.get(stream.id)
+      if (snapshot) {
         this.planText(plan, stream, snapshot.text)
       }
     }
@@ -263,7 +274,11 @@ export class ProviderTimelineTextStreams {
       plan.onAdmitted(() => this.coalescer.markFlushed(stream.id))
       return
     }
-    const body = this.message(stream, text)
+    const body: AgentJournalItemBody = {
+      kind: 'message',
+      role: stream.channel === 'assistant' ? 'assistant' : 'reasoning',
+      blocks: [{ type: 'text', text }]
+    }
     plan.item({
       reservedBytes: estimateStructuredAgentSessionItemBytes(stream.row.identity, body),
       resolve: (journal) => this.resolveText(stream, body, journal),
@@ -299,14 +314,6 @@ export class ProviderTimelineTextStreams {
   ): string | null {
     const held = journal.item(stream.row.itemId)
     return turnOf(held ? (held.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE) : stream.scope)
-  }
-
-  private message(stream: ProviderTimelineStream, text: string): AgentJournalItemBody {
-    return {
-      kind: 'message',
-      role: stream.channel === 'assistant' ? 'assistant' : 'reasoning',
-      blocks: [{ type: 'text', text }]
-    }
   }
 
   private stop(stream: ProviderTimelineStream, turnItemId: string): void {
