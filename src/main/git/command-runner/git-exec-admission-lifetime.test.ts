@@ -403,3 +403,41 @@ describe('git exec admission lifetime', () => {
     children.get('interactive')?.emit('close', 0, null)
   })
 })
+
+it('awaits retained-checkout eligibility after real admission and starts no child when it became unavailable', async () => {
+  vi.useFakeTimers()
+  _resetGitAdmissionForTests(new GitAdmissionScheduler({ generalCap: 1, generalHeadroom: 0 }))
+  execFileMock.mockClear()
+  const holding = acquireGitAdmission({ args: ['status'], cwd: '/retained-checkout' })
+  await vi.advanceTimersByTimeAsync(0)
+  const blocker = await holding
+  const eligibility = Promise.withResolvers<boolean>()
+  const canStart = vi.fn(() => eligibility.promise)
+  const pending = gitExecFileAsync(['symbolic-ref', '--quiet', 'HEAD'], {
+    cwd: '/retained-checkout',
+    canStart
+  })
+  const outcome = pending.catch((error) => error)
+  try {
+    await vi.advanceTimersByTimeAsync(0)
+    expect(canStart).not.toHaveBeenCalled()
+    blocker.release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(canStart).toHaveBeenCalledOnce()
+    expect(execFileMock).not.toHaveBeenCalled()
+    eligibility.reject(new Error('Checkout location stopped while queued'))
+    expect(await outcome).toMatchObject({ message: 'Checkout location stopped while queued' })
+    expect(execFileMock).not.toHaveBeenCalled()
+    expect(
+      Object.values(_gitAdmissionSnapshotForTests().budgets).every(
+        (budget) => budget.baseUsed === 0 && budget.headroomUsed === 0
+      )
+    ).toBe(true)
+  } finally {
+    blocker.release()
+    eligibility.resolve(false)
+    await outcome
+    _resetGitAdmissionForTests()
+    vi.useRealTimers()
+  }
+})

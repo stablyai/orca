@@ -1,3 +1,4 @@
+import { getDefaultSettings } from '../../shared/constants'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
@@ -403,4 +404,53 @@ describe('RuntimeManagedWorktreeQueries.listDetected overtaken scan', () => {
     expect(scanRepo).toHaveBeenCalledTimes(1)
     expect(result).toMatchObject({ authoritative: false, source: 'metadata-fallback' })
   })
+})
+
+it('rechecks managed provenance after awaited pruning, carrying only current positive owners', async () => {
+  resetLocalWorktreeScanGenerationsForTests()
+  const repo = folderRepo({ kind: 'git', path: '/repo' })
+  const id = `${repo.id}::/deleted`
+  const meta: Record<string, WorktreeMeta> = { [id]: metadata({ hostId: 'local' }) }
+  const { partialRuntimeStore } = await import('./runtime-store-partial-fixture')
+  const store = partialRuntimeStore({
+    getRepos: () => [repo],
+    getAllWorktreeMeta: () => meta,
+    captureNativeLocalWorktreeMetadataScanExpectation: () => ({
+      repo: { ...repo, kind: 'git', expectedRepo: repo },
+      routing: {
+        expectedProject: undefined,
+        expectedProjectUpdatedAt: undefined,
+        expectedSettings: getDefaultSettings('/fixture')
+      },
+      metadata: []
+    }),
+    pruneSessionlessMissingLocalWorktreeMetadataForRepo: vi.fn(),
+    getProfileStorageDirectory: () => '/fixture'
+  })
+  const pendingPrune = Promise.withResolvers<{
+    scanGenerationCurrent: boolean
+    preservedMetadataCandidateIds: Set<string>
+  }>()
+  pruneMetadataMock.mockReturnValueOnce(pendingPrune.promise)
+  pruneLineageMock.mockClear()
+  const pending = queries(store, {
+    scanRepo: async () => ({
+      ok: true,
+      worktrees: [repo.path, '/deleted'].map((path) => ({
+        path,
+        head: 'abc',
+        branch: 'refs/heads/feature',
+        isMainWorktree: path === repo.path,
+        isBare: false
+      }))
+    })
+  }).listDetected(repo)
+  await vi.waitFor(() => expect(pruneMetadataMock).toHaveBeenCalled())
+  delete meta[id]
+  bumpLocalWorktreeScanGeneration(repo.id)
+  pendingPrune.resolve({ scanGenerationCurrent: false, preservedMetadataCandidateIds: new Set() })
+  const result = await pending
+  expect(result).toMatchObject({ authoritative: false, source: 'git' })
+  expect(result.worktrees.map((row) => row.path)).toEqual([repo.path])
+  expect(pruneLineageMock).not.toHaveBeenCalled()
 })

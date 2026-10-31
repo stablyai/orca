@@ -2,9 +2,12 @@ import type { GitWorktreeInfo } from '../../shared/worktree/types'
 import { listWorktreesStrict } from '../git/worktree'
 import type { LocalProjectWorktreeGitOptions } from '../project-runtime-git-options'
 
-export type RuntimeWorktreeScanResult =
-  | { ok: true; worktrees: GitWorktreeInfo[] }
-  | { ok: false; worktrees: GitWorktreeInfo[] }
+export type RuntimeWorktreeScanResult = {
+  ok: boolean
+  worktrees: GitWorktreeInfo[]
+  /** Internal observation currency; never serialized to clients. */
+  isCurrent?: () => boolean
+}
 
 export async function scanLocalRepoWorktreesForResolution(
   repoPath: string,

@@ -17,6 +17,7 @@ import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cach
 import type { RuntimeStore } from '../runtime-store-contract'
 import {
   projectRepoWorktreeRows,
+  currentRepoWorktreeScan,
   joinRepoWorktreeRows,
   scanRepoWorktreeRows,
   type RepoWorktreeRowDeps,
@@ -106,8 +107,9 @@ export function joinResolvedWorktreeScans(
   const scannedRepoKeys = new Set<HostScopedRepoKey>()
   const perRepoWorktrees = repos.map((repo) => {
     const key = resolvedWorktreeRepoScanKey(repo)
-    const scan = scans.get(key) ?? null
-    if (!scan && !isFolderRepo(repo)) {
+    const original = scans.get(key) ?? null
+    const scan = currentRepoWorktreeScan(store, repo, original)
+    if (!scan?.ok && !isFolderRepo(repo)) {
       unscannedRepoKeys.add(key)
     }
     const rows = (projectOnly ? projectRepoWorktreeRows : joinRepoWorktreeRows)(
@@ -119,7 +121,7 @@ export function joinResolvedWorktreeScans(
     if (scan?.ok) {
       scannedRepoKeys.add(key)
       for (const row of rows) {
-        gitRunById.set(composeWorktreeHostIdentity(row.hostId, row.id), scan.gitRun)
+        gitRunById.set(composeWorktreeHostIdentity(row.hostId, row.id), original?.gitRun ?? null)
       }
     }
     return rows

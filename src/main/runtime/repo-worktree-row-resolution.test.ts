@@ -474,3 +474,77 @@ it('stamps the scan/sidebar join while cached catalog projection stays pure acro
   joinResolvedWorktreeScans(deps.store, () => deps, scans, true)
   expect(writes).toHaveBeenCalledOnce()
 })
+
+it('reprojects a repo overtaken during a later fleet await and withdraws branch/stamp provenance', async () => {
+  const owner = repo('live', '/repo')
+  const slow = repo('slow', '/slow')
+  const deps = createDeps([owner, slow])
+  const id = 'live::/child'
+  deps.metaById[id] = mergeWorktreeMetaForWrite(undefined, {
+    hostId: 'local',
+    displayName: 'Saved child'
+  })
+  let current = true
+  const wait = Promise.withResolvers<{ ok: boolean; worktrees: GitWorktreeInfo[] }>()
+  deps.scanRepo.mockImplementation(async (target) =>
+    target.id === owner.id
+      ? { ok: true, worktrees: [gitWorktree('/child')], isCurrent: () => current }
+      : wait.promise
+  )
+  const { scanResolvedWorktreeRepos } = await import('./workspaces/resolved-worktree-scan-join')
+  const pending = scanResolvedWorktreeRepos(
+    deps.store,
+    () => deps,
+    () => ({})
+  )
+  await vi.waitFor(() => expect(deps.scanRepo).toHaveBeenCalledTimes(2))
+  current = false
+  const writes = vi.spyOn(deps.store, 'setWorktreeMeta')
+  wait.resolve({ ok: true, worktrees: [] })
+  const scans = await pending
+  const joined = joinResolvedWorktreeScans(deps.store, () => deps, scans)
+  expect(joined.worktrees).toEqual([expect.objectContaining({ id, displayName: 'Saved child' })])
+  expect(joined.scannedRepoKeys.has(getRepoHostIdentityForParts(owner.id, 'local'))).toBe(false)
+  expect(joined.gitRunById.size).toBe(0)
+  expect(writes).not.toHaveBeenCalled()
+  delete deps.metaById[id]
+  expect(joinResolvedWorktreeScans(deps.store, () => deps, scans).worktrees).toEqual([])
+})
+
+it('does not stamp or return a scoped target removed while a related repository is awaited', async () => {
+  const owner = repo('child', '/repo')
+  const related = repo('parent', '/parent-repo')
+  const deps = createDeps([owner, related])
+  const id = 'child::/child',
+    parentId = 'parent::/parent'
+  deps.metaById[id] = mergeWorktreeMetaForWrite(undefined, {
+    hostId: 'local',
+    instanceId: 'child-instance'
+  })
+  deps.store.getAllWorktreeLineage = () => ({
+    [id]: {
+      worktreeId: id,
+      worktreeInstanceId: 'child-instance',
+      parentWorktreeId: parentId,
+      parentWorktreeInstanceId: 'parent-instance',
+      origin: 'cli',
+      capture: { source: 'explicit-cli-flag', confidence: 'explicit' },
+      createdAt: 1
+    }
+  })
+  let current = true
+  const wait = Promise.withResolvers<{ ok: boolean; worktrees: GitWorktreeInfo[] }>()
+  deps.scanRepo.mockImplementation(async (target) =>
+    target.id === owner.id
+      ? { ok: true, worktrees: [gitWorktree('/child')], isCurrent: () => current }
+      : wait.promise
+  )
+  const writes = vi.spyOn(deps.store, 'setWorktreeMeta')
+  const pending = resolveScopedWorktreeIdRow(deps, id, 'local')
+  await vi.waitFor(() => expect(deps.scanRepo).toHaveBeenCalledTimes(2))
+  current = false
+  delete deps.metaById[id]
+  wait.resolve({ ok: true, worktrees: [] })
+  expect(await pending).toBeNull()
+  expect(writes).not.toHaveBeenCalled()
+})

@@ -150,7 +150,7 @@ async function gitExecFileAsyncUnlocked(
       }
       try {
         options.admissionSignal?.throwIfAborted()
-        if (options.canStart?.() === false) {
+        if (options.canStart && (await options.canStart()) === false) {
           throw createAbortError()
         }
         return await runCapturedCommand()

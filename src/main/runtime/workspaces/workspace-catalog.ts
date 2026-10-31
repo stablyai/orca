@@ -1,3 +1,5 @@
+import { resolveWorktreeScanCacheTtlMs } from '../runtime-worktree-scan-cache'
+import { observeRuntimeRepoWorktrees } from './repo-worktree-listing-observation'
 import { OrcaRuntimeWithReadKittyFile } from '../orca-runtime-read-kitty-file'
 import type { RuntimeWorkspaceRepoScanRefresh } from './workspace-repo-scan-refresh'
 import type { ResolvedWorktree } from '../runtime-worktree-path-identity'
@@ -6,23 +8,17 @@ import { isPathInsideOrEqual } from '../../../shared/cross-platform-path'
 import type { ResolvedWorktreeSnapshot } from '../runtime-resolved-worktree-cache'
 import { RESOLVED_WORKTREE_CACHE_TTL_MS } from '../orca-runtime-postlude'
 import { getWorktreeScanMutationRevision } from '../../local-worktree-scan-generation'
+import { resolveLocalProjectRuntimeForRepo } from '../../project-runtime-git-options'
 import {
-  resolveLocalProjectRuntimeForRepo,
-  resolveLocalProjectRuntimesForRepos
-} from '../../project-runtime-git-options'
-import {
-  resolveRepoWorktreeRows,
   resolveScopedWorktreeIdRow,
   type RepoWorktreeRowDeps
 } from '../repo-worktree-row-resolution'
 import {
   joinResolvedWorktreeScans,
-  platformsByRepoId,
   scanResolvedWorktreeRepos,
   type ResolvedWorktreeRepoScans,
   type ResolvedWorktreeScanJoin
 } from './resolved-worktree-scan-join'
-import { projectResolvedWorktreeLineage } from '../../../shared/resolved-worktree-lineage'
 import {
   listRuntimeFolderWorkspaces,
   projectRuntimeFolderWorkspaces
@@ -36,15 +32,12 @@ import {
   getRepoSshConnectionId,
   LOCAL_EXECUTION_HOST_ID
 } from '../../../shared/execution-host'
-import { withUnregisteredRemovalCheckouts } from '../../worktree-removal-listing'
-import { retainKnownWorktreesInListing } from '../../known-worktree-listing-retention'
-import { withoutInFlightWorktreeCreates } from '../../worktree-create-in-flight'
-import { preserveFolderUpgradeWorktreePath } from '../../folder-upgrade-worktree-path'
 import type { RuntimeWorktreeScanCache } from '../orca-runtime-core'
 import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
-import { resolveWorktreeScanCacheTtlMs } from '../runtime-worktree-scan-cache'
+import { WorktreeListingObservations } from '../../worktree-listing-observation'
 
 export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFile {
+  private readonly listingObservations = new WorktreeListingObservations()
   protected abstract refreshRepoWorktreeScan(
     ...args: Parameters<RuntimeWorkspaceRepoScanRefresh['refreshRepoWorktreeScan']>
   ): ReturnType<RuntimeWorkspaceRepoScanRefresh['refreshRepoWorktreeScan']>
@@ -112,18 +105,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     if (!this.store) {
       return { worktrees: [], platformByRepoId: new Map() }
     }
-    const metaById = this.store.getAllWorktreeMeta() ?? {}
-    const repos = this.store.getRepos()
-    const projectRuntimeByRepoId = resolveLocalProjectRuntimesForRepos(this.requireStore(), repos)
-    const platformByRepoId = platformsByRepoId(repos, projectRuntimeByRepoId)
-    const deps = this.repoWorktreeRowDeps()
-    const perRepoWorktrees = await Promise.all(
-      repos.map(
-        async (repo) => await resolveRepoWorktreeRows(deps, repo, metaById, projectRuntimeByRepoId)
-      )
-    )
-    const lineageById = this.store?.getAllWorktreeLineage?.() ?? {}
-    const worktrees = projectResolvedWorktreeLineage(perRepoWorktrees.flat(), lineageById)
+    const scans = await this.scanResolvedWorktreeRepos()
+    const { worktrees, platformByRepoId } = this.joinResolvedWorktreeScans(scans)
     return { worktrees, platformByRepoId }
   }
 
@@ -169,7 +152,10 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
       const cached = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
       if (cached) {
         scans.set(getRepoHostIdentityForParts(repo.id, getRepoExecutionHostId(repo)), {
-          ...(cached.listing ?? cached.result),
+          ...(cached.listing ??
+            (getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+              ? { ok: false, worktrees: [] }
+              : cached.result)),
           gitRun: cached
         })
       }
@@ -190,8 +176,8 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
     const store = this.requireStore()
     return {
       store,
-      scanRepo: (repo, projectRuntimeByRepoId) =>
-        this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId),
+      scanRepo: (repo, projectRuntimeByRepoId, signal) =>
+        this.listRepoWorktreesForListing(repo, projectRuntimeByRepoId, signal),
       listFolderWorkspaces: (repo, repoOwnerCount) =>
         listRuntimeFolderWorkspaces(store, repo, repoOwnerCount)
     }
@@ -210,29 +196,20 @@ export abstract class RuntimeWorkspaceCatalog extends OrcaRuntimeWithReadKittyFi
   /** The resolution scan plus the checkouts this host's removals own that Git no longer lists. */
   protected async listRepoWorktreesForListing(
     repo: Repo,
-    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>
+    projectRuntimeByRepoId?: ReadonlyMap<string, ProjectExecutionRuntimeResolution>,
+    signal?: AbortSignal
   ): Promise<RuntimeWorktreeScanResult> {
-    const cached = await this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId)
-    // Paired detectedList must retain folder-upgrade locators or folder ids lose metadata and terminals (#30150).
-    const scan = { ...cached, worktrees: preserveFolderUpgradeWorktreePath(repo, cached.worktrees) }
-    const listing =
-      scan.ok && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
-        ? {
-            ok: true,
-            worktrees: await withUnregisteredRemovalCheckouts(
-              repo.id,
-              withoutInFlightWorktreeCreates(
-                repo.id,
-                await retainKnownWorktreesInListing(this.requireStore(), repo, scan.worktrees)
-              )
-            )
-          }
-        : scan
-    const cachedEntry = this.worktreeScanCache.get(`${repo.id}\0${getRepoExecutionHostId(repo)}`)
-    if (cachedEntry?.result === cached) {
-      cachedEntry.listing = listing
-    }
-    return listing
+    return observeRuntimeRepoWorktrees(
+      {
+        store: this.requireStore(),
+        observations: this.listingObservations,
+        cache: this.worktreeScanCache,
+        generations: this.worktreeScanGenerations
+      },
+      repo,
+      () => this.listRepoWorktreesForResolution(repo, projectRuntimeByRepoId),
+      signal
+    )
   }
 
   protected async listRepoWorktreesForResolution(

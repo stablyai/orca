@@ -50,10 +50,13 @@ async function scanRuntimeWorktreesWithMutationWitness(
   } catch {
     scan = { ok: false, worktrees: [] }
   }
+  const isCurrent = () =>
+    isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration) && scan.isCurrent?.() !== false
   return {
     ...scan,
+    isCurrent,
     // Failed scans are already non-authoritative.
-    superseded: scan.ok && !isLocalWorktreeScanGenerationCurrent(repo.id, scanGeneration),
+    superseded: scan.ok && !isCurrent(),
     scanGeneration,
     metadataPruneExpectation
   }

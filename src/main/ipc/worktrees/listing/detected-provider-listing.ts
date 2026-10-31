@@ -1,3 +1,4 @@
+import { knownWorktreeInventory } from '../../../known-worktree-inventory'
 import {
   projectPendingWorktreeRemovals,
   snapshotPendingWorktreeRemovals,
@@ -24,10 +25,14 @@ import { isFolderWorkspaceIdForRepo } from '../folder-workspace-model'
 import { hasConflictingStoredWorktreeOwner } from './worktree-host-ownership'
 import {
   applyFreshDetectedWorktreeScanSideEffects,
+  detectedListingObservations,
+  DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
   listDetectedGitWorktrees
 } from './detected-worktree-scan-cache'
 import {
   getLocalWorktreeCatalogVersion,
+  isLocalWorktreeScanGenerationCurrent,
+  getLocalWorktreeScanGeneration,
   localWorktreeCatalogVersionAt
 } from '../../../local-worktree-scan-generation'
 import {
@@ -39,7 +44,10 @@ import { readAllWorktreeMetaForRepo } from '../../../persistence/host-qualified-
 import { classifyWorktreeScanFailure } from '../../../../shared/worktree-scan-failure'
 import { scanUntilNotOvertaken } from './overtaken-scan-rerun'
 import { withoutInFlightWorktreeCreates } from '../../../worktree-create-in-flight'
-import { retainKnownWorktreesInListing } from '../../../known-worktree-listing-retention'
+import {
+  retainKnownWorktreesInListing,
+  KnownWorktreeListingError
+} from '../../../known-worktree-listing-retention'
 import { releaseWslStoppedWorktreeRescan } from '../../../wsl-stopped-worktree-rescan-registry'
 import {
   listWslStoppedWorktrees,
@@ -59,7 +67,7 @@ export async function listDetectedWorktreesForCapturedRepo(
     providerAbort?.signal.aborted
       ? ({ providerAbortStatus: providerAbort.status() } as const)
       : undefined
-  const allMeta = isFolderRepo(repo) ? undefined : readAllWorktreeMetaForRepo(store, repo)
+  const allMeta = connectionId ? readAllWorktreeMetaForRepo(store, repo) : undefined
 
   try {
     // Folder rows are read synchronously, leaving no mutation window that needs a re-scan.
@@ -113,52 +121,95 @@ export async function listDetectedWorktreesForCapturedRepo(
       }
     }
     const pendingAtScan = snapshotPendingWorktreeRemovals()
+    const inventory = knownWorktreeInventory(store)
     const scan = await scanUntilNotOvertaken(
       repo.id,
-      () => listDetectedGitWorktrees(store, repo),
+      async () => {
+        const generation = getLocalWorktreeScanGeneration(repo.id)
+        const scope = inventory.read(repo)
+        const route = inventory.route(repo)
+        const producerCurrent = () =>
+          isLocalWorktreeScanGenerationCurrent(repo.id, generation) &&
+          inventory.read(repo) === scope &&
+          inventory.route(repo) === route
+        try {
+          const observation = await detectedListingObservations(store).observe({
+            key: repo.id,
+            scope,
+            route: `${repo.path}\0${route}\0${generation}`,
+            ttlMs: DETECTED_WORKTREE_SCAN_CACHE_TTL_MS,
+            reusable: inventory.reusable,
+            signal: providerAbort?.signal,
+            isCallerCurrent: isCurrent,
+            isProducerCurrent: producerCurrent,
+            run: async (signal, current) => {
+              const raw = await listDetectedGitWorktrees(store, repo)
+              if (raw.superseded || !current()) {
+                throw new Error('Worktree listing superseded')
+              }
+              const retained = await retainKnownWorktreesInListing(store, repo, raw.gitWorktrees, {
+                inventory: scope,
+                gitOptions: inventory.gitOptions(repo),
+                signal,
+                isCurrent: current
+              })
+              const rows = await withUnregisteredRemovalCheckouts(
+                repo.id,
+                withoutInFlightWorktreeCreates(repo.id, retained),
+                { signal, isCurrent: current }
+              )
+              if (!current()) {
+                throw new Error('Worktree listing superseded')
+              }
+              if (
+                hasConflictingStoredWorktreeOwner(
+                  store,
+                  repo,
+                  rows.map((row) => `${repo.id}::${row.path}`)
+                )
+              ) {
+                throw new KnownWorktreeListingError(new Error('Conflicting worktree owner'))
+              }
+              if (
+                raw.fresh &&
+                !(await applyFreshDetectedWorktreeScanSideEffects(
+                  store,
+                  repo,
+                  retained,
+                  raw.metadataPrune,
+                  {
+                    isCurrent: current,
+                    sideEffectToken: raw.sideEffectToken,
+                    signal,
+                    hygieneDue: raw.hygieneDue
+                  }
+                ))
+              ) {
+                throw new KnownWorktreeListingError(new Error('Worktree listing commit superseded'))
+              }
+              return { worktrees: rows, confirmed: true }
+            }
+          })
+          return { generation, observation, superseded: !producerCurrent() }
+        } catch (error) {
+          if (isCurrent() && producerCurrent()) {
+            throw error
+          }
+          return { generation, observation: null, superseded: true }
+        }
+      },
       () => isCurrent() && !providerAbort?.signal.aborted
     )
-    // Stale rejection preserves client rows; non-authoritative replacement could hide newly created worktrees.
-    if (scan.superseded) {
+    if (scan.superseded || !scan.observation?.isCurrent()) {
       return abortedResult() ?? null
     }
-    const { fresh: freshScan, sideEffectToken, metadataPrune, hygieneDue } = scan
-    const gitWorktrees = await retainKnownWorktreesInListing(store, repo, scan.gitWorktrees)
-    const localRows = await withUnregisteredRemovalCheckouts(
-      repo.id,
-      withoutInFlightWorktreeCreates(repo.id, gitWorktrees)
-    )
+    const localRows = scan.observation.worktrees
     const aborted = abortedResult()
     if (aborted) {
       return aborted
     }
     if (!isCurrent()) {
       return null
-    }
-    const listedWorktreeIds = gitWorktrees.map((worktree) => `${repo.id}::${worktree.path}`)
-    if (hasConflictingStoredWorktreeOwner(store, repo, listedWorktreeIds)) {
-      return {
-        repoId: repo.id,
-        authoritative: false,
-        source: 'metadata-fallback',
-        worktrees: [],
-        catalogVersion: localWorktreeCatalogVersionAt(scan.generation)
-      }
-    }
-    if (freshScan) {
-      await applyFreshDetectedWorktreeScanSideEffects(store, repo, gitWorktrees, metadataPrune, {
-        isCurrent: () => isCurrent() && !providerAbort?.signal.aborted,
-        sideEffectToken,
-        signal: providerAbort?.signal,
-        ...(hygieneDue === undefined ? {} : { hygieneDue })
-      })
-      const aborted = abortedResult()
-      if (aborted) {
-        return aborted
-      }
-      if (!isCurrent()) {
-        return null
-      }
     }
     loggedWorktreeListFailures.delete(`${repo.id}:${repo.path}`)
     releaseWslStoppedWorktreeRescan(repo.id)
@@ -169,7 +220,7 @@ export async function listDetectedWorktreesForCapturedRepo(
       source: 'git',
       catalogVersion: localWorktreeCatalogVersionAt(scan.generation),
       worktrees: projectPendingWorktreeRemovals(
-        buildDetectedGitWorktrees(store, repo, localRows, allMeta),
+        buildDetectedGitWorktrees(store, repo, localRows, inventory.read(repo).meta),
         (worktree) => worktree.id,
         true,
         pendingAtScan
@@ -184,17 +235,19 @@ export async function listDetectedWorktreesForCapturedRepo(
       return null
     }
     // Retained rows need their scan-failure cause to explain why they are unavailable.
-    const unavailableReason = describeWorktreeScanFailure(err)
+    const retentionFailure = err instanceof KnownWorktreeListingError
+    const failure = retentionFailure ? err.cause : err
+    const unavailableReason = describeWorktreeScanFailure(failure)
     const failureKind = classifyWorktreeScanFailure(unavailableReason)
     // A distro the gate would not start (E9) is expected: keep stored rows and re-list once it runs.
-    const wslDistroStopped = wslDistroNotRunningForScanFailure(err)
+    const wslDistroStopped = wslDistroNotRunningForScanFailure(failure)
     if (wslDistroStopped) {
       rescanWorktreesWhenWslDistroRuns(repo.id, wslDistroStopped.distro)
       return {
         repoId: repo.id,
         authoritative: false,
         source: 'metadata-fallback',
-        worktrees: listWslStoppedWorktrees(store, repo, allMeta),
+        worktrees: retentionFailure ? [] : listWslStoppedWorktrees(store, repo, allMeta),
         unavailableReason,
         failureKind,
         wslDistroStopped,

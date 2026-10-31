@@ -1,4 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type * as Fs from 'node:fs/promises'
+import type { StateWriteListener } from '../persistence/loading-store/write-scheduling'
+import { getDefaultWorkspaceSession } from '../../shared/constants'
 
 const electronMocks = vi.hoisted(() => {
   const ipcMain = {
@@ -16,6 +19,11 @@ const electronMocks = vi.hoisted(() => {
 vi.mock('electron', () => electronMocks)
 
 const listWorktreesStrictMock = vi.hoisted(() => vi.fn())
+const statMock = vi.hoisted(() => vi.fn(async (_path: string) => ({ isDirectory: () => true })))
+vi.mock('node:fs/promises', async (original) => ({
+  ...(await original<typeof Fs>()),
+  stat: statMock
+}))
 vi.mock('../git/worktree', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   listWorktreesStrict: listWorktreesStrictMock
@@ -81,7 +89,16 @@ function makeStore(options: StoreOptions = {}) {
     [MAIN_WORKTREE_ID]: makeMeta({ displayName: 'main', instanceId: 'parent-instance' })
   }
   const lineageById = makeLineage()
+  const stateListeners = new Set<StateWriteListener>()
   const store = {
+    getWorkspaceSession: () => getDefaultWorkspaceSession(),
+    onWorkspaceSessionWritten: () => () => {},
+    onStateWritten: (listener: StateWriteListener) => {
+      stateListeners.add(listener)
+      return () => {
+        stateListeners.delete(listener)
+      }
+    },
     getRepo: (id: string) => store.getRepos().find((repo) => repo.id === id),
     getRepos: () => [
       storeRepo({
@@ -100,6 +117,9 @@ function makeStore(options: StoreOptions = {}) {
     getWorktreeMeta: (id: string) => metaById[id],
     setWorktreeMeta: ({ id }: HostWorktreeTarget, meta: Partial<WorktreeMeta>) => {
       metaById[id] = { ...(metaById[id] ?? makeMeta()), ...meta }
+      for (const listener of stateListeners) {
+        listener(['worktreeMeta'])
+      }
       return metaById[id]
     },
     removeWorktreeMeta: () => {},
@@ -141,6 +161,12 @@ describe('worktree.ps on a degraded repo scan', () => {
   beforeEach(() => {
     listWorktreesStrictMock.mockReset()
     listWorktreesStrictMock.mockResolvedValue([])
+    statMock.mockReset().mockImplementation(async (path) => {
+      if (path === WORKTREE_PATH) {
+        throw Object.assign(new Error('missing'), { code: 'ENOENT' })
+      }
+      return { isDirectory: () => true }
+    })
   })
 
   it('keeps persisted worktrees when a remote scan stalls past the per-repo budget', async () => {
@@ -182,23 +208,23 @@ describe('worktree.ps on a degraded repo scan', () => {
     }
   })
 
-  // withTimeout also falls back on rejection; absorb real scan failures before they can restore stale rows.
-  it('treats a rejected scan as a real answer instead of restoring persisted worktrees', async () => {
+  it('preserves stored representation when a scan rejects without asserting Git facts', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
     const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
     const result = await runtime.getWorktreePs(10_000)
 
-    expect(result.worktrees.map((worktree) => worktree.worktreeId)).not.toContain(WORKTREE_ID)
+    expect(result.worktrees.map((worktree) => worktree.worktreeId)).toContain(WORKTREE_ID)
   })
 
-  it('still reports selector_not_found for a local worktree when the scan rejects', async () => {
+  it('keeps a current stored selector available when the scan rejects', async () => {
     listWorktreesStrictMock.mockRejectedValue(new Error('git unavailable'))
     const runtime = new OrcaRuntimeService(partialRuntimeStore(makeStore()))
 
-    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).rejects.toThrow(
-      'selector_not_found'
-    )
+    await expect(runtime.showManagedWorktree(`id:${WORKTREE_ID}`)).resolves.toMatchObject({
+      id: WORKTREE_ID,
+      displayName: 'feature'
+    })
   })
 
   it('caches a zero-row local scan instead of rescanning on every poll', async () => {
@@ -349,7 +375,8 @@ describe('worktree.ps on a degraded repo scan', () => {
 
   it('does not re-read persisted worktree metadata on a healthy scan', async () => {
     listWorktreesStrictMock.mockResolvedValue([
-      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
+      { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true },
+      { path: WORKTREE_PATH, head: 'abc', branch: 'feature', isBare: false, isMainWorktree: false }
     ])
     const store = makeStore()
     const runtime = new OrcaRuntimeService(partialRuntimeStore(store))

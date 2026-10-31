@@ -1,3 +1,4 @@
+import type * as ProjectRuntimeGitOptionsModule from '../../../project-runtime-git-options'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
@@ -11,7 +12,8 @@ vi.mock('electron', () => ({
 vi.mock('../../../repo-worktrees', () => ({
   listRepoWorktreesForDetectedScan: listRepoWorktreesMock
 }))
-vi.mock('../../../project-runtime-git-options', () => ({
+vi.mock('../../../project-runtime-git-options', async (importOriginal) => ({
+  ...(await importOriginal<ProjectRuntimeGitOptionsModule>()),
   getLocalProjectWorktreeGitOptions: () => ({})
 }))
 vi.mock('../../registered-worktree-roots-cache', () => ({

@@ -1,6 +1,7 @@
+import { throwIfSignalAborted } from '../shared/abort-signal-reason'
 import { LOCAL_EXECUTION_HOST_ID, type ExecutionHostId } from '../shared/execution-host'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
-import { areWorktreePathsEqual, canonicalWorktreePath } from './git/worktree-path-comparison'
+import { canonicalWorktreePath } from './git/worktree-path-comparison'
 import { isRecordedCheckout, isUnregisteredRemovalLeftover } from './worktree-removal-leftover'
 import type { WorktreeRemovalRecord } from './worktree-removal-records'
 import {
@@ -19,8 +20,16 @@ const NO_PENDING_REMOVALS: PendingWorktreeRemovals = new Map()
 /** Keep unregistered removal leftovers visible until the folder disappears or a different checkout replaces it. */
 export async function withUnregisteredRemovalCheckouts(
   repoId: string,
-  gitWorktrees: GitWorktreeInfo[]
+  gitWorktrees: GitWorktreeInfo[],
+  options: { signal?: AbortSignal; isCurrent?: () => boolean } = {}
 ): Promise<GitWorktreeInfo[]> {
+  const current = (): void => {
+    throwIfSignalAborted(options.signal)
+    if (options.isCurrent?.() === false) {
+      throw new Error('Worktree listing superseded')
+    }
+  }
+  current()
   let droppedFailure = false
   const failures = new Map(
     [...failedWorktreeRemovals.values()]
@@ -39,18 +48,22 @@ export async function withUnregisteredRemovalCheckouts(
     droppedFailure = true
     return row
   })
+  const listedPaths = new Set(gitWorktrees.map((row) => canonicalWorktreePath(row.path)))
   const unlisted = [...pendingWorktreeRemovals.values(), ...failedWorktreeRemovals.values()].filter(
     (record) =>
-      record.repoId === repoId &&
-      !gitWorktrees.some((worktree) => areWorktreePathsEqual(worktree.path, record.worktreePath))
+      record.repoId === repoId && !listedPaths.has(canonicalWorktreePath(record.worktreePath))
   )
   const leftovers: GitWorktreeInfo[] = []
   for (const record of unlisted) {
+    current()
     const failed = failedWorktreeRemovals.get(record.worktreeId) === record
-    if (
-      (await worktreeCheckoutExists(record.worktreePath)) &&
+    const exists = await worktreeCheckoutExists(record.worktreePath)
+    current()
+    const leftover =
+      exists &&
       (!failed || (await isUnregisteredRemovalLeftover(record.repoPath, record.worktreePath)))
-    ) {
+    current()
+    if (leftover) {
       leftovers.push({
         path: record.worktreePath,
         head: record.head,

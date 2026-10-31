@@ -18,7 +18,7 @@ export type GitExecOptions = {
   /** Cancels admission only; a running child still finishes. */
   admissionSignal?: AbortSignal
   /** Rechecks owner eligibility after admission, before starting the child. */
-  canStart?: () => boolean
+  canStart?: () => boolean | Promise<boolean>
   wslDistro?: string
   /** Runs the host's Git even in a WSL-runtime project (local-git-runtime-route.ts); say why. */
   hostGit?: true

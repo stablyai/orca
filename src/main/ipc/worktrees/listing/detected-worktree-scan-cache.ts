@@ -1,3 +1,4 @@
+import { WorktreeListingObservations } from '../../../worktree-listing-observation'
 import { getRepoExecutionHostId, LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GitWorktreeInfo } from '../../../../shared/worktree/types'
 import type { Store } from '../../../persistence/loading-store/store'
@@ -26,6 +27,15 @@ import {
 } from '../../../local-worktree-metadata-prune-gate'
 import { pruneMetadataMissingFromAuthoritativeLocalScan } from './authoritative-local-worktree-metadata-pruning'
 import { assertWslUncPathRunning, wslDistroForPath } from '../../../wsl/wsl-unc-access-gate'
+
+const listingObservations = new WeakMap<Store, WorktreeListingObservations>()
+export function detectedListingObservations(store: Store): WorktreeListingObservations {
+  let owner = listingObservations.get(store)
+  if (!owner) {
+    listingObservations.set(store, (owner = new WorktreeListingObservations()))
+  }
+  return owner
+}
 
 // Coalesce renderer polls while bounding external-change lag.
 export const DETECTED_WORKTREE_SCAN_CACHE_TTL_MS = 5_000
