@@ -2,11 +2,27 @@ import { expect, it } from 'vitest'
 import { createRuntimeAgentProjections } from '../construction/runtime-agent-projections'
 import { MIRROR_LEAVES_STEP_1 } from '../runtime-leaf-record-projection.test-fixture'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from '../runtime-terminal-state-records'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
+import type {
+  RuntimeMobileSessionTabsResult,
+  RuntimeMobileSessionTabsSnapshot
+} from '../../../shared/runtime-types'
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees as Inventory } from './session-tabs-inventory'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged as Publication } from './session-tabs-change-publication'
 
 const WORKTREES = 20
+
+/** The runtime's own pass methods under test; protected, so reached through their prototypes. */
+type InventoryPass = {
+  collectAllMobileSessionTabs: () => Promise<{ snapshots: RuntimeMobileSessionTabsResult[] }>
+}
+type BroadcastPass = {
+  notifyMobileSessionTabSnapshots: () => void
+  toMobileSessionTabsFrames: (
+    snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>
+  ) => RuntimeMobileSessionTabsResult[]
+}
+const inventoryPass = Inventory.prototype as unknown as InventoryPass
+const broadcastPass = Publication.prototype as unknown as BroadcastPass
 const leafOf = (i: number) => `${(i + 1).toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
 
 /** The runtime parts an inventory or broadcast pass reads, with `terminals` live terminals over
@@ -68,20 +84,15 @@ function runtime(terminals: number) {
     restoreLivePairedRendererSessionOwnedMobileTerminals: () => undefined,
     projectMobileSessionTabsForClient: (frame: RuntimeMobileSessionTabsResult) => frame,
     toMobileSessionTabsResult: (frame: RuntimeMobileSessionTabsResult) => frame,
-    toMobileSessionTabsFrames: Reflect.get(Publication.prototype, 'toMobileSessionTabsFrames')
+    toMobileSessionTabsFrames: broadcastPass.toMobileSessionTabsFrames
   }
-  const call = (owner: object, method: string) =>
-    (Reflect.get(owner, method) as () => unknown).call(host)
   const walks = () => agentProjections.senders.workForTest()
   return {
     senders: agentProjections.senders,
     frames,
     walks,
-    inventory: () =>
-      call(Inventory.prototype, 'collectAllMobileSessionTabs') as Promise<{
-        snapshots: RuntimeMobileSessionTabsResult[]
-      }>,
-    broadcast: () => call(Publication.prototype, 'notifyMobileSessionTabSnapshots')
+    inventory: () => inventoryPass.collectAllMobileSessionTabs.call(host),
+    broadcast: () => broadcastPass.notifyMobileSessionTabSnapshots.call(host)
   }
 }
 
