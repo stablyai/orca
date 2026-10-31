@@ -6,7 +6,9 @@ const wakeRequests = vi.hoisted(() => ({ take: vi.fn(() => false) }))
 vi.mock('@/lib/sleeping-agent-wake-requests', () => ({
   takeSleepingAgentWakeRequest: wakeRequests.take
 }))
-const paneStarts = vi.hoisted(() => ({ byPaneKey: {} as Record<string, { status: string }> }))
+const paneStarts = vi.hoisted(
+  (): { byPaneKey: Record<string, { status: string }> } => ({ byPaneKey: {} })
+)
 vi.mock('@/store', () => ({
   useAppStore: {
     getState: () => ({ terminalPaneStartsByPaneKey: paneStarts.byPaneKey })
@@ -37,6 +39,10 @@ function hiddenPaneSession(): ConnectPanePtySession {
 const startup = {
   sleepingRecordEntry: { paneKey: 'tab-1:leaf-1', record: { paneKey: 'tab-1:leaf-1' } }
 } as unknown as ColdRestoreAgentResumeStartup
+const startupRecord = startup.sleepingRecordEntry
+if (!startupRecord) {
+  throw new Error('test startup record is required')
+}
 
 describe('deferHiddenAgentResume', () => {
   it('holds again once a pane a background wake released has gone back to sleep', () => {
@@ -70,7 +76,7 @@ describe('deferHiddenAgentResume', () => {
     expect(deferHiddenAgentResume(visible, startup)).toBe(false)
     expect(deferHiddenAgentResume(disposed, startup)).toBe(false)
     // A pane that never takes the deferral path must not leave its mark behind as stale ownership.
-    expect(wakeRequests.take).toHaveBeenCalledWith(startup.sleepingRecordEntry.record)
+    expect(wakeRequests.take).toHaveBeenCalledWith(startupRecord.record)
     expect(wakeRequests.take).toHaveBeenCalledTimes(2)
     expect(deferHiddenAgentResume(visible, null)).toBe(false)
     expect(wakeRequests.take).toHaveBeenCalledTimes(2)
@@ -92,6 +98,24 @@ describe('deferHiddenAgentResume', () => {
     visible.disposed = true
     releaseHiddenAgentResumeHold(visible)
     expect(isPaneSpawnDeferred('tab-1:leaf-1')).toBe(false)
+  })
+
+  it('preserves a wake consumed by a visible bypass through a later hidden fallback', () => {
+    const session = hiddenPaneSession()
+    session.deps.isVisibleRef.current = true
+    wakeRequests.take.mockClear()
+    wakeRequests.take.mockReturnValueOnce(true)
+
+    expect(deferHiddenAgentResume(session, startup)).toBe(false)
+    expect(session.hiddenAgentResumeReleased).toBe(true)
+
+    session.deps.isVisibleRef.current = false
+    wakeRequests.take.mockReturnValue(false)
+    expect(deferHiddenAgentResume(session, startup)).toBe(false)
+    expect(wakeRequests.take).toHaveBeenCalledTimes(1)
+
+    noteHiddenAgentResumePtyEnded(session)
+    expect(deferHiddenAgentResume(session, startup)).toBe(true)
   })
 
   it('releases the hold under a record key the pane no longer holds', async () => {
