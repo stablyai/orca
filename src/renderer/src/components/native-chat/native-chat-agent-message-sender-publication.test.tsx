@@ -4,6 +4,11 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeTab } from '@/store/slices/store-test-helpers'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
+import { useAgentMessageSenderLabel } from './native-chat-agent-message-sender-label'
+import {
+  agentMessageSenderOpens,
+  resolveAgentMessageSenderTarget
+} from './native-chat-agent-message-sender-target'
 import {
   initialStore,
   resetSenderStore,
@@ -411,3 +416,77 @@ it('keeps equal session ids on two hosts separate and rejects an unqualified pan
     selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', identity)?.paneKey
   ).toBe('remote-pane')
 })
+
+it.each([100, 1000])(
+  'renders no card name for an update that changes nothing it shows, and one for a real change, at %i senders',
+  (n) => {
+    const LOCAL = { kind: 'local' } as const
+    const rows = Array.from({ length: n }, (_, i) => association(i))
+    useAppStore.setState({
+      agentStatusByPaneKey: Object.fromEntries(rows.map((_, i) => [status(i).paneKey, status(i)])),
+      tabsByWorktree: {
+        workspace: rows.map((_, i) => makeTab({ id: `tab-${i}`, worktreeId: 'workspace' }))
+      }
+    })
+    useAppStore.getState().setAgentSenderPublication('local', publication(rows))
+    let renders = 0
+    // Each card's name: the label and link selectors NativeChatAgentMessageSenders subscribes with.
+    const cards = Array.from({ length: 50 }, (_, i) => {
+      const named = { ...sender(`term_${i}`), name: `Sender ${i}` }
+      return renderHook(() => {
+        renders++
+        const label = useAgentMessageSenderLabel(named, 'workspace', LOCAL)
+        const opens = useAppStore((state) =>
+          agentMessageSenderOpens(
+            resolveAgentMessageSenderTarget(state, named, 'workspace', LOCAL),
+            named
+          )
+        )
+        return { label, opens }
+      })
+    })
+    const rendersFor = (update: () => void) => {
+      const before = renders
+      act(update)
+      return renders - before
+    }
+    expect(rendersFor(() => useAppStore.setState({ sidebarBody: 'agents' }))).toBe(0)
+    expect(
+      rendersFor(() =>
+        useAppStore.setState(
+          agentSenderPublicationPatch(
+            useAppStore.getState(),
+            'runtime:other',
+            'other',
+            publication([{ identity: 'unrelated', paneKey: 'other', worktreeId: 'other' }])
+          )
+        )
+      )
+    ).toBe(0)
+    expect(
+      rendersFor(() =>
+        useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
+          state: 'working',
+          progress: 42,
+          observedAt: 2_000_000
+        })
+      )
+    ).toBe(0)
+    // The same host moves a row no mounted card names.
+    const moved = rows.map((row, i) =>
+      i === n - 1 ? { ...row, paneKey: status(0).paneKey.replace('tab-0', 'tab-x') } : row
+    )
+    expect(
+      rendersFor(() =>
+        useAppStore.getState().setAgentSenderPublication('local', publication(moved))
+      )
+    ).toBe(0)
+    // Card 0's sender is gone: only that card renders.
+    expect(
+      rendersFor(() =>
+        useAppStore.getState().setAgentSenderPublication('local', publication(rows.slice(1)))
+      )
+    ).toBe(1)
+    expect(cards[0].result.current.label).toBe('Sender 0')
+  }
+)
