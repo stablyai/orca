@@ -6,7 +6,8 @@ import { toast } from 'sonner'
 import { translate } from '@/i18n/i18n'
 import {
   activateAndRevealWorktree,
-  activateAndRevealFolderWorkspace
+  activateAndRevealFolderWorkspace,
+  type ActivateAndRevealResult
 } from '@/lib/worktree-activation'
 import { activateWslMovedWorkspace } from '@/lib/wsl-moved-chat-activation'
 import { useAppStore } from '@/store'
@@ -193,7 +194,7 @@ async function openRunChat(
   worktreeId: string,
   sessionId: string,
   environmentId: string | null,
-  revealWorkspace: (workspaceId: string) => boolean
+  revealWorkspace: (workspaceId: string) => ActivateAndRevealResult | false
 ): Promise<void> {
   try {
     await openExistingStructuredSession(
