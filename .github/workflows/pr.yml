@@ -72,6 +72,7 @@ jobs:
             /docs/readme/
             /.github/scripts/check-root-directory-entries.mjs
             /.github/scripts/check-required-pr-context.mjs
+            /.github/scripts/check-pull-request-job-timeouts.mjs
             /.github/workflows/
             /config/.bun-version
             /config/scripts/check-readme-local-links.mjs
@@ -109,6 +110,9 @@ jobs:
 
       - name: Check required PR context ownership
         run: bun .github/scripts/check-required-pr-context.mjs
+
+      - name: Check PR job time limits
+        run: bun .github/scripts/check-pull-request-job-timeouts.mjs
 
       # Readiness changes eligibility for advisory tests, not the already-tested source.
       - name: Find identical successful required checks
