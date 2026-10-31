@@ -16292,7 +16292,10 @@
           "zoomOut": "Verkleinern",
           "zoomIn": "Vergrößern",
           "fit": "An Bildschirm anpassen",
-          "close": "Schließen"
+          "close": "Schließen",
+          "copyPng": "Als PNG kopieren",
+          "copiedPng": "Als PNG kopiert",
+          "copyPngFailed": "Bild konnte nicht kopiert werden"
         },
         "MermaidBlock": {
           "dcc132e691": "Diagrammfehler:",

@@ -13518,7 +13518,10 @@
           "zoomOut": "Diminuir zoom",
           "zoomIn": "Aumentar zoom",
           "fit": "Ajustar à tela",
-          "close": "Fechar"
+          "close": "Fechar",
+          "copyPng": "Copiar como PNG",
+          "copiedPng": "Copiado como PNG",
+          "copyPngFailed": "Não foi possível copiar a imagem"
         },
         "richMarkdownImageInsertionFeedback": {
           "importedFileKept": "A inserção da imagem foi cancelada porque o destino mudou. O arquivo importado foi mantido.",

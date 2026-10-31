@@ -16278,7 +16278,10 @@
           "zoomOut": "Uzaklaştır",
           "zoomIn": "Yakınlaştır",
           "fit": "Ekrana sığdır",
-          "close": "Kapat"
+          "close": "Kapat",
+          "copyPng": "PNG olarak kopyala",
+          "copiedPng": "PNG olarak kopyalandı",
+          "copyPngFailed": "Görsel kopyalanamadı"
         },
         "MermaidBlock": {
           "dcc132e691": "Diyagram hatası:",

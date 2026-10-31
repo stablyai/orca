@@ -15626,7 +15626,10 @@
           "zoomOut": "축소",
           "zoomIn": "확대",
           "fit": "화면에 맞추기",
-          "close": "닫기"
+          "close": "닫기",
+          "copyPng": "PNG로 복사",
+          "copiedPng": "PNG로 복사했습니다",
+          "copyPngFailed": "이미지를 복사할 수 없습니다"
         },
         "MermaidBlock": {
           "dcc132e691": "다이어그램 오류:",
