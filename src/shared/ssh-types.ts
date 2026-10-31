@@ -41,6 +41,8 @@ export type SshTarget = {
   username: string
   /** Path to private key file, if using key-based auth. */
   identityFile?: string
+  /** All configured private key paths in OpenSSH directive order. */
+  identityFiles?: string[]
   /** SSH agent socket path from IdentityAgent, if configured. */
   identityAgent?: string
   /** Whether OpenSSH IdentitiesOnly should limit public-key auth attempts. */

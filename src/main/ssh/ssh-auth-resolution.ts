@@ -86,6 +86,10 @@ export function resolveAgentSocket(
   return resolveDefaultAgentSocket()
 }
 
+function targetIdentityFilePaths(target: SshTarget): string[] {
+  return target.identityFiles ?? (target.identityFile ? [target.identityFile] : [])
+}
+
 function resolveExplicitPrivateKeyPaths(
   target: SshTarget,
   resolved: SshResolvedConfig | null
@@ -96,10 +100,8 @@ function resolveExplicitPrivateKeyPaths(
   if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolvedIdentities
   }
-  if (target.identityFile) {
-    return [target.identityFile]
-  }
-  return resolvedIdentities
+  const targetIdentities = targetIdentityFilePaths(target)
+  return targetIdentities.length > 0 ? targetIdentities : resolvedIdentities
 }
 
 export function resolveIdentityFilePaths(
@@ -109,10 +111,8 @@ export function resolveIdentityFilePaths(
   if (isOpenSshConfigBackedTarget(target) && resolved) {
     return resolved.identityFile
   }
-  if (target.identityFile) {
-    return [target.identityFile]
-  }
-  return resolved?.identityFile ?? []
+  const targetIdentities = targetIdentityFilePaths(target)
+  return targetIdentities.length > 0 ? targetIdentities : (resolved?.identityFile ?? [])
 }
 
 const MAX_WARNED_IDENTITY_FILE_PROBLEMS = 64
@@ -175,7 +175,7 @@ export function resolvePrivateKeys(
   skipped?: SkippedIdentityFiles
 ): PrivateKeyFile[] {
   const keyPaths = resolveIdentityFilePaths(target, resolved)
-  if (keyPaths.length > 0 || resolved || target.identityFile) {
+  if (keyPaths.length > 0 || resolved || target.identityFile || target.identityFiles?.length) {
     return readPrivateKeys(keyPaths, skipped)
   }
   const defaultKey = findDefaultKeyFile(skipped)

@@ -8,6 +8,7 @@ import {
   sshConfigHostsToTargets,
   type SshConfigHost
 } from '../config/ssh-config-parser'
+import { importedSshConfigFields, importedSshConfigFieldsChanged } from './ssh-config-import-patch'
 import {
   findSshRouteDuplicates,
   sshRouteSnapshotFingerprint,
@@ -294,24 +295,10 @@ export class SshConnectionStore {
     for (const { alias, candidate } of candidates) {
       const existing = syncableByAlias.get(alias)
       if (existing) {
-        const nextFields = {
-          configHost: candidate.configHost,
-          host: candidate.host,
-          port: candidate.port,
-          username: candidate.username,
-          identityFile: candidate.identityFile,
-          identityAgent: candidate.identityAgent,
-          identitiesOnly: candidate.identitiesOnly,
-          gssapiAuthentication: candidate.gssapiAuthentication,
-          proxyCommand: candidate.proxyCommand,
-          jumpHost: candidate.jumpHost
-        }
+        const nextFields = importedSshConfigFields(candidate)
         // Skip unchanged writes/reports; stamp legacy imports as config-managed once.
         const isDirty =
-          existing.source !== 'ssh-config' ||
-          (Object.keys(nextFields) as (keyof typeof nextFields)[]).some(
-            (key) => existing[key] !== nextFields[key]
-          )
+          existing.source !== 'ssh-config' || importedSshConfigFieldsChanged(existing, nextFields)
         if (!isDirty) {
           continue
         }

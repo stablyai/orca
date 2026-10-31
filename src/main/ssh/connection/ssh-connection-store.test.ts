@@ -282,6 +282,65 @@ describe('SshConnectionStore', () => {
       )
     })
 
+    it('persists identityFiles when a re-import changes only that list', async () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'box',
+        configHost: 'box',
+        host: 'box.example.com',
+        port: 22,
+        username: 'dev',
+        identityFile: '/keys/old',
+        identityFiles: ['/keys/old'],
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'box' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({
+          configHost: 'box',
+          host: 'box.example.com',
+          username: 'dev',
+          identityFile: '/keys/old',
+          identityFiles: ['/keys/old', '/keys/new']
+        })
+      ])
+
+      await sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).toHaveBeenCalledWith(
+        'ssh-1',
+        expect.objectContaining({ identityFiles: ['/keys/old', '/keys/new'] })
+      )
+    })
+
+    it('skips a re-import whose identityFiles are unchanged', async () => {
+      mockStore.addSshTarget({
+        id: 'ssh-1',
+        label: 'box',
+        configHost: 'box',
+        host: 'box.example.com',
+        port: 22,
+        username: 'dev',
+        identityFile: '/keys/old',
+        identityFiles: ['/keys/old', '/keys/new'],
+        source: 'ssh-config'
+      })
+      loadUserSshConfigMock.mockReturnValue([{ host: 'box' }])
+      sshConfigHostsToTargetsMock.mockReturnValue([
+        candidate({
+          configHost: 'box',
+          host: 'box.example.com',
+          username: 'dev',
+          identityFile: '/keys/old',
+          identityFiles: ['/keys/old', '/keys/new']
+        })
+      ])
+
+      await sshStore.importFromSshConfig()
+
+      expect(mockStore.updateSshTarget).not.toHaveBeenCalled()
+    })
+
     it('never overwrites a manual target that owns the alias', async () => {
       mockStore.addSshTarget({
         id: 'ssh-m',
