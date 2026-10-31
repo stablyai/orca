@@ -70,6 +70,13 @@ describe('openDefaultAgentChatInEmptyWorkspace', () => {
     expect(mocks.seedShell).toHaveBeenCalledOnce()
   })
 
+  it('starts no agent when no default agent was saved', () => {
+    seedSettings({ defaultTuiAgent: null })
+
+    expect(openDefaultAgentChatInEmptyWorkspace('wt-1', mocks.seedShell)).toBeNull()
+    expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+  })
+
   it('reads the agents detected on the workspace SSH host', () => {
     seedSettings({})
     mocks.detectionTargetKey.mockReturnValue('ssh:conn-1')
@@ -95,6 +102,10 @@ describe('agent detection for the default chat', () => {
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
 
     seedSettings({ nativeChatProviders: {} })
+    useAppStore.setState({ remoteDetectedAgentIds: {} })
+    expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
+
+    seedSettings({ defaultTuiAgent: null })
     useAppStore.setState({ remoteDetectedAgentIds: {} })
     expect(emptyWorkspaceDefaultChatAwaitsDetection('wt-1')).toBe(false)
   })

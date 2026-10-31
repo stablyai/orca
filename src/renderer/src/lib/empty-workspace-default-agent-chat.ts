@@ -23,11 +23,9 @@ function defaultChatDetectionTarget(
   state: AppState,
   worktreeId: string
 ): AgentDetectionTarget | undefined {
-  // Why: a 'blank' default means the user wants workspaces to open without an agent.
-  if (
-    state.settings?.defaultTuiAgent === 'blank' ||
-    !newAgentLaunchesMayOpenChats(state.settings)
-  ) {
+  // Why: only a saved agent is a choice; Auto (null) would start the catalog's first agent unasked.
+  const defaultAgent = state.settings?.defaultTuiAgent
+  if (!defaultAgent || defaultAgent === 'blank' || !newAgentLaunchesMayOpenChats(state.settings)) {
     return undefined
   }
   // Why: an unresolved owner is an unknown host, not the local machine.
