@@ -4,14 +4,13 @@ import { subscribeCrew } from './crew-stream'
 import type { OrchestrationCrewFrame } from '../../../../shared/orchestration-crew'
 import * as helperScope from '../../rpc/methods/orchestration/worker/helper-start-scope'
 import * as custodyHistory from '../db/pane-key-match'
-import { crewQueryPlans } from './crew-recipient-sql.test-fixture'
+import { crewQueryPlans, meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 import * as followUpPlan from '../db/dispatch-context/worker-follow-up-plan'
 import { z } from 'zod'
 import '../../rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import { CrewReadModel } from './crew-read-model'
 import { deltaFixture } from './crew-recipient-delta-cost.test-fixture'
-import { meterCrewSql, sqlTotals } from './crew-recipient-sql.test-fixture'
 
 it('charges selected genuine worker follow-up lineage, origin and caller facts at N and 10N without per-row SQL', () => {
   const samples = [3, 30].map((population) => {
