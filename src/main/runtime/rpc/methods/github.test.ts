@@ -117,20 +117,33 @@ describe('github RPC methods', () => {
     expect(response).toMatchObject({ ok: true, result: { number: 12, type: 'pr' } })
   })
 
-  it('fetches work item details on the runtime server', async () => {
-    const runtime = {
-      getRuntimeId: () => 'test-runtime',
-      getRepoWorkItemDetails: vi.fn().mockResolvedValue({ body: 'Details' })
-    } as unknown as OrcaRuntimeService
-    const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
+  it.each([undefined, { owner: 'fork', repo: 'widgets', host: 'github.corp' }])(
+    'fetches work item details with an optional exact target: %j',
+    async (ownerRepo) => {
+      const runtime = {
+        getRuntimeId: () => 'test-runtime',
+        getRepoWorkItemDetails: vi.fn().mockResolvedValue({ body: 'Details' })
+      } as unknown as OrcaRuntimeService
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_METHODS })
 
-    const response = await dispatcher.dispatch(
-      makeRequest('github.workItemDetails', { repo: 'repo-1', number: 12, type: 'issue' })
-    )
+      const response = await dispatcher.dispatch(
+        makeRequest('github.workItemDetails', {
+          repo: 'repo-1',
+          number: 12,
+          type: 'pr',
+          ...(ownerRepo ? { ownerRepo } : {})
+        })
+      )
 
-    expect(runtime.getRepoWorkItemDetails).toHaveBeenCalledWith('repo-1', 12, 'issue')
-    expect(response).toMatchObject({ ok: true, result: { body: 'Details' } })
-  })
+      expect(runtime.getRepoWorkItemDetails).toHaveBeenCalledWith(
+        'repo-1',
+        12,
+        'pr',
+        ...(ownerRepo ? [ownerRepo] : [])
+      )
+      expect(response).toMatchObject({ ok: true, result: { body: 'Details' } })
+    }
+  )
 
   it('counts work items on the runtime server', async () => {
     const runtime = {

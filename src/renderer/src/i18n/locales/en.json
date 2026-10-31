@@ -2625,8 +2625,6 @@
         "25690a3855": "Start workspace from PR",
         "a459866967": "Resume workspace attached to PR",
         "347034903a": "Copy GitHub link",
-        "5a01ca7253": "Failed to sync viewed state with GitHub.",
-        "996a1897d2": "Unable to sync viewed state for this pull request.",
         "e0b15c793f": "Failed to copy GitHub link",
         "992e799227": "GitHub link copied",
         "61bfc81ada": "Unable to open the workspace attached to this pull request.",

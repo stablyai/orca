@@ -29,7 +29,7 @@ export const webRuntimeState: {
   activeClientEnvironmentId: string | null
   cachedDetectedWorktrees: { loadedAt: number; worktrees: Worktree[] } | null
 } = {
-  activeEnvironment: readStoredWebRuntimeEnvironment(),
+  activeEnvironment: null,
   zcodePlanSiteRuntimeOwner: null,
   zcodePlanSiteRuntimeValue: null,
   worktreeVisibilityDefaultsRuntimeEnvironmentId: null,

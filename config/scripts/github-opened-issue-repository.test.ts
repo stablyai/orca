@@ -3,7 +3,8 @@ import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import { createElement } from 'react'
 import { renderToStaticMarkup } from 'react-dom/server'
-import type * as ReactModule from 'react'
+import { create } from 'zustand'
+import type { AppState } from '../../src/renderer/src/store/types'
 import type * as GhUtils from '../../src/main/github/gh-utils'
 import type * as IssueMetadata from '../../src/renderer/src/hooks/useIssueMetadata'
 import type { GitHubWorkItem } from '../../src/shared/github/work-item-types'
@@ -22,20 +23,11 @@ const fixture = vi.hoisted(() => {
   return state
 })
 
-vi.mock('react', async (original) => ({
-  ...(await original<typeof ReactModule>()),
-  useState: (initial: unknown) => [typeof initial === 'function' ? initial() : initial, vi.fn()],
-  useMemo: <T>(value: () => T) => value(),
-  useCallback: <T>(value: T) => value,
-  useRef: <T>(initial: T) => ({ current: initial }),
-  useEffect: vi.fn()
-}))
-vi.mock('zustand/react/shallow', () => ({ useShallow: <T>(value: T) => value }))
 vi.mock('@/store', () => ({
   useAppStore: Object.assign(
-    (selector: (state: unknown) => unknown) =>
-      selector({ patchWorkItem: vi.fn(), patchProjectRowContent: vi.fn() }),
-    { getState: () => ({ recordFeatureInteraction: vi.fn() }) }
+    (selector: (state: ReturnType<typeof metadataStore.getState>) => unknown) =>
+      metadataStore(selector),
+    { getState: () => metadataStore.getState() }
   )
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -80,17 +72,13 @@ import { workItemsCacheKey } from '../../src/renderer/src/store/github/cache-ide
 import { createTestStore } from '../../src/renderer/src/store/slices/github-slice-test-harness'
 import { getTaskSourceCacheScope } from '../../src/shared/task-source-context'
 import { listLabels, listAssignableUsers } from '../../src/main/github/issue-field-options'
-import { useRepoLabels, useRepoAssignees } from '../../src/renderer/src/hooks/useIssueMetadata'
+import { useRepoLabels, useRepoAssignees } from '../../src/renderer/src/hooks/useGitHubRepoMetadata'
 import { updateIssue } from '../../src/main/github/issue-update'
 import { materializeTaskPageItemList } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-pages'
 import {
   resetTaskPageGitHubMutationRegistryForTests,
   setTaskPageGitHubMutationQueryKey
 } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-registry'
-
-function renderEditSection(props: Parameters<typeof GHEditSection>[0]): void {
-  renderToStaticMarkup(createElement(GHEditSection, props))
-}
 
 const registeredRepo: Repo = {
   id: 'repo-1',
@@ -99,6 +87,19 @@ const registeredRepo: Repo = {
   badgeColor: 'primary',
   addedAt: 1,
   upstream: { owner: 'upstream-owner', repo: 'widgets', host: 'github.com' }
+}
+
+const metadataStore = create<
+  Pick<AppState, 'repos' | 'patchWorkItem' | 'patchProjectRowContent' | 'recordFeatureInteraction'>
+>()(() => ({
+  repos: [registeredRepo],
+  patchWorkItem: vi.fn(),
+  patchProjectRowContent: vi.fn(),
+  recordFeatureInteraction: vi.fn()
+}))
+
+function renderEditSection(props: Parameters<typeof GHEditSection>[0]): void {
+  renderToStaticMarkup(createElement(GHEditSection, props))
 }
 
 function sourceFor(preference: 'origin' | 'upstream'): TaskSourceContext {
@@ -136,6 +137,7 @@ type MetadataArgs = { repoPath: string; ownerRepo?: GitHubOwnerRepo }
 
 beforeEach(() => {
   fixture.preference = 'upstream'
+  metadataStore.setState({ repos: [registeredRepo] })
   fixture.loads = []
   fixture.requests = []
   resetTaskPageGitHubMutationRegistryForTests()
@@ -316,20 +318,46 @@ it('keeps ordinary metadata caches distinct by canonical repository and host', (
     { ...issueRepo, host: 'ghe.example:8443' }
   ]
   for (const ownerRepo of identities) {
-    useRepoLabels(registeredRepo.path, registeredRepo.id, { ownerRepo })
-    useRepoAssignees(registeredRepo.path, registeredRepo.id, { ownerRepo })
+    function Metadata() {
+      useRepoLabels(registeredRepo.path, registeredRepo.id, { ownerRepo })
+      useRepoAssignees(registeredRepo.path, registeredRepo.id, { ownerRepo })
+      return null
+    }
+    renderToStaticMarkup(createElement(Metadata))
   }
   expect(new Set(fixture.loads.filter((_, i) => i % 2 === 0).map((load) => load.key)).size).toBe(3)
   expect(new Set(fixture.loads.filter((_, i) => i % 2 === 1).map((load) => load.key)).size).toBe(3)
 })
 
 it('keeps metadata requests without an explicit target compatible', async () => {
-  useRepoLabels(registeredRepo.path, registeredRepo.id)
-  useRepoAssignees(registeredRepo.path, registeredRepo.id)
+  function Metadata() {
+    useRepoLabels(registeredRepo.path, registeredRepo.id)
+    useRepoAssignees(registeredRepo.path, registeredRepo.id)
+    return null
+  }
+  renderToStaticMarkup(createElement(Metadata))
   for (const request of fixture.loads) {
     await request.load()
   }
-  expect(fixture.loads.map((load) => load.key)).toEqual([registeredRepo.id, registeredRepo.id])
+  const scope = JSON.stringify([
+    'local',
+    null,
+    registeredRepo.id,
+    registeredRepo.path,
+    registeredRepo.id,
+    registeredRepo.path,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null,
+    null
+  ])
+  expect(fixture.loads.map((load) => load.key)).toEqual([
+    `${registeredRepo.id}::${scope}`,
+    `${registeredRepo.id}::${scope}`
+  ])
   expect(
     fixture.requests.map((request) => request.args.find((arg) => arg.startsWith('repos/')))
   ).toEqual([

@@ -66,7 +66,7 @@ export function GitHubItemDialogPRTabs({
   ) => void
   tab: ItemDialogTab
   setTab: (tab: ItemDialogTab) => void
-  pendingViewedPaths: Set<string>
+  pendingViewedPaths: ReadonlySet<string>
   onViewedChange: (path: string, viewed: boolean) => Promise<boolean>
 }): React.JSX.Element {
   const body = details?.body ?? ''
@@ -114,6 +114,7 @@ export function GitHubItemDialogPRTabs({
       <div className="min-h-0 flex-1 overflow-y-auto scrollbar-sleek">
         <TabsContent value="conversation" className="mt-0">
           <ConversationTab
+            key={detailsCacheKey}
             item={displayWorkItem ?? workItem}
             repoPath={repoPath}
             repoId={effectiveRepoId}
@@ -175,7 +176,7 @@ export function GitHubItemDialogPRTabs({
             </TabsContent>
 
             <TabsContent value="files" className="mt-0 h-full min-h-0 overflow-hidden">
-              {loading && files.length === 0 ? (
+              {(loading || !detailsLoaded) && files.length === 0 ? (
                 <div className="flex items-center justify-center py-10">
                   <LoaderCircle className="size-5 animate-spin text-muted-foreground" />
                 </div>

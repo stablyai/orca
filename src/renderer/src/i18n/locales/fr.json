@@ -2375,8 +2375,6 @@
         "25690a3855": "Démarrer un espace de travail à partir de la PR",
         "a459866967": "Reprendre l'espace de travail attaché à la PR",
         "347034903a": "Copier le lien GitHub",
-        "5a01ca7253": "Échec de la synchronisation de l'état consulté avec GitHub.",
-        "996a1897d2": "Impossible de synchroniser l'état consulté de cette pull request.",
         "e0b15c793f": "Échec de la copie du lien GitHub",
         "992e799227": "Lien GitHub copié",
         "61bfc81ada": "Impossible d'ouvrir l'espace de travail attaché à cette pull request.",

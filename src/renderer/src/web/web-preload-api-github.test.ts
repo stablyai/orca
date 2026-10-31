@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { PreloadApi } from '../../../preload/api-types'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import {
+  RUNTIME_PROTOCOL_VERSION,
+  MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+} from '../../../shared/protocol-version'
+import {
   installBrowserGlobals,
   writeStoredRuntimeEnvironment
 } from './web-preload-api-test-harness'
@@ -26,7 +30,15 @@ describe('web GitHub preload API', () => {
           return Promise.resolve({
             id: `call-${runtimeCalls.length}`,
             ok: true,
-            result: { ok: true, items: [], count: 0 },
+            result:
+              method === 'status.get'
+                ? {
+                    runtimeId: 'runtime-1',
+                    graphStatus: 'ready',
+                    runtimeProtocolVersion: RUNTIME_PROTOCOL_VERSION,
+                    minCompatibleRuntimeClientVersion: MIN_COMPATIBLE_RUNTIME_CLIENT_VERSION
+                  }
+                : { ok: true, items: [], count: 0 },
             _meta: { runtimeId: 'runtime-1' }
           })
         }
@@ -438,7 +450,12 @@ describe('web GitHub preload API', () => {
     })
 
     expect(runtimeCalls).toEqual([
-      ...routeCases.map((routeCase) => ({
+      ...routeCases.slice(0, 6).map((routeCase) => ({
+        method: routeCase.expectedMethod,
+        params: routeCase.expectedParams
+      })),
+      { method: 'status.get', params: undefined },
+      ...routeCases.slice(6).map((routeCase) => ({
         method: routeCase.expectedMethod,
         params: routeCase.expectedParams
       })),

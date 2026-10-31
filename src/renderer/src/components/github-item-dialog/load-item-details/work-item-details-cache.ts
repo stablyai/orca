@@ -1,3 +1,4 @@
+import type { PRComment } from '../../../../../shared/github/comment-types'
 import type { PRCheckDetail } from '../../../../../shared/github/check-types'
 import type {
   GitHubAssignableUser,
@@ -7,7 +8,6 @@ import type {
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import { getGitHubSourceRuntimeHost } from '@/lib/github-source-runtime-context'
 import { onGitHubWorkItemDetailsCacheMutation } from '@/lib/github-work-item-details-cache-events'
 
 // Bound cached details for instant reopen; refresh stale entries on open. See docs/gh-work-item-drawer-cache.md.
@@ -19,7 +19,9 @@ export type WorkItemDetailsCacheEntry = {
   fetchedAt: number
   pending?: Promise<GitHubWorkItemDetails | null>
   error?: string
+  viewed?: { requests: Map<string, object>; paths: ReadonlySet<string> }
 }
+export const optimisticWorkItemComments = new Map<string, PRComment[]>()
 export const workItemDetailsCache = new Map<string, WorkItemDetailsCacheEntry>()
 
 // Replace entry identity on every write so useSyncExternalStore snapshots stay stable between notifications.
@@ -47,10 +49,9 @@ export function getWorkItemDetailsCacheKey(args: {
   ownerRepo?: GitHubOwnerRepo | null
 }): string {
   // NUL-separate routing axes to prevent key collisions; keep repoPath second for path-only invalidation events.
-  const sourceKey =
-    args.ownerRepo && !getGitHubSourceRuntimeHost(args.sourceContext)
-      ? githubRepoIdentityKey(args.ownerRepo)
-      : (args.issueSourcePreference ?? 'auto')
+  const sourceKey = args.ownerRepo
+    ? githubRepoIdentityKey(args.ownerRepo)
+    : (args.issueSourcePreference ?? 'auto')
   const keyParts = args.sourceCacheScope
     ? [args.repoId, args.repoPath, args.sourceCacheScope, sourceKey, args.type]
     : [args.repoId, args.repoPath, sourceKey, args.type]
@@ -59,14 +60,16 @@ export function getWorkItemDetailsCacheKey(args: {
 
 export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCacheEntry): void {
   // Reinsert as most recent; Map order supplies the eviction order.
+  const previous = workItemDetailsCache.get(key)
   workItemDetailsCache.delete(key)
-  workItemDetailsCache.set(key, entry)
+  workItemDetailsCache.set(key, { ...entry, viewed: entry.viewed ?? previous?.viewed })
   while (workItemDetailsCache.size > WORK_ITEM_DETAILS_CACHE_MAX) {
     const oldest = workItemDetailsCache.keys().next().value
     if (oldest === undefined) {
       break
     }
     workItemDetailsCache.delete(oldest)
+    optimisticWorkItemComments.delete(oldest)
   }
   notifyWorkItemDetailsCache()
 }
@@ -74,6 +77,9 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
   workItemDetailsCacheGeneration += 1
   const existed = workItemDetailsCache.delete(key)
+  if (optimisticWorkItemComments.has(key)) {
+    workItemDetailsCache.set(key, { details: null, fetchedAt: 0 })
+  }
   if (existed) {
     notifyWorkItemDetailsCache()
   }
@@ -104,6 +110,9 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     const matches = args.repoId ? keyRepoId === args.repoId : keyRepoPath === args.repoPath
     if (matches) {
       workItemDetailsCache.delete(key)
+      if (optimisticWorkItemComments.has(key)) {
+        workItemDetailsCache.set(key, { details: null, fetchedAt: 0 })
+      }
       removed = true
     }
   }
@@ -208,4 +217,77 @@ if (import.meta !== undefined && import.meta.hot) {
     workItemMutatedUnsub?.()
     workItemDetailsCacheEventUnsub?.()
   })
+}
+
+export const EMPTY_VIEWED_PATHS: ReadonlySet<string> = new Set()
+
+export function settleWorkItemComment(key: string, comment: PRComment): void {
+  const previous = workItemDetailsCache.get(key)
+  const comments = optimisticWorkItemComments.get(key) ?? []
+  optimisticWorkItemComments.set(key, [
+    ...comments.filter((item) => item.id !== comment.id),
+    comment
+  ])
+  const details = previous?.details
+  touchWorkItemDetailsCache(key, {
+    ...previous,
+    fetchedAt: 0,
+    error: undefined,
+    details: details
+      ? {
+          ...details,
+          comments: [...details.comments.filter((item) => item.id !== comment.id), comment]
+        }
+      : null
+  })
+}
+
+export function beginWorkItemViewed(key: string, path: string, viewed: boolean) {
+  const entry = workItemDetailsCache.get(key)
+  if (!entry?.details) {
+    return null
+  }
+  const owner = entry.viewed ?? { requests: new Map<string, object>(), paths: EMPTY_VIEWED_PATHS }
+  if (owner.requests.has(path)) {
+    return null
+  }
+  const request = {}
+  owner.requests.set(path, request)
+  owner.paths = new Set(owner.requests.keys())
+  touchWorkItemDetailsCache(key, { ...entry, viewed: owner })
+  const previous = patchCachedPRFileViewedState(key, path, viewed ? 'VIEWED' : 'UNVIEWED')
+  const optimisticFile = workItemDetailsCache
+    .get(key)
+    ?.details?.files?.find((file) => file.path === path)
+  const ownsPath = () =>
+    workItemDetailsCache.get(key)?.viewed === owner && owner.requests.get(path) === request
+  let finished = false
+  return {
+    ownsPath,
+    rollback: () => {
+      if (
+        previous &&
+        ownsPath() &&
+        workItemDetailsCache.get(key)?.details?.files?.find((file) => file.path === path) ===
+          optimisticFile
+      ) {
+        patchCachedPRFileViewedState(key, path, previous)
+      }
+    },
+    finish: () => {
+      if (finished) {
+        return
+      }
+      finished = true
+      if (owner.requests.get(path) !== request) {
+        return
+      }
+      owner.requests.delete(path)
+      owner.paths = new Set(owner.requests.keys())
+      const current = workItemDetailsCache.get(key)
+      if (current?.viewed === owner) {
+        touchWorkItemDetailsCache(key, current)
+      }
+    }
+  }
 }
