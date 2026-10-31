@@ -16,6 +16,8 @@ import {
 } from './automation-run-output-files'
 import { RuntimeAutomationController } from '../runtime/runtime-automation-controller'
 
+const NOW = 1_000_000
+
 beforeEach(() => {
   testState.dir = mkdtempSync(join(tmpdir(), 'orca-output-retention-'))
 })
@@ -37,7 +39,7 @@ function fixture() {
   }))
   writePersistedStateJson(join(testState.dir, 'orca-data.json'), JSON.stringify(state))
   const store = createStore()
-  const completed = store.createAutomationRun(automation, Date.now() - 1)
+  const completed = store.createAutomationRun(automation, NOW - 1)
   store.updateAutomationRun({ runId: completed.id, status: 'completed' })
   const retained = store.listAutomationRuns(automation.id)
   for (const entry of retained) {
@@ -57,7 +59,7 @@ describe('durable automation output retention', () => {
     const { store, automation, retained, path } = fixture()
     const acknowledgement = Promise.withResolvers<void>()
     vi.spyOn(store, 'flushPendingOrThrowAsync').mockReturnValueOnce(acknowledgement.promise)
-    const pending = createAutomationRunWriter(store, null).createRun(automation, Date.now())
+    const pending = createAutomationRunWriter(store, null).createRun(automation, NOW)
     const kept = new Set(store.listAutomationRuns(automation.id).map((run) => run.id))
     const pruned = retained.filter((run) => !kept.has(run.id))
     expect(pruned.length).toBeGreaterThan(0)
