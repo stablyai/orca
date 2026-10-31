@@ -52,3 +52,15 @@ export function canBridgeOpenExternalLink(
     )
   )
 }
+
+export function refreshBridgeExternalLinkGrants(
+  held: BridgeGrants,
+  sent: BridgeGrants
+): BridgeGrants {
+  const selected = (grant: string) =>
+    grant === BRIDGE_EXTERNAL_LINK_GRANT || grant === BRIDGE_EXTERNAL_LINK_FULL_URL
+  return {
+    ...held,
+    native: [...held.native.filter((grant) => !selected(grant)), ...sent.native.filter(selected)]
+  }
+}

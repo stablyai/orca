@@ -110,7 +110,9 @@ export function mobileQueuedEditHarness() {
   const client: RpcClient = {
     sendRequest,
     subscribe: (_method, _params, onData) => {
-      state.listener = onData
+      if (_method === 'agentSession.subscribe') {
+        state.listener = onData
+      }
       return () => {}
     },
     updateTerminalSubscriptionViewport: () => {},

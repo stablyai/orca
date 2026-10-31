@@ -29,9 +29,9 @@ beforeEach(async () => {
   warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
-  rig.dispose()
+  await rig.dispose()
 })
 
 function opId(): string {
@@ -64,13 +64,8 @@ it('does not treat completed submission history as a send in an empty reinitiali
 })
 
 function stopEvents(): { sequence: number; event: JournalStopEvent }[] {
-  const since = journal().readSince({ epoch: journal().epoch, sequence: 0 })
-  if (!since.ok) {
-    throw new Error(`expected rows, got reset ${since.reset}`)
-  }
-  return since.rows.flatMap((row) =>
-    row.kind === 'tombstone' && row.stopEvent ? [{ sequence: row.seq, event: row.stopEvent }] : []
-  )
+  const mark = journal().stopMarks.latest()
+  return mark ? [{ sequence: mark.sequence, event: mark.event }] : []
 }
 
 async function turnRow(turnId: string, state: 'running' | 'interrupted'): Promise<void> {

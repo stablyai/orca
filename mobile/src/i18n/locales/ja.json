@@ -48,12 +48,10 @@
       "untitledSession": "無題のセッション"
     },
     "sessionHistoryList": {
-      "assistantRole": "アシスタント",
       "currentWorktree": "現在のワークツリー",
       "messages_one": "{{count}} 件のメッセージ",
       "messages_other": "{{count}} 件のメッセージ",
-      "resumeSession": "Agent セッションを再開",
-      "userRole": "ユーザー"
+      "resumeSession": "Agent セッションを再開"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "ホストに接続できません",
@@ -188,7 +186,11 @@
       "cancelEditing": "編集をキャンセル",
       "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
       "saveEditedMessage": "編集したメッセージを保存",
-      "sendMessage": "メッセージを送信"
+      "sendMessage": "メッセージを送信",
+      "sendQueue": "キューに入れる",
+      "sendSteer": "今すぐ送信",
+      "sendQueueHint": "現在のターンの後に実行します",
+      "sendSteerHint": "Agent が今行っている作業に加えます"
     },
     "composerAttachments": {
       "attachedImage": "添付画像",
@@ -279,7 +281,10 @@
       "compaction": "コンテキストを圧縮しました",
       "contextCleared": "コンテキストをクリアしました",
       "plan": "プラン",
-      "stoppedManually": "手動で停止しました"
+      "stoppedManually": "手動で停止しました",
+      "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+      "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
+      "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。"
     },
     "orcaStop": {
       "canContinue": "この会話で続行できます。",
@@ -359,7 +364,6 @@
     "sessionOptionPickers": {
       "agentWorking": "Agent が作業中",
       "backToModels": "モデル一覧に戻る",
-      "closePicker": "選択画面を閉じる",
       "dispatchUnconfirmed": "Agent に送信済み — 未確認",
       "modelFullAccessLabel": "モデル、{{value}}、フルアクセス",
       "modelLabel": "モデル、{{value}}",
@@ -657,7 +661,6 @@
       "tryDifferentFilter": "別のレビューフィルターを試してください。"
     },
     "diffReviewDrawers": {
-      "actionsTitle": "レビュー操作",
       "addNote": "メモを追加",
       "cancelNote": "メモの入力をキャンセル",
       "clearSentNotes": "送信済みのメモをクリア",
@@ -764,11 +767,6 @@
       "moveUp": "上に移動",
       "reorderHint": "「上に移動」「下に移動」の操作で、ドラッグせずに並べ替えられます。"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新規ワークスペース",
-      "pairDesktop": "デスクトップのペアリング",
-      "title": "クイック操作"
-    },
     "hostCard": {
       "hostActions": "「{{title}}」の操作",
       "openHost": "「{{title}}」を開く",
@@ -809,9 +807,6 @@
     "mountedBottomDrawer": {
       "dismissDrawer": "ドロワーを閉じる"
     },
-    "newWorkspaceFab": {
-      "newWorkspace": "新規ワークスペース"
-    },
     "newWorkspaceSetupScriptField": {
       "hooks": "フック",
       "label": "セットアップスクリプト",
@@ -829,12 +824,10 @@
       "blankTerminal": "ブランクターミナル"
     },
     "newWorktreeFormSheet": {
-      "advanced": "詳細設定",
       "agent": "Agent",
       "connectTarget": "接続先に接続",
       "connectTargetFirst": "先に接続先へ接続",
       "createWorktree": "ワークツリーを作成する",
-      "nameOrCreateFrom": "名前または「作成元」",
       "noProjectsFound": "プロジェクトが見つかりません",
       "note": "注記",
       "notePlaceholder": "メモを書く",
@@ -925,12 +918,10 @@
       "noResults": "検索結果が見つかりませんでした。",
       "searchPlaceholder": "名前を入力、または作成元を検索",
       "switchRepo": "{{repoName}} に切り替え",
-      "title": "名前または「作成元」",
       "typeWorkspaceName": "下のフィールドにワークスペース名を入力してください。"
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "選択した作成元を開く",
-      "optional": "[オプション]",
       "searchPlaceholder": "名前を入力、または作成元を検索"
     },
     "smartWorkspaceSourceRow": {
@@ -957,7 +948,13 @@
       "empty": "カスタムショートカットはまだ設定されていません。",
       "removeShortcut": "{{label}} を削除",
       "resetDefaults": "初期設定に戻す",
-      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示"
+      "resetDescription": "すべての組み込みショートカットキーを元の順序で表示",
+      "moreKeys": "その他のキー",
+      "moreKeysDescription": "これらのキーは、ターミナルのキー列にある ⋯ の下に表示されます。キーの表示・非表示を切り替え、ハンドルを長押ししてドラッグすると順序を変更できます。Esc や矢印キーなど、キー列にすでにあるキーは ⋯ に表示されません。",
+      "directionPad": "方向パッド",
+      "showDirectionPad": "方向パッドを表示",
+      "showDirectionPadDescription": "矢印パッドをサイドレールに固定します。オフの場合、レールに各矢印キーが表示されます。",
+      "showShortcut": "{{label}} ショートカットを表示"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "レート制限のリセット枠を使用しますか？",
@@ -1296,17 +1293,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "アカウントの使用状況",
-      "sessionWindow": "5時間",
-      "systemDefault": "システムのデフォルト",
-      "weeklyWindow": "7日"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
-      "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。",
-      "updateHint": "タップして更新"
+      "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。"
     },
     "emptyState": {
       "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
@@ -1314,26 +1304,16 @@
       "description": "コンピュータ上の Orca とペアリングすると、スマートフォンから Agent の状況を確認したり、任意のターミナルを操作したりして、作業を進められます。",
       "openDesktopDescription": "「設定」→「モバイル」を開き、ペアリング用の QR コードを生成してください。",
       "openDesktopTitle": "デスクトップで Orca を開く",
-      "pairDesktop": "デスクトップのペアリング",
-      "scanCodeDescription": "上のボタンをタップしてスキャナーを開いてください。画面の QR コードにカメラを向けてください。",
       "scanCodeTitle": "コードをスキャン",
-      "stepsHeading": "使い方",
       "title": "デスクトップに接続"
     },
     "listFooter": {
       "hostPickerTitle": "タスクを開くホスト",
-      "resumeHeading": "再開",
-      "tasksHeading": "タスク"
+      "automationsHeading": "自動化",
+      "automationsHostPickerTitle": "オートメーションを開くホスト"
     },
     "listHeader": {
-      "agentTime": "Agent 時間",
-      "agentsSpawned": "Agent が生成されました",
-      "daysHours": "{{days}}日 {{hours}}時間",
-      "desktopsHeading": "デスクトップ",
-      "hoursMinutes": "{{hours}}時間 {{minutes}}分",
-      "minutes": "{{minutes}}分",
-      "prsCreated": "作成された PR",
-      "title": "おかえり"
+      "desktopsHeading": "デスクトップ"
     },
     "screen": {
       "pairingCheckFailed": "ペアリングを確認できませんでした",
@@ -1341,11 +1321,6 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "removeHostTitle": "ホストを削除",
       "tryAgain": "再試行してください。"
-    },
-    "tasksCard": {
-      "noSources": "タスクの連携先が接続されていません",
-      "openProviderTasks": "{{provider}} のタスクを開く",
-      "title": "タスク"
     }
   },
   "hooks": {
@@ -1388,26 +1363,14 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "ワークスペースを作成中…"
     },
-    "hostRailActions": {
-      "accounts": "アカウント",
-      "closeSearch": "検索を閉じる",
-      "floatingWorkspace": "フローティングワークスペース",
-      "newWorkspace": "新規ワークスペース",
-      "searchWorkspaces": "ワークスペースの検索",
-      "tasks": "タスク"
-    },
     "hostScreenHeader": {
       "accounts": "アカウント",
-      "activeFilters_one": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
-      "activeFilters_other": "ワークスペースのオプション ({{count}} 件のフィルターが有効)",
       "backToHosts": "ホスト一覧に戻る",
-      "closeSearch": "検索を閉じる",
       "floatingWorkspace": "フローティングワークスペース",
       "hideSidebar": "サイドバーを非表示",
       "reconnect": "再接続",
-      "searchWorkspaces": "ワークスペースの検索",
       "tasks": "タスク",
-      "workspaceOptions": "ワークスペースのオプション"
+      "automations": "自動化"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "「{{name}}」（{{branch}}）を削除しますか？",
@@ -1418,10 +1381,6 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "sleep": "スリープ",
       "unpin": "固定を解除する"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "ワークスペースを検索…",
-      "searchWorkspaces": "ワークスペースの検索"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "チェック：失敗",
@@ -1480,7 +1439,6 @@
       "backToOptions": "ワークスペースのオプションに戻る",
       "cardDisplay": "カード表示",
       "cardLayout": "カードのレイアウト",
-      "clearFilters": "フィルターをクリア",
       "exceptDefaultBranch": "デフォルトのブランチを除く",
       "filters": "フィルター",
       "groupBy": "グループ化",
@@ -1517,7 +1475,8 @@
       "sourceControl": "ソース管理",
       "tasks": "タスク",
       "terminal": "ターミナル",
-      "workspace": "ワークスペース"
+      "workspace": "ワークスペース",
+      "automations": "自動化"
     }
   },
   "newWorkspace": {
@@ -1835,7 +1794,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "キーボードを閉じる",
-      "sendKey": "{{label}} を送信"
+      "sendKey": "{{label}} を送信",
+      "modifierHint": "次のキーに適用されます。ダブルタップすると維持されます。",
+      "typeCharacter": "{{character}}を入力",
+      "interrupt": "ターミナルを中断",
+      "keysModeLabel": "キーモード：入力はターミナルに直接送られます。メッセージモードに切り替える",
+      "messageModeLabel": "メッセージモード：入力してから送信します。キーモードに切り替える",
+      "keysMode": "キー",
+      "messageMode": "メッセージ",
+      "moreKeys": "その他のキーと操作",
+      "showKeyboard": "キーボードを表示"
     },
     "activeContent": {
       "createTab": "タブを作成",
@@ -1947,7 +1915,10 @@
     "commandDock": {
       "liveInputHint": "入力したテキストは、選択中のターミナルに直接送信されます。",
       "liveInputLabel": "ターミナルへのリアルタイム入力",
-      "sendCommand": "コマンドを送信"
+      "sendCommand": "コマンドを送信",
+      "messageAgentPlaceholder": "{{agent}}にメッセージ",
+      "writeCommandPlaceholder": "コマンドを入力して送信",
+      "theAgent": "Agent"
     },
     "contentRow": {
       "dismissCreationWarning": "ワークスペース作成の警告を閉じる"
@@ -2121,13 +2092,18 @@
       "requestFailed": "リクエストに失敗しました: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "ワークスペースの完全な名前と場所を表示します",
       "backToWorktrees": "ワークツリー一覧に戻る",
       "moreActions": "セッションのその他の操作",
-      "openFileExplorer": "ファイルエクスプローラーを開く",
       "openSourceControl": "ソース管理を開く",
       "reconnectToDesktop": "デスクトップに再接続",
       "showSidebar": "サイドバーを表示",
-      "terminalTitle": "ターミナル"
+      "terminalTitle": "ターミナル",
+      "terminalLayout": "ターミナルのレイアウト",
+      "fileExplorer": "ファイルエクスプローラー",
+      "sourceControl": "ソース管理",
+      "newTab": "新規タブ",
+      "quickCommands": "クイックコマンド"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agent の履歴",
@@ -2285,9 +2261,6 @@
       "title": "クイックコマンド",
       "untitled": "無題"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "クイックコマンド"
-    },
     "routeHelpers": {
       "connected": "接続済み",
       "connecting": "接続中",
@@ -2327,10 +2300,8 @@
       "terminal": "ターミナル",
       "terminalName": "ターミナル名",
       "unsavedMarkdown": "Markdown の未保存の変更",
-      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。"
-    },
-    "sideRail": {
-      "backToWorktrees": "ワークツリーに戻る"
+      "urlPrompt": "URL を入力してください。空欄のままにすると新規タブが開きます。",
+      "allowAutoClose": "自動終了を許可"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "このワークスペースホストでは有効な AI Agent が検出されませんでした。",
@@ -2609,6 +2580,56 @@
       "waitForStart": "Agent の起動が終わるまでお待ちください。",
       "waitForTurn": "Agent の応答が終わるまで待つか、Agent を停止してください。",
       "waitMoment": "しばらくお待ちください。"
+    },
+    "workerAutoClose": {
+      "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
+      "finished": "一時的なオーケストレーションワーカーが完了しました · {{countdown}}後に閉じます",
+      "keepOpen": "開いたままにする"
+    },
+    "terminalLayoutSheet": {
+      "title": "ターミナルのレイアウト",
+      "oneTerminal": "ターミナル1つ",
+      "selected": "選択中",
+      "auto": "自動",
+      "autoHint": "利用可能なスペースに合わせて分割",
+      "sideBySide": "左右に並べる",
+      "sideBySideHint": "サイドバーを開いていても2列で表示",
+      "stacked": "上下に並べる",
+      "stackedHint": "画面の向きに関係なく2行で表示",
+      "selectedHint": "選択中 · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "レイアウトを保存できませんでした",
+      "saveFailedMessage": "このレイアウトは一時的に適用されます。もう一度選択すると保存を再試行できます。"
+    },
+    "terminalArrowPad": {
+      "label": "矢印キー",
+      "hint": "端をタップすると矢印キーを1回押し、長押ししてドラッグすると繰り返します",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}}を送信",
+      "paste": "貼り付け",
+      "sending": "送信中…",
+      "photo": "写真",
+      "file": "ファイル",
+      "desktopWidth": "デスクトップ幅",
+      "phoneWidth": "スマートフォン幅",
+      "keys": "キー",
+      "combos": "組み合わせ",
+      "yourKeys": "自分のキー",
+      "deleteKeyHint": "長押ししてこのキーを削除",
+      "addCustomKey": "カスタムキーを追加",
+      "addKey": "キーを追加"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}、フォーカス中",
+      "terminal": "ターミナル",
+      "tapToFocusPane": "{{title}}、タップしてフォーカス",
+      "inputPane": "{{title}} · 入力"
     }
   },
   "settings": {
@@ -2800,7 +2821,9 @@
       "cherryPickState": "チェリーピック",
       "mergeState": "マージ",
       "rebaseState": "リベース",
-      "stagedCount": "ステージ済み {{count}} 件"
+      "stagedCount": "ステージ済み {{count}} 件",
+      "completingMerge": "完了しています…",
+      "completeMerge": "マージを完了"
     },
     "branchCompare": {
       "commits_one": "{{count}} 件のコミット",
@@ -2964,7 +2987,8 @@
       "openNumberedPrWeb": "PR #{{number}} をウェブで開く",
       "openPrWeb": "PR をウェブで開く",
       "refresh": "ソース管理を更新",
-      "title": "ソース管理"
+      "title": "ソース管理",
+      "moreActions": "ソース管理のその他の操作"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3239,6 +3263,13 @@
       "branchUnavailable": "ブランチの状態を確認できません。",
       "commitFailed": "コミットに失敗しました。",
       "waitingForDesktop": "デスクトップへの接続を待機中…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "スマートフォンからマージ競合を解決するには、このワークスペースを実行しているコンピューターの Orca を更新してください。",
+      "markResolved": "解決済みとしてマーク",
+      "keepFile": "ファイルを残す",
+      "keepDeletion": "削除を維持",
+      "completeMergeFailed": "マージを完了できませんでした"
     }
   },
   "tasks": {
@@ -3313,23 +3344,18 @@
       "recent": "最近の",
       "retryHint": "タップして再試行してください。",
       "searchProjects": "プロジェクトを検索する",
-      "sort": "プロジェクトの並べ替え",
       "subtitle": "「タスク」ページで使うプロジェクトビューを選択してください。",
       "title": "GitHub Projects",
       "unsupportedLayout": "Orca はこの GitHub プロジェクトのレイアウトにまだ対応していません。",
       "view": "プロジェクトビュー"
     },
     "githubViewControls": {
-      "fields": "フィールド: {{fields}}",
-      "openView": "GitHub でビューを開く",
-      "sort": "並べ替え: {{sort}}",
-      "source": "ソース: {{source}}"
+      "openView": "GitHub でビューを開く"
     },
     "itemActions": {
       "changeStatus": "ステータスを変更",
       "copyGitHubLink": "GitHub リンクをコピーする",
       "copyLinearLink": "Linear リンクをコピーする",
-      "createWorkspace": "ワークスペースを作成",
       "creating": "作成中…",
       "mergeConflicts": "GitHub でマージの競合が報告されています。",
       "mergeMergeRequest": "MR をマージ",
@@ -3337,8 +3363,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "サブ Issue を追加",
-      "assignee": "担当者",
-      "assignees": "担当者",
       "checks": "チェック",
       "description": "説明",
       "discussion": "ディスカッション",
@@ -3350,13 +3374,10 @@
       "pipeline": "パイプライン",
       "pipelineJobs_one": "{{count}} 件のジョブ",
       "pipelineJobs_other": "{{count}} 件のジョブ",
-      "project": "プロジェクト",
       "rerunAll": "すべて再実行",
       "rerunFailed": "失敗分を再実行",
-      "status": "状態",
       "subIssueTitle": "サブ Issue のタイトル",
-      "subIssues": "サブ Issue",
-      "type": "種類"
+      "subIssues": "サブ Issue"
     },
     "itemDetailDrawer": {
       "refreshDetails": "詳細を更新"
@@ -3413,17 +3434,8 @@
     "linearList": {
       "changeStatusFrom": "状態を「{{status}}」から変更"
     },
-    "linearViewControls": {
-      "displayButton": "表示",
-      "groupLabel": "グループ化：{{group}}",
-      "orderLabel": "並べ替え：{{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "表示項目",
-      "linearGroupTitle": "Linear の Issue をグループ化",
-      "linearOrderTitle": "Linear の Issue を並べ替え",
-      "linearViewTitle": "Linear の表示",
-      "sortTasksTitle": "タスクを並べ替え"
+      "displayPropertiesTitle": "表示項目"
     },
     "listSurface": {
       "connectLinearButton": "Linear に接続",
@@ -3492,8 +3504,6 @@
       "allSites": "すべてのサイト",
       "currentlyAscending": "現在は昇順・タップで降順に変更",
       "currentlyDescending": "現在は降順・タップで昇順に変更",
-      "fieldAscending": "{{field}} 昇順",
-      "fieldDescending": "{{field}} 降順",
       "fields": "フィールド",
       "repos_one": "{{count}} 件のリポジトリ",
       "repos_other": "{{count}} 件のリポジトリ",
@@ -3602,8 +3612,7 @@
     },
     "providerControls": {
       "myTodos": "自分の ToDo",
-      "projectMergeRequests": "プロジェクトの MR",
-      "sort": "並べ替え：{{sortLabel}}"
+      "projectMergeRequests": "プロジェクトの MR"
     },
     "providerItemList": {
       "intoBranch": "{{base}} へ",
@@ -3631,7 +3640,6 @@
       "queryingSource": "検索対象: {{source}}",
       "repoDescription": "検索対象のリポジトリを選択してください。",
       "repos": "リポジトリ",
-      "taskSource": "タスクソース",
       "upstream": "upstream"
     },
     "providerViewProjection": {
@@ -3643,10 +3651,7 @@
       "default": "デフォルト",
       "defaultSubtitle": "{{subtitle}} · デフォルト",
       "issues": "Issue",
-      "list": "リスト",
-      "noGrouping": "グループ化なし",
       "openState": "オープン",
-      "priority": "優先度",
       "projects": "プロジェクト",
       "pullRequests": "PR",
       "teams_one": "{{count}} チーム",
@@ -3658,7 +3663,6 @@
       "unassigned": "未割り当て"
     },
     "screenChrome": {
-      "connectLinear": "Linear に接続",
       "newGitHubIssue": "GitHub の新規 Issue",
       "newLinearIssue": "新規 Linear Issue",
       "refreshGitHub": "GitHub の作業を更新する",
@@ -3726,19 +3730,14 @@
       "addRepository": "Linear の Issue からワークスペースを作成する前に、Git リポジトリを追加してください。",
       "advanced": "詳細設定",
       "agent": "Agent",
-      "connect": "接続",
       "connectFirst": "先にリポジトリに接続",
       "connectRepository": "リポジトリに接続",
-      "connecting": "接続中…",
-      "createFrom": "{{branch}} から作成",
       "defaultBranch": "デフォルトブランチ",
       "detectingAgents": "Agent を検出中…",
-      "optional": "[オプション]",
       "remoteRepository": "リモートリポジトリ",
       "repository": "リポジトリ",
       "repositoryNotFound": "リポジトリが見つかりません。",
       "selectRepository": "リポジトリを選択",
-      "sshConnection": "SSH 接続",
       "startFrom": "作成元",
       "title": "ワークスペースを作成",
       "workspaceName": "ワークスペース名"
@@ -3861,7 +3860,6 @@
       "existing": "既存のブランチ",
       "existingHint": "新しいコミットはこのブランチに追加されます。",
       "hostUpdateRequired": "ブランチを再利用するか、別のブランチを明示的に作成するには、ワークスペースのホストで Orca を更新してください。",
-      "new": "新しいブランチ",
       "newHint": "新しいローカルブランチを作成",
       "newName": "新しいブランチ名",
       "title": "このワークツリーのブランチ"
@@ -3905,6 +3903,222 @@
       "inProgress": "進行中",
       "inReview": "レビュー中",
       "pinned": "ピン留め済み"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "方向パッドの上",
+      "left": "方向パッドの左",
+      "right": "方向パッドの右",
+      "down": "方向パッドの下",
+      "hint": "矢印キーを送信します。長押しで繰り返します。"
+    }
+  },
+  "automations": {
+    "mobile": {
+      "extraAgentArguments": "追加の Agent 引数",
+      "allAutomations": "すべての自動化",
+      "schedule": "スケジュール",
+      "nextRun": "次の実行",
+      "project": "プロジェクト",
+      "unavailable": "利用不可",
+      "workspace": "ワークスペース",
+      "edit": "編集",
+      "deleteAutomation": "オートメーションの削除",
+      "editAutomation": "オートメーションの編集",
+      "cancel": "キャンセル",
+      "name": "名前",
+      "back": "戻る",
+      "continue": "続行",
+      "createAutomation": "オートメーションの作成",
+      "automations": "自動化",
+      "runs": "実行履歴",
+      "refresh": "更新",
+      "automation": "オートメーション",
+      "inProgress": "進行中",
+      "completed": "完了",
+      "skipped": "スキップ済み",
+      "started": "開始済み",
+      "trigger": "トリガー",
+      "run": "実行",
+      "output": "出力",
+      "noOutput": "出力内容はありません。",
+      "loadingRuns": "実行を読み込み中…",
+      "loading": "読み込み中…",
+      "hourly": "毎時",
+      "daily": "毎日",
+      "weekdays": "平日",
+      "weekly": "毎週",
+      "cadence": "ケイデンス",
+      "day": "日",
+      "host": "ホスト",
+      "pending": "保留中",
+      "starting": "起動中",
+      "baseBranchOptional": "ベースブランチ（任意）",
+      "workspaceSetupScript": "ワークスペースのセットアップスクリプト",
+      "useProjectSettings": "プロジェクト設定を使用",
+      "runSetupScript": "セットアップスクリプトを実行",
+      "skipSetupScript": "セットアップスクリプトをスキップ",
+      "reuseAgentSession": "Agentセッションを再利用",
+      "precheckCommandOptional": "事前チェックコマンド（任意）",
+      "precheckTimeoutSeconds": "事前チェックのタイムアウト（秒）",
+      "missedRunGraceMinutes": "実行遅延の猶予（分）",
+      "choose": "選択…",
+      "runOnSchedule": "{{name}} をスケジュール実行",
+      "noNextScheduledRun": "次回の実行予定はありません",
+      "agent": "Agent",
+      "newWorkspacePerRun": "実行ごとに新しいワークスペース",
+      "instructions": "指示",
+      "runNow": "今すぐ実行",
+      "viewAllRuns": "すべての実行を表示",
+      "savedAgent": "{{agent}}（保存済み）",
+      "chooseAProjectSetUpOnThisHost": "このホストに設定されたプロジェクトを選択してください。",
+      "newAutomation": "新しい自動化",
+      "editorStep": "{{step}} / 3 · {{section}}",
+      "retryProjectLoading": "プロジェクトを再読み込み",
+      "loadingProjects": "プロジェクトを読み込み中…",
+      "projectAndHostSetup": "プロジェクトとホストの設定",
+      "savedTarget": "保存済みの対象",
+      "useAnExistingWorkspace": "既存のワークスペースを使用",
+      "existingWorkspace": "既存のワークスペース",
+      "savedWorkspace": "保存済みのワークスペース",
+      "loadMoreWorkspaces": "ワークスペースをさらに読み込む",
+      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "このホストのワークスペース一覧は不完全です。更新するか、さらに読み込んでください。",
+      "agentDetecting": "Agent · 検出中…",
+      "installAndEnableAnAgentOnThisHostThenRetry": "このホストにAgentをインストールして有効にし、再試行してください。",
+      "hideAdvancedOptions": "詳細オプションを隠す",
+      "advancedOptions": "詳細オプション",
+      "chooseAnAgent": "Agentを選択",
+      "saveChanges": "変更を保存",
+      "loadingAutomations": "自動化を読み込み中…",
+      "letYourAgentsWorkOnASchedule": "Agentをスケジュールに従って実行",
+      "createAnAutomationToRunATaskOnThisHost": "このホストでタスクを実行する自動化を作成します。",
+      "nextDate": "次回：{{date}}",
+      "lastResult": "前回：{{status}} · {{date}}",
+      "latestResultNotReported": "最新の結果は未報告です",
+      "sshTarget": " · SSH {{target}}",
+      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "更新や変更を行うには、このホストに再接続してください。保存済みの情報は引き続き以下で確認できます。",
+      "recentRuns": "最近の実行",
+      "outcome": "結果",
+      "allOutcomes": "すべての結果",
+      "couldNotStart": "開始できませんでした",
+      "deleteAutomationTitle": "自動化を削除しますか？",
+      "deleteRetained": "「{{name}}」と保持されている実行を削除しますか？",
+      "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "元のAgentペインを確認できませんでした。再接続して再試行してください。",
+      "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "元のAgentペインは開けなくなりました。保存済みの出力はここに残ります。",
+      "allRuns": "すべての実行",
+      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "この実行はホストの保持履歴にありません。最後に保存された情報は以下に残ります。",
+      "scheduledFor": "実行予定日時",
+      "notCreated": "未作成",
+      "projectHost": "プロジェクトのホスト",
+      "notRecorded": "未記録",
+      "capturedTruncated": "取得日時：{{date}} · ホストにより出力が切り詰められました",
+      "capturedDate": "取得日時：{{date}}",
+      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "元のAgentペインは利用できません。保存済みの出力はここに残ります。",
+      "openAgent": "Agentを開く",
+      "retryHistory": "履歴を再読み込み",
+      "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "読み込んだ履歴に一致する実行はありません。さらに読み込んでください。",
+      "noMatchingRunsYet": "一致する実行はまだありません。",
+      "runSummary": "{{title}}、{{status}}、{{date}}",
+      "scheduled": "スケジュール実行",
+      "loadMoreRuns": "実行をさらに読み込む",
+      "customCronOrRRULE": "カスタム Cron または RRULE",
+      "cronOrRRULE": "Cron または RRULE",
+      "minuteFromHHMM": "分（HH:MM から）",
+      "timeHHMM24Hour": "時刻（HH:MM、24 時間制）",
+      "useATimeSuchAs0900": "09:00 のような時刻を使用してください。",
+      "timeZone": "タイムゾーン",
+      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "選択したホストで実行します。予定時刻にホストを利用可能にしておいてください。",
+      "pairedHost": "ペアリング済みホスト",
+      "selectedServerUnavailable": "選択したサーバー（利用不可）",
+      "addANameInstructionsAndAnAgent": "名前、指示、Agentを追加してください。",
+      "chooseAnExistingWorkspace": "既存のワークスペースを選択してください。",
+      "checkTheExtraAgentArguments": "追加のAgent引数を確認してください。",
+      "enterAValidCronOrRRULESchedule": "有効な Cron または RRULE スケジュールを入力してください。",
+      "enterAValidTimeZoneSuchAsAmericaLosAngeles": "America/Los_Angeles などの有効なタイムゾーンを入力してください。",
+      "missedRunGraceMustBeZeroOrAPositiveNumberOfMinutes": "猶予時間は 0 または正の分数で指定してください。",
+      "precheckTimeoutRange": "事前チェックのタイムアウトは 1～{{maximum}} 秒にしてください。",
+      "outcomeUnknown": "ホストがこの操作を適用した可能性があります。再試行する前に更新して確認してください。",
+      "ownerChanged": "この自動化のホストが変更されました。続行する前に再読み込みしてください。",
+      "targetRemoved": "この自動化の SSH ホストが削除されたため、実行できません。自動化を削除するか、ホストを再追加してください。",
+      "fencingRequired": "この自動化は SSH ホストに固定されているため、リクエストには想定するホストの指定が必要です。",
+      "invalidDestination": "この管理元ではそのホストは利用できなくなりました。ホストを選択して再試行してください。",
+      "agentDiscoveryUnavailable": "このプロジェクトのホストではAgentを検出できません。保存済みの選択は保持されます。",
+      "agentVerificationUnavailable": "このホストではプロジェクトのAgentを確認できません。ホストを更新して再試行してください。",
+      "hostUnavailable": "このホストでは自動化を利用できません。ホストの Orca を更新して再接続してください。",
+      "hostUnreachable": "このホストに接続できませんでした。再接続し、更新して現在の状態を確認してください。",
+      "actionFailed": "ホストでこの操作を完了できませんでした。更新して再試行してください。",
+      "dispatched": "送信済み",
+      "skippedPrecheck": "スキップ · 事前チェック",
+      "skippedMissedSchedule": "スキップ · 予定時刻を過ぎました",
+      "skippedHostUnavailable": "スキップ · ホストが利用不可",
+      "skippedSignInNeeded": "スキップ · サインインが必要",
+      "unknownResult": "不明な結果",
+      "notReported": "未報告",
+      "searchOptions": "オプションを検索",
+      "scheduleAgentWorkAndViewRuns": "Agentの作業を予定し、実行を確認",
+      "task": "タスク",
+      "review": "確認"
+    },
+    "orphanIssues": {
+      "hostReselection": "実行する前に、このオートメーションを編集してホストを選択し直してください。",
+      "malformed": "保存されているホストの記録が不完全です。",
+      "projectMissing": "プロジェクトが存在しなくなったため、ホストを特定できません。",
+      "projectUnverified": "ここからはプロジェクトを確認できなかったため、ホストは未確認です。",
+      "scheduledElsewhere": "ここに保存されていますが、リモートのランタイムで実行するようにスケジュールされています。",
+      "targetMissing": "SSHホストは登録されていません。",
+      "targetReplaced": "SSHホストが削除されて再追加されたため、このオートメーションを再度引き継ぐ必要があります。",
+      "workspaceHostAmbiguous": "ワークスペースが複数のホストにまたがっているため、所有者を一つに特定できません。"
+    },
+    "runFailures": {
+      "noDispatchHost": "オートメーションを起動できる Orca ウィンドウがありませんでした。",
+      "unevaluableSchedule": "Orca はこのオートメーションを評価できず、今回の実行をスキップしました。",
+      "noRunnableHost": "このオートメーションには実行するホストがありません。",
+      "wslMoveInProgress": "このオートメーションのプロジェクトを WSL ホストへ移動中のため、Orca は今回の実行をスキップしました。移動が完了すると実行が再開されます。",
+      "wslMoveOwnedByHost": "このオートメーションのプロジェクトは現在 WSL ホスト上で動作しており、オートメーションもそこで実行されます。Orca はこのローカルコピーを実行しなくなりました。",
+      "missedGraceWindow": "Orca が次に確認した時点で、この実行は実行漏れの猶予時間を過ぎていました。",
+      "targetMissing": "オートメーションのホストは登録されていないため、このオートメーションを実行する場所がありません。",
+      "targetReplaced": "オートメーションのホストが削除され、再登録されたため、実行するにはこのオートメーションを再度関連付ける必要があります。",
+      "workspaceHostAmbiguous": "オートメーションのワークスペースが複数のホストにまたがっているため、Orca はどのホストで実行すべきか判断できません。",
+      "legacyTwinHosts": "このオートメーションは、Orca が実行ホストを記録するようになる前に保存されており、プロジェクトが複数のホストにあります。オートメーションを開き、実行するホストを選択してください。",
+      "targetUnavailable": "オートメーションの実行ターゲットは利用できなくなりました。",
+      "remoteSchedulingUnavailable": "この Orca クライアントでは、リモートサーバーのオートメーションのスケジュール設定はまだ利用できません。リモートサーバー上でこのオートメーションを実行するか、永続的なリモートスケジュール機能が利用可能になったら Orca を更新してください。",
+      "projectSetupMissing": "オートメーション用に選択したホストでは、プロジェクトがセットアップされていない状態になっています。",
+      "targetSetupMismatch": "オートメーションの実行ターゲットが、プロジェクトで選択したホストの設定と一致しなくなりました。",
+      "repoUnavailable": "選択したオートメーションのホストのリポジトリは利用できなくなりました。",
+      "repoDetached": "リポジトリは、選択したオートメーションのホストに関連付けられていません。",
+      "projectPathChanged": "選択したオートメーションのホストのプロジェクトパスが変更されました。",
+      "automationChanged": "今回の実行を開始する前に、オートメーションが変更されました。",
+      "destinationChanged": "今回の実行を開始する前に、オートメーションの実行先が変更されました。",
+      "hooksReviewBlocked": "Agent は、新規または変更されたフックのレビューを待っています（「Hooks need review」）。この実行を開き、フックを信頼するか削除してください。スケジュールされた実行は継続され、レビューが必要なものがなくなれば成功します。",
+      "agentNeverStarted": "プロンプトの送信後、オートメーションの Agent が起動しませんでした。",
+      "agentNoCompletion": "オートメーションの Agent から完了の報告がありませんでした。",
+      "watchTimedOut": "完了シグナルがないまま 6 時間が経過したため、Orca はこの実行の監視を終了しました。",
+      "projectSetupState": {
+        "notSetUp": "選択したオートメーションのホストでは、プロジェクトがセットアップされていません。",
+        "settingUp": "選択したオートメーションのホストで、プロジェクトをまだセットアップ中です。",
+        "error": "選択したオートメーションのホストで、プロジェクトのセットアップに失敗しました。",
+        "unsupported": "選択したオートメーションのホストは、このプロジェクトをサポートしていません。"
+      },
+      "wslDistroStopped": "WSL ディストリビューション {{distro}} が停止しているため、このスケジュール実行では起動しませんでした。ディストリビューションを起動するか、「今すぐ実行」を使ってください。起動中は以降の実行が行われます。"
+    }
+  },
+  "auto": {
+    "components": {
+      "automations": {
+        "automation": {
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "無効なスケジュール",
+              "ba20c92073": "カスタムスケジュール",
+              "a95afb7483": "毎時 :{{minute}}",
+              "280ccd2701": "毎日 {{time}}",
+              "3f1422adc1": "平日 {{time}}",
+              "cc71e252ba": "毎週{{day}} {{time}}"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -1,3 +1,4 @@
+import { agentModelCatalogEntryWithSuccess } from '../native-chat/agent-model-catalog/agent-model-catalog-entry'
 import { AgentModelCatalogUnavailableError } from '../native-chat/agent-model-catalog/agent-model-catalog-unavailable'
 import { chmodSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { homedir, tmpdir } from 'node:os'
@@ -130,7 +131,7 @@ describe('claude model catalog probe', () => {
     expect(fastModeSupport).toEqual({ supported: true })
     expect(models[0]?.supportsFastMode).toBe(true)
     expect(
-      models[0] && discoveredModel(models[0], fastModeSupport?.supported === true).options
+      models[0] && discoveredModel(models[0], fastModeSupport?.supported === true, 'claude').options
     ).toContainEqual(expect.objectContaining({ id: 'fastMode' }))
     expect(
       models.map(({ id, isDefault, supportsAutoMode }) => ({ id, isDefault, supportsAutoMode }))
@@ -273,50 +274,63 @@ it.each([null, 0, 1])('enterprise retry uses the actual exit code %s', async (ex
   expect(runListing).toHaveBeenCalledTimes(exitCode === 1 ? 2 : 1)
 })
 
-it('discovers a configured launch override without chat picks and preserves literal settings', async () => {
-  const calls: ListingCall[] = []
-  const probe = createClaudeModelCatalogProbe({
-    ...probeDeps(),
-    resolveLaunchArgs: () => [
-      '--model',
-      'sonnet',
-      '--effort',
-      'high',
-      '--settings',
-      '/literal/settings.json'
-    ],
-    runListing: async (...call) => {
-      calls.push(call)
-      return `${LISTED}${JSON.stringify({
-        type: 'control_response',
-        response: {
-          subtype: 'success',
-          request_id: 'orca-model-settings',
-          response: { applied: { model: 'sonnet', effort: 'high' } }
-        }
-      })}\n`
-    }
-  })
-  const resolved = await probe.resolve?.(HOME('/account'), '/project')
-  expect(await resolved?.run()).toMatchObject({ configured: { model: 'sonnet', effort: 'high' } })
-  expect(calls[0]?.[0].args).toEqual(
-    expect.arrayContaining([
-      '--model',
-      'sonnet',
-      '--effort',
-      'high',
-      '--settings',
-      '/literal/settings.json'
-    ])
-  )
-  expect(calls[0]?.[0].args.filter((arg) => arg === '--settings')).toHaveLength(1)
-  expect(
-    calls[0]?.[0].stdin
-      ?.trim()
-      .split('\n')
-      .map((line) => JSON.parse(line))
-  ).toHaveLength(2)
-})
+it.each(['high', 'low'])(
+  'discovers configured %s without chat picks and preserves literal settings',
+  async (effort) => {
+    const calls: ListingCall[] = []
+    const probe = createClaudeModelCatalogProbe({
+      ...probeDeps(),
+      resolveLaunchArgs: () => [
+        '--model',
+        'sonnet',
+        '--effort',
+        effort,
+        '--settings',
+        '/literal/settings.json'
+      ],
+      runListing: async (...call) => {
+        calls.push(call)
+        return `${LISTED}${JSON.stringify({
+          type: 'control_response',
+          response: {
+            subtype: 'success',
+            request_id: 'orca-model-settings',
+            response: { applied: { model: 'sonnet', effort } }
+          }
+        })}\n`
+      }
+    })
+    const resolved = await probe.resolve?.(HOME('/account'), '/project')
+    const success = await resolved!.run()
+    expect(success).toMatchObject({ configured: { model: 'sonnet', effort } })
+    expect(
+      agentModelCatalogEntryWithSuccess(
+        undefined,
+        { agent: 'claude', fingerprint: 'fp' },
+        success,
+        'discovery',
+        1
+      )?.models.find((row) => row.id === 'sonnet')?.declaredDefaultEffort
+    ).toBe(effort === 'low' ? 'low' : null)
+    expect(calls[0]?.[0].args).toEqual(
+      expect.arrayContaining([
+        '--model',
+        'sonnet',
+        '--effort',
+        effort,
+        '--settings',
+        '/literal/settings.json'
+      ])
+    )
+    expect(calls[0]?.[0].args.filter((arg) => arg === '--settings')).toHaveLength(1)
+    expect(
+      calls[0]?.[0].stdin
+        ?.trim()
+        .split('\n')
+        .map((line) => JSON.parse(line))
+    ).toHaveLength(2)
+  }
+)
 
 it('qualifies only a correlated valid settings observation', async () => {
   for (const [applied, requestId, complete] of [

@@ -1,14 +1,18 @@
 ---
 name: orchestration
 description: >-
-  Coordinate supervised Orca workers, or work as a dispatched worker
-  (heartbeats, ask, worker_done): threaded messages, blocking ask/reply, task
-  dispatch, worker_done/escalation waits, task DAGs, decision gates,
-  coordinator loops, and decomposing work across agents. Use `orca-cli` for full
-  ownership handoffs — "hand off", "handoff", "handover", "give this to another
-  agent", "another worktree" — unless asked to supervise, monitor, or coordinate
-  a DAG, and for terminal control, lightweight terminal prompts, shell commands,
-  Orca worktree management, and reading or waiting on terminals.
+  Run work in separate Orca worker agents and get their results back. Use when
+  the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,
+  decision gates), or when the work needs something your own subagents cannot
+  give: a different agent (such as Codex from Claude) or its own Orca workspace.
+  "Have Codex (or Claude) review this and report back" means an Orca worker of
+  that agent, even when you have your own model subagents.
+  Also use when you are a dispatched worker (a prompt with Task and Dispatch
+  IDs: ask, worker_done). Otherwise prefer your own subagents,
+  including for long or parallel work. Use `orca-cli` to hand work off with
+  nothing expected back ("hand off", "handover", "give this to another agent",
+  "another worktree"), and for terminal control, shell commands, worktree
+  management, and reading or waiting on terminals.
 ---
 
 # Orca Orchestration
@@ -17,15 +21,17 @@ This file is a discovery stub, not the usage guide. The full, version-matched Or
 orchestration reference is served by the `orca` binary itself — kept out of this file on
 purpose so it can never drift from the binary that will actually run your commands.
 
-Engage Orca orchestration whenever you need structured multi-agent coordination: threaded
-messages, blocking ask/reply flows, task dispatch, worker_done/escalation waits, task DAGs,
-decision gates, coordinator loops, or decomposing work across agents. Engage it as well
-when you are a dispatched worker sending heartbeats, `ask` questions, or `worker_done`. Use
-the orca-cli skill instead for full ownership handoffs ("hand off", "handoff", "handover",
-"give this to another agent", "another worktree") when the user did not ask to supervise,
-monitor, wait for results, or coordinate a DAG — and for ordinary terminal control, shell
-commands, worktree management, and the built-in browser. Coordination requires real Orca
-runtime state; never substitute a non-Orca subagent tool.
+Use Orca orchestration to run work in separate Orca worker agents and get their results
+back: when the user asks for Orca workers or supervision (monitor, task DAGs, ask/reply,
+decision gates), or when the work needs something your own subagents cannot give, such as a
+different agent or its own Orca workspace. "Have Codex (or Claude) review this and report
+back" means an Orca worker of that agent, even when you have your own model subagents. Use
+it as well when you are a dispatched worker sending `ask` questions or `worker_done`. Otherwise prefer your own subagents,
+including for long or parallel work. Use the orca-cli skill instead to hand work off with
+nothing expected back ("hand off", "handoff", "handover", "give this to another agent",
+"another worktree"), and for ordinary terminal control, shell commands, worktree management,
+and the built-in browser. Coordination requires real Orca runtime state; never substitute a
+non-Orca subagent tool when the user asked for Orca orchestration.
 
 ## Resolve the CLI for this session
 
@@ -60,9 +66,9 @@ recovery, or expanded DAG work, load only the reference that gate names with
 (`--references` lists the names). If that binary rejects `--reference`, run
 `ORCA skills get orchestration --full` and read the named bundled reference before acting.
 
-Prefer `--json`. Use the selected executable's `--help` for commands or flags the guide does
-not cover. If a command reports that Orca is not running, start it with `ORCA open --json`
-and retry. If it fails with `runtime_access_denied`, your sandbox blocked the connection:
-re-run it with escalated permissions, and do not run `ORCA open` or restart Orca. If
-`skills get` is unknown, explain that updating Orca restores the guide; use `--help` for
-read-only discovery and do not guess unsupported commands.
+Use the selected executable's `--help` for commands or flags the guide does not cover. If a
+command reports that Orca is not running, start it with `ORCA open --json` and retry. If it
+fails with `runtime_access_denied`, your sandbox blocked the connection: re-run it with
+escalated permissions, and do not run `ORCA open` or restart Orca. If `skills get` is unknown,
+explain that updating Orca restores the guide; use `--help` for read-only discovery and do not
+guess unsupported commands.

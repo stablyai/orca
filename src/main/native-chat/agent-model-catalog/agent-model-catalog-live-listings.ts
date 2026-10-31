@@ -105,7 +105,9 @@ export function createAgentModelCatalogLiveListings(
     if (saved && configuredDefault !== undefined) {
       // In report order, so the latest chat's resolution is the one kept.
       const recording = (recordingDefaults.get(fingerprint) ?? Promise.resolve())
-        .then(() => recordConfiguredDefault(deps, record, fingerprint, configuredDefault, current))
+        .then(() =>
+          recordConfiguredDefault(deps, record, fingerprint, configuredDefault, current, saved.live)
+        )
         .catch(() => {})
         .then(() => {
           if (recordingDefaults.get(fingerprint) === recording) {

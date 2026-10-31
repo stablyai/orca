@@ -101,8 +101,7 @@ export async function listSubmodulePaths(
       ['config', '-z', '--file', '.gitmodules', '--get-regexp', '^submodule\\..*\\.path$'],
       {
         ...gitOptionsForWorktree(worktreePath, options),
-        env: gitOptionalLocksDisabledEnv(),
-        captureWslLoginShellOutput: true
+        env: gitOptionalLocksDisabledEnv()
       }
     )
     for (const record of iterateNulDelimitedFields(stdout)) {

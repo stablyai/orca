@@ -26,7 +26,7 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserKeypressResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) => {
@@ -49,7 +49,7 @@ export abstract class AgentBrowserBridgeKeyCommands extends AgentBrowserBridgeCa
     browserPageId?: string
   ): Promise<BrowserTypeResult> {
     await assertClipboardTextWriteWithinLimitWithYield(input)
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) => {

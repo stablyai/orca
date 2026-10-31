@@ -4,7 +4,9 @@
       "updateRequired": "이 버전의 OpenCode는 선택한 모델로 안전하게 시작할 수 없습니다. OpenCode를 지원되는 버전으로 업데이트하거나 모델 선택을 생략하세요.",
       "invalidConfig": "OpenCode가 선택한 모델을 시작 구성에 적용하지 못했습니다. OpenCode 시작 구성을 확인하고 다시 시도하거나 모델 선택을 생략하세요.",
       "unsupportedLaunch": "OpenCode가 이번 시작에 선택한 모델을 적용할 수 없습니다. 지원되는 시작 인수를 사용하여 새 로컬 터미널을 열거나 모델 선택을 생략하세요."
-    }
+    },
+    "terminalPreparationFailed": "{{value0}}의 터미널을 열 수 없습니다. 워크스페이스 연결과 에이전트 설정을 확인한 후 다시 시도하세요.",
+    "terminalPromptFailed": "Orca가 {{value0}}의 터미널을 열었지만 프롬프트를 전달하지 못했습니다. 해당 터미널에서 프롬프트를 보내세요."
   },
   "app": {
     "saving": {
@@ -220,7 +222,7 @@
       },
       "userAgent": {
         "title": "브라우저 ID",
-        "description": "모든 브라우저 프로필과 페이지에 대한 사용자 에이전트를 선택하세요. 기본 모드에서는 Google 로그인이 비활성화됩니다. 변경 사항은 다시 시작한 후에 적용됩니다.",
+        "description": "모든 브라우저 프로필과 페이지에 대한 사용자 에이전트를 선택하세요. 변경 사항은 다시 시작한 후에 적용됩니다.",
         "remoteUnsupported": "Orca CLI를 사용하여 원격 호스트에서 브라우저 ID를 관리합니다.",
         "loading": "로드 중…",
         "resetRequired": "ID 데이터를 변경하려면 먼저 명시적으로 재설정해야 합니다.",
@@ -228,7 +230,7 @@
         "optionClean": "정리됨",
         "optionCleanTooltip": "가져온 Chrome 세션과 일치하도록 Orca 및 Electron 토큰을 제거합니다.",
         "optionNative": "네이티브",
-        "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다. 기본 모드에서는 Google 로그인을 사용할 수 없습니다.",
+        "optionNativeTooltip": "정리된 ID를 거부하는 사이트에 대해 Electron의 내장 ID를 유지합니다.",
         "restartRequired": "다시 시작해야 함",
         "unavailable": "브라우저 ID를 사용할 수 없습니다."
       },
@@ -376,7 +378,22 @@
       "installCliForTerminal": "터미널에서 열려면 {{value0}} CLI를 설치하세요.",
       "chatRuntime": "채팅 런타임",
       "chatChoiceTitle": "채팅 또는 CLI로 열기",
-      "chatChoiceDescription": "각 에이전트를 채팅으로 열지 CLI로 열지 선택합니다."
+      "chatChoiceDescription": "각 에이전트를 채팅으로 열지 CLI로 열지 선택합니다.",
+      "defaultSurfaceTitle": "에이전트 열기 방식",
+      "defaultSurfaceDescription": "이 컴퓨터에서 에이전트를 여는 기본 방식입니다.",
+      "defaultSurfaceChatDescription": "서식 있는 메시지, 시각 자료, 이미지.",
+      "defaultSurfaceTerminal": "터미널",
+      "defaultSurfaceTerminalDescription": "각 에이전트의 자체 CLI.",
+      "defaultSurfacePerAgent": "에이전트별로 선택",
+      "defaultSurfaceNowChat": "이제 에이전트가 채팅으로 열립니다",
+      "defaultSurfaceNowTerminal": "이제 에이전트가 터미널에서 열립니다",
+      "defaultSurfaceKeptTerminal_one": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}}은(는) 설정한 대로 터미널에서 열립니다.",
+      "defaultSurfaceKeptChat_one": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceKeptChat_other": "{{agents}}은(는) 설정한 대로 채팅으로 열립니다.",
+      "defaultSurfaceSetAllChat": "모두 채팅으로 설정",
+      "defaultSurfaceSetAllTerminal": "모두 터미널로 설정",
+      "sameAsChoice": "{{agent}}와 동일 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "심볼릭 링크",
@@ -835,9 +852,7 @@
         "jira": {
           "856083302c": "더 새로운 요청이 있어 Jira 연결 요청을 건너뛰었습니다."
         },
-        "linear": {
-          "37d36984d0": "더 새로운 요청이 있어 Linear 연결 요청을 건너뛰었습니다."
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "프로필을 생성하지 못했습니다",
@@ -878,6 +893,13 @@
       "pluginNewFile": {
         "unavailable": "{{value0}}을(를) 더 이상 사용할 수 없습니다. 해당 플러그인을 다시 켜세요.",
         "failed": "파일을 만들 수 없습니다."
+      },
+      "pluginAutoUpdates": {
+        "one": "{{value0}}을(를) {{value1}}(으)로 업데이트했습니다",
+        "many": "플러그인 {{value0}}개를 업데이트했습니다"
+      },
+      "pluginInstallLink": {
+        "invalid": "유효하지 않은 플러그인 링크입니다."
       }
     },
     "lib": {
@@ -6494,13 +6516,15 @@
           "distro": "배포판",
           "loading": "WSL 배포판 찾는 중…",
           "placeholder": "배포판 선택",
-          "none": "WSL 배포판을 찾을 수 없습니다. 다음 명령으로 설치하세요: wsl --install",
           "stoppedHint": "{{value0}}이(가) 중지되어 있습니다. 추가하면 시작됩니다.",
           "addingHint": "배포판에 Orca 서버를 설치하고 시작하는 중입니다. 처음에는 1분 정도 걸릴 수 있습니다.",
           "adding": "설정 중…",
           "startAndAdd": "시작 및 추가",
           "add": "호스트 추가",
-          "refresh": "새로고침"
+          "refresh": "새로고침",
+          "wsl1Reason": "WSL 1에서는 Orca 호스트를 실행할 수 없습니다. {{command}}(으)로 변환하세요",
+          "noWsl2Title": "WSL 2 배포판을 찾을 수 없음",
+          "noWsl2Install": "Windows 터미널에서 {{command}}(으)로 설치한 다음 새로 고침을 선택하세요."
         },
         "wslHostRowStatus": {
           "connecting": "시작 중",
@@ -7150,7 +7174,8 @@
           "506f2acf7a": "액세스 재설정 중...",
           "statusGranted": "부여된",
           "statusUnsupported": "macOS만 해당",
-          "statusNotEnabled": "활성화되지 않음"
+          "statusNotEnabled": "활성화되지 않음",
+          "794807aa21": "macOS 개인정보 보호 및 보안을 대기열에 추가했습니다. 더 새로운 요청이나 재설정으로 대체될 수 있습니다"
         },
         "DeveloperPermissionsPane": {
           "4c17304beb": "새로고침",
@@ -7239,8 +7264,6 @@
             "toggleLabel": "새 카드 스타일 전환"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Chat UI 전환",
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
             "shellEnvNameAdd": "추가",
@@ -7252,9 +7275,7 @@
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
-            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환",
-            "description": "Chat UI에서 지원되는 새 에이전트를 엽니다.",
-            "copy": "구조화된 채팅에서 지원되는 새 에이전트가 열립니다. 터미널에 다른 에이전트가 열립니다. 기존 채팅은 계속 사용할 수 있습니다."
+            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",
@@ -7703,20 +7724,11 @@
           "191ac34567": "에이전트 오케스트레이션",
           "nestedWorkerDepthTitle": "하위 에이전트 최대 생성 단계",
           "nestedWorkerDepthDescription": "하위 에이전트를 몇 단계까지 생성할 수 있는지 설정합니다. 1이면 조율 에이전트만 하위 에이전트를 생성할 수 있고, 생성된 하위 에이전트는 자신의 하위 에이전트를 생성할 수 없습니다.",
-          "chatErrorEscalationTitle": "채팅 오류를 코디네이터에게 알리기",
-          "chatErrorEscalationDescription": "할당된 에이전트가 턴을 끝내는 오류를 만나면 그 오류를 그대로 할당한 코디네이터에게 보냅니다. 작업은 에이전트에게 계속 할당됩니다. 채팅 UI에서 실행되는 에이전트에서만 작동합니다.",
-          "chatErrorEscalationNeedsChat": "사용하려면 실험적 기능 설정에서 채팅 UI를 켜세요.",
-          "chatErrorEscalationKeywordError": "오류",
-          "chatErrorEscalationKeywordChat": "채팅",
-          "heartbeatTitle": "워커 하트비트",
-          "heartbeatDescription": "할당된 워커가 몇 분마다 상태를 알려 코디네이터가 작업 중인 에이전트와 응답 없는 에이전트를 구분할 수 있습니다. 끄면 코디네이터로 가는 메시지가 줄지만 그 상태 신호를 더 이상 받을 수 없습니다. 변경 이후 할당된 워커에 적용됩니다.",
-          "heartbeatKeywordHeartbeat": "하트비트",
-          "heartbeatKeywordStalled": "멈춤",
-          "heartbeatKeywordInterval": "간격",
-          "heartbeatIntervalTitle": "하트비트 간격",
-          "heartbeatIntervalDescription": "간격이 짧을수록 코디네이터가 더 자주 상태를 받지만 메시지도 많아집니다. 간격이 길수록 메시지는 줄지만 상태 보고 사이의 공백이 길어집니다. 변경 이후 할당된 워커에 적용됩니다.",
-          "heartbeatIntervalSuffix": "분",
-          "7bc082f4de": "설치 명령 복사"
+          "7bc082f4de": "설치 명령 복사",
+          "workerAutoReleaseTitle": "완료된 워커 자동 닫기",
+          "workerAutoReleaseDescription": "열어 두기를 선택하지 않으면 워커가 완료된 지 2분 후 터미널 또는 채팅을 닫습니다. 다시 작업을 시작하면 완료 시 2분이 다시 시작됩니다.",
+          "workerAutoReleaseKeywordClose": "닫기",
+          "workerAutoReleaseKeywordRelease": "해제"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "에이전트가 Orca를 통해 컨텍스트를 인계하고 작업을 조율할 수 있습니다.",
@@ -9417,19 +9429,6 @@
               "title": "새 카드 스타일",
               "worktree": "워크트리",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "네이티브",
-              "chat": "채팅",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "터미널",
-              "agent": "에이전트",
-              "description": "Chat UI에서 지원되는 새 에이전트를 엽니다."
             },
             "agentDashboard": {
               "title": "에이전트 대시보드",
@@ -11288,13 +11287,13 @@
           "pathLabel": "개발 플러그인 폴더 경로",
           "placeholder": "플러그인 폴더 경로",
           "add": "경로 추가",
-          "reviewHelp": "한 번만 검토합니다. 이후 코드 변경은 묻지 않고 실행됩니다."
+          "reviewHelp": "한 번만 검토합니다. 이후 코드 변경은 묻지 않고 실행됩니다.",
+          "dialogTitle": "개발 폴더"
         },
         "PluginInstallDialog": {
           "localRequired": "플러그인 폴더 경로를 입력하세요.",
           "gitUrlRequired": "저장소 URL을 입력하세요.",
-          "gitUrlInvalid": "HTTPS 또는 SSH Git URL을 사용하세요.",
-          "gitRefRequired": "#tag 또는 #commit을 추가하세요(예: #v0.1.0).",
+          "gitUrlInvalid": "https://github.com/owner/repo, owner/repo 또는 SSH URL 같은 저장소 링크를 사용하세요.",
           "title": "플러그인 설치",
           "description": "활성화하기 전에는 아무것도 실행되지 않습니다.",
           "source": "설치 소스",
@@ -11304,12 +11303,23 @@
           "localPlaceholder": "플러그인 폴더 경로",
           "localHelp": "orca-plugin.json이 있는 폴더",
           "gitLabel": "저장소 URL",
-          "gitPlaceholder": "https://git.example/acme/orca-notes#v0.1.0",
-          "gitHelp": "#tag 또는 #commit으로 끝내 버전을 고정하세요",
+          "gitPlaceholder": "https://github.com/acme/orca-notes",
+          "gitHelp": "저장소, 릴리스 또는 태그 링크를 붙여넣으세요. #tag나 #commit이 없으면 최신 버전 태그를 사용합니다.",
           "cancel": "취소",
           "installing": "설치 중…",
           "install": "설치",
-          "installFailed": "플러그인 설치에 실패했습니다. 소스를 확인하고 다시 시도하세요."
+          "installFailed": "플러그인 설치에 실패했습니다. 소스를 확인하고 다시 시도하세요.",
+          "checking": "확인 중…",
+          "continue": "계속",
+          "gitUrlCredentials": "URL에서 사용자 이름이나 토큰을 제거하세요. Orca는 사용자의 Git 로그인을 사용합니다.",
+          "gitRefInvalid": "# 뒤의 버전이 올바른 태그, 브랜치 또는 커밋 이름이 아닙니다.",
+          "gitRefNotFound": "이 저장소에는 {{value0}}(이)라는 태그나 브랜치가 없습니다.",
+          "gitUnreachable": "이 저장소를 읽을 수 없습니다. URL과 Git 계정의 접근 권한을 확인하세요.",
+          "resolvedLatestTag": "최신 버전 {{value0}}(커밋 {{value1}})을 설치합니다.",
+          "resolvedTag": "{{value0}}(커밋 {{value1}})을 설치합니다.",
+          "resolvedBranch": "브랜치 {{value0}}의 현재 상태(커밋 {{value1}})를 설치합니다.",
+          "resolvedCommit": "커밋 {{value0}}을 설치합니다.",
+          "resolvedDefaultBranch": "버전 태그가 없어 최신 커밋 {{value0}}을 설치합니다."
         },
         "PluginKeybindingConsentPreview": {
           "worktree": "워크스페이스에서만"
@@ -11420,9 +11430,11 @@
         },
         "PluginThemeUseNow": {
           "label": "지금 사용:",
-          "useName": "지금 사용: {{value0}}",
           "useForLight": "라이트에 사용:",
-          "useForDark": "다크에 사용:"
+          "useForDark": "다크에 사용:",
+          "assignedLight": "{{value0}}을(를) 라이트 테마로 설정했습니다",
+          "assignedDark": "{{value0}}을(를) 다크 테마로 설정했습니다",
+          "saveFailed": "테마를 저장할 수 없습니다. 다시 시도하세요."
         },
         "PluginContributionActionCommand": {
           "run": "실행",
@@ -11477,7 +11489,8 @@
           "invalidManifest": "orca-plugin.json이 유효하지 않습니다. 수정한 후 플러그인을 새로고침하세요.",
           "installedManifestUnloadable": "이 버전은 이 Orca에서 불러올 수 없습니다. 업데이트하거나 다시 설치하세요.",
           "invalidArtifact": "워커 또는 패널 파일이 없거나 안전하지 않습니다. 수정한 후 새로 고치세요.",
-          "consentChanged": "검토하는 동안 이 플러그인이 변경되었습니다. 다시 검토하세요."
+          "consentChanged": "검토하는 동안 이 플러그인이 변경되었습니다. 다시 검토하세요.",
+          "installGitMoved": "Orca가 확인한 후 저장소가 변경되었습니다. 다시 시도하세요."
         },
         "plugins": {
           "search": {
@@ -12447,7 +12460,9 @@
           "repository": "저장소",
           "stoppedDataBody": "파일을 불러오지 못했습니다. 다시 시작해 재시도하세요.",
           "newerBody": "보는 동안 카탈로그가 변경되었습니다.",
-          "showNewer": "새 버전 보기"
+          "showNewer": "새 버전 보기",
+          "newerTitle": "새 버전을 사용할 수 있습니다",
+          "alsoListedBy": "{{value0}}에도 등록되어 있습니다. 업데이트는 설치한 카탈로그에서만 받습니다. 바꾸려면 제거한 뒤 다시 설치하세요."
         },
         "PluginDetailSections": {
           "typeLanguagePack": "인터페이스 언어",
@@ -12497,7 +12512,9 @@
           "rollbackTo": "{{value0}}(으)로 되돌리기…",
           "copyContentHash": "콘텐츠 해시 복사",
           "reviewUpdate": "업데이트 검토",
-          "dataLoadFailed": "파일을 불러오지 못했습니다"
+          "dataLoadFailed": "파일을 불러오지 못했습니다",
+          "updateNeedsReview": "업데이트 {{value0}} 검토 필요",
+          "updatedTo": "{{value0}}(으)로 업데이트됨"
         },
         "PluginSettingsOverview": {
           "offTitle": "플러그인이 꺼져 있습니다"
@@ -12547,7 +12564,9 @@
           "license": "라이선스",
           "whatsNew": "새로운 기능",
           "hashCopied": "콘텐츠 해시를 복사했습니다",
-          "hashCopyFailed": "해시를 복사할 수 없습니다."
+          "hashCopyFailed": "해시를 복사할 수 없습니다.",
+          "readme": "{{value0}}에서 README 읽기",
+          "installs": "설치 수"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "이 필터와 일치하는 플러그인이 없습니다",
@@ -12558,20 +12577,27 @@
           "dark": "다크",
           "light": "라이트",
           "languageIncomplete": "{{value0}}% 번역됨. Orca 언어로 사용하기에는 너무 불완전합니다",
-          "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨"
+          "languageCoverage": "인터페이스 언어 · {{value0}}% 번역됨",
+          "newFileMenu": "+ 메뉴에 추가"
         },
         "PluginInstallConsent": {
           "noOtherAccess": "다른 접근 권한 없음",
           "replacesShortcut": "{{value0}}({{value1}})이(가) {{value2}}의 단축키를 대체합니다.",
           "updatesKeepApproval": "업데이트는 새 접근 권한이 있을 때만 다시 묻습니다",
           "fullAccessUpdates": "업데이트가 묻지 않고 코드를 바꿀 수 있습니다",
-          "editsFileTypes": "Orca에서 {{value0}} 파일을 열고 편집합니다. 연 파일을 읽을 수 있습니다."
+          "editsFileTypes": "Orca에서 {{value0}} 파일을 열고 편집합니다. 연 파일을 읽을 수 있습니다.",
+          "install": "설치 및 사용",
+          "keepOff": "끈 상태로 유지"
         },
         "PluginPageAction": {
-          "contentOnly": "콘텐츠만"
+          "contentOnly": "콘텐츠만",
+          "failedTitle": "{{value0}}을(를) 설치할 수 없습니다"
         },
         "PluginSettingsMenu": {
-          "autoUpdateHint": "새 접근 권한이 있을 때만 다시 묻습니다"
+          "autoUpdateHint": "새 접근 권한이 있을 때만 다시 묻습니다",
+          "label": "플러그인 설정",
+          "development": "개발 폴더…",
+          "autoUpdateLabel": "플러그인 자동 업데이트"
         },
         "PluginInUseAction": {
           "inUseDark": "사용 중 · 다크",
@@ -12665,6 +12691,48 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "이 언어 팩은 번역이 너무 불완전해서 전환할 수 없습니다."
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}}이(가) 다른 저장소에서 제공됩니다",
+          "accessTitle": "{{value0}} {{value1}}이(가) 더 많은 접근 권한을 요청합니다",
+          "manyTitle": "플러그인 업데이트 {{value0}}개가 검토를 기다리고 있습니다",
+          "oneDescription": "게시자: {{value0}}. 검토하기 전까지 업데이트되지 않습니다.",
+          "manyDescription": "검토하기 전까지 업데이트되지 않습니다.",
+          "review": "검토",
+          "dismiss": "닫기"
+        },
+        "PluginInstallTrustDialog": {
+          "titleFolder": "이 폴더를 신뢰하는지 확인하세요",
+          "title": "{{value0}}을(를) 신뢰하는지 확인하세요",
+          "theme": "이 테마는 Orca가 아닌 {{value0}}에서 제공합니다. 신뢰하는 작성자의 플러그인만 설치하세요.",
+          "content": "이 플러그인은 Orca가 아닌 {{value0}}에서 제공합니다. 신뢰하는 작성자의 플러그인만 설치하세요.",
+          "translations": "이 번역은 Orca가 아닌 {{value0}}에서 제공합니다. 번역은 Orca의 모든 텍스트를 바꿀 수 있으므로 신뢰하는 작성자의 번역만 설치하세요.",
+          "code": "이 플러그인은 Orca가 아닌 {{value0}}에서 제공합니다. 게시자의 코드를 Orca 안에서 실행하므로 {{value0}}을(를) 신뢰하는 경우에만 설치하세요.",
+          "git": "Orca는 이 저장소를 확인하지 않았습니다. 여기서 가져온 플러그인은 게시자의 코드를 Orca 안에서 실행할 수 있으므로 {{value0}}을(를) 신뢰하는 경우에만 설치하세요.",
+          "localFolder": "확인되지 않은 로컬 폴더입니다. 여기서 가져온 플러그인은 Orca 안에서 코드를 실행할 수 있으므로 출처를 신뢰하는 경우에만 설치하세요.",
+          "devFolder": "확인되지 않은 로컬 폴더입니다. Orca는 플러그인을 그대로 불러오며 이후 코드 변경은 묻지 않고 실행되므로 신뢰하는 폴더만 추가하세요.",
+          "publisher": "게시자",
+          "repository": "저장소",
+          "folder": "폴더",
+          "catalog": "카탈로그",
+          "cancel": "취소",
+          "addFolder": "폴더 추가",
+          "install": "설치"
+        },
+        "PluginPageHero": {
+          "screenshots": "스크린샷",
+          "openScreenshot": "스크린샷 열기: {{value0}}",
+          "position": "{{value0}} / {{value1}}",
+          "previous": "이전 스크린샷",
+          "next": "다음 스크린샷"
+        },
+        "PluginChips": {
+          "updateNeedsReview": "업데이트 검토 필요",
+          "updatedTo": "{{value0}}(으)로 업데이트됨",
+          "devUnverified": "개발 · 미검증"
+        },
+        "PluginContributionActionNewFile": {
+          "create": "만들기"
         }
       },
       "right": {
@@ -13149,7 +13217,10 @@
             "abortRebaseFailed": "리베이스 중단 실패",
             "abortMergeFailed": "병합 중단 실패",
             "clearNotesFromWorkspace_other": "이 워크스페이스에서 메모 {{count}}개를 지울까요?",
-            "clearNotesFromFile_other": "{{path}}에서 메모 {{count}}개를 지울까요?"
+            "clearNotesFromFile_other": "{{path}}에서 메모 {{count}}개를 지울까요?",
+            "markResolved": "해결됨으로 표시",
+            "keepFile": "파일 유지",
+            "keepDeletion": "삭제 유지"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "선택한 agent를 시작할 수 없습니다.",
@@ -13725,7 +13796,8 @@
                     "edc2d82a2b": "병합 진행 중",
                     "5c3707aa44": "리베이스 진행 중",
                     "ffe53a1da6": "체리픽 진행중",
-                    "35eb76d323": "작업 진행 중"
+                    "35eb76d323": "작업 진행 중",
+                    "completeMerge": "병합 완료"
                   }
                 }
               },
@@ -13754,7 +13826,8 @@
                   "e7876a2bde": "메시지를 생성하려면 하나 이상의 파일을 준비하세요.",
                   "0904be2505": "다시 생성하려면 메시지를 지웁니다.",
                   "1ea9ba37aa": "설정 -> Git -> 소스 제어 AI에서 에이전트를 선택합니다."
-                }
+                },
+                "completeMergeFailed": "병합을 완료하지 못했습니다"
               }
             }
           },
@@ -14042,7 +14115,8 @@
                   "79aa06bb2c": "새로고침할 수 없습니다. GitHub의 API를 일시적으로 사용할 수 없습니다. 마지막으로 알려진 상태를 표시합니다.",
                   "6ec12cee0c": "새로고침할 수 없습니다. 지금은 GitHub에 연결할 수 없습니다. 마지막으로 알려진 상태를 표시합니다.",
                   "de088015e8": "새로고침할 수 없습니다. GitHub에서 요청 수를 제한하고 있습니다. 마지막으로 확인된 상태를 표시합니다.",
-                  "d9dd7c6687": "GitHub에서 새로고침할 수 없습니다. 마지막으로 알려진 상태를 표시합니다."
+                  "d9dd7c6687": "GitHub에서 새로고침할 수 없습니다. 마지막으로 알려진 상태를 표시합니다.",
+                  "manual_provider": "{{provider}}에서 새로고침할 수 없습니다. 다시 시도하세요."
                 }
               }
             },
@@ -14558,27 +14632,10 @@
         },
         "slides": {
           "HomeSlide": {
-            "a7d9e2c44d": "7일",
-            "a3d5476811": "5시간",
-            "8a350a4784": "계정 사용량",
-            "e27fdaee51": "새 워크스페이스",
-            "4405f3c440": "데스크탑 페어링",
-            "0b00c98506": "빠른 작업",
-            "0bad5b07c8": "GitHub 및 Linear",
-            "d047197480": "GitHub · Linear",
             "a4c3f7b7aa": "작업",
-            "d33d7a9c29": "orca  ·  feat/mobile-page",
-            "25d6e8a491": "feat/mobile-page",
-            "c791677f2f": "재개",
             "cf3f98fa3f": "연결이 끊김",
-            "091355da3d": "M1 미니 · 집",
-            "0bc1881bc4": "연결됨 · 워크트리 40개 · 활성 5개",
             "19c212e25e": "맥북 프로",
             "2f1a1d10c4": "데스크탑",
-            "156db8a68a": "생성된 PR",
-            "4a40af029b": "Agent 시간",
-            "00a6903322": "시작된 Agents",
-            "c0e2e9dcd9": "다시 오신 것을 환영합니다",
             "af761a0c0d": "설정",
             "5d94e8ddcc": "Orca"
           },
@@ -16090,7 +16147,29 @@
           "message": ".{{value0}} 파일을 열 수 있는 플러그인: {{value1}}",
           "view": "플러그인 보기",
           "notNow": "나중에",
-          "never": ".{{value0}}에 대해 제안하지 않기"
+          "never": ".{{value0}}에 대해 제안하지 않기",
+          "editorMessage": "플러그인이 .{{value0}} 파일용 편집기를 추가합니다: {{value1}}"
+        },
+        "RichMarkdownEmojiMenu": {
+          "chooseEmoji": "이모지 선택"
+        },
+        "richMarkdownBlobImagePaste": {
+          "saveFailed": "붙여 넣은 이미지를 문서 옆에 저장할 수 없습니다. Orca를 다시 시작한 후 불러오지 못할 수 있습니다."
+        },
+        "PluginCustomEditorFrame": {
+          "loading": "편집기 로드 중…",
+          "unresponsive": "{{value0}}이(가) 응답하지 않습니다. 계속 편집하려면 소스로 전환하세요.",
+          "loadFailed": "{{value0}}을(를) 불러올 수 없습니다. 이 파일을 편집하려면 소스로 전환하세요.",
+          "editTooLarge": "파일이 너무 커서 {{value0}}에서 변경 사항을 저장할 수 없습니다. 대신 소스를 사용하세요.",
+          "saveBlocked": "{{value0}}의 최신 변경 사항을 저장할 수 없습니다.",
+          "editsHeld": "{{value0}}이(가) 변경 사항을 너무 빠르게 보내고 있습니다. Orca가 곧 최신 변경 사항을 적용합니다.",
+          "largeFile": "큰 파일입니다. 잠시 걸릴 수 있습니다."
+        },
+        "PluginBytesCustomEditorSurface": {
+          "retry": "다시 시도",
+          "tooLarge": "{{value0}}은(는) 너무 커서 {{value1}}에서 열 수 없습니다({{value2}}, 한도는 {{value3}}).",
+          "unsupported": "{{value0}}은(는) 이 파일이 저장된 위치에서 읽을 수 없습니다. 파일을 호스팅하는 Orca 서버를 업데이트하거나 소스로 전환하세요.",
+          "readFailed": "{{value1}}에서 사용할 {{value0}}을(를) 읽을 수 없습니다. {{value2}}"
         }
       },
       "diff": {
@@ -16413,7 +16492,8 @@
           },
           "pluginQuickActions": {
             "description": "{{value0}} 플러그인 명령",
-            "keyword": "플러그인 명령"
+            "keyword": "플러그인 명령",
+            "newFileDescription": "활성 작업 공간에 제목 없는 {{value0}} 파일을 만듭니다."
           }
         }
       },
@@ -17074,7 +17154,8 @@
         },
         "capturedOwner": {
           "orphan": "이 자동화에는 실행할 호스트가 없습니다. 삭제하거나 해당 호스트를 다시 추가하세요.",
-          "unfenced": "실행 기록을 보거나 이 자동화를 관리하려면 이 호스트의 Orca를 업데이트해야 합니다. 예약된 실행은 호스트에서 계속 계속될 수 있습니다."
+          "unfenced": "실행 기록을 보거나 이 자동화를 관리하려면 이 호스트의 Orca를 업데이트해야 합니다. 예약된 실행은 호스트에서 계속 계속될 수 있습니다.",
+          "hostReselection": "자동화를 편집하고 실행하기 전에 호스트를 다시 선택하세요."
         },
         "hostStatus": {
           "authority": {
@@ -17202,6 +17283,9 @@
         },
         "hostSummary": {
           "partialFailureOfHosts_other": "호스트 {{count}}개 중 {{failed}}개를 불러오지 못했습니다"
+        },
+        "automationTargetAvailability": {
+          "hostMismatch": "저장된 실행 호스트가 더 이상 이 프로젝트 설정과 일치하지 않습니다."
         }
       },
       "agent": {
@@ -17646,7 +17730,8 @@
           "notInstalled": "설치 안 됨"
         },
         "PluginListGroup": {
-          "showAll": "{{value0}}개 더 보기"
+          "showAll": "{{value0}}개 더 보기",
+          "showAllTotal": "플러그인 {{value0}}개 모두 보기"
         },
         "PluginListRow": {
           "official": "공식"
@@ -18133,6 +18218,23 @@
           "noMovableChat": "“{{action}}” 실행 불가 — 이동 가능한 활성 채팅이 없습니다.",
           "clientUnsupported": "“{{action}}” 실행 불가 — 이 클라이언트와 런타임에서 지원하지 않습니다."
         }
+      },
+      "plugins": {
+        "list": {
+          "PluginsSectionDescription": {
+            "openWith": "다음으로 열기 (편집 가능한 필드에 포커스가 없을 때)"
+          }
+        },
+        "pluginInstallCount": {
+          "installs": "{{value0}}회 설치"
+        },
+        "PluginCatalogLinkDialog": {
+          "failed": "이 카탈로그를 추가할 수 없습니다.",
+          "title": "카탈로그 {{value0}}을(를) 추가할까요?",
+          "cancel": "취소",
+          "add": "카탈로그 추가",
+          "body": "링크가 이 카탈로그의 {{value0}}을(를) 표시하도록 요청했습니다. 신뢰할 수 있는 사람의 카탈로그만 추가하세요."
+        }
       }
     },
     "i18n": {
@@ -18180,6 +18282,12 @@
       "forgeCredentialTarget": {
         "unknownHost": "이 리포지토리를 소유한 컴퓨터를 아직 알 수 없습니다. 다시 연결한 후 시도하세요.",
         "thisComputer": "이 컴퓨터"
+      },
+      "runtimeGitSyncClient": {
+        "completeMergeNeedsNewerHost": "병합을 완료하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다. 해당 호스트의 Orca를 업데이트하세요."
+      },
+      "runtimeGitWorkingTreeClient": {
+        "resolveConflictNeedsNewerHost": "충돌을 해결하려면 이 호스트에 더 최신 버전의 Orca가 필요합니다. 해당 호스트의 Orca를 업데이트하세요."
       }
     },
     "ssh": {
@@ -18811,7 +18919,10 @@
         "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
         "orcaStopRemote": "이 응답이 진행되는 동안 {{machine}}의 Orca가 중지되었습니다.",
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
-        "orcaStopUnnamedServer": "원격 서버"
+        "orcaStopUnnamedServer": "원격 서버",
+        "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+        "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
+        "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
       },
       "providerFrame": {
         "byteCount_other": "{{count}}바이트"
@@ -18901,7 +19012,11 @@
       },
       "agentMessage": {
         "messageFrom": "보낸 사람:",
-        "unnamedSender": "Agent"
+        "unnamedSender": "Agent",
+        "messageFromCoordinator": "코디네이터의 메시지",
+        "startedWorker": "워커 시작됨",
+        "taskFromCoordinator": "코디네이터의 작업",
+        "updateFromWorker": "워커의 업데이트"
       },
       "goal": {
         "placeholder": "목표를 설명하고, 최상의 결과를 위해 측정 가능한 결과를 정의하세요.",
@@ -18952,7 +19067,6 @@
         "editMessage": "메시지 편집",
         "showFullMessage": "전체 메시지 보기",
         "showLess": "접기",
-        "turnOffQueueing": "대기열 사용 안 함",
         "withdrawnHold": "전송 전에 중지됨",
         "pausedSendFailed": "보낼 수 없습니다. 보내기를 눌러 다시 시도하세요.",
         "paused": "일시 중지됨",
@@ -19184,7 +19298,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "터미널 에이전트로 계속하기",
-          "switchToChatView": "채팅 UI에서 계속하기"
+          "switchToChatView": "채팅 UI에서 계속하기",
+          "allowAutoClose": "자동 닫기 허용"
         },
         "BrowserTab": {
           "closeOthers": "다른 탭 닫기",
@@ -19557,9 +19672,8 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "후속 메시지 대기열에 추가",
-        "queueFollowUpsCopy": "Agent가 작업하는 동안 보낸 메시지는 지금 보내기, 편집, 삭제할 수 있는 카드로 대기합니다. 이미지가 포함된 메시지는 바로 전송됩니다.",
-        "queueFollowUpsToggleLabel": "후속 메시지 대기열 전환",
+        "followUpBehaviorTitle": "후속 메시지를 대기열에 추가",
+        "followUpBehaviorCopy": "Agent가 작업하는 동안 보낸 메시지는 진행 중인 턴에 들어가지 않고 턴이 끝날 때까지 카드로 대기합니다. Cmd/Ctrl+Enter를 누르면 메시지 하나에 대해 반대로 동작합니다.",
         "inlineVisualsTitle": "인라인 시각 자료",
         "inlineVisualsCopy": "에이전트가 답변 안에 차트, 다이어그램, 목업을 표시하도록 합니다. 새로 시작한 채팅에 적용됩니다.",
         "inlineVisualsToggleLabel": "인라인 시각 자료 전환",
@@ -19589,6 +19703,10 @@
       "caution": "주의"
     },
     "automations": {
+      "openIn": "열기 방식",
+      "chat": "채팅",
+      "terminal": "터미널",
+      "runChatUnavailable": "실행 채팅을 사용할 수 없습니다. 작업 공간을 표시합니다. 저장된 출력은 실행 세부 정보에 남아 있습니다.",
       "runTerminalUnavailable": "실행 터미널을 사용할 수 없습니다."
     },
     "jiraIssueTitleField": {
@@ -19680,6 +19798,20 @@
       "stepDownload": "다운로드",
       "stepUnpack": "압축 해제",
       "stepCheck": "확인"
+    },
+    "linearWorkspacePicker": {
+      "search": "Linear 워크스페이스 검색",
+      "empty": "워크스페이스를 찾을 수 없습니다.",
+      "label": "Linear 워크스페이스",
+      "all": "모든 Linear 워크스페이스",
+      "unavailable": "사용할 수 없는 Linear 워크스페이스"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "임시 오케스트레이션 워커 · 완료 2분 후 닫힘",
+        "finished": "임시 오케스트레이션 워커 완료 · {{countdown}} 후 닫힘",
+        "keepOpen": "열어 두기"
+      }
     }
   },
   "dashboardPopout": {
@@ -20150,6 +20282,14 @@
         "unconfirmed_other": "에이전트 {{count}}개 모두 미확인",
         "needsAttention_other": "에이전트 {{count}}개 모두 확인 필요"
       }
+    },
+    "cardProperties": {
+      "agentModel": "에이전트 모델"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}}을(를) 호스트로 실행(권장)",
+      "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
+      "accept": "호스트로 실행"
     }
   },
   "editor": {
@@ -20180,18 +20320,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "새 기능",
-      "title": "기본 채팅이 업그레이드되었습니다",
-      "intro": "이제 지원되는 Agent의 새 채팅은 업그레이드된 채팅 보기에서 열립니다. 채팅과 CLI 사이를 오가려면 오른쪽 사이드바에서 {{panel}}을 여세요:",
-      "resumeInNativeChat": "{{action}}: 지원되는 CLI 대화를 기본 채팅에서 엽니다.",
-      "resumeInCli": "{{action}}: Claude 또는 Codex 채팅을 새 CLI 세션으로 복사합니다. 원래 채팅은 그대로 유지됩니다.",
-      "gotIt": "확인",
-      "leaveOff": "꺼진 상태 유지",
-      "enableNow": "지금 활성화",
-      "enableError": "채팅 모드를 활성화하지 못했습니다.",
-      "manageInSettings": "<link>설정 → 실험적</link>에서 Chat UI를 관리하세요."
-    },
     "voice": {
       "demoPrompt": "극단적인 경우에 대해 이 차이점을 검토하고 찾은 항목에 대한 테스트를 추가하세요.",
       "startDictation": "받아쓰기 시작",
@@ -20263,7 +20391,26 @@
       "title": "<shortcut> 키로 워크트리 이동",
       "description": "워크트리 검색, 탭 전환, 설정 조정, 새 워크트리 생성까지 모두 키보드만으로 하세요."
     },
-    "gotIt": "확인"
+    "gotIt": "확인",
+    "chatUiHere": {
+      "title": "채팅 UI가 나왔습니다",
+      "offIntro": "이제 에이전트를 채팅으로 열 수 있습니다. 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "offTerminal": "터미널이 더 편하신가요? 터미널은 앞으로도 완전히 지원됩니다. 채팅을 선택하기 전까지 에이전트는 계속 터미널에서 열립니다.",
+      "onIntro": "채팅 UI가 실험적 기능에서 벗어나 이제 Orca의 정식 기능이 되었습니다. 에이전트는 계속 채팅으로 열리며 서식 있는 메시지, 시각 자료, 이미지를 지원합니다.",
+      "onTerminal": "터미널도 계속 완전히 지원됩니다. 언제든지 에이전트를 다시 터미널로 바꿀 수 있습니다.",
+      "changeInSettings": "<link>설정 → 에이전트</link>에서 언제든지 변경할 수 있습니다.",
+      "stayInTerminal": "터미널 계속 사용",
+      "cta": "채팅 UI 사용",
+      "saveFailed": "채팅 UI를 켜지 못했습니다. 설정 → 에이전트에서 채팅을 선택하세요.",
+      "demoTabTitle": "로그인 설명",
+      "demoPrompt": "로그인이 어떻게 동작하는지 정리해 줘",
+      "demoReply": "로그인은 {{file}}에서 시작합니다. 브라우저가 /login으로 보내면 서버가 비밀번호를 확인하고 세션을 만든 뒤 앱으로 리디렉션합니다. 흐름은 다음과 같습니다:",
+      "demoBrowser": "브라우저",
+      "demoSession": "세션",
+      "demoApp": "앱",
+      "demoPassword": "비밀번호",
+      "demoCookie": "쿠키"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "더 많은 일치 항목을 사용할 수 있습니다. 검색 결과를 좁히려면 검색을 구체화하세요.",
@@ -20691,7 +20838,9 @@
       "scannerBusy": "동시에 진행 중인 세션 스캔이 너무 많습니다. 잠시 기다린 후 새로고침하세요.",
       "scannerMissing": "이 Orca 설치에는 세션 스캐너가 없습니다. Orca를 다시 설치하면 복원됩니다.",
       "scannerStopped": "세션 스캐너가 예기치 않게 중지되었습니다. 새로고침하여 다시 시도하세요."
-    }
+    },
+    "sessionAccount": "계정",
+    "sessionAccountUnknown": "알 수 없음"
   },
   "common": {
     "retry": "다시 시도",
@@ -21724,7 +21873,8 @@
       "terminalSplitRight": "터미널 오른쪽으로 분할",
       "terminalSplitDown": "터미널 아래로 분할",
       "terminalSwitchInputSource": "입력 소스/언어 전환(네이티브)",
-      "newAgentTab": "새 {{agent}} 탭"
+      "newAgentTab": "새 {{agent}} 탭",
+      "viewPlugins": "플러그인 열기"
     },
     "group": {
       "global": "글로벌",
@@ -21989,12 +22139,7 @@
       "fetchMore": "더 불러오기",
       "connectionFailed": "연결 실패",
       "listLabel": "Linear 목록",
-      "projectsLoadFailed": "프로젝트를 불러오지 못했습니다.",
       "projectNotFound": "프로젝트를 찾을 수 없습니다.",
-      "projectLoadFailed": "프로젝트를 불러오지 못했습니다.",
-      "projectIssuesLoadFailed": "프로젝트 이슈를 불러오지 못했습니다.",
-      "viewsLoadFailed": "보기를 불러오지 못했습니다.",
-      "viewContentsLoadFailed": "보기 내용을 불러오지 못했습니다.",
       "issuesLoadFailed": "Linear 이슈를 불러오지 못했습니다.",
       "apiKeyHint": "Orca에서 사용할 Linear 워크스페이스의 개인 API 키를 붙여넣으세요. 이미 연결된 워크스페이스라면 저장된 키가 교체됩니다.",
       "remoteKeyStorage": "이 키는 활성 원격 런타임에 저장됩니다.",
@@ -22117,7 +22262,15 @@
     "arguments": "인수",
     "argumentsHint": "CLI 실행에만 적용됩니다.",
     "launchChat": "채팅 시작",
-    "launchTerminal": "터미널 시작"
+    "launchTerminal": "터미널 시작",
+    "setByArguments": "인수로 설정됨",
+    "searchModels": "모델 검색",
+    "noModels": "검색과 일치하는 모델이 없습니다.",
+    "legacyModels": "이전 모델",
+    "toggleArguments": "인수 표시 전환",
+    "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
+    "searchAgentModels": "{{agent}} 모델 검색…",
+    "legacyModelCount": "모델 {{total}}개"
   },
   "wslMove": {
     "entry": {

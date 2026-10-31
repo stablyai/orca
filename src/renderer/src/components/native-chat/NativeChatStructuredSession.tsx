@@ -1,10 +1,10 @@
 import { useNativeChatFormSession } from './use-native-chat-form-session'
+import { NativeChatSettledBodyContext } from './native-chat-settled-body'
 import { useNativeChatHandOff } from './use-native-chat-hand-off'
 import { cn } from '@/lib/utils'
 import { NATIVE_CHAT_APPEARANCE_ROOT_CLASS } from './native-chat-appearance-style'
 import { useNativeChatStoreAppearanceStyle } from './use-native-chat-store-appearance-style'
 import { useRef, useState } from 'react'
-import { NativeChatSettledBodyContext } from './native-chat-settled-body'
 import { agentSessionPromptQuestions } from '../../../../shared/agent-session-question-answer'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import { useStructuredChatLiveSession } from './use-structured-chat-live-session'
@@ -26,6 +26,7 @@ import { useNativeChatRootInputRouting } from './use-native-chat-root-input-rout
 import { useNativeChatFontSize } from './use-native-chat-font-size'
 import { useNativeChatFind } from './use-native-chat-find'
 import { NativeChatFindBar } from './NativeChatFindBar'
+import { nativeChatQueueFollowUps } from '../../../../shared/native-chat-follow-up-behavior'
 import { LinkActionPopover } from '@/components/link-actions/LinkActionPopover'
 import { useNativeChatLinkActions } from './use-native-chat-link-actions'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
@@ -36,7 +37,6 @@ import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-co
 import { useStructuredNativeChatPaneCommands } from './use-structured-native-chat-pane-commands'
 import type { NativeChatStructuredViewProps } from './native-chat-view-types'
 import { NativeChatStructuredSessionStatus } from './NativeChatStructuredSessionStatus'
-import { useNativeChatLaunchDraftSignal } from './use-native-chat-launch-draft-adoption'
 import { useNativeChatInterruptedContinuation } from './NativeChatInterruptedContinue'
 import { NativeChatOrcaStopContext } from './native-chat-orca-stop-context'
 import { structuredSessionNotices } from './native-chat-structured-session-notices'
@@ -52,7 +52,7 @@ import { nativeChatStructuredStopControls } from './native-chat-structured-stop-
 import { useAppStore } from '../../store'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useNativeChatStructuredComposerTransport } from './use-native-chat-structured-composer-transport'
-import { NativeChatStructuredGoalStrip } from './NativeChatStructuredGoalStrip'
+import { NativeChatStructuredComposerTabStrips } from './NativeChatStructuredComposerTabStrips'
 import { nativeChatPaneHeader } from './NativeChatPaneHeader'
 import { structuredAgentSessionReadFailureNotice } from './structured-agent-session-read-failure-notice'
 import { useStructuredAgentSessionDeliveryNotices } from './use-structured-agent-session-delivery-notices'
@@ -63,7 +63,11 @@ import { useNativeChatHostSendGate } from './use-native-chat-host-send-gate'
 import { useNativeChatAvailabilityNotice } from './use-native-chat-availability-notice'
 import { useStructuredAgentSessionStartFailureFacts } from './use-structured-agent-session-start-failure-facts'
 import { pendingPromptsAllUnanswerableHere } from '../../../../shared/agent-session-approval-subject'
-import * as signIn from './native-chat-claude-sign-in'
+import {
+  isClaudeSignInFailureKind,
+  NativeChatClaudeSignInContext,
+  useNativeChatClaudeSignIn
+} from './native-chat-claude-sign-in'
 
 export function NativeChatStructuredSession(
   props: Omit<NativeChatStructuredViewProps, 'mode'>
@@ -74,8 +78,8 @@ export function NativeChatStructuredSession(
   // The host's own word on whether the provider child has answered startup yet.
   const hostExecution = useStructuredAgentSessionHostExecution(props.sessionId, props.target)
   const paneKey = structuredAgentSessionPaneKey(props.tabId, props.sessionId)
-  // Chat-wide: absent means on; only an explicit off keeps mid-turn sends immediate.
-  const queueFollowUps = useAppStore((store) => store.settings?.nativeChatQueueFollowUps !== false)
+  // Chat-wide preference; an alternate send flips it for one message.
+  const queueFollowUps = useAppStore((store) => nativeChatQueueFollowUps(store.settings))
   const composerRef = useRef<NativeChatComposerHandle>(null)
   // Paste target while a question card replaces the composer.
   const questionAnswerInputRef = useRef<HTMLInputElement>(null)
@@ -97,13 +101,6 @@ export function NativeChatStructuredSession(
   const { ordinaryMessages, settledBodyOwner } = useNativeChatFormSession(props, controller.epoch)
   useRecheckNativeChatFileLinksWhenTurnEnds(controller.isWorking)
   const stopControls = nativeChatStructuredStopControls(controller, hostExecution.stopping)
-  const launchDraftSignal = useNativeChatLaunchDraftSignal({
-    terminalTabId: props.tabId,
-    agent: props.agent,
-    messages: controller.messages,
-    // Pre-read idle/loading states cannot establish a launch draft baseline from an empty transcript.
-    transcriptLoading: controller.status === 'idle' || controller.status === 'loading'
-  })
   const { composerError, reportComposerError } = useNativeChatComposerError(
     controller.commandRefusalCauses
   )
@@ -240,11 +237,11 @@ export function NativeChatStructuredSession(
     submissions: controller.submissions,
     deliveryNotices
   })
-  const claudeSignIn = signIn.useNativeChatClaudeSignIn({
+  const claudeSignIn = useNativeChatClaudeSignIn({
     agent: props.agent,
     target: props.target,
     failure: provisionalLaunch.failure,
-    failureRows: startFailures.filter((fact) => signIn.isClaudeSignInFailureKind(fact.kind)).length
+    failureRows: startFailures.filter((fact) => isClaudeSignInFailureKind(fact.kind)).length
   })
   // While Install shows, it says what to do; a start failure's "send again" or Retry can't help.
   const notices = structuredSessionNotices({
@@ -299,7 +296,7 @@ export function NativeChatStructuredSession(
           ) : (
             <NativeChatRewindContext.Provider value={controller.rewind.surface}>
               <NativeChatOrcaStopContext.Provider value={continuation.view}>
-                <signIn.NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
+                <NativeChatClaudeSignInContext.Provider value={claudeSignIn}>
                   <NativeChatMessageList
                     // A rewind or a /clear replaces the conversation; nothing the old one held carries over.
                     key={`${controller.epoch}:${controller.contextClear.clears}`}
@@ -323,7 +320,7 @@ export function NativeChatStructuredSession(
                     runtimeContext={imageRuntimeContext}
                     deliveryNotices={deliveryNotices}
                   />
-                </signIn.NativeChatClaudeSignInContext.Provider>
+                </NativeChatClaudeSignInContext.Provider>
               </NativeChatOrcaStopContext.Provider>
             </NativeChatRewindContext.Provider>
           )}
@@ -348,8 +345,8 @@ export function NativeChatStructuredSession(
               stopBackgroundTask={controller.stopBackgroundTask}
             />
             {prompt ? null : (
-              <NativeChatStructuredGoalStrip
-                sessionId={props.sessionId}
+              <NativeChatStructuredComposerTabStrips
+                tabId={props.tabId}
                 threadGoal={controller.threadGoal}
                 transport={transport}
                 isWorking={controller.isWorking}
@@ -394,9 +391,8 @@ export function NativeChatStructuredSession(
                 agent={props.agent}
                 {...stopControls.composer}
                 unavailableHint={install.unavailableHint}
-                steerQueued={stopControls.stopping ? undefined : submits.queuedMessages.steerNewest}
+                steerHead={stopControls.stopping ? undefined : submits.queuedMessages.steerHead}
                 structuredTransport={transport}
-                launchSeed={{ ...launchDraftSignal, ownsTabWideLaunchDraft: true }}
                 notices={notices}
                 recallSource={{ messages: session.messages, withoutImageMarkers: true }}
               />

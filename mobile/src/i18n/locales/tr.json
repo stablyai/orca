@@ -48,12 +48,10 @@
       "untitledSession": "Başlıksız oturum"
     },
     "sessionHistoryList": {
-      "assistantRole": "asistan",
       "currentWorktree": "mevcut worktree",
       "messages_one": "{{count}} mesaj",
       "messages_other": "{{count}} mesaj",
-      "resumeSession": "Ajan oturumuna devam et",
-      "userRole": "kullanıcı"
+      "resumeSession": "Ajan oturumuna devam et"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Sunucuya ulaşılamadı",
@@ -188,7 +186,11 @@
       "cancelEditing": "Düzenlemeyi iptal et",
       "placeholder": "Bir şey sorun; dosyalara başvurmak için @, komutlar için / kullanın",
       "saveEditedMessage": "Düzenlenen mesajı kaydet",
-      "sendMessage": "Mesaj gönder"
+      "sendMessage": "Mesaj gönder",
+      "sendQueue": "Sıraya al",
+      "sendSteer": "Yönlendir",
+      "sendQueueHint": "Geçerli tur bittikten sonra çalışır",
+      "sendSteerHint": "Ajanın şu anda yaptığı işe katılır"
     },
     "composerAttachments": {
       "attachedImage": "Ekli görsel",
@@ -279,7 +281,10 @@
       "compaction": "Bağlam sıkıştırıldı",
       "contextCleared": "Bağlam temizlendi",
       "plan": "Plan",
-      "stoppedManually": "Elle durduruldu"
+      "stoppedManually": "Elle durduruldu",
+      "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+      "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
+      "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
     },
     "orcaStop": {
       "canContinue": "Bu konuşmada devam edebilirsiniz.",
@@ -359,7 +364,6 @@
     "sessionOptionPickers": {
       "agentWorking": "Ajan çalışıyor",
       "backToModels": "Modellere dön",
-      "closePicker": "Seçiciyi kapat",
       "dispatchUnconfirmed": "Ajana gönderildi, onaylanmadı",
       "modelFullAccessLabel": "Model, {{value}}, tam erişim",
       "modelLabel": "Model, {{value}}",
@@ -661,7 +665,6 @@
       "tryDifferentFilter": "Farklı bir inceleme filtresi deneyin."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "İnceleme İşlemleri",
       "addNote": "Not Ekle",
       "cancelNote": "Notu iptal et",
       "clearSentNotes": "Gönderilen Notları Temizle",
@@ -768,11 +771,6 @@
       "moveUp": "Yukarı taşı",
       "reorderHint": "Sürüklemeden yeniden sıralamak için yukarı taşı ve aşağı taşı eylemlerini kullanın"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Yeni Çalışma Alanı",
-      "pairDesktop": "Masaüstünü Eşleştir",
-      "title": "Hızlı İşlemler"
-    },
     "hostCard": {
       "hostActions": "{{title}} için işlemler",
       "openHost": "Aç: {{title}}",
@@ -813,9 +811,6 @@
     "mountedBottomDrawer": {
       "dismissDrawer": "Alt paneli kapat"
     },
-    "newWorkspaceFab": {
-      "newWorkspace": "Yeni çalışma alanı"
-    },
     "newWorkspaceSetupScriptField": {
       "hooks": "HOOK'LAR",
       "label": "Kurulum betiği",
@@ -833,12 +828,10 @@
       "blankTerminal": "Boş Terminal"
     },
     "newWorktreeFormSheet": {
-      "advanced": "Gelişmiş",
       "agent": "Ajan",
       "connectTarget": "Hedefe bağlan",
       "connectTargetFirst": "Önce hedefe bağlanın",
       "createWorktree": "Worktree oluştur",
-      "nameOrCreateFrom": "Ad veya “Şuradan Oluştur”",
       "noProjectsFound": "Proje bulunamadı",
       "note": "Not",
       "notePlaceholder": "Bir not yazın",
@@ -929,12 +922,10 @@
       "noResults": "Sonuç bulunamadı.",
       "searchPlaceholder": "Bir ad yazın veya kaynak arayın",
       "switchRepo": "{{repoName}} reposuna geç",
-      "title": "Ad veya ‘Şuradan Oluştur’",
       "typeWorkspaceName": "Aşağıdaki alana bir çalışma alanı adı yazın."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "Seçili kaynağı aç",
-      "optional": "[İsteğe bağlı]",
       "searchPlaceholder": "Bir ad yazın veya kaynak arayın"
     },
     "smartWorkspaceSourceRow": {
@@ -961,7 +952,13 @@
       "empty": "Henüz özel kısayol tanımlanmadı.",
       "removeShortcut": "{{label}} kısayolunu kaldır",
       "resetDefaults": "Varsayılanlara Sıfırla",
-      "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster"
+      "resetDescription": "Tüm yerleşik kısayol tuşlarını özgün sırayla göster",
+      "moreKeys": "DİĞER TUŞLAR",
+      "moreKeysDescription": "Bu tuşlar, terminal tuş satırındaki ⋯ altında bulunur. Tuşları göstermek veya gizlemek için açıp kapatın; istediğiniz sıraya sürüklemek için tutamacı basılı tutun. Esc veya oklar gibi satırda zaten bulunan tuşlar ⋯ altında gösterilmez.",
+      "directionPad": "YÖN TUŞ TAKIMI",
+      "showDirectionPad": "Yön tuş takımını göster",
+      "showDirectionPadDescription": "Ok takımını yan çubuğa sabitleyin. Kapalıyken çubukta ayrı ok tuşları listelenir.",
+      "showShortcut": "{{label}} kısayolunu göster"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Hız sınırı sıfırlama hakkı kullanılsın mı?",
@@ -1300,17 +1297,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Hesap kullanımı",
-      "sessionWindow": "5 sa",
-      "systemDefault": "Sistem varsayılanı",
-      "weeklyWindow": "7g"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",
-      "updateAccessibilityLabel": "Orca {{version}} sürümü mevcut, güncellemek için dokunun",
-      "updateHint": "Güncellemek için dokunun"
+      "updateAccessibilityLabel": "Orca {{version}} sürümü mevcut, güncellemek için dokunun"
     },
     "emptyState": {
       "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
@@ -1318,26 +1308,16 @@
       "description": "Ajanlarınızı takip etmek, istediğiniz terminale erişmek ve işlerinizi telefonunuzdan yönetmek için bilgisayarınızdaki Orca ile eşleştirin.",
       "openDesktopDescription": "Ayarlar → Mobil bölümüne gidin ve eşleştirme için bir QR kodu oluşturun.",
       "openDesktopTitle": "Orca masaüstü uygulamasını açın",
-      "pairDesktop": "Masaüstünü Eşleştir",
-      "scanCodeDescription": "Tarayıcıyı açmak için yukarıdaki düğmeye dokunun. Kamerayı ekranınızdaki QR koduna doğrultun.",
       "scanCodeTitle": "Kodu tarayın",
-      "stepsHeading": "Nasıl çalışır",
       "title": "Masaüstünüzü bağlayın"
     },
     "listFooter": {
       "hostPickerTitle": "Görevlerin Açılacağı Sunucu",
-      "resumeHeading": "Devam et",
-      "tasksHeading": "Görevler"
+      "automationsHeading": "Otomasyonlar",
+      "automationsHostPickerTitle": "Otomasyonları aç"
     },
     "listHeader": {
-      "agentTime": "Ajan süresi",
-      "agentsSpawned": "Başlatılan ajanlar",
-      "daysHours": "{{days}} g {{hours}} sa",
-      "desktopsHeading": "Masaüstleri",
-      "hoursMinutes": "{{hours}} sa {{minutes}} dk",
-      "minutes": "{{minutes}} dk",
-      "prsCreated": "Oluşturulan PR'lar",
-      "title": "Tekrar hoş geldiniz"
+      "desktopsHeading": "Masaüstleri"
     },
     "screen": {
       "pairingCheckFailed": "Eşleştirme kontrol edilemedi",
@@ -1345,11 +1325,6 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "removeHostTitle": "Sunucuyu Kaldır",
       "tryAgain": "Lütfen tekrar deneyin."
-    },
-    "tasksCard": {
-      "noSources": "Bağlı görev kaynağı yok",
-      "openProviderTasks": "{{provider}} görevlerini aç",
-      "title": "Görevler"
     }
   },
   "hooks": {
@@ -1392,26 +1367,14 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Çalışma alanı oluşturuluyor…"
     },
-    "hostRailActions": {
-      "accounts": "Hesaplar",
-      "closeSearch": "Aramayı kapat",
-      "floatingWorkspace": "Yüzen Çalışma Alanı",
-      "newWorkspace": "Yeni çalışma alanı",
-      "searchWorkspaces": "Çalışma alanlarını ara",
-      "tasks": "Görevler"
-    },
     "hostScreenHeader": {
       "accounts": "Hesaplar",
-      "activeFilters_one": "Çalışma alanı seçenekleri ({{count}} filtre etkin)",
-      "activeFilters_other": "Çalışma alanı seçenekleri ({{count}} filtre etkin)",
       "backToHosts": "Sunuculara dön",
-      "closeSearch": "Aramayı kapat",
       "floatingWorkspace": "Yüzen Çalışma Alanı",
       "hideSidebar": "Kenar çubuğunu gizle",
       "reconnect": "Yeniden bağlan",
-      "searchWorkspaces": "Çalışma alanlarını ara",
       "tasks": "Görevler",
-      "workspaceOptions": "Çalışma alanı seçenekleri"
+      "automations": "Otomasyonlar"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "“{{name}}” ({{branch}}) silinsin mi?",
@@ -1422,10 +1385,6 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "sleep": "Uyut",
       "unpin": "Sabitlemeyi Kaldır"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Çalışma alanlarını ara…",
-      "searchWorkspaces": "Çalışma alanlarını ara"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Kontroller: Başarısız",
@@ -1484,7 +1443,6 @@
       "backToOptions": "Çalışma alanı seçenekleri bölümüne dön",
       "cardDisplay": "Kart görünümü",
       "cardLayout": "Kart düzeni",
-      "clearFilters": "Filtreleri temizle",
       "exceptDefaultBranch": "Varsayılan branch hariç",
       "filters": "Filtreler",
       "groupBy": "Gruplama ölçütü",
@@ -1521,7 +1479,8 @@
       "sourceControl": "Kaynak Kontrolü",
       "tasks": "Görevler",
       "terminal": "Terminal",
-      "workspace": "Çalışma Alanı"
+      "workspace": "Çalışma Alanı",
+      "automations": "Otomasyonlar"
     }
   },
   "newWorkspace": {
@@ -1839,7 +1798,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Klavyeyi gizle",
-      "sendKey": "{{label}} gönder"
+      "sendKey": "{{label}} gönder",
+      "modifierHint": "Sonraki tuşa uygulanır. Açık tutmak için iki kez dokunun.",
+      "typeCharacter": "{{character}} yaz",
+      "interrupt": "Terminali kesintiye uğrat",
+      "keysModeLabel": "Tuş modu: yazılanlar doğrudan terminale gider. Mesaj moduna geç",
+      "messageModeLabel": "Mesaj modu: yazın, ardından gönderin. Tuş moduna geç",
+      "keysMode": "Tuşlar",
+      "messageMode": "Mesaj",
+      "moreKeys": "Diğer tuşlar ve işlemler",
+      "showKeyboard": "Klavyeyi göster"
     },
     "activeContent": {
       "createTab": "Sekme Oluştur",
@@ -1951,7 +1919,10 @@
     "commandDock": {
       "liveInputHint": "Yazılan metin doğrudan etkin terminale gönderilir",
       "liveInputLabel": "Canlı terminal girişi",
-      "sendCommand": "Komut gönder"
+      "sendCommand": "Komut gönder",
+      "messageAgentPlaceholder": "{{agent}} için mesaj",
+      "writeCommandPlaceholder": "Bir komut yazın ve gönderin",
+      "theAgent": "ajan"
     },
     "contentRow": {
       "dismissCreationWarning": "Çalışma alanı oluşturma uyarısını kapat"
@@ -2125,13 +2096,18 @@
       "requestFailed": "İstek tamamlanamadı: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Çalışma alanının tam adını ve konumunu gösterir",
       "backToWorktrees": "Worktree'lere dön",
       "moreActions": "Diğer oturum işlemleri",
-      "openFileExplorer": "Dosya gezginini aç",
       "openSourceControl": "Kaynak kontrolünü aç",
       "reconnectToDesktop": "Masaüstüne yeniden bağlan",
       "showSidebar": "Kenar çubuğunu göster",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Terminal düzeni",
+      "fileExplorer": "Dosya gezgini",
+      "sourceControl": "Kaynak kontrolü",
+      "newTab": "Yeni sekme",
+      "quickCommands": "Hızlı komutlar"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Ajan Geçmişi",
@@ -2289,9 +2265,6 @@
       "title": "Hızlı Komutlar",
       "untitled": "Adsız"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "Hızlı komutlar"
-    },
     "routeHelpers": {
       "connected": "Bağlı",
       "connecting": "Bağlanıyor",
@@ -2331,10 +2304,8 @@
       "terminal": "Terminal",
       "terminalName": "Terminal adı",
       "unsavedMarkdown": "Kaydedilmemiş Markdown değişiklikleri",
-      "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın."
-    },
-    "sideRail": {
-      "backToWorktrees": "Worktree'lere dön"
+      "urlPrompt": "Bir URL girin veya yeni sekme için boş bırakın.",
+      "allowAutoClose": "Otomatik kapatmaya izin ver"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Bu çalışma alanı sunucusunda etkin bir AI ajanı algılanmadı.",
@@ -2613,6 +2584,56 @@
       "waitForStart": "Ajanın başlatılmasının tamamlanmasını bekleyin.",
       "waitForTurn": "Ajanın yanıtını tamamlamasını bekleyin veya durdurun.",
       "waitMoment": "Biraz bekleyin."
+    },
+    "workerAutoClose": {
+      "running": "Geçici orkestrasyon çalışanı · Tamamlandıktan 2 dakika sonra kapanır",
+      "finished": "Geçici orkestrasyon çalışanı tamamlandı · {{countdown}} içinde kapanır",
+      "keepOpen": "Açık tut"
+    },
+    "terminalLayoutSheet": {
+      "title": "Terminal düzeni",
+      "oneTerminal": "Tek terminal",
+      "selected": "Seçili",
+      "auto": "Otomatik",
+      "autoHint": "Kullanılabilir alana sığacak şekilde böl",
+      "sideBySide": "Yan yana",
+      "sideBySideHint": "Kenar çubuğu açıkken bile iki sütun",
+      "stacked": "Alt alta",
+      "stackedHint": "Her yönlendirmede iki satır",
+      "selectedHint": "Seçili · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Düzen kaydedilemedi",
+      "saveFailedMessage": "Bu düzen şimdilik uygulanır. Kaydetmeyi yeniden denemek için tekrar seçin."
+    },
+    "terminalArrowPad": {
+      "label": "Ok tuşları",
+      "hint": "Bir oka bir kez basmak için bir tarafa dokunun; tekrarlamak için basılı tutup sürükleyin",
+      "up": "Yukarı",
+      "down": "Aşağı",
+      "left": "Sol",
+      "right": "Sağ"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}} gönder",
+      "paste": "Yapıştır",
+      "sending": "Gönderiliyor…",
+      "photo": "Fotoğraf",
+      "file": "Dosya",
+      "desktopWidth": "Masaüstü genişliği",
+      "phoneWidth": "Telefon genişliği",
+      "keys": "Tuşlar",
+      "combos": "Kombinasyonlar",
+      "yourKeys": "Tuşlarınız",
+      "deleteKeyHint": "Bu tuşu silmek için uzun basın",
+      "addCustomKey": "Özel tuş ekle",
+      "addKey": "Tuş ekle"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, odakta",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, odaklamak için dokunun",
+      "inputPane": "{{title}} · Girdi"
     }
   },
   "settings": {
@@ -2804,7 +2825,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "{{count}} stage edildi"
+      "stagedCount": "{{count}} stage edildi",
+      "completingMerge": "Tamamlanıyor…",
+      "completeMerge": "Birleştirmeyi tamamla"
     },
     "branchCompare": {
       "commits_one": "{{count}} commit",
@@ -2968,7 +2991,8 @@
       "openNumberedPrWeb": "#{{number}} numaralı pull request'i tarayıcıda aç",
       "openPrWeb": "Pull request'i tarayıcıda aç",
       "refresh": "Kaynak kontrolünü yenile",
-      "title": "Kaynak Kontrolü"
+      "title": "Kaynak Kontrolü",
+      "moreActions": "Diğer kaynak kontrolü işlemleri"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3243,6 +3267,13 @@
       "branchUnavailable": "Branch durumu alınamadı",
       "commitFailed": "Commit'lenemedi",
       "waitingForDesktop": "Masaüstü bekleniyor…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Birleştirme çakışmalarını telefonunuzdan çözmek için bu çalışma alanının çalıştığı bilgisayarda Orca’yı güncelleyin.",
+      "markResolved": "Çözüldü olarak işaretle",
+      "keepFile": "Dosyayı koru",
+      "keepDeletion": "Silmeyi koru",
+      "completeMergeFailed": "Birleştirme tamamlanamadı"
     }
   },
   "tasks": {
@@ -3317,23 +3348,18 @@
       "recent": "Son Kullanılanlar",
       "retryHint": "Yeniden denemek için dokunun.",
       "searchProjects": "Proje ara",
-      "sort": "Proje Sıralaması",
       "subtitle": "Görevler sayfası için bir proje görünümü seçin.",
       "title": "GitHub Projects",
       "unsupportedLayout": "Orca bu GitHub Projects düzenini henüz desteklemiyor.",
       "view": "Proje Görünümü"
     },
     "githubViewControls": {
-      "fields": "Alanlar: {{fields}}",
-      "openView": "Görünümü GitHub'da aç",
-      "sort": "Sıralama: {{sort}}",
-      "source": "Kaynak: {{source}}"
+      "openView": "Görünümü GitHub'da aç"
     },
     "itemActions": {
       "changeStatus": "Durumu değiştir",
       "copyGitHubLink": "GitHub bağlantısını kopyala",
       "copyLinearLink": "Linear bağlantısını kopyala",
-      "createWorkspace": "Çalışma Alanı Oluştur",
       "creating": "Oluşturuluyor…",
       "mergeConflicts": "GitHub merge çakışmaları olduğunu bildiriyor.",
       "mergeMergeRequest": "Merge request'i merge et",
@@ -3341,8 +3367,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "Alt sorun ekle",
-      "assignee": "Atanan kişi",
-      "assignees": "Atanan kişiler",
       "checks": "Kontroller",
       "description": "Açıklama",
       "discussion": "Tartışma",
@@ -3354,13 +3378,10 @@
       "pipeline": "Pipeline",
       "pipelineJobs_one": "{{count}} iş",
       "pipelineJobs_other": "{{count}} iş",
-      "project": "Proje",
       "rerunAll": "Tümünü yeniden çalıştır",
       "rerunFailed": "Başarısızları yeniden çalıştır",
-      "status": "Durum",
       "subIssueTitle": "Alt sorun başlığı",
-      "subIssues": "Alt sorunlar",
-      "type": "Tür"
+      "subIssues": "Alt sorunlar"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Ayrıntıları yenile"
@@ -3417,17 +3438,8 @@
     "linearList": {
       "changeStatusFrom": "Durumu değiştir (şu an: {{status}})"
     },
-    "linearViewControls": {
-      "displayButton": "Görünüm",
-      "groupLabel": "Gruplama: {{group}}",
-      "orderLabel": "Sıralama: {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "Gösterilecek Özellikler",
-      "linearGroupTitle": "Linear Sorunlarını Grupla",
-      "linearOrderTitle": "Linear Sorunlarını Sırala",
-      "linearViewTitle": "Linear Görünümü",
-      "sortTasksTitle": "Görevleri Sırala"
+      "displayPropertiesTitle": "Gösterilecek Özellikler"
     },
     "listSurface": {
       "connectLinearButton": "Linear'ı bağla",
@@ -3496,8 +3508,6 @@
       "allSites": "Tüm siteler",
       "currentlyAscending": "Artan sıra · azalan sıraya geçmek için dokunun",
       "currentlyDescending": "Azalan sıra · artan sıraya geçmek için dokunun",
-      "fieldAscending": "{{field}} (artan)",
-      "fieldDescending": "{{field}} (azalan)",
       "fields": "Alanlar",
       "repos_one": "{{count}} repo",
       "repos_other": "{{count}} repo",
@@ -3606,8 +3616,7 @@
     },
     "providerControls": {
       "myTodos": "Yapılacaklarım",
-      "projectMergeRequests": "Proje MR'ları",
-      "sort": "Sırala: {{sortLabel}}"
+      "projectMergeRequests": "Proje MR'ları"
     },
     "providerItemList": {
       "intoBranch": "{{base}} branch'ine",
@@ -3635,7 +3644,6 @@
       "queryingSource": "{{source}} sorgulanıyor",
       "repoDescription": "Sorgulanacak repository'leri seçin.",
       "repos": "Repository'ler",
-      "taskSource": "Görev Kaynağı",
       "upstream": "Upstream"
     },
     "providerViewProjection": {
@@ -3647,10 +3655,7 @@
       "default": "Varsayılan",
       "defaultSubtitle": "{{subtitle}} · Varsayılan",
       "issues": "Sorunlar",
-      "list": "Liste",
-      "noGrouping": "Gruplama yok",
       "openState": "Açık",
-      "priority": "Öncelik",
       "projects": "Projeler",
       "pullRequests": "PR'lar",
       "teams_one": "{{count}} takım",
@@ -3662,7 +3667,6 @@
       "unassigned": "Atanmamış"
     },
     "screenChrome": {
-      "connectLinear": "Linear'ı bağla",
       "newGitHubIssue": "Yeni GitHub sorunu",
       "newLinearIssue": "Yeni Linear sorunu",
       "refreshGitHub": "GitHub işini yenile",
@@ -3730,19 +3734,14 @@
       "addRepository": "Linear çalışma alanı oluşturmadan önce bir Git repository'si ekleyin.",
       "advanced": "Gelişmiş",
       "agent": "Ajan",
-      "connect": "Bağlan",
       "connectFirst": "Önce repository'ye bağlanın",
       "connectRepository": "Repository'ye Bağlan",
-      "connecting": "Bağlanıyor…",
-      "createFrom": "{{branch}} branch'inden oluştur",
       "defaultBranch": "Varsayılan branch",
       "detectingAgents": "Ajanlar algılanıyor…",
-      "optional": "[İsteğe bağlı]",
       "remoteRepository": "Uzak repository",
       "repository": "Repository",
       "repositoryNotFound": "Repository bulunamadı.",
       "selectRepository": "Bir repository seçin",
-      "sshConnection": "SSH Bağlantısı",
       "startFrom": "Başlangıç noktası",
       "title": "Çalışma Alanı Oluştur",
       "workspaceName": "Çalışma Alanı Adı"
@@ -3865,7 +3864,6 @@
       "existing": "Mevcut dal",
       "existingHint": "Yeni commitler bu dala eklenir.",
       "hostUpdateRequired": "Bir branch'i yeniden kullanmak veya ayrı bir branch oluşturmayı seçmek için çalışma alanının bulunduğu bilgisayardaki Orca'yı güncelleyin.",
-      "new": "Yeni dal",
       "newHint": "Yeni bir yerel dal oluştur",
       "newName": "Yeni dal adı",
       "title": "Bu çalışma ağacı için dal"
@@ -3909,6 +3907,222 @@
       "inProgress": "Devam ediyor",
       "inReview": "İncelemede",
       "pinned": "Sabitlenenler"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Yön tuşu yukarı",
+      "left": "Yön tuşu sol",
+      "right": "Yön tuşu sağ",
+      "down": "Yön tuşu aşağı",
+      "hint": "Bir ok tuşu gönderir. Tekrarlamak için basılı tutun."
+    }
+  },
+  "automations": {
+    "mobile": {
+      "extraAgentArguments": "Ek ajan argümanları",
+      "allAutomations": "Tüm otomasyonlar",
+      "schedule": "Zamanlama",
+      "nextRun": "Sonraki çalıştırma",
+      "agent": "Ajan",
+      "project": "Proje",
+      "unavailable": "Kullanılamıyor",
+      "workspace": "Çalışma Alanı",
+      "edit": "Düzenle",
+      "deleteAutomation": "Otomasyonu sil",
+      "editAutomation": "Otomasyonu düzenle",
+      "cancel": "İptal",
+      "name": "Ad",
+      "back": "Geri",
+      "continue": "Devam Et",
+      "createAutomation": "Otomasyon oluştur",
+      "automations": "Otomasyonlar",
+      "runs": "Çalıştırmalar",
+      "refresh": "Yenile",
+      "automation": "Otomasyon",
+      "inProgress": "Devam ediyor",
+      "completed": "Tamamlandı",
+      "skipped": "Atlandı",
+      "started": "Başladı",
+      "trigger": "Tetikleyici",
+      "run": "Çalıştırma",
+      "output": "Çıktı",
+      "noOutput": "Çıktı içeriği yok.",
+      "loadingRuns": "Çalıştırmalar yükleniyor…",
+      "loading": "Yükleniyor…",
+      "hourly": "Saatlik",
+      "daily": "Günlük",
+      "weekdays": "Hafta içi",
+      "weekly": "Haftalık",
+      "cadence": "Sıklık",
+      "day": "Gün",
+      "host": "Sunucu",
+      "pending": "Beklemede",
+      "starting": "Başlatılıyor",
+      "baseBranchOptional": "Temel dal (isteğe bağlı)",
+      "workspaceSetupScript": "Çalışma alanı kurulum betiği",
+      "useProjectSettings": "Proje ayarlarını kullan",
+      "runSetupScript": "Kurulum betiğini çalıştır",
+      "skipSetupScript": "Kurulum betiğini atla",
+      "reuseAgentSession": "Aracı oturumunu yeniden kullan",
+      "precheckCommandOptional": "Ön kontrol komutu (isteğe bağlı)",
+      "precheckTimeoutSeconds": "Ön kontrol zaman aşımı (saniye)",
+      "missedRunGraceMinutes": "Kaçırılan çalıştırma toleransı (dakika)",
+      "choose": "Seçin…",
+      "runOnSchedule": "{{name}} zamanlamaya göre çalışsın",
+      "noNextScheduledRun": "Sonraki zamanlanmış çalıştırma yok",
+      "newWorkspacePerRun": "Her çalıştırmada yeni çalışma alanı",
+      "instructions": "Talimatlar",
+      "runNow": "Şimdi çalıştır",
+      "viewAllRuns": "Tüm çalıştırmaları görüntüle",
+      "savedAgent": "{{agent}} (kaydedildi)",
+      "chooseAProjectSetUpOnThisHost": "Bu ana makinede kurulmuş bir proje seçin.",
+      "newAutomation": "Yeni otomasyon",
+      "editorStep": "{{step}} / 3 · {{section}}",
+      "retryProjectLoading": "Projeleri yeniden yükle",
+      "loadingProjects": "Projeler yükleniyor…",
+      "projectAndHostSetup": "Proje ve ana makine kurulumu",
+      "savedTarget": "Kaydedilen hedef",
+      "useAnExistingWorkspace": "Mevcut bir çalışma alanını kullan",
+      "existingWorkspace": "Mevcut çalışma alanı",
+      "savedWorkspace": "Kaydedilen çalışma alanı",
+      "loadMoreWorkspaces": "Daha fazla çalışma alanı yükle",
+      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "Bu ana makinenin çalışma alanı envanteri eksik. Yenileyin veya daha fazla çalışma alanı yükleyin.",
+      "agentDetecting": "Aracı · algılanıyor…",
+      "installAndEnableAnAgentOnThisHostThenRetry": "Bu ana makineye bir aracı yükleyip etkinleştirin, sonra tekrar deneyin.",
+      "hideAdvancedOptions": "Gelişmiş seçenekleri gizle",
+      "advancedOptions": "Gelişmiş seçenekler",
+      "chooseAnAgent": "Bir aracı seçin",
+      "saveChanges": "Değişiklikleri kaydet",
+      "loadingAutomations": "Otomasyonlar yükleniyor…",
+      "letYourAgentsWorkOnASchedule": "Aracılarınız bir programa göre çalışsın",
+      "createAnAutomationToRunATaskOnThisHost": "Bu ana makinede görev çalıştırmak için bir otomasyon oluşturun.",
+      "nextDate": "Sonraki: {{date}}",
+      "lastResult": "Son: {{status}} · {{date}}",
+      "latestResultNotReported": "Son sonuç bildirilmedi",
+      "sshTarget": " · SSH {{target}}",
+      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Yenilemek veya değişiklik yapmak için bu ana makineye yeniden bağlanın. Kaydedilen bilgiler aşağıda kullanılabilir.",
+      "recentRuns": "Son çalıştırmalar",
+      "outcome": "Sonuç",
+      "allOutcomes": "Tüm sonuçlar",
+      "couldNotStart": "Başlatılamadı",
+      "deleteAutomationTitle": "Otomasyon silinsin mi?",
+      "deleteRetained": "“{{name}}” ve saklanan çalıştırmaları silinsin mi?",
+      "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Özgün aracı bölmesi doğrulanamadı. Yeniden bağlanıp tekrar deneyin.",
+      "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "Özgün aracı bölmesi artık açılamıyor. Kaydedilen çıktı burada kalır.",
+      "allRuns": "Tüm çalıştırmalar",
+      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "Bu çalıştırma artık ana makinenin saklanan geçmişinde değil. Son kaydedilen bilgiler aşağıda kalır.",
+      "scheduledFor": "Zamanlanan tarih",
+      "notCreated": "Oluşturulmadı",
+      "projectHost": "Proje ana makinesi",
+      "notRecorded": "Kaydedilmedi",
+      "capturedTruncated": "Kaydedildi: {{date}} · Çıktı ana makine tarafından kısaltıldı",
+      "capturedDate": "Kaydedildi: {{date}}",
+      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "Özgün aracı bölmesi kullanılamıyor. Kaydedilen çıktı burada kalır.",
+      "openAgent": "Aracıyı aç",
+      "retryHistory": "Geçmişi yeniden yükle",
+      "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Yüklenen geçmişte eşleşen çalıştırma yok. Devam etmek için daha fazlasını yükleyin.",
+      "noMatchingRunsYet": "Henüz eşleşen çalıştırma yok.",
+      "runSummary": "{{title}}, {{status}}, {{date}}",
+      "scheduled": "Zamanlandı",
+      "loadMoreRuns": "Daha fazla çalıştırma yükle",
+      "customCronOrRRULE": "Özel Cron veya RRULE",
+      "cronOrRRULE": "Cron veya RRULE",
+      "minuteFromHHMM": "Dakika (SS:DD biçiminden)",
+      "timeHHMM24Hour": "Saat (SS:DD, 24 saat)",
+      "useATimeSuchAs0900": "09:00 gibi bir saat kullanın.",
+      "timeZone": "Saat dilimi",
+      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Seçilen ana makinede çalışır. Zamanlanan saatte ana makineyi kullanılabilir tutun.",
+      "pairedHost": "Eşleştirilmiş ana makine",
+      "selectedServerUnavailable": "Seçilen sunucu (kullanılamıyor)",
+      "addANameInstructionsAndAnAgent": "Bir ad, talimatlar ve bir aracı ekleyin.",
+      "chooseAnExistingWorkspace": "Mevcut bir çalışma alanı seçin.",
+      "checkTheExtraAgentArguments": "Ek aracı bağımsız değişkenlerini kontrol edin.",
+      "enterAValidCronOrRRULESchedule": "Geçerli bir Cron veya RRULE zamanlaması girin.",
+      "enterAValidTimeZoneSuchAsAmericaLosAngeles": "America/Los_Angeles gibi geçerli bir saat dilimi girin.",
+      "missedRunGraceMustBeZeroOrAPositiveNumberOfMinutes": "Tolerans sıfır veya pozitif bir dakika sayısı olmalıdır.",
+      "precheckTimeoutRange": "Ön kontrol zaman aşımı 1 ile {{maximum}} saniye arasında olmalıdır.",
+      "outcomeUnknown": "Ana makine bu işlemi uygulamış olabilir. Tekrar denemeden önce kontrol etmek için yenileyin.",
+      "ownerChanged": "Bu otomasyonun ana makinesi değişti. Devam etmeden önce yeniden yükleyin.",
+      "targetRemoved": "Bu otomasyonun SSH ana makinesi kaldırıldı, dolayısıyla çalışamaz. Otomasyonu silin veya ana makineyi yeniden ekleyin.",
+      "fencingRequired": "Bu otomasyon bir SSH ana makinesine sabitlenmiştir; istek beklediği ana makineyi belirtmelidir.",
+      "invalidDestination": "Bu yetkili sunucuda o ana makine artık kullanılamıyor. Bir ana makine seçip tekrar deneyin.",
+      "agentDiscoveryUnavailable": "Bu proje ana makinesinde aracı keşfi kullanılamıyor. Kaydedilen aracı seçimleri korunur.",
+      "agentVerificationUnavailable": "Bu ana makine projenin aracılarını doğrulayamıyor. Ana makineyi güncelleyip tekrar deneyin.",
+      "hostUnavailable": "Bu ana makinede otomasyonlar kullanılamıyor. Ana makinedeki Orca’yı güncelleyip yeniden bağlanın.",
+      "hostUnreachable": "Bu ana makineye ulaşılamadı. Yeniden bağlanıp mevcut durumunu kontrol etmek için yenileyin.",
+      "actionFailed": "Bu işlem ana makinede tamamlanamadı. Yenileyip tekrar deneyin.",
+      "dispatched": "Gönderildi",
+      "skippedPrecheck": "Atlandı · ön kontrol",
+      "skippedMissedSchedule": "Atlandı · zamanlama kaçırıldı",
+      "skippedHostUnavailable": "Atlandı · ana makine kullanılamıyor",
+      "skippedSignInNeeded": "Atlandı · oturum açılması gerekiyor",
+      "unknownResult": "Bilinmeyen sonuç",
+      "notReported": "Bildirilmedi",
+      "searchOptions": "Seçenekleri ara",
+      "scheduleAgentWorkAndViewRuns": "Aracı işlerini zamanlayın ve çalıştırmaları görüntüleyin",
+      "task": "Görev",
+      "review": "İncele"
+    },
+    "orphanIssues": {
+      "hostReselection": "Bu otomasyonu çalıştırmadan önce düzenleyin ve ana bilgisayarını yeniden seçin.",
+      "malformed": "Saklanan ana bilgisayar kaydı eksik.",
+      "projectMissing": "Projesi artık mevcut olmadığından ana bilgisayarı belirlenemiyor.",
+      "projectUnverified": "Projesi buradan denetlenemediğinden ana bilgisayarı doğrulanmış değil.",
+      "scheduledElsewhere": "Burada saklanıyor ancak uzak bir çalışma ortamında çalıştırılmak üzere zamanlanmış.",
+      "targetMissing": "SSH ana bilgisayarı artık kayıtlı değil.",
+      "targetReplaced": "SSH ana bilgisayarı kaldırılıp yeniden eklendiği için bu otomasyonun yeniden devralınması gerekiyor.",
+      "workspaceHostAmbiguous": "Çalışma alanı birden fazla ana bilgisayara yayıldığından tek bir sahibi yok."
+    },
+    "runFailures": {
+      "noDispatchHost": "Otomasyonu başlatmak için kullanılabilir bir Orca penceresi yoktu.",
+      "unevaluableSchedule": "Orca bu otomasyonu değerlendiremedi ve bu çalıştırmayı atladı.",
+      "noRunnableHost": "Bu otomasyonun çalışacağı bir sunucu yok.",
+      "wslMoveInProgress": "Bu otomasyonun projesi WSL ana makinesine taşınıyor. Bu nedenle Orca bu çalıştırmayı atladı. Taşıma tamamlandığında çalıştırmalar devam edecek.",
+      "wslMoveOwnedByHost": "Bu otomasyonun projesi artık WSL ana makinesinde çalışıyor ve bu otomasyon da orada ana makine tarafından çalıştırılıyor. Orca artık bu yerel kopyayı çalıştırmıyor.",
+      "missedGraceWindow": "Orca'nın bir sonraki kontrolünde bu çalıştırma, kaçırılan çalıştırmalar için tanınan tolerans süresini aşmıştı.",
+      "targetMissing": "Otomasyon sunucusu artık kayıtlı olmadığından bu otomasyonun çalışacağı bir yer yok.",
+      "targetReplaced": "Otomasyon sunucusu kaldırılıp yeniden kaydedildiği için bu otomasyonun çalıştırılmadan önce yeniden ilişkilendirilmesi gerekiyor.",
+      "workspaceHostAmbiguous": "Otomasyonun çalışma alanı birden fazla sunucuya yayıldığı için Orca hangi sunucuda çalıştırılacağını belirleyemiyor.",
+      "legacyTwinHosts": "Bu otomasyon, Orca hangi sunucuda çalıştığını izlemeye başlamadan önce kaydedilmiş ve projesi birden fazla sunucuda bulunuyor. Otomasyonu açın ve çalışması gereken sunucuyu seçin.",
+      "targetUnavailable": "Otomasyonun çalıştırma hedefi artık kullanılamıyor.",
+      "remoteSchedulingUnavailable": "Bu Orca istemcisinden uzak sunucu otomasyonlarını zamanlama henüz kullanılamıyor. Bu otomasyonu uzak sunucuda çalıştırın veya kalıcı uzak zamanlama kullanıma sunulduğunda Orca'yı güncelleyin.",
+      "projectSetupMissing": "Proje artık seçili otomasyon sunucusunda kurulu değil.",
+      "targetSetupMismatch": "Otomasyonun çalıştırma hedefi artık projenin seçili sunucu kurulumuyla eşleşmiyor.",
+      "repoUnavailable": "Seçili otomasyon sunucusunun repository'si artık kullanılamıyor.",
+      "repoDetached": "Repository artık seçili otomasyon sunucusuna bağlı değil.",
+      "projectPathChanged": "Seçili otomasyon sunucusundaki proje yolu değişti.",
+      "automationChanged": "Bu çalıştırma başlatılamadan otomasyon değişti.",
+      "destinationChanged": "Bu çalıştırma başlatılamadan otomasyonun hedefi değişti.",
+      "hooksReviewBlocked": "Ajan, yeni veya değiştirilmiş hook'ların incelenmesini bekliyor (\"Hooks need review\"). Bu çalıştırmayı açıp hook'lara güvenin veya onları kaldırın. Zamanlanmış çalıştırmalar devam eder ve incelenecek bir şey kalmadığında başarıyla tamamlanır.",
+      "agentNeverStarted": "İstem gönderildikten sonra otomasyon ajanı hiç başlatılmadı.",
+      "agentNoCompletion": "Otomasyon ajanı tamamlanma bildirimi göndermedi.",
+      "watchTimedOut": "Orca, 6 saat boyunca tamamlanma sinyali gelmeyince bu çalıştırmayı izlemeyi durdurdu.",
+      "projectSetupState": {
+        "notSetUp": "Proje seçili otomasyon sunucusunda kurulu değil.",
+        "settingUp": "Proje seçili otomasyon sunucusunda hâlâ kuruluyor.",
+        "error": "Proje seçili otomasyon sunucusunda kurulamadı.",
+        "unsupported": "Seçili otomasyon sunucusu bu projeyi desteklemiyor."
+      },
+      "wslDistroStopped": "WSL dağıtımı {{distro}} durdurulmuş, bu yüzden bu zamanlanmış çalıştırma onu başlatmadı. Dağıtımı başlatın veya Şimdi çalıştır'ı kullanın; dağıtım çalıştığı sürece sonraki çalıştırmalar devam eder."
+    }
+  },
+  "auto": {
+    "components": {
+      "automations": {
+        "automation": {
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "Geçersiz zamanlama",
+              "ba20c92073": "Özel zamanlama",
+              "a95afb7483": "Saat başı :{{minute}}'de",
+              "280ccd2701": "Her gün {{time}}'de",
+              "3f1422adc1": "Hafta içi {{time}}'de",
+              "cc71e252ba": "{{day}} günleri {{time}}'de"
+            }
+          }
+        }
+      }
     }
   }
 }

@@ -1,3 +1,4 @@
+import { automationRequiresHostReselection } from '../../shared/automation-repo-target'
 import type { Automation } from '../../shared/automations-types'
 import type { SshTarget } from '../../shared/ssh-types'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -6,6 +7,7 @@ import type { Repo } from '../../shared/repo-types'
 import { parseExecutionHostId } from '../../shared/execution-host'
 import {
   resolveAutomationWorkspaceSshTargetId,
+  resolveAutomationWorkspaceHost,
   type AutomationWorkspaceSshPin
 } from '../../shared/automation-workspace-pin'
 import {
@@ -158,7 +160,13 @@ function migrateAutomations(
   let changed = false
   const migrated = automations.map((automation) => {
     const pin = resolveWorkspacePin(automation, workspaceState, targetsById)
-    // Follow a valid workspace repin before checking for an orphan.
+    if (
+      resolveAutomationWorkspaceHost(workspaceState, automation.workspaceId).kind === 'unpinned' &&
+      automationRequiresHostReselection(automation, workspaceState.repos)
+    ) {
+      return automation
+    }
+    // Before classification: a followed re-pin is a healthy record, not an orphan.
     const record = followWorkspaceRepin(automation, pin, sshTargetIdForGeneration)
     const classification = classifyAutomationOwner(record, knownIds, pin, storageAuthority)
     // Dispatch refuses unowned records; migration must not adopt them.

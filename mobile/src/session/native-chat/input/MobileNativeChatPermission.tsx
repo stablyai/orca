@@ -191,7 +191,7 @@ const styles = themedStyleSheet(() => ({
     marginVertical: spacing.sm,
     padding: spacing.md,
     gap: spacing.sm,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
@@ -245,7 +245,7 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   optionPrimary: {
     backgroundColor: colors.accentBlue

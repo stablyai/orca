@@ -91,6 +91,32 @@ describe('automation setup decision defaults', () => {
     ).toBeUndefined()
   })
 
+  it('uses only the selected repo host setup and refuses an ambiguous repo table', () => {
+    const remote = { ...repo, connectionId: 'builder' }
+    const localSetup = setup({
+      hookSettings: {
+        mode: 'override',
+        setupRunPolicy: 'run-by-default',
+        scripts: { setup: 'local setup', archive: '' }
+      }
+    })
+    const remoteSetup = setup({
+      hostId: 'ssh:builder',
+      hookSettings: {
+        mode: 'override',
+        setupRunPolicy: 'skip-by-default',
+        scripts: { setup: 'remote setup', archive: '' }
+      }
+    })
+    const args = {
+      workspaceMode: 'new_per_run' as const,
+      repoId: repo.id,
+      projectHostSetups: [localSetup, remoteSetup]
+    }
+    expect(getVisibleAutomationSetupDecision({ ...args, repos: [remote] })).toBe('skip')
+    expect(getVisibleAutomationSetupDecision({ ...args, repos: [repo, remote] })).toBeUndefined()
+  })
+
   it('uses ready project-host setup hook settings before repo fallback', () => {
     expect(
       getVisibleAutomationSetupDecision({

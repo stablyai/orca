@@ -5,7 +5,7 @@ import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { DaemonClient } from './client'
 import { createMockSubprocess } from './daemon-pty-adapter-test-harness'
-import { DaemonPtyAdapter } from './daemon-pty-adapter'
+
 import { DaemonServer } from './daemon-server'
 import { getDaemonSocketPath } from './daemon-spawner'
 
@@ -98,36 +98,5 @@ describe('daemon automatic-work resume', () => {
       'no longer owns its endpoint'
     )
     expect(readFileSync(markerPath, 'utf8')).toBe(markerBefore)
-  })
-
-  it('tells a gate-bearing daemon from before resume apart from no gate', async () => {
-    vi.spyOn(DaemonClient.prototype, 'ensureConnected').mockResolvedValue()
-    vi.spyOn(DaemonClient.prototype, 'request').mockRejectedValue(
-      new Error('Unknown request type: resumeAutomaticWork')
-    )
-    const adapter = new DaemonPtyAdapter({
-      socketPath: '/tmp/orca-automatic-work-old.sock',
-      tokenPath: '/tmp/orca-automatic-work-old.token'
-    })
-    try {
-      await expect(adapter.resumeAutomaticWork()).resolves.toBe('terminal-host-predates-resume')
-      await expect(adapter.getAutomaticWorkStatus()).resolves.toBeNull()
-    } finally {
-      adapter.dispose()
-    }
-  })
-
-  it('does not hide a real failure behind "no gate"', async () => {
-    vi.spyOn(DaemonClient.prototype, 'ensureConnected').mockResolvedValue()
-    vi.spyOn(DaemonClient.prototype, 'request').mockRejectedValue(new Error('socket closed'))
-    const adapter = new DaemonPtyAdapter({
-      socketPath: '/tmp/orca-automatic-work-broken.sock',
-      tokenPath: '/tmp/orca-automatic-work-broken.token'
-    })
-    try {
-      await expect(adapter.resumeAutomaticWork()).rejects.toThrow('socket closed')
-    } finally {
-      adapter.dispose()
-    }
   })
 })

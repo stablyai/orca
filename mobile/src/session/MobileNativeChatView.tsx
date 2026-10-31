@@ -1,4 +1,4 @@
-import type { MobilePermissionResponse } from './native-chat/input/mobile-native-chat-permission'
+import type * as permission from './native-chat/input/mobile-native-chat-permission'
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
 import { useCallback, useMemo } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
@@ -50,6 +50,7 @@ import { MobileNativeChatFloatingControls } from './MobileNativeChatFloatingCont
 import type { PendingNativeChatImage } from './native-chat/composer/mobile-native-chat-image-attachment'
 import {
   MobileNativeChatDraftComposer,
+  type MobileNativeChatSendProps,
   type MobileNativeChatStructuredComposer
 } from './native-chat/composer/MobileNativeChatComposer'
 import { MobileNativeChatPromptCard } from './native-chat/input/MobileNativeChatPromptCard'
@@ -59,7 +60,6 @@ import {
   NO_COMPOSER_TRAY,
   type ComposerTrayProps
 } from './native-chat/composer/use-mobile-native-chat-composer-tray'
-import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRootsBoundary'
@@ -72,7 +72,7 @@ export type MobileNativeChatInputLockReason = 'disconnected' | 'waiting'
 
 type Props = ComposerTrayProps & MobileNativeChatMicProps & ChatViewProps
 
-type ChatViewProps = {
+type ChatViewProps = MobileNativeChatSendProps & {
   // Keep raw messages to distinguish loading from a loaded transcript filtered to empty.
   messages: NativeChatMessage[]
   folded: NativeChatMessage[]
@@ -99,7 +99,6 @@ type ChatViewProps = {
   hasMore?: boolean
   olderPages?: OlderPagePhase
   onLoadEarlier?: () => void
-  onSend: (text: string) => Promise<boolean>
   // Fence send completion by route identity after tab/view switches.
   sendSurfaceId: string
   getSendCompletionGeneration: () => number
@@ -138,9 +137,9 @@ type ChatViewProps = {
   collapsedPrompt?: { title: string; expand: () => void } | null
   question?: MobileChatQuestion | null
   onAnswerQuestion?: (text: string, prompt?: MobileChatQuestion['prompt']) => Promise<boolean>
-  permission?: MobileChatPermission | null
+  permission?: permission.MobileChatPermission | null
   promptKey?: string | null
-  onRespondPermission?: MobilePermissionResponse
+  onRespondPermission?: permission.MobilePermissionResponse
   onOpenFile?: (relativePath: string) => void
   keyboardInset?: number
 }
@@ -155,6 +154,7 @@ export function MobileNativeChatView({
   sessionLive,
   agentWorking,
   canStop = agentWorking,
+  sendFollowUp,
   awaitingInput = null,
   structuredActivityUi = false,
   turnIndicator = null,
@@ -237,8 +237,8 @@ export function MobileNativeChatView({
   const { jumpToTail, recordScrollMetrics, scrollMayLoadEarlier } = tail
 
   const handleSend = useCallback(
-    async (text: string): Promise<boolean> => {
-      const accepted = await onSend(text)
+    async (...send: Parameters<typeof onSend>): Promise<boolean> => {
+      const accepted = await onSend(...send)
       if (!accepted) {
         return false
       }
@@ -401,7 +401,7 @@ export function MobileNativeChatView({
           onChangeText={onComposerTextChange}
           onSend={handleSend}
           sendSurfaceId={sendSurfaceId}
-          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef }}
+          {...{ getSendCompletionGeneration, getComposerEditGeneration, inputRef, sendFollowUp }}
           agent={agent}
           sessionOptions={sessionOptions}
           onAttachImage={onAttachImage}

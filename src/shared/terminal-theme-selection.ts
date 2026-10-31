@@ -1,4 +1,5 @@
 import type { GlobalSettings } from './global-settings-types'
+import { isPluginContentSwitchedOff } from './plugins/plugin-system-settings'
 import {
   hasUsableTerminalThemeColors,
   normalizeTerminalColorOverrides,
@@ -36,13 +37,24 @@ export function selectTerminalTheme(
   return { mode, useLightVariant, themeName }
 }
 
+/** Settings a terminal theme lookup reads; plugin switches decide whether a plugin palette paints. */
+export type TerminalThemeLookupSettings = Pick<
+  GlobalSettings,
+  'terminalCustomThemes' | 'terminalPluginPalettes'
+> &
+  Partial<Pick<GlobalSettings, 'pluginSystemEnabled' | 'disabledPlugins'>>
+
 /** A selection names a plugin, user-imported or built-in theme; one lookup for all three. */
 export function lookupTerminalTheme(
-  settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'> | undefined,
+  settings: TerminalThemeLookupSettings | undefined,
   selection: string
 ): TerminalThemeMap[string] | null {
   if (selection.startsWith('plugin:')) {
-    return pluginPalette(settings?.terminalPluginPalettes, selection)
+    // Why: like app and icon themes, a switched-off plugin's palette falls back to the default
+    // but stays saved, so turning the plugin back on restores it.
+    return isPluginContentSwitchedOff(settings, selection)
+      ? null
+      : pluginPalette(settings?.terminalPluginPalettes, selection)
   }
   const customId = parseCustomTerminalThemeSelection(selection)
   const custom =
@@ -76,7 +88,7 @@ function pluginPalette(palettes: unknown, selection: string): TerminalThemeMap[s
 
 function themeColors(
   selection: string,
-  settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'>
+  settings: TerminalThemeLookupSettings
 ): TerminalOscColorQueryReplyColors | null {
   const theme = lookupTerminalTheme(settings, selection)
   return theme ? { foreground: theme.foreground, background: theme.background } : null
@@ -85,10 +97,8 @@ function themeColors(
 /** Answer OSC 10/11 from saved settings without a renderer; queries report opaque theme colors, ignoring opacity. */
 export function resolveConfiguredTerminalColors(
   settings: TerminalThemeSelectionSettings &
-    Pick<
-      GlobalSettings,
-      'terminalCustomThemes' | 'terminalPluginPalettes' | 'terminalColorOverrides'
-    >,
+    TerminalThemeLookupSettings &
+    Pick<GlobalSettings, 'terminalColorOverrides'>,
   systemPrefersDark: boolean
 ): TerminalOscColorQueryReplyColors {
   const { themeName, useLightVariant } = selectTerminalTheme(settings, systemPrefersDark)

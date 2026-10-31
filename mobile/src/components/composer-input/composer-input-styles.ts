@@ -17,7 +17,7 @@ export const FIELD_MIN_HEIGHT = 44
 const roundControl = {
   width: COMPOSER_CONTROL_SIZE,
   height: COMPOSER_CONTROL_SIZE,
-  borderRadius: COMPOSER_CONTROL_SIZE / 2,
+  borderRadius: radii.pill,
   alignItems: 'center',
   justifyContent: 'center'
 } as const
@@ -36,11 +36,11 @@ export const composerInputStyles = themedStyleSheet(() => ({
     paddingTop: spacing.md,
     paddingHorizontal: 10,
     paddingBottom: 10,
-    borderRadius: radii.composer
+    borderRadius: radii.floating
   },
   formBox: {
     paddingTop: 10,
-    borderRadius: radii.composerItem
+    borderRadius: radii.surface
   },
   formText: {
     minHeight: FORM_MESSAGE_MIN_HEIGHT
@@ -96,7 +96,7 @@ export const composerInputStyles = themedStyleSheet(() => ({
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.sm,
-    borderRadius: radii.composerItem,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md
   },
   fieldText: {
