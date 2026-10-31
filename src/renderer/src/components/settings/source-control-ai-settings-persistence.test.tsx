@@ -423,12 +423,15 @@ it.each(['global', 'repo'] as const)(
       }
       expect(write).not.toHaveBeenCalled()
     } finally {
-      view.unmount()
-      expect(disposals.length).toBeGreaterThan(0)
-      for (const stop of disposals) {
-        expect(stop).toHaveBeenCalledOnce()
+      try {
+        view.unmount()
+      } finally {
+        await locale.restore()
       }
-      await locale.restore()
+    }
+    expect(disposals.length).toBeGreaterThan(0)
+    for (const stop of disposals) {
+      expect(stop).toHaveBeenCalledOnce()
     }
   }
 )
