@@ -18,6 +18,7 @@ type Props = {
   visible: boolean
   prompt: SetupTrustPrompt | null
   busy: boolean
+  allowAlwaysTrust?: boolean
   onRunOnce: () => void
   onAlwaysTrust: () => void
   onDontRun: () => void
@@ -29,6 +30,7 @@ export function SetupHookTrustDrawer({
   visible,
   prompt,
   busy,
+  allowAlwaysTrust = true,
   onRunOnce,
   onAlwaysTrust,
   onDontRun,
@@ -81,13 +83,17 @@ export function SetupHookTrustDrawer({
               </Text>
             </Pressable>
             <View style={styles.trustActionSeparator} />
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>
-                {t('components.setupHookTrustDrawer.alwaysTrustAndRun', 'Always trust and run')}
-              </Text>
-            </Pressable>
-            <View style={styles.trustActionSeparator} />
+            {allowAlwaysTrust ? (
+              <>
+                <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
+                  <Check size={16} color={colors.textPrimary} />
+                  <Text style={styles.trustActionText}>
+                    {t('components.setupHookTrustDrawer.alwaysTrustAndRun', 'Always trust and run')}
+                  </Text>
+                </Pressable>
+                <View style={styles.trustActionSeparator} />
+              </>
+            ) : null}
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onDontRun}>
               <Text style={styles.trustActionText}>
                 {t('components.setupHookTrustDrawer.dontRun', "Don't run")}

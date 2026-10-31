@@ -117,6 +117,7 @@ export abstract class OrcaRuntimeWithRefreshFloatingWorkspacePtyLiveness extends
     this.ptysById.delete(ptyId)
     this.pendingPtyHandleReplacementFences.delete(ptyId)
     this.recentPtyOutputById.delete(ptyId)
+    this.launchComposerReadyByPtyId.delete(ptyId)
     this.setupCompletionTokenByPtyId.delete(ptyId)
     this.clearWaitBlockedCheckState(ptyId)
     this.trustDialogStatus.forget(ptyId)

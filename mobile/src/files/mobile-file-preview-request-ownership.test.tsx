@@ -14,6 +14,7 @@ vi.mock('../transport/host-client-hooks', () => ({
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   BackHandler: { addEventListener: () => ({ remove() {} }) },
   Alert: { alert() {} },
   Image: 'Image',

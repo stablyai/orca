@@ -19,6 +19,7 @@ vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' 
 // Mock RN hosts as strings: Vitest cannot parse React Native Flow, but panel structure stays real.
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   SectionList: 'SectionList',
@@ -79,9 +80,9 @@ function render(pair: Pair): ReactElement {
 
 /** The panel's own chevron, found by the label a user reads rather than by tree position. */
 function pressBack(tree: ReactTestRenderer): void {
-  const back = tree.root
-    .findAll((node) => node.props.accessibilityLabel === 'Back')
-    .filter((node) => typeof node.props.onPress === 'function')
+  const back = tree.root.findAll(
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Back'
+  )
   if (back.length !== 1) {
     throw new Error(`expected one Back control, found ${back.length}`)
   }

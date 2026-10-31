@@ -27,7 +27,7 @@ Orca wakes you with the answer. To hand work off with nothing back, use `orca-cl
 place and use it for every command.
 
 ```text
-ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex --json
+ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 ```
 
 - Start every independent worker, then **end your turn**. "Report back" and
@@ -58,14 +58,15 @@ Never:
 
 ## When Orca wakes you
 
-- Run the `check` command the wake gives you. Answer each `question` with
-  `ORCA orchestration reply --id <message_id> --body "<answer>" --json`.
+- Run the `check` command the wake gives you. Answer a `question` with
+  `ORCA orchestration reply --id <message_id> --body "<answer>"` when the answer
+  follows from the task or the user's instructions; otherwise ask the user first.
 - An `escalation` with `stopReason` means the worker stopped without
   `worker_done`: steer it with `send`, stop and retry it, or tell the user.
 - A `worker_done` settles its Task; never mark a reported failure completed.
 - When every worker has settled, report to the user per Task: outcome,
   evidence, open blockers.
-- Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50 --full --json`
+- Lost track? `ORCA orchestration inbox --terminal run:<run_id> --limit 50`
   shows mail `check` already handled.
 
 Finished workers close on their own; `send` reopens one when you need it again.
@@ -83,8 +84,10 @@ gap or contradiction.
 
 ## Safety
 
-Stop, retry, or abandon a worker only on proof its agent stopped; silence or an
-`unverifiable` reading proves nothing.
+Silence, a timeout, or `unverifiable` liveness alone never proves exit or authorizes
+autonomous recovery. For explicit user cancellation or assignment abandonment,
+load `references/recovery-and-cleanup.md`: requesting a guarded stop or fencing an
+assignment does not prove its agent stopped.
 
 ## References
 

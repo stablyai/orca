@@ -243,7 +243,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(handler?.(event, { ...identity, enableIfData: true })).resolves.toMatchObject({
       needsReview: false
     })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     await expect(
@@ -253,7 +253,7 @@ describe('plugin marketplace IPC authority', () => {
     await expect(
       handler?.(event, { ...identity, enableIfData: true, expectedFingerprint: 'sha256-fp' })
     ).resolves.toMatchObject({ needsReview: false })
-    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp', 7)
+    expect(approve).toHaveBeenCalledWith(PLUGIN_KEY, 'sha256-fp')
 
     approve.mockClear()
     execution.value = 'declarative'
@@ -331,5 +331,38 @@ describe('plugin update review notices IPC', () => {
       vi.fn()
     )
     await expect(invoke('plugins:takeUpdateReviewNotices')).resolves.toEqual([])
+  })
+
+  it('returns public install counts, or none when the service fails or is absent', async () => {
+    const counts = { 'stablyai.orca-nord-theme': 37 }
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      {
+        ...createServices(),
+        installStats: { getInstallCounts: vi.fn().mockResolvedValue(counts) }
+      },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual(counts)
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      {
+        ...createServices(),
+        installStats: { getInstallCounts: vi.fn().mockRejectedValue(new Error('disk')) }
+      },
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual({})
+    handlers = new Map()
+    registerPluginMarketplaceHandlers(
+      createPluginService(),
+      createServices(),
+      () => getDefaultSettings('/tmp'),
+      vi.fn()
+    )
+    await expect(invoke('plugins:getInstallCounts')).resolves.toEqual({})
   })
 })

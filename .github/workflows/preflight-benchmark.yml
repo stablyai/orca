@@ -19,7 +19,8 @@ jobs:
     if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
     # Native compiler peaks can exhaust the standard ARM runner before samples are saved.
     runs-on: blacksmith-8vcpu-ubuntu-2404-arm
-    timeout-minutes: 25
+    # The fifth typecheck project needs a 40-minute aggregate budget.
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v6
         with:

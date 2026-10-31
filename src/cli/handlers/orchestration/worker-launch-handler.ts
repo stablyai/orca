@@ -10,6 +10,8 @@ import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import { isDevCliInvocation } from './runtime-compatibility'
 import { resolveCoordinatorTerminalHandle } from './terminal-identity'
 import { formatWorkerStart } from './worker-output'
+import { WORKER_START_VIEW } from './worker-start-agent-view'
+import { printOrchestrationResult } from './agent-view'
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
 import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 
@@ -79,6 +81,10 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
       process.exitCode = 1
     }
     const renderedResult = { ...result, result: withResolvedNextCommands(result.result) }
+    if (!flags.has('full')) {
+      printOrchestrationResult(renderedResult, json, WORKER_START_VIEW)
+      return
+    }
     printResult(renderedResult, json, (value) => withReceiptNext(formatWorkerStart(value), value))
   }
 }

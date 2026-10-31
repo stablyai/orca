@@ -6,20 +6,24 @@ vi.mock('../selectors', () => ({ getTerminalHandle: vi.fn() }))
 
 import { printResult } from '../format'
 import { ORCHESTRATION_HANDLERS } from './orchestration'
+import { orchestrationTestContext } from './orchestration-handler-test-context'
 
 async function formatSend(result: unknown): Promise<string> {
   callMock.mockReset().mockResolvedValueOnce({ result })
   vi.mocked(printResult).mockClear()
-  await ORCHESTRATION_HANDLERS['orchestration send']({
-    flags: new Map([
-      ['from', 'term_sender'],
-      ['to', 'term_recipient'],
-      ['subject', 'ping']
-    ]),
-    client: { call: callMock },
-    cwd: '/workspace',
-    json: false
-  } as never)
+  await ORCHESTRATION_HANDLERS['orchestration send'](
+    orchestrationTestContext(
+      callMock,
+      new Map<string, string | boolean>([
+        ['full', true],
+        ['from', 'term_sender'],
+        ['to', 'term_recipient'],
+        ['subject', 'ping']
+      ]),
+      false,
+      '/workspace'
+    )
+  )
   expect(printResult).toHaveBeenCalledOnce()
   const printCall = vi.mocked(printResult).mock.calls[0]
   if (!printCall) {
@@ -90,21 +94,4 @@ it('prints delivery limitations on relayed receipts', async () => {
 
 it('leaves a canonical receipt unchanged', async () => {
   await expect(formatSend({ message: { id: 'msg_1' } })).resolves.toBe('Sent msg_1')
-})
-
-it('names the launch mode for a follow-up only when it started a fresh worker', async () => {
-  const followUp = (delivery: string) =>
-    formatSend({
-      delivery,
-      followUpOf: 'ctx_old',
-      dispatchId: 'ctx_new',
-      taskId: 'task_1',
-      state: 'ready',
-      mode: { detail: 'Started a terminal agent worker.' }
-    })
-
-  expect(await followUp('reopened')).toBe(
-    'Follow-up of ctx_old (reopened)\nWorker ctx_new [ready] for task_1'
-  )
-  expect(await followUp('started_fresh')).toContain('Started a terminal agent worker.')
 })

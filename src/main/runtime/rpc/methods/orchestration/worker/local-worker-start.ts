@@ -221,6 +221,7 @@ export async function startLocalWorker(args: {
         : await waitForWorkerAgentReady(runtime, terminalHandle, {
             agent,
             reusesTerminal: Boolean(params.terminal),
+            creation: placed.terminalCreation,
             timeoutMs: params.timeoutMs ?? 60_000
           })
     if (wait) {

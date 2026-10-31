@@ -118,7 +118,7 @@ export const ROOT_HELP_TEXT_SECONDARY = [
   '',
   'Agent Sessions And Worktrees:',
   '  Start agents with `worktree create --agent` (new checkout) or `agent launch` (existing',
-  '  worktree). Both open a chat or a terminal per your Chat UI setting, and take --model/--effort.',
+  '  worktree). Both open a chat or a terminal per your Chat | CLI choice, and take --model/--effort.',
   '    orca agent launch --agent codex --model gpt-6-astra --effort high',
   '',
   'Browser Workflow:',

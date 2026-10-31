@@ -1,7 +1,9 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { printOrchestrationResult } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
-import { formatWorkerStart, type WorkerStartReceipt } from './worker-output'
+import { formatWorkerStart } from './worker-output'
+import { WORKER_FOLLOW_UP_VIEW, type WorkerFollowUpReceipt } from './worker-start-agent-view'
 import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
@@ -43,12 +45,7 @@ type OrchestrationSendResult = { next?: string } & (
       recipients: number
       warnings?: SendRecipientWarning[]
     }
-  | (WorkerStartReceipt & {
-      /** A finished worker took this message as its next Task (follow-up Dispatch). */
-      delivery: 'follow_up' | 'reopened' | 'started_fresh'
-      followUpOf: string
-      warnings?: SendRecipientWarning[]
-    })
+  | (WorkerFollowUpReceipt & { warnings?: SendRecipientWarning[] })
   | {
       relay: {
         messageId: string
@@ -130,6 +127,15 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
     if ('lifecycle' in result.result && result.result.lifecycle?.action === 'rejected') {
       throw new RuntimeClientError(result.result.lifecycle.code, result.result.lifecycle.reason)
     }
+    if (!flags.has('full')) {
+      if ('delivery' in result.result) {
+        const followUp = withResolvedNextCommands(result.result)
+        printOrchestrationResult({ ...result, result: followUp }, json, WORKER_FOLLOW_UP_VIEW)
+      } else {
+        printOrchestrationResult({ ...result, result: result.result }, json, { fields: sendFields })
+      }
+      return
+    }
     if ('delivery' in result.result && result.result.state !== 'ready') {
       process.exitCode = 1
     }
@@ -174,5 +180,44 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
         `Sent ${value.messages.length} messages to ${value.recipients} recipients`
       )
     })
+  }
+}
+
+type SendFields = {
+  messageId?: string
+  messageIds?: string[]
+  recipients?: number
+  dispatchId?: string
+  queuedFor?: 'run_home' | 'worker'
+  lifecycle?: string
+  autoReleaseAt?: string
+  warnings?: string[]
+  next?: string
+}
+
+// The message row echoes what the caller just sent; only its id is new.
+function sendFields(value: Exclude<OrchestrationSendResult, { delivery: string }>): SendFields {
+  const lifecycle = 'lifecycle' in value ? value.lifecycle : undefined
+  const common = {
+    lifecycle: lifecycle?.action,
+    autoReleaseAt: lifecycle && 'autoReleaseAt' in lifecycle ? lifecycle.autoReleaseAt : undefined,
+    warnings: value.warnings?.length ? value.warnings.map((warning) => warning.message) : undefined,
+    next: value.next
+  }
+  if ('message' in value) {
+    return { messageId: value.message.id, ...common }
+  }
+  if ('relay' in value) {
+    return {
+      messageId: value.relay.messageId,
+      dispatchId: value.relay.dispatchId,
+      queuedFor: value.relay.destination ?? 'run_home',
+      ...common
+    }
+  }
+  return {
+    messageIds: value.messages.map((message) => message.id),
+    recipients: value.recipients,
+    ...common
   }
 }

@@ -23,7 +23,6 @@ import { fileInventoryMountAdapters } from './file-inventory-mount-adapters'
 import { fileTapOpenMountAdapters } from './file-tap-open-mount-adapters'
 import { fileRequestMountAdapters } from './file-request-mount-adapters'
 import { githubPrMountAdapters } from './github-pr-mount-adapters'
-import { homeAccountsMountAdapters } from './home-accounts-mount-adapters'
 import { hostScreenMountAdapters } from './host-screen-mount-adapters'
 import { hostWorktreeActionMountAdapters } from './host-worktree-action-mount-adapters'
 import { hostedReviewMountAdapters } from './hosted-review-mount-adapters'
@@ -119,7 +118,6 @@ export const MOUNTED_OPERATION_MODULES: readonly MountedOperationModule[] = [
   { source: 'file-tap-open-mount-adapters.ts', mounts: fileTapOpenMountAdapters },
   { source: 'file-request-mount-adapters.ts', mounts: fileRequestMountAdapters },
   { source: 'github-pr-mount-adapters.ts', mounts: githubPrMountAdapters },
-  { source: 'home-accounts-mount-adapters.ts', mounts: homeAccountsMountAdapters },
   { source: 'host-screen-mount-adapters.ts', mounts: hostScreenMountAdapters },
   {
     source: 'host-worktree-action-mount-adapters.ts',

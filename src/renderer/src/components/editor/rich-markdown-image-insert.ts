@@ -4,7 +4,10 @@ import { dirname, basename } from '@/lib/path'
 import { getConnectionId } from '@/lib/connection-context'
 import { useAppStore } from '@/store'
 import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
-import { getEditorFileOperationContext } from '@/lib/editor-file-operation-owner'
+import {
+  acquireEditorFileOperation,
+  getEditorFileOperationContext
+} from '@/lib/editor-file-operation-owner'
 import { editorTabDocumentFolderAccess } from '@/lib/local-file-access'
 import { requireRuntimeTargetForFileOwner } from '@/lib/file-owner-runtime-target'
 import { captureDirectSshMutationExpectation } from '@/lib/ssh-mutation-expectation'
@@ -32,6 +35,7 @@ export type RichMarkdownImageImportDestination = {
   context: RuntimeFileOperationArgs
   destinationDir: string
   access: LocalFileAccess | undefined
+  assertCurrent?: () => void
 }
 
 /** Resolves where image bytes for this note are saved; null after reporting a missing worktree path. */
@@ -44,10 +48,20 @@ export function captureRichMarkdownImageImportDestination({
   'filePath' | 'worktreeId' | 'runtimeEnvironmentId'
 >): RichMarkdownImageImportDestination | null {
   const state = useAppStore.getState()
-  const worktreePath = getWorktreePath(worktreeId)
+  const openDocument = state.openFiles.find(
+    (file) =>
+      file.filePath === filePath &&
+      file.worktreeId === worktreeId &&
+      (file.runtimeEnvironmentId ?? null) === (runtimeEnvironmentId ?? null)
+  )
+  const acquisition =
+    openDocument?.mode === 'edit'
+      ? acquireEditorFileOperation(useAppStore.getState, openDocument)
+      : null
+  const worktreePath = acquisition ? acquisition.context.worktreePath : getWorktreePath(worktreeId)
   const parsedWorkspace = worktreeId ? parseWorkspaceKey(worktreeId) : null
   const resolvedConnectionId = getConnectionId(worktreeId)
-  if (parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
+  if (!acquisition && parsedWorkspace?.type === 'folder' && resolvedConnectionId === undefined) {
     throw new Error(
       translate(
         'auto.components.editor.richMarkdownImageInsert.hostUnverified',
@@ -56,8 +70,9 @@ export function captureRichMarkdownImageImportDestination({
     )
   }
   const connectionId = resolvedConnectionId ?? undefined
-  const fileContext =
-    worktreeId && parsedWorkspace?.type !== 'folder'
+  const fileContext = acquisition
+    ? acquisition.mutationContext()
+    : worktreeId && parsedWorkspace?.type !== 'folder'
       ? getEditorFileOperationContext(state, { worktreeId, runtimeEnvironmentId }, worktreePath)
       : {
           target: requireRuntimeTargetForFileOwner(state, worktreeId, runtimeEnvironmentId),
@@ -82,13 +97,11 @@ export function captureRichMarkdownImageImportDestination({
   }
 
   // Save image bytes beside the note, including outside projects, so rich-mode size checks measure document text only.
-  const openDocument = state.openFiles.find(
-    (file) => file.filePath === filePath && file.worktreeId === worktreeId
-  )
   return {
     context: fileContext,
     destinationDir: dirname(filePath),
-    access: openDocument ? editorTabDocumentFolderAccess(state, openDocument) : undefined
+    access: openDocument ? editorTabDocumentFolderAccess(state, openDocument) : undefined,
+    ...(acquisition ? { assertCurrent: acquisition.assertCurrent } : {})
   }
 }
 
@@ -109,12 +122,17 @@ export async function insertRichMarkdownImageFromPath({
     if (!destination) {
       return
     }
+    destination.assertCurrent?.()
     const { results } = await importExternalPathsToRuntime(
       destination.context,
       [sourcePath],
       destination.destinationDir,
-      { access: destination.access }
+      {
+        access: destination.access,
+        ...(destination.assertCurrent ? { assertCurrent: destination.assertCurrent } : {})
+      }
     )
+    destination.assertCurrent?.()
     const imported = results.find((result) => result.status === 'imported')
     if (!imported) {
       toast.error(

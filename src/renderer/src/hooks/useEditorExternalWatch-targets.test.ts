@@ -1,4 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
+import { captureWorktreeOperationGenerationSnapshot } from '@/lib/worktree-operation-generation'
+import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-provenance'
 import {
   selectEditorExternalWatchTargets as getEditorExternalWatchTargets,
   type EditorExternalWatchTargetState
@@ -51,6 +53,14 @@ describe('getEditorExternalWatchTargets', () => {
       mode: 'edit',
       isDirty
     }) as EditorExternalWatchTargetState['openFiles'][number]
+
+  const capturedLocalProvenance = (): EditorFileOperationProvenance => ({
+    generation: captureWorktreeOperationGenerationSnapshot({
+      executionHostId: 'local',
+      runtimeEnvironmentId: null
+    }),
+    ownershipProjection: 'explicit'
+  })
 
   const makeState = (args: {
     repo: EditorExternalWatchTargetState['repos'][number]
@@ -471,7 +481,11 @@ describe('getEditorExternalWatchTargets', () => {
   it('creates separate watch targets for local and runtime-owned tabs in the same worktree', () => {
     const repo = makeRepo('repo-mixed')
     const worktree = makeWorktree(repo.id, 'wt-mixed')
-    const localFile = makeOpenFile(worktree.id)
+    worktree.hostId = 'local'
+    const localFile = {
+      ...makeOpenFile(worktree.id),
+      operationProvenance: capturedLocalProvenance()
+    }
     const runtimeFile = {
       ...makeOpenFile(worktree.id),
       id: 'runtime-file',
@@ -479,14 +493,18 @@ describe('getEditorExternalWatchTargets', () => {
     }
 
     expect(
-      getEditorExternalWatchTargets(
-        makeState({
+      getEditorExternalWatchTargets({
+        ...makeState({
           repo,
           worktree,
           openFiles: [localFile, runtimeFile],
           runtimeEnvironmentId: null
-        })
-      ).targets
+        }),
+        repos: [repo, { ...repo, executionHostId: 'runtime:env-1' }],
+        worktreesByRepo: {
+          [repo.id]: [worktree, { ...worktree, hostId: 'runtime:env-1' }]
+        }
+      }).targets
     ).toEqual([
       {
         worktreeId: 'wt-mixed',
@@ -503,13 +521,15 @@ describe('getEditorExternalWatchTargets', () => {
     ])
   })
 
-  it('keeps restored ownerless tabs local when an active runtime is selected', () => {
+  it('keeps restored captured-local ownership when an active runtime is selected', () => {
     const repo = makeRepo('repo-restored')
     const worktree = makeWorktree(repo.id, 'wt-restored')
+    worktree.hostId = 'local'
     const restoredLocalFile = {
       ...makeOpenFile(worktree.id),
       id: 'restored-local-file',
-      runtimeEnvironmentId: undefined
+      runtimeEnvironmentId: undefined,
+      operationProvenance: capturedLocalProvenance()
     }
     const runtimeFile = {
       ...makeOpenFile(worktree.id),
@@ -518,14 +538,18 @@ describe('getEditorExternalWatchTargets', () => {
     }
 
     expect(
-      getEditorExternalWatchTargets(
-        makeState({
+      getEditorExternalWatchTargets({
+        ...makeState({
           repo,
           worktree,
           openFiles: [restoredLocalFile, runtimeFile],
           runtimeEnvironmentId: 'env-1'
-        })
-      ).targets
+        }),
+        repos: [repo, { ...repo, executionHostId: 'runtime:env-1' }],
+        worktreesByRepo: {
+          [repo.id]: [worktree, { ...worktree, hostId: 'runtime:env-1' }]
+        }
+      }).targets
     ).toEqual([
       {
         worktreeId: 'wt-restored',

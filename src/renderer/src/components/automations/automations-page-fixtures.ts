@@ -7,6 +7,7 @@ import type {
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
 import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
 import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
@@ -279,4 +280,17 @@ export function makeStoreState(): AutomationsPageStoreFixtures {
     repoMap: new Map([[REPO_ID, repo]]),
     worktreeMap: new Map([[WORKSPACE_ID, worktree]])
   }
+}
+
+export type DetailPaneProps = {
+  selected: Automation | null
+  selectedHostEntry: AutomationHostCatalogEntry | null
+  selectedRuns: AutomationRun[]
+  selectedRunsNotice: { message: string } | null
+  runNow: (automation: Automation) => void
+  toggleAutomation: (automation: Automation) => void
+  requestDeleteAutomation: (automation: Automation) => void
+  openEditDialog: (automation: Automation) => void
+  openAutomationRunPage: (run: AutomationRun) => void
+  recoverSelectedRuns: (action: 'retry') => void
 }

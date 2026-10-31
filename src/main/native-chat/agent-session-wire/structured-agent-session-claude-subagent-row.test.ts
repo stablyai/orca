@@ -105,6 +105,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  host.stopDelivery()
+  claude.dispose()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await closeTestJournalHostDatabases()
@@ -285,15 +287,20 @@ it('keeps a helper the next child resumes while it is still starting working, pa
   const opened = claude.connections.push.bind(claude.connections)
   vi.spyOn(claude.connections, 'push').mockImplementation((connection) => {
     const initialize = connection.initializationResult
-    connection.initializationResult = async () => {
-      const initialized = await initialize()
-      for (const [index, captured] of RESUMED_BY_MESSAGE.filter(
-        ({ at }) => at >= 16_142 && at <= 16_143
-      ).entries()) {
-        frame(connection, { uuid: `resume-${index}`, ...captured.frame })
-      }
-      return initialized
-    }
+    let completion: Promise<unknown> | undefined
+    connection.initializationResult = () =>
+      (completion ??= (async () => {
+        const initialized = await initialize()
+        if (connection.initialization.disposed) {
+          return initialized
+        }
+        for (const [index, captured] of RESUMED_BY_MESSAGE.filter(
+          ({ at }) => at >= 16_142 && at <= 16_143
+        ).entries()) {
+          frame(connection, { uuid: `resume-${index}`, ...captured.frame })
+        }
+        return initialized
+      })())
     return opened(connection)
   })
   const body = hostTestMessage('Carry on.')
