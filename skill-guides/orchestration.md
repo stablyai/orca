@@ -38,7 +38,8 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
 - `--worktree current` uses your workspace. Use a new one only when the user
   asks or sharing would conflict:
   `--worktree new-top-level --repo id:<repoId> --name <short-name>`
-  (`ORCA repo list --json` gives the id).
+  (`ORCA repo list --json` gives the id). If the user will keep working in that
+  workspace's chat after it reports, add `--keep-open`.
 - Add `--model` only if the user named one.
 - If `worker-start` fails, do not rerun it; read `failedStage` and load
   `references/recovery-and-cleanup.md`.
