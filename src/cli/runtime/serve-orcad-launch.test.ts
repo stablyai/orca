@@ -60,6 +60,22 @@ describe('orca serve asking the app which host to run', () => {
     expect(run).not.toHaveBeenCalled()
   })
 
+  it('asks the app on packaged macOS when orcad is requested explicitly', async () => {
+    const selection = {
+      kind: 'orcad' as const,
+      runtime: '/rt/node',
+      entry: '/slot/orcad.js',
+      version: '1'
+    }
+    const run = answering(formatServeRuntimeSelection(selection))
+    expect(
+      await resolveLocalServeRuntime(
+        { ...options, usesMacUpdateHandoff: true, env: { ORCA_SERVE_RUNTIME: 'orcad' } },
+        run
+      )
+    ).toEqual(selection)
+  })
+
   it('selects Electron with a reason when the app gives no answer', async () => {
     expect(await resolveLocalServeRuntime(options, answering('', 1))).toEqual({
       kind: 'electron',

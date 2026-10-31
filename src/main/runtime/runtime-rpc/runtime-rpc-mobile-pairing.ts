@@ -5,6 +5,8 @@ import {
 } from '../../../shared/mobile-relay-mint-failure'
 import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../../shared/pairing'
 import { NETWORK_EXPOSURE_FAILED_GUIDANCE } from '../network-exposure-guidance'
+import { createOwnerPairingOffer } from '../pairing-offer-requests'
+import type { PairingOffersRpcContext } from '../rpc/core'
 import { RuntimeRpcPairing } from './runtime-rpc-pairing'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import {
@@ -19,6 +21,10 @@ import {
 const RELAY_PROVIDER_INSTALL_WAIT_MS = 15_000
 
 export class RuntimeRpcMobilePairing extends RuntimeRpcPairing {
+  protected override ownerPairingOffers(): PairingOffersRpcContext {
+    return { create: (params) => createOwnerPairingOffer(this, params) }
+  }
+
   async createMobilePairingOffer(args: {
     address?: string | null
     connectionMode?: MobilePairingConnectionMode
