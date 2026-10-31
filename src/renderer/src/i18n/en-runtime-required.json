@@ -1893,11 +1893,6 @@
         "resumeFailed": "{{agent}} couldn't continue in chat. Check this terminal and the host connection, then try again.",
         "exitUnconfirmedFromTerminal": "{{agent}} is still running this conversation in this terminal. Quit {{agent}} here, then try again.",
         "exitUnconfirmed": "{{agent}} is running this conversation in another terminal. Quit it there, then try again."
-      },
-      "surfaceSwitch": {
-        "stopReplyTitle": "{{agent}} is replying. Stop it and continue in chat?",
-        "stopBackgroundTitle": "{{agent}} has background tasks running. Stop them and continue in chat?",
-        "stopAndContinue": "Stop and continue"
       }
     },
     "onboarding": {

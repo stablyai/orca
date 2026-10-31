@@ -25,7 +25,6 @@ import {
 } from '../../../shared/structured-agent-cli-conversation-adoption'
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
 import type { TerminalAgentStopPreparation } from './terminal-agent-stop-for-chat'
-import { needsStopConsent } from './terminal-agent-stop-for-chat'
 
 export abstract class OrcaRuntimeWithTerminalAgentStopPreparation extends OrcaRuntimeWithGetWorktreePs {
   protected abstract cliWriterTerminal(coordinates: {
@@ -37,7 +36,6 @@ export abstract class OrcaRuntimeWithTerminalAgentStopPreparation extends OrcaRu
       agent: StructuredAgentId
       providerSessionId: string
       cliSource: { workspaceId: string; paneKey: string }
-      consented: boolean
     },
     readRow: () => AgentStatusIpcPayload | null,
     signal: AbortSignal
@@ -106,8 +104,7 @@ export abstract class OrcaRuntimeWithTerminalAgentStopPreparation extends OrcaRu
       if (!shell?.startTime) {
         throw new Error('shell unavailable')
       }
-      const current = () =>
-        conversationCurrent() && (input.consented || !needsStopConsent(readRow()))
+      const current = conversationCurrent
       const released = async (predict = false) => {
         const fresh = await readPosixPaneProcessRows()
         const nowShell = fresh.find((item) => item.pid === shell.pid)

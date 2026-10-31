@@ -1,21 +1,6 @@
 import type { AgentStatusIpcPayload } from '../../../shared/agent-status-ipc-payload'
 import { mainAgentState } from '../../../shared/main-agent-status'
-import { isAgentStatusHeldOpenByChildWork } from '../../../shared/agent-lead-status-fold'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
-
-const BACKGROUND_TASKS_NEED_CONSENT = false
-export function needsStopConsent(
-  row: AgentStatusIpcPayload | null
-): 'turnActive' | 'backgroundTasksRunning' | null {
-  if (!row) {
-    return null
-  }
-  return mainAgentState(row) === 'working'
-    ? 'turnActive'
-    : BACKGROUND_TASKS_NEED_CONSENT && isAgentStatusHeldOpenByChildWork(row)
-      ? 'backgroundTasksRunning'
-      : null
-}
 
 export type TerminalAgentStopPreparation = {
   hasAgent: boolean
@@ -27,7 +12,6 @@ export type TerminalAgentStopPreparation = {
 }
 
 export async function stopTerminalAgentForChat(input: {
-  consented: boolean
   prepare: () => Promise<TerminalAgentStopPreparation>
   readRow: () => AgentStatusIpcPayload | null
   predict: (prepared: TerminalAgentStopPreparation) => Promise<unknown>
@@ -57,10 +41,6 @@ export async function stopTerminalAgentForChat(input: {
       throw agentSessionRefusalError('agent_session_operation_invalid', {
         reason: 'conversationMoved'
       })
-    }
-    const reason = needsStopConsent(input.readRow())
-    if (reason && !input.consented) {
-      throw agentSessionRefusalError('agent_session_operation_invalid', { reason })
     }
   }
   fence()

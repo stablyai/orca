@@ -31,7 +31,6 @@ vi.mock('../tab-bar/cli-chat-resume-run', () => ({
   runCliChatResume: mocks.run,
   useCliChatResumePending: () => mocks.pending
 }))
-vi.mock('../confirmation-dialog-context', () => ({ useConfirmationDialog: () => mocks.run }))
 beforeEach(() => {
   mocks.source.current = LOCAL_SOURCE
 })
@@ -48,7 +47,7 @@ it('dispatches the exact pane with owner-opening intent and shares pending', () 
     tab: { id: 'tab-1', worktreeId: 'wt-1' },
     paneKey: 'tab-1:leaf'
   })
-  expect(mocks.run).toHaveBeenCalledWith(LOCAL_SOURCE, true, mocks.run)
+  expect(mocks.run).toHaveBeenCalledWith(LOCAL_SOURCE, true)
   mocks.pending = true
   rerender(
     <TooltipProvider>

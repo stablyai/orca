@@ -1,5 +1,4 @@
 import { useShallow } from 'zustand/react/shallow'
-import { useConfirmationDialog } from '../confirmation-dialog-context'
 import { MessagesSquare } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -26,7 +25,6 @@ export function TerminalPaneResumeInChatButton({
     )
   )
   const pending = useCliChatResumePending(source)
-  const confirm = useConfirmationDialog()
   const updateRequired = source?.hostUpdateRequired === true
   const label = translate(
     'components.tab.bar.SortableTabContextMenu.switchToChatView',
@@ -55,7 +53,7 @@ export function TerminalPaneResumeInChatButton({
             onClick={(event) => {
               event.stopPropagation()
               if (source) {
-                void runCliChatResume(source, true, confirm)
+                void runCliChatResume(source, true)
               }
             }}
           >

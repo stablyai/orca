@@ -29,7 +29,6 @@ export abstract class OrcaRuntimeWithStopTerminalAgentForChat extends OrcaRuntim
     const readRow = () => this.agentTransitions.latestRow(input.cliSource.paneKey)
     const signal = AbortSignal.timeout(13_000)
     return stopTerminalAgentForChat({
-      consented: input.consented,
       readRow,
       prepare: () => this.prepareTerminalAgentStopForChat(input, readRow, signal),
       predict: (prepared) =>

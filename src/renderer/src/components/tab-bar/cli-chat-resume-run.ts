@@ -8,11 +8,7 @@ import {
   supportsStopTerminalAgentForChat,
   callStructuredAgentSession
 } from '@/runtime/structured-agent-session-client'
-import { structuredLaunchFailure } from '@/lib/structured-agent-session-launch-failure'
-import { translate } from '@/i18n/i18n'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 import type { AgentSessionRefusalReference } from '../../../../shared/agent-session-wire-refusals'
-import type { ConfirmationDialogContextValue } from '../confirmation-dialog-context'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
@@ -45,8 +41,7 @@ export function useCliChatResumePending(source: CliChatResumeSource | null): boo
 
 export async function runCliChatResume(
   source: CliChatResumeSource,
-  openOwner = false,
-  confirm?: ConfirmationDialogContextValue
+  openOwner = false
 ): Promise<void> {
   const key = keyFor(source)
   if (pending.has(key) || source.hostUpdateRequired) {
@@ -90,7 +85,7 @@ export async function runCliChatResume(
       release()
     }
   })
-  let timer = setTimeout(
+  const timer = setTimeout(
     () => controller.abort(new Error('Conversation preparation timed out.')),
     30_000
   )
@@ -130,65 +125,22 @@ export async function runCliChatResume(
     if (
       await waitForPromiseWithSignal(supportsStopTerminalAgentForChat(target), controller.signal)
     ) {
-      const stop = async (consented: boolean) => {
-        const result = await waitForPromiseWithSignal(
-          callStructuredAgentSession<
-            { ok: true } | { ok: false; refusal: AgentSessionRefusalReference }
-          >(target, 'agentSession.stopTerminalAgentForChat', {
-            worktree: source.workspaceId,
-            agent,
-            providerSessionId: source.providerSessionId,
-            cliSource,
-            consented
-          }),
-          controller.signal
-        )
-        if (!result.ok) {
-          throw Object.assign(new Error(result.refusal.code), { refusal: result.refusal })
-        }
-      }
       if (!isCurrent()) {
         return
       }
-      try {
-        await stop(false)
-      } catch (error) {
-        const reason = structuredLaunchFailure(error)?.details?.reason
-        if (reason !== 'turnActive' && reason !== 'backgroundTasksRunning') {
-          throw error
-        }
-        // Waiting for a person is not part of the host's bounded preparation deadline.
-        clearTimeout(timer)
-        const accepted = await confirm?.({
-          title:
-            reason === 'turnActive'
-              ? translate(
-                  'components.native-chat.surfaceSwitch.stopReplyTitle',
-                  '{{agent}} is replying. Stop it and continue in chat?',
-                  { agent: agentLabel(source.agent) }
-                )
-              : translate(
-                  'components.native-chat.surfaceSwitch.stopBackgroundTitle',
-                  '{{agent}} has background tasks running. Stop them and continue in chat?',
-                  { agent: agentLabel(source.agent) }
-                ),
-          confirmLabel: translate(
-            'components.native-chat.surfaceSwitch.stopAndContinue',
-            'Stop and continue'
-          ),
-          cancelLabel: translate('common.cancel', 'Cancel'),
-          compact: true,
-          cancelVariant: 'ghost',
-          signal: controller.signal
-        })
-        if (!accepted || !isCurrent()) {
-          return
-        }
-        timer = setTimeout(
-          () => controller.abort(new Error('Conversation preparation timed out.')),
-          30_000
-        )
-        await stop(true)
+      const result = await waitForPromiseWithSignal(
+        callStructuredAgentSession<
+          { ok: true } | { ok: false; refusal: AgentSessionRefusalReference }
+        >(target, 'agentSession.stopTerminalAgentForChat', {
+          worktree: source.workspaceId,
+          agent,
+          providerSessionId: source.providerSessionId,
+          cliSource
+        }),
+        controller.signal
+      )
+      if (!result.ok) {
+        throw Object.assign(new Error(result.refusal.code), { refusal: result.refusal })
       }
       stopped = true
     }

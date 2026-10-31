@@ -23,7 +23,6 @@ describe('terminal stop admission order', () => {
   it.each([
     'conversationMoved',
     'agentPaused',
-    'turnActive',
     'otherHolder',
     'transcriptNotFound',
     'sharedServer'
@@ -40,15 +39,7 @@ describe('terminal stop admission order', () => {
     }
     const latest: AgentStatusIpcPayload = {
       ...row,
-      state: ['turnActive', 'agentPaused', 'backgroundTasksRunning'].includes(reason)
-        ? 'working'
-        : 'done',
-      ...(reason === 'backgroundTasksRunning'
-        ? {
-            mainAgent: { state: 'done' as const, stateStartedAt: 1 },
-            workingMode: 'monitoring' as const
-          }
-        : {})
+      state: reason === 'agentPaused' ? 'working' : 'done'
     }
     const expected =
       reason === 'otherHolder'
@@ -58,7 +49,6 @@ describe('terminal stop admission order', () => {
           : 'agent_session_operation_invalid'
     await expect(
       stopTerminalAgentForChat({
-        consented: false,
         readRow: () => latest,
         prepare: async () => prepared,
         predict: async () => {
@@ -90,7 +80,6 @@ describe('terminal stop admission order', () => {
     vi.useFakeTimers()
     const stop = vi.fn(async () => 'exited' as const)
     const input = {
-      consented: true,
       readRow: () => ({ ...row, state: 'working' as const }),
       prepare: async () => ({
         hasAgent: true,

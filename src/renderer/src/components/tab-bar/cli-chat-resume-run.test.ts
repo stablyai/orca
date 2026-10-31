@@ -208,51 +208,26 @@ async function seedTabs() {
 const HOST_LEAF = '11111111-1111-4111-8111-111111111111'
 
 describe('CLI identity resume through the existing launch owner', () => {
-  it.each([true, false])(
-    'stops on the host before create, consent accepted: %s',
-    async (accepted) => {
-      mocks.stopCapability.mockResolvedValue(true)
-      const confirm = vi.fn(async () => accepted)
-      mocks.call.mockImplementation(async (_target, method, params) => {
-        if (method === 'agentSession.stopTerminalAgentForChat') {
-          return params.consented
-            ? { ok: true }
-            : {
-                ok: false,
-                refusal: {
-                  code: 'agent_session_operation_invalid',
-                  details: { reason: 'turnActive' }
-                }
-              }
-        }
-        return { ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } }
-      })
-      await runCliChatResume(SOURCE, false, confirm)
-      expect(confirm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: 'Claude is replying. Stop it and continue in chat?',
-          compact: true
-        })
-      )
-      expect(mocks.call.mock.calls.map((call) => call[1])).toEqual(
-        accepted
-          ? [
-              'agentSession.stopTerminalAgentForChat',
-              'agentSession.stopTerminalAgentForChat',
-              'agentSession.create'
-            ]
-          : ['agentSession.stopTerminalAgentForChat']
-      )
-      expect(mocks.call.mock.calls[0][2]).toEqual({
-        worktree: 'wt-1',
-        agent: 'claude',
-        providerSessionId: 'provider-1',
-        cliSource: { workspaceId: 'wt-1', paneKey: SOURCE.paneKey },
-        consented: false
-      })
-      expect(mocks.toast).not.toHaveBeenCalled()
-    }
-  )
+  it('stops on the host before create without asking for confirmation', async () => {
+    mocks.stopCapability.mockResolvedValue(true)
+    mocks.call.mockImplementation(async (_target, method, params) =>
+      method === 'agentSession.stopTerminalAgentForChat'
+        ? { ok: true }
+        : { ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } }
+    )
+    await runCliChatResume(SOURCE)
+    expect(mocks.call.mock.calls.map((call) => call[1])).toEqual([
+      'agentSession.stopTerminalAgentForChat',
+      'agentSession.create'
+    ])
+    expect(mocks.call.mock.calls[0][2]).toEqual({
+      worktree: 'wt-1',
+      agent: 'claude',
+      providerSessionId: 'provider-1',
+      cliSource: { workspaceId: 'wt-1', paneKey: SOURCE.paneKey }
+    })
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
 
   it('never creates after stop loses contact', async () => {
     mocks.stopCapability.mockResolvedValue(true)

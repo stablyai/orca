@@ -12,7 +12,6 @@ export const StopTerminalAgentForChatParams = z
         workspaceId: Identifier('Invalid workspace id'),
         paneKey: Identifier('Invalid pane key')
       })
-      .strict(),
-    consented: z.boolean()
+      .strict()
   })
   .strict()
