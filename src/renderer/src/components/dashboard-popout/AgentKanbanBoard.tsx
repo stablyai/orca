@@ -1,11 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { XIcon } from 'lucide-react'
-import {
-  DASHBOARD_BUCKET_ORDER,
-  type DashboardBucket,
-  type DashboardCard,
-  type DashboardSnapshot
-} from '../../../../shared/dashboard-snapshot'
+import type { DashboardCard, DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { cn } from '@/lib/utils'
 import { TooltipProvider } from '@/components/ui/tooltip'
@@ -21,6 +16,17 @@ import {
 import './agent-board-transitions.css'
 import { translate } from '@/i18n/i18n'
 import type { AgentSubjectReadIntent } from '@/attention/agent-subject-read-actions'
+import { Button } from '@/components/ui/button'
+import { useDashboardTaskNotes } from './use-dashboard-task-notes'
+import {
+  currentTaskNote,
+  isOlderResponse,
+  taskBucket,
+  taskNoteIdentity,
+  TASK_BUCKET_ORDER,
+  type DashboardTaskBucket,
+  type DashboardTaskNote
+} from './agent-task-status'
 
 /** Relay acknowledgments to the main renderer; optional calls tolerate dev-HMR preload skew until restart. */
 function ackAgentViaPopoutRelay(paneKey: string, intent: AgentSubjectReadIntent): void {
@@ -32,31 +38,37 @@ function revealAgentViaPopoutRelay(args: AgentRevealArgs): void {
   void window.api.dashboard.revealAgent?.(args)
 }
 
-function bucketLabel(bucket: DashboardBucket): string {
+function bucketLabel(bucket: DashboardTaskBucket): string {
   switch (bucket) {
     case 'attention':
       return translate('dashboardPopout.bucket.attention', 'Needs You')
     case 'working':
       return translate('dashboardPopout.bucket.working', 'Working')
     case 'done':
-      return translate('dashboardPopout.bucket.done', 'Done')
+      return translate('dashboardPopout.task.responses', 'Responses')
+    case 'waiting-input':
+      return translate('dashboardPopout.task.waitingInput', 'Waiting for input')
     case 'idle':
       return translate('dashboardPopout.bucket.idle', 'Idle')
   }
 }
 
-function groupByBucket(cards: DashboardCard[]): Record<DashboardBucket, DashboardCard[]> {
-  const grouped: Record<DashboardBucket, DashboardCard[]> = {
+function groupByBucket(
+  cards: DashboardCard[],
+  notes: Record<string, DashboardTaskNote>
+): Record<DashboardTaskBucket, DashboardCard[]> {
+  const grouped: Record<DashboardTaskBucket, DashboardCard[]> = {
     attention: [],
     working: [],
+    'waiting-input': [],
     done: [],
     idle: []
   }
   for (const card of cards) {
-    grouped[card.bucket].push(card)
+    grouped[taskBucket(card, notes[taskNoteIdentity(card)])].push(card)
   }
   // Newly moved cards lead their column, matching the view-transition motion.
-  for (const bucket of DASHBOARD_BUCKET_ORDER) {
+  for (const bucket of TASK_BUCKET_ORDER) {
     grouped[bucket].sort((a, b) => b.stateChangedAt - a.stateChangedAt)
   }
   return grouped
@@ -67,46 +79,87 @@ function KanbanColumn({
   cards,
   repoIconsByRepoId,
   now,
-  onOpenTerminal
+  onOpenTerminal,
+  notes,
+  onSaveTaskNote,
+  searching
 }: {
-  bucket: DashboardBucket
+  bucket: DashboardTaskBucket
   cards: DashboardCard[]
   repoIconsByRepoId: Record<string, RepoIcon | null> | undefined
   now: number
   onOpenTerminal: (card: DashboardCard) => void
+  notes: Record<string, DashboardTaskNote>
+  onSaveTaskNote: (card: DashboardCard, note: DashboardTaskNote) => void
+  searching: boolean
 }): React.JSX.Element {
   const label = bucketLabel(bucket)
+  const [showOlder, setShowOlder] = useState(false)
+  const older =
+    bucket === 'done'
+      ? cards.filter((card) => isOlderResponse(card, notes[taskNoteIdentity(card)], now))
+      : []
+  const shownCards =
+    showOlder || searching || older.length === 0
+      ? cards
+      : cards.filter((card) => !isOlderResponse(card, notes[taskNoteIdentity(card)], now))
 
   return (
     // Cards carry attention color; keep the column neutral to avoid duplicate signaling.
     <section
       aria-label={label}
-      className="flex min-w-[264px] flex-1 flex-col rounded-xl border border-border/60 bg-muted/30"
+      className="flex min-w-0 flex-col rounded-xl border border-border/60 bg-muted/30"
     >
       <header className="flex items-center gap-2 px-3 py-2">
-        <span className="text-[11px] font-semibold uppercase tracking-[0.05em] text-muted-foreground">
+        <span className="text-2xs font-semibold uppercase tracking-wider text-muted-foreground">
           {label}
         </span>
-        <span className="ml-auto rounded-full bg-background px-1.5 text-[11px] tabular-nums text-muted-foreground">
+        <span className="ml-auto rounded-full bg-background px-1.5 text-2xs tabular-nums text-muted-foreground">
           {cards.length}
         </span>
       </header>
-      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2">
-        {cards.length === 0 ? (
-          <p className="px-1 py-2 text-[11px] text-muted-foreground">
+      {bucket === 'done' ? (
+        <p className="px-3 pb-2 text-xs text-muted-foreground">
+          {translate(
+            'dashboardPopout.task.responseScope',
+            'Last 48 hours. A response is not a verified result.'
+          )}
+        </p>
+      ) : null}
+      <div className="scrollbar-sleek flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-2 pb-2 @max-[640px]/board:flex-none @max-[640px]/board:overflow-y-visible">
+        {shownCards.length === 0 ? (
+          <p className="px-1 py-2 text-2xs text-muted-foreground">
             {translate('dashboardPopout.bucket.empty', 'None')}
           </p>
         ) : (
-          cards.map((card) => (
+          shownCards.map((card) => (
             <AgentKanbanCard
               key={card.paneKey}
               card={card}
               repoIcon={repoIconsByRepoId?.[card.repoId] ?? null}
               now={now}
               onOpenTerminal={onOpenTerminal}
+              taskNote={notes[taskNoteIdentity(card)]}
+              onSaveTaskNote={onSaveTaskNote}
             />
           ))
         )}
+        {older.length > 0 && !searching ? (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="shrink-0 whitespace-normal"
+            aria-expanded={showOlder}
+            onClick={() => setShowOlder((open) => !open)}
+          >
+            {showOlder
+              ? translate('dashboardPopout.task.hideOlder', 'Hide older responses')
+              : translate('dashboardPopout.task.showOlder', 'Show older responses ({{count}})', {
+                  count: older.length
+                })}
+          </Button>
+        ) : null}
       </div>
     </section>
   )
@@ -135,23 +188,32 @@ export function AgentKanbanBoard({
   onClose,
   headerActions
 }: AgentKanbanBoardProps): React.JSX.Element {
+  const { notes, saveNote } = useDashboardTaskNotes()
   const visibleBuckets = useMemo(
-    () =>
-      DASHBOARD_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
+    () => TASK_BUCKET_ORDER.filter((bucket) => bucket !== 'idle' || snapshot.showIdle === true),
     [snapshot.showIdle]
   )
   const visibleCards = useMemo(
-    () => snapshot.cards.filter((card) => visibleBuckets.includes(card.bucket)),
-    [snapshot.cards, visibleBuckets]
+    () =>
+      snapshot.cards.filter((card) =>
+        visibleBuckets.includes(taskBucket(card, notes[taskNoteIdentity(card)]))
+      ),
+    [snapshot.cards, visibleBuckets, notes]
   )
   const [query, setQuery] = useState('')
   const searchInputRef = useRef<HTMLInputElement>(null)
   const [filters, setFilters] = useState<DashboardFilters>(EMPTY_DASHBOARD_FILTERS)
   const filteredCards = useMemo(
-    () => filterDashboardCards(visibleCards, query, filters),
-    [visibleCards, filters, query]
+    () =>
+      filterDashboardCards(visibleCards, query, filters, (card) => {
+        const note = currentTaskNote(card, notes[taskNoteIdentity(card)])
+        return note
+          ? [note.title, note.summary, note.nextStep, note.owner, note.reviewReference].join(' ')
+          : ''
+      }),
+    [visibleCards, filters, query, notes]
   )
-  const grouped = useMemo(() => groupByBucket(filteredCards), [filteredCards])
+  const grouped = useMemo(() => groupByBucket(filteredCards, notes), [filteredCards, notes])
   const hasRelativeTimestamps = useMemo(
     () => snapshot.cards.some((card) => (card.finishedAt ?? card.startedAt) > 0),
     [snapshot.cards]
@@ -237,7 +299,10 @@ export function AgentKanbanBoard({
     // Pop-outs have no app provider; supply the card tooltip provider in either host.
     <TooltipProvider delayDuration={300}>
       <div
-        className={cn('relative flex flex-col bg-background text-foreground', containerClassName)}
+        className={cn(
+          '@container/board relative flex flex-col bg-background text-foreground',
+          containerClassName
+        )}
       >
         <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2.5">
           <h1 className="text-[13px] font-semibold">
@@ -274,9 +339,9 @@ export function AgentKanbanBoard({
           onFiltersChange={setFilters}
           searchInputRef={searchInputRef}
         />
-        <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3">
+        <div className="scrollbar-sleek flex min-h-0 flex-1 overflow-x-auto p-3 @max-[640px]/board:block">
           {/* Auto margins center the capped board and collapse during horizontal overflow. */}
-          <div className="mx-auto flex w-full max-w-[1280px] gap-3">
+          <div className="mx-auto grid min-h-0 w-full max-w-[1512px] auto-rows-[minmax(200px,1fr)] grid-cols-[repeat(auto-fit,minmax(min(100%,264px),1fr))] gap-3 @max-[640px]/board:block @max-[640px]/board:space-y-3">
             {visibleBuckets.map((bucket) => (
               <KanbanColumn
                 key={bucket}
@@ -285,6 +350,9 @@ export function AgentKanbanBoard({
                 repoIconsByRepoId={snapshot.repoIconsByRepoId}
                 now={now}
                 onOpenTerminal={handleOpenTerminal}
+                notes={notes}
+                onSaveTaskNote={saveNote}
+                searching={query.trim().length > 0}
               />
             ))}
           </div>

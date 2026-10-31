@@ -20726,6 +20726,44 @@
       "ssh": "SSH host",
       "remoteNamed": "Remote Orca host · {{host}}",
       "remote": "Remote Orca host"
+    },
+    "task": {
+      "responses": "Responses",
+      "waitingInput": "Waiting for input",
+      "responseScope": "Last 48 hours. A response is not a verified result.",
+      "hideOlder": "Hide older responses",
+      "showOlder": "Show older responses ({{count}})",
+      "owner": "Who acts next",
+      "conversationPreview": "Conversation preview",
+      "respondedAt": "Response {{age}} ago",
+      "changedAt": "State {{age}} ago",
+      "title": "Task name",
+      "summary": "Current status",
+      "nextStep": "Next step",
+      "reviewReference": "Review reference",
+      "details": "Task details",
+      "changed": "The agent state changed. Close and reopen these details before saving.",
+      "reviewRequired": "Record a review reference for this completed response before marking the result verified.",
+      "waitRequired": "Specify the next step and who needs to act.",
+      "saveFailed": "Task details could not be saved. Keep this form open and try again.",
+      "localScope": "Saved on this device for the current agent state. These notes do not control the agent. A new state requires a new review.",
+      "outcome": "Task state",
+      "automatic": "Follow agent activity",
+      "needsYou": "Waiting for you",
+      "verified": "Result verified",
+      "confirmReview": "Saving confirms that you checked the result against the linked review. A finished agent turn alone is not verification.",
+      "working": "Agent is working",
+      "responded": "Responded · not reviewed",
+      "idle": "No activity reported",
+      "answer": "Open the conversation and answer the pending question.",
+      "nameInput": "Specify the missing input and who will provide it.",
+      "reviewRecorded": "Review recorded; add any follow-up.",
+      "reviewResponse": "Review the response and record the outcome.",
+      "awaitResponse": "Await the next response.",
+      "checkConversation": "Check the conversation before assigning more work.",
+      "failed": "Agent reported a failure",
+      "interrupted": "Agent was stopped",
+      "unconfirmed": "Response could not be confirmed"
     }
   },
   "dashboard": {
@@ -21325,7 +21363,8 @@
   },
   "common": {
     "retry": "Retry",
-    "cancel": "Cancel"
+    "cancel": "Cancel",
+    "save": "Save"
   },
   "terminal": {
     "sessionSaveFailure": {

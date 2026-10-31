@@ -21,6 +21,15 @@ import {
 import type { RepoIcon } from '../../../../shared/repo-icon'
 import { translate } from '@/i18n/i18n'
 import { DashboardHostBadge } from './DashboardHostBadge'
+import { AgentTaskDetails } from './AgentTaskDetails'
+import {
+  currentTaskNote,
+  taskBucket,
+  taskNextStep,
+  taskResultVerified,
+  taskStatusLabel,
+  type DashboardTaskNote
+} from './agent-task-status'
 
 function formatStartedAgo(startedAt: number, now: number): string {
   const seconds = Math.max(0, Math.floor((now - startedAt) / 1000))
@@ -40,9 +49,9 @@ function formatStartedAgo(startedAt: number, now: number): string {
   })
 }
 
-/** Count from completion when present, otherwise start, matching the worktree sidebar. */
+/** Label response age separately from the latest reported state change. */
 function displayTimestamp(card: DashboardCard): number {
-  return card.finishedAt ?? card.startedAt
+  return card.finishedAt ?? (card.stateChangedAt || card.startedAt)
 }
 
 function formatSubagentCount(count: number): string {
@@ -184,6 +193,8 @@ function sameRepoIcon(a: RepoIcon | null | undefined, b: RepoIcon | null | undef
 
 type AgentKanbanCardProps = {
   card: DashboardCard
+  taskNote?: DashboardTaskNote
+  onSaveTaskNote?: (card: DashboardCard, note: DashboardTaskNote) => void
   /** The card repo's icon. null renders the default folder glyph. */
   repoIcon?: RepoIcon | null
   now: number
@@ -194,6 +205,8 @@ type AgentKanbanCardProps = {
 export const AgentKanbanCard = memo(
   function AgentKanbanCard({
     card,
+    taskNote,
+    onSaveTaskNote,
     repoIcon = null,
     now,
     onOpenTerminal
@@ -201,11 +214,13 @@ export const AgentKanbanCard = memo(
     useTranslation()
     const [subagentsOpen, setSubagentsOpen] = useState(false)
     // Tint only attention and done so scan-worthy outcomes retain distinct meaning.
-    const needsYou = card.bucket === 'attention'
-    const displayState = dashboardCardDisplayState(card)
-    const isDone = displayState === 'done'
+    const note = currentTaskNote(card, taskNote)
+    const needsYou = taskBucket(card, note) === 'attention'
+    const isDone = taskResultVerified(card, note)
+    const activityState = dashboardCardDisplayState(card)
+    const displayState = isDone ? 'done' : activityState === 'done' ? 'idle' : activityState
     // Prefer the conversation heading; otherwise use the worktree once and omit its duplicate footer.
-    const heading = card.conversationName ?? card.worktreeName
+    const heading = note?.title.trim() || card.conversationName || card.worktreeName
     const worktreeInFooter = card.conversationName !== undefined
 
     return (
@@ -239,32 +254,26 @@ export const AgentKanbanCard = memo(
             >
               {heading}
             </span>
-            {card.askSummary ? null : <AgentStateDot state={displayState} className="ml-auto" />}
+            {card.askSummary ? null : (
+              <AgentStateDot
+                state={displayState}
+                title={taskStatusLabel(card, note)}
+                className="ml-auto"
+              />
+            )}
           </div>
 
-          {card.lastUserMessage || card.lastAgentMessage ? (
-            <div className="flex w-full flex-col gap-0.5">
-              {card.lastUserMessage ? (
-                <div className="line-clamp-1 text-[11px] leading-snug text-muted-foreground">
-                  <span className="font-medium text-foreground/45">
-                    {translate('dashboardPopout.card.you', 'You')}
-                  </span>{' '}
-                  {card.lastUserMessage}
-                </div>
-              ) : null}
-              {card.lastAgentMessage ? (
-                <div className="line-clamp-2 text-xs leading-snug text-foreground/90">
-                  <span className="font-medium text-foreground/45">
-                    {formatAgentTypeLabel(card.agentType)}
-                  </span>{' '}
-                  {card.lastAgentMessage}
-                </div>
-              ) : null}
-            </div>
-          ) : card.task ? (
-            <div className="line-clamp-2 w-full text-xs leading-snug text-foreground/90">
-              {card.task}
-            </div>
+          <span className="text-xs font-medium">{taskStatusLabel(card, note)}</span>
+          {note?.summary ? (
+            <span className="w-full break-words text-xs">{note.summary}</span>
+          ) : null}
+          <span className="w-full break-words text-xs text-muted-foreground">
+            {taskNextStep(card, note)}
+          </span>
+          {note?.owner ? (
+            <span className="w-full break-words text-xs">
+              {translate('dashboardPopout.task.owner', 'Who acts next')}: {note.owner}
+            </span>
           ) : null}
 
           {card.askSummary ? (
@@ -274,6 +283,31 @@ export const AgentKanbanCard = memo(
             </div>
           ) : null}
         </button>
+
+        {onSaveTaskNote ? (
+          <AgentTaskDetails card={card} note={note} onSave={onSaveTaskNote} />
+        ) : null}
+
+        {card.lastUserMessage || card.lastAgentMessage || card.task ? (
+          <details className="text-xs">
+            <summary className="cursor-pointer rounded-sm text-muted-foreground focus-visible:ring-2 focus-visible:ring-ring">
+              {translate('dashboardPopout.task.conversationPreview', 'Conversation preview')}
+            </summary>
+            <div className="mt-2 max-h-48 space-y-2 overflow-y-auto scrollbar-sleek break-words whitespace-pre-wrap">
+              {card.lastUserMessage ? (
+                <p>
+                  {translate('dashboardPopout.card.you', 'You')}: {card.lastUserMessage}
+                </p>
+              ) : null}
+              {card.lastAgentMessage ? (
+                <p>
+                  {formatAgentTypeLabel(card.agentType)}: {card.lastAgentMessage}
+                </p>
+              ) : null}
+              {!card.lastUserMessage && !card.lastAgentMessage ? <p>{card.task}</p> : null}
+            </div>
+          </details>
+        ) : null}
 
         {card.subagents?.length ? (
           <>
@@ -328,11 +362,22 @@ export const AgentKanbanCard = memo(
             hostLabel={card.hostLabel}
             className="size-[18px] rounded-[5px] bg-muted-foreground/10 transition-colors group-hover:text-foreground"
           />
-          {worktreeInFooter ? <span className="truncate">{card.worktreeName}</span> : null}
+          <span className="min-w-0 truncate">
+            {card.repoName}
+            {worktreeInFooter && card.worktreeName !== card.repoName
+              ? ` · ${card.worktreeName}`
+              : ''}
+          </span>
           <ReviewPill card={card} />
           {displayTimestamp(card) > 0 ? (
             <span className="ml-auto shrink-0 pl-1 tabular-nums">
-              {formatStartedAgo(displayTimestamp(card), now)}
+              {card.finishedAt !== null
+                ? translate('dashboardPopout.task.respondedAt', 'Response {{age}} ago', {
+                    age: formatStartedAgo(displayTimestamp(card), now)
+                  })
+                : translate('dashboardPopout.task.changedAt', 'State {{age}} ago', {
+                    age: formatStartedAgo(displayTimestamp(card), now)
+                  })}
             </span>
           ) : null}
         </button>
@@ -341,6 +386,8 @@ export const AgentKanbanCard = memo(
   },
   (previous, next) =>
     previous.onOpenTerminal === next.onOpenTerminal &&
+    previous.taskNote === next.taskNote &&
+    previous.onSaveTaskNote === next.onSaveTaskNote &&
     sameCard(previous.card, next.card) &&
     sameRepoIcon(previous.repoIcon, next.repoIcon) &&
     (displayTimestamp(previous.card) <= 0 ||
