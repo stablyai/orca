@@ -10,7 +10,6 @@ import {
 } from '../../../../../../shared/execution-host'
 import { parseWorkspaceKey } from '../../../../../../shared/workspace-scope'
 import { ORCA_SIDEBAR_INPUTS_IS_MAIN } from '../../../../../../shared/sidebar-inputs-switch'
-import { folderWorkspaceToWorktree } from '../../../../../../shared/folder-workspace-worktree'
 import {
   floatingWorkspaceToWorktree,
   isFloatingWorkspaceId
@@ -20,12 +19,14 @@ import { findWorktreeById, withoutErasedRequiredWorktreeFields } from '../../wor
 import { worktreeMatchesHost } from './worktree-host-ownership'
 import { hostWorktreeTarget } from '../../../../../../shared/worktree/host-qualified-identity'
 import {
+  type WorkspaceRecordState,
+  getFolderWorkspaceWorktree,
+  resolveQualifiedIndexedFolderWorkspace,
   selectFolderWorkspaces,
   selectWorkspaceByHostTarget,
   selectWorktreesByRepo
 } from '../../../workspace-record-selectors'
 
-const folderWorkspaceWorktreeCache = new WeakMap<FolderWorkspace, Worktree>()
 // Why a one-slot cache: the floating workspace is a singleton; retained selectors only need the
 // row's identity to hold while the resolved directory is unchanged.
 let floatingWorkspaceWorktreeCache: { path: string; worktree: Worktree } | null = null
@@ -76,22 +77,8 @@ export function folderWorkspaceMatchesHost(
   return getRepoExecutionHostId(workspace) === executionHostId
 }
 
-/** Stable synthetic row per folder workspace object, so selectors keep referential equality. */
-export function getFolderWorkspaceWorktree(folderWorkspace: FolderWorkspace): Worktree {
-  const cached = folderWorkspaceWorktreeCache.get(folderWorkspace)
-  if (cached) {
-    return cached
-  }
-  const worktree = folderWorkspaceToWorktree(folderWorkspace)
-  folderWorkspaceWorktreeCache.set(folderWorkspace, worktree)
-  return worktree
-}
-
 export function findKnownWorktreeById(
-  state: Pick<
-    AppState,
-    'worktreesByRepo' | 'detectedWorktreesByRepo' | 'folderWorkspaces' | 'floatingWorkspacePath'
-  >,
+  state: WorkspaceRecordState & Pick<AppState, 'detectedWorktreesByRepo' | 'floatingWorkspacePath'>,
   worktreeId: string,
   executionHostId?: ExecutionHostId
 ): Worktree | DetectedWorktreeListResult['worktrees'][number] | undefined {
@@ -109,12 +96,21 @@ export function findKnownWorktreeById(
   }
   const workspaceScope = parseWorkspaceKey(worktreeId)
   if (workspaceScope?.type === 'folder') {
-    const folderWorkspace = selectFolderWorkspaces(state).find(
-      (workspace) =>
-        workspace.id === workspaceScope.folderWorkspaceId &&
-        (!executionHostId || folderWorkspaceMatchesHost(workspace, executionHostId))
+    const result = resolveQualifiedIndexedFolderWorkspace(
+      state,
+      workspaceScope.folderWorkspaceId,
+      executionHostId
     )
-    return folderWorkspace ? getFolderWorkspaceWorktree(folderWorkspace) : undefined
+    if (result.kind === 'selected') {
+      return getFolderWorkspaceWorktree(result.value.workspace, result.value)
+    }
+    // Preserve unqualified path access for narrow snapshots.
+    const rows = selectFolderWorkspaces(state).filter(
+      (workspace) => workspace.id === workspaceScope.folderWorkspaceId
+    )
+    return !executionHostId && (!state.projectGroups || !state.repos) && rows.length === 1
+      ? getFolderWorkspaceWorktree(rows[0])
+      : undefined
   }
   const visible = executionHostId
     ? selectWorkspaceByHostTarget(
@@ -125,10 +121,7 @@ export function findKnownWorktreeById(
   if (visible) {
     return visible
   }
-  // Why the index: this miss path runs per activity row for exactly the worktrees the
-  // feature targets (retained agents on deleted worktrees); the cached index replaces a
-  // full scan of every repo's detected worktrees. The index holds the same row objects,
-  // so the cast restores the listing's row type.
+  // Cached index avoids fleet scans per deleted-worktree activity row; same row objects justify restoring the listing row type.
   const detectedCandidates = findIndexedDetectedWorktrees(
     state.detectedWorktreesByRepo,
     worktreeId

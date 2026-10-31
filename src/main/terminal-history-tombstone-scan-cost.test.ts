@@ -80,14 +80,13 @@ describe('terminal history tombstone scan cost', () => {
     return releases
   }
 
-  /** Drain only the microtask queue, so no queued directory read can land yet. */
+  // Do not let real directory reads land while settling removal promises.
   async function settleRemovalPromises(): Promise<void> {
     for (let index = 0; index < 8; index++) {
       await Promise.resolve()
     }
   }
 
-  /** Let real filesystem reads land. Callers using fake timers must drive the clock instead. */
   async function waitFor(label: string, condition: () => boolean): Promise<void> {
     for (let index = 0; index < 500; index++) {
       if (condition()) {
@@ -115,8 +114,6 @@ describe('terminal history tombstone scan cost', () => {
 
     expect(removeHostTreeMock).toHaveBeenCalledTimes(1024)
     expect(readdirSync(pendingRoot)).toEqual([])
-    // One read fills the queue; the handful after it only confirm the directory drained, so the
-    // count must stay flat in the backlog size rather than tracking completion batches.
     expect(reads.count).toBeLessThanOrEqual(8)
     expect(reads.names).toBeLessThanOrEqual(1024 + MAX_PENDING_HISTORY_TREE_REMOVALS)
   })
@@ -131,7 +128,6 @@ describe('terminal history tombstone scan cost', () => {
     mkdirSync(join(pendingRoot, 'late-session'))
     releases.splice(0).forEach((release) => release())
 
-    // The completion exhausted the queue, so its refill read discovers the late arrival.
     await waitFor('late tombstone admission', () => removeHostTreeMock.mock.calls.length === 2)
     releases.splice(0).forEach((release) => release())
     await flushPendingWorktreeHistoryDeletions()
@@ -159,7 +155,6 @@ describe('terminal history tombstone scan cost', () => {
     expect(peakInFlight).toBeLessThanOrEqual(MAX_PENDING_HISTORY_TREE_REMOVALS)
     expect(readdirSync(join(nativeRoot, '.pending-delete'))).toEqual([])
     expect(readdirSync(join(wslRoot, '.pending-delete'))).toEqual([])
-    // Two roots, so a couple of reads each rather than one per completion.
     expect(reads.count).toBeLessThanOrEqual(12)
   })
 
@@ -172,16 +167,14 @@ describe('terminal history tombstone scan cost', () => {
     await schedulePendingHistoryTreeRemovals(root)
     expect(removeHostTreeMock).toHaveBeenCalledTimes(MAX_PENDING_HISTORY_TREE_REMOVALS)
 
-    // The refill these completions request is the one that fails.
     reads.failNext = 1
     releases.splice(0).forEach((release) => release())
     await settleRemovalPromises()
-    // The queued 65th still came from memory, so the failed read cost no progress.
+    // The queued 65th removal comes from memory despite the failed refill read.
     expect(removeHostTreeMock).toHaveBeenCalledTimes(MAX_PENDING_HISTORY_TREE_REMOVALS + 1)
 
     mkdirSync(join(pendingRoot, 'late-after-failed-read'))
     releases.splice(0).forEach((release) => release())
-    // A later completion must be able to read again rather than stay wedged on the failure.
     await waitFor(
       'recovery after failed read',
       () => removeHostTreeMock.mock.calls.length === MAX_PENDING_HISTORY_TREE_REMOVALS + 2
@@ -209,7 +202,6 @@ describe('terminal history tombstone scan cost', () => {
   })
 
   it('preserves delayed failure retries while successful removals replenish the queue', async () => {
-    // Fake timers must be armed before the failure so its retry lands on the test clock.
     vi.useFakeTimers()
     const root = join(userDataDir, 'terminal-history')
     seedTombstones(root, 130)
@@ -256,7 +248,6 @@ describe('terminal history tombstone scan cost', () => {
     await schedulePendingHistoryTreeRemovals(nativeRoot)
     await schedulePendingHistoryTreeRemovals(wslRoot)
 
-    // Every WSL tombstone that was admitted exhausts its retries while native removals stay in flight.
     for (const delay of HISTORY_TREE_REMOVAL_RETRY_DELAYS_MS) {
       await vi.advanceTimersByTimeAsync(delay)
     }
@@ -268,8 +259,7 @@ describe('terminal history tombstone scan cost', () => {
     releases.splice(0).forEach((release) => release())
     await vi.advanceTimersByTimeAsync(0)
     await vi.advanceTimersByTimeAsync(0)
-    // Freeing another root's slots may give untried tombstones a first attempt, but must never hand
-    // an exhausted one a fresh attempt.
+    // Freed slots may admit untried tombstones, but must not restart exhausted ones.
     for (const count of attemptsByDir.values()) {
       expect(count).toBeLessThanOrEqual(maxAttempts)
     }

@@ -1,10 +1,5 @@
-// When the session's own agent entered the status it is in, read off its own lifecycle edges: its
-// turn records, its sends, and the prompts holding it. Row timestamps never date it. Subagents
-// write into the same journal and keep going after the session settles, and a clock over rows
-// re-dates an idle session with every one of theirs.
-//
-// Turn records need no producer filter: a turn is the session's own unit of work and never carries
-// subagent linkage (see the header of `structured-agent-session-live-turn.ts`).
+// Date status from own turn/send/prompt edges, never newest-row time: child output would keep redating an idle lead.
+// Turn records need no producer filter because they never carry child linkage (structured-agent-session-live-turn.ts).
 
 import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
 import { isRootAgentJournalItem } from './agent-session-journal-producer'
@@ -89,8 +84,7 @@ export function structuredAgentSessionDatedMainAgent<T extends object>(
     : { ...mainAgent, stateStartedAt: summary.statusStartedAt }
 }
 
-/** The row's own start, when the host dated it: the row is showing the main agent's state rather
- *  than one child work holds open. Undefined leaves the writer's own continuity rule in charge. */
+/** Use the host clock only while the row shows the lead’s state; child-held rows retain the writer’s continuity rule. */
 export function structuredAgentSessionRowStateStartedAt(
   row: { state: AgentStatusState; mainAgent: Pick<AgentMainAgentStatus, 'state'> },
   summary: Pick<AgentSessionStatusSummary, 'statusStartedAt'>

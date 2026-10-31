@@ -1,4 +1,4 @@
-// A failed start's one row is keyed by the start, so a reader finds it by identity, not by its words.
+// Key failure rows by start identity so readers never match by prose.
 
 import { parseAgentJournalItemKey } from './agent-session-journal-item-key'
 import type { AgentJournalItemIdentity } from './agent-session-journal-types'

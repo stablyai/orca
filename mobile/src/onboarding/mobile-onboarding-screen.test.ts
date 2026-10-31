@@ -2,6 +2,7 @@ import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import MobileOnboardingScreen from '../../app/mobile-onboarding'
+import { findAllByHostType, findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
 const mocks = vi.hoisted(() => ({
   params: { hostId: 'paired-host', steps: 'session-view,notifications' },
@@ -24,7 +25,7 @@ vi.mock('react-native', () => ({
       constructor(public current: number) {}
     },
     View: 'AnimatedView',
-    // Lazy like a real Animated node, so translateX tracks later timing updates.
+    // Keep Animated values lazy so later timing updates reach translateX.
     multiply: (value: { current: number }, factor: number) => ({ value, factor }),
     timing: mocks.animatedTiming
   },
@@ -102,7 +103,7 @@ describe('MobileOnboardingScreen', () => {
   }
 
   function trackStyle() {
-    return renderer!.root.findByType('AnimatedView').props.style[1]
+    return findByHostType(renderer!.root, 'AnimatedView').props.style[1]
   }
 
   function trackWidth(): number {
@@ -111,12 +112,11 @@ describe('MobileOnboardingScreen', () => {
 
   function translateX(): number {
     const { value, factor } = trackStyle().transform[0].translateX
-    // + 0 normalises -0 on the first slide.
     return value.current * factor + 0
   }
 
   function pages() {
-    return renderer!.root.findAllByType('MobileOnboardingPage')
+    return findAllByHostType(renderer!.root, 'MobileOnboardingPage')
   }
 
   it('advances from session view to notifications before opening the paired host', async () => {
@@ -219,7 +219,6 @@ describe('MobileOnboardingScreen', () => {
   })
 
   it('sizes slides from the modal viewport rather than the wider window', async () => {
-    // iPad presents the modal as a centred sheet narrower than the window.
     mocks.windowWidth = 1024
     await renderScreen(540)
 

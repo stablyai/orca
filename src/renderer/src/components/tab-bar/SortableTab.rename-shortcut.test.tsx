@@ -1,3 +1,4 @@
+import type * as ReactModule from 'react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { requestTerminalTabRename } from './terminal-tab-rename-request'
 
@@ -33,7 +34,7 @@ const storeState = vi.hoisted(
 )
 
 vi.mock('react', async () => {
-  const actual = await vi.importActual<typeof import('react')>('react') // eslint-disable-line @typescript-eslint/consistent-type-imports -- vi.importActual requires inline import()
+  const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
     useCallback<T>(callback: T) {
@@ -63,6 +64,7 @@ vi.mock('react', async () => {
 })
 
 // The menu's session lookup is covered by its own tests; this file only drives rename.
+
 vi.mock('./TabSessionSurfaceSwitchMenuItems', () => ({
   TabSessionSurfaceSwitchMenuItems: () => null
 }))
@@ -147,35 +149,35 @@ vi.mock('@/hooks/useShortcutLabel', () => ({
   useShortcutKeyDetails: () => ({ keys: ['⌘', 'W'], doubleTap: false })
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: function DropdownMenu(props: { children?: unknown }) {
-    return { type: 'DropdownMenu', props }
+vi.mock('@/components/ui/context-menu', () => ({
+  ContextMenu: function ContextMenu(props: { children?: unknown }) {
+    return { type: 'ContextMenu', props }
   },
-  DropdownMenuContent: function DropdownMenuContent(props: { children?: unknown }) {
-    return { type: 'DropdownMenuContent', props }
+  ContextMenuContent: function ContextMenuContent(props: { children?: unknown }) {
+    return { type: 'ContextMenuContent', props }
   },
-  DropdownMenuItem: function DropdownMenuItem(props: { children?: unknown }) {
-    return { type: 'DropdownMenuItem', props }
+  ContextMenuItem: function ContextMenuItem(props: { children?: unknown }) {
+    return { type: 'ContextMenuItem', props }
   },
-  DropdownMenuShortcut: function DropdownMenuShortcut(props: { children?: unknown }) {
-    return { type: 'DropdownMenuShortcut', props }
+  ContextMenuShortcut: function ContextMenuShortcut(props: { children?: unknown }) {
+    return { type: 'ContextMenuShortcut', props }
   },
-  DropdownMenuSeparator: function DropdownMenuSeparator() {
-    return { type: 'DropdownMenuSeparator', props: {} }
+  ContextMenuSeparator: function ContextMenuSeparator() {
+    return { type: 'ContextMenuSeparator', props: {} }
   },
-  DropdownMenuLabel: function DropdownMenuLabel(props: { children?: unknown }) {
-    return { type: 'DropdownMenuLabel', props }
+  ContextMenuLabel: function ContextMenuLabel(props: { children?: unknown }) {
+    return { type: 'ContextMenuLabel', props }
   },
-  DropdownMenuSub: function DropdownMenuSub(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSub', props }
+  ContextMenuSub: function ContextMenuSub(props: { children?: unknown }) {
+    return { type: 'ContextMenuSub', props }
   },
-  DropdownMenuSubContent: function DropdownMenuSubContent(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSubContent', props }
+  ContextMenuSubContent: function ContextMenuSubContent(props: { children?: unknown }) {
+    return { type: 'ContextMenuSubContent', props }
   },
-  DropdownMenuSubTrigger: function DropdownMenuSubTrigger(props: { children?: unknown }) {
-    return { type: 'DropdownMenuSubTrigger', props }
+  ContextMenuSubTrigger: function ContextMenuSubTrigger(props: { children?: unknown }) {
+    return { type: 'ContextMenuSubTrigger', props }
   },
-  DropdownMenuTrigger: function DropdownMenuTrigger(props: { children?: unknown }) {
+  ContextMenuTrigger: function ContextMenuTrigger(props: { children?: unknown }) {
     return props.children
   }
 }))

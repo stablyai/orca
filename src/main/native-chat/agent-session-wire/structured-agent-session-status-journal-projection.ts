@@ -1,10 +1,8 @@
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../../../shared/structured-agent-session-command-entry'
-// The status feed's per-journal projection, cached per commit: what a session's journal says its
-// row is, and the user's newest send the provider accepted.
 
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { projectStructuredAgentSessionStatusState } from '../../../shared/structured-agent-session-projection'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -20,32 +18,29 @@ export type StructuredAgentSessionStatusState = ReturnType<
 
 export type StructuredAgentSessionJournalProjection = {
   epoch: string
+  contextId: string | null
   sequence: number
   fence: number | undefined
-  /** The live generation's fence (`structuredAgentSessionLiveFence`): an exit this host saw, or a
-   *  release, changes what is current without a journal row. */
+  /** Live authority may change without a journal row. */
   liveFence: number | null
-  /** `StructuredAgentSessionCurrentWork.revision`: what this host saw end with no row or lease
-   *  write still changes the row. */
+  /** Include observed row-free/lease-free child endings in cache identity. */
   workRevision: number
-  /** The Stop marks' settle revision: a settle edge writes no row, so it is a key of its own. */
+  /** Stop settlement edges write no row and need an independent cache key. */
   stopRevision: number
   state: StructuredAgentSessionStatusState
   acceptedSendKey: string
   firstInputSubmissionKey: string | null
   submissionCount: number
-  /** A person's Stop is still ending the work it stopped (`structuredAgentSessionStopping`). */
   stopping: boolean
 }
 
 export class StructuredAgentSessionJournalProjections {
-  // Task progress must not sort and scan an unchanged conversation. Journal identity owns cleanup.
+  // Key by journal lifetime; task-progress frames must not rescan unchanged conversations.
   private readonly byJournal = new WeakMap<
     AgentSessionJournal,
     StructuredAgentSessionJournalProjection
   >()
 
-  /** `AgentSessionRecordStore.replacedRuntime`, which ends what a replaced runtime held. */
   constructor(
     private readonly replacedRuntime?: (
       sessionId: string
@@ -54,8 +49,7 @@ export class StructuredAgentSessionJournalProjections {
 
   read(
     journal: AgentSessionJournal,
-    record: AgentSessionRecord | null,
-    /** What this host saw end (`StructuredAgentSessionHostSession`). */
+    record: AgentSessionConversationView | null,
     seen?: {
       lastEndedChild?: StructuredAgentSessionWorkEvidence['ended']
       operationalRevision?: number
@@ -63,8 +57,8 @@ export class StructuredAgentSessionJournalProjections {
     }
   ): StructuredAgentSessionJournalProjection {
     const cursor = journal.cursor()
-    // The conversation's fence, which a child's end moves: its unanswered sends stop counting.
-    const fence = record?.lease.runtimeFence
+    const contextId = record?.providerContextBoundary?.operationId ?? null
+    const fence = record?.currentFence
     const ended = seen?.lastEndedChild
     const work = structuredAgentSessionCurrentWork(journal, {
       record,
@@ -78,30 +72,35 @@ export class StructuredAgentSessionJournalProjections {
     if (
       !projection ||
       projection.epoch !== cursor.epoch ||
+      projection.contextId !== contextId ||
       projection.sequence !== cursor.sequence ||
       projection.fence !== fence ||
       projection.liveFence !== work.liveFence ||
       projection.workRevision !== work.revision ||
       projection.stopRevision !== stopRevision
     ) {
-      // A journalled submission bumps `lastSequence`, so the send-time working
-      // signal reaches the cache; the lease fence does not, hence the extra key.
+      // Journal sequence captures sends; lease/live-work/Stop keys capture row-free changes.
       const snapshot = journal.snapshot()
-      let firstInputSubmissionKey =
-        projection?.epoch === cursor.epoch ? projection.firstInputSubmissionKey : null
-      const start = projection?.epoch === cursor.epoch ? projection.submissionCount : 0
+      const sameContext =
+        projection?.epoch === cursor.epoch && projection.contextId === contextId
+          ? projection
+          : undefined
+      let firstInputSubmissionKey = sameContext?.firstInputSubmissionKey ?? null
+      const start = sameContext?.submissionCount ?? 0
+      const floor = sameContext ? 0 : (journal.context.floor()?.sequence ?? 0)
       const submissions =
         !firstInputSubmissionKey && snapshot.submissions.length !== start
           ? journal.submissions()
           : snapshot.submissions
-      // New submissions are visited once; streamed output cannot rescan command history.
       for (let index = start; !firstInputSubmissionKey && index < submissions.length; index++) {
         const submission = submissions[index]
         const item =
           journal.item(agentJournalSubmissionKey(submission.clientMessageId)) ??
           (submission.providerItemId ? journal.item(submission.providerItemId) : null)
         if (
-          item?.body.kind === 'message' &&
+          item &&
+          item.sequence > floor &&
+          item.body.kind === 'message' &&
           item.body.role === 'user' &&
           isRootAgentJournalItem(item) &&
           !isStructuredAgentSessionCommandEntry(item.body)
@@ -111,13 +110,13 @@ export class StructuredAgentSessionJournalProjections {
       }
       projection = {
         ...cursor,
+        contextId,
         firstInputSubmissionKey,
         submissionCount: snapshot.submissions.length,
         fence,
         liveFence: work.liveFence,
         workRevision: work.revision,
         stopRevision,
-        // The host's projection of current work: an ended generation's is not Working.
         state: withDiedTurnVerdict(
           projectStructuredAgentSessionStatusState(
             snapshot.items,
@@ -141,8 +140,7 @@ export class StructuredAgentSessionJournalProjections {
   }
 }
 
-/** A turn whose generation died on its own reads as its settlement writes it, interrupted, before
- *  that lands: never a finish with no verdict (`StructuredAgentSessionCurrentWork.diedTurn`). */
+/** Project proven child death immediately, before durable settlement can land. */
 function withDiedTurnVerdict(
   state: StructuredAgentSessionStatusState,
   died: { turnId: string } | null

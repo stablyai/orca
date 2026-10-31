@@ -1,7 +1,6 @@
 import type { AgentSessionHandoffStage } from './agent-session-record'
 
-/** `agentSession.handoffStatus`. Named for the removed terminal handoff; released desktop clients
- *  still read `owner`. Clients parse the reply as unknown, since older hosts sent more fields. */
+/** Released clients still read owner under the old handoffStatus name; parse as unknown because older hosts sent additional fields. */
 export type AgentSessionHandoffStatus = {
   owner: 'native' | 'none'
   direction: 'to-native' | null

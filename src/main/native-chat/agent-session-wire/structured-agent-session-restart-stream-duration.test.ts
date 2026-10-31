@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
@@ -7,7 +8,7 @@ import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
 } from '../../../shared/structured-agent-session-turn-timing'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   closeTestJournalHostDatabases,
@@ -44,7 +45,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
 async function streamBeforeCrash(
@@ -88,7 +89,6 @@ async function streamBeforeCrash(
   expect(rig.store.getRecord(SESSION)?.lease.lastRenewedAt).toBe(HOST_TEST_NOW)
 }
 
-/** Drops the old host without an exit callback or graceful turn settlement. */
 async function restartAfterCrash(): Promise<void> {
   const old = rig.host
   old.stopDelivery()
@@ -97,7 +97,7 @@ async function restartAfterCrash(): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   rig.clock.now = RESTARTED_AT
   rig.store = await openTestAgentSessionRecordStore(rig.root)
   rig.host = new StructuredAgentSessionHost({
@@ -135,7 +135,7 @@ describe('a provider stream cut short before its next lease renewal', () => {
       await streamBeforeCrash(workspaceKind)
       const cursor = (await rig.host.journalSnapshot(SESSION)).cursor
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
 
       await expectSettledStream()
       const events: AgentSessionSubscribeEvent[] = []
@@ -159,13 +159,12 @@ describe('a provider stream cut short before its next lease renewal', () => {
       ])
       unsubscribe()
       const settled = await rig.host.journalSnapshot(SESSION)
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       expect(await rig.host.journalSnapshot(SESSION)).toEqual(settled)
 
       await restartAfterCrash()
-      await rig.host.restoreReadableSessions()
+      await openTestChats(rig.host)
       await expectSettledStream()
-      // A reopen can mark its queue, but never revises the settled turn again.
       expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(settled.items)
     }
   )
@@ -189,13 +188,13 @@ describe('a provider stream cut short before its next lease renewal', () => {
     rig.clock.now = LAST_CHUNK_AT
     await rig.host.flushAllStreamedEvents({ trigger: 'quit' })
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
 
     await expectSettledStream()
     expect(rig.adapter.closeSession).toHaveBeenCalledOnce()
   })
 
-  // A new server replacing the owner's runtime ends it anyway (structured-agent-session-replaced-server-turn).
+  // A different runtime’s replacement is stronger evidence than same-runtime reopening.
   it('leaves the end unverifiable when its own runtime reopens and cannot prove owner death', async () => {
     await streamBeforeCrash()
     await restartAfterCrash()
@@ -203,7 +202,7 @@ describe('a provider stream cut short before its next lease renewal', () => {
       outcome: 'indeterminate',
       reason: 'probe unavailable'
     })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
 
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
@@ -262,7 +261,7 @@ describe('a provider stream cut short before its next lease renewal', () => {
       { fence: 2, turnScope: TURN_SCOPE, observedAt: later }
     )
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
 
     await expectSettledStream()
   })

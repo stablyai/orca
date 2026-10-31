@@ -15,14 +15,12 @@ import { readTrackedSources, runEntryRatchet } from './ratchet-baseline.mjs'
 
 const BASELINE_PATH = 'config/max-lines-baseline.txt'
 const MOBILE_CONFIG_PATH = 'mobile/.oxlintrc.json'
-// These two files legitimately contain the directive text as data (regex, fixtures),
-// so scanning them would self-flag. The ratchet does not police itself.
+// Exclude gate/fixtures containing directive text as data or scanning self-flags.
 const SELF_FILES = new Set([
   'config/scripts/check-max-lines-ratchet.mjs',
   'config/scripts/check-max-lines-ratchet.test.mjs'
 ])
 
-// Default max-lines budgets from .oxlintrc.json (counted lines).
 export function defaultLimitForPath(p) {
   if (/\.(test|spec)\.(ts|tsx|mts|cts)$/.test(p)) {
     return 800
@@ -43,10 +41,10 @@ export function hasMaxLinesDisable(sourceText) {
   let m
   while ((m = re.exec(sourceText)) !== null) {
     let rules = m[1]
-    rules = rules.split('--')[0] // strip the reason
+    rules = rules.split('--')[0]
     const close = rules.indexOf('*/')
     if (close !== -1) {
-      rules = rules.slice(0, close) // strip block-comment tail
+      rules = rules.slice(0, close)
     }
     if (/\bmax-lines\b/.test(rules)) {
       return true
@@ -55,8 +53,7 @@ export function hasMaxLinesDisable(sourceText) {
   return false
 }
 
-// Per-file `max-lines` bumps in mobile/.oxlintrc.json whose `max` exceeds the
-// default for that glob (a lower `max` is stricter, not a bypass).
+// Only budget increases bypass max-lines; lower maxima are stricter.
 export function collectMobileBumps(configText) {
   const cfg = JSON.parse(configText)
   const bumps = []
@@ -74,7 +71,6 @@ export function collectMobileBumps(configText) {
   return bumps
 }
 
-// Collect every current suppression entry from the tracked tree.
 export function collectCurrentSuppressions(root = process.cwd()) {
   const sources = readTrackedSources(
     root,

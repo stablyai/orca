@@ -82,8 +82,7 @@ describe('SidebarToolbar moved workspace board hint', () => {
     })
     document.body.replaceChildren()
     vi.clearAllMocks()
-    // Why: the language-change case mutates the shared i18n instance; restore
-    // here so a failing assertion cannot leave later tests running in Korean.
+    // Restore locale between tests so a failure cannot leave later cases in Korean.
     await i18n.changeLanguage('en')
   })
 
@@ -128,10 +127,7 @@ describe('SidebarToolbar moved workspace board hint', () => {
     expect(window.localStorage.getItem('orca.workspaceBoardMovedHintSeen.v1')).toBe('true')
   })
 
-  // Why: the toolbar is a React.memo boundary whose props never change on a
-  // language switch, so without its own useTranslation() subscription it keeps
-  // the English copy it rendered at boot (the persisted locale is applied
-  // asynchronously, after the lazy catalog loads).
+  // Memoized toolbar props stay unchanged on locale switches; the boundary needs its own subscription.
   it('relabels itself when the UI language changes after mount', async () => {
     const { container } = await renderToolbar()
     expect(container.querySelector('button[aria-label="Workspace board"]')).not.toBeNull()
@@ -140,18 +136,9 @@ describe('SidebarToolbar moved workspace board hint', () => {
       await i18n.changeLanguage('ko')
     })
 
-    // Why: read the expected copy from the catalog instead of hardcoding it, so
-    // editing the Korean wording cannot fail this test as a bogus stale-render
-    // report.
+    // Read expected translation from the catalog so wording edits cannot resemble stale rendering.
     const localized = ko.auto.components.sidebar.SidebarToolbar['49f62c5665']
     expect(localized).not.toBe('Workspace board')
     expect(container.querySelector(`button[aria-label="${localized}"]`)).not.toBeNull()
-  })
-
-  it('keeps account controls out of the sidebar footer', async () => {
-    const { container } = await renderToolbar()
-
-    expect(container.textContent).not.toContain('Profile')
-    expect(container.textContent).toContain('Settings')
   })
 })

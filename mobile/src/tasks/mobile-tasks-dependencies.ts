@@ -9,32 +9,14 @@ export {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View
 } from 'react-native'
-/**
- * `Linking` as this tree uses it: one method, routed through the platform seam.
- *
- * Not react-native's. Inside the shell's WebView react-native-web's `openURL` calls
- * `window.open(url, '_blank')`, which both shells refuse — iOS returns nil from
- * `createWebViewWith`, Android false from `onCreateWindow` — and resolves regardless, so every
- * call site would report success into a tap that opened nothing. The seam posts `externalLink` to
- * the shell on the web and is `Linking.openURL` unchanged on a phone.
- *
- * Typed `void` on purpose: the seam names its own failures and never rejects, so a `.catch` here
- * would be a handler for a rejection that cannot arrive, and this makes that a compile error.
- */
+// Use the platform seam: WebView window.open is refused by both shells despite resolving successfully.
+// The seam reports failures itself and returns void, preventing unreachable rejection handlers.
 export const Linking: { openURL: (url: string) => void } = { openURL: openExternalLink }
 export { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 export { useLocalSearchParams } from 'expo-router'
-/**
- * The router as this tree uses it: expo-router's on a phone, and the handoff inside the page.
- *
- * The page is one document standing in for one screen, so a route it does not render goes back to
- * the app that does, and its Back goes to the native stack the shell pushed it onto — the
- * document has the single history entry the entry wrote, so expo-router's `back()` moves nothing.
- * `useRouteHandoff` is router-shaped, so no call site changes.
- */
+// The embedded page has one history entry; route pushes and Back must hand off to the native app stack.
 export { useRouteHandoff as useRouter } from '../navigation/route-handoff'
 export {
   AlertTriangle,
@@ -47,10 +29,12 @@ export {
   ExternalLink,
   GitBranch,
   Lock,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
-  Send,
+  Search,
+  SlidersHorizontal,
   X
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'
@@ -70,6 +54,8 @@ export { ConfirmModal } from '../components/ConfirmModal'
 export { MobileMarkdown } from '../components/MobileMarkdown'
 export { MobileAgentIcon } from '../components/MobileAgentIcon'
 export { MobileWorkspaceNameInput } from '../components/MobileWorkspaceNameInput'
+export { MessageBox } from '../components/composer-input/MessageBox'
+export { TextField } from '../components/composer-input/TextField'
 export { MobileSearchField } from '../components/MobileSearchField'
 export { MobileSyntaxSegments } from '../components/MobileSyntaxSegments'
 export { PickerModal } from '../components/PickerModal'
@@ -130,10 +116,14 @@ export { WORKTREE_CREATE_TIMEOUT_MS } from './workspace-create-timeout'
 export {
   isSetupHookTrusted,
   normalizeSetupHookTrust,
-  trustedOrcaHooksWithSetupApproval,
+  persistSetupHookTrustApproval,
+  readRepoHooksSetupCommand,
   wasSetupHookPreviouslyApproved
 } from './setup-hook-trust'
 export { colors, radii, spacing, typography } from '../theme/mobile-theme'
+export type { MobileColorScheme } from '../theme/mobile-theme'
+export { themedStyleSheet, themedStyles } from '../theme/themed-styles'
+export { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 export { triggerMediumImpact } from '../platform/haptics'
 export {
   CROSS_REPO_DISPLAY_LIMIT,

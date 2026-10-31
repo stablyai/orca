@@ -1,10 +1,7 @@
-/** The activation's manifest: a generation directory is an activation only once this is in it. */
+// A generation activates only once its manifest exists.
 export const MANIFEST_FILE_NAME = 'manifest.json'
 
-/** The manifest schema bans traversal already, but this is the last code between a manifest and a
- *  write, and both manifest names are the store's own rather than an asset's to take: the pending
- *  one would be read back as an activation. Folded, because APFS and NTFS are case-insensitive and
- *  `Manifest.JSON` would land on the same file. */
+// Recheck traversal at the write boundary and reserve both manifest names; fold case because APFS/NTFS can alias Manifest.JSON to manifest.json.
 export function requireStorablePath(path: string): string {
   const segments = path.split('/')
   const folded = path.toLowerCase()

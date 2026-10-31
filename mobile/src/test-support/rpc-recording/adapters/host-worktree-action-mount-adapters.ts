@@ -18,12 +18,7 @@ const ROW = {
   linkedPR: null
 }
 
-/**
- * The host screen's three worktree mutations: pin, delete and open.
- *
- * Mounted with no hostId, which is the only thing that keeps the hook off native storage: the
- * pinned-id write is the sole native call and it sits behind `if (hostId)`.
- */
+// Omit hostId to keep the hook off native pinned-id storage while recording worktree writes.
 export function hostWorktreeActionMountAdapters(
   modules: ReturnType<typeof operationModuleLoader>
 ): Record<string, MountAdapter> {

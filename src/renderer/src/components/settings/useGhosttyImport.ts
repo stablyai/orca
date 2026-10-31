@@ -1,6 +1,8 @@
 import { useState } from 'react'
 import type { GhosttyImportPreview, GlobalSettings } from '../../../../shared/global-settings-types'
 import { useMountedRef } from '../../hooks/useMountedRef'
+import { withImportedTerminalColorOverrides } from '../../../../shared/terminal-theme-selection'
+import { getSystemPrefersDark } from '@/lib/terminal-theme'
 
 export type UseGhosttyImportReturn = {
   open: boolean
@@ -15,10 +17,7 @@ export type UseGhosttyImportReturn = {
 
 export function useGhosttyImport(
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>,
-  // Why: caller may not yet have the settings loaded (the settings page shows
-  // a loading spinner before the store resolves). We still need to hold the
-  // hook state at the parent level so React hook order stays stable, so accept
-  // null and no-op the apply path until settings exist.
+  // Accept unloaded settings so the parent retains stable hook order; defer applying until settings exist.
   settings: GlobalSettings | null
 ): UseGhosttyImportReturn {
   const [open, setOpen] = useState(false)
@@ -52,22 +51,14 @@ export function useGhosttyImport(
     if (applied || !preview?.found || Object.keys(preview.diff).length === 0 || !settings) {
       return
     }
-    const merged = {
-      ...preview.diff,
-      ...(preview.diff.terminalColorOverrides
-        ? {
-            terminalColorOverrides: {
-              ...settings.terminalColorOverrides,
-              ...preview.diff.terminalColorOverrides
-            }
-          }
-        : {})
-    }
+    const merged = withImportedTerminalColorOverrides(
+      settings,
+      preview.diff,
+      getSystemPrefersDark()
+    )
     setApplyError(null)
     try {
-      // Why: updateSettings may be async (settings:set IPC). If it rejects we
-      // must keep the modal in its "unapplied" state and surface the error so
-      // the user doesn't see a false success.
+      // Await persistence before marking applied so rejected IPC cannot report success.
       await updateSettings(merged)
       if (mountedRef.current) {
         setApplied(true)

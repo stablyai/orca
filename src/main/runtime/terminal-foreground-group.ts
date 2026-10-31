@@ -1,12 +1,14 @@
-/**
- * Who holds one pane's terminal, from a `ps` limited to that terminal's processes: a few
- * milliseconds, where the whole-machine capture behind a fresh scan or an `inspectProcess`
- * observation takes seconds on a loaded host and gated every launch paste behind it.
- */
+/** Limit ps to the pane's terminal so launch paste avoids whole-machine scans that take seconds on loaded hosts. */
 
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { runProcess } from '@orca/process-host'
-import { parseShellForegroundRows, type ProcessTableRow } from '../../shared/process-table-snapshot'
+import { runPsInProcess } from '../../shared/libproc-process-table'
+import {
+  parseShellForegroundRows,
+  unreadableArgvName,
+  type ProcessTableRow
+} from '../../shared/process-table-snapshot'
+import { psLocaleEnvironment } from '../../shared/ps-locale-environment'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import type { TuiAgent } from '../../shared/tui-agent'
 
@@ -18,12 +20,20 @@ const TTY_CACHE_LIMIT = 256
 
 async function ps(args: readonly string[]): Promise<string | null> {
   try {
-    const result = await runProcess({
-      program: 'ps',
-      args,
-      timeoutMs: PS_TIMEOUT_MS,
-      maxOutputBytes: PS_MAX_OUTPUT_BYTES
-    })
+    const env = psLocaleEnvironment()
+    const result =
+      (await runPsInProcess(args, {
+        env,
+        timeoutMs: PS_TIMEOUT_MS,
+        maxOutputBytes: PS_MAX_OUTPUT_BYTES
+      })) ??
+      (await runProcess({
+        program: 'ps',
+        args,
+        env,
+        timeoutMs: PS_TIMEOUT_MS,
+        maxOutputBytes: PS_MAX_OUTPUT_BYTES
+      }))
     return result.code === 0 ? result.stdout : null
   } catch {
     return null
@@ -72,13 +82,7 @@ function isShellCommand(command: string): boolean {
   return isShellProcess(executable.split('/').pop() ?? executable)
 }
 
-/**
- * The terminal's foreground process group decides. The launched agent among its members, or any
- * member that is not a shell, is the agent: that finds it behind a wrapper that did not `exec` it,
- * whose own shell name leads the group. A group of shells alone is the shell, whether the pane's
- * own (the launch line has not run, or the agent exited) or a wrapper between commands. The pane's
- * root is never assumed to be the shell: a macOS pane runs its shell under `login`.
- */
+/** Judge the foreground group: any agent/non-shell counts as agent, shell-only wrappers as shell. Never assume root is shell; macOS uses login. */
 export function judgeTerminalForeground(
   rows: readonly ProcessTableRow[],
   rootPid: number,
@@ -90,7 +94,12 @@ export function judgeTerminalForeground(
     return 'unknown'
   }
   const front = rows.filter((row) => row.pgid === foregroundGroup)
-  if (front.length === 0) {
+  // An unrecovered root shell (`su`) prints `(bash)`; typing into it could run the text. Our own exiting `(git)` is no risk.
+  const unreadableShell = (row: ProcessTableRow): boolean => {
+    const name = unreadableArgvName(row.command)
+    return name !== null && isShellProcess(name.replace(/^-/, ''))
+  }
+  if (front.length === 0 || front.some(unreadableShell)) {
     return 'unknown'
   }
   return front.some(

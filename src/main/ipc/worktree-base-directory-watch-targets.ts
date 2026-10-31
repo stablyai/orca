@@ -12,7 +12,11 @@ import {
 import { isWslUncPath } from '../../shared/wsl-paths'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
 import { getWorktreeMirrorDistro } from '../project-runtime-git-options'
-import { computeWorkspaceRoot, getWorktreePathSettings } from './worktree-logic'
+import {
+  computeWorkspaceRoot,
+  getWorktreePathSettings,
+  workspaceRootMirrorsIntoWsl
+} from './worktree-logic'
 import { shouldEmitBoundedWarning } from './bounded-warning-dedupe'
 import { resolveWorktreeCommonGitDirectory } from './worktree-common-git-directory'
 import type {
@@ -24,7 +28,6 @@ import type {
 const missingRootWarnings = new Set<string>()
 const skippedWslWarnings = new Set<string>()
 
-// Why: match existing worktree probe caps.
 export const WORKTREE_BASE_TARGET_RESOLUTION_CONCURRENCY = 8
 
 function normalizeWatchKey(pathValue: string): string {
@@ -72,22 +75,24 @@ async function maybeAddBaseTarget(
   settings: GlobalSettings,
   mirrorDistro: string | undefined
 ): Promise<void> {
+  // UNC watching is unreliable; distro repos have no native target, but mirrored Windows repos retain their Git-common watch.
+  // Why before the root: resolving it probes the distro's home, which boots a stopped distro.
+  if (isWslUncPath(repo.path)) {
+    warnSkippedWslRoot(repo.id, repo.path)
+    return
+  }
   const pathSettings = getWorktreePathSettings(repo, settings, mirrorDistro)
-  const workspaceRoot = computeWorkspaceRoot(repo.path, pathSettings)
   const config = {
     repoId: repo.id,
     repoName: getRuntimePathBasename(repo.path).replace(/\.git$/, ''),
     nestWorkspaces: pathSettings.nestWorkspaces
   }
-  // Why: WSL UNC paths are unreliable for native watching. A repo inside the
-  // distro has nothing watchable at all; a Windows-drive repo whose worktrees
-  // are mirrored into the distro still has its gitdir on the Windows side.
-  if (isWslUncPath(repo.path)) {
-    warnSkippedWslRoot(repo.id, workspaceRoot)
-    return
-  }
-  if (isWslUncPath(workspaceRoot)) {
-    warnSkippedWslRoot(repo.id, workspaceRoot)
+  // A root mirrored into WSL is a UNC path either way; probing the distro's home (which can kill a
+  // booting distro) would only lead to the same skip, so keep just the Git-common watch.
+  const mirrorsIntoWsl = workspaceRootMirrorsIntoWsl(repo.path, pathSettings)
+  const workspaceRoot = mirrorsIntoWsl ? null : computeWorkspaceRoot(repo.path, pathSettings)
+  if (workspaceRoot === null || isWslUncPath(workspaceRoot)) {
+    warnSkippedWslRoot(repo.id, workspaceRoot ?? repo.path)
   } else {
     try {
       if ((await stat(workspaceRoot)).isDirectory()) {
@@ -116,7 +121,7 @@ async function resolveRepoTargets(
   if (isFolderRepo(repo)) {
     return targets
   }
-  // Why: the desktop can only watch its own disk; an SSH repo has no local root to watch.
+  // Desktop watches can inspect only locally owned disk paths.
   if (getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID) {
     await maybeAddBaseTarget(targets, repo, settings, mirrorDistro)
   }

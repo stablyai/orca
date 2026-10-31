@@ -31,3 +31,8 @@ export function isManagedBrowserProfileOf(
 ): boolean {
   return profile.owner?.kind === owner.kind && profile.owner.id === owner.id
 }
+
+/** A partition main never admits, so a tab whose profile main has not made, or has deleted, loads nowhere. */
+export function unadmittedBrowserPartition(profileId: string): string {
+  return `persist:orca-browser-unminted-${profileId}`
+}

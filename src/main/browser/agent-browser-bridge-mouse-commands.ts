@@ -8,12 +8,12 @@ import {
 } from './agent-browser-bridge-mouse'
 import { acquireElectronDebugger } from './electron-debugger-lease'
 import { sendGuestCdpCommand } from './guest-cdp-command'
+import { touchEmulationParams } from './guest-touch-emulation'
 import { assertRemoteCliBrowserAccess } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 import { AgentBrowserBridgePointerCommands } from './agent-browser-bridge-pointer-commands'
+import { agentBrowserSetMediaArguments } from './agent-browser-set-media-arguments'
 
 export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridgePointerCommands {
-  // ── Mouse commands ──
-
   async mouseClick(
     x: number,
     y: number,
@@ -23,7 +23,7 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     radius?: number,
     modifiers?: BrowserMouseModifier[]
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (_sessionName, target) => {
@@ -40,16 +40,22 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
         const lease = acquireElectronDebugger(wc)
         let releaseFocusGuard = (): void => {}
         try {
+          await this.waitForPagePaint(wc, target.webContentsId)
+          await this.browserManager.showAgentPointer(wc, { type: 'mouseMoved', x, y })
           releaseFocusGuard = await this.focusPageForPress(wc, target.webContentsId)
-          // Why: the hit test below can activate the element, and access may be revoked meanwhile.
+          // Hit testing can activate an element; recheck access after awaiting focus.
           assertRemoteCliBrowserAccess(target.webContentsId)
           const point =
             cdpButton === 'left'
-              ? // Why: DOM activation can't carry Cmd/Ctrl/Alt/Shift, so modifier clicks use the adjusted point and let CDP dispatch the event.
+              ? // DOM activation drops modifiers; let CDP dispatch modifier clicks.
                 await resolveMobileTouchClickPoint(wc.debugger, x, y, radius, cdpModifiers === 0)
               : { x, y, adjusted: false, handled: false }
-          // Why: land the tap as one atomic op — separate move/down/up CLI calls visibly hover and can miss small controls.
-          // Why: mobile-emulated BrowserViews can ignore CDP mouse clicks, so the runtime may already have activated DOM controls.
+          // Mobile-emulated guests can ignore CDP clicks, so hit testing may already activate the control.
+          await this.browserManager.showAgentPointer(wc, {
+            type: 'mousePressed',
+            x: point.x,
+            y: point.y
+          })
           if (!point.handled) {
             await sendGuestCdpCommand(wc, 'Input.dispatchMouseEvent', {
               type: 'mousePressed',
@@ -88,8 +94,6 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     )
   }
 
-  // ── Find (semantic locators) ──
-
   async find(
     locator: string,
     value: string,
@@ -98,20 +102,35 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
+    const run = async (sessionName: string): Promise<unknown> => {
       const args = ['find', locator, value, action]
       if (text) {
         args.push(text)
       }
       return await this.execAgentBrowser(sessionName, args)
-    })
+    }
+    // `text` reads the element; every other find action acts on it.
+    return action === 'text'
+      ? this.enqueueTargetedCommand(worktreeId, browserPageId, run)
+      : this.enqueuePageAction(worktreeId, browserPageId, run)
   }
 
-  // ── Set commands ──
-
   async setDevice(name: string, worktreeId?: string, browserPageId?: string): Promise<unknown> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return await this.execAgentBrowser(sessionName, ['set', 'device', name])
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName, target) => {
+      const result = await this.execAgentBrowser(sessionName, ['set', 'device', name])
+      const wc = this.requireTargetWebContents(target)
+      // agent-browser sets only metrics and user agent; without touch the page still reports pointer: fine.
+      const mobile =
+        typeof result === 'object' &&
+        result !== null &&
+        'mobile' in result &&
+        result.mobile === true
+      await sendGuestCdpCommand(
+        wc,
+        'Emulation.setTouchEmulationEnabled',
+        touchEmulationParams(mobile)
+      )
+      return result
     })
   }
 
@@ -152,14 +171,8 @@ export abstract class AgentBrowserBridgeMouseCommands extends AgentBrowserBridge
     worktreeId?: string,
     browserPageId?: string
   ): Promise<unknown> {
+    const args = agentBrowserSetMediaArguments(colorScheme, reducedMotion)
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['set', 'media']
-      if (colorScheme) {
-        args.push(colorScheme)
-      }
-      if (reducedMotion) {
-        args.push(reducedMotion)
-      }
       return await this.execAgentBrowser(sessionName, args)
     })
   }

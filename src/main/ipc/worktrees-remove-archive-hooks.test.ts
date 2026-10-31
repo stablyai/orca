@@ -97,14 +97,11 @@ vi.mock('./pty/provider/state-cleanup', async () =>
   (await import('./worktrees-test-module-mocks')).ptyStateCleanupModuleMock()
 )
 
-// The shared IPC surface types every handler as returning `unknown`; removal's contract is
-// narrower, and #19334's whole point is that a caller can name and branch on it.
 async function removeWorktreeViaIpc(args: RemoveWorktreeArgs): Promise<RemoveWorktreeResult> {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the registry types every handler as `(...) => unknown`, so this is the only place the real `worktrees:remove` return shape can be named; the production caller in worktree-ipc.ts declares the same type.
   return (await handlers['worktrees:remove'](null, args)) as RemoveWorktreeResult
 }
 
-/** Narrows through the exported error class — the same branch a real caller would write. */
 async function expectArchiveHookRefusal(
   args: RemoveWorktreeArgs
 ): Promise<WorktreeArchiveHookFailedError> {
@@ -116,7 +113,6 @@ async function expectArchiveHookRefusal(
   throw new Error(`expected removal of ${args.worktreeId} to be refused by the archive hook`)
 }
 
-// Why: every removal and listing reply now names the catalog it produced or scanned.
 const anyCatalogVersion = { epoch: expect.any(String), sequence: expect.any(Number) }
 
 describe('registerWorktreeHandlers', () => {
@@ -182,10 +178,9 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeLinkedPathsMock).toHaveBeenCalledWith('/workspace/feature-wt', [
       'node_modules'
     ])
-    // Why order matters: linked-path deletion is destructive, so PTYs must release every handle
-    // before Windows or WSL filesystem cleanup starts (mirrors the runtime removal path).
+    // PTYs must release handles before destructive linked-path cleanup on Windows/WSL.
     expect(killAllProcessesForWorktreeMock).toHaveBeenCalled()
-    // Latest PTY sweep vs earliest deletion: a later sweep would mean handles were still open.
+    // Even the latest PTY sweep must precede the earliest deletion.
     expect(Math.max(...killAllProcessesForWorktreeMock.mock.invocationCallOrder)).toBeLessThan(
       Math.min(...removeWorktreeLinkedPathsMock.mock.invocationCallOrder)
     )
@@ -264,7 +259,6 @@ describe('registerWorktreeHandlers', () => {
     )
   })
 
-  // Regression cover for #19334: a failed archive hook is a blocking precondition, not an advisory.
   it('refuses removal and mutates nothing when the local archive hook exits 23', async () => {
     mockKnownFeatureWorktree()
     removeWorktreeMock.mockResolvedValue(undefined)
@@ -345,8 +339,6 @@ describe('registerWorktreeHandlers', () => {
     expect(removeWorktreeMock).toHaveBeenCalled()
   })
 
-  // The folder-workspace path runs no archive hook at all (no Git removal step), so the gate has
-  // nothing to evaluate there. Pinned so a future hook added to that path is a deliberate change.
   it('removes a folder workspace without consulting the archive hook', async () => {
     const repo = {
       id: 'repo-folder',

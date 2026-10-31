@@ -11,7 +11,6 @@ import {
 import { useMountedRef } from '../../hooks/useMountedRef'
 import { translate } from '@/i18n/i18n'
 
-/** Which entry point opened the import flow; only affects modal copy. */
 export type ThemeImportMode = 'warp' | 'yaml'
 
 export type UseWarpThemeImportReturn = {
@@ -21,8 +20,7 @@ export type UseWarpThemeImportReturn = {
   loading: boolean
   desktopOnly: boolean
   applyError: string | null
-  /** Bumps on each successful import so the theme picker can scroll to and
-   *  highlight the freshly-imported themes. */
+  /** Signals the picker to reveal freshly imported themes below the built-in list. */
   importSignal: number
   selectedThemeIds: Set<string>
   handleClick: () => Promise<void>
@@ -52,8 +50,7 @@ export function useWarpThemeImport(
     setApplyError(null)
     try {
       const result = await window.api.settings.previewWarpThemeImport(source)
-      // Why: a dismissed native picker keeps whatever preview was already
-      // showing instead of wiping it with an empty result.
+      // Canceling the native picker must retain any existing preview.
       if (mountedRef.current && !result.canceled) {
         setPreview(result)
         setSelectedThemeIds(new Set(result.themes.map((theme) => theme.id)))
@@ -94,8 +91,7 @@ export function useWarpThemeImport(
 
   async function handleImportYamlClick(): Promise<void> {
     setMode('yaml')
-    // Why: go straight to the native picker and only surface the modal once
-    // there is a selection to preview — canceling leaves settings untouched.
+    // Open the modal only after a native file selection; cancellation leaves Settings untouched.
     const result = await previewSource({ kind: 'chooseFile' })
     if (mountedRef.current && !result.canceled) {
       setOpen(true)
@@ -132,17 +128,17 @@ export function useWarpThemeImport(
     const overflowCount = byId.size + newThemeCount - MAX_TERMINAL_CUSTOM_THEMES
     if (overflowCount > 0) {
       setApplyError(
-        overflowCount === 1
-          ? translate(
-              'auto.components.settings.useWarpThemeImport.over_limit_one',
-              'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect 1 new theme and try again.',
-              { value0: MAX_TERMINAL_CUSTOM_THEMES }
-            )
-          : translate(
-              'auto.components.settings.useWarpThemeImport.over_limit_other',
-              'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again.',
-              { value0: MAX_TERMINAL_CUSTOM_THEMES, value1: overflowCount }
-            )
+        translate(
+          'auto.components.settings.useWarpThemeImport.over_limit',
+          'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new themes and try again.',
+          {
+            value0: MAX_TERMINAL_CUSTOM_THEMES,
+            value1: overflowCount,
+            count: overflowCount,
+            defaultValue_one:
+              'Importing these themes would exceed the {{value0}} custom terminal theme limit. Deselect {{value1}} new theme and try again.'
+          }
+        )
       )
       return
     }
@@ -157,23 +153,14 @@ export function useWarpThemeImport(
         terminalCustomThemes: normalizeTerminalCustomThemes([...byId.values()])
       })
       const count = selectedThemes.length
-      // Why: report success via a toast and dismiss the modal rather than
-      // leaving an "imported" state inside the dialog.
       toast.success(
-        count === 1
-          ? translate(
-              'auto.components.settings.useWarpThemeImport.imported_one',
-              'Imported 1 theme'
-            )
-          : translate(
-              'auto.components.settings.useWarpThemeImport.imported_other',
-              'Imported {{value0}} themes',
-              { value0: count }
-            )
+        translate(
+          'auto.components.settings.useWarpThemeImport.imported',
+          'Imported {{value0}} themes',
+          { value0: count, count, defaultValue_one: 'Imported {{value0}} theme' }
+        )
       )
-      // Bump the signal so the theme picker scrolls to / highlights the
-      // newly-imported themes, which otherwise sit off-screen below the
-      // built-in list.
+      // Reveal new themes that otherwise remain below the built-in list.
       setImportSignal((value) => value + 1)
       handleOpenChange(false)
     } catch (err) {

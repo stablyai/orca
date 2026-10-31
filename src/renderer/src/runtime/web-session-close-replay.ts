@@ -1,7 +1,4 @@
-// Why: a user's close of a paired host's tab prunes the local mirror at once, so a close the host
-// never received (the connection dropped) would otherwise be lost and the host's next snapshot
-// brings the tab back. The close is held in the persisted store and sent again once the host is
-// reachable, so a reload does not forget it either.
+// Persist undelivered closes across disconnect/reload; replay once reachable or authoritative snapshots resurrect optimistically removed tabs.
 
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 import {
@@ -87,13 +84,7 @@ function revealHeldClose(
   }
 }
 
-/**
- * The one way a held close leaves the store. Whatever the change removed -- the named intents, a
- * cap eviction, or anything past the age bound that the store prunes on the way -- is never sent
- * again, so it stops hiding its tab, except a delivered close the host's next snapshot will settle.
- * The tab was hidden when its worktree's current snapshot applied, so that snapshot may apply
- * again unchanged; otherwise the tab stays hidden until the host publishes a change.
- */
+/** Remove held closes through this path so eviction/age pruning also releases their hides, except delivered closes awaiting host removal. Reaccept unchanged snapshots after release or tabs stay hidden until host changes. */
 function changeHeldIntents(
   store: Pick<PairedTerminalTabCloseIntentStore, 'getIntents'>,
   environmentId: string,
@@ -157,12 +148,7 @@ export function holdWebSessionCloseForReplay(
   )
 }
 
-/**
- * Re-hides every held close whose tab this snapshot lists and returns the ones it makes due: a
- * snapshot that still lists the tab proves the host is reachable and still holds it. Absence is
- * not treated as removal, because an incomplete inventory omits tabs too; a close whose tab never
- * returns ends at delivery, give-up, the cap, or the age bound.
- */
+/** Rehide all listed held closes and return due replays; listed tabs prove reachability. Incomplete inventories make absence inconclusive, so unlisted closes end only at delivery, give-up, cap or age bound. */
 export function takeDueWebSessionCloseReplays(
   store: PairedTerminalTabCloseIntentStore,
   environmentId: string,
@@ -182,12 +168,7 @@ export function takeDueWebSessionCloseReplays(
     }
     const intentKey = pairedTerminalTabCloseIntentKey(intent)
     const key = attemptKey(environmentId, intentKey)
-    // Why: after a reload a snapshot can land before the environment list publishes revisions.
-    // Unknown is not a mismatch: keep hiding the tab (under the key the snapshot apply reads now)
-    // and send nothing until the pairing can be checked.
-    // A re-pair still waiting for its host identity is unknown in the same way: it may yet prove to
-    // continue this close's pairing (the catalog then moves it) or to be another machine (dropped).
-    // A key that never arrives holds it until the age bound; safe, since nothing is sent meanwhile.
+    // Reload/re-pair snapshots can precede pairing identity. Unknown is not mismatch: hide under the current key without sending until checked; the age bound limits unresolved holds.
     const expired = now - intent.closedAt > PAIRED_TERMINAL_TAB_CLOSE_INTENT_MAX_AGE_MS
     if (
       !expired &&
@@ -199,15 +180,13 @@ export function takeDueWebSessionCloseReplays(
       hiddenUnderCurrentPairing.add(key)
       continue
     }
-    // Why: the close was the old pairing's, so a replacement host must never receive it; and past
-    // the age bound the tab is one this client can no longer explain hiding.
+    // Never send old-pairing closes to replacement hosts; age-bound closes can no longer justify hiding.
     if (expired || intent.pairingRevision !== currentRevision) {
       dropped.push(intentKey)
       continue
     }
     const owner = intentOwner(environmentId, intent)
-    // Why every held close, in flight too: a reload or a subscription reinstall clears close
-    // intents, and this snapshot lists the tab.
+    // Rehide in-flight closes too: reload/subscription reinstall clears intent while snapshots still list the tab.
     hideHeldClose(owner, intent.worktreeId, intent.hostTabIds)
     const attempt = attemptsByIntent.get(key) ?? { attempts: 0, inFlight: false }
     if (attempt.inFlight) {
@@ -276,12 +255,7 @@ export function pairedTerminalTabCloseIntentStoreOf(
   }
 }
 
-/**
- * Brings the held closes in line with a published catalog. A close owed to a server the catalog
- * lacks or to a retired peer can never be sent, so it goes; the whole catalog, not a diff, so a
- * server removed while the app was closed goes too. A proven same-machine re-pair moves its closes
- * to the new pairing, in the saved record, so a reload still sends them.
- */
+/** Reconcile the full catalog, including servers removed while closed: discard absent/retired peers’ closes. Proven same-machine re-pairs persist the new pairing so reload still replays them. */
 export function reconcileWebSessionCloseReplaysWithCatalog(
   store: PairedTerminalTabCloseIntentStore,
   catalog: {
@@ -315,8 +289,7 @@ export function reconcileWebSessionCloseReplaysWithCatalog(
     for (const intent of rebased) {
       hideHeldClose(intentOwner(environmentId, intent), intent.worktreeId, intent.hostTabIds)
     }
-    // Why: a close held while the re-pair was undecided waits for a snapshot, and an idle host may
-    // publish none; ask for one so the moved close is sent now.
+    // Request a snapshot after resolving re-pair identity; idle hosts may publish none to trigger replay.
     const worktreeIds = [...new Set(rebased.map((intent) => intent.worktreeId))]
     // Lazy: the snapshot module reaches the store, which loads this module.
     void import('./web-runtime-session-snapshot').then(({ refreshWebRuntimeSessionTabsSnapshot }) =>

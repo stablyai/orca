@@ -1,6 +1,6 @@
 import type { ProjectExecutionRuntimeResolution } from '../../../shared/project-execution-runtime'
 import {
-  isNativeChatDefaultFor,
+  nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
   type NativeChatDefaultSettings,
   type StructuredNativeChatBlocker
@@ -20,6 +20,7 @@ export type AgentLaunchRoutingInput = {
   /** What this client advertises to a paired host. */
   clientCapabilities?: readonly string[]
   workspaceKind?: WorkspaceLaunchKind
+  projectExecutionKind?: 'host' | 'ssh'
   projectRuntime?: ProjectExecutionRuntimeResolution | null
   promptDelivery?: NativeChatLaunchPromptDelivery
   launchText?: string
@@ -30,20 +31,19 @@ export type AgentLaunchRoutingInput = {
 }
 
 export function resolveAgentLaunchRoute(input: AgentLaunchRoutingInput): AgentLaunchRoute {
-  return isNativeChatDefaultFor(input.settings, input.agent) &&
+  return nativeChatPreferenceFor(input.settings, input.agent) &&
     structuredAgentLaunchSupported(input)
     ? 'structured-native-chat'
     : 'terminal-tui'
 }
 
-// Explicit chat requests (resume history in a new chat) do not depend on the Chat UI switch.
+// Explicit chat requests (resume history in a new chat) do not depend on the agent's Chat | CLI choice.
 export function structuredAgentLaunchSupported(
   input: Omit<AgentLaunchRoutingInput, 'launchText'>
 ): boolean {
   return structuredAgentLaunchSupport(input).supported
 }
 
-/** Whether the target host could open this agent as a chat, and why not; the settings aside. */
 export function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput, 'launchText'>) {
   return resolveStructuredNativeChatSupport({
     agent: input.agent,
@@ -51,19 +51,19 @@ export function structuredAgentLaunchSupport(input: Omit<AgentLaunchRoutingInput
     hostCapabilities: input.hostCapabilities,
     ...(input.clientCapabilities ? { clientCapabilities: input.clientCapabilities } : {}),
     workspaceKind: input.workspaceKind,
+    projectExecutionKind: input.projectExecutionKind,
     projectRuntime: input.projectRuntime,
     startsOutsideWorkspaceRoot: input.startsOutsideWorkspaceRoot,
     ...(input.hostStructuredAgents ? { hostStructuredAgents: input.hostStructuredAgents } : {})
   })
 }
 
-/** Why a launch the user wanted as a chat did not route to it; null when it did, or when the user's
- *  default for this agent is a terminal. Diagnostics only: the route itself is `resolveAgentLaunchRoute`. */
+/** Diagnostics for chat-to-terminal fallback; route decisions remain owned by resolveAgentLaunchRoute. */
 export function structuredAgentLaunchDowngrade(
   input: AgentLaunchRoutingInput,
   route: AgentLaunchRoute
 ): StructuredNativeChatBlocker | null {
-  if (route === 'structured-native-chat' || !isNativeChatDefaultFor(input.settings, input.agent)) {
+  if (route === 'structured-native-chat' || !nativeChatPreferenceFor(input.settings, input.agent)) {
     return null
   }
   const support = structuredAgentLaunchSupport(input)

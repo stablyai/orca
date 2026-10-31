@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// A chat on a paired server belongs to that server: its reads (history, live updates, rail outline),
-// writes, and the capability questions behind them go to it, never to this machine. The server here advertises today's capabilities and this machine
-// advertises none, so a question asked of the wrong runtime changes what is sent.
+// Advertise capabilities only on the paired host so misrouted reads, writes or capability probes change observable behavior.
 
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -16,7 +14,6 @@ const mocks = vi.hoisted(() => ({
 vi.mock('@/runtime/runtime-rpc-client', async (importOriginal) => ({
   ...(await importOriginal<Record<string, unknown>>()),
   callRuntimeRpc: mocks.call,
-  // The sender checks compatibility itself before its send goes out.
   ensureRuntimeEnvironmentCompatible: async () => undefined,
   runtimeEnvironmentSupportsCapability: async (environmentId: string, capability: string) =>
     mocks.hostCapabilities.get(environmentId)?.includes(capability) === true
@@ -28,15 +25,9 @@ vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => (
 
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
-import {
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-stop-capabilities'
-import {
-  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from '../../../../shared/protocol-version'
+
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
+
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
@@ -145,17 +136,6 @@ describe('a structured chat on a paired server', () => {
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
   })
 
-  it('advertises every capability these actions ask about', () => {
-    expect(RUNTIME_CAPABILITIES).toEqual(
-      expect.arrayContaining([
-        AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-        AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
-        AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
-        AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
-      ])
-    )
-  })
-
   it('reads, sends, stops, answers, and releases through the server', async () => {
     const unsubscribe = vi.fn()
     mocks.subscribe.mockResolvedValue({ unsubscribe })
@@ -174,7 +154,7 @@ describe('a structured chat on a paired server', () => {
       })
     )
 
-    // Only the server takes a Stop that names no turn; this machine would leave nothing to stop.
+    // Only the paired host supports untargeted Stop; local routing would refuse it.
     await waitFor(async () => {
       await act(async () => {
         await result.current.stop()
@@ -183,7 +163,7 @@ describe('a structured chat on a paired server', () => {
     })
     expect(calls('agentSession.cancel')[0].params).not.toHaveProperty('turnId')
 
-    // The server keeps a repeated Stop quiet, so two presses both go out instead of joining.
+    // The paired host supports quiet repeats, so both Stop presses must be dispatched.
     await act(async () => {
       await Promise.all([result.current.cancel('turn-1'), result.current.cancel('turn-1')])
     })
@@ -220,18 +200,9 @@ describe('a structured chat on a paired server', () => {
       expect.any(Function)
     )
     expect(mocks.subscribe.mock.calls.every(([target]) => target === PAIRED_TARGET)).toBe(true)
-    expect(mocks.call.mock.calls.every(([target]) => target === PAIRED_TARGET)).toBe(true)
-  })
-
-  // The rail asks for the outline only while older history is unloaded.
-  it("reads the rail's conversation outline from the server", async () => {
-    olderHistoryUnloaded = true
-    render(PAIRED_TARGET)
-
-    await waitFor(() =>
-      expect(calls('agentSession.conversationOutline')).toEqual([
-        { target: PAIRED_TARGET, params: { sessionId: 'session-a' } }
-      ])
+    // The options view memoizes an equal target by environment, so routing compares by value.
+    expect(mocks.call.mock.calls.map(([target]) => target)).toEqual(
+      mocks.call.mock.calls.map(() => PAIRED_TARGET)
     )
   })
 

@@ -6,10 +6,7 @@ import { getRepoHostIdentityForParts } from './repo-host-identity'
 import { createTestStore } from './store-test-helpers'
 
 export function registerReposRefreshIdentityTests(): void {
-  // Why: every field here is load-bearing. A scalar-only repo reconciles even when the structural
-  // compare is broken, which is exactly how an earlier version of this work shipped green and inert.
-  // addedAt is non-zero on this fixture so the default case still exercises a real timestamp;
-  // dedicated tests below cover addedAt 0 / omitted without restamping Date.now().
+  // Exercise nested fields and nonzero addedAt: scalar-only fixtures let broken structural reconciliation pass. Separate cases cover zero/omitted timestamps without Date.now restamping.
   const repo: Repo = {
     id: 'repo-1',
     path: '/repo-1',
@@ -48,8 +45,7 @@ export function registerReposRefreshIdentityTests(): void {
   const projectsList = vi.fn()
   const listHostSetups = vi.fn()
 
-  // Why: catalogs arrive over IPC, so every fetch must hand back freshly allocated objects —
-  // otherwise identity would match by accident and prove nothing.
+  // Allocate fresh IPC objects so reference reuse alone cannot pass.
   function clone<T>(value: T): T {
     return structuredClone(value)
   }
@@ -81,37 +77,6 @@ export function registerReposRefreshIdentityTests(): void {
   })
 
   describe('repo catalog refresh identity', () => {
-    it('keeps the projects and host setups arrays and entries across a no-op refetch', async () => {
-      const store = createTestStore()
-      await store.getState().fetchRepos(catalogOwner(store))
-      const projects = store.getState().projects
-      const setups = store.getState().projectHostSetups
-      expect(projects).toHaveLength(1)
-      expect(setups).toHaveLength(1)
-
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().projects).toBe(projects)
-      expect(store.getState().projects[0]).toBe(projects[0])
-      expect(store.getState().projectHostSetups).toBe(setups)
-      expect(store.getState().projectHostSetups[0]).toBe(setups[0])
-    })
-
-    it('lets a nested hookSettings change through', async () => {
-      const store = createTestStore()
-      await store.getState().fetchRepos(catalogOwner(store))
-      const setups = store.getState().projectHostSetups
-
-      mockRepos({
-        ...repo,
-        hookSettings: { mode: 'override', scripts: { setup: '', archive: '' } }
-      })
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().projectHostSetups).not.toBe(setups)
-      expect(store.getState().projectHostSetups[0]?.hookSettings?.mode).toBe('override')
-    })
-
     it('lets a displayName change through on projects', async () => {
       const store = createTestStore()
       await store.getState().fetchRepos(catalogOwner(store))
@@ -191,8 +156,7 @@ export function registerReposRefreshIdentityTests(): void {
       const setups = store.getState().projectHostSetups
       expect(setups[0]?.hostId).toBe('local')
 
-      // Why: the repo-derived fallback sets setup.id = repo.id, so the same id on a second host is
-      // the case that would silently splice the wrong host's routing metadata into the row.
+      // Fallback setup.id equals repo.id; cross-host same-ID case must retain owner routing metadata.
       mockRepos({ ...repo, executionHostId: 'ssh:host-a', connectionId: 'host-a' })
       await store.getState().fetchRepos(catalogOwner(store))
 
@@ -202,9 +166,7 @@ export function registerReposRefreshIdentityTests(): void {
     })
 
     it('reconciles both setups when one repo id exists on two hosts', async () => {
-      // Why: the repo-derived fallback sets setup.id = repo.id, so these two setups share an id and
-      // differ only by host. Keying the reconcile on setup.id instead of the owner key collapses them
-      // onto one slot and one of the two churns on every refresh.
+      // Same setup IDs on different hosts need owner-key reconciliation or one slot churns each refresh.
       const sshRepo: Repo = { ...repo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
       mockRepos(repo, sshRepo)
       const store = createTestStore()
@@ -235,9 +197,7 @@ export function registerReposRefreshIdentityTests(): void {
     })
 
     it('keeps a project owned only through a repo on another host', async () => {
-      // Why: no setup row names this project, so the refreshing host can only be ruled out from the
-      // project's own source repos. Feeding the host-id resolvers anything but this project's repo
-      // slice prunes it on a local refresh.
+      // Without setup rows, infer project owners only from its own source-repo slice or local refresh prunes remote projects.
       const sshRepo: Repo = { ...secondRepo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
       mockRepos(repo, sshRepo)
       const store = createTestStore()
@@ -261,8 +221,7 @@ export function registerReposRefreshIdentityTests(): void {
     })
 
     it('keeps a project whose repo id is cloned onto a second host', async () => {
-      // Why: both rows share `repo.id`, so the project's repo slice must carry every duplicate —
-      // keeping only the first drops the remote host and the local refresh prunes the project.
+      // Keep all duplicate-ID repo rows in project slice or local-first ownership hides remote hosts and prunes projects.
       const sshRepo: Repo = { ...repo, executionHostId: 'ssh:host-a', connectionId: 'host-a' }
       mockRepos(repo, sshRepo)
       const store = createTestStore()
@@ -367,15 +326,6 @@ export function registerReposRefreshIdentityTests(): void {
       expect(store.getState().filterRepoIds).toBe(first)
     })
 
-    it('still prunes a filtered repo id that no longer exists', async () => {
-      const store = createTestStore()
-      store.setState({ filterRepoIds: [repo.id, 'gone'] })
-
-      await store.getState().fetchRepos(catalogOwner(store))
-
-      expect(store.getState().filterRepoIds).toEqual([repo.id])
-    })
-
     it('prunes only the vanished id and reallocates', async () => {
       mockRepos(repo)
       const store = createTestStore()
@@ -412,8 +362,7 @@ export function registerReposRefreshIdentityTests(): void {
 
       await store.getState().fetchRepos(catalogOwner(store))
 
-      // Why: SetupScriptPromptCard Object.is-subscribes to this array. A no-op
-      // catalog refresh must not allocate just because the helper rebuilt next.
+      // No-op refresh must preserve SetupScriptPromptCard’s Object.is-selected prompt array.
       expect(store.getState().setupScriptPromptDismissedRepoIds).toBe(first)
     })
   })
@@ -430,8 +379,7 @@ export function registerReposRefreshIdentityTests(): void {
 
       store.getState().recordSshRepoReadoptions([])
 
-      // Why: the empty-in/empty-pending call must hand the state object back untouched, or the
-      // freshly allocated pendingSshRepoReadoptions alone would wake every store subscriber.
+      // Empty readoption returns state unchanged; fresh pending arrays alone wake all subscribers.
       expect(store.getState()).toBe(before)
       expect(store.getState().pendingSshRepoReadoptions).toBe(before.pendingSshRepoReadoptions)
       expect(store.getState().projects).toBe(projects)

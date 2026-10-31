@@ -30,6 +30,7 @@ vi.mock('node:fs', async (original) => {
   }
 })
 import type Database from '../../sqlite/sync-database'
+import type { JournalHostDatabase } from '../agent-session-journal/journal-host-database'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import {
   closeTestJournalHostDatabases,
@@ -60,6 +61,7 @@ const CARRIED = '3e1f0a9b-8c7d-4e6f-a5b4-c3d2e1f0a903'
 
 let stateDirectory: string
 let store: AgentSessionAttachmentStore
+let journal: JournalHostDatabase
 let db: Database.Database
 let recorded: Set<string> | null
 
@@ -68,7 +70,8 @@ beforeEach(async () => {
   store = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(stateDirectory), {
     hasSession: () => true
   })
-  db = openTestJournalHostDatabase(stateDirectory).db
+  journal = openTestJournalHostDatabase(stateDirectory)
+  db = journal.db
   recorded = new Set(['session-1', 'session-2'])
 })
 
@@ -76,15 +79,20 @@ afterEach(async () => {
   fault.path = ''
   fault.sync = false
   store.clearInFlightForTests()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(stateDirectory, { recursive: true, force: true })
 })
 
 function facts(overrides: Partial<AgentSessionAttachmentSweepFacts> = {}) {
-  return { database: () => db, recordedSessionIds: () => recorded, ...overrides }
+  return {
+    database: () => db,
+    write: <T>(run: (db: Database.Database) => T) =>
+      overrides.database?.() === null ? undefined : journal.writeAutocommit(run),
+    recordedSessionIds: () => recorded,
+    ...overrides
+  }
 }
 
-/** A stored upload (or a bare part file) last touched `ageMs` ago. */
 async function seedUpload(
   uploadId: string,
   ageMs: number,
@@ -141,7 +149,7 @@ describe('sweepAgentSessionAttachments', () => {
     expect(await remaining()).toEqual([UNSENT])
   })
 
-  it('removes an upload nobody claimed after 30 days, and keeps a claimed one and a fresh one', async () => {
+  it('removes an upload nobody claimed after 7 days, and keeps a claimed one and a fresh one', async () => {
     claim('session-1', await seedUpload(SENT, OLD))
     await seedUpload(UNSENT, OLD)
     await seedUpload(CARRIED, HOUR)
@@ -174,12 +182,10 @@ describe('sweepAgentSessionAttachments', () => {
     const path = await seedUpload(CARRIED, OLD)
     claim('session-1', path)
     claim('session-2', path, false)
-    // The source chat goes; the replacement still holds the upload.
     recorded = new Set(['session-2'])
     await sweepAgentSessionAttachments(store, facts(), NOW)
     expect(await remaining()).toEqual([CARRIED])
     expect(claimedSessions()).toEqual(['session-2'])
-    // Once no chat holds it, it is unclaimed and goes.
     recorded = new Set()
     await sweepAgentSessionAttachments(store, facts(), NOW)
     expect(claimedSessions()).toEqual([])
@@ -189,7 +195,6 @@ describe('sweepAgentSessionAttachments', () => {
 
   it('a send after the sweep marked an upload is refused, never sent without its file', async () => {
     const path = await seedUpload(UNSENT, OLD)
-    // The sweep wins the race: its mark lands before the claim.
     expect(markUnclaimedUploadForSweep(db, UNSENT, NOW)).toBe(true)
     let refused: unknown
     try {
@@ -203,7 +208,6 @@ describe('sweepAgentSessionAttachments', () => {
 
   it('finishes a delete a crashed sweep left marked, then forgets the mark', async () => {
     await seedUpload(UNSENT, HOUR)
-    // Marked, then the process died before the files went.
     expect(markUnclaimedUploadForSweep(db, UNSENT, NOW)).toBe(true)
     const onUploadRemoved = vi.fn()
     await sweepAgentSessionAttachments(store, facts({ onUploadRemoved }), NOW)

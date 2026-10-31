@@ -1,11 +1,10 @@
 import { View, Text } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { AuthFailedBannerActions } from './AuthFailedBannerActions'
 import { authFailedBannerStyles as styles } from './auth-failed-banner-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
-// Why: auth-failed is no longer necessarily terminal (issue #5200) — a
-// transient rejection can latch it even though the desktop still lists this
-// device. Offer Retry (fresh client + handshake) ahead of the disruptive
-// re-pair flow so the common transient case recovers without re-pairing.
+// Transient auth failure may leave desktop pairing valid (#5200); offer fresh-client/handshake Retry before disruptive re-pair.
 export function AuthFailedBanner({
   canRetry,
   onRetry,
@@ -17,10 +16,15 @@ export function AuthFailedBanner({
   onRepair: () => void
   onRemove: () => void
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <View style={styles.banner}>
       <Text style={styles.text}>
-        Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.
+        {t(
+          'components.authFailedBanner.message',
+          'Authentication failed — try reconnecting first; if it keeps failing, re-pair from desktop.'
+        )}
       </Text>
       <View style={styles.actions}>
         <AuthFailedBannerActions

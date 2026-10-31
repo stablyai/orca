@@ -46,10 +46,10 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
     visibleClaudeAccounts,
     wslCapabilitiesLoading
   } = model
-  // Why host only: the host reads its own System default, never a WSL distro's.
+  // System default belongs to the host home, never a WSL distro.
   const systemDefaultEmail =
     accountRuntime.runtime === 'host' ? claudeAccounts.systemDefaultEmail : undefined
-  // Why the copy evidence: saving your own login as an account too is normal and needs no warning.
+  // Warn only with copy evidence; saving one’s own login as an account is normal.
   const systemDefaultIsSaved =
     !!systemDefaultEmail &&
     claudeAccounts.systemDefaultMayBeCopied === true &&
@@ -58,7 +58,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
       (account) => account.email.toLowerCase() === systemDefaultEmail.toLowerCase()
     )
   const addDisabled = claudeAction !== 'idle' || wslCapabilitiesLoading || accountRuntimeUnavailable
-  // Why the server's own login for a remote owner: one here would sign in this device, not it.
+  // Remote additions must run login on the account owner rather than this device.
   const addClaudeAccount = (copyLink: boolean): Promise<void> =>
     runClaudeAccountAction('adding', () =>
       trackAccountAddition('claude', accountOwner, () =>
@@ -141,7 +141,7 @@ export function renderClaudeAccountsSection(model: AccountsPaneSectionModel): Re
                 />
               ) : null}
             </ButtonGroup>
-            {/* Why: follows the running addition; hidden only where its server's prompt has Cancel. */}
+            {/* Follow the running addition; hide Cancel only when its server prompt already offers it. */}
             {claudeAction === 'adding' && !accountAdditionShownInPrompt('claude', accountOwner) ? (
               <Button
                 variant="ghost"

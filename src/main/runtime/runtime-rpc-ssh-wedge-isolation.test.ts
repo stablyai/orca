@@ -11,8 +11,7 @@ import { STATUS_METHODS } from './rpc/methods/status'
 import { SSH_METHODS } from './rpc/methods/ssh'
 import { sendRequest } from './runtime-rpc-test-harness'
 
-// #31179: a headless serve's probes (ssh.listTargets / ssh.getState / status.get) must answer
-// while the SSH layer is wedged. These pin that over the real Unix socket transport.
+// Real socket probes must stay responsive while SSH is wedged on headless serve (#31179).
 const { connectMock, removeMock } = vi.hoisted(() => {
   const never = (): Promise<never> => new Promise<never>(() => {})
   return { connectMock: vi.fn(never), removeMock: vi.fn(never) }
@@ -84,7 +83,7 @@ function openPipelinedSocket(endpoint: string): {
   const waiters = new Map<string, (frame: RpcResponseFrame) => void>()
   let buffer = ''
   socket.setEncoding('utf8')
-  // Why: a reset on a wedged socket must fail the probe assertions, not crash the worker.
+  // Wedged-socket reset should fail probe assertions, not crash the worker.
   socket.on('error', () => {})
   socket.on('data', (chunk: string) => {
     buffer += chunk

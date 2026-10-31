@@ -115,10 +115,13 @@ describe('orca serve service', () => {
     calls = []
     await expect(uninstallServeService(d)).resolves.toMatchObject({ removed: true })
     expect(existsSync(String(result.unitPath))).toBe(false)
-    expect(calls[0]).toMatch(/^systemctl --user disable --now orca-serve-/)
+    expect(calls).toEqual([
+      `systemctl --user disable --now ${String(result.name)}`,
+      'systemctl --user daemon-reload'
+    ])
   })
 
-  it('never picks a version-scoped launcher from the profile or a mounted AppImage', async () => {
+  it('skips a profile launcher and refuses a bare Linux orca', async () => {
     const scoped = join(home, 'profile', 'cli', 'bin')
     await mkdir(scoped, { recursive: true })
     await writeFile(join(scoped, 'orca'), '#!/bin/sh\n')

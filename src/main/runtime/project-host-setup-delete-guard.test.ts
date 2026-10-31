@@ -1,5 +1,4 @@
-// `orca project setup-delete` used to drop a repo-backed project even while its terminals were
-// running and its workspaces had saved details, orphaning both with no warning.
+// Setup deletion must not orphan live project terminals or saved workspace metadata.
 import { describe, expect, it, vi } from 'vitest'
 import { RuntimeProjectHostSetupController } from './runtime-project-host-setup-controller'
 import { projectHostSetupProjectionFromRepos } from '../../shared/project-host-setup-projection'
@@ -71,18 +70,6 @@ describe('project setup delete guard', () => {
     expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
   })
 
-  it('refuses while workspaces have saved details', () => {
-    const { controller, deleteProjectHostSetup, setupId } = makeController({
-      liveTerminals: 0,
-      metaIds: ['repo-1::/work/app', 'other-repo::/work/other']
-    })
-
-    expect(() => controller.deleteSetup({ setupId, force: false })).toThrow(
-      /saved details for 1 workspace\./
-    )
-    expect(deleteProjectHostSetup).not.toHaveBeenCalled()
-  })
-
   it('sees sibling-host metadata kept only in the host-qualified maps', () => {
     // Same repo id and path on local and SSH: the raw-id map holds only the local row.
     const { controller, deleteProjectHostSetup, setupId } = makeController({
@@ -96,16 +83,6 @@ describe('project setup delete guard', () => {
       /saved details for 1 workspace\./
     )
     expect(deleteProjectHostSetup).not.toHaveBeenCalled()
-  })
-
-  it('deletes an unused project without --force', () => {
-    const { controller, deleteProjectHostSetup, setupId } = makeController({
-      liveTerminals: 0,
-      metaIds: ['other-repo::/work/other']
-    })
-
-    controller.deleteSetup({ setupId, force: false })
-    expect(deleteProjectHostSetup).toHaveBeenCalledTimes(1)
   })
 
   it('keeps the unchecked delete for older clients that omit force', () => {

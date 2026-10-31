@@ -1,8 +1,7 @@
 import { vi } from 'vitest'
 import type { SshIpcMockModules, SshIpcMockState, SshIpcMocks } from './ssh-ipc-mock-shapes'
 
-// Mocked module shapes for the SSH IPC handler tests. Built inside `vi.hoisted` so
-// each test file's own `vi.mock` factories can hand the objects back verbatim.
+// Build inside vi.hoisted so per-suite vi.mock factories can return these objects.
 export function createSshIpcMocks(): SshIpcMocks {
   const state: SshIpcMockState = {
     handleMock: vi.fn(),
@@ -15,7 +14,9 @@ export function createSshIpcMocks(): SshIpcMocks {
       addTarget: vi.fn(),
       updateTarget: vi.fn(),
       removeTarget: vi.fn(),
-      importFromSshConfig: vi.fn().mockReturnValue([]),
+      importFromSshConfig: vi.fn().mockResolvedValue({ targets: [], repoReadoptions: [] }),
+      currentSshRouteSnapshot: vi.fn().mockReturnValue(null),
+      refreshSshRouteSnapshot: vi.fn().mockResolvedValue(null),
       lastRepoReadoptions: [] as {
         oldTargetId: string
         newTargetId: string
@@ -52,6 +53,7 @@ export function createSshIpcMocks(): SshIpcMocks {
       removeForwardAndWait: vi.fn(),
       listForwards: vi.fn().mockReturnValue([]),
       removeAllForwards: vi.fn(),
+      closeStaleForwards: vi.fn(),
       closeAll: vi.fn(),
       dispose: vi.fn(),
       setCallbacks: vi.fn(),

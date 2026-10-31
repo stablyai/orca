@@ -79,7 +79,6 @@ describe('ACP permission requests', () => {
       },
       'handler failed: Error: renderer gone'
     ],
-    // JSON.parse yields an untyped value, so a deliberately malformed reply needs no assertion.
     [
       'the handler answers nonsense',
       () => JSON.parse('{"outcome":"yes"}'),

@@ -244,7 +244,6 @@ describe('recorded child-session outcome during a full parent Stop', () => {
       await hosted.rows()
       vi.setSystemTime(1791496678726)
       agent.notify(selectedFinished.method, selectedFinished.params)
-      // One saved row per subagent, which the host writes from its records.
       const subagents = async () =>
         (await hosted.rows()).flatMap((row) =>
           row.body.kind === 'message'

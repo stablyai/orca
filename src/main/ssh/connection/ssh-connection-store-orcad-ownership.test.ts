@@ -14,6 +14,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
 
 vi.mock('../config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
+  loadUserSshConfigWithText: () => ({ hosts: loadUserSshConfigMock(), text: '' }),
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
 
@@ -26,7 +27,7 @@ describe('managed orcad ownership of SSH targets', () => {
   beforeEach(() => {
     mockStore = Object.assign(createMockStore(), emptyDependentStateStore())
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the fixture implements the store methods SshConnectionStore calls.
-    sshStore = new SshConnectionStore(mockStore as never)
+    sshStore = new SshConnectionStore(mockStore as never, { config: async () => null })
     loadUserSshConfigMock.mockReset()
     sshConfigHostsToTargetsMock.mockReset()
   })
@@ -55,7 +56,7 @@ describe('managed orcad ownership of SSH targets', () => {
     expect(sshStore.getTarget(claimed.id)?.owner).toBeUndefined()
   })
 
-  it('keeps ~/.ssh/config sync from rewriting a claimed config-sourced host', () => {
+  it('keeps ~/.ssh/config sync from rewriting a claimed config-sourced host', async () => {
     mockStore.addSshTarget({
       ...base,
       id: 'ssh-config-host',
@@ -68,7 +69,7 @@ describe('managed orcad ownership of SSH targets', () => {
       { ...base, id: 'tmp', configHost: 'cluster', host: '10.0.0.9', port: 2222 }
     ])
 
-    expect(sshStore.importFromSshConfig()).toEqual([])
+    expect((await sshStore.importFromSshConfig()).targets).toEqual([])
     expect(mockStore.updateSshTarget).not.toHaveBeenCalled()
   })
 

@@ -6,8 +6,8 @@ import { encodePairingOffer, PAIRING_OFFER_VERSION } from '../../shared/pairing'
 
 const sendRequest = vi.hoisted(() => vi.fn())
 const status = vi.hoisted(() => ({ capabilities: ['orcad.migration-catalog.v1'] }))
-// Runs the status preflight, then hands the request to the old single-call shape the cases assert.
-vi.mock('../../shared/remote-runtime-client', () => ({
+// Run status preflight, then adapt to the existing single-call assertions.
+vi.mock('../../shared/remote-runtime/remote-runtime-client', () => ({
   sendRemoteRuntimeRequestWithStatusPreflight: async (
     pairing: unknown,
     method: string,

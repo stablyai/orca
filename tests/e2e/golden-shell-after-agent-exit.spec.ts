@@ -15,9 +15,7 @@ import {
 
 test.use({ launchEnv: getGoldenStubAgentLaunchEnv() })
 
-// Why: xterm renders the typed command itself, so `echo after-agent` would
-// satisfy waitForTerminalOutput even if the shell never ran it. Splitting the
-// marker keeps it out of the input, so a match proves real shell execution.
+// Split the marker so terminal input echo cannot impersonate successful shell execution.
 function buildSplitMarkerEcho(prefix: string, suffix: string): { command: string; marker: string } {
   const command =
     process.platform === 'win32'
@@ -45,8 +43,7 @@ test('opens a clean live shell after an agent exits', async ({ orcaPage }) => {
     .click({ force: true })
   await expect(orcaPage.locator('[data-testid="sortable-tab"]')).toHaveCount(tabsBeforeShell + 1)
   const shellPtyId = await waitForActivePanePtyId(orcaPage)
-  // Why: a bound ptyId only means the pane exists; the renderer transport can
-  // still drop keystrokes until it connects, which would strand the markers.
+  // A bound pane can precede transport readiness; wait or marker keystrokes may be dropped.
   expect(await waitForRestoredTerminalInputReady(orcaPage, shellPtyId)).toBe(true)
 
   const afterAgent = buildSplitMarkerEcho('after-', 'agent')

@@ -322,9 +322,7 @@ describe('getPRForBranch', () => {
       baseRefOid: 'base-oid',
       headRefOid: 'head-oid'
     }
-    // Why a second head OID: identical inputs now hit the summary result
-    // cache outright; a pushed head re-derives and must still skip the
-    // unsupported --merge-base retry via the capability cache.
+    // Change head OID to bypass the result cache while retaining the learned Git capability.
     const pushedBranchLookup = { ...branchLookup, head: { ref: 'feature/test', sha: 'head-oid-2' } }
     const pushedExactLookup = { ...exactLookup, headRefOid: 'head-oid-2' }
     ghExecFileAsyncMock

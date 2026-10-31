@@ -2,7 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { GRAB_BUDGET, type BrowserPageAnnotation } from '../../../../shared/browser-grab-types'
 import { makeAnnotation } from './browser-annotation-test-fixture'
-import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { BrowserSessionProfile } from '../../../../shared/browser-workspace-types'
 import type { ManagedBrowserProfileOwner } from '../../../../shared/browser-profile-scope'
@@ -79,6 +79,23 @@ describe('createBrowserSlice annotations', () => {
     })
   })
 
+  it('announces a tab that creation activates, but not one opened in the background', async () => {
+    const { store } = await createTestStoreDrawnFromMain()
+    mockApi.browser.notifyActiveTabChanged.mockClear()
+
+    const background = store
+      .getState()
+      .createBrowserTab('wt-1', 'https://background.example.com', { activate: false })
+    const active = store.getState().createBrowserTab('wt-1', 'https://active.example.com')
+
+    expect(mockApi.browser.notifyActiveTabChanged).not.toHaveBeenCalledWith({
+      browserPageId: background.activePageId
+    })
+    expect(mockApi.browser.notifyActiveTabChanged).toHaveBeenLastCalledWith({
+      browserPageId: active.activePageId
+    })
+  })
+
   it('keeps a requested canonical page identity distinct from its workspace', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'about:blank', {
@@ -124,27 +141,6 @@ describe('createBrowserSlice annotations', () => {
       url: 'https://accounts.google.com/',
       sessionProfileId: 'profile-1'
     })
-  })
-
-  it('retains saved page annotations while retiring geometry when the URL changes', async () => {
-    const { store, main } = await createTestStoreDrawnFromMain()
-    const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
-    await main.settle()
-    const pageId = tab.activePageId
-    if (!pageId) {
-      throw new Error('Expected a new browser page')
-    }
-
-    store.getState().addBrowserPageAnnotation(makeAnnotation(pageId))
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toHaveLength(1)
-
-    const saved = store.getState().browserAnnotationsByPageId[pageId]
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com/next')
-    store.getState().setBrowserPageUrl(pageId, 'https://example.com')
-
-    expect(store.getState().browserAnnotationsByPageId[pageId]).toBe(saved)
-    expect(saved?.[0]?.payload.page.sanitizedUrl).toBe('https://example.com')
-    expect(store.getState().browserAnnotationMarkerIdsByPageId[pageId]).toBeUndefined()
   })
 
   it('can commit a navigation URL without hiding an active recovery error', async () => {
@@ -265,10 +261,12 @@ describe('createBrowserSlice annotations', () => {
   it('uses local browser profile defaults for client-local fallback pages', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     store.setState({
-      settings: settingsWithRuntime('env-1'),
-      defaultBrowserSessionProfileIdByHostId: {
-        local: 'local-profile',
-        'runtime:env-1': 'runtime-profile'
+      settings: {
+        ...settingsWithRuntime('env-1')!,
+        browserDefaultProfileIdByHostId: {
+          local: 'local-profile',
+          'runtime:env-1': 'runtime-profile'
+        }
       }
     })
 
@@ -294,9 +292,11 @@ describe('createBrowserSlice annotations', () => {
     Object.assign(mockApi.browser, { sessionEnsureManagedProfile: ensureMock })
     const { store, main } = await createTestStoreDrawnFromMain({
       repos: [],
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the browser keys are read.
-      settings: { browserProfileScope: 'repo' } as AppState['settings'],
-      defaultBrowserSessionProfileId: 'user-default'
+      settings: {
+        ...getDefaultSettings('/tmp'),
+        browserProfileScope: 'repo',
+        browserDefaultProfileIdByHostId: { local: 'user-default' }
+      }
     })
 
     const first = store.getState().createBrowserTab('repo-a::/a/one', 'about:blank')
@@ -436,14 +436,49 @@ describe('createBrowserSlice annotations', () => {
     const removed = store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
     expect(removed).toBe(visited)
     expect(store.getState().browserUrlHistory).toEqual([])
-    store.getState().restoreBrowserHistoryEntry(removed!)
+    store
+      .getState()
+      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
     expect(store.getState().browserUrlHistory).toEqual([visited])
 
     store.getState().removeBrowserHistoryEntry(visited!.normalizedUrl)
     store.getState().addBrowserHistoryEntry('https://example.com', 'Example')
     const revisited = store.getState().browserUrlHistory
-    store.getState().restoreBrowserHistoryEntry(removed!)
+    store
+      .getState()
+      .restoreBrowserHistory({ browserUrlHistory: [removed!], workspaceDocHistory: [] })
     expect(store.getState().browserUrlHistory).toBe(revisited)
+  })
+
+  it('clears pages and documents visited since a time, and Undo puts back exactly those', () => {
+    vi.useFakeTimers()
+    try {
+      const store = createTestStore()
+      const doc = { kind: 'workspace-doc' as const, worktreeId: 'wt-1', filePath: '/repo/a.html' }
+      vi.setSystemTime(1_000)
+      store.getState().addBrowserHistoryEntry('https://old.example', 'Old')
+      vi.setSystemTime(5_000)
+      store.getState().addBrowserHistoryEntry('https://new.example', 'New')
+      store.getState().recordWorkspaceDocVisit(doc, 'Doc')
+
+      const removed = store.getState().clearBrowserHistory(5_000)
+      expect(store.getState().browserUrlHistory.map((e) => e.title)).toEqual(['Old'])
+      expect(store.getState().workspaceDocHistory).toEqual([])
+
+      store.getState().restoreBrowserHistory(removed)
+      expect(
+        store
+          .getState()
+          .browserUrlHistory.map((e) => e.title)
+          .sort()
+      ).toEqual(['New', 'Old'])
+      expect(store.getState().workspaceDocHistory.map((e) => e.title)).toEqual(['Doc'])
+
+      store.getState().clearBrowserHistory()
+      expect(store.getState().browserUrlHistory).toEqual([])
+    } finally {
+      vi.useRealTimers()
+    }
   })
 
   it('repairs a stale active browser unified-tab label on an otherwise unchanged title update', async () => {
@@ -576,7 +611,7 @@ describe('createBrowserSlice annotations', () => {
     expect(store.getState().setTabLabel).not.toHaveBeenCalled()
   })
 
-  it('caps stored browser annotations per page', async () => {
+  it('refuses browser annotations past the per-page cap instead of dropping the oldest', async () => {
     const { store, main } = await createTestStoreDrawnFromMain()
     const tab = store.getState().createBrowserTab('wt-1', 'https://example.com')
     await main.settle()
@@ -591,7 +626,8 @@ describe('createBrowserSlice annotations', () => {
 
     const annotations = store.getState().browserAnnotationsByPageId[pageId] ?? []
     expect(annotations).toHaveLength(GRAB_BUDGET.annotationsMaxPerPage)
-    expect(annotations[0]?.id).toBe('annotation-3')
+    expect(annotations[0]?.id).toBe('annotation-0')
+    expect(annotations.at(-1)?.id).toBe(`annotation-${GRAB_BUDGET.annotationsMaxPerPage - 1}`)
   })
 
   it('sanitizes persistent annotation payloads at the store boundary', async () => {

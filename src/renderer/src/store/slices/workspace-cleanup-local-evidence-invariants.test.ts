@@ -4,9 +4,7 @@ import { shouldPreserveCleanupInspection } from './workspace-cleanup-local-evide
 import { WORKTREE_ID, makeCandidate, makeState } from './workspace-cleanup-slice-test-harness'
 
 describe('cleanup inspection grace survives upgrades', () => {
-  // Why: viewed marks are persisted. Any extra field required of `viewed` is
-  // absent from every entry written by an older build, so gating on one
-  // silently voids the grace period for existing users after they update.
+  // Legacy persisted viewed marks lack newer fields; requiring them would silently remove existing users’ grace period.
   it('honours a viewed mark persisted without any newer fields', () => {
     const candidate = makeCandidate({ fingerprint: 'fingerprint-1' })
     const state = makeState({
@@ -45,9 +43,7 @@ describe('cleanup inspection grace survives upgrades', () => {
 })
 
 describe('cleanup reads visit recency host-qualified', () => {
-  // Why: visits are STAMPED under `${hostId}|${worktreeId}` whenever the host is
-  // known, which is the normal case including 'local'. A bare `map[worktreeId]`
-  // read therefore misses every modern entry and silently yields 0.
+  // Modern visits use host|worktreeId, including local; bare-ID reads miss them and report zero.
   it('finds a visit stamped under the host-qualified key', async () => {
     const { enrichWorkspaceCleanupCandidates } = await import('./workspace-cleanup')
     const qualifiedKey = composeWorktreeHostIdentity('local', WORKTREE_ID)

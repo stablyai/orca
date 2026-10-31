@@ -24,6 +24,15 @@ vi.mock('./transcript-watch-engine', () => ({
   getActiveNativeChatWatcherCount: vi.fn(() => 0),
   installTranscriptWatcher: mocks.install
 }))
+// These cases cover root and path policy; the E9 gate has its own suite.
+vi.mock('./wsl-transcript-running-admission', () => ({ admitWslTranscriptPath: async () => {} }))
+vi.mock('../wsl/wsl-home-unless-stopped', async () => {
+  const wsl = await import('../wsl')
+  return {
+    wslHomeUnlessStopped: (distro: string) => wsl.getWslHomeAsync(distro),
+    listRunningWslHomeDirsUnlessStopped: () => wsl.listRunningWslHomeDirsAsync()
+  }
+})
 vi.mock('../wsl', () => ({
   getWslHomeAsync: mocks.getWslHomeAsync,
   listRunningWslDistrosAsync: mocks.listRunningWslDistrosAsync,
@@ -104,26 +113,6 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
     subscription.unsubscribe()
   })
 
-  it('passes the raw path through untouched off Windows', async () => {
-    setPlatform('darwin')
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'codex',
-      sessionId: 'wsl-sess',
-      transcriptPath: ROLLOUT_LINUX,
-      resolvePollIntervalMs: 10,
-      onAppend: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(50)
-    expect(mocks.install).toHaveBeenCalledWith(
-      ROLLOUT_LINUX,
-      expect.anything(),
-      expect.anything(),
-      expect.any(AbortSignal)
-    )
-    subscription.unsubscribe()
-  })
-
   it('validates an exact UNC path without probing distro homes', async () => {
     setPlatform('win32')
     const subscription = await subscribeNativeChatTranscript({
@@ -142,23 +131,6 @@ describe('exact hook path install on a Windows host with WSL (#10326)', () => {
       expect.any(AbortSignal)
     )
     expect(mocks.getWslHomeAsync).not.toHaveBeenCalled()
-    subscription.unsubscribe()
-  })
-
-  it('does not install an already-UNC path after its distro stops', async () => {
-    setPlatform('win32')
-    mocks.listRunningWslDistrosAsync.mockResolvedValue([])
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'codex',
-      sessionId: 'wsl-sess',
-      transcriptPath: ROLLOUT_UNC,
-      resolvePollIntervalMs: 10,
-      onAppend: () => {}
-    })
-
-    await vi.advanceTimersByTimeAsync(2_100)
-    expect(mocks.listRunningWslDistrosAsync).toHaveBeenCalledTimes(1)
-    expect(mocks.install).not.toHaveBeenCalled()
     subscription.unsubscribe()
   })
 

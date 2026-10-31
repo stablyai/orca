@@ -1,8 +1,5 @@
-// A chat whose agent is not running still owns its conversation. Released desktop clients gate
-// worktree activation on the host's owner answer, so a chat at rest that answered anything but
-// `native` blocked the gate, which then skips adopting and resuming the worktree's paneless agents.
-// This drives the real host's answer through the desktop's activation gate for the two ways a chat
-// comes to rest.
+// Resting chats still own their conversation: native owner answers must pass released desktop activation gates and resume paneless agents.
+// Drive the real host answer through that gate for both ways a chat stops running.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -24,7 +21,10 @@ import { useAppStore } from '../../src/renderer/src/store'
 import { runWorktreeAgentActivationGate } from '../../src/renderer/src/lib/worktree-agent-activation-gate'
 import { readWorktreeStructuredActivationInventory } from '../../src/renderer/src/lib/worktree-agent-structured-inventory'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
-import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
 import { startsWhenPublished } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
@@ -64,7 +64,9 @@ function openHost(): void {
         }),
         closeSession,
         releaseAcquisition: async () => true,
-        dispatch: async () => ({ state: 'rejected', reason: 'unused' }),
+        dispatch: async () => {
+          throw new Error('dispatch is not exercised by this test')
+        },
         cancelTurn: async () => ({ cancelled: false }),
         answerPrompt: async () => undefined,
         setOption: async () => undefined
@@ -145,6 +147,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllGlobals()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabase(root)
   await rm(root, { recursive: true, force: true })
 })
 
@@ -152,17 +155,18 @@ describe('a chat at rest keeps its worktree activatable', () => {
   it('after the idle sweep stopped its agent and closed the conversation', async () => {
     clock += STRUCTURED_AGENT_SESSION_IDLE_MS + 1
     await vi.waitFor(() => expect(host.hasSession(SESSION)).toBe(false))
-    expect(closeSession).toHaveBeenCalledWith(SESSION)
+    expect(closeSession).toHaveBeenCalledWith(SESSION, undefined)
 
     expect(host.handoffStatus(SESSION)).toMatchObject({ owner: 'native' })
     expect(await activate()).toBe('structured')
   })
 
-  it('after an app restart restored it for reading', async () => {
+  it('after an app restart opens it for reading', async () => {
     await host.flushAllStreamedEvents()
     store = await openTestAgentSessionRecordStore(root)
     openHost()
-    await host.restoreReadableSessions()
+    await host.seedSessionTabs([SESSION])
+    await host.revealSession(SESSION)
     expect(host.hasSession(SESSION)).toBe(true)
     expect(store.getRecord(SESSION)?.lease).toMatchObject({
       claimStatus: 'released',

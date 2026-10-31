@@ -18,7 +18,7 @@ beforeEach(() => {
   trackMock.mockReset()
   getCohortAtEmitMock.mockReset()
   getCohortAtEmitMock.mockReturnValue({ nth_repo_added: 2 })
-  // Only the wall clock is faked, so the hook server's real sockets keep working.
+  // Fake only Date so real hook sockets keep working.
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(1_000_000)
 })
@@ -28,8 +28,6 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
-// A finished turn's verdict and clock belong to that turn: an event restating the same finished
-// turn keeps them, and only a new turn or a new session replaces them.
 describe('main agent turn verdicts and clocks', () => {
   let server: AgentHookServer
 
@@ -73,7 +71,7 @@ describe('main agent turn verdicts and clocks', () => {
       const cancelled = server.getStatusSnapshot()[0]?.mainAgent
       expect(cancelled).toMatchObject({ state: 'done', outcome: 'cancellation' })
 
-      // Past the late-event suppression window, so the restatement itself is published.
+      // Advance past late-event suppression so the restatement is published.
       vi.setSystemTime(1_030_000)
       await post(
         '/hook/grok',
@@ -116,9 +114,9 @@ describe('main agent turn verdicts and clocks', () => {
 
     vi.setSystemTime(1_002_000)
     await post('/hook/codex', { hook_event_name: 'Stop' })
-    // Readers that predate `mainAgent` must still read the restated turn as stopped, not finished.
+    // Older readers need interrupted even when they cannot read mainAgent.
     expect(server.getStatusSnapshot()[0]).toMatchObject({ state: 'done', interrupted: true })
-    // Past the late-event suppression window, a child's activity republishes the main agent.
+    // Advance past suppression before child activity republishes the main agent.
     vi.setSystemTime(1_060_000)
     await post('/hook/codex', { hook_event_name: 'SubagentStart', agent_id: 'child-1' })
 

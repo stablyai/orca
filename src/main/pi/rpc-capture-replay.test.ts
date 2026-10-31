@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcTurns } from './rpc-turns'
+import { PiRpcOptionObservations, readPiRpcSessionOptions } from './rpc-options'
+import { piRpcStateSchema } from './rpc-protocol'
 import { piRpcFailureFact } from './rpc-prompt-delivery'
 import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
 import { piRpcDialogPresentation } from './rpc-extension-dialogs'
@@ -47,7 +49,10 @@ afterEach(async () => {
   vi.useRealTimers()
 })
 
-async function replay(name: string) {
+async function replay(
+  name: string,
+  oversized: (frame: z.infer<typeof record>) => boolean = () => false
+) {
   const frames = capture(name)
   const states = frames.filter(
     ({ dir, frame }) => dir === 'out' && frame.type === 'response' && frame.command === 'get_state'
@@ -95,7 +100,9 @@ async function replay(name: string) {
     if (dir === 'in' && frame.type === 'abort') {
       turns.stop()
     }
-    if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
+    if (dir === 'out' && oversized(frame)) {
+      turns.skipped(frame.type, JSON.stringify(frame).slice(0, 256))
+    } else if (dir === 'out' && (frame.type !== 'response' || frame.command === 'prompt')) {
       turns.receive(frame)
     }
     if (dir === 'out' && frame.type === 'response' && frame.command === 'get_state') {
@@ -120,6 +127,35 @@ function transcript(rows: Awaited<ReturnType<typeof replay>>['rows']): string {
 }
 
 describe('scrubbed Pi 1.0.4 RPC captures', () => {
+  it('keeps captured current reports provisional until the native model listing arrives', async () => {
+    const frames = capture('command-only')
+    const response = (command: string) =>
+      frames.find(({ dir, frame }) => dir === 'out' && frame.command === command)?.frame.data
+    const observed = new PiRpcOptionObservations(
+      { current: new Map(), writes: new Map() },
+      () => true
+    )
+    const state = piRpcStateSchema.parse(response('get_state'))
+    observed.seed(state)
+    observed.prepareState(vi.fn())(state)
+    expect(observed.read()).toMatchObject({
+      models: [],
+      modelsKnown: false,
+      current: { model: 'openai-codex/gpt-6.1-sol', effort: 'medium' }
+    })
+    const adopt = observed.prepare()
+    expect(
+      adopt(await readPiRpcSessionOptions({ request: async (command) => response(command) }))
+    ).toBe(true)
+    expect(observed.read().modelsKnown).toBeUndefined()
+    expect(observed.read().models).toContainEqual(
+      expect.objectContaining({
+        id: 'openai-codex/gpt-6.1-sol',
+        label: 'GPT-6.1 Sol'
+      })
+    )
+  })
+
   it('records tool output, streamed text, and all three consumed inputs in one settled run', async () => {
     const result = await replay('steer-followup')
     expect(result.failed).not.toHaveBeenCalled()
@@ -130,6 +166,22 @@ describe('scrubbed Pi 1.0.4 RPC captures', () => {
       result.rows.some((row) => row.body.kind === 'tool-call' && row.body.state === 'completed')
     ).toBe(true)
     expect(transcript(result.rows)).toContain('STEER_CONSUMED')
+    expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
+  })
+  it('keeps the run and consumed inputs when Pi sends records too large to deliver', async () => {
+    const result = await replay('steer-followup', (frame) =>
+      ['tool_execution_end', 'message_end', 'turn_end', 'agent_end'].includes(frame.type)
+    )
+    expect(result.failed).not.toHaveBeenCalled()
+    expect(result.accepted.mock.calls.map(([id]) => id)).toEqual(['send-1', 'send-2', 'send-3'])
+    expect(result.turns.map((turn) => turn.outcome)).toEqual(['success'])
+    expect(
+      result.rows.filter((row) => row.body.kind === 'status' && row.body.tone === 'warning')
+    ).toHaveLength(1)
+    expect(result.rows.find((row) => row.body.kind === 'tool-call')?.body).toMatchObject({
+      name: 'bash',
+      state: 'completed'
+    })
     expect(transcript(result.rows)).toContain('FOLLOWUP_CONSUMED')
   })
   it.each(['provider-fetch-error', 'provider-socket-error'])(

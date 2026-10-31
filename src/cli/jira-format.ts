@@ -7,7 +7,7 @@ import type {
   JiraIssueType,
   JiraTransition,
   JiraUser
-} from '../shared/jira-types'
+} from '../shared/jira/jira-types'
 
 function issueHeadline(issue: JiraIssue): string {
   return `${issue.key} ${issue.title}`

@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { RuntimeTerminalWriter } from './runtime-terminal-writer'
+import { isTerminalInputPaused } from './terminal-input-admission'
+import { terminalInputSourceForClient } from './rpc/methods/terminal/terminal-input-delivery'
 import {
   WRITE_ACCEPTED,
   writeRefused,
@@ -158,5 +160,115 @@ describe('requested terminal write settlement', () => {
     await expect(pending).resolves.toBeUndefined()
     expect(raw.mock.calls.map((call) => call[1])).toEqual(['body', '\r'])
     expect(settled).not.toHaveBeenCalled()
+  })
+})
+
+it.each([
+  ['desktop', { kind: 'desktop' }, { id: 'desktop', type: 'desktop' }],
+  ['local CLI', { kind: 'local-cli' }, { id: 'orca-cli', type: 'desktop' }],
+  ['paired CLI', { kind: 'paired-device', deviceId: 'cli' }, { id: 'orca-cli', type: 'desktop' }],
+  ['orchestration', undefined, undefined],
+  ['mobile', { kind: 'paired-device', deviceId: 'phone' }, { id: 'phone', type: 'mobile' }],
+  ['legacy', { kind: 'paired-device', deviceId: 'old' }, undefined],
+  ['unknown', { kind: 'paired-device', deviceId: 'other' }, { id: 'unknown' }]
+] as const)('admits %s by source and driver', (source, caller, client) => {
+  const inputSource =
+    source === 'orchestration' ? undefined : terminalInputSourceForClient(client, caller)
+  for (const phone of [false, true]) {
+    const runtime = {
+      getDriver: () =>
+        phone ? { kind: 'mobile' as const, clientId: 'phone' } : { kind: 'desktop' as const }
+    }
+    expect(isTerminalInputPaused(runtime, 'pty', inputSource)).toBe(
+      phone && ['desktop', 'unknown'].includes(source)
+    )
+  }
+})
+
+describe('submit settle before Enter', () => {
+  /** An idle proof the test settles by hand, after advancing the fake clock. */
+  function heldProof(): { claim: () => Promise<boolean>; settle: (idle: boolean) => void } {
+    let settle: (idle: boolean) => void = () => {
+      throw new Error('proof not started')
+    }
+    const proof = new Promise<boolean>((resolve) => {
+      settle = resolve
+    })
+    return { claim: () => proof, settle: (idle) => settle(idle) }
+  }
+
+  async function submitTimes(text: string, idleShell: boolean, proofMs = 0): Promise<number[]> {
+    vi.useFakeTimers()
+    const startedAt = Date.now()
+    const enters: number[] = []
+    const proof = heldProof()
+    const writer = new RuntimeTerminalWriter(
+      (_id, data) => {
+        if (data === '\r') {
+          enters.push(Date.now() - startedAt)
+        }
+        return true
+      },
+      () => 'linux',
+      () => null,
+      undefined,
+      proof.claim
+    )
+    const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
+      inputKind: 'driving'
+    })
+    await vi.advanceTimersByTimeAsync(proofMs)
+    proof.settle(idleShell)
+    await vi.advanceTimersByTimeAsync(5000)
+    await pending
+    return enters
+  }
+
+  it('skips the settle for a single line sent to an idle shell prompt', async () => {
+    expect(await submitTimes('ls -la', true)).toEqual([0])
+  })
+
+  it('keeps the settle when the pane is not provably an idle shell', async () => {
+    const [at] = await submitTimes('ls -la', false)
+    expect(at).toBeGreaterThanOrEqual(500)
+  })
+
+  it('keeps the settle for multi-line text even at an idle prompt', async () => {
+    const [at] = await submitTimes('echo one\necho two', true)
+    expect(at).toBeGreaterThanOrEqual(500)
+  })
+
+  it('counts a failed idle proof toward the settle instead of adding to it', async () => {
+    const [unproven] = await submitTimes('ls -la', false)
+    const [slowProof] = await submitTimes('ls -la', false, 250)
+    expect(slowProof).toBe(unproven)
+  })
+
+  it('does not submit when the send is cancelled during a successful idle proof', async () => {
+    vi.useFakeTimers()
+    const writes: string[] = []
+    const controller = new AbortController()
+    const proof = heldProof()
+    const writer = new RuntimeTerminalWriter(
+      (_id, data) => {
+        writes.push(data)
+        return true
+      },
+      () => 'linux',
+      () => null,
+      undefined,
+      proof.claim
+    )
+    const pending = writer.writeAction('pty', { text: 'ls', enter: true }, 'ls\r', {
+      inputKind: 'driving',
+      signal: controller.signal
+    })
+    const rejected = expect(pending).rejects.toThrow('request_aborted')
+    await vi.advanceTimersByTimeAsync(100)
+    controller.abort()
+    proof.settle(true)
+    await vi.advanceTimersByTimeAsync(1000)
+    await rejected
+    expect(writes).toEqual(['ls'])
   })
 })

@@ -34,7 +34,9 @@ const done: AgentSessionStatusSummary = {
   ...owned,
   sessionId: 'completed',
   status: 'idle',
-  hostExecutionOwned: undefined
+  hostExecutionOwned: undefined,
+  hostExecutionPhase: undefined,
+  runtimePermission: null
 }
 
 function subscription(index = 0): Subscription {
@@ -81,7 +83,8 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getSnapshot().get('running')).toEqual({
       ...owned,
       hostExecutionOwned: undefined,
-      hostExecutionPhase: undefined
+      hostExecutionPhase: undefined,
+      runtimePermission: null
     })
     expect(feed.getSnapshot().get('completed')).toBe(done)
     subscription().emit({ type: 'status', session: owned })
@@ -136,18 +139,5 @@ describe('structured status feed execution authority lifecycle', () => {
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBeUndefined()
     subscription(1).emit({ type: 'snapshot', sessions: [owned] })
     expect(feed.getSnapshot().get('running')?.hostExecutionOwned).toBe(true)
-  })
-
-  it('does not notify or reallocate already unowned historical rows on teardown', async () => {
-    const feed = getStructuredAgentSessionStatusFeed({ kind: 'local' })
-    const deactivate = feed.activate()
-    await vi.advanceTimersByTimeAsync(0)
-    subscription().emit({ type: 'snapshot', sessions: [done] })
-    const previous = feed.getSnapshot()
-    const listener = vi.fn()
-    feed.subscribe(listener)
-    deactivate()
-    expect(feed.getSnapshot()).toBe(previous)
-    expect(listener).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { salvagedOptional } from '../../../../src/shared/zod-salvage'
+import { SUPPORTED_UI_LOCALES } from '../../../../src/shared/ui-locale'
 import { NODE_PLATFORM_NAMES } from '../../transport/mobile-runtime-host-platform'
 import { RpcEnvelopeFieldsSchema } from '../../transport/rpc-envelope-fields'
 import { isRpcResponse } from '../../transport/rpc-response-shape'
@@ -9,8 +10,15 @@ import { BridgeInitRouteSchema, type BridgeInitRoute } from './bridge-init-route
 import { BridgePageRouteGrantsSchema } from './bridge-page-route-grants'
 import { BridgeSafeAreaInsetsSchema } from './bridge-safe-area-insets'
 import { BridgeKeyboardInsetSchema } from './bridge-keyboard-inset'
+import { BridgePageGeometrySchema } from './bridge-page-geometry'
+import { BridgeFoldDivisionSchema } from './bridge-fold-division'
 import { BridgeNotifySchema } from './bridge-notify-envelope'
 import { BRIDGE_BACK_FRAME } from './bridge-page-back'
+import {
+  BRIDGE_TERMINAL_KEY_FRAME,
+  BridgeTerminalKeyIdSchema,
+  BridgeTerminalKeyRailSchema
+} from './bridge-terminal-key'
 import { BRIDGE_ID_PATTERN, idSchema, methodSchema, versionSchema } from './bridge-frame-fields'
 
 export {
@@ -38,7 +46,6 @@ import {
   type BridgeRead
 } from './bridge-caps'
 
-/** Closed against `ConnectionState`; the pin lives in this module's test. */
 export const BRIDGE_CONNECTION_STATES = [
   'connecting',
   'handshaking',
@@ -48,26 +55,19 @@ export const BRIDGE_CONNECTION_STATES = [
   'auth-failed'
 ] as const
 
-/** Closed against `BrowserScreencastFormat`; the pin lives in this module's test. */
 export const BRIDGE_BINARY_FORMATS = ['jpeg', 'png'] as const
 
-/**
- * What the page's synchronous `RpcClient` getters read. It travels whole rather than as deltas so a
- * dropped frame cannot leave the cache half-applied, and `generation` is what lets the page notice
- * it missed one.
- */
+// Send whole connection snapshots so lost frames cannot leave partial state; generation detects snapshots that need repair.
 export const BridgeConnectionSnapshotSchema = z.object({
   state: z.enum(BRIDGE_CONNECTION_STATES),
   reconnectAttempt: z.number().int().nonnegative(),
   lastConnectedAt: z.number().nullable(),
-  // Null also covers the client not implementing the optional getter at all.
   lastInboundAt: z.number().nullable(),
   generation: z.number().int().nonnegative().nullable()
 })
 
 export type BridgeConnectionSnapshot = z.infer<typeof BridgeConnectionSnapshotSchema>
 
-/** `native` is a list of grant names, empty in C0. Adding one is never a version bump. */
 export const BridgeGrantsSchema = z.object({
   rpc: z.object({
     maxPendingRequests: z.number().int().positive(),
@@ -78,25 +78,14 @@ export const BridgeGrantsSchema = z.object({
 
 export type BridgeGrants = z.infer<typeof BridgeGrantsSchema>
 
-// The route half of `init`, in its own module; re-exported so the envelope stays one import for
-// everything that reads a bridge frame.
 export { BridgeInitRouteSchema, type BridgeInitRoute }
 
-/**
- * The host the shell opened this page for, minus everything secret about it.
- *
- * `expo-secure-store` is `{}` on web, so the page's own `loadHosts()` answers with nothing and the
- * list paints "Host not found" over a host that is right there. What crosses is the profile the
- * screens read and not the credential they never touch: the bridge already carries the RPC, so a
- * page that held a device token would be holding one it has no use for.
- */
+// Forward only nonsecret host profile fields: web SecureStore is empty, but the bridge already owns credentials/RPC and the page needs host labels to render.
 export const BridgeInitHostSchema = z.object({
   id: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
   name: z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS),
-  // Why: `name` alone cannot say whether it is the phone's override or the desktop's name.
-  // Optional and additive: an older shell sends none and the page falls back to classifying `name`.
-  // Salvaged so a value this page cannot read (a newer shell's platform) drops the field, not `init`;
-  // the outer `.optional()` keeps the inferred key optional rather than required `T | undefined`.
+  // Optional name metadata distinguishes phone overrides from desktop names; salvage unknown platform values so newer shells cannot invalidate the whole init.
+  // The outer optional keeps the key optional, rather than requiring a T|undefined property.
   personalName: salvagedOptional(
     'personalName',
     z.string().min(1).max(BRIDGE_MAX_HOST_FIELD_CHARS)
@@ -115,7 +104,16 @@ export const BridgeInitHostSchema = z.object({
 
 export type BridgeInitHost = z.infer<typeof BridgeInitHostSchema>
 
-/** The allowlisted keys as the app holds them right now. Absent keys are absent, never empty. */
+// The app's resolved light/dark scheme, so the page paints the same palette as the native chrome around it.
+export const BridgeColorSchemeSchema = z.enum(['light', 'dark'])
+
+export type BridgeColorScheme = z.infer<typeof BridgeColorSchemeSchema>
+
+// The app's resolved UI language, so page chrome matches the native chrome and the in-app override.
+export const BridgeUiLocaleSchema = z.enum(SUPPORTED_UI_LOCALES)
+
+export type BridgeUiLocale = z.infer<typeof BridgeUiLocaleSchema>
+
 export const BridgeInitStorageSchema = z
   .record(
     z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey),
@@ -123,30 +121,16 @@ export const BridgeInitStorageSchema = z
   )
   .refine((entries) => Object.keys(entries).length <= PAGE_STORAGE_MAX_ENTRIES)
 
-/** Pinned against `SendRequestOptions` in this module's test; its `envelope` is a frame field. */
 export const BridgeSendRequestOptionsSchema = z.object({
   timeoutMs: z.number().int().positive().optional(),
   budgetSpansConnect: z.boolean().optional(),
   failWhenDisconnected: z.boolean().optional()
 })
 
-/**
- * A host `RpcFailure` is data, not a rejection: it rides in `reply` exactly as it arrived, `_meta`
- * and `error.data` included, because the page reads it and the goldens record it. Nothing is
- * stripped for the same reason — a field a newer host adds must reach the page unaltered.
- *
- * The predicate is the native client's own, imported rather than restated. A page reader narrower
- * than the transport it stands in for refuses replies the phone accepts today: `_meta` is required
- * on neither arm off the wire, and `src/shared/runtime-rpc-envelope.ts` makes it optional on a
- * failure with a nullable `runtimeId`. Widening a reader is safe in both directions; keeping a
- * second copy of one is what drifts.
- */
+// Reuse native isRpcResponse and preserve failures as data, including _meta/error.data and new fields; a narrower bridge reader would reject replies native clients and golden recorders accept.
 export const BridgeReplyPayloadSchema = z.custom<RpcResponse>(isRpcResponse)
 
-/**
- * `BrowserScreencastFrameMetadata` field for field, loose so a field a newer host adds still reaches
- * the page. Every value is a finite number there, which is what `z.number()` accepts.
- */
+// Keep screencast metadata loose for newer host fields; z.number accepts the same finite-number values as the host type.
 const screencastMetadataSchema = z.looseObject({
   offsetTop: z.number().optional(),
   pageScaleFactor: z.number().optional(),
@@ -171,18 +155,22 @@ const replyPartSchema = z.object({
 const BridgeClientMessageSchema = z.discriminatedUnion('type', [
   z.object({
     v: versionSchema,
-    type: z.literal('ready')
+    type: z.literal('ready'),
+    // Negotiated keys this page's `init` reader accepts. A malformed list reads as none, so the
+    // page gets the legacy keys rather than no session.
+    storageKeys: z
+      .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS))
+      .max(PAGE_STORAGE_MAX_ENTRIES)
+      .optional()
+      .catch(undefined)
   }),
   z.object({
     v: versionSchema,
     type: z.literal('request'),
     id: idSchema,
     method: methodSchema,
-    // Absent stays absent: `sendRequest(method)` and `sendRequest(method, undefined)` are different
-    // calls to the recorder, so the host replays the arity the page used.
     params: z.unknown().optional(),
     options: BridgeSendRequestOptionsSchema.optional(),
-    // Verbatim like a reply's `payload`, bounded by the frame caps `params` already has.
     envelope: RpcEnvelopeFieldsSchema.optional()
   }),
   z.object({
@@ -212,8 +200,7 @@ const BridgeClientMessageSchema = z.discriminatedUnion('type', [
 
 export type BridgeClientMessage = z.infer<typeof BridgeClientMessageSchema>
 
-// Not a discriminated union: `reply` and `event` each have two shapes under one `type`, which zod's
-// discriminator cannot express. Hot frames come first so the common case matches on the first try.
+// reply/event each have multiple shapes under type, so use a union rather than a discriminator; try hot frames first.
 const BridgeHostMessageSchema = z.union([
   z.object({
     v: versionSchema,
@@ -227,9 +214,7 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('event'),
     id: idSchema,
     seq: z.number().int().nonnegative(),
-    // A binary listener is handed a decoded `BrowserScreencastFrame`, never bytes, so every field
-    // but the image crosses beside the base64. `seq` is the bridge's backpressure counter;
-    // `frameSeq` is the screencast's own, and conflating them loses one of the two.
+    // Carry decoded-frame metadata alongside base64. Keep bridge seq separate from screencast frameSeq: only the former drives backpressure.
     binary: z.object({
       b64: z.string(),
       format: z.enum(BRIDGE_BINARY_FORMATS),
@@ -255,9 +240,15 @@ const BridgeHostMessageSchema = z.union([
     type: z.literal('state'),
     connection: BridgeConnectionSnapshotSchema
   }),
-  // One Back press, and nothing else: the shell pops what it pushed, so a frame naming where to go
-  // back to would be naming a screen the page cannot see.
+  // Back names no destination; only the native stack knows what screen lies beneath.
   z.object({ v: versionSchema, type: z.literal(BRIDGE_BACK_FRAME) }),
+  // One press on the shell's key rail. Sent only to a page granted the rail, which knows the frame.
+  z.object({
+    v: versionSchema,
+    type: z.literal(BRIDGE_TERMINAL_KEY_FRAME),
+    key: BridgeTerminalKeyIdSchema,
+    inputOwner: z.string().min(1).max(128).optional()
+  }),
   z.object({
     v: versionSchema,
     type: z.literal('end'),
@@ -278,12 +269,22 @@ const BridgeHostMessageSchema = z.union([
     connection: BridgeConnectionSnapshotSchema,
     grants: BridgeGrantsSchema,
     route: BridgeInitRouteSchema.optional(),
-    /** How much of the WebView is under a system bar; absent reads as zeros. */
     safeAreaInsets: BridgeSafeAreaInsetsSchema.optional(),
-    /** The keyboard height native screens read on the shell's OS; absent reads as 0. */
     keyboardInset: BridgeKeyboardInsetSchema.optional(),
+    // Older pages strip this key; salvage an unknown future scheme so it cannot invalidate the whole init.
+    colorScheme: salvagedOptional('colorScheme', BridgeColorSchemeSchema).optional(),
+    /** The fold splitting the page on a partially folded device; absent reads as none. Salvaged so a
+     *  value this page cannot read drops the field, not `init`. */
+    pageGeometry: salvagedOptional('pageGeometry', BridgePageGeometrySchema).optional(),
+    foldDivision: salvagedOptional('foldDivision', BridgeFoldDivisionSchema).optional(),
+    /** The keys the shell's rail shows beside this page, which then drops them from its own row.
+     *  Absent reads as no rail. */
+    terminalKeyRail: salvagedOptional('terminalKeyRail', BridgeTerminalKeyRailSchema).optional(),
+    // Older pages strip this key; a locale this page does not ship is salvaged rather than refusing init.
+    uiLocale: salvagedOptional('uiLocale', BridgeUiLocaleSchema).optional(),
     host: BridgeInitHostSchema.optional(),
     storage: BridgeInitStorageSchema.optional(),
+    refreshTerminalShortcuts: salvagedOptional('refreshTerminalShortcuts', z.boolean()).optional(),
     /**
      * The allowlisted keys the shell holds a value for that `storage` could not carry, because the
      * app's value is over the page's own cap (ruling 33.6).
@@ -300,26 +301,12 @@ const BridgeHostMessageSchema = z.union([
       .array(z.string().min(1).max(PAGE_STORAGE_MAX_KEY_CHARS).refine(isPageStorageKey))
       .max(PAGE_STORAGE_MAX_ENTRIES)
       .optional(),
-    /** Every route pattern the shell would render from the page. The page keeps a navigation into
-     *  one of them and hands the rest back, which is the only thing that tells it which is which. */
     pageRoutes: z
       .array(z.string().min(1).max(BRIDGE_MAX_ROUTE_PATHNAME_CHARS))
       .max(BRIDGE_MAX_PAGE_ROUTES)
       .optional(),
-    /**
-     * What each of those patterns declared, so the page can tell a hop it may keep from one it must
-     * hand back.
-     *
-     * `pageRoutes` says which routes this shell would render; it does not say what each costs. A
-     * page keeping a push local on the pattern alone runs the target under the opener's grants,
-     * which is how the tasks page was reached from the sidebar without `native.clipboard.write`.
-     *
-     * Optional in both directions: an older shell omits it and the page falls back to today's
-     * behaviour, an older page ignores it. The grant grammar is the manifest's own, so a name the
-     * bundle could not have declared cannot arrive here either.
-     */
+    // Send manifest grant pairs so local hops cannot run targets under insufficient opener grants. Older shells omit/older pages ignore this field; absent pairs retain the older handoff rule.
     pageRouteGrants: BridgePageRouteGrantsSchema.optional(),
-    /** The page owns the wide host area and draws the sidebar; absent, it never does. Additive. */
     ownsHostArea: salvagedOptional('ownsHostArea', z.boolean()).optional()
   })
 ])
@@ -328,20 +315,8 @@ export type BridgeHostMessage = z.infer<typeof BridgeHostMessageSchema>
 export type BridgeReplyMessage = Extract<BridgeHostMessage, { type: 'reply' }>
 export type BridgeReplyPayload = z.infer<typeof BridgeReplyPayloadSchema>
 
-/**
- * The exchange a frame the page's reader refused was answering, when it named one.
- *
- * A refused frame is dropped, and a dropped `reply` or `error` would otherwise leave the request it
- * answered pending for the life of the document. The id is salvaged through the same caps the
- * reader applies, never trusted: the caller settles only an exchange it already holds, so a frame
- * naming anything else still changes nothing.
- *
- * Two refusals are decided before an id can exist: `oversized`, on the raw string, and
- * `malformed-json`, on a parse that did not finish. Nothing is salvageable from either, so an
- * exchange one of those frames was answering is settled by `close` or by a shell replacement and by
- * nothing else. Neither arises from a host that is behaving: it chunks at the frame cap and refuses
- * a body over `BRIDGE_MAX_REPLY_BYTES` on its own side, answering with an `error` frame instead.
- */
+// Salvage a refused frame’s id through the same caps to settle only an existing exchange; silently dropping replies would strand requests.
+// Raw oversize and malformed JSON yield no id, so only close/replacement settles their exchanges; conforming hosts instead chunk or send bounded errors.
 export function readRefusedBridgeFrameId(raw: string): string | null {
   const framed = parseBridgeMessage(raw, 'shell-to-page')
   if (!framed.ok) {
@@ -355,12 +330,10 @@ export function readRefusedBridgeFrameId(raw: string): string | null {
   return typeof id === 'string' && BRIDGE_ID_PATTERN.test(id) ? id : null
 }
 
-/** What the RN host accepts from the page. */
 export function readBridgeClientMessage(raw: string): BridgeRead<BridgeClientMessage> {
   return readMessage(raw, BridgeClientMessageSchema, 'page-to-shell')
 }
 
-/** What the page accepts from the RN host. */
 export function readBridgeHostMessage(raw: string): BridgeRead<BridgeHostMessage> {
   return readMessage(raw, BridgeHostMessageSchema, 'shell-to-page')
 }

@@ -1,26 +1,12 @@
-/**
- * STA-5377. An inventory that published zero snapshots satisfied
- * `settles.length === fullInventory.publishedSnapshotCount` as `0 === 0` and
- * fired the environment-wide "the host has spoken" verdict with no host
- * evidence behind it. A live relay/SSH-paired host answers exactly that until
- * its renderer's first mirror publish, so the drained resume sweep forked
- * `codex resume` / `claude --resume` onto a PTY the host was still running.
- *
- * All three states are pinned here because the naive floor
- * (`settles.length > 0`) trades the duplicate session for the opposite defect:
- * a genuinely zero-terminal host whose panes park forever. The distinguisher
- * is host readiness — `terminal.list` reads the PTY controller, not the
- * session-tab mirror — so an empty mirror plus a live PTY is a THIRD state.
- */
+// Zero published snapshots satisfied 0===0 and drained resumes before host evidence, duplicating live agents (STA-5377). Requiring nonzero snapshots instead strands truly empty hosts. Probe the PTY controller to distinguish empty, unpublished-but-live and unverifiable hosts.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 
-// Why: web-session-tabs-sync imports the app-level store singleton, and this
-// suite drives only the settle receipt — no store patch is exercised.
+// Mock the singleton store import; this suite tests settle receipts without store patches.
 vi.mock('../store', () => ({
   useAppStore: {
     setState: vi.fn(),
-    getState: vi.fn(() => ({})),
+    getState: vi.fn(() => ({ updateAgentStatusState: vi.fn() })),
     subscribe: vi.fn(() => () => {})
   }
 }))
@@ -312,9 +298,7 @@ describe('empty host inventory settling the session mirror', () => {
     expect(result).toBe('live')
   })
 
-  // Why: pre-hostScope hosts cannot prove emptiness; parking them forever would
-  // strand auto-resume on every truly-empty legacy host, so their best-effort
-  // empty keeps settling as it did before authoritative inventories existed.
+  // Pre-hostScope hosts cannot prove emptiness; retain best-effort empty settlement or legacy auto-resume parks forever.
   it('settles a scope-less legacy empty inventory', async () => {
     const environmentId = 'env-legacy-scope-less'
     const call = vi.fn(async () => ({
@@ -334,10 +318,7 @@ describe('empty host inventory settling the session mirror', () => {
     expect(hasHostSessionMirrorHydrated(environmentId, WORKTREE)).toBe(true)
   })
 
-  // #18595, the reporter's shape: the answering host holds a mirrored row for a peer runtime, so
-  // that peer is named in `omittedHostIds` for every listing it will ever give. Reading the
-  // disclosure list as the gate made this probe permanently `unverifiable`, the mirror never
-  // hydrated, and every remote pane parked forever.
+  // Peer runtimes always appear omitted; treating disclosure as missing owed coverage made probes permanently unverifiable and parked every remote pane (#18595).
   it('settles on a peer runtime it disclosed but never owed coverage for', async () => {
     const result = await probeHostLiveTerminals(
       'env-peer-disclosed',
@@ -395,9 +376,7 @@ describe('empty host inventory settling the session mirror', () => {
     expect(result).toBe('unverifiable')
   })
 
-  // A worktree-scoped listing whose target is a runtime host covers nothing and names `local`
-  // among its omissions. `local` is what keeps this unverifiable — the point is that the
-  // runtime-only rule does not rescue a listing that answered for nothing.
+  // A runtime-only target covering no hosts still omits local; the peer exception must not rescue this empty coverage.
   it('stays unverifiable when the listing covered no host at all', async () => {
     const result = await probeHostLiveTerminals(
       'env-covered-nothing',
@@ -455,8 +434,7 @@ describe('empty host inventory settling the session mirror', () => {
       fullInventory: { environmentId, publishedSnapshotCount: 1 }
     })()
 
-    // Why: a published inventory is host evidence on its own — it must settle
-    // in the same tick as before, with no probe round trip.
+    // Published inventory is already host evidence; settle synchronously without a probe round trip.
     expect(resumeSweeps).toBe(1)
     expect(hasHostSessionMirrorHydrated(environmentId, WORKTREE)).toBe(true)
     await flushProbe()

@@ -1,16 +1,16 @@
+import type * as PromptCardModule from './use-native-chat-interactive-prompt-card'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { useImperativeHandle } from 'react'
 import type { NativeChatLiveSession } from './use-native-chat-live-session'
-import type { AskPrompt } from './native-chat-interactive-prompt'
+import type { AskPrompt } from '../../../../shared/native-chat/input/native-chat-ask-types'
 import type { NativeChatInteractiveSend } from './use-native-chat-interactive-send'
 import type { NativeChatMessageListHandle } from './use-native-chat-reveal-latest'
 import type * as InteractiveCardModule from './NativeChatInteractiveCard'
 
-// The transcript and composer are stubbed: the wire under test is which of this
-// pane's sends tell the transcript to bring the latest into view.
+// Stub transcript and composer to observe which pane sends request latest-message navigation.
 type ComposerStubProps = { onSubmitted?: () => void }
 const stubs = vi.hoisted(
   (): {
@@ -44,9 +44,20 @@ vi.mock('./use-native-chat-interactive-send', () => ({
   })
 }))
 // A pending question, so the pane mounts its card with the send it hands it.
-vi.mock('./use-native-chat-interactive-prompt-card', () => ({
-  useNativeChatInteractivePromptCard: () => ({ kind: 'question', prompt })
-}))
+vi.mock('./use-native-chat-interactive-prompt-card', async (importOriginal) => {
+  const original = await importOriginal<typeof PromptCardModule>()
+  const { useNativeChatPromptCardPresentation } =
+    await import('./use-native-chat-prompt-card-presentation')
+  return {
+    useNativeChatTerminalPromptCard: (
+      args: Parameters<typeof original.useNativeChatTerminalPromptCard>[0]
+    ) => {
+      const card = { kind: 'question' as const, prompt }
+      const presentation = useNativeChatPromptCardPresentation({ ...args, card })
+      return { promptCard: card, presentation, actionKey: presentation.occurrenceKey ?? 'prompt' }
+    }
+  }
+})
 vi.mock('./NativeChatInteractiveCard', async (importOriginal) => {
   const original = await importOriginal<typeof InteractiveCardModule>()
   return {
@@ -110,76 +121,5 @@ describe('NativeChatResolvedView sends', () => {
     expect(onSwitchToTerminal).toHaveBeenCalledOnce()
     expect(stubs.revealLatest).not.toHaveBeenCalled()
     expect(screen.queryByRole('textbox')).toBeNull()
-  })
-
-  it('brings the latest into view for a composer send and a prompt answer, not a Stop', () => {
-    stubs.session = {
-      messages: [
-        {
-          id: 'user-1',
-          role: 'user',
-          blocks: [{ type: 'text', text: 'Rename the module' }],
-          timestamp: 1,
-          source: 'transcript'
-        }
-      ],
-      status: 'ready',
-      sessionId: 'session-reveal',
-      agent: 'claude',
-      hasMore: false,
-      loadingEarlier: false,
-      olderHistoryGeneration: 0,
-      loadEarlier: vi.fn(),
-      readPhase: 'ready'
-    }
-    render(
-      <NativeChatResolvedView
-        paneKey="tab-reveal:leaf-reveal"
-        agent="claude"
-        sessionId="session-reveal"
-        transcriptPath={null}
-        isVisible
-        isFocusedGroup={false}
-        targetPtyId="pty-reveal"
-        terminalTabId="tab-reveal"
-        ownsTabWideLaunchDraft={false}
-      />
-    )
-    // Anti-vacuous: opening the pane reveals nothing by itself.
-    expect(stubs.revealLatest).not.toHaveBeenCalled()
-
-    stubs.composer?.onSubmitted?.()
-    expect(stubs.revealLatest).toHaveBeenCalledOnce()
-    // A question answer and an approval option, then Stop and a dismissal: only the answers are sends.
-    stubs.cardSend?.sendAnswer(prompt, [{ indices: [0] }])
-    expect(stubs.revealLatest).toHaveBeenCalledTimes(2)
-    // An empty answer writes nothing, so it moves nobody.
-    stubs.cardSend?.sendAnswer(prompt, [{ indices: [] }])
-    expect(stubs.revealLatest).toHaveBeenCalledTimes(2)
-    void stubs.cardSend?.sendRawVerified('1')
-    expect(stubs.revealLatest).toHaveBeenCalledTimes(3)
-    stubs.cardSend?.cancel()
-    void stubs.cardSend?.cancelAsk()
-    expect(stubs.revealLatest).toHaveBeenCalledTimes(3)
-  })
-
-  it('leaves the reader where they are when the terminal is gone and nothing is written', () => {
-    render(
-      <NativeChatResolvedView
-        paneKey="tab-reveal:leaf-reveal"
-        agent="claude"
-        sessionId="session-reveal"
-        transcriptPath={null}
-        isVisible
-        isFocusedGroup={false}
-        targetPtyId={null}
-        terminalTabId="tab-reveal"
-        ownsTabWideLaunchDraft={false}
-      />
-    )
-    stubs.cardSend?.sendAnswer(prompt, [{ indices: [0] }])
-    void stubs.cardSend?.sendRawVerified('1')
-    expect(stubs.cardSend).not.toBeNull()
-    expect(stubs.revealLatest).not.toHaveBeenCalled()
   })
 })

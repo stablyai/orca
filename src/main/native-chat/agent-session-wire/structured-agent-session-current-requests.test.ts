@@ -6,7 +6,7 @@ import {
   type AgentJournalResolution
 } from '../../../shared/agent-session-journal-types'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
-import { createStructuredAgentSessionEventCoalescer } from '../../../shared/structured-agent-session-coalescer'
+import { createStructuredAgentSessionEventCoalescer } from '../../../shared/agent-session/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession

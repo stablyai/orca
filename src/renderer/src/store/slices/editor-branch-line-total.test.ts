@@ -59,9 +59,7 @@ describe('createEditorSlice branch line total', () => {
       )
     const published = store.getState().gitBranchLineTotalByWorktree['wt-1']
 
-    // Why: an omitted field is "not computed on this pass" — a soft-deadline
-    // miss or a cooldown — and the host keeps backfilling its cache. Clearing
-    // it blanked the chip mid-poll and then flashed it back.
+    // Omitted totals mean deferred computation; retain host backfill cache or polling flashes the chip blank.
     store.getState().setGitStatus('wt-1', status())
 
     expect(store.getState().gitBranchLineTotalByWorktree['wt-1']).toBe(published)
@@ -222,9 +220,7 @@ describe('createEditorSlice branch line total', () => {
     })
   })
 
-  // Moving a line from a source file into a test file leaves the totals
-  // identical; without the split in the equality check the hover would keep
-  // showing the old share.
+  // Source-to-test line moves preserve totals; compare split counts too or hover retains stale shares.
   it('produces a new state object when only the test split changed', () => {
     const store = createEditorStore()
     const tick = status({

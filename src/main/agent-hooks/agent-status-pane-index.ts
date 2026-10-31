@@ -1,8 +1,6 @@
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 
-/** Groups one agent-status snapshot by pane key so a projection that resolves many
- *  panes reads the snapshot once instead of rescanning (and re-materializing) it per
- *  pane. Rows without a pane key are unaddressable here and dropped. */
+/** Index once per snapshot to avoid rematerializing rows for every pane. */
 export function indexAgentStatusRowsByPaneKey(
   rows: readonly AgentStatusIpcPayload[]
 ): Map<string, AgentStatusIpcPayload[]> {

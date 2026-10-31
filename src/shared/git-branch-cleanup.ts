@@ -147,7 +147,7 @@ async function branchOnlyCommitsArePatchEquivalent(
   targetOid: string,
   branchRef: string
 ): Promise<boolean> {
-  const stdout = await readOptionalGitStdout(runGit, ['cherry', '-v', targetOid, branchRef])
+  const stdout = await readOptionalGitStdout(runGit, ['cherry', targetOid, branchRef])
   if (stdout === null) {
     return false
   }
@@ -243,6 +243,20 @@ export async function branchHasNoUnmergedChangesOnAnyTarget(
     const mergeBase = await readOptionalGitStdout(runGit, ['merge-base', targetOid, branchRef])
     if (!mergeBase) {
       continue
+    }
+    const branchChanges = await readOptionalGitRawStdout(runGit, [
+      'diff',
+      '--name-only',
+      mergeBase,
+      branchRef
+    ])
+    if (!branchChanges) {
+      // An unchanged tree does not prove empty or reverted commits were merged.
+      try {
+        await runGit(['merge-base', '--is-ancestor', branchRef, targetOid])
+      } catch {
+        continue
+      }
     }
     if (await branchMergesWithoutTreeChanges(runGit, targetOid, branchRef, capabilities)) {
       return true

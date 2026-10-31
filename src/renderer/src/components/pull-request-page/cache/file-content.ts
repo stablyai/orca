@@ -50,7 +50,7 @@ function touchPRFileContentCache(
 
   const existing = prFileContentCache.get(key)
   prFileContentCacheBytes -= existing?.byteCount ?? 0
-  // Why: re-insert moves the key to MRU; Map insertion order makes the oldest key first when evicting.
+  // Reinsert to mark MRU; insertion order identifies the oldest eviction candidate.
   prFileContentCache.delete(key)
   const byteCount = retainedByteCount
   prFileContentCache.set(key, { value, byteCount })

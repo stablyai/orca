@@ -319,7 +319,6 @@ describe('ClaudeUsageStore', () => {
     const summary = await store.getSummary('orca', '30d')
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // 5 + 25 + 0.5 + (0.6 * 6.25 + 0.4 * 10); the flat 5m rate would give 36.75.
     expect(summary.estimatedCostUsd).toBeCloseTo(38.25)
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-7-20260416')?.estimatedCostUsd
@@ -461,7 +460,6 @@ describe('ClaudeUsageStore', () => {
 
     const summary = await store.getSummary('orca', '30d')
 
-    // Why: Sonnet 4.6 and earlier bill above 200k at a premium; Sonnet 5 does not.
     expect(summary.estimatedCostUsd).toBeCloseTo(4.41)
   })
 
@@ -493,13 +491,10 @@ describe('ClaudeUsageStore', () => {
 
     const breakdown = await store.getBreakdown('orca', '30d', 'model')
 
-    // Why: the 4.5 long-context premium only applies if `-4-5-` never matches the `-5`
-    // family pattern, so this doubles as the digit-boundary proof for both families.
     expect(
       breakdown.find((row) => row.key === 'claude-sonnet-4-5-20250929')?.estimatedCostUsd
     ).toBeCloseTo(10.98)
-    // Why: Opus 4.5 and Opus 5 share rates today, so this pins the rate rather
-    // than the routing — it fails only if the two ever diverge.
+    // Opus 4.5 and 5 share rates, so this assertion cannot distinguish their routing.
     expect(
       breakdown.find((row) => row.key === 'claude-opus-4-5-20251101')?.estimatedCostUsd
     ).toBeCloseTo(11.025)
@@ -691,8 +686,6 @@ describe('ClaudeUsageStore', () => {
 
     expect(beforeRefresh).toHaveBeenCalledWith(true)
 
-    // That forced scan failed: it recorded an attempt but no completion. Later
-    // lookups must not keep forcing a full rescan of all Claude history.
     const afterAttempt = createStoreWithState({ scanState: failedScanState(completedAt + 1000) })
     const afterRefresh = vi.spyOn(afterAttempt, 'refresh').mockResolvedValue(scanStateResult)
     const usage = await afterAttempt.getAutomationRunUsage(request)
@@ -775,8 +768,6 @@ describe('ClaudeUsageStore', () => {
     finishScan()
     await inFlight
 
-    // The in-flight scan's start time is not a finished attempt, so the lookup
-    // forces and rides that scan instead of reading a pre-run cache.
     expect((await usage).status).toBe('known')
     expect((await usage).providerSessionId).toBe('session-1')
   })

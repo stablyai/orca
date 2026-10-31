@@ -69,8 +69,7 @@ describe('terminal drop path writer', () => {
     })
 
     expect(result).toEqual({ sentAnyPath: true, targetCurrent: true, pathsWritten: 1 })
-    // Why: image attachment detection in terminal TUIs keys off bracketed paste
-    // of the literal path — no shell-escaping, no trailing space.
+    // Image attachment detection requires bracketed paste of the path without a trailing space.
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/tmp/orca-paste-1-abc.png'),
       'driving',
@@ -194,8 +193,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    // Why: the image paste carries no trailing space of its own, so a following
-    // non-image path would collide with it without an explicit separator.
+    // An image adds no trailing space, so separate a following non-image path explicitly.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/shot.png')} `,
@@ -221,8 +219,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    // Why: bracketed pastes are self-delimiting; a stray space would land in the
-    // TUI input between the two attachments.
+    // Raw image frames self-delimit; intervening spaces would become TUI input.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       wrapTerminalBracketedPasteText('/repo/one.png'),
@@ -251,8 +248,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    // Why: the text stays escaped so a shell still gets one argument; the
-    // paste frame is what lets agent TUIs attach the image.
+    // Shell escaping preserves one argument; the paste frame enables TUI image attachment.
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/repo/a.png\\;\\ touch\\ /tmp/pwned\\ \\#.png'),
@@ -275,8 +271,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    // Why: browser download names like `download (1).png` were written as
-    // unframed keystrokes, so agent TUIs left the path as text.
+    // Unframed escaped download names reach agents as typed text instead of attachments.
     expect(sendInputAccepted).toHaveBeenCalledTimes(1)
     expect(sendInputAccepted).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/repo/.orca/drops/download\\ \\(1\\).png'),
@@ -299,8 +294,7 @@ describe('terminal drop path writer', () => {
       targetShell: 'posix'
     })
 
-    // Why: a shell ignores paste boundaries, so without the space
-    // `/repo/download\ \(1\).png/repo/it\'s.png` would be one argument.
+    // Shells ignore paste boundaries; without a separator adjacent escaped paths become one argument.
     expect(sendInputAccepted).toHaveBeenNthCalledWith(
       1,
       `${wrapTerminalBracketedPasteText('/repo/download\\ \\(1\\).png')} `,

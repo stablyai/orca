@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import { pairedRuntimeConnectionFromOffer } from '../../shared/paired-runtime-connection'
 import { mkdtempSync } from 'node:fs'
 import { rm, writeFile } from 'node:fs/promises'
@@ -8,7 +9,7 @@ import { OrcaRuntimeService } from './orca-runtime'
 import { readRuntimeMetadata } from './runtime-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import { parsePairingCode } from '../../shared/pairing'
-import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime-client'
+import { subscribeRemoteRuntimeRequest } from '../../shared/remote-runtime/remote-runtime-client'
 import {
   TerminalStreamOpcode,
   decodeTerminalStreamFrame,
@@ -298,50 +299,18 @@ describe('OrcaRuntimeRpcServer', () => {
     }
   })
 
-  it('authorizes a mobile artifact tap after first-connect backfill even once the raw window scrolls', async () => {
+  it('opens a host file outside every workspace for a phone with no terminal context', async () => {
     const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
     const runtime = new OrcaRuntimeService(makeStore() as never)
-    runtime.setPtyController({
-      spawn: vi.fn().mockResolvedValue({ id: 'pty-1' }),
-      write: () => true,
-      kill: () => true,
-      getCwd: async () => '/tmp/worktree-a',
-      getForegroundProcess: async () => null
-    })
     const server = new OrcaRuntimeRpcServer({
       runtime,
       userDataPath,
       enableWebSocket: true,
       wsPort: 0
     })
-    // Real artifact under the temp root so the grant path stats it.
-    const artifactPath = join(tmpdir(), `orca-artifact-${process.pid}-${Date.now()}.json`)
-    await writeFile(artifactPath, '{"ok":true}')
-
-    runtime.attachWindow(1)
-    runtime.syncWindowGraph(1, {
-      tabs: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          title: 'Agent',
-          activeLeafId: 'pane:1',
-          layout: null
-        }
-      ],
-      leaves: [
-        {
-          tabId: 'tab-1',
-          worktreeId: 'repo-1::/tmp/worktree-a',
-          leafId: 'pane:1',
-          paneRuntimeId: 1,
-          ptyId: 'pty-1'
-        }
-      ]
-    })
-    // Path printed before any mobile client exists: tracking is inactive, so
-    // only the retained raw window knows it at connect time.
-    runtime.onPtyData('pty-1', `wrote ${artifactPath}\n`, 100)
+    // Never printed by any terminal: a chat link or typed path is enough.
+    const artifactPath = join(tmpdir(), `orca-outside-${process.pid}-${Date.now()}.md`)
+    await writeFile(artifactPath, '# handoff')
 
     await server.start()
     const offer = server.createPairingOffer({
@@ -353,107 +322,43 @@ describe('OrcaRuntimeRpcServer', () => {
     if (!offer.available) {
       throw new Error('WebSocket pairing unavailable')
     }
-    // Full direct E2EE authentication drives MobileSocketWiring.onReady (the
-    // relay transport attaches through the same wiring), which must backfill
-    // candidates from the raw window without any direct activation call.
     const phone = await authenticateMobileWsSession(offer.pairingUrl)
     const phoneResponses = createEncryptedWsResponseReader(phone)
     try {
-      // Post-connect pathless output scrolls the artifact out of the raw
-      // 64KiB window; only the connect-time backfilled candidate can answer.
-      runtime.onPtyData('pty-1', 'x'.repeat(70 * 1024), 200)
-
-      sendEncryptedWsRequest(phone, {
-        id: 'phone_terminals',
-        method: 'terminal.list',
-        params: { worktree: 'id:repo-1::/tmp/worktree-a' }
-      })
-      const listResponse = await phoneResponses.next('phone_terminals')
-      const handle = (listResponse.result as { terminals: { handle: string }[] }).terminals[0]!
-        .handle
-      expect(handle).toBeTruthy()
-
       sendEncryptedWsRequest(phone, {
         id: 'phone_tap',
         method: 'files.resolveTerminalPath',
-        params: {
-          worktree: 'id:repo-1::/tmp/worktree-a',
-          pathText: artifactPath,
-          terminal: handle
-        }
+        params: { worktree: 'id:repo-1::/tmp/worktree-a', pathText: artifactPath }
       })
-      await expect(phoneResponses.next('phone_tap')).resolves.toMatchObject({
+      const tap = await phoneResponses.next('phone_tap')
+      expect(tap).toMatchObject({
         ok: true,
         result: {
           exists: true,
-          isDirectory: false,
-          openTarget: {
-            kind: 'absolute-file',
-            provider: 'local',
-            grantId: expect.any(String)
-          }
+          openTarget: { kind: 'absolute-file', provider: 'local', grantId: expect.any(String) }
         }
+      })
+      const { openTarget } = z
+        .object({ openTarget: z.object({ absolutePath: z.string(), grantId: z.string() }) })
+        .parse(tap.result)
+      sendEncryptedWsRequest(phone, {
+        id: 'phone_read',
+        method: 'files.readTerminalArtifact',
+        params: {
+          worktree: 'id:repo-1::/tmp/worktree-a',
+          grantId: openTarget.grantId,
+          absolutePath: openTarget.absolutePath
+        }
+      })
+      await expect(phoneResponses.next('phone_read')).resolves.toMatchObject({
+        ok: true,
+        result: { content: '# handoff' }
       })
     } finally {
       phoneResponses.dispose()
       phone.ws.close()
       await server.stop()
       await rm(artifactPath, { force: true })
-    }
-  })
-
-  it('completes remote E2EE authentication against a runtime proxy without activateRecentPtyPathCandidateTracking', async () => {
-    const userDataPath = mkdtempSync(join(tmpdir(), 'orca-runtime-rpc-'))
-    // Why: a remote-host runtime proxy only implements RPC-forwarded methods;
-    // activation is a local-host concern, so the proxy legitimately lacks
-    // activateRecentPtyPathCandidateTracking and onReady must not throw.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the proxy fake carries only the surface the auth and status paths under test read.
-    const runtimeProxy = {
-      configureNotificationDismissalStore: () => {},
-      getRuntimeId: () => 'proxy-runtime-test',
-      getStartedAt: () => 1,
-      machineNameReady: async () => undefined,
-      getStatus: () => ({ graphStatus: 'unavailable' }),
-      cleanupSubscriptionsForConnection: () => {},
-      cancelMobileDictationForConnection: () => {},
-      onClientDisconnected: () => {}
-    } as unknown as OrcaRuntimeService
-    expect(
-      (runtimeProxy as { activateRecentPtyPathCandidateTracking?: unknown })
-        .activateRecentPtyPathCandidateTracking
-    ).toBeUndefined()
-    const server = new OrcaRuntimeRpcServer({
-      runtime: runtimeProxy,
-      userDataPath,
-      enableWebSocket: true,
-      wsPort: 0
-    })
-
-    await server.start()
-    const offer = server.createPairingOffer({
-      address: '127.0.0.1',
-      name: 'remote',
-      scope: 'runtime'
-    })
-    expect(offer.available).toBe(true)
-    if (!offer.available) {
-      throw new Error('WebSocket pairing unavailable')
-    }
-    // Real E2EE pairing + authentication drives MobileSocketWiring.onReady
-    // before e2ee_authenticated is sent; a throwing onReady never authenticates.
-    const session = await authenticateMobileWsSession(offer.pairingUrl)
-    const responses = createEncryptedWsResponseReader(session)
-    try {
-      sendEncryptedWsRequest(session, { id: 'proxy_status', method: 'status.get' })
-      await expect(responses.next('proxy_status')).resolves.toMatchObject({
-        id: 'proxy_status',
-        ok: true,
-        result: { graphStatus: 'unavailable' }
-      })
-    } finally {
-      responses.dispose()
-      session.ws.close()
-      await server.stop()
     }
   })
 

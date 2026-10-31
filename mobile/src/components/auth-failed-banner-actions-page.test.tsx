@@ -8,8 +8,7 @@ vi.mock('react-native', () => ({
   Text: 'Text',
   View: 'View'
 }))
-// The substitution the page bundler makes for itself, made here by name: this suite runs under the
-// native resolution, so the sibling has to be named to be the one the banner renders.
+// Name web sibling explicitly: native test resolver otherwise misses page bundler’s substitution.
 vi.mock('./AuthFailedBannerActions', async () => await import('./AuthFailedBannerActions.web'))
 
 import { AuthFailedBanner } from './AuthFailedBanner'
@@ -44,11 +43,7 @@ function labels(node: ReactTestInstance): string[] {
     .map((child) => String(child.props.children))
 }
 
-/**
- * Re-pair works from the page: its push of `/pair-scan` is handed to the shell, which opens the
- * native scan screen. Retry and Remove do not (`forceReconnect` is null, removal refuses), so the
- * banner names the app for those two rather than painting controls that do nothing.
- */
+// Page re-pair hands /pair-scan to shell; Retry (null reconnect)/Remove (refused) must point to app instead of offering dead controls.
 describe('the auth-failed banner on the page', () => {
   it('offers Re-pair alone, and its press reaches the screen', () => {
     const presses: Presses = { retry: 0, repair: 0, remove: 0 }

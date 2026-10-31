@@ -47,6 +47,7 @@ async function inspect(rawName: string, command: string | null) {
       pid: 100,
       incarnationId: 'incarnation-1',
       isAlive: true,
+      confirmForegroundProcess: async () => rawName,
       inspectChildProcesses: () => 'unverifiable' as const,
       getForegroundProcess: () => rawName
     } as unknown as Session,

@@ -12,6 +12,7 @@ import { BrowserUseSetup } from './BrowserUsePane'
 import { BrowserSearchEngineSetting } from './BrowserSearchEngineSetting'
 import { BrowserLinkRoutingSetting } from './BrowserLinkRoutingSetting'
 import { BrowserLinkRoutingModifierSetting } from './BrowserLinkRoutingModifierSetting'
+import { BrowserLinkRoutingBackgroundSetting } from './BrowserLinkRoutingBackgroundSetting'
 import { BrowserTerminalLinkActionsSetting } from './BrowserTerminalLinkActionsSetting'
 import { BrowserLocalhostWorktreeLabelsSetting } from './BrowserLocalhostWorktreeLabelsSetting'
 import { BrowserClientHostedRemoteSetting } from './BrowserClientHostedRemoteSetting'
@@ -22,6 +23,7 @@ import { BrowserSitePermissionsSetting } from './BrowserSitePermissionsSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { BrowserSessionCookiesSection } from './BrowserSessionCookiesSection'
 import { BrowserNewProfileDialog } from './BrowserNewProfileDialog'
+import { BrowserExtensionsSection } from './BrowserExtensionsSection'
 import {
   createBrowserHomePageDraftState,
   resolveBrowserHomePageDraftState
@@ -30,11 +32,14 @@ import { buildSidebarHostOptions } from '../sidebar/sidebar-host-options'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import {
   getSettingsFocusedExecutionHostId,
+  LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { isMacUserAgent } from '@/components/terminal-pane/pane-helpers'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { resolveAvailableBrowserSessionHostId } from './browser-session-host-selection'
+import { getDefaultBrowserProfileForHost } from '@/store/slices/browser/browser-host-state'
 import { motionSafeScrollBehavior } from '@/hooks/usePrefersReducedMotion'
 export { getBrowserPaneCombinedSearchEntries }
 
@@ -56,6 +61,7 @@ export function BrowserPane({
   updateSettings,
   onOpenComputerUse
 }: BrowserPaneProps): React.JSX.Element {
+  const languageRevision = useUiLanguageRevision()
   const searchQuery = useAppStore((s) => s.settingsSearchQuery)
   const browserDefaultUrl = useAppStore((s) => s.browserDefaultUrl)
   const setBrowserDefaultUrl = useAppStore((s) => s.setBrowserDefaultUrl)
@@ -73,7 +79,6 @@ export function BrowserPane({
   const setBrowserSessionHostId = useAppStore((s) => s.setBrowserSessionHostId)
   const detectedBrowsers = useAppStore((s) => s.detectedBrowsers)
   const browserSessionImportState = useAppStore((s) => s.browserSessionImportState)
-  const defaultBrowserSessionProfileId = useAppStore((s) => s.defaultBrowserSessionProfileId)
   const setDefaultBrowserSessionProfileId = useAppStore((s) => s.setDefaultBrowserSessionProfileId)
   const defaultProfile = browserSessionProfiles.find((p) => p.id === 'default')
   const nonDefaultProfiles = browserSessionProfiles.filter((p) => p.scope !== 'default')
@@ -119,6 +124,7 @@ export function BrowserPane({
   const showUserAgent = matchesSettingsSearch(searchQuery, [browserSearchEntries[10]])
   const showSitePermissions = matchesSettingsSearch(searchQuery, [browserSearchEntries[11]])
   const showProfileScope = matchesSettingsSearch(searchQuery, [browserSearchEntries[12]])
+  const showLinkRoutingBackground = matchesSettingsSearch(searchQuery, [browserSearchEntries[13]])
   const showBrowserUse = matchesSettingsSearch(searchQuery, getBrowserUsePaneSearchEntries())
   const isMac = isMacUserAgent()
   const linkRoutingDescription = getBrowserLinkRoutingDescription(
@@ -149,6 +155,7 @@ export function BrowserPane({
                   'Browser profiles on this Orca server.'
                 )
         })),
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- translate() reads the UI language implicitly.
     [
       repos,
       sshTargetLabels,
@@ -156,7 +163,8 @@ export function BrowserPane({
       settings,
       runtimeEnvironments,
       runtimeStatusByEnvironmentId,
-      hostLabelOverrides
+      hostLabelOverrides,
+      languageRevision
     ]
   )
   const settingsFocusedHostId = getSettingsFocusedExecutionHostId(settings)
@@ -165,6 +173,9 @@ export function BrowserPane({
     browserSessionHostIdOverride,
     settingsFocusedHostId
   )
+  const activeBrowserSessionProfileId =
+    useAppStore((s) => getDefaultBrowserProfileForHost(s, selectedBrowserSessionHostId)) ??
+    'default'
   useEffect(() => {
     const requestedHostId = browserSessionHostIdOverride ?? settingsFocusedHostId
     if (selectedBrowserSessionHostId !== requestedHostId) {
@@ -271,6 +282,10 @@ export function BrowserPane({
         />
       ) : null}
 
+      {showLinkRoutingBackground ? (
+        <BrowserLinkRoutingBackgroundSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
       {showTerminalLinkActions ? (
         <BrowserTerminalLinkActionsSetting
           settings={settings}
@@ -315,13 +330,25 @@ export function BrowserPane({
           nonDefaultProfiles={nonDefaultProfiles}
           detectedBrowsers={detectedBrowsers}
           importState={browserSessionImportState}
-          defaultBrowserSessionProfileId={defaultBrowserSessionProfileId}
           hostOptions={browserSessionHostOptions}
           selectedHostId={selectedBrowserSessionHostId}
+          activeProfileId={activeBrowserSessionProfileId}
           onAddProfile={() => setNewProfileDialogOpen(true)}
           onSelectHost={selectBrowserSessionHost}
           onSelectDefaultProfile={() => setDefaultBrowserSessionProfileId(null)}
           onSelectProfile={setDefaultBrowserSessionProfileId}
+        />
+      ) : null}
+
+      {/* Why local only: release 1 runs extensions in this computer's browser profiles. */}
+      {settings.experimentalBrowserExtensions === true &&
+      selectedBrowserSessionHostId === LOCAL_EXECUTION_HOST_ID ? (
+        <BrowserExtensionsSection
+          profileId={activeBrowserSessionProfileId}
+          profileLabel={
+            browserSessionProfiles.find((profile) => profile.id === activeBrowserSessionProfileId)
+              ?.label ?? activeBrowserSessionProfileId
+          }
         />
       ) : null}
 

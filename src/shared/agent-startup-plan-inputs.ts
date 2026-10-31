@@ -1,16 +1,25 @@
 import type { GlobalSettings } from './global-settings-types'
-import type { SessionOptionValue } from './native-chat-session-options'
+import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import type { TuiAgent } from './tui-agent'
-import { resolveTuiAgentLaunchArgs, resolveTuiAgentLaunchEnv } from './tui-agent-launch-defaults'
+import {
+  agentLaunchPermissionSettings,
+  resolveTuiAgentLaunchEnv
+} from './tui-agent-launch-defaults'
 import { resolveStartupShell, type AgentStartupShell } from './tui-agent-startup-shell'
-import { hasExtraAgentArgs, mergeExtraAgentArgs } from './automation-extra-agent-args'
+import { terminalSessionOptionInputs } from './tui-agent-launch-command'
 import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
 
 /** The settings slice a launch reads; hosts pass their whole `GlobalSettings` row. */
 export type AgentStartupSettings = Partial<
   Pick<
     GlobalSettings,
-    'agentCmdOverrides' | 'agentDefaultArgs' | 'agentDefaultEnv' | 'terminalWindowsShell'
+    | 'agentCmdOverrides'
+    | 'agentDefaultArgs'
+    | 'agentLaunchChoices'
+    | 'agentDefaultEnv'
+    | 'agentPermissionDefault'
+    | 'agentPermissionOverrides'
+    | 'terminalWindowsShell'
   >
 >
 
@@ -25,18 +34,10 @@ export type AgentStartupPlanInputs = {
   isRemote: boolean
   sessionOptions?: Record<string, SessionOptionValue>
   sessionOptionsOverrideAgentArgs: boolean
+  suppressStartupUpdatePrompt?: boolean
 }
 
-/**
- * Assembles the settings-derived half of a startup plan's inputs.
- *
- * `buildAgentStartupPlan` was already one shared implementation, but every host re-derived its
- * argument object by hand from the same four settings, and the copies had drifted — one dropped
- * `sessionOptionsOverrideAgentArgs` and so let configured `agentDefaultArgs` silently defeat an
- * explicit model pick. What varies between launches is the host (`platform`, `isRemote`), the
- * shell this PTY will actually be, and the per-launch overrides; those stay parameters. What does
- * not vary is how settings become inputs, which is this function.
- */
+/** Share settings-to-launch mapping so hosts cannot omit precedence flags and let configured args override explicit model picks. Keep host, actual PTY shell and launch overrides as parameters. */
 export function resolveAgentStartupPlanInputs(args: {
   agent: TuiAgent
   settings: AgentStartupSettings
@@ -46,18 +47,15 @@ export function resolveAgentStartupPlanInputs(args: {
   agentArgs?: string | null
   /** An automation's saved extras, merged over the resolved args; invalid extras throw. */
   extraAgentArgs?: string
-  /** The shell family this PTY will be; `undefined` reads it from the Settings shell, which is
-   *  right only where the Settings shell is the one the PTY gets. */
+  /** Pass the actual PTY shell; omission is valid only when the Settings shell is what the PTY receives. */
   shell: AgentStartupShell | undefined
-  sessionOptions?: Record<string, SessionOptionValue> | undefined
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>> | undefined
+  sessionOptionsYieldToAgentArgs?: boolean
+  /** Orca types into this launch after start (worker, automation, handoff), not a user. */
+  suppressStartupUpdatePrompt?: boolean
 }): AgentStartupPlanInputs {
-  const { agent, settings, platform, isRemote, sessionOptions } = args
-  // A per-launch override wins over the Settings default; `null` is "no arguments", so this
-  // tests for absence rather than falsiness.
-  let agentArgs =
-    args.agentArgs !== undefined
-      ? args.agentArgs
-      : resolveTuiAgentLaunchArgs(agent, settings.agentDefaultArgs)
+  const { agent, platform, isRemote, sessionOptions } = args
+  const settings = agentLaunchPermissionSettings(agent, args.settings, sessionOptions)
   const shell =
     args.shell ??
     resolveLocalWindowsAgentStartupShell({
@@ -65,29 +63,26 @@ export function resolveAgentStartupPlanInputs(args: {
       isRemote,
       terminalWindowsShell: settings.terminalWindowsShell
     })
-  if (hasExtraAgentArgs(args.extraAgentArgs)) {
-    const merged = mergeExtraAgentArgs({
-      agent,
-      defaultArgs: agentArgs,
-      extraAgentArgs: args.extraAgentArgs,
-      shell: resolveStartupShell(platform, shell)
-    })
-    if (!merged.ok) {
-      throw new Error(merged.error)
-    }
-    agentArgs = merged.agentArgs
-  }
+  const options = terminalSessionOptionInputs({
+    agent,
+    settings,
+    agentArgs: args.agentArgs,
+    sessionOptions,
+    yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+    command: settings.agentCmdOverrides?.[agent],
+    extraAgentArgs: args.extraAgentArgs,
+    shell: resolveStartupShell(platform, shell)
+  })
   return {
     agent,
     cmdOverrides: settings.agentCmdOverrides ?? {},
-    agentArgs,
-    agentEnv: resolveTuiAgentLaunchEnv(agent, settings.agentDefaultEnv),
+    agentArgs: options.agentArgs ?? null,
+    agentEnv: resolveTuiAgentLaunchEnv(agent, settings, platform),
     platform,
     shell,
     isRemote,
-    ...(sessionOptions ? { sessionOptions } : {}),
-    // Why: session options are an explicit per-launch pick, so they outrank configured args —
-    // without this the two spellings of the same flag both reach argv and the last one wins.
-    sessionOptionsOverrideAgentArgs: Boolean(sessionOptions)
+    sessionOptionsOverrideAgentArgs: false,
+    ...options,
+    ...(args.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
   }
 }

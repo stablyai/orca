@@ -10,13 +10,11 @@ import {
   trustedScriptPrefixFor
 } from './renderer-heap-allocation-sites'
 
-// Why 512 KB: V8's sampler then records ~2 stacks per MB allocated, cheap enough to leave on near OOM.
+// A 512 KiB interval samples about two allocation stacks per MiB near OOM.
 const SAMPLING_INTERVAL_BYTES = 512 * 1024
-// Sampling runs while the heap is at least 60% full and stops once it falls below 50%.
 const START_HEAP_RATIO = 0.6
 const STOP_HEAP_RATIO = 0.5
-// Why: main re-reads on its own clock, since a hidden window throttles the renderer's memory samples
-// and a fast leak can go from 60% to OOM between two of them. Each read forces a full GC, so not often.
+// Main refreshes independently because hidden renderers throttle memory samples.
 const PROFILE_REFRESH_MS = 30_000
 
 export type ProfiledDebugger = {
@@ -33,7 +31,6 @@ export type ProfiledRenderer = {
   debugger: ProfiledDebugger
   isDestroyed(): boolean
   getURL(): string
-  // Calls onEnd when the renderer is destroyed, its process dies, or it loads a new document.
   watchDocumentEnd(onEnd: () => void): () => void
 }
 
@@ -44,7 +41,7 @@ export function profiledRendererFor(contents: WebContents): ProfiledRenderer {
     isDestroyed: () => contents.isDestroyed(),
     getURL: () => contents.getURL(),
     watchDocumentEnd: (onEnd) => {
-      // Why: a new document starts with a fresh heap and its own high-water marks.
+      // A new document has a fresh heap and high-water marks.
       const onNavigation = (details: { isMainFrame: boolean; isSameDocument: boolean }): void => {
         if (details.isMainFrame && !details.isSameDocument) {
           onEnd()
@@ -62,7 +59,6 @@ export function profiledRendererFor(contents: WebContents): ProfiledRenderer {
   }
 }
 
-/** One heap reading from a renderer crumb: a periodic sample or a high-water mark. */
 export type RendererHeapReading = {
   heapRatio: number
   rendererSurface: string
@@ -74,7 +70,7 @@ type SamplingSession = {
   startedAtPct: number
   startedAtMs: number
   trustedScriptPrefix: string | null
-  // Reads before startSampling resolves would fail, so they wait for it.
+  // Wait for startSampling before requesting a profile.
   ready: boolean
   reading: boolean
   stop: () => void
@@ -82,11 +78,7 @@ type SamplingSession = {
 
 const sessions = new Map<number, SamplingSession>()
 
-/**
- * Samples which code allocates the renderer heap while it is near its limit, and keeps the newest
- * summary in one retained crumb so a crash report names the allocation sites behind the growth.
- * Whether to sample is re-derived from every reading, so recovery or a reload releases the debugger.
- */
+/** Retain allocation-site evidence near the heap limit; release the debugger after recovery. */
 export function noteRendererHeapReading(
   renderer: ProfiledRenderer,
   reading: RendererHeapReading,
@@ -145,7 +137,7 @@ function startSampling(
   record: (data: CrashReportBreadcrumbData) => void
 ): void {
   const debug = renderer.debugger
-  // Why: never take over a debugger someone else (DevTools, a diagnostic script) attached.
+  // Do not take over a debugger attached by DevTools or another diagnostic client.
   if (debug.isAttached()) {
     return
   }
@@ -171,7 +163,7 @@ function startSampling(
       try {
         debug.detach()
       } catch {
-        // Already gone with the renderer.
+        // Renderer teardown can race debugger detachment.
       }
     }
   }
@@ -209,7 +201,6 @@ function startSampling(
     .catch(stop)
 }
 
-/** Feeds a renderer-sent memory crumb to the profiler. */
 export function profileRendererMemoryBreadcrumb(
   renderer: ProfiledRenderer,
   args: { name?: unknown; data?: unknown } | undefined,

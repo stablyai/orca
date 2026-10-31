@@ -1,3 +1,5 @@
+import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
+import { readableWslDistroHoldText } from '../../shared/wsl-distro-stopped-hold'
 import { paneIdentity } from './runtime-terminal-pane-identity'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { shouldSeedWorktreePrimaryTerminal } from '../../shared/worktree-first-surface'
@@ -29,7 +31,11 @@ type Ports = {
     options: TerminalCreateOptions
   ) => Promise<RuntimeTerminalCreate>
   pasteDraft: (handle: string, draft: WorktreeStartupDraftPaste) => void
-  sendFollowup: (handle: string, followup: WorktreeStartupFollowup) => void
+  sendFollowup: (
+    handle: string,
+    followup: WorktreeStartupFollowup,
+    terminal: RuntimeTerminalCreate
+  ) => void
   provision: (
     options: WorktreeTerminalProvisioningArgs
   ) => Promise<{ setupSpawned: boolean; setupTerminalHandle: string | null }>
@@ -72,7 +78,8 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
   warning?: string
   ports: Ports
 }): Promise<RuntimeLocalWorktreeTerminalStartupResult> {
-  const { request, repo, worktree, setup, defaultTabs, startup, ports } = args
+  const { request, repo, worktree, defaultTabs, startup, ports } = args
+  let { setup } = args
   const shouldActivate = request.activate === true || request.runHooks === true
   let warning = args.warning
   let didSpawnStartup = false
@@ -98,9 +105,10 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ...(sequenced.startupEnv ? { env: { ...startup.env, ...sequenced.startupEnv } } : {})
     }
     wrappedSetupCommand = sequenced.setupCommand
+    setup = { ...setup, envVars: { ...setup.envVars, ...sequenced.setupEnv } }
   }
 
-  // Switch point: main starts the agent even with no terminal service, so its pane shows why not.
+  // Main owns failed agent startup too, keeping its reason visible without a terminal service.
   if (sequencedStartup && (ports.canSpawn || ORCA_LAYOUT_OWNER_IS_MAIN)) {
     try {
       const launchRuntime = args.startupLaunchRuntime
@@ -123,15 +131,16 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
         ...(sequencedStartup.viewMode ? { viewMode: sequencedStartup.viewMode } : {}),
         startupCommandDelivery: sequencedStartup.startupCommandDelivery,
         telemetry: sequencedStartup.telemetry,
-        // Switch point: a start main could not make stays in its pane, showing why.
+        // Keep failed starts visible in their panes.
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...ownerSurfacing(shouldActivate)
       })
+      request.onStartupTerminalCreated?.(terminal)
       if (args.draftPaste) {
         ports.pasteDraft(terminal.handle, args.draftPaste)
       }
       if (args.startupFollowup) {
-        ports.sendFollowup(terminal.handle, args.startupFollowup)
+        ports.sendFollowup(terminal.handle, args.startupFollowup, terminal)
       }
       didSpawnStartup = true
       startupTerminalHandle = terminal.handle
@@ -143,15 +152,14 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     }
   }
 
-  // Switch point: a failed agent start keeps its pane, so no extra shell is seeded beside it.
+  // Failed agents retain their pane; do not seed an extra shell.
   const startupPaneHeld =
     didSpawnStartup || (ORCA_LAYOUT_OWNER_IS_MAIN && Boolean(sequencedStartup))
   if (shouldActivate) {
     const provisionInBackground = ports.provisionInBackground?.() === true
-    // Why: a failed agent start hands the whole create to the window, which seeds the agent's tab
-    // first and lays setup and default tabs around it; main provisioning first would leave it no tab.
+    // Legacy failure hands provisioning to the window, which needs the agent tab first; main provisioning would consume that slot.
     const agentStartFailed = Boolean(sequencedStartup && ports.canSpawn && !didSpawnStartup)
-    // Switch point: main provisions whether or not a window is open; no window takes over.
+    // Main provisions even without an open window; no window takes over.
     if (!ORCA_LAYOUT_OWNER_IS_MAIN && agentStartFailed && !provisionInBackground) {
       ports.activate(repo.id, worktree.id, startup, setup, defaultTabs)
     } else {
@@ -163,7 +171,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
           Boolean(setup || defaultTabs))
       if (runtimeWillProvision) {
         const provisioned = await ports.provision({
-          ...provisionArgs(args, startupTerminalHandle, startupPaneHeld, wrappedSetupCommand),
+          ...provisionArgs(
+            { ...args, setup },
+            startupTerminalHandle,
+            startupPaneHeld,
+            wrappedSetupCommand
+          ),
           ...(provisionInBackground ? { surfaceOwner: false as const } : {})
         })
         didSpawnSetup = provisioned.setupSpawned
@@ -178,7 +191,7 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
       ports.activate(
         repo.id,
         worktree.id,
-        // Switch point: a start main could not make stays main's to show, never the window's.
+        // Main retains failed startup presentation, not the window.
         ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : startup && !didSpawnStartup ? startup : undefined,
         ORCA_LAYOUT_OWNER_IS_MAIN ? undefined : failedSetup,
         undefined,
@@ -187,7 +200,12 @@ export async function startRuntimeLocalWorktreeTerminals(args: {
     }
   } else if (ports.canSpawn && (setup || defaultTabs || didSpawnStartup)) {
     const provisioning = ports.provision({
-      ...provisionArgs(args, startupTerminalHandle, startupPaneHeld, wrappedSetupCommand),
+      ...provisionArgs(
+        { ...args, setup },
+        startupTerminalHandle,
+        startupPaneHeld,
+        wrappedSetupCommand
+      ),
       surfaceOwner: false
     })
     if (request.awaitTerminalProvisioning) {
@@ -288,7 +306,9 @@ function appendFailure(
   kind: 'startup' | 'initial',
   error: unknown
 ): string {
-  const message = error instanceof Error ? error.message : String(error)
+  const message = readableWslDistroHoldText(
+    formatTerminalStartFailure(error) ?? (error instanceof Error ? error.message : String(error))
+  )
   const failure = `failed to create the ${kind} terminal for ${path}: ${message}`
   const combined = warning
     ? `${warning} Also ${failure}`

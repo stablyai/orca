@@ -90,7 +90,6 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
       batcher.enqueue('client-1', 'session-0', 'x')
     }
 
-    // Legacy evaluated the producer plus all 100 queued sessions per chunk: 101,000 calls.
     expect(isSessionDroppable).toHaveBeenCalledTimes(0)
     expect(mapIterator).toHaveBeenCalledTimes(0)
     expect(mapEntries).toHaveBeenCalledTimes(0)
@@ -178,7 +177,7 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
     })
     const queuedPerSession = 800 * 1024
 
-    // A zero total reserves the first Map position without joining the Set.
+    // Reserve Map order without joining droppable membership.
     batcher.enqueue('client-1', 'session-a', '', { transformed: true })
     for (const id of ['b', 'c', 'd', 'e']) {
       batcher.enqueue('client-1', `session-${id}`, id.repeat(queuedPerSession))
@@ -186,8 +185,7 @@ describe('DaemonStreamDataBatcher droppable membership', () => {
     batcher.enqueue('client-1', 'session-a', 'a'.repeat(queuedPerSession))
     salvageDroppedData.mockClear()
 
-    // The sixth member tightens the cap below 800 KiB. Map order is A→E,
-    // while Set insertion order is B→E→A.
+    // Tighten the cap with Map order A-E differing from Set order B-E-A.
     batcher.enqueue('client-1', 'session-f', 'f')
 
     expect(

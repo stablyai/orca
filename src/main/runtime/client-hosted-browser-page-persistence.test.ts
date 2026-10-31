@@ -42,12 +42,11 @@ describe('client-hosted browser page persistence', () => {
       browserPageId: 'page-a',
       workspaceId: 'repo-1::wt-a',
       browserProfileId: 'profile-a',
-      // Never the key it was created under: that one names the runtime process that minted it.
+      // Predecessor route keys name the dead process and cannot be reused.
       executionHostKey: RESTORED_CLIENT_HOSTED_EXECUTION_HOST_KEY,
       pairedDeviceId: 'device-a',
       url: 'https://kept.internal/',
       title: 'Kept',
-      // A held row: nothing is driving it, and it claims no focus from whatever the host shows.
       loading: false,
       active: false
     })
@@ -55,7 +54,6 @@ describe('client-hosted browser page persistence', () => {
   })
 
   it('persists no authority: a rehydrated placement can never equal a mintable one', () => {
-    // Generation counters start at 1 and only ever increase, so the sentinel's 0s are unreachable.
     expect(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT.browserHostGeneration).toBe(0)
     expect(RESTORED_CLIENT_HOSTED_BROWSER_PLACEMENT.pageHostGeneration).toBe(0)
     expect(isRestoredClientHostedBrowserPlacement(livePlacement)).toBe(false)
@@ -64,8 +62,7 @@ describe('client-hosted browser page persistence', () => {
     persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
     const [row] = store.session.clientHostedBrowserPagesByWorktree!['repo-1::wt-a']!
 
-    // The persisted row's keys are the whole durable contract; anything naming an authority here
-    // would be a forgery the next epoch could not distinguish from a live placement.
+    // Persist no authority: the next epoch could mistake it for a live placement.
     expect(Object.keys(row).sort()).toEqual([
       'browserPageId',
       'browserProfileId',
@@ -100,7 +97,6 @@ describe('client-hosted browser page persistence', () => {
     expect(store.session.clientHostedBrowserPagesByWorktree?.['repo-1::wt-a']?.[0]?.savedAt).toBe(
       now
     )
-    // Still cheap in between: a tab whose page did not change does not rewrite on every call.
     expect(persistClientHostedBrowserPages(store, pages, 'repo-1::wt-a')).toBe(false)
   })
 
@@ -158,9 +154,7 @@ describe('client-hosted browser page persistence', () => {
     const store = sessionStore()
     persistClientHostedBrowserPages(store, registryWith(livePlacement), 'repo-1::wt-a')
     const live = registryWith(livePlacement)
-    // Why the warning is the assertion: the registry refuses a duplicate publish on its own, so
-    // outcome alone cannot tell a skipped attempt from a rejected one — and only the skip is
-    // silent. A rejected one would log on every start for every page the registry already had.
+    // The registry already rejects duplicates; warnings distinguish skipped replay from a noisy rejected attempt.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     let warnings = -1
     try {
@@ -169,7 +163,7 @@ describe('client-hosted browser page persistence', () => {
         isKnownWorktree: () => true,
         now: () => NOW
       })
-      // Read before restoring: mockRestore also resets the recorded calls.
+      // mockRestore clears calls too; capture the count first.
       warnings = warn.mock.calls.length
     } finally {
       warn.mockRestore()

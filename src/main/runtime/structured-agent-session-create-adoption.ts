@@ -6,7 +6,10 @@ import {
 import { prepareCodexAdoption } from '../native-chat/codex-adoption-preparation'
 import type { NativeCodexResumePreparation } from '../codex/codex-ai-vault-session-resume'
 import type { StructuredAgentSessionResumeSource } from '../../shared/structured-agent-session-create'
-import type { StructuredAgentCliSourceEvidence } from '../native-chat/structured-agent-cli-source'
+import type {
+  StructuredAgentCliSourceEvidence,
+  StructuredAgentCliSourceLocator
+} from '../native-chat/structured-agent-cli-source'
 import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 import type {
@@ -90,7 +93,7 @@ export function requireUnownedStructuredAgentSessionAdoption(input: {
   const conflict = input.host
     ? findConflictingStructuredAdoption({
         ...input,
-        ownership: listStructuredProviderSessionOwnership(input.host.deps.store.listRecords())
+        ownership: listStructuredProviderSessionOwnership(input.host.deps.store.listConversations())
       })
     : null
   if (conflict) {
@@ -107,14 +110,14 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   selectedAccountHome: AgentSessionAccountHome
   launchEnv: NodeJS.ProcessEnv
   workspaceCwd: string
-  resolveTranscriptPath?: () => string | undefined
+  resolveTranscriptSource?: () => StructuredAgentCliSourceLocator
   prepareCodexResume?: NativeCodexResumePreparation
 }) {
   try {
-    const transcriptPath = input.resolveTranscriptPath?.()
+    const source = input.resolveTranscriptSource?.()
+    const transcriptPath = source?.kind === 'matched' ? source.transcriptPath : undefined
     const candidates = input.transcriptImport.accountHomeCandidates(input)
-    // Each account's store is resolved once, so the hook path, the lookup and its re-admission
-    // all judge the same place even if the environment changes mid-create.
+    // Resolve each account store once so lookup, hook path and re-admission agree despite environment changes.
     const stores = new Map<AgentSessionAccountHome, string | null>()
     const storeOf = (accountHome: AgentSessionAccountHome): string | null => {
       if (!stores.has(accountHome)) {
@@ -146,6 +149,7 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
     }
     const adoption = await resolveStructuredAgentSessionAdoption({
       providerSessionId: input.providerSessionId,
+      ...(source?.kind === 'absent' ? { exhaustionReason: 'transcriptUnreadable' as const } : {}),
       candidateAccountHomes: admitted ? [admitted.accountHome] : candidates,
       resolveTranscript: async (args) => {
         const exact = admitted?.path
@@ -212,14 +216,14 @@ export async function resolveStructuredAgentSessionAdoptionForCreate(input: {
   }
 }
 
-/** `adopt` is what makes the reservation seed the handle chain. Presence of `providerHandle` alone
- *  must not: `agentSession.ensure` already passes one today without adopting anything. */
+/** Only adopt seeds the handle chain; ensure already passes providerHandle without adopting. */
 export function structuredAgentSessionAdoptAttach(input: {
   definition: {
     handleTransport: AgentSessionProviderHandle['transport']
     agent: AgentSessionProviderHandle['agent']
   }
   handleNamesTranscript: boolean | undefined
+  conversationStore?: string
   transcriptPath: string
   providerSessionId: string
   workspaceCwd: string
@@ -231,6 +235,12 @@ export function structuredAgentSessionAdoptAttach(input: {
       nativeId: input.handleNamesTranscript ? input.transcriptPath : input.providerSessionId
     },
     transcriptPath: input.transcriptPath,
-    source: { providerSessionId: input.providerSessionId, workspaceCwd: input.workspaceCwd }
+    source: {
+      providerSessionId: input.providerSessionId,
+      workspaceCwd: input.workspaceCwd,
+      ...(input.conversationStore !== undefined
+        ? { conversationStore: input.conversationStore }
+        : {})
+    }
   }
 }

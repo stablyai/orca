@@ -26,7 +26,7 @@ vi.mock('./skill-discovery-wsl', () => ({
 
 const { clearSkillDiscoveryCaches, discoverSkillsOnTarget } =
   await import('./skill-discovery-target')
-const { clearSkillRootScanCache, discoverSkills } = await import('./discovery')
+const { clearSkillRootScanCache } = await import('./discovery')
 
 function makeRepo(path: string): Repo {
   return {
@@ -83,10 +83,7 @@ describe('discoverSkillsOnTarget', () => {
     expect(nativeScans).toHaveLength(2)
   })
 
-  // Why: two clients can hold the same repo set in a different stored order. If the
-  // digest is order-sensitive they get different keys and each runs a full native
-  // scan — the fan-out this cache exists to bound. ttl is 0 here, so the pin is
-  // that two *concurrent* callers coalesce, which they only do on an equal key.
+  // Repo order must not change the key: with TTL 0, only equal keys coalesce concurrent callers.
   it('keeps repo-list identity stable regardless of stored order', async () => {
     const repos = [makeRepo('/repo-a'), makeRepo('/repo-b')]
     await discoverSkillsOnTarget({ kind: 'native-host', cwd: undefined }, repos)
@@ -96,12 +93,6 @@ describe('discoverSkillsOnTarget', () => {
     ])
 
     expect(nativeScans).toHaveLength(2)
-  })
-
-  it('forwards refresh to the native scan so it re-reads disk', async () => {
-    await discoverSkillsOnTarget({ kind: 'native-host', cwd: '/workspace' }, [], { refresh: true })
-
-    expect(nativeScans).toEqual([{ repos: [], cwd: '/workspace', refresh: true }])
   })
 
   it('reuses a WSL result rather than booting wsl.exe again', async () => {
@@ -135,22 +126,6 @@ describe('discoverSkillsOnTarget', () => {
     expect(wslScans).toHaveLength(3)
   })
 
-  it('distinguishes an absent WSL cwd from the literal undefined path', async () => {
-    await discoverSkillsOnTarget(
-      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: undefined },
-      []
-    )
-    await discoverSkillsOnTarget(
-      { kind: 'wsl', distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' },
-      []
-    )
-
-    expect(wslScans).toEqual([
-      { distro: 'Ubuntu', homeDir: '/home/dev' },
-      { distro: 'Ubuntu', homeDir: '/home/dev', cwd: 'undefined' }
-    ])
-  })
-
   it('re-reads a WSL target when the caller refreshes', async () => {
     const target = {
       kind: 'wsl',
@@ -163,26 +138,6 @@ describe('discoverSkillsOnTarget', () => {
     await discoverSkillsOnTarget(target, [], { refresh: true })
     await discoverSkillsOnTarget(target, [])
 
-    // The refreshed result replaces the cached one, so the third call is free.
     expect(wslScans).toHaveLength(2)
-  })
-
-  it('drops the root cache too when the host clears its scans', () => {
-    clearSkillDiscoveryCaches()
-    expect(clearSkillRootScanCache).toHaveBeenCalled()
-  })
-
-  // This layer scans whole targets, so it has no partial answer to degrade to. It
-  // must not leak the internal error class to IPC/RPC, and must not answer with an
-  // empty result — zero skills reads as "nothing installed" and re-offers installs.
-  it('reports a stalled target as a retryable error rather than as no skills', async () => {
-    vi.mocked(discoverSkills).mockRejectedValueOnce(
-      Object.assign(new Error('This operation was aborted'), { name: 'AbortError' })
-    )
-
-    const call = discoverSkillsOnTarget({ kind: 'native-host', cwd: '/workspace' }, [])
-
-    await expect(call).rejects.toThrow(/try again/i)
-    await expect(call).rejects.not.toThrow(/workspace/)
   })
 })

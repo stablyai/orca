@@ -10,12 +10,10 @@ export type RuntimeMobileSessionTerminalTab = {
   type: 'terminal'
   id: string
   title: string
-  /** The tab's manual name on the host, null when it has none. Absent from older hosts, so a
-   *  client keeps its own record then rather than reading absence as a cleared name. */
+  /** Host manual title; absent on old hosts preserves the client record, whereas null clears it. */
   customTitle?: string | null
   quickCommandLabel?: string | null
-  /** Window-to-main only: the names the desktop ranks above the live title. `generatedTitle` is
-   *  sent only while the desktop shows generated names. */
+  /** Window-to-main names ranked above live titles; generatedTitle is sent only when enabled. */
   aiVaultTitle?: TerminalTab['aiVaultTitle']
   generatedTitle?: string | null
   parentTabId: string
@@ -41,8 +39,7 @@ export type RuntimeMobileSessionTerminalTab = {
 export type RuntimeMobileTerminalTheme = {
   mode: 'dark' | 'light'
   theme: TerminalColorOverrides
-  /** Optional desktop terminalMinimumContrastRatio override (#10754). Absent means the client picks
-   *  its own background-luminance floor, which is what pre-#10754 clients always do. */
+  /** Optional desktop contrast override (#10754); absent uses the client’s background-luminance floor. */
   minimumContrastRatio?: number
 }
 
@@ -64,6 +61,8 @@ export type RuntimeMobileSessionMarkdownTab = {
   documentVersion: string
   color?: string | null
   isPinned?: boolean
+  /** The paired server the file lives on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionFileTab = {
@@ -75,10 +74,13 @@ export type RuntimeMobileSessionFileTab = {
   language: string
   mode?: 'edit' | 'diff'
   diffSource?: 'staged' | 'unstaged'
+  oldPath?: string
   isDirty: boolean
   color?: string | null
   isPinned?: boolean
   isActive: boolean
+  /** The paired server the file lives on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionBrowserTab = {
@@ -99,6 +101,8 @@ export type RuntimeMobileSessionBrowserTab = {
   color?: string | null
   isPinned?: boolean
   isActive: boolean
+  /** The paired server the page runs on. Its publisher sets it; runtimes strip it before serving. */
+  hostRuntimeEnvironmentId?: string
 }
 
 export type RuntimeMobileSessionAgentTab = {
@@ -107,8 +111,7 @@ export type RuntimeMobileSessionAgentTab = {
   title: string
   sessionId: string
   replacesSessionId?: string
-  /** An agent the host registered. Beyond Claude and Codex, published only to clients advertising
-   *  the registered-agents capability. */
+  /** Host-registered agent; gate names beyond Claude/Codex on client registered-agents capability. */
   agent: StructuredAgentId
   /** The host's structured status row for this chat. Optional: old hosts never send it. */
   chatStatus?: RuntimeMobileSessionAgentTabStatus

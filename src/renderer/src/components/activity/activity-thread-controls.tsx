@@ -24,9 +24,7 @@ export function EventTime({
   timestamp: number
   compact?: boolean
 }): React.JSX.Element {
-  // Why: rows reuse their identity across store writes, so this label can't rely on
-  // incidental re-renders to stay honest; the shared visibility-gated clock re-renders
-  // only this leaf (memo'd rows stay bailed out). 30s cadence matches WorktreeCardAgents.
+  // Memoized rows ignore unrelated writes; refresh this leaf from the visibility-gated 30s clock, matching WorktreeCardAgents.
   const now = useNow(30_000)
   const absolute = formatAbsoluteDate(timestamp)
   return (

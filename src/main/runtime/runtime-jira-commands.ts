@@ -14,7 +14,7 @@ import type {
   JiraIssueListFilters,
   JiraIssueUpdate,
   JiraSiteSelection
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 import type { JiraMediaFormat } from '../../shared/jira/jira-attachment-image'
 import { connect, disconnect, getStatus, selectSite, testConnection } from '../jira/client'
 import { listFavouriteFilters } from '../jira/favourite-filters'

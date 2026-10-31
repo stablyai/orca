@@ -5,6 +5,7 @@ import {
   redactKagiSessionToken
 } from '../../../../../shared/browser-url'
 import { ORCA_BROWSER_BLANK_URL } from '../../../../../shared/constants'
+import { normalizeBrowserGuestSrc } from '../../../../../shared/browser-extension-url'
 import {
   applyBrowserPageViewportLayout,
   syncBrowserPageChromeInset
@@ -74,7 +75,7 @@ export function useBrowserPageWebviewUrlSync({
     if (!webview) {
       return
     }
-    const normalizedUrl = normalizeBrowserNavigationUrl(browserTabUrl)
+    const normalizedUrl = normalizeBrowserGuestSrc(browserTabUrl)
     if (!normalizedUrl) {
       return
     }
@@ -147,8 +148,7 @@ export function useBrowserPageWebviewUrlSync({
       }
     }
 
-    // Why: some Electron builds paint chrome-error pages without a did-fail-load event; poll only while the active tab loads as a fallback.
-    // Why gated: a page stuck loading would otherwise poll 4x/sec forever behind a hidden window. The guest URL is durable state, so the becoming-visible run re-derives anything a hidden window skipped.
+    // Some Electron builds omit did-fail-load; poll loading visible pages only, then re-read durable guest state on visibility return.
     return installWindowVisibilityInterval({
       run: detectChromiumErrorPage,
       intervalMs: 250

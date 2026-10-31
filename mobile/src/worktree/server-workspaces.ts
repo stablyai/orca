@@ -9,17 +9,33 @@ import { relayHostWorktreesRead } from './server-workspace-operations'
 import type { Worktree } from './workspace-list-types'
 import { areWorktreeListsEqual } from './worktree-list-snapshot'
 
-/** The desktop's servers and their rows, each stamped by the desktop with the server's host id. */
 export type ServerWorkspaces = { hosts: readonly MobileRelayHost[]; worktrees: readonly Worktree[] }
 
 export const NO_SERVER_WORKSPACES: ServerWorkspaces = { hosts: [], worktrees: [] }
 
-/** A server that needs an update reads as blocked, which the shared table labels "Update needed". */
 export function serverHostHealth(host: MobileRelayHost): ExecutionHostHealth {
   return host.relay === 'update-needed' ? 'blocked' : host.health
 }
 
-/** `desktop`'s per-host values with each server's read from its feed entry. */
+// Why: a phone never starts or connects the desktop's own WSL host, so the badge says where to.
+export function serverHostHealthLabel(host: MobileRelayHost): string | undefined {
+  if (host.stoppedOnDesktop) {
+    return 'Start on computer'
+  }
+  return host.unavailableOnDesktop ? 'Open on computer' : undefined
+}
+
+export function serverHostHealthLabels(
+  hosts: readonly MobileRelayHost[]
+): ReadonlyMap<ExecutionHostId, string> {
+  return new Map(
+    hosts.flatMap((host) => {
+      const label = serverHostHealthLabel(host)
+      return label ? [[host.hostId, label] as const] : []
+    })
+  )
+}
+
 export function withServerHosts<Value>(
   desktop: ReadonlyMap<ExecutionHostId, Value>,
   hosts: readonly MobileRelayHost[],
@@ -70,13 +86,11 @@ async function fetchHostRows(
   }
 }
 
-/** One listing round: the desktop's servers, and per server its rows or null when unread. */
 export type FetchedServerWorkspaces = {
   hosts: readonly MobileRelayHost[]
   rows: readonly (readonly Worktree[] | null)[]
 }
 
-/** The servers' rows through the desktop's one listing path; null when it did not answer. */
 export async function fetchServerWorkspaces(
   client: RpcClient
 ): Promise<FetchedServerWorkspaces | null> {
@@ -87,19 +101,32 @@ export async function fetchServerWorkspaces(
   return { hosts, rows: await Promise.all(hosts.map((host) => fetchHostRows(client, host.hostId))) }
 }
 
-/**
- * A server whose rows were not read keeps those shown; one the desktop dropped loses its rows.
- * An unchanged poll returns `previous` itself, so the list does not rebuild every few seconds.
- */
+// Keep rows when their server read failed; drop them only when the desktop drops the server.
+// Preserve identity on unchanged polls so consumers avoid rebuilding.
 export function applyServerWorkspaces(
   previous: ServerWorkspaces,
   fetched: FetchedServerWorkspaces
 ): ServerWorkspaces {
+  let previousByHost: Map<ExecutionHostId | undefined, Worktree[]> | undefined
+  const previousRows = (hostId: ExecutionHostId): readonly Worktree[] => {
+    if (previousByHost === undefined) {
+      previousByHost = new Map()
+      for (const row of previous.worktrees) {
+        const host = row.hostId
+        const rows = previousByHost.get(host)
+        if (rows) {
+          rows.push(row)
+        } else {
+          previousByHost.set(host, [row])
+        }
+      }
+    }
+    return previousByHost.get(hostId) ?? []
+  }
   const worktrees = fetched.hosts.flatMap(
-    (host, index) =>
-      fetched.rows[index] ?? previous.worktrees.filter((row) => row.hostId === host.hostId)
+    (host, index) => fetched.rows[index] ?? previousRows(host.hostId)
   )
-  // Why kept: screens key per-server clients on `hosts`, which rows changing must not rebuild.
+  // Keep hosts identity when only rows change; screens key their per-server clients on it.
   const hosts =
     JSON.stringify(fetched.hosts) === JSON.stringify(previous.hosts)
       ? previous.hosts

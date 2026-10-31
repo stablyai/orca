@@ -24,8 +24,7 @@ describe('floating terminal panel view state', () => {
   })
 
   it('does not clobber the other owner_s flag', () => {
-    // Why: `open` is written by the app shell and `maximized` by the panel, so a
-    // whole-record write from either would drop the other's value.
+    // Separate owners must preserve each other’s flags when writing view state.
     persistFloatingTerminalPanelMaximized(true)
     persistFloatingTerminalPanelOpen(false)
     expect(readPersistedFloatingTerminalPanelViewState()).toEqual({ open: false, maximized: true })
@@ -36,10 +35,7 @@ describe('floating terminal panel view state', () => {
   })
 
   it('lets a later write destroy a restored open preference', () => {
-    // Why pinned: this is the hazard the App-side guard exists for. `settings` hydrates
-    // asynchronously, so the feature flag reads false on every boot before it resolves and
-    // the feature-off effect force-closes the panel. If that path persists, it overwrites a
-    // preference the user never changed - which is exactly what shipped and had to be fixed.
+    // Before settings hydrate, a false feature flag can overwrite restored open state; the app guard must prevent that write.
     persistFloatingTerminalPanelOpen(true)
     expect(readPersistedFloatingTerminalPanelViewState()?.open).toBe(true)
 
@@ -48,7 +44,6 @@ describe('floating terminal panel view state', () => {
   })
 
   it('restores the half a older record carries', () => {
-    // Why: a record written before the second flag existed must still restore.
     window.localStorage.setItem(
       FLOATING_TERMINAL_PANEL_VIEW_STATE_STORAGE_KEY,
       JSON.stringify({ open: true })
@@ -77,8 +72,6 @@ describe('shouldRestoreMaximizedPanelBounds', () => {
     expect(shouldRestoreMaximizedPanelBounds({ open: true, maximized: true }, () => true)).toBe(
       true
     )
-    // Why: maximized bounds come from the live viewport, so restoring against one too small
-    // pins terminals to a grid the window is about to leave - the jump this restore removes.
     expect(shouldRestoreMaximizedPanelBounds({ open: true, maximized: true }, () => false)).toBe(
       false
     )

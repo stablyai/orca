@@ -14,7 +14,8 @@ import {
   getHostedReviewCreationEligibility
 } from '../source-control/hosted-review-creation'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
-import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { hostedReviewForBranchReply } from '../../shared/hosted-review'
+import { readHostedReviewForBranch } from '../source-control/hosted-review'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { listRepoWorktreeGraph } from '../repo-worktrees'
 import {
@@ -24,6 +25,7 @@ import {
 import { getWorktreeSharedLinkPaths } from '../git/worktree-shared-directories'
 import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../shared/execution-host'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
+import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
 
 function assertRegisteredRepo(repoPath: string, store: Store, repoId?: string): Repo {
   if (repoId) {
@@ -46,8 +48,7 @@ function assertRegisteredRepoForBranch(args: HostedReviewForBranchArgs, store: S
     return assertRegisteredRepo(args.repoPath, store, args.repoId)
   }
   const matches = store.getRepos().filter((candidate) => {
-    // Which host holds the files, not which this client may dial: a remote path is POSIX and
-    // `resolve()` would rewrite it, and a row can name its SSH owner in either spelling.
+    // Check filesystem ownership, not dialability, before applying local path rules.
     const samePath = getRepoSshConnectionId(candidate)
       ? normalizeRemoteHostedReviewPath(candidate.path) ===
         normalizeRemoteHostedReviewPath(args.repoPath)
@@ -100,8 +101,7 @@ function normalizeRemoteHostedReviewPath(remotePath: string): string {
   if (!remotePath || remotePath.includes('\0')) {
     throw new Error('Access denied: invalid worktree path')
   }
-  // Why: SSH worktree paths belong to the remote POSIX host. Local path.resolve
-  // rewrites them on Windows and cannot authorize remote-only paths.
+  // Remote paths use POSIX rules; Windows resolve would rewrite their identity.
   const normalized = posix.normalize(remotePath)
   return normalized.length > 1 ? normalized.replace(/\/+$/, '') : normalized
 }
@@ -113,21 +113,31 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: args.admissionTier ?? ('background' as const)
     }
-    const review = await getHostedReviewForBranch({
-      repoPath: repo.path,
-      executionHostId: getStoredRepoExecutionHostId(repo),
-      branch: args.branch,
-      linkedGitHubPR: args.linkedGitHubPR ?? null,
-      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
-      currentHeadOid: args.currentHeadOid ?? null,
-      ...(args.active === true ? { active: true } : {}),
-      ...(args.force === true ? { force: true } : {}),
-      localGitExecOptions: localGitOptions
-    })
+    // Sidebar cards and the checks panel poll this for every provider; gh/glab in WSL boot it (E9).
+    // Only an explicit Refresh may start a stopped distro; admissionTier is priority only, and
+    // the visible scheduler sends 'interactive' for the selected card on a timer.
+    const read = await guardWslUncPathAccess(
+      repo.path,
+      () =>
+        readHostedReviewForBranch({
+          repoPath: repo.path,
+          executionHostId: getStoredRepoExecutionHostId(repo),
+          branch: args.branch,
+          linkedGitHubPR: args.linkedGitHubPR ?? null,
+          fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
+          linkedGitLabMR: args.linkedGitLabMR ?? null,
+          linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+          linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+          linkedGiteaPR: args.linkedGiteaPR ?? null,
+          currentHeadOid: args.currentHeadOid ?? null,
+          ...(args.active === true ? { active: true } : {}),
+          ...(args.force === true ? { force: true } : {}),
+          ...(args.userRefresh === true ? { userRefresh: true } : {}),
+          localGitExecOptions: localGitOptions
+        }),
+      { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }
+    )
+    const review = read.review
     if (review?.provider === 'github' && !stats.hasCountedPR(review.url)) {
       stats.record({
         type: 'pr_created',
@@ -136,21 +146,28 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
         meta: { prNumber: review.number, prUrl: review.url }
       })
     }
-    return review
+    return hostedReviewForBranchReply(read, args.reportReadOutcome)
   })
 
   ipcMain.handle(
     'hostedReview:getCreationEligibility',
     async (_event, args: HostedReviewCreationEligibilityArgs) => {
       const repo = assertRegisteredRepo(args.repoPath, store, args.repoId)
-      const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
       const localGitOptions = getLocalProjectGhExecOptions(store, repo)
-      return getHostedReviewCreationEligibility({
-        ...args,
-        repoPath: worktreePath,
-        executionHostId: getStoredRepoExecutionHostId(repo),
-        localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
-      })
+      // Source Control asks on mount; only the user's Create PR may start a stopped distro (E9).
+      return guardWslUncPathAccess(
+        repo.path,
+        async () => {
+          const worktreePath = await resolveHostedReviewWorktreePath(repo, store, args.worktreePath)
+          return getHostedReviewCreationEligibility({
+            ...args,
+            repoPath: worktreePath,
+            executionHostId: getStoredRepoExecutionHostId(repo),
+            localGitExecOptions: { ...localGitOptions, admissionTier: 'interactive' as const }
+          })
+        },
+        { wake: args.wakeWslDistro === true, wslDistro: localGitOptions.wslDistro }
+      )
     }
   )
 
@@ -161,10 +178,7 @@ export function registerHostedReviewHandlers(store: Store, stats: StatsCollector
       ...getLocalProjectGhExecOptions(store, repo),
       admissionTier: 'interactive' as const
     }
-    // Why: the dirty preflight must not count Orca's own shared symlinks as user work (issue #10451).
-    // Remote creation never materializes them, and `repo.path` is a path on the
-    // remote host — reading it locally would resolve an unrelated `orca.yaml`.
-    // Not dead code: SSH ignores these, so this only prevents that read and a poisoned cache entry.
+    // Exclude Orca-owned symlinks from local dirty checks; remote paths must never read or cache unrelated local orca.yaml files (#10451).
     const sharedLinkPaths = getRepoSshConnectionId(repo) ? [] : getWorktreeSharedLinkPaths(repo)
     const executionOptions =
       Object.keys(localGitOptions).length > 0 || sharedLinkPaths.length > 0

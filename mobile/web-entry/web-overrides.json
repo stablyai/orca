@@ -47,7 +47,7 @@
     },
     {
       "file": "src/platform/text-input-content-height.web.ts",
-      "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the queued-message edit field grows from one line to four; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
+      "reason": "react-native-web renders a multiline TextInput as a <textarea> that keeps the browser's default two rows whatever it holds, where a native multiline input grows between its min and max heights by itself. The web file measures the text in a hidden copy of the textarea and returns that height, so the chat composer grows with its draft, placeholder, and dictation preview; the native file returns nothing to measure. Resizing the live field to measure it was rejected: WebKit clamps the scroll position of the list around it, so the queue jumped while typing."
     },
     {
       "file": "src/platform/haptics.web.ts",
@@ -86,6 +86,10 @@
       "reason": "The shell renders this page for the accounts screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
     },
     {
+      "file": "app/h/[hostId]/automations.web.tsx",
+      "reason": "The served automation route renders its screen directly; the native sibling mounts the shell and imports a native view manager unavailable in the page."
+    },
+    {
       "file": "app/h/[hostId]/source-control/[worktreeId].web.tsx",
       "reason": "The shell renders this page for the source-control hub, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and the route manifest imports every route, so one throwing module takes the whole bundle down. The tab, name and origin params are parsed here exactly as the native sibling parses them, because the page reads them back out of its own URL the way the native screen reads them out of the router."
     },
@@ -118,16 +122,8 @@
       "reason": "Not an RN Web API gap but a transport one that exists only in the page. A terminal's first frame is its scrollback snapshot, which the desktop trims to 512 KiB of raw terminal text while the bridge measures the serialized event against BRIDGE_MAX_MESSAGE_BYTES. An ANSI snapshot is mostly ESC bytes and JSON spends six on each, so a colour-dense 80-column screen comes back at 669,268 bytes against a 655,360-byte cap and the stream ends with overflow before a live byte is painted. This file derives the budget the page sends in terminal.subscribe from the cap less the event envelope; the native sibling sends nothing, because a socket frame has no ceiling above it and a budget there would shrink a phone's scrollback for a limit that does not exist."
     },
     {
-      "file": "src/session/MobileNativeChatComposerField.web.tsx",
-      "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll."
-    },
-    {
-      "file": "src/session/mobile-native-chat-input-styles.web.ts",
-      "reason": "The chat's composer and its question field render one point above the app's body size, which is 15 and under the floor below which iOS zooms the page on focus. keyboard-occlusion.web.ts reads a scale other than 1 as 'no keyboard' and answers 0, and on this screen that lift is the terminal's only feedback that its hidden input has focus, so one focus of the composer would cost the rest of the session. This file puts both fields on TEXT_INPUT_FONT_SIZE; the native sibling keeps the question field at 15 and the composer at 16."
-    },
-    {
-      "file": "src/browser/browser-address-field-styles.web.ts",
-      "reason": "The address bar renders at the theme's 12px meta size, and in a browser an input under 16px makes iOS zoom the page on focus and never zoom back. keyboard-occlusion.web.ts reads that scale as 'no keyboard' and answers 0, so one focus would stop the pane lifting for the rest of the typing session. This file puts the input and its overlaid label on TEXT_INPUT_FONT_SIZE with a line box to match; the native sibling keeps 12px, which is what a phone has always rendered and where no page can zoom."
+      "file": "src/session/native-chat/composer/MobileNativeChatComposerField.web.tsx",
+      "reason": "A picked skill leads the composer's draft and is drawn highlighted in place. Natively that is a styled span of the TextInput's own text, but react-native-web renders TextInput as a textarea, which cannot style part of its text and ignores Text children. This one draws a copy of the draft behind the field with the skill highlighted, clears the field's own text while keeping its caret, and moves the copy with the field's scroll. It also measures the shown text to grow the textarea, whose default two rows do not grow with content, and caps it to the space above the keyboard."
     },
     {
       "file": "src/terminal/TerminalWebView.web.tsx",
@@ -140,6 +136,10 @@
     {
       "file": "src/platform/dictation-capture.web.ts",
       "reason": "Dictation's capture seam. The native file holds the microphone through @orca/expo-two-way-audio, which a browser does not have; this one asks the shell for it over native.audio.start|read|stop, draining the shell's ring on a timer and raising each reply as the events the engine emits directly, and taking the utterance's tail off the stop's own reply. The screen an open microphone holds awake is not in this seam at all: the device module that opens the mic takes it and gives it back on both hosts. The flow above the seam is one file on both hosts."
+    },
+    {
+      "file": "src/platform/pdf-opener.web.ts",
+      "reason": "Native file routes never render a preview themselves: they mount this page, which cannot show a PDF because the shell's CSP refuses frames and objects. This one asks the shell through native.pdf.view, which downloads the file and shows it in Quick Look or the Android PDF viewer, cancels that download when the preview is left, and returns null on shells that do not grant the verb so the preview asks for an app update."
     },
     {
       "file": "src/platform/media-picker.web.ts",
@@ -192,6 +192,18 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
+    },
+    {
+      "file": "src/layout/use-fold-split.web.ts",
+      "reason": "The fold is a native reserved region the WebView cannot see: WebKit exposes no viewport segments, and the native file reads an Expo module the page does not have. This one reads the fold the shell measured over the page from `init`, already in the page's px."
+    },
+    {
+      "file": "src/session/shell-terminal-key-rail.web.ts",
+      "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
+    },
+    {
+      "file": "src/platform/shell-storage.web.ts",
+      "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
     }
   ]
 }

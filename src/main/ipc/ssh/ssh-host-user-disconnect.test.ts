@@ -38,7 +38,12 @@ import {
   isRuntimeEnvironmentManuallyDisconnected
 } from '../runtime-environments/runtime-environment-manual-disconnect'
 import { isSshUserDisconnected } from '../../ssh/ssh-user-disconnect'
+import {
+  holdLaunchReconnectOptOuts,
+  resetLaunchReconnectOptOutsForTests
+} from './ssh-host-user-disconnect'
 import { createSshIpcHarness } from './ssh-ipc-test-harness'
+import { runTargetLifecycle } from './ssh-target-lifecycle-queue'
 
 const { mockSshStore, mockConnectionManager } = mocks
 
@@ -150,5 +155,107 @@ describe('a user Disconnect of an SSH host', () => {
     expect(mockConnectionManager.connect).toHaveBeenCalledWith(target, { probe: true })
     expect(isSshUserDisconnected(target.id)).toBe(true)
     expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
+  })
+})
+
+describe('a host opted out of reconnect on launch', () => {
+  const harness = createSshIpcHarness(mocks)
+  const { handlers } = harness
+
+  beforeEach(async () => {
+    await harness.reset()
+    runtime.environments = [managedServer, otherServer]
+    runtime.getStatusOwner.mockReset().mockReturnValue({ activate: runtime.activate })
+    runtime.activate.mockReset()
+    mockSshStore.getTarget.mockReturnValue({ ...target, reconnectOnLaunch: false })
+  })
+
+  afterEach(() => {
+    clearRuntimeEnvironmentManualDisconnect(managedServer.id)
+  })
+
+  it('is not dialed at launch, nor is its managed server, until the user connects it', async () => {
+    // Handler registration already took this process's hold with no hosts; take it again here.
+    resetLaunchReconnectOptOutsForTests()
+    holdLaunchReconnectOptOuts([{ ...target, reconnectOnLaunch: false }, { id: 'ssh-2' }], '/tmp')
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
+    ).rejects.toThrow('Server was disconnected. Connect to use it again.')
+    expect(mockConnectionManager.connect).not.toHaveBeenCalled()
+    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(true)
+    expect(isSshUserDisconnected('ssh-2')).toBe(false)
+
+    await Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id })).catch(
+      () => {}
+    )
+    expect(isSshUserDisconnected(target.id)).toBe(false)
+    expect(isRuntimeEnvironmentManuallyDisconnected(managedServer.id)).toBe(false)
+  })
+})
+
+describe('a host whose managed server the user stopped and removed', () => {
+  const harness = createSshIpcHarness(mocks)
+  const { handlers } = harness
+  const removed: SshTarget = {
+    ...target,
+    managedServerRemoved: { removedAt: '2026-10-26T00:00:00Z' }
+  }
+
+  beforeEach(async () => {
+    await harness.reset()
+    runtime.environments = [otherServer]
+    mockSshStore.getTarget.mockReturnValue(removed)
+    vi.mocked((await import('./ssh-host-server-connect')).decideHostServer).mockClear()
+  })
+
+  it('is not redeployed by a reload or launch reconnect, only by an explicit Connect', async () => {
+    const { decideHostServer } = await import('./ssh-host-server-connect')
+
+    await expect(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
+    ).rejects.toThrow('Server was disconnected. Connect to use it again.')
+    expect(decideHostServer).not.toHaveBeenCalled()
+
+    await Promise.resolve(handlers.get('ssh:connect')!(null, { targetId: target.id })).catch(
+      () => {}
+    )
+    expect(mockSshStore.updateTarget).toHaveBeenCalledWith(target.id, {
+      managedServerRemoved: undefined
+    })
+    expect(decideHostServer).toHaveBeenCalledTimes(1)
+  })
+
+  it('holds a reconnect that queued behind the Stop that wrote the hold', async () => {
+    mockSshStore.getTarget.mockReturnValue(target)
+    let finishStop!: () => void
+    const stopping = runTargetLifecycle(
+      target.id,
+      () => new Promise<void>((resolve) => (finishStop = resolve))
+    )
+    const reconnect = Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
+    )
+    mockSshStore.getTarget.mockReturnValue(removed)
+    finishStop()
+    await stopping
+
+    await expect(reconnect).rejects.toThrow('Server was disconnected. Connect to use it again.')
+    const { decideHostServer } = await import('./ssh-host-server-connect')
+    expect(decideHostServer).not.toHaveBeenCalled()
+  })
+
+  it('still reconnects a server an older desktop deployed for it since', async () => {
+    runtime.environments = [managedServer]
+    mockSshStore.getTarget.mockReturnValue({
+      ...removed,
+      orcadFence: { environmentId: managedServer.id }
+    })
+    const { decideHostServer } = await import('./ssh-host-server-connect')
+
+    await Promise.resolve(
+      handlers.get('ssh:connect')!(null, { targetId: target.id, automatic: true })
+    ).catch(() => {})
+    expect(decideHostServer).toHaveBeenCalledTimes(1)
   })
 })

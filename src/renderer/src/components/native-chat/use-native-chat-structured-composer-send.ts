@@ -7,13 +7,15 @@ import { promptSkillRefs } from './native-chat-prompt-document'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
-  isStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionGoalCommand,
+  isStructuredAgentSessionHostCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../shared/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type {
+  NativeChatComposerSendIntent,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatAttachImagesAgainReason } from './native-chat-image-reattach'
 import { nativeChatNoticeFromError } from './native-chat-composer-notice'
@@ -21,6 +23,7 @@ import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { translate } from '@/i18n/i18n'
 import {
   readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraftAppend,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
@@ -40,25 +43,13 @@ export type UseNativeChatStructuredComposerSendArgs = {
   setCaret: (caret: number) => void
 }
 
-/** A command the host runs itself (and `/goal` where the host sets goals), never a message. */
-function isNativeChatStructuredHostCommand(
-  text: string,
-  agent: AgentType,
-  transport: NativeChatStructuredComposerTransport
-): boolean {
-  return (
-    isStructuredAgentSessionComposerCommand(text, agent) ||
-    (transport.threadGoal !== undefined && isStructuredAgentSessionGoalCommand(text))
-  )
-}
-
 export type NativeChatStructuredComposerSend = (
   text: string,
-  attachments?: readonly NativeChatComposerImageAttachment[]
+  attachments?: readonly NativeChatComposerImageAttachment[],
+  intent?: NativeChatComposerSendIntent
 ) => Promise<void>
 
-/** Send through the structured journal transport, clearing the composer only
- *  once the transport accepts (the PTY path has its own sibling hook). */
+/** Clear submitted composer content only after structured transport acceptance. */
 export function useNativeChatStructuredComposerSend({
   agent,
   draftScopeKey,
@@ -70,8 +61,8 @@ export function useNativeChatStructuredComposerSend({
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
-    async (text, attachments = imageAttachments): Promise<void> => {
-      // A picked command is held like Send: it would carry attachments still uploading, pathless.
+    async (text, attachments = imageAttachments, intent): Promise<void> => {
+      // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
       }
@@ -79,9 +70,11 @@ export function useNativeChatStructuredComposerSend({
         return
       }
       text = resolveNativeChatPastedText(draftScopeKey, text)
-      const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
-      // A held host takes no turn, and its notice says why; an option command only changes what
-      // the next turn runs with.
+      const hostCommand = isStructuredAgentSessionHostCommand(
+        text,
+        structuredTransport.threadGoal !== undefined
+      )
+      // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&
         (!hostCommand || structuredAgentSessionCommandChangesConversation(text))
@@ -107,26 +100,59 @@ export function useNativeChatStructuredComposerSend({
       if (hostCommand && structuredAgentSessionCommandChangesConversation(text)) {
         structuredTransport.onSubmitted?.()
       }
+      const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
+      let completeAddition = false
+      const stopObservingAppend = subscribeToNativeChatComposerDraftAppend(
+        draftScopeKey,
+        (addition) => {
+          if (typeof addition !== 'function' && addition.document !== undefined) {
+            completeAddition = true
+          }
+        }
+      )
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
         attachments,
-        promptSkillRefs(submitted.document)
+        promptSkillRefs(submitted.document),
+        intent
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
-          structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          if (!hostCommand || isCurrent()) {
+            structuredTransport.onError(error, refusedWhile ? { refusedWhile } : undefined)
+          }
           if (!accepted) {
             return
           }
-          completeNativeChatStructuredUserAction(agent, structuredTransport, revealsTranscript)
-          // Why: the send settles after a round trip, while this or another composer of the same
-          // conversation may have changed the draft; only what was sent leaves it.
+          completeNativeChatStructuredUserAction(
+            agent,
+            structuredTransport,
+            revealsTranscript && (!hostCommand || isCurrent())
+          )
+          // A round trip may outlast edits in any composer for this conversation; remove only the submitted content.
           const left = nativeChatComposerDraftLeftAfterSend(
             readNativeChatComposerDraft(draftScopeKey),
             submitted
           )
           if (!left) {
+            return
+          }
+          if (completeAddition) {
+            updateNativeChatComposerDraft(
+              draftScopeKey,
+              { ...left, document: left.document },
+              'immediate'
+            )
+          }
+          if (hostCommand && !isCurrent()) {
+            if (!completeAddition) {
+              updateNativeChatComposerDraft(
+                draftScopeKey,
+                { text: left.text, document: undefined, images: left.images },
+                'immediate'
+              )
+            }
             return
           }
           updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
@@ -137,6 +163,9 @@ export function useNativeChatStructuredComposerSend({
           clearSkillOrigin()
         })
         .catch((error) => {
+          if (hostCommand && !isCurrent()) {
+            return
+          }
           const notice = nativeChatNoticeFromError(
             error,
             error instanceof SkillRefLimitError
@@ -152,6 +181,7 @@ export function useNativeChatStructuredComposerSend({
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
+        .finally(stopObservingAppend)
     },
     [
       agent,

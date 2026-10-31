@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { RemoteRuntimeClientError } from '../../../shared/remote-runtime-client-error'
+import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { WebRuntimeBrowserCreationContext } from './web-runtime-browser-creation-context'
 import { prepareWebRuntimeBrowserCreationFailure } from './web-runtime-browser-creation-failure'
 

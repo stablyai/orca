@@ -5,6 +5,8 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'
+import type { GitBranchCompareSummary } from '../../../../shared/git-diff-compare-types'
+import { toBranchCompareSnapshot } from '@/store/slices/editor/git/git-status-reconciliation'
 import SourceControl from './SourceControl'
 
 const mocks = vi.hoisted(() => {
@@ -39,6 +41,7 @@ const mocks = vi.hoisted(() => {
   return {
     activeRepo,
     activeWorktree,
+    isFolder: false,
     state: {} as Record<string, unknown>
   }
 })
@@ -57,7 +60,9 @@ vi.mock('@/store', () => {
 vi.mock('@/store/selectors', () => ({
   useActiveWorktree: () => mocks.activeWorktree,
   useRepoById: (repoId: string | null) =>
-    repoId === mocks.activeRepo.id ? mocks.activeRepo : null,
+    repoId === mocks.activeRepo.id
+      ? { ...mocks.activeRepo, kind: mocks.isFolder ? 'folder' : 'git' }
+      : null,
   useWorktreeMap: () => new Map([[mocks.activeWorktree.id, mocks.activeWorktree]])
 }))
 
@@ -114,7 +119,6 @@ function resetState(overrides: Partial<Record<string, unknown>> = {}): void {
     prCache: {},
     commitMessageGenerationRecords: {},
     pullRequestGenerationRecords: {},
-    // Why: the open-file highlight reads the active editor tab for this worktree.
     openFiles: [] as OpenFileStub[],
     activeFileIdByWorktree: {},
     activeTabTypeByWorktree: {},
@@ -180,6 +184,7 @@ let root: Root
 beforeEach(() => {
   globalThis.IS_REACT_ACT_ENVIRONMENT = true
   resetState()
+  mocks.isFolder = false
   container = document.createElement('div')
   document.body.appendChild(container)
   root = createRoot(container)
@@ -190,17 +195,17 @@ afterEach(() => {
   container.remove()
 })
 
-function renderSourceControl(): void {
+function renderSourceControl(renderKey = 0): void {
   act(() => {
     root.render(
       <TooltipProvider>
-        <SourceControl />
+        <SourceControl key={renderKey} />
       </TooltipProvider>
     )
   })
 }
 
-function row(path: string, area: GitStatusEntry['area']): HTMLDivElement | null {
+function row(path: string, area: GitStatusEntry['area'] | 'branch'): HTMLDivElement | null {
   return container.querySelector<HTMLDivElement>(
     `[data-source-control-path="${path}"][data-source-control-area="${area}"]`
   )
@@ -218,6 +223,77 @@ function isHighlighted(element: HTMLElement | null): boolean {
 }
 
 describe('SourceControl open-file highlight', () => {
+  it.each(['list', 'tree'] as const)('marks the active committed comparison in %s mode', (mode) => {
+    const summary: GitBranchCompareSummary = {
+      baseRef: 'main',
+      baseOid: 'base-1',
+      compareRef: 'feature',
+      headOid: 'head-1',
+      mergeBase: 'merge-1',
+      changedFiles: 2,
+      status: 'ready'
+    }
+    const entry = { path: 'src/file.ts', status: 'modified' as const, added: 1, removed: 0 }
+    resetState({
+      settings: { sourceControlViewMode: mode },
+      gitStatusByWorktree: { 'wt-1': [gitEntry({})] },
+      gitBranchChangesByWorktree: { 'wt-1': [entry, { ...entry, path: 'src/other.ts' }] },
+      gitBranchCompareSummaryByWorktree: { 'wt-1': summary }
+    })
+    renderSourceControl()
+    const branchRow = row(entry.path, 'branch')
+    expect(branchRow).not.toBeNull()
+    act(() => branchRow?.dispatchEvent(new MouseEvent('click', { bubbles: true })))
+    expect(mocks.state.openBranchDiff).toHaveBeenCalledWith(
+      'wt-1',
+      '/repo/wt',
+      entry,
+      summary,
+      'typescript',
+      { targetGroupId: undefined, preview: true }
+    )
+
+    const tab = {
+      id: 'branch-tab',
+      worktreeId: 'wt-1',
+      relativePath: entry.path,
+      diffSource: 'branch',
+      branchCompare: toBranchCompareSnapshot(summary)
+    }
+    mocks.state.openFiles = [tab]
+    mocks.state.activeFileIdByWorktree = { 'wt-1': tab.id }
+    mocks.state.activeTabTypeByWorktree = { 'wt-1': 'editor' }
+    renderSourceControl(1)
+    expect(isHighlighted(row(entry.path, 'branch'))).toBe(true)
+    expect(isHighlighted(row('src/other.ts', 'branch'))).toBe(false)
+    expect(isHighlighted(row(entry.path, 'unstaged'))).toBe(false)
+
+    mocks.state.gitBranchCompareSummaryByWorktree = { 'wt-1': { ...summary, headOid: 'head-2' } }
+    renderSourceControl(2)
+    expect(isHighlighted(row(entry.path, 'branch'))).toBe(false)
+    mocks.state.gitBranchCompareSummaryByWorktree = { 'wt-1': summary }
+    mocks.state.activeTabTypeByWorktree = { 'wt-1': 'terminal' }
+    renderSourceControl(3)
+    expect(isHighlighted(row(entry.path, 'branch'))).toBe(false)
+    mocks.state.activeTabTypeByWorktree = { 'wt-1': 'editor' }
+    mocks.state.openFiles = [{ ...tab, worktreeId: 'another-workspace' }]
+    renderSourceControl(4)
+    expect(isHighlighted(row(entry.path, 'branch'))).toBe(false)
+    mocks.state.openFiles = [{ ...tab, diffSource: 'combined-branch' }]
+    renderSourceControl(5)
+    expect(isHighlighted(row(entry.path, 'branch'))).toBe(false)
+  })
+
+  it('renders no committed row for a folder workspace without a branch summary', () => {
+    mocks.isFolder = true
+    resetState({
+      gitBranchChangesByWorktree: { 'wt-1': [{ path: 'src/file.ts', status: 'modified' }] }
+    })
+    renderSourceControl()
+    expect(row('src/file.ts', 'branch')).toBeNull()
+    expect(mocks.state.beginGitBranchCompareRequest).not.toHaveBeenCalled()
+  })
+
   it('highlights the row whose unstaged diff is the active editor tab', () => {
     resetState({
       gitStatusByWorktree: {

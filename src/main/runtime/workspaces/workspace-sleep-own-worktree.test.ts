@@ -80,3 +80,35 @@ describe("a phone's or the CLI's sleep", () => {
     expect(failedNotices(notices)).toEqual([])
   })
 })
+
+it.each([true, false])(
+  'an automatic=%s retry preserves Sleep/VM suspension intent',
+  async (automatic) => {
+    let finishStop: (result: RuntimeWorktreeTerminalSleepResult) => void = () => {}
+    const stopped = new Promise<RuntimeWorktreeTerminalSleepResult>((resolve) => {
+      finishStop = resolve
+    })
+    const suspendVm = vi.fn(async () => {})
+    const ensureRestoredPaneStarted = vi.fn(async () => null)
+    const stop = vi.fn(() => stopped)
+    const { sleep } = coordinator({
+      workspaceLifecycle: null,
+      sleepTerminalsForWorktree: stop,
+      ensureRestoredPaneStarted,
+      workspaceSleepPlatform: {
+        callEnvironment: async () => {
+          throw new Error('unused')
+        },
+        suspendVm
+      }
+    })
+    const sleeping = sleep.sleepOwnWorktree(WORKTREE, {})
+    await vi.waitFor(() => expect(stop).toHaveBeenCalled())
+    const pane = { worktreeId: WORKTREE, tabId: 'tab', leafId: 'leaf' }
+    await sleep.resumePane(pane, automatic)
+    finishStop(verified)
+    await sleeping
+    expect(ensureRestoredPaneStarted).toHaveBeenCalledWith(pane, { automatic })
+    expect(suspendVm).toHaveBeenCalledTimes(automatic ? 1 : 0)
+  }
+)

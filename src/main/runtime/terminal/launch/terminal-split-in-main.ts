@@ -1,5 +1,4 @@
-// Layout-owner build: a split of a pane in main's layout is written and started by main, under the
-// caller's proposed pane id; every view, the window's included, attaches to the terminal it starts.
+// Main writes and starts its owned splits under the proposed pane id; every view attaches to that terminal.
 import { OrcaRuntimeWithSplitPtyBackedTerminal } from './terminal-split-surface'
 import type { RuntimeTerminalSplit } from '../../../../shared/runtime-types'
 import { mainOwnsTabLayout } from './main-owned-tab-layout'
@@ -28,6 +27,8 @@ export type SplitPaneInMainOptions = {
   activate?: boolean
   /** The window's own split keeps a pane whose start failed, showing why, as its spawn did. */
   keepPaneOnStartFailure?: boolean
+  /** The user's own act (a CLI or window split); without it a stopped WSL distro holds the start. */
+  wslUserAct?: true
 }
 
 export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSplitPtyBackedTerminal {
@@ -97,7 +98,9 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       return this.keepSplitThatCannotStart(source, opts, new Error('runtime_unavailable'))
     }
     const workspace = await this.resolveTerminalWorkspaceLaunchScope(
-      `id:${source.worktreeId}`
+      `id:${source.worktreeId}`,
+      undefined,
+      { wslUserAct: opts.wslUserAct === true }
     ).catch((error: unknown) => this.keepSplitThatCannotStart(source, opts, error))
     const preAllocatedHandle = this.createPreAllocatedTerminalHandle()
     const result = await spawnInAdmittedPane(this.store, controller, {
@@ -110,8 +113,10 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
         ...opts.env
       }),
       envToDelete: opts.envToDelete,
+      ...(opts.wslUserAct ? { wslUserAct: true } : {}),
       connectionId: workspace.connectionId,
       worktreeId: workspace.id,
+      resolvedWorkspace: workspace,
       preAllocatedHandle,
       tabId: source.tabId,
       leafId,
@@ -136,7 +141,6 @@ export abstract class OrcaRuntimeWithSplitPaneInMain extends OrcaRuntimeWithSpli
       makePaneKey(source.tabId, leafId),
       spawnSurfaceClaimSequence(this.graphSequence)
     )
-    // Phones and session.tabs list the pane without a window's report, as the other splits do.
     this.publishPtyBackedMobileSessionTerminal(workspace.id, createdPty, {
       tabId: source.tabId,
       leafId,

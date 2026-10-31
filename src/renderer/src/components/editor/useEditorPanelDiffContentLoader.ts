@@ -13,6 +13,8 @@ import type { DiffContent, InFlightContentRead } from './editor-panel-content-ty
 import { canUseChangesModeForFile } from './editor-panel-file-mode'
 import type { EditorPanelContentLoadOptions } from './useEditorPanelExternalContentEvents'
 import { stampCleanTabDiskBaseline } from './editor-clean-tab-disk-baseline'
+import { translate } from '@/i18n/i18n'
+import { isWslDistroNotRunningRefusal } from '../../../../shared/wsl-distro-not-running-refusal'
 
 const inFlightDiffReads = new Map<string, InFlightContentRead<DiffContent>>()
 
@@ -41,7 +43,7 @@ function inFlightDiffKey(
     file.diffSource === 'commit' && file.commitCompare
       ? `${file.commitCompare.parentOid ?? 'empty-tree'}..${file.commitCompare.commitOid}::${file.branchOldPath ?? ''}`
       : ''
-  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${branch}::${commit}`
+  return `${connectionId ?? ''}::${file.diffSource ?? ''}::${compareAgainstHead ? 'head' : 'default'}::${file.filePath}::${file.branchOldPath ?? ''}::${branch}::${commit}`
 }
 
 export function useEditorPanelDiffContentLoader({
@@ -79,25 +81,25 @@ export function useEditorPanelDiffContentLoader({
         const effectiveDiffSource: typeof file.diffSource =
           file.mode === 'edit' ? 'unstaged' : file.diffSource
         const compareAgainstHead = file.mode === 'edit'
-        const key = inFlightDiffKey(
+        const wake = options?.wakeWslDistro ? { wakeWslDistro: true } : undefined
+        // A background reload must not join (and inherit the refusal of) a wake, or vice versa.
+        const key = `${inFlightDiffKey(
           { ...file, diffSource: effectiveDiffSource },
           gitScope ?? undefined,
           compareAgainstHead
-        )
+        )}${wake ? '::wake' : ''}`
         const registeredRead = inFlightDiffReads.get(key)
         if (
           options?.force &&
           (options.externalEventGeneration === undefined ||
             registeredRead?.externalEventGeneration !== options.externalEventGeneration)
         ) {
-          // Why: forced diff reloads must not attach to a read started before
-          // the external change landed.
+          // Forced reloads must bypass deduped reads that predate external changes.
           inFlightDiffReads.delete(key)
         }
         let pending = inFlightDiffReads.get(key)
         if (!pending) {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every branch resolves a git diff result, which DiffContent mirrors.
-          const promise = (
+          const promise: Promise<DiffContent> =
             effectiveDiffSource === 'commit'
               ? commitCompare
                 ? getRuntimeGitCommitDiff(
@@ -112,7 +114,8 @@ export function useEditorPanelDiffContentLoader({
                       parentOid: commitCompare.parentOid,
                       filePath: file.relativePath,
                       oldPath: file.branchOldPath
-                    }
+                    },
+                    wake
                   )
                 : Promise.reject(new Error('Missing commit comparison for diff tab.'))
               : effectiveDiffSource === 'branch' && branchCompare
@@ -132,7 +135,8 @@ export function useEditorPanelDiffContentLoader({
                       },
                       filePath: file.relativePath,
                       oldPath: file.branchOldPath
-                    }
+                    },
+                    wake
                   )
                 : getRuntimeGitDiff(
                     {
@@ -144,10 +148,13 @@ export function useEditorPanelDiffContentLoader({
                     {
                       filePath: file.relativePath,
                       staged: effectiveDiffSource === 'staged',
-                      compareAgainstHead
-                    }
+                      compareAgainstHead,
+                      ...(effectiveDiffSource === 'staged' && file.branchOldPath
+                        ? { oldPath: file.branchOldPath }
+                        : {})
+                    },
+                    wake
                   )
-          ) as Promise<DiffContent>
           pending = { externalEventGeneration: options?.externalEventGeneration, promise }
           inFlightDiffReads.set(key, pending)
           queueMicrotask(() => {
@@ -173,16 +180,28 @@ export function useEditorPanelDiffContentLoader({
         if (diffReadGenerationRef.current[file.id] !== generation) {
           return
         }
-        setDiffContents((prev) => ({
-          ...prev,
-          [file.id]: {
-            kind: 'text',
-            originalContent: '',
-            modifiedContent: `Error loading diff: ${String(err)}`,
-            originalIsBinary: false,
-            modifiedIsBinary: false
+        setDiffContents((prev) => {
+          // A poll's reload refused for a stopped WSL distro keeps the diff already shown.
+          if (prev[file.id] && isWslDistroNotRunningRefusal(err)) {
+            return prev
           }
-        }))
+          return {
+            ...prev,
+            [file.id]: {
+              kind: 'text',
+              originalContent: '',
+              modifiedContent: translate(
+                'auto.components.editor.EditorPanel.diffLoadError',
+                'Error loading diff: {{error}}',
+                {
+                  error: String(err)
+                }
+              ),
+              originalIsBinary: false,
+              modifiedIsBinary: false
+            }
+          }
+        })
       } finally {
         if (outstandingDiffReadsRef.current[file.id] === generation) {
           delete outstandingDiffReadsRef.current[file.id]

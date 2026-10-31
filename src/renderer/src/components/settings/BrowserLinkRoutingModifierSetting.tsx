@@ -36,7 +36,6 @@ export function BrowserLinkRoutingModifierSetting({
         isMac ? 'cmd' : 'ctrl'
       ]}
     >
-      {/* Nested under Link Routing: this row only describes what its modifier does. */}
       <div className="ml-4 border-l border-border pl-4">
         <SettingsSwitchRow
           label={title}

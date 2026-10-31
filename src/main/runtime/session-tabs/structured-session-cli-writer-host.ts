@@ -1,3 +1,8 @@
+import { hostSleepKey } from '../terminal/stop/worktree-terminal-sleep-key'
+import {
+  terminalLaunchFacts,
+  type TerminalLaunchResult
+} from '../../../shared/agent-session-resume'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
 import { OrcaRuntimeWithGetWorktreePs } from '../workspaces/workspace-process-listing'
@@ -16,8 +21,62 @@ import {
   OPEN_CODE_WRITER_TOPOLOGY,
   cliWriterTopology
 } from '../../agent-hooks/server/cli-writer-observation'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../shared/structured-agent-cli-conversation-adoption'
+import { recordConversationKey } from '../../native-chat/structured-conversation-key'
+import type { StructuredAgentCliSourceRoute } from '../../native-chat/structured-agent-cli-source'
 
 export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends OrcaRuntimeWithGetWorktreePs {
+  getStructuredAgentCliSourceRoute(source: {
+    workspaceId: string
+    paneKey: string
+  }): StructuredAgentCliSourceRoute {
+    const pty = this.getPtyRecordForPaneKey(source.paneKey)
+    if (!pty) {
+      return 'unknown'
+    }
+    const pane = this.resolveTerminalPane(source.paneKey, source.workspaceId)
+    if (pane.ptyId !== pty.ptyId || pty.worktreeId !== source.workspaceId) {
+      return 'unknown'
+    }
+    return pty.connectionId ||
+      pty.isWsl ||
+      pty.wslDistro ||
+      pane.executionHostId !== LOCAL_EXECUTION_HOST_ID
+      ? 'unsupported'
+      : 'native-local'
+  }
+
+  rememberSavedTerminalLaunchResult(ptyId: string, result: TerminalLaunchResult): void {
+    const pty = this.ptysById.get(ptyId)
+    if (pty && result.savedResumeDecision) {
+      pty.savedTerminalLaunchResult = {
+        incarnationId: pty.incarnationId,
+        launchConfig: pty.launchConfig,
+        launchToken: pty.launchToken,
+        result: terminalLaunchFacts(result)
+      }
+    }
+  }
+
+  getTerminalLaunchResult(ptyId: string): TerminalLaunchResult | undefined {
+    const pty = this.ptysById.get(ptyId)
+    const saved = pty?.savedTerminalLaunchResult
+    if (!pty) {
+      return undefined
+    }
+    return terminalLaunchFacts({
+      ...(saved?.incarnationId === pty.incarnationId &&
+      saved.launchConfig === pty.launchConfig &&
+      saved.launchToken === pty.launchToken
+        ? saved.result
+        : {}),
+      launchAgent: pty.launchAgent ?? undefined,
+      launchToken: pty.launchToken ?? undefined,
+      launchConfig: pty.launchConfig ?? undefined
+    })
+  }
+
   private cliWriterPtyPane(ptyId: string | null | undefined): CliWriterPane | null {
     const pty = ptyId ? this.ptysById.get(ptyId) : undefined
     return pty?.connected && !pty.connectionId && !pty.isWsl && pty.incarnationId
@@ -54,6 +113,9 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
     if (!agent || !binding || !pty) {
       return
     }
+    if (event.agentPresence?.process) {
+      delete pty.savedTerminalLaunchResult
+    }
     if (pty.cliConversations?.incarnationId !== pty.incarnationId) {
       pty.cliConversations = { incarnationId: pty.incarnationId, byKey: new Map() }
     }
@@ -68,6 +130,20 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
         (!(OPEN_CODE_WRITER_TOPOLOGY in binding) && previous?.paneOwned === true),
       process: event.agentPresence?.process ?? previous?.process
     })
+  }
+
+  /** Before a chat's agent spawns: refuses while a terminal may still write its head conversation.
+   *  Never enters the session queue, so it can run inside an acquisition. */
+  protected async assertStructuredChatAcquireAdmissible(record: AgentSessionRecord): Promise<void> {
+    const head = record.providerHandleChain.at(-1)
+    const key = head ? recordConversationKey(record, head) : null
+    const adopts = Object.values(CLI_CONVERSATION_ADOPTING_AGENTS).some(
+      (agents: readonly string[]) => agents.includes(record.provider)
+    )
+    if (!key?.id || !adopts) {
+      return
+    }
+    await this.assertStructuredAdoptionTerminalWritersExited(record.provider, key.id)
   }
 
   async assertStructuredAdoptionTerminalWritersExited(
@@ -105,12 +181,8 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
             }))
           }),
         sleeping: (workspaceId) =>
-          [...this.terminalSleepStateByHostWorktree.values()].some(
-            (state) =>
-              state.worktreeId === workspaceId &&
-              (state.phase === 'sleeping' ||
-                state.phase === 'partial' ||
-                state.phase === 'stopping')
+          this.terminalSleepStateByHostWorktree.has(
+            hostSleepKey(LOCAL_EXECUTION_HOST_ID, workspaceId)
           ),
         shellAlone: async (pane) => {
           if (process.platform === 'win32') {

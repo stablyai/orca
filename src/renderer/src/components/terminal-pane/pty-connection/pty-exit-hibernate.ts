@@ -1,3 +1,4 @@
+import { installTerminalLaunchInputAttempt } from '../terminal-launch-input-attempt'
 import { resolveLiveAgentStatusConnectionRouting } from '@/lib/agent-status-connection-ownership'
 import { scheduleRuntimeGraphSync } from '@/runtime/sync-runtime-graph'
 import { useAppStore } from '@/store'
@@ -11,11 +12,6 @@ import { isProvenProcessExit } from '../../../../../shared/terminal-exit-cause'
 import { getProviderSessionClaimKey } from '@/lib/sleeping-agent-pane-ownership'
 import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-session-resume'
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
-import {
-  createGitBashConsoleCapacityDetector,
-  type GitBashConsoleCapacityDetector
-} from '../git-bash-console-capacity'
-import type { PtyPaneStartup } from '../pty-connection-types'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
@@ -38,27 +34,8 @@ function keepsUntouchedFreshPane(session: ConnectPanePtySession, ptyId: string):
   return session.spawnedFreshPtyId === ptyId && !Number.isFinite(session.lastTerminalInputAt)
 }
 
-/** PTY exit handling, hibernated-pane wake targets, and post-exit focus transfer. */
 export function installPtyExitHibernate(session: ConnectPanePtySession): void {
-  type ProcessExitState = {
-    startup: PtyPaneStartup
-    detector: GitBashConsoleCapacityDetector
-  }
-  session.createProcessExitState = (startup: PtyPaneStartup): ProcessExitState => ({
-    startup,
-    detector: createGitBashConsoleCapacityDetector()
-  })
-  session.currentProcessExitState = session.createProcessExitState(session.paneStartup)
-  session.processExitStateByPtyId = new Map<string, ProcessExitState>()
-  session.bindProcessExitState = (ptyId: string, replacedPtyId?: string): void => {
-    const state =
-      (replacedPtyId ? session.processExitStateByPtyId.get(replacedPtyId) : undefined) ??
-      session.currentProcessExitState
-    session.processExitStateByPtyId.set(ptyId, state)
-    if (replacedPtyId && replacedPtyId !== ptyId) {
-      session.processExitStateByPtyId.delete(replacedPtyId)
-    }
-  }
+  installTerminalLaunchInputAttempt(session)
   session.focusSurvivingPtyPaneAfterKeptExit = (): void => {
     if (session.manager.getActivePane()?.id !== session.pane.id) {
       return
@@ -80,49 +57,25 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
             .find((candidate) => candidate.id !== session.pane.id && hasPtyBinding(candidate.id))
             ?.id ?? null)
     if (targetPaneId !== null) {
-      // Why: when a newborn split PTY dies before output/input, the pane stays
-      // mounted for diagnostics; move live focus to the sibling that still owns a PTY.
+      // Retain newborn split failures for diagnostics, moving focus to a sibling with a live PTY.
       session.manager.setActivePane(targetPaneId, {
         focus: session.deps.isActiveRef.current && session.deps.isVisibleRef.current
       })
     }
   }
 
-  // Why: the transport's own exit handler (pty-transport.ts) normally makes
-  // onExit run-at-most-once by clearing connected/ptyId + unregistering BEFORE
-  // calling it. reconcileIfSessionMissing drives onExit directly (bypassing that),
-  // so this guards the body so reconcile and any racing real/synthetic pty:exit
-  // for the same id close the pane exactly once. Scoped to the exiting ptyId
-  // (not a bare boolean): an intentional suppressed restart keeps the pane
-  // mounted and rebinds to a NEW ptyId, and that replacement's later real exit
-  // must still run — a one-shot boolean would strand the pane on rebind.
+  // Deduplicate direct reconcile and transport exits by PTY ID; a later replacement ID must retain its own exit handling.
   session.handledExitPtyId = null
-  // Why: tracks the ptyId of a genuine fresh spawn — onPtySpawn fires only for
-  // fresh spawns, never reattach/coldRestore (pty-transport.ts). Lets the
-  // sole-pane exit branch tell "this newborn shell died on its own" from "a
-  // reattached persisted session was already dead", so a failing .envrc/direnv
-  // on a brand-new worktree keeps its dead terminal visible instead of bouncing
-  // the user to Landing.
+  // Only genuine fresh, never-typed PTYs keep startup errors visible; dead reattached sessions must still close normally.
   session.spawnedFreshPtyId = null
-  // Why: hibernation suppresses its kill's exit while the pane is hidden, so
-  // onExit must not tear the pane down — but the pane still owes the user a
-  // wake. Remember the hibernated PTY and record; the visibility-resume hook
-  // consumes both and cannot adopt a later record of a different session.
+  // Suppressed hidden hibernation exits still owe a wake; retain the exact PTY/record so a later session cannot be adopted.
   session.hibernatedWakeTarget = null
   session.wakeHibernatedAgentPane = null
-  // Why: a mobile wake can land after the sleeping record is written but
-  // before the suppressed kill exit arms the wake target. The phone never
-  // reveals the desktop pane, so without a latch the edge-triggered wake would
-  // be dropped and the phone left on a frozen terminal.
+  // Latch mobile wakes between record write and kill-exit arming; mobile never reveals the desktop to retry the lost edge.
   session.pendingHibernatedWakeTarget = null
-  // Why: transport.connect settles asynchronously. Repeated mobile activation
-  // must keep claiming this provider session until the replacement PTY either
-  // exists (and clears the sleep record) or the spawn fails and can be retried.
+  // Claim the provider session throughout async replacement spawn so repeated mobile activation cannot duplicate resume.
   session.hibernatedWakeInFlightClaimKey = null
-  // Why: reveal is the normal wake trigger, but a reveal that lands *during* the
-  // in-flight hibernation kill runs noteVisibilityResume before onExit arms the
-  // wake. Sharing the guarded consume lets both the reveal hook and the
-  // arm-time foreground check resume the pane exactly once.
+  // Share guarded wake consumption between reveal and arm-time visibility checks so a reveal racing kill resumes exactly once.
   session.consumeHibernatedAgentWake = (claimedProviderSessions?: Set<string>): string | null => {
     const target = session.hibernatedWakeTarget
     if (!target || session.disposed) {
@@ -142,10 +95,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return null
     }
     const currentPtyId = session.transport.getPtyId()
-    // Why: a real pty:exit clears the transport's ptyId before onExit while a
-    // reconcile-driven exit leaves it bound; both mean "nothing respawned since
-    // hibernation". A different non-null id means another flow (e.g. an
-    // intentional restart) already rebound the pane — its spawn wins.
+    // Null or the old PTY means no replacement; a different bound ID proves another flow already owns the pane.
     if (currentPtyId !== null && currentPtyId !== target.ptyId) {
       session.hibernatedWakeTarget = null
       session.pendingHibernatedWakeTarget = null
@@ -158,23 +108,17 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     if (claimedProviderSessions?.has(claimKey)) {
       return null
     }
-    // Why: one wake event can visit multiple mounted legacy/stable panes for
-    // the same provider session. Claim synchronously before any spawn starts.
+    // Claim synchronously before spawn because one wake visits multiple aliases of the same provider session.
     claimedProviderSessions?.add(claimKey)
     session.hibernatedWakeTarget = null
     session.pendingHibernatedWakeTarget = null
     session.hibernatedWakeInFlightClaimKey = claimKey
-    // Why: reveal is the wake signal for a hibernated pane. Resume the recorded
-    // agent session (or fall back to a fresh shell) instead of leaving the
-    // frozen frame with no PTY behind it.
+    // Reveal must resume the recorded session or fresh shell behind the otherwise frozen frame.
     const wake: () => Promise<string | null> = target.wake ?? session.wakeHibernatedAgentPane
     void wake()
       .then((spawnedPtyId) => {
         if (!spawnedPtyId) {
-          // Why: a transient replacement-spawn failure leaves the passive
-          // record owned by this pane. Re-arm the exact target so a later
-          // mobile open can retry instead of stranding the frozen session;
-          // consume revalidates disposal, binding, PTY, and record identity.
+          // On transient spawn failure, re-arm the exact retained record so later mobile wakes can retry after full ownership validation.
           session.hibernatedWakeTarget = target
         }
       })
@@ -212,8 +156,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     session.resetRendererOrderedSeqForPtyExit(ptyId)
     const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
     if (currentPaneTransport && currentPaneTransport !== session.transport) {
-      // Why: an old transport can deliver a late exit after this pane has
-      // rebound to a replacement PTY; only clear ownership for the exited id.
+      // Late exits from replaced transports may clear only the exiting PTY’s ownership.
       session.handledExitPtyId = ptyId
       session.processExitStateByPtyId.delete(ptyId)
       if (!preserveRendererBinding && !isUnverifiedExit) {
@@ -230,13 +173,10 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     session.processExitStateByPtyId.delete(ptyId)
     session.agentCompletionCoordinator.dispose()
     session.dropSideEffectFactConsumer()
-    // Why: main clears gate state on PTY exit too; this only resets the
-    // pane-local marker so a reused pane cannot skip re-marking a new PTY.
+    // Clear the local mark too so a rebound PTY cannot skip hidden gating.
     session.releaseHiddenRendererPtyDelivery()
     const replacedByRestart = isPtyExitReplacedByRestart(ptyId)
-    // A synthetic host-loss exit only retires this transport. Keep the mounted
-    // leaf↔PTY identity so reconnect/replay can adopt it after the host returns.
-    // A restart's process is gone for good, so its replacement binds as a first spawn.
+    // Synthetic host loss preserves leaf↔PTY identity for reconnect; confirmed restart death permits replacement as a first spawn.
     if (!isUnverifiedExit || replacedByRestart) {
       session.clearPanePtyFitBinding()
     }
@@ -249,29 +189,19 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     if (!preserveRendererBinding && !isUnverifiedExit) {
       session.deps.clearTabPtyId(session.deps.tabId, ptyId)
     }
-    // Why: if the PTY exits abruptly (Ctrl-D, crash, shell termination) without
-    // first emitting a non-agent title, the cache timer would persist as stale
-    // state. Clear it unconditionally on PTY exit.
+    // Abrupt exits may omit title reset; always clear the cache countdown.
     session.deps.setCacheTimerStartedAt(session.cacheKey, null)
-    // Why: a dead terminal has no running agent — remove its explicit status
-    // entry so the hover UI only shows what is running *now*.
     useAppStore.getState().removeAgentStatus(session.cacheKey)
     useAppStore.getState().clearPaneForegroundAgent(session.cacheKey)
-    // The runtime graph is the CLI's source for live terminal bindings, so
-    // we must republish when a pane loses its PTY instead of waiting for a
-    // broader layout change that may never happen.
+    // Republish PTY loss to the runtime graph immediately; CLI bindings cannot wait for an unrelated layout change.
     scheduleRuntimeGraphSync()
     if (isUnverifiedExit && !isSuppressedExit) {
-      // The tab-level owner records liveness as unknown and leaves the row in
-      // place. This must happen before the split/sole-pane close branches.
+      // Record unknown liveness before any close branch can remove the row.
       session.manager.setPaneGpuRendering(session.pane.id, true)
       session.deps.onPtyExitRef.current(ptyId, exitCode)
       return
     }
-    // Why: intentional restarts suppress the PTY exit ahead of time so the
-    // pane stays mounted and can reconnect in place. Without consuming the
-    // suppression here, split-pane Codex restarts would still close the pane
-    // because this handler runs before the tab-level close logic sees the exit.
+    // Consume intentional-exit suppression before split close logic so in-place restart keeps its pane.
     if (isSuppressedExit) {
       // Why: the action that suppressed the exit owns whether the leaf binding
       // is a wake hint or should be discarded; runtime cleanup above is enough.
@@ -283,10 +213,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       }
       const sleepingRecordEntry = session.getSleepingRecordForPane(useAppStore.getState())
       if (sleepingRecordEntry && noteArmsHibernatedPaneWake(sleepingRecordEntry.record)) {
-        // Why: hibernation killed this pane's PTY while hidden. The frozen TUI
-        // frame still has mouse-tracking/bracketed-paste armed, which silently
-        // eats every click and keystroke against a dead transport — disarm the
-        // modes now and arm the reveal-time wake.
+        // Disarm input-eating modes on the dead frozen TUI, then arm its reveal wake.
         session.writeInputModeGround(POST_REPLAY_MODE_RESET)
         session.hibernatedWakeTarget = { ptyId, record: sleepingRecordEntry.record }
         const pendingWakeMatches =
@@ -296,10 +223,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
           session.pendingHibernatedWakeTarget = null
         }
         if (session.deps.isVisibleRef.current || pendingWakeMatches) {
-          // Why: a reveal (or a mobile wake) that raced this kill already ran
-          // before the exit landed, so it saw nothing armed. Consume the wake
-          // now (deferred off the exit handler) so the pane still resumes
-          // without needing a second hide/reveal or wake event.
+          // Consume wake after exit if reveal/mobile activation already raced arming; a second user event must not be required.
           queueMicrotask(() => {
             session.consumeHibernatedAgentWake()
           })
@@ -310,30 +234,26 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       return
     }
     session.manager.setPaneGpuRendering(session.pane.id, true)
-    const failedLocalProcess = session.runtimeEnvironmentId === null && exitCode !== 0
-    if (failedLocalProcess && session.deps.onPaneProcessDied) {
-      const gitBashConsoleCapacityFailure = processExitState.detector.detected()
+    // Only the exact console failure owns this overlay; other exits keep the existing newborn guards.
+    const gitBashConsoleCapacityFailure =
+      session.isNativeWindowsConpty &&
+      session.runtimeEnvironmentId === null &&
+      exitCode !== 0 &&
+      session.spawnedFreshPtyId === ptyId &&
+      !processExitState.inputAttempt.attempted &&
+      processExitState.detector.detected()
+    if (gitBashConsoleCapacityFailure && session.deps.onPaneProcessDied) {
       session.deps.onPaneProcessDied({
         paneId: session.pane.id,
         exitCode,
-        startup: gitBashConsoleCapacityFailure ? processExitState.startup : null,
-        reason: gitBashConsoleCapacityFailure ? 'git-bash-console-capacity' : 'process-failed'
+        startup: processExitState.startup,
+        reason: 'git-bash-console-capacity'
       })
       return
     }
     const panes = session.manager.getPanes()
     if (panes.length <= 1) {
-      // Why: a worktree's sole newborn terminal can die on shell startup — e.g.
-      // a PR branch ships an .envrc whose direnv command fails, so the login
-      // shell exits non-zero immediately. Routing that through onPtyExitRef
-      // closes the only tab, which deactivates the worktree (setActiveWorktree
-      // (null)) and strands the user on the Landing screen for a worktree that
-      // was just created. Keep the dead pane mounted instead (mirrors the
-      // freshly-split guard below) so the direnv error stays visible and the
-      // worktree stays active. Gated on a genuine fresh spawn (onPtySpawn fired
-      // for this ptyId — reattach/coldRestore skip it) that the user never typed
-      // into, so a reattached-dead session or an explicit `exit` still tears
-      // down as before.
+      // Keep sole fresh, never-typed shell failures visible for diagnostics instead of closing the tab and deactivating the workspace; explicit exit and dead reattach still close.
       if (keepsUntouchedFreshPane(session, ptyId)) {
         return
       }
@@ -347,12 +267,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       !Number.isFinite(session.lastTerminalInputAt) &&
       !session.hasReceivedPtyOutput
     ) {
-      // Why: a freshly split pane can lose its newborn PTY during setup; keep
-      // the split visible so the failed session does not immediately collapse.
-      // Hidden panes must close instead: the hidden-delivery gate withholds
-      // their bytes, so "no output" is meaningless there, and keeping one
-      // strands a binding-less pane the exit path never revisits — it remounts
-      // as a permanently blank ghost on reveal.
+      // Keep visible newborn split failures; hidden no-output proves nothing under delivery gating and would strand a blank ghost pane.
       session.focusSurvivingPtyPaneAfterKeptExit()
       return
     }
@@ -370,11 +285,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     session.manager.closePane(session.pane.id)
   }
 
-  // Why: on app restart, restored Claude tabs may already be idle when we first
-  // see their title. The agent status tracker only fires onBecameIdle for
-  // working→idle transitions, so the cache timer would never start for these
-  // sessions. We only allow this one-time seed for reattached PTYs; fresh
-  // Claude launches also start idle, but they have no prompt cache yet.
+  // Seed idle cache timing only on reattach; already-idle restored Claude emits no transition, while fresh idle launches have no prompt cache.
   session.hasConsideredInitialCacheTimerSeed = false
   session.allowInitialIdleCacheSeed = false
 

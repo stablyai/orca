@@ -92,14 +92,11 @@ describe('SkillScanCoalescer', () => {
     const refreshed = await coalescer.run('root', { ttlMs: 10_000, refresh: true }, task)
 
     expect(refreshed).toEqual({ value: 2, cached: false })
-    // The refreshed result is what later readers see, not the entry it replaced.
     expect(await coalescer.run('root', { ttlMs: 10_000 }, task)).toEqual({ value: 2, cached: true })
     expect(runs).toBe(2)
   })
 
-  // Why: discovery issues one refreshing run() per root, synchronously. An
-  // invalidation counter shared across keys would let only the last-issued root
-  // publish and silently discard the rest, so every later scan re-walks them.
+  // Refresh fan-out needs per-key publish ownership; a global counter would cache only the last root.
   it('caches every key when a refresh fans out across roots', async () => {
     const coalescer = new SkillScanCoalescer<string>(64)
     const keys = ['root-a', 'root-b', 'root-c', 'root-d']
@@ -119,7 +116,6 @@ describe('SkillScanCoalescer', () => {
     const coalescer = new SkillScanCoalescer<string>(8)
     const slowScan = deferred<string>()
 
-    // A focus/mount scan is already in flight when the user installs a skill.
     const inFlight = coalescer.run('root', { ttlMs: 10_000 }, () => slowScan.promise)
     const refreshed = await coalescer.run(
       'root',
@@ -128,8 +124,7 @@ describe('SkillScanCoalescer', () => {
     )
     expect(refreshed.value).toBe('after-install')
 
-    // The older scan now lands. It must not overwrite the post-install entry with
-    // a pre-install listing and a fresh lifetime.
+    // A pre-install scan must not overwrite the refreshed result with a new lifetime.
     slowScan.resolve('before-install')
     await inFlight
 
@@ -144,7 +139,6 @@ describe('SkillScanCoalescer', () => {
     const slowScan = deferred<string>()
 
     const inFlight = coalescer.run('root', { ttlMs: 10_000 }, () => slowScan.promise)
-    // A skill update run rewrote disk while that scan was walking it.
     coalescer.clear()
     slowScan.resolve('pre-update')
     await inFlight
@@ -180,7 +174,6 @@ describe('SkillScanCoalescer', () => {
 
     await scan('a')
     await scan('b')
-    // Reading 'a' promotes it, so 'b' is the eviction candidate when 'c' arrives.
     expect((await scan('a')).cached).toBe(true)
     await scan('c')
 
@@ -188,17 +181,15 @@ describe('SkillScanCoalescer', () => {
     expect((await scan('b')).cached).toBe(false)
   })
 
-  // ttl is non-zero on purpose: with ttl 0 nothing is ever written, which hides
-  // whether the abandoned scan can still publish over the replacement's result.
+  // Use nonzero TTL to expose abandoned scans incorrectly publishing over replacements.
   it('stops joining a scan that never settles, and never lets it publish later', async () => {
     let now = 1_000
     const coalescer = new SkillScanCoalescer<number>(8, () => now)
     const wedged = deferred<number>()
     let runs = 0
-    // Mirrors `findSkillFiles`, which throws once its signal aborts.
     const task = (signal: AbortSignal): Promise<number> => {
       runs += 1
-      // The first scan models a root on a stalled mount: its readdir never settles.
+      // Model a stalled mount whose syscall never settles.
       return runs === 1
         ? Promise.race([
             wedged.promise,
@@ -211,7 +202,6 @@ describe('SkillScanCoalescer', () => {
 
     void coalescer.run('root', { ttlMs: 10_000 }, task).catch(() => undefined)
     now = 1_100
-    // Still young enough to share.
     const joined = coalescer.run('root', { ttlMs: 10_000 }, task)
     now = 40_000
 
@@ -221,10 +211,8 @@ describe('SkillScanCoalescer', () => {
     })
     expect(runs).toBe(2)
 
-    // Callers of the abandoned scan are released by its abort rather than left
-    // waiting on a mount that may never answer.
+    // Abort releases abandoned-scan callers even if the mount never answers.
     await expect(joined).rejects.toThrow()
-    // It must not overwrite the replacement's newer result with a fresh ttl.
     wedged.resolve(99)
     expect(await coalescer.run('root', { ttlMs: 10_000 }, task)).toEqual({ value: 2, cached: true })
   })
@@ -244,12 +232,11 @@ describe('SkillScanCoalescer', () => {
     await coalescer.run('root', { ttlMs: 10_000 }, task)
 
     expect(signals[0].aborted).toBe(true)
-    // The replacement owns the key now, so it must not be aborted alongside it.
+    // The new owner must not be aborted with its predecessor.
     expect(signals[1].aborted).toBe(false)
   })
 
-  // Why not abort here: on a healthy root the superseded scan is about to finish and
-  // its callers still want an answer; the publish fence already stops the stale write.
+  // Keep healthy superseded callers alive; publish ownership already prevents stale caching.
   it('does not abort the scan a refresh supersedes', async () => {
     const coalescer = new SkillScanCoalescer<string>(8)
     const slowScan = deferred<string>()
@@ -266,17 +253,14 @@ describe('SkillScanCoalescer', () => {
     expect((await inFlight).value).toBe('before-install')
   })
 
-  // The walk is wedged inside a syscall here, so aborting it never settles it —
-  // the case the budget exists for. A walk that does return on abort frees its
-  // slot again, which is why the budget is not a permanent ceiling.
+  // A stuck syscall cannot settle on abort; budget abandoned scans until actual completion.
   it('sheds a replacement once too many abandoned scans are still live', async () => {
     let now = 1_000
     const coalescer = new SkillScanCoalescer<number>(64, () => now)
     const task = (): Promise<number> => new Promise<number>(() => {})
     const keys = Array.from({ length: 17 }, (_unused, index) => `root-${index}`)
 
-    // Every root on one dead mount wedges, then each is abandoned for age when a
-    // later caller arrives and tries to replace it.
+    // Each stalled root spends abandonment budget when a caller seeks a replacement.
     for (const key of keys) {
       void coalescer.run(key, { ttlMs: 10_000 }, task).catch(() => undefined)
     }
@@ -291,7 +275,6 @@ describe('SkillScanCoalescer', () => {
     }
     await new Promise((resolve) => setImmediate(resolve))
 
-    // 16 replacements are admitted; past that no further walk is started.
     expect(shed).toEqual(['root-16'])
   })
 })

@@ -9,7 +9,7 @@ import {
 } from '../../shared/closed-terminal-tab-tombstones'
 import type { WorkspaceSessionState } from '../../shared/workspace-session-state-types'
 import { Store } from '../persistence/loading-store/store'
-import { closeTestStores, createSqliteTestStore } from '../persistence-test-harness'
+import { closeTestStores, createSqliteTestStore } from '../persistence/persistence-test-harness'
 import { OrcaRuntimeService } from './orca-runtime'
 import {
   LEAF_ID,
@@ -70,7 +70,7 @@ function createPersistedRuntime(session: WorkspaceSessionState = makeSession()) 
   }
 }
 
-/** A renderer save: membership as the renderer holds it, and no close records, which it never sends. */
+/** Renderer saves membership, never main-owned close records. */
 function rendererSave(session: WorkspaceSessionState): WorkspaceSessionState {
   const {
     terminalTopologyRevisionByRepoId: _hostPrivate,
@@ -103,7 +103,7 @@ describe('close records', () => {
     }
   )
 
-  // The store keeps main's map only when a write omits it; main's own writes carry it and win.
+  // Store preserves omitted close maps; explicit main-owned maps replace them.
   it("keeps main's own record writes across later store writes", async () => {
     const { store, runtime } = createPersistedRuntime()
 
@@ -143,7 +143,6 @@ describe('close records', () => {
     )
   })
 
-  // A write cannot list a tab its partition recorded as closed, so legacy rows beside a record go.
   it('drops a listed tab its partition already recorded as closed, and keeps the record', async () => {
     const earlier = Date.now() - 24 * 60 * 60 * 1000
     const record = { closedAt: earlier, worktreeId: WORKTREE_ID, reason: 'cleanup' as const }
@@ -195,7 +194,6 @@ describe('close records', () => {
     expect(store.getWorkspaceSession().closedTerminalTabTombstonesByTabId).toBeUndefined()
   })
 
-  // Why: only a resolved tab close records; a pane target never widens here, even on the last pane.
   it("records nothing for a pane close aimed at its tab's only pane", async () => {
     const { store, runtime } = createPersistedRuntime()
 
@@ -214,8 +212,7 @@ describe('close records', () => {
     ])
   })
 
-  // The durable half of refusing a late graft: the close lands while the tab's spawn is in
-  // flight, so main has never listed the tab, and the spawn commits only after a relaunch.
+  // Durable close must reject in-flight spawns committing after crash/reload, even if the tab was never listed.
   it('refuses a closed tab whose spawn commits after a crash and reload', async () => {
     const { runtime, reload } = createPersistedRuntime()
 
@@ -257,7 +254,7 @@ describe('close records', () => {
     expect(
       store.getWorkspaceSession(SSH_HOST_ID).closedTerminalTabTombstonesByTabId?.[LATE_TAB_ID]
     ).toBeDefined()
-    // A relay reattach binds into `local`, not the partition the close was recorded in.
+    // Reattach targets local, distinct from the partition recording close.
     expect(
       await store.persistPtyBinding({
         worktreeId: SSH_WORKTREE_ID,

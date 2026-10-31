@@ -14,7 +14,6 @@ import {
   Is,
   Keypress,
   LimitParam,
-  Screenshot,
   Scroll,
   Select,
   SelectorPath,
@@ -26,6 +25,7 @@ import {
   Upload,
   Wait
 } from '../../../../shared/rpc-contract/browser-params'
+import { Screenshot, Snapshot } from '../../../../shared/rpc-contract/browser-observation-params'
 import {
   BrowserOpenUrlParams,
   BrowserTabCreateParams
@@ -38,7 +38,7 @@ export const BROWSER_CORE_METHODS = [
   defineMethod({
     name: 'browser.snapshot',
     permission: 'workspace',
-    params: BrowserTarget,
+    params: Snapshot,
     handler: async (params, { runtime }) => runtime.browserSnapshot(params)
   }),
   defineMethod({
@@ -94,7 +94,7 @@ export const BROWSER_CORE_METHODS = [
     name: 'browser.eval',
     permission: 'workspace',
     params: Eval,
-    handler: async (params, { runtime }) => runtime.browserEval(params)
+    handler: async (params, { runtime, signal }) => runtime.browserEval(params, signal)
   }),
   defineMethod({
     name: 'browser.tabList',

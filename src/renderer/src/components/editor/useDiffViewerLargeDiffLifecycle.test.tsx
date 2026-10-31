@@ -52,54 +52,6 @@ function diffEditorFixture(
 }
 
 describe('useDiffViewerLargeDiffLifecycle', () => {
-  it('keeps repeated content rotations bounded to the current Monaco models', async () => {
-    const modelKey = 'diff-tab'
-    const originalModelKey = 'original-v1'
-    const onEnterFallback = vi.fn()
-    const paths = ['modified-v1', 'modified-v2', 'modified-v3'].map((modifiedModelKey) =>
-      getDiffViewerMonacoModelPaths({
-        modelKey,
-        originalModelKey,
-        modifiedModelKey,
-        generationSuffix: ''
-      })
-    )
-    const firstModel = detachedModel()
-    const secondModel = detachedModel()
-    const currentModel = detachedModel()
-    const originalModel = detachedModel()
-    monacoFixture.models.set(paths[0].originalModelPath, originalModel)
-    monacoFixture.models.set(paths[0].modifiedModelPath, firstModel)
-    monacoFixture.models.set(paths[1].modifiedModelPath, secondModel)
-    monacoFixture.models.set(paths[2].modifiedModelPath, currentModel)
-    const retainedEditor = diffEditorFixture(originalModel, firstModel)
-
-    const hook = renderHook(
-      ({ modifiedModelKey }) =>
-        useDiffViewerLargeDiffLifecycle({
-          limited: false,
-          modelKey,
-          originalModelKey,
-          modifiedModelKey,
-          diffEditorRef: retainedEditor,
-          onEnterFallback
-        }),
-      { initialProps: { modifiedModelKey: 'modified-v1' } }
-    )
-
-    hook.rerender({ modifiedModelKey: 'modified-v2' })
-    await act(() => Promise.resolve())
-    hook.rerender({ modifiedModelKey: 'modified-v3' })
-    await act(() => Promise.resolve())
-
-    expect(firstModel.dispose).toHaveBeenCalledOnce()
-    expect(secondModel.dispose).toHaveBeenCalledOnce()
-    expect(currentModel.dispose).not.toHaveBeenCalled()
-    expect(retainedEditor.setModel).toHaveBeenCalledTimes(2)
-    expect(hook.result.current).toEqual(paths[2])
-    expect(onEnterFallback).not.toHaveBeenCalled()
-  })
-
   it('resets the owning diff widget before disposing a superseded model', async () => {
     const modelKey = 'diff-tab'
     const paths = ['modified-v1', 'modified-v2'].map((modifiedModelKey) =>

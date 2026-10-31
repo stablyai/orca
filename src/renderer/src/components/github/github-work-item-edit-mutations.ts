@@ -15,9 +15,9 @@ import { githubProjectHost } from '../../../../shared/github/project-identity'
 import type { TaskSourceContext } from '../../../../shared/task-source-context'
 import type { GitHubOwnerRepo } from '../../../../shared/github/pull-request-types'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
+import { codeHostErrorText } from '@/lib/code-host-error-copy'
 
-// Why: for a Project row whose repo differs from the active workspace, mutations must target the row's actual repo via slug-addressed IPCs, else edits silently apply to the workspace's repo.
-// Why: these edit IPCs return `{ ok, error }`; callers throw on `!ok` so useImmediateMutation (which expects throws on failure) works unchanged.
+// Route Project edits to the row’s repository; callers throw on failed IPC results for optimistic rollback.
 export function getGitHubMutationTarget(
   repoId: string | null | undefined,
   projectOrigin: GitHubWorkItemProjectOrigin | undefined
@@ -32,8 +32,7 @@ export function getGitHubMutationTarget(
   if (isTwinRepo(state, repoId) && !projectOrigin) {
     throw new Error(`No single host owns project ${repoId}.`)
   }
-  // Why: an untracked repo's Project row goes to the host that loaded the row; any other
-  // slug-addressed edit uses this computer's credentials, never the focused server.
+  // Untracked Project rows use their source host; other slug edits use local credentials, never the focused server.
   return projectOrigin ? projectViewCacheKeyTarget(projectOrigin.cacheKey) : { kind: 'local' }
 }
 
@@ -69,7 +68,7 @@ export async function runIssueUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updateIssueBySlug(updateArgs)
+        : await window.api.gh.updateIssueBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -109,7 +108,7 @@ export async function runIssueUpdate(args: {
         ...(args.issueRepo ? { ownerRepo: args.issueRepo } : {})
       })
   if (!res.ok) {
-    throw new Error(res.error)
+    throw new Error(codeHostErrorText(res))
   }
   if (runtimeHost) {
     notifyWorkItemDetailsMutation(
@@ -165,7 +164,7 @@ export async function runWorkItemBodyUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -226,7 +225,7 @@ export async function runPullRequestStateUpdate(args: {
               timeoutMs: 30_000
             }
           )
-        : await window.api.gh.updatePullRequestBySlug(updateArgs)
+        : await window.api.gh.updatePullRequestBySlug({ ...updateArgs, wakeWslDistro: true })
     if (!res.ok) {
       throw new Error(res.error.message)
     }
@@ -271,7 +270,7 @@ export async function runPullRequestStateUpdate(args: {
           updates: args.updates
         })
   if (!res.ok) {
-    throw new Error(res.error)
+    throw new Error(codeHostErrorText(res))
   }
   if (target.kind === 'environment') {
     notifyWorkItemDetailsMutation(

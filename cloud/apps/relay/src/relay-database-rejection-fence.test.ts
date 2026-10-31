@@ -96,8 +96,7 @@ describe('database rejection fence', () => {
     expect(() => handleRelayUnhandledRejection(duplicate, true)).not.toThrow()
   })
 
-  // A whole-VM stall of 6-7 s outlasts the 5 s idle-in-transaction limit for any backend caught
-  // idle mid-transaction, and the server ends that session with FATAL 25P03 on resume.
+  // A 6–7s VM stall exceeds the 5s idle-transaction deadline, ending idle backends with FATAL 25P03.
   it('fences an idle-in-transaction timeout but keeps the rest of class 25 fatal', async () => {
     const idleTimeout = await rejectionFrom(() =>
       databaseFailingWith(

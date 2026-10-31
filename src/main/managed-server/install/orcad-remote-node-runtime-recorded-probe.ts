@@ -1,9 +1,4 @@
-/**
- * The runtime probe for hosts that opt in (WSL guests): the ~110 MiB executable is hashed only
- * when its stat signature differs from the one recorded the last time it hashed to the pin.
- * A republish renames a new inode into place and an in-place write moves ctime, so either change
- * forces the full hash again (verify on mismatch).
- */
+// WSL opt-in reuses verified runtime stat signatures; inode replacement or in-place ctime change forces a full hash.
 import { pinnedNodeRuntimeAsset, type NodeRuntimeTarget } from '../../../shared/node-runtime-pin'
 import { quotePosixShell } from '../../../shared/shell-argument-quoting'
 import { joinRemotePath, type RemoteHostPlatform } from '../../ssh/ssh-remote-platform'
@@ -16,10 +11,8 @@ import {
 import { posixNodeRuntimeExecutable } from './orcad-remote-node-runtime'
 import { remoteSha256Command } from './remote-sha256-command'
 
-/** Beside `.verified`; store GC removes it with its runtime directory. */
 export const REMOTE_NODE_RUNTIME_HASHED_STAT_FILENAME = '.verified-stat'
 
-/** Same verdicts as `probeRemoteNodeRuntimeCommand`, against `executableSha256`. */
 export function recordedNodeRuntimeProbeCommand(
   host: RemoteHostPlatform,
   runtimeDir: string,
@@ -34,7 +27,7 @@ export function recordedNodeRuntimeProbeCommand(
     joinRemotePath(host, runtimeDir, REMOTE_NODE_RUNTIME_HASHED_STAT_FILENAME)
   )
   const pin = quotePosixShell(executableSha256)
-  // GNU/busybox `stat -c`, else BSD `stat -f`; an empty signature never matches and is never kept.
+  // Try GNU/BusyBox then BSD stat; empty signatures cannot be trusted or retained.
   const signature =
     `{ stat -L -c '%d:%i:%s:%y:%z' ${executable} || ` +
     `stat -L -f '%d:%i:%z:%Fm:%Fc' ${executable}; } 2>/dev/null`

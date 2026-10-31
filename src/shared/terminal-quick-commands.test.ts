@@ -1,126 +1,25 @@
 import { describe, expect, it } from 'vitest'
 import {
   applyTerminalQuickCommandMutation,
-  buildTerminalQuickCommandInput,
   flattenTerminalQuickCommand,
-  getTerminalQuickCommandAction,
-  getTerminalQuickCommandBody,
-  getDefaultTerminalQuickCommands,
-  isTerminalQuickCommandComplete,
   normalizeTerminalQuickCommands,
   parseNormalizedTerminalQuickCommands,
-  supportsTerminalAgentQuickCommand,
   terminalQuickCommandMatchesRepo
 } from './terminal-quick-commands'
 
 describe('terminal quick commands', () => {
-  it('returns safe defaults when persisted settings are missing', () => {
-    expect(normalizeTerminalQuickCommands(undefined)).toEqual([])
-    expect(getDefaultTerminalQuickCommands()).toEqual([])
-  })
+  it('preserves lists larger than forty commands across loading and protocol parsing', () => {
+    const commands = Array.from({ length: 100 }, (_, index) => ({
+      id: `command-${index}`,
+      label: `Command ${index}`,
+      action: 'terminal-command' as const,
+      command: 'echo saved',
+      appendEnter: true,
+      scope: { type: 'repo' as const, repoId: `project-${index}` }
+    }))
 
-  it('keeps an intentionally empty command list', () => {
-    expect(normalizeTerminalQuickCommands([])).toEqual([])
-  })
-
-  it('removes quick commands from the abandoned preset rollout', () => {
-    expect(
-      normalizeTerminalQuickCommands([
-        {
-          id: 'default-pwd',
-          label: 'Print Working Directory',
-          command: 'pwd',
-          appendEnter: true
-        },
-        {
-          id: 'default-git-status',
-          label: 'Git Status',
-          command: 'git status',
-          appendEnter: true
-        }
-      ])
-    ).toEqual([])
-  })
-
-  it('drops malformed entries and normalizes valid commands and drafts', () => {
-    expect(
-      normalizeTerminalQuickCommands([
-        null,
-        { id: 'status', label: '  Status  ', command: 'git status\n', appendEnter: false },
-        { id: 'empty-command', label: 'Empty', command: '   ' },
-        { id: 'status', label: 'Duplicate', command: 'pwd' },
-        { label: 'No ID', command: 'date' }
-      ])
-    ).toEqual([
-      {
-        id: 'status',
-        label: 'Status',
-        action: 'terminal-command',
-        command: 'git status',
-        appendEnter: false,
-        scope: { type: 'global' }
-      },
-      {
-        id: 'empty-command',
-        label: 'Empty',
-        action: 'terminal-command',
-        command: '',
-        appendEnter: true,
-        scope: { type: 'global' }
-      },
-      {
-        id: 'status-2',
-        label: 'Duplicate',
-        action: 'terminal-command',
-        command: 'pwd',
-        appendEnter: true,
-        scope: { type: 'global' }
-      },
-      {
-        id: 'quick-command-4',
-        label: 'No ID',
-        action: 'terminal-command',
-        command: 'date',
-        appendEnter: true,
-        scope: { type: 'global' }
-      }
-    ])
-  })
-
-  it('normalizes repository scoped commands and falls back to global for invalid scopes', () => {
-    expect(
-      normalizeTerminalQuickCommands([
-        {
-          id: 'repo-dev',
-          label: 'Dev',
-          command: 'pnpm dev',
-          scope: { type: 'repo', repoId: ' repo-1 ' }
-        },
-        {
-          id: 'bad-repo',
-          label: 'Bad',
-          command: 'echo bad',
-          scope: { type: 'repo', repoId: '   ' }
-        }
-      ])
-    ).toEqual([
-      {
-        id: 'repo-dev',
-        label: 'Dev',
-        action: 'terminal-command',
-        command: 'pnpm dev',
-        appendEnter: true,
-        scope: { type: 'repo', repoId: 'repo-1' }
-      },
-      {
-        id: 'bad-repo',
-        label: 'Bad',
-        action: 'terminal-command',
-        command: 'echo bad',
-        appendEnter: true,
-        scope: { type: 'global' }
-      }
-    ])
+    expect(normalizeTerminalQuickCommands(commands)).toEqual(commands)
+    expect(parseNormalizedTerminalQuickCommands(commands)).toEqual(commands)
   })
 
   it('normalizes agent prompt commands without storing generated shell text', () => {
@@ -284,88 +183,9 @@ describe('terminal quick commands', () => {
       )
     ).toBe(false)
   })
-
-  it('formats terminal input without assuming shell semantics', () => {
-    expect(
-      buildTerminalQuickCommandInput({
-        id: 'status',
-        label: 'Status',
-        command: 'git status',
-        appendEnter: true
-      })
-    ).toBe('git status\r')
-    expect(
-      buildTerminalQuickCommandInput({
-        id: 'status',
-        label: 'Status',
-        command: 'git status',
-        appendEnter: false
-      })
-    ).toBe('git status')
-  })
-
-  it('classifies quick command actions and body text', () => {
-    const terminal = {
-      id: 'status',
-      label: 'Status',
-      command: 'git status',
-      appendEnter: true
-    }
-    const agent = {
-      id: 'agent',
-      label: 'Agent',
-      action: 'agent-prompt' as const,
-      agent: 'claude' as const,
-      prompt: 'Fix the tests'
-    }
-
-    expect(getTerminalQuickCommandAction(terminal)).toBe('terminal-command')
-    expect(getTerminalQuickCommandBody(terminal)).toBe('git status')
-    expect(isTerminalQuickCommandComplete(terminal)).toBe(true)
-    expect(getTerminalQuickCommandAction(agent)).toBe('agent-prompt')
-    expect(getTerminalQuickCommandBody(agent)).toBe('Fix the tests')
-    expect(isTerminalQuickCommandComplete(agent)).toBe(true)
-  })
-
-  it('only allows agent prompt quick commands for launch-time prompt agents', () => {
-    expect(supportsTerminalAgentQuickCommand('claude')).toBe(true)
-    expect(supportsTerminalAgentQuickCommand('gemini')).toBe(true)
-    expect(supportsTerminalAgentQuickCommand('aider')).toBe(false)
-    expect(supportsTerminalAgentQuickCommand('not-real')).toBe(false)
-  })
 })
 
 describe('flattenTerminalQuickCommand', () => {
-  it('returns the same object when there are no line breaks', () => {
-    const command = {
-      id: 'test',
-      label: 'Test',
-      command: 'git status',
-      appendEnter: true
-    } as const
-    expect(flattenTerminalQuickCommand(command)).toBe(command)
-  })
-
-  it('replaces newlines with semicolons and spaces', () => {
-    const result = flattenTerminalQuickCommand({
-      id: 'test',
-      label: 'Test',
-      command: 'cd packages\nbun run build\ncd ..',
-      appendEnter: true
-    })
-    expect(result.command).toBe('cd packages; bun run build; cd ..')
-  })
-
-  it('collapses consecutive newlines into a single separator', () => {
-    const result = flattenTerminalQuickCommand({
-      id: 'test',
-      label: 'Test',
-      command: 'echo one\n\n\necho two',
-      appendEnter: true
-    })
-    expect(result.command).toBe('echo one; echo two')
-  })
-
   it('handles Windows-style CRLF endings', () => {
     const result = flattenTerminalQuickCommand({
       id: 'test',

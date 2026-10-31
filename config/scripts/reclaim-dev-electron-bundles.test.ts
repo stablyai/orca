@@ -118,8 +118,7 @@ describe('sweeping across worktrees', () => {
     ])
     const bundles = collectDevBundles(worktree)
     const live = bundles.find((bundle) => bundle.dir.endsWith('live'))!
-    // Why currentDir is null here: unlike the dev runner, the sweep is not about to launch
-    // anything, so only a live process or an in-flight build may protect a bundle.
+    // No launch follows sweep; null currentDir leaves only live process/in-flight build protection.
     const stale = selectStaleDevBundleDirs({
       bundles,
       currentDir: null,

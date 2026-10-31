@@ -1,4 +1,4 @@
-import type { StructuredLaunchSurfaceAddress } from './structured-agent-session-launch-record'
+import type { StructuredLaunchSurfaceAddress } from './agent-session/launch/structured-agent-session-launch-record'
 import type { StructuredAgentSessionResumeSource } from '../../../shared/structured-agent-session-create'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
@@ -34,11 +34,9 @@ import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import { relearnHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { awaitLocalRuntimeCapabilities } from '@/runtime/local-runtime-capabilities'
 
-/** Which surface the user picked for one launch: the agent's chat, or its CLI in a terminal. */
 export type AgentLaunchSurface = 'chat' | 'terminal'
 
 export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
-  /** The user action this launch serves, minted where that action is handled. */
   requestId: AgentLaunchRequestId
   requestedSurface?: AgentLaunchSurface
   selectedExecutionHostId?: ExecutionHostId
@@ -46,32 +44,29 @@ export type AgentSessionLaunchRequest = AgentLaunchRouteArgs & {
   onPromptDelivered?: () => void
   /** The caller keeps the prompt's text if it does not go out (notes), so no composer gets it. */
   promptKeptByCaller?: true
+  /** Options this launch asks for over the saved chat defaults, e.g. an action's model. */
+  launchOptions?: Readonly<Record<string, string>>
 }
 
-/**
- * A route decided once plus exactly what its structured launch delivers. The quick-create request
- * carries the data fields in renderer memory, so a launch that happens after the workspace exists
- * (or a retry within the same session) re-enters here without re-resolving.
- */
+/** Carry the decided route and delivery fields in memory so post-create launches and same-session retries reuse them without re-resolving. */
 export type AgentSessionLaunchVerdict = {
   route: AgentLaunchRoute
   requestedSurface?: AgentLaunchSurface
-  /** The user action this launch serves; a re-entry with this verdict is that same action. */
   requestId: AgentLaunchRequestId
   agent: TuiAgent
   worktreeId?: string
-  /** The host the structured route was decided for; the chat is created there. */
   executionHostId?: ExecutionHostId
   prompt?: string
   promptDelivery?: NativeChatLaunchPromptDelivery
   resumeFrom?: StructuredAgentSessionResumeSource
   onPromptDelivered?: () => void
   promptKeptByCaller?: true
+  draftFromScope?: string
+  launchOptions?: Readonly<Record<string, string>>
 }
 
 export type AgentSessionStructuredFeasibilityRequest = AgentLaunchRouteArgs & {
-  /** Named explicitly rather than read off the store, so a React caller's memo depends on the
-   *  settings this answer actually turns on. */
+  /** Name settings explicitly so React memo dependencies match the values this decision reads. */
   settings: AgentLaunchRoutingInput['settings']
 }
 
@@ -86,12 +81,10 @@ export type AgentSessionLaunchTarget = {
 }
 
 export type AgentSessionLaunchPlan = Readonly<AgentSessionLaunchVerdict> & {
-  /** Begins the launch and exposes its durable identity before host acquisition settles. */
   begin(
     hooks: StructuredAgentLaunchHooks,
     target?: AgentSessionLaunchTarget
   ): StructuredAgentLaunchHandle | null
-  /** Runs the structured settle loop for this plan. Null when the route is not structured. */
   launch(
     hooks: StructuredAgentLaunchHooks,
     target?: AgentSessionLaunchTarget
@@ -106,7 +99,9 @@ function structuredLaunchOptions(verdict: AgentSessionLaunchVerdict): Structured
     ...(verdict.resumeFrom ? { resumeFrom: verdict.resumeFrom } : {}),
     ...(verdict.onPromptDelivered ? { onPromptDelivered: verdict.onPromptDelivered } : {}),
     ...(verdict.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
-    ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {})
+    ...(verdict.draftFromScope ? { draftFromScope: verdict.draftFromScope } : {}),
+    ...(verdict.executionHostId ? { executionHostId: verdict.executionHostId } : {}),
+    ...(verdict.launchOptions ? { launchOptions: verdict.launchOptions } : {})
   }
 }
 
@@ -115,7 +110,6 @@ function beginStructuredPlanLaunch(
   hooks: StructuredAgentLaunchHooks,
   target?: AgentSessionLaunchTarget
 ): StructuredAgentLaunchHandle | null {
-  // The route already admitted the agent: its host registered it as structured.
   if (verdict.route !== 'structured-native-chat') {
     return null
   }
@@ -151,7 +145,6 @@ function beginStructuredPlanLaunch(
   }
 }
 
-/** Re-enter with a verdict decided earlier; the route is data here and is never re-resolved. */
 export function adoptAgentSessionLaunchVerdict(
   verdict: AgentSessionLaunchVerdict
 ): AgentSessionLaunchPlan {
@@ -163,21 +156,16 @@ export function adoptAgentSessionLaunchVerdict(
   }
 }
 
-/**
- * Can this pair open a structured session at all? A feasibility QUERY for enable/disable UI, not a
- * launch decision: it resolves no route and builds no plan, so a list may ask it per row.
- */
+/** Query structured feasibility for row enablement only; do not decide a route or build a launch plan. */
 export function structuredAgentSessionLaunchFeasible(
   store: AgentLaunchRouteStore,
   request: AgentSessionStructuredFeasibilityRequest
 ): boolean {
   const { settings, ...args } = request
-  // Why: the narrow settings ride on the built input, not the store, so a caller names the exact
-  // settings this answer turns on without having to hold a whole store-shaped object.
+  // Carry narrow settings on the built input so callers can name exact dependencies without a whole store object.
   return structuredAgentLaunchSupported({ ...buildAgentLaunchRouteInput(store, args), settings })
 }
 
-/** The route a launch would take, for a caller that only branches on it and launches nothing. */
 export function resolveAgentSessionLaunchRoute(
   store: AgentLaunchRouteStore,
   request: AgentLaunchRouteArgs
@@ -185,8 +173,7 @@ export function resolveAgentSessionLaunchRoute(
   return resolveAgentLaunchRoute(buildAgentLaunchRouteInput(store, request))
 }
 
-/** Says in the console why a launch with structured chat on opens a terminal, and asks again a
- *  host whose agent list was never learned, so the next launch can open its chat. */
+/** Log chat-to-terminal fallback and re-ask missing host agent lists for future launches. */
 function reportStructuredLaunchDowngrade(
   store: AgentLaunchRouteStore,
   input: AgentLaunchRoutingInput,
@@ -213,8 +200,7 @@ function reportStructuredLaunchDowngrade(
   }
 }
 
-/** What a launch's chat route is waiting to hear from its host, if anything: the host's agent
- *  list, or this computer's runtime capabilities while startup is still answering. */
+/** Identify pending host-agent inventory or local startup capabilities that a chat route still needs. */
 function structuredRouteAwaits(
   input: AgentLaunchRoutingInput
 ): 'host-agents' | 'local-capabilities' | null {
@@ -222,7 +208,6 @@ function structuredRouteAwaits(
   if (
     downgrade === 'agent-without-structured-session' &&
     !input.hostStructuredAgents &&
-    // A host that does not publish its agents has no list to wait for.
     input.hostCapabilities?.includes(
       STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY
     ) !== false
@@ -234,10 +219,7 @@ function structuredRouteAwaits(
     : null
 }
 
-/** When a launch's chat route waits only on its host's answer (the agent list, or this
- *  computer's runtime capabilities during a slow startup), asks for it and resolves once it came
- *  or after `waitMs`, whichever is first; null when the route waits on neither. The caller then
- *  decides the route again. */
+/** Await missing host-agent inventory or local startup capabilities up to waitMs, then let the caller resolve again; null when neither is pending. */
 export function awaitStructuredRouteHostAnswer(
   store: AgentLaunchRouteStore,
   request: AgentLaunchRouteArgs,
@@ -255,8 +237,7 @@ export function awaitStructuredRouteHostAnswer(
   })
   const ask = async (): Promise<void> => {
     let capabilities = input.hostCapabilities
-    // Either route may be missing this computer's capabilities: wait for the probe that lands
-    // them, since one that failed at startup answers null at once.
+    // Await the probe itself: startup failure can leave capabilities null without another pending answer.
     if (capabilities === null && isLocalExecutionHost(input.executionHostId)) {
       const wait = awaitLocalRuntimeCapabilities()
       stopCapabilitiesWait = wait.stop
@@ -282,8 +263,7 @@ export function awaitStructuredRouteHostAnswer(
   })
 }
 
-/** The one place a launch route is decided. Delivery mode is fixed here too, so the settle loop
- *  later receives exactly the prompt and mode the route was decided on. */
+/** Decide route and delivery mode together so settlement receives the exact prompt/mode the route admitted. */
 export function planAgentSessionLaunch(
   store: AgentLaunchRouteStore,
   request: AgentSessionLaunchRequest
@@ -312,6 +292,7 @@ export function planAgentSessionLaunch(
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     ...(request.resumeFrom ? { resumeFrom: request.resumeFrom } : {}),
     ...(request.onPromptDelivered ? { onPromptDelivered: request.onPromptDelivered } : {}),
-    ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {})
+    ...(request.promptKeptByCaller ? { promptKeptByCaller: true as const } : {}),
+    ...(request.launchOptions ? { launchOptions: request.launchOptions } : {})
   })
 }

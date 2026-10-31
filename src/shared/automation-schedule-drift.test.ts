@@ -1,8 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { describeAutomationScheduleDrift } from './automation-schedule-drift'
 
-// Both lists were recorded by running the same corpus through the real parent build
-// (729491597f3) and this branch, not by re-deriving them from the detector under test.
+// Record corpus outputs from parent 729491597f3 and this branch; never derive expectations from the detector.
 const DRIFTED = [
   '5/15 * * * *',
   '0/30 * * * *',
@@ -52,8 +51,7 @@ describe('automation schedule drift', () => {
     }
   })
 
-  // The restriction flags move on several of these while the days they fire do not; reporting
-  // those would train the reader to ignore the notice.
+  // Changed restriction flags without changed fire dates must stay silent or the notice becomes noise.
   it('stays silent on schedules the repair left alone', () => {
     for (const expression of STABLE) {
       expect(describeAutomationScheduleDrift(expression, ANCHOR), expression).toBeNull()

@@ -3,6 +3,7 @@ import type { RpcClient } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import { loadMobileDiffReviewDiff } from './mobile-diff-review-loaders'
+import * as diffLines from './mobile-diff-lines'
 
 const DELETED_ITEM: MobileDiffReviewQueueItem = {
   key: 'unstaged\0unstaged\0\0deleted.ts',
@@ -55,5 +56,25 @@ describe('loadMobileDiffReviewDiff', () => {
         branchCompare: null
       })
     ).resolves.toEqual({ kind: 'deleted', itemKey: DELETED_ITEM.key })
+  })
+
+  it('skips projection for a reply whose load was abandoned', async () => {
+    const buildDiff = vi.spyOn(diffLines, 'buildMobileDiffLines')
+    const controller = new AbortController()
+    controller.abort()
+    await expect(
+      loadMobileDiffReviewDiff({
+        client: clientWith({
+          id: 'rpc-1',
+          ok: true,
+          result: { kind: 'text', originalContent: 'old', modifiedContent: 'new' }
+        }),
+        worktreeId: 'wt-1',
+        item: { ...DELETED_ITEM, status: 'modified' },
+        branchCompare: null,
+        signal: controller.signal
+      })
+    ).resolves.toEqual({ kind: 'idle' })
+    expect(buildDiff).not.toHaveBeenCalled()
   })
 })

@@ -35,6 +35,7 @@ export class FakeConnection implements PiRpcConnection {
   closed = false
   rootVerdict: 'live' | 'unverifiable' | 'exited' = 'live'
   processless = false
+  spawnAbsence: PiRpcConnection['spawnAbsence'] = null
   deferExit = false
   closeError?: Error
   lastCloseResult: PiRpcConnection['lastCloseResult'] = null
@@ -108,7 +109,6 @@ export class FakeConnection implements PiRpcConnection {
 
 type PiLifecycleEvent = Parameters<PiRpcSessionAdapterDeps['onLifecycle']>[0]
 
-/** The first `type` event the adapter reported; a missing one fails the test. */
 export function reportedEvent<T extends PiLifecycleEvent['type']>(
   lifecycle: Mock<PiRpcSessionAdapterDeps['onLifecycle']>,
   type: T

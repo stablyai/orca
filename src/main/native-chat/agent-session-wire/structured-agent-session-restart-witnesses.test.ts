@@ -4,7 +4,7 @@ import type { AgentSessionResumeMarker } from '../../../shared/agent-session-res
 import { createStructuredAgentSessionRestartWitnesses } from './structured-agent-session-restart-witnesses'
 import { marker } from './structured-agent-session-restart-resume-test-harness'
 
-// Every stopped session counts as cut off; what is under test is which witnesses a clear drops.
+// Mock every stopped session as working to isolate witness-clear scope.
 vi.mock('./structured-agent-session-working-at-teardown', () => ({
   structuredAgentSessionWorkingAtStop: (input: { sessionId: string; now: number }) =>
     marker({ sessionId: input.sessionId, recordedAt: input.now })

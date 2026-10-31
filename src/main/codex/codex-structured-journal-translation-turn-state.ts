@@ -6,19 +6,18 @@ export const MAX_CODEX_RECENT_TURN_BYTES = 256 * 1024
 
 export type CodexJournalRequestOrigin = CodexDispatchRequestOrigin & { userItemId: string }
 
-function earlierRequestOrigin(
+export function earlierRequestOrigin(
   candidate: CodexJournalRequestOrigin,
   current: CodexJournalRequestOrigin | undefined
 ): boolean {
   return current === undefined || candidate.sequence < current.sequence
 }
 
-/** Running turns across provider threads; each is forgotten when it ends, all at session end. */
 export class CodexJournalActiveTurns {
   readonly byThread = new Map<string, Set<string>>()
-  /** Host turn-start receipt per remembered turn; the terminal row carries it forward. */
+  /** Host receipt time, retained on terminal rows. */
   private readonly startedAtByTurn = new Map<string, number>()
-  /** Earliest dispatched exact send per remembered turn, carried onto terminal rows. */
+  /** Earliest exact dispatch echo, retained on terminal rows. */
   private readonly requestOriginByTurn = new Map<string, CodexJournalRequestOrigin>()
   /** Last dispatch armed before each provider turn-start event. */
   private readonly latestDispatchSequenceByTurn = new Map<string, number>()
@@ -31,7 +30,6 @@ export class CodexJournalActiveTurns {
     return [...(this.byThread.get(threadId) ?? [])].at(-1) ?? null
   }
 
-  /** Whether this child started the turn: its running record is this translator's. */
   has(threadId: string, turnId: string): boolean {
     return this.byThread.get(threadId)?.has(turnId) === true
   }
@@ -129,7 +127,7 @@ type RecentTurn = {
   bytes: number
 }
 
-/** Bounded terminal lifecycle window: exact echoes that arrive after completion revise it. */
+/** Retain terminal rows within bounds for late dispatch echoes. */
 export class CodexJournalRecentTurns {
   private readonly turns = new Map<string, RecentTurn>()
   private retainedBytes = 0

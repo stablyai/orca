@@ -1,9 +1,22 @@
+import {
+  createLegacyPrerequisites,
+  type LegacyPrerequisites
+} from './structured-agent-session-launch-prerequisites'
 import { useSyncExternalStore } from 'react'
+import { acceptedStructuredSessionSelectionOutcome } from '../../../shared/structured-agent-session-options-write-owner'
+import { structuredSessionSelectionController } from './structured-agent-session-selection-controller'
+import type {
+  SelectionOperation,
+  SelectionOutcome
+} from '../../../shared/structured-agent-session-selection-operations'
+import {
+  structuredAgentSessionOptionPicks,
+  type StructuredAgentSessionOptionState
+} from '../../../shared/structured-agent-session-options'
 import type {
   AgentSessionMutationResult,
   AgentSessionOptionResult
 } from '../../../shared/agent-session-wire'
-import { STRUCTURED_LAUNCH_OPTION_IDS } from '../../../shared/native-chat-session-option-defaults'
 import {
   createStructuredAgentSessionOperationId,
   structuredAgentSessionPayloadFingerprint
@@ -11,16 +24,12 @@ import {
 import { callStructuredAgentSession } from '@/runtime/structured-agent-session-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import {
-  StructuredAgentSessionLaunchCancelledError,
-  type StructuredAgentLaunchReceipt
-} from './structured-agent-session-launch-recovery'
+import type { StructuredAgentLaunchReceipt } from './agent-session/launch/structured-agent-session-launch-recovery'
 import {
   getStructuredLaunchStateBySessionId,
-  notifyStructuredLaunchListeners,
   subscribeStructuredAgentLaunchStatus,
   type StructuredLaunchState
-} from './structured-agent-session-launch-registry'
+} from './agent-session/launch/structured-agent-session-launch-registry'
 import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
@@ -28,17 +37,13 @@ import {
 } from '../../../shared/agent-session-write-failure'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { StructuredAgentSessionLaunchIntent } from './launch-structured-agent-session'
-import {
-  structuredAgentSessionModelOffers,
-  type StructuredAgentSessionOptionState
-} from '../../../shared/structured-agent-session-options'
 
 /** The options a launch starts with, replaced whole so readers can compare by identity. */
 export type StructuredLaunchSelection = {
-  /** What the host runs as far as the launch knows: the create seed, then each accepted pick. */
+  /** The immutable create seed, until a queried host answer replaces it. */
   seed?: Readonly<Record<string, string>>
-  /** Encoded picks made before publish; the launch applies them before it publishes. */
-  held: Readonly<Record<string, string>>
+  /** Immutable action input, separate from later picker operations. */
+  explicit?: Readonly<Record<string, string>>
   /** A paired server has not yet said what create seeds, so nothing can be picked against it. */
   seedPending?: true
 }
@@ -48,39 +53,45 @@ export function initialStructuredLaunchSelection(
 ): StructuredLaunchSelection {
   return {
     seed: intent.seedOptions,
-    held: {},
+    ...(intent.explicitLaunchOptions ? { explicit: intent.explicitLaunchOptions } : {}),
     ...(intent.target.kind !== 'local' && !intent.seedOptions ? { seedPending: true } : {})
   }
 }
 
-export type StructuredLaunchOptionOutcome =
-  | { kind: 'accepted'; options: Readonly<Record<string, string>> }
-  | { kind: 'refused'; failure: AgentSessionWriteFailure }
-  | { kind: 'superseded' }
+export type StructuredLaunchOptionOutcome = SelectionOutcome
 
-type OptionReply = (outcome: StructuredLaunchOptionOutcome) => void
-
-const optionReplies = new WeakMap<StructuredLaunchState, Map<string, OptionReply>>()
-
-function repliesFor(state: StructuredLaunchState): Map<string, OptionReply> {
-  let replies = optionReplies.get(state)
-  if (!replies) {
-    replies = new Map()
-    optionReplies.set(state, replies)
+const launchControllers = new WeakMap<
+  StructuredLaunchState,
+  ReturnType<typeof structuredSessionSelectionController>
+>()
+export const structuredLaunchSelectionController = (state: StructuredLaunchState) => {
+  let controller = launchControllers.get(state)
+  if (!controller) {
+    controller = structuredSessionSelectionController(
+      state.intent.target,
+      state.intent.sessionId,
+      state.intent.agent
+    )
+    launchControllers.set(state, controller)
   }
-  return replies
+  return controller
+}
+const selectionController = structuredLaunchSelectionController
+const receipts = new WeakMap<StructuredLaunchState, StructuredAgentLaunchReceipt>()
+/** Create and the attached view read the same finite operation overlay. */
+export function structuredLaunchOptionOverlay(
+  state: StructuredLaunchState
+): Record<string, string> {
+  return selectionController(state).overlay()
 }
 
-/**
- * Records a pick made while the launch has no fence to send it against. Null once the launch
- * has published or is gone: the pick then goes through the session like any other.
- */
+/** Hold picks only before publication; published/missing launches use the normal session option path. */
 export function holdStructuredAgentSessionLaunchOption(
   sessionId: string,
   id: string,
   encoded: string,
   /** The picker's list, under which a model pick keeps only the held values the model offers. */
-  picker?: Pick<StructuredAgentSessionOptionState, 'catalog' | 'verifiedModelIds'>
+  picker?: StructuredAgentSessionOptionState
 ): Promise<StructuredLaunchOptionOutcome> | null {
   const state = getStructuredLaunchStateBySessionId(sessionId)
   if (!state || state.cancelled || state.callers.outcome === 'published') {
@@ -89,138 +100,166 @@ export function holdStructuredAgentSessionLaunchOption(
   if (state.selection.seedPending) {
     return null
   }
-  const replies = repliesFor(state)
-  const held: Record<string, string> = {}
-  // Each held value is the chat's own: a pick supersedes an earlier pick of the same option.
-  for (const [key, value] of Object.entries(state.selection.held)) {
-    const offered =
-      id !== 'model' || !picker || structuredAgentSessionModelOffers(picker, encoded, key, value)
-    if (key !== id && offered) {
-      held[key] = value
-    } else {
-      replies.get(key)?.({ kind: 'superseded' })
-      replies.delete(key)
-    }
+  const model = picker
+    ? (structuredAgentSessionOptionPicks(picker, { [id]: encoded })[0]?.modelId ?? null)
+    : (state.selection.seed?.model ?? null)
+  const operation = selectionController(state).issue(id, encoded, model)
+  const receipt = receipts.get(state)
+  if (receipt) {
+    void applyStructuredLaunchHeldOptions(state, receipt, false)
   }
-  state.selection = { ...state.selection, held: { ...held, [id]: encoded } }
-  notifyStructuredLaunchListeners()
-  return new Promise((resolve) => replies.set(id, resolve))
+  return operation.result
 }
 
-async function setLaunchOption(
+export async function setStructuredSessionSelectionOption(
   target: RuntimeClientTarget,
   sessionId: string,
   fence: number,
   key: string,
-  value: string
+  value: string,
+  options: { expectedEnvironmentPairingRevision?: number } = {}
 ): Promise<StructuredLaunchOptionOutcome> {
   const fields = { key, value }
   try {
     const result = await callStructuredAgentSession<
       AgentSessionMutationResult<AgentSessionOptionResult>
-    >(target, 'agentSession.setOption', {
-      envelope: {
-        sessionId,
-        clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid),
-        expectedRuntimeFence: fence,
-        payloadFingerprint: structuredAgentSessionPayloadFingerprint({
-          method: 'agentSession.setOption',
+    >(
+      target,
+      'agentSession.setOption',
+      {
+        envelope: {
           sessionId,
-          fields
-        })
+          clientOperationId: createStructuredAgentSessionOperationId(createBrowserUuid),
+          expectedRuntimeFence: fence,
+          payloadFingerprint: structuredAgentSessionPayloadFingerprint({
+            method: 'agentSession.setOption',
+            sessionId,
+            fields
+          })
+        },
+        ...fields
       },
-      ...fields
-    })
+      options
+    )
     return result.ok
-      ? { kind: 'accepted', options: result.value.options ?? { [key]: value } }
+      ? acceptedStructuredSessionSelectionOutcome(fields, result.value.options)
       : { kind: 'refused', failure: agentSessionRefusalFailure(result.refusal) }
   } catch (error) {
-    return {
-      kind: 'refused',
-      failure: agentSessionThrownFailure(
-        error,
-        error instanceof RuntimeRpcCallError ? error.code : undefined
-      )
-    }
+    const failure = agentSessionThrownFailure(
+      error,
+      error instanceof RuntimeRpcCallError ? error.code : undefined
+    )
+    return failure.kind === 'unconfirmed'
+      ? { kind: 'unknown', failure }
+      : { kind: 'refused', failure }
   }
 }
 
-function settleHeldOption(
+const prerequisites = new WeakMap<StructuredLaunchState, LegacyPrerequisites>()
+
+/** One action decision per create attempt; picker settlement still belongs to its controller. */
+export async function applyStructuredLaunchExplicitOptions(
   state: StructuredLaunchState,
-  id: string,
-  encoded: string,
-  outcome: StructuredLaunchOptionOutcome
-): void {
-  const {
-    held: { [id]: current, ...rest },
-    seed
-  } = state.selection
-  // A pick made while this one was in flight superseded it and stays held for the next pass.
-  const settled = current === encoded
-  state.selection = {
-    seed: outcome.kind === 'accepted' ? { ...seed, ...outcome.options } : seed,
-    held: settled ? rest : state.selection.held
+  receipt: StructuredAgentLaunchReceipt
+): Promise<StructuredAgentLaunchReceipt> {
+  let phase = prerequisites.get(state)
+  if (!phase || phase.intent !== state.intent) {
+    const controller = selectionController(state)
+    const intent = state.intent
+    phase = createLegacyPrerequisites(
+      state,
+      controller,
+      (key, value) =>
+        controller.request((options) =>
+          setStructuredSessionSelectionOption(
+            intent.target,
+            receipt.sessionId,
+            receipt.fence,
+            key,
+            value,
+            options
+          )
+        ),
+      () => {
+        void applyStructuredLaunchHeldOptions(state, receipt, false)
+      }
+    )
+    prerequisites.set(state, phase)
+    receipts.set(state, receipt)
+    phase.advance?.()
   }
-  if (settled) {
-    const replies = repliesFor(state)
-    replies.get(id)?.(outcome)
-    replies.delete(id)
-  }
-  notifyStructuredLaunchListeners()
-  state.callers.onSettled()
+  const failure = await phase.decision
+  return failure ? { ...receipt, configurationFailure: failure } : receipt
 }
 
-const createHeld = new WeakMap<StructuredLaunchState, Readonly<Record<string, string>>>()
+const createHeld = new WeakMap<StructuredLaunchState, readonly SelectionOperation[]>()
 
-/** The held picks this create attempt carries, in whatever form it carries them. */
-export function holdStructuredLaunchCreatePicks(
-  state: StructuredLaunchState,
-  held: Readonly<Record<string, string>>
-): void {
-  createHeld.set(state, held)
+/** Freeze identities, so a later equal-valued choice is a distinct operation. */
+export function holdStructuredLaunchCreatePicks(state: StructuredLaunchState): void {
+  createHeld.set(state, selectionController(state).freeze(createHeld.get(state)))
 }
 
-/** Selections included in the durable create are already the host's option intent; a pick the
- *  create carried in another form settles too, and a newer pick stays held. */
 export function settleStructuredLaunchCreateOptions(
   state: StructuredLaunchState,
   options: Readonly<Record<string, string>>
 ): void {
-  const carried = { ...options, ...createHeld.get(state) }
-  createHeld.delete(state)
-  for (const [id, encoded] of Object.entries(carried)) {
-    settleHeldOption(state, id, encoded, { kind: 'accepted', options })
+  for (const operation of createHeld.get(state) ?? []) {
+    selectionController(state).settle(operation, { kind: 'accepted', options })
   }
+  createHeld.delete(state)
 }
 
-/**
- * Applies the picks held during launch against the create receipt's fence, model first so an
- * effort lands under the model it was picked against, until none is left. A refused pick is
- * reported to its picker and never keeps the launch from publishing.
- */
+/** All desktop senders enroll launch prerequisites before the actual operation request. */
+export function flushStructuredSessionSelectionOptions(
+  target: RuntimeClientTarget,
+  sessionId: string,
+  fence: number,
+  controller: ReturnType<typeof structuredSessionSelectionController>
+): Promise<AgentSessionWriteFailure | undefined> | undefined {
+  const state = getStructuredLaunchStateBySessionId(sessionId)
+  const phase =
+    state && launchControllers.get(state) === controller ? prerequisites.get(state) : undefined
+  if (phase?.advance && phase.intent === state?.intent) {
+    phase.advance()
+    return phase.decision
+  }
+  controller.flush((operation) =>
+    controller.request((options) =>
+      setStructuredSessionSelectionOption(
+        target,
+        sessionId,
+        fence,
+        operation.key,
+        operation.value,
+        options
+      )
+    )
+  )
+  return undefined
+}
+
+/** Enqueue the current batch before attachment; later picks use this same ordered sender. */
 export async function applyStructuredLaunchHeldOptions(
   state: StructuredLaunchState,
-  receipt: StructuredAgentLaunchReceipt
+  receipt: StructuredAgentLaunchReceipt,
+  waitForDrain = true
 ): Promise<StructuredAgentLaunchReceipt> {
-  for (;;) {
-    if (state.cancelled) {
-      throw new StructuredAgentSessionLaunchCancelledError()
+  receipts.set(state, receipt)
+  const controller = selectionController(state)
+  const decision = flushStructuredSessionSelectionOptions(
+    state.intent.target,
+    receipt.sessionId,
+    receipt.fence,
+    controller
+  )
+  if (waitForDrain) {
+    if (decision) {
+      const failure = await decision
+      return failure ? { ...receipt, configurationFailure: failure } : receipt
     }
-    const { held } = state.selection
-    const id = STRUCTURED_LAUNCH_OPTION_IDS.find((key) => held[key] !== undefined)
-    const encoded = id ? held[id] : undefined
-    if (!id || encoded === undefined) {
-      return receipt
-    }
-    const outcome = await setLaunchOption(
-      state.intent.target,
-      state.intent.sessionId,
-      receipt.fence,
-      id,
-      encoded
-    )
-    settleHeldOption(state, id, encoded, outcome)
+    await controller.drain()
   }
+  return receipt
 }
 
 export function getStructuredAgentSessionLaunchSelection(

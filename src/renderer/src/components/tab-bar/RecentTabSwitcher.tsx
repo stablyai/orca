@@ -4,6 +4,11 @@ import { FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
 import { useAppStore } from '../../store'
 import { activateCyclableTab } from '../../hooks/ipc-tab-switch'
 import { getShortcutPlatform } from '../../hooks/useShortcutLabel'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import {
+  activateFloatingWorkspaceCyclableTab,
+  isFloatingWorkspacePanelFocused
+} from '@/lib/floating-workspace-terminal-actions'
 import {
   isRecentTabSwitcherCommitRelease,
   matchesRecentTabSwitcherChord
@@ -21,6 +26,7 @@ import { cn } from '@/lib/utils'
 type SwitcherState = {
   items: RecentTabSwitcherItem[]
   selectedIndex: number
+  targetWorktreeId: string
 }
 
 function consumeKeyboardEvent(event: KeyboardEvent): void {
@@ -58,20 +64,24 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
   const openOrAdvance = useCallback(
     (direction: 1 | -1): void => {
       const store = useAppStore.getState()
-      if (store.activeView !== 'terminal' || !store.activeWorktreeId) {
+      const current = switcherRef.current
+      const targetWorktreeId =
+        current?.targetWorktreeId ??
+        (isFloatingWorkspacePanelFocused() ? FLOATING_TERMINAL_WORKTREE_ID : store.activeWorktreeId)
+      const isFloating = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
+      if ((!isFloating && store.activeView !== 'terminal') || !targetWorktreeId) {
         return
       }
 
       const model = buildRecentTabSwitcherModel(
         store,
-        store.activeWorktreeId,
+        targetWorktreeId,
         normalizeCtrlTabOrderMode(store.settings?.ctrlTabOrderMode)
       )
       if (!model) {
         return
       }
 
-      const current = switcherRef.current
       const selectedKey = current?.items[current.selectedIndex]?.key ?? null
       const currentIndex =
         selectedKey == null
@@ -82,7 +92,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         currentIndex,
         direction
       )
-      setSwitcherState({ items: model.items, selectedIndex })
+      setSwitcherState({ items: model.items, selectedIndex, targetWorktreeId })
     },
     [setSwitcherState]
   )
@@ -94,7 +104,12 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
     if (!selected) {
       return
     }
-    activateCyclableTab(useAppStore.getState(), selected)
+    const store = useAppStore.getState()
+    if (current.targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID) {
+      activateFloatingWorkspaceCyclableTab(store, selected)
+    } else {
+      activateCyclableTab(store, selected)
+    }
   }, [setSwitcherState])
 
   const cancel = useCallback((): void => {
@@ -116,9 +131,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
     const onKeyDown = (event: KeyboardEvent): void => {
       const store = useAppStore.getState()
       if (matchesRecentTabSwitcherChord(event, getShortcutPlatform(), store.keybindings)) {
-        // Why: Electron's native before-input-event path is authoritative, but
-        // CDP/test-dispatched keys can reach the renderer directly. Respect the
-        // keybinding registry here too so tests do not bypass user customization.
+        // Respect configured bindings for renderer-dispatched keys that bypass Electron’s native input path.
         consumeKeyboardEvent(event)
         openOrAdvance(event.shiftKey ? -1 : 1)
         return

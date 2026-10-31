@@ -170,9 +170,7 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     })
   })
 
-  // A hook row carries no incarnation of its own, so a row replayed after a runtime restart
-  // is indistinguishable from a current one by pane and handle alone. The pane's incarnation
-  // at mint time is what says which process the evidence is about.
+  // Hook rows have no incarnation; capture the pane's at mint time to distinguish pre-restart evidence.
   it('refuses a replayed row once the pane runs a different incarnation', () => {
     const page = projectFleetWorkerPage(
       createRuntime({ handleForPane: TERMINAL_HANDLE, incarnationForHandle: 'pty-fleet:inc-2' }),
@@ -199,8 +197,7 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     })
   })
 
-  // The positive control the fail-closed tightening owes: once the rebind lands on the
-  // incarnation the durable resource named, the same pane reads live again.
+  // Once the rebind matches the durable incarnation, the same pane must become live again.
   it('reads live again once the rebind restores the durable incarnation', () => {
     const page = projectFleetWorkerPage(
       createRuntime({ handleForPane: TERMINAL_HANDLE, incarnationForHandle: PROCESS_INCARNATION }),
@@ -211,10 +208,7 @@ describe('local fleet liveness from a hook row that carries only a pane key', ()
     expect(page?.workers[0]?.liveness).toMatchObject({ verdict: 'live', source: 'agent_status' })
   })
 
-  // HEAD accepted a reminted pane on `Boolean(resource.processIncarnation)` — presence, not
-  // equality — so a dispatch-labelled row from the previous incarnation bound to the new worker.
-  // The row must be published for a DIFFERENT pane than the worker names, or the remint arm of
-  // the matcher never runs and the case proves only the incarnation guard.
+  // Use a different pane to exercise remint matching; incarnation presence alone previously bound old evidence to a new worker.
   it('refuses a reminted pane whose dispatch matches but whose incarnation does not', () => {
     const page = projectFleetWorkerPage(
       createRuntime({

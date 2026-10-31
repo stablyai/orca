@@ -17,11 +17,12 @@ import {
   writeJiraBoardIssueDragData
 } from '@/lib/jira-board-drag-payload'
 import type { JiraBoardIssueDragRef } from '@/lib/jira-board-drag-payload'
-import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira-types'
+import type { JiraIssue, JiraProjectStatusOrder } from '../../../shared/jira/jira-types'
 import {
   buildJiraBoardSections,
   type TaskPageJiraBoardSection
 } from './task-page-jira-board-sections'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function jiraBoardIssueRefKey(issue: Pick<JiraIssue, 'key' | 'siteId'>): string {
   return `${issue.siteId ?? 'site'}:${issue.key}`
@@ -130,7 +131,6 @@ export function TaskPageJiraBoard({
   }
 
   return (
-    // Jira boards can have more columns than fit the panel.
     <div className="flex min-w-0 items-start gap-3 overflow-x-auto p-3 scrollbar-sleek">
       {sections.map((section) => {
         return (
@@ -271,7 +271,7 @@ export function TaskPageJiraBoard({
                               size="icon-xs"
                               onClick={(event) => {
                                 event.stopPropagation()
-                                void window.api.shell.openUrl(issue.url)
+                                openAppHttpLink(issue.url, { event })
                               }}
                               aria-label={translate(
                                 'auto.components.TaskPage.4ac8ff2275',

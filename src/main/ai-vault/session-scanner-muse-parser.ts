@@ -29,9 +29,7 @@ type MuseRecord = {
   payload: Record<string, unknown> | null
 }
 
-// Why: `recorded_at` is microseconds since epoch; the shared timeline helpers
-// take milliseconds (or ISO strings), so convert here. Values below the
-// microsecond floor fall through to the shared parser (seconds/ISO).
+// Convert microsecond recorded_at values to milliseconds; preserve shared parsing for smaller values and ISO strings.
 function museTimestampMs(value: unknown): number | null {
   if (typeof value === 'number' && Number.isFinite(value) && value >= 1e14) {
     return Math.floor(value / 1000)
@@ -45,8 +43,7 @@ function unwrapMuseRecords(line: string): MuseRecord[] {
   if (!envelope) {
     return []
   }
-  // Why: retention markers (`retained_marker: omitted_live_only`) stand in for
-  // ephemeral records excluded from the retained log — no payload to fold.
+  // Retention markers have no payload; unwrap only retained log records.
   return unwrapMuseLogRecords(envelope).map((record) => ({
     recordType: extractString(record.record_type),
     payloadType: extractString(record.payload_type),
@@ -65,8 +62,6 @@ function firstTextBlock(value: unknown): string | null {
   return null
 }
 
-// Why: user intent arrives either as `refill_blocks` text blocks or nested
-// `model_messages[].content[]` blocks; both shapes carry the same prompt.
 function userIntentText(payload: Record<string, unknown>): string | null {
   return (
     firstTextBlock(payload.refill_blocks) ??
@@ -87,11 +82,7 @@ function foldUserTurn(
   text: string | null,
   timestampMs: number | null,
   dedupe: { text: string | null; ms: number | null },
-  // Why: each turn emits both `runtime.user_intent.accepted` and a `run ::
-  // started` carrying the same prompt ~ms apart — folding both double-counts
-  // turns and evicts real rows from the 5-message preview window. The intent
-  // record always folds; `run.started` is the fallback for logs missing intent
-  // records, so only it dedupes (a deliberately repeated prompt still counts).
+  // Deduplicate run.started fallback against accepted intent; repeated intent records still count as new turns.
   skipIfDuplicate: boolean
 ): void {
   if (!text) {
@@ -130,14 +121,12 @@ function foldMuseRecord(
   }
   switch (record.payloadType) {
     case 'runtime.session.metadata': {
-      // Why: the representative cwd is the session's start directory; later
-      // drift must not move history grouping or the resume `cd` prefix.
+      // Preserve the starting cwd for History grouping and resume commands.
       accumulator.cwd ??= extractString(asRecord(payload.record)?.workspace_root)
       break
     }
     case 'runtime.session.route_facts': {
-      // Newer Muse logs carry the execution cwd in route facts as well as
-      // metadata; retain it as a fallback for partially written sessions.
+      // Route facts provide a cwd fallback when session metadata has not been written.
       accumulator.cwd ??= extractString(asRecord(payload.record)?.cwd)
       break
     }

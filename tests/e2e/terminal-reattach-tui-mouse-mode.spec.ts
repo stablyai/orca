@@ -1,8 +1,4 @@
-/**
- * Regression proof for #8291: a real alt-screen TUI survives an Orca quit/relaunch, and after the
- * warm reattach a drag over it must still go to the TUI as mouse reports, not to xterm's row
- * selection. Drives the rendered surface only — no mocks, no direct mode assertions.
- */
+// #8291: after quit/relaunch, real alt-screen TUI drag/wheel must remain mouse reports rather than xterm row selection.
 
 import { execFileSync } from 'node:child_process'
 import { mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
@@ -25,12 +21,10 @@ const VISIBLE_TUI_FIXTURE_PATH = path.join(
   'tests/e2e/fixtures/visible-tui-scroll-fixture.cjs'
 )
 
-// One SGR wheel-down report, as the fixture's stdin parser expects it. Doubles as a settle beacon:
-// only post-relaunch bytes can repaint `offset=1`, so seeing it proves the reattach replay landed.
+// Send the fixture’s wheel-down report; only post-relaunch bytes can repaint offset=1, fencing replay/reset completion.
 const WHEEL_DOWN_REPORT = '\x1b[<65;10;10M'
 
-// Why not the shared seeded repo: a concurrent e2e globalTeardown deletes whatever repo the
-// machine-global pointer file names, which could be this one mid-restart.
+// Own the seed repo: concurrent globalTeardown can delete the machine-global pointer’s repo mid-restart.
 function createIsolatedProofRepo(): string {
   // Why realpathSync: macOS tmpdir symlinks through /private and Orca canonicalizes repo.path.
   const repoDir = realpathSync(mkdtempSync(path.join(os.tmpdir(), 'orca-mouse-reattach-repo-')))
@@ -55,8 +49,7 @@ type TerminalSurface = {
   screen: { left: number; top: number; width: number; height: number; cellHeight: number }
 }
 
-// Why one evaluate for everything: it flushes xterm's write queue first, so a caller can never
-// sample mode/selection state mid-replay.
+// Flush xterm’s write queue and sample in one evaluate to avoid mid-replay mode/selection reads.
 async function readTerminalSurface(page: Page): Promise<TerminalSurface | null> {
   return page.evaluate(async () => {
     const state = window.__store?.getState()
@@ -74,8 +67,7 @@ async function readTerminalSurface(page: Page): Promise<TerminalSurface | null> 
     if (!pane || !element || !screenElement) {
       return null
     }
-    // Why a zero-length write: xterm's write queue is FIFO, so this callback fires only after
-    // every earlier replay/reset write was parsed.
+    // An empty write callback fences all earlier FIFO replay/reset writes.
     await new Promise<void>((resolve) => {
       const timer = setTimeout(resolve, 3000)
       pane.terminal.write('', () => {
@@ -145,8 +137,7 @@ async function dragAcrossTuiRows(page: Page, screen: TerminalSurface['screen']):
   await page.mouse.up()
 }
 
-// Why: this suite quits and relaunches Orca against one userDataDir, and the
-// second launch must find the daemon (and the TUI it owns) still alive.
+// Relaunch the same profile while its daemon and TUI remain alive.
 test.describe.configure({ mode: 'serial' })
 
 test.describe('terminal reattach mouse mode', () => {
@@ -158,7 +149,6 @@ test.describe('terminal reattach mouse mode', () => {
     let secondApp: ElectronApplication | null = null
 
     try {
-      // ── First launch: a real TUI arms mouse reporting ──────────────────
       const firstLaunch = await session.launch()
       firstApp = firstLaunch.app
       await attachRepoAndOpenTerminal(firstLaunch.page, repoPath)
@@ -183,12 +173,10 @@ test.describe('terminal reattach mouse mode', () => {
       )
       expect(beforeRestart.mouseTrackingMode).toBe('any')
 
-      // Why: the daemon is a detached fork, so closing the app leaves this PTY
-      // — and the TUI running inside it — alive for the relaunch to reattach.
+      // Closing the app leaves the detached daemon’s PTY/TUI alive.
       await session.close(firstApp)
       firstApp = null
 
-      // ── Second launch: warm reattach to the still-running TUI ──────────
       const secondLaunch = await session.launch()
       secondApp = secondLaunch.app
       await waitForSessionReady(secondLaunch.page)
@@ -200,10 +188,7 @@ test.describe('terminal reattach mouse mode', () => {
         window.__store?.getState().updateSettings({ terminalTuiScrollSensitivity: 1 })
       )
 
-      // Beacon: drive one report straight down the PTY so the TUI repaints
-      // `offset=1`. That row can only reach the pane through the reattach
-      // stream, so its arrival is the deterministic "replay + reset applied"
-      // point — no sleep needed before sampling the modes.
+      // Require the wheel beacon’s offset=1 repaint to prove replay/reset completion without sleep.
       const secondPtyId = await waitForActivePanePtyId(secondLaunch.page)
       await sendToTerminal(secondLaunch.page, secondPtyId, WHEEL_DOWN_REPORT)
       const afterReattach = await waitForTerminalSurface(
@@ -212,12 +197,9 @@ test.describe('terminal reattach mouse mode', () => {
         'Reattached pane never rendered the live TUI repaint after the restart'
       )
 
-      // ── The reported symptom: drag now paints a selection over the TUI ──
       await dragAcrossTuiRows(secondLaunch.page, afterReattach.screen)
       const afterDrag = await readTerminalSurface(secondLaunch.page)
-      // Why a screenshot and not the video fixture: this spec quits and relaunches Orca,
-      // so the recorder's WebM never flushes. This frame IS the proof — on main the drag
-      // paints an xterm row selection across the live TUI; here it must stay clean.
+      // Capture a screenshot: restart prevents video WebM flush; the frame must show no row-selection overlay on the live TUI.
       const proofShot = process.env.ORCA_E2E_PROOF_SCREENSHOT
       if (proofShot) {
         await secondLaunch.page.screenshot({ path: proofShot })
@@ -229,7 +211,6 @@ test.describe('terminal reattach mouse mode', () => {
       ).toBe('')
       expect(afterDrag!.hasSelection).toBe(false)
 
-      // ── And the wheel must still reach the TUI as mouse reports ─────────
       const wheelTargetX = afterReattach.screen.left + afterReattach.screen.width / 2
       const wheelTargetY = afterReattach.screen.top + afterReattach.screen.height / 2
       await secondLaunch.page.mouse.move(wheelTargetX, wheelTargetY)

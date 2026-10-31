@@ -1,7 +1,4 @@
-/**
- * Counts how many times each pane's terminal view (its xterm) is created in the window, so a
- * remount outside a relaunch, reload or daemon restart fails.
- */
+// Count xterm creations so remounts outside relaunch, reload or daemon restart fail.
 
 import type { Page } from '@stablyai/playwright-test'
 

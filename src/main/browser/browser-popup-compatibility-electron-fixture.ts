@@ -229,7 +229,7 @@ async function run(): Promise<void> {
   }
   phase = 'sessions'
   writeStatus()
-  // The synthetic HTTP proxy receipts prove descendants keep the opener's egress session.
+  // Proxy receipts verify that descendants retain the opener's session.
   await routeSession.setProxy({
     proxyRules: `http=${fixtureOrigin}`,
     proxyBypassRules: '<-loopback>'

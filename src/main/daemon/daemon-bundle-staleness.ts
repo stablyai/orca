@@ -48,9 +48,7 @@ export async function isDaemonStaleForCurrentBundle(
       return parsedPid.appVersion !== currentAppVersion
     }
 
-    // Why: older packaged daemons do not carry a reliable build-generation
-    // marker. Replacing them once prevents archive-preserved mtimes from
-    // reusing stale native modules across the first metadata-aware upgrade.
+    // Replace legacy daemons without build metadata; archive mtimes cannot prove native-module freshness.
     return true
   })()
   if (cacheKey) {

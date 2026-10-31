@@ -1,7 +1,4 @@
-// A Stop that ends the child after its interrupt failed: its row reports on the run it stopped, so
-// one whose child end took back the send it found, with no turn running, leaves none. A client
-// draws that send where it was sent with its own row, and a second row would sit under the turn
-// before on an older client, as if that turn were stopped.
+// Accepted Stop retains its request note even when child exit takes back the send.
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -122,35 +119,20 @@ async function stopEndingTheChild(options: {
 }
 
 describe('a Stop that ends the child after its interrupt failed', () => {
-  it('leaves no row when the child end took back the send, with no turn running', async () => {
+  it('records Stop when the child end took back the send, with no turn running', async () => {
     expect(await stopEndingTheChild({ turnRunning: false, takesSendBack: true })).toEqual({
-      cancelled: true,
-      rows: []
-    })
-  })
-
-  it('says cancellation was requested when the send stays in doubt', async () => {
-    expect(await stopEndingTheChild({ turnRunning: false, takesSendBack: false })).toEqual({
       cancelled: true,
       rows: ['Cancellation requested.']
     })
   })
 
-  // That send was never this child's to take back, so it does not keep the row.
-  it("leaves no row when the only other send in doubt was an earlier process's", async () => {
+  it("keeps Stop when the only other send in doubt was an earlier process's", async () => {
     expect(
       await stopEndingTheChild({
         turnRunning: false,
         takesSendBack: true,
         earlierProcessSendInDoubt: true
       })
-    ).toEqual({ cancelled: true, rows: [] })
-  })
-
-  it('says cancellation was requested on the turn it stopped, whatever became of the send', async () => {
-    expect(await stopEndingTheChild({ turnRunning: true, takesSendBack: true })).toEqual({
-      cancelled: true,
-      rows: ['Cancellation requested.']
-    })
+    ).toEqual({ cancelled: true, rows: ['Cancellation requested.'] })
   })
 })

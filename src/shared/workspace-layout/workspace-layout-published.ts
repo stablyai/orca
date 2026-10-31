@@ -1,7 +1,4 @@
-// What `layout.subscribe` publishes for one workspace: an explicit projection of the model, so the
-// model's internal shape is never a wire contract. Runtime records (incarnations, sleeping agents,
-// closed tabs, default-tabs marks), terminal spawn inputs and the legacy persistence record are
-// not in it; neither are content facts or any view's selection.
+// Explicit layout.subscribe wire projection includes terminal startup inputs and permits live pane titles/status. Persistence-only records and view selection stay private.
 
 import type { AgentType } from '../agent-status-types'
 import type { AiVaultSessionTitle } from '../ai-vault-session-title'
@@ -23,37 +20,26 @@ import type { LayoutEditorView } from './layout-editor-view'
 
 export type PublishedPane = {
   leafId: string
-  /** The terminal the pane shows; absent while unbound. */
+  /** Absent while unbound. */
   ptyId?: string
   /** Rises on each pty bind, retire and rollback of the pane in this process (a same-id respawn too). */
   ptyGeneration?: number
   title?: string
-  /** The title the pane's terminal shows now. Live state, never saved; the tab's title stays each
-   *  view's choice, since it follows that view's focused pane. */
+  /** Unsaved live terminal title; each view chooses its tab title from its focused pane. */
   liveTitle?: string
   /** Main's start of the pane's terminal, while it has none: live state, never saved. */
   status?: PaneStartStatus
   /** Why a start failed or is held, for the pane's card. */
   statusReason?: string
-  /** Whether main's start of the pane's terminal resumed its agent: live state, never saved, and
-   *  only while the pane keeps that terminal. Absent from older hosts and from plain starts. */
+  /** Unsaved outcome for the terminal main started; absent on older hosts/plain starts and removed when that terminal changes. */
   resumeOutcome?: PaneResumeOutcome
 }
 
-/** 'restored': main's start resumed the pane's agent. 'resume-unavailable': it could not verify the
- *  agent's session, so a fresh one runs instead. */
+/** restored: resumed the agent; resume-unavailable: unverifiable agent session forced a fresh start. */
 export type PaneResumeOutcome = 'restored' | 'resume-unavailable'
 
-/**
- * Why the pane shows no live terminal. A pane with a ptyId and no status shows that live terminal;
- * with a status, its ptyId is only the terminal it restores from, so no view attaches it yet.
- * - 'starting': main is starting the pane's terminal.
- * - 'failed': the start failed; the pane stays.
- * - 'sleeping': nothing runs; main starts it (resuming its agent, if it had one) on first view or
- *   the first command that needs it.
- * - 'resuming': main is starting it from its saved terminal or agent.
- * - 'held': a newer Orca build's terminal service may still run it, so main will not start it.
- */
+/** A status means no view may attach ptyId yet: it names restore input.
+ * starting/resuming: main is starting; failed: start failed; sleeping: resume on first view/use; held: a newer terminal service may still run it. */
 export type PaneStartStatus = 'starting' | 'failed' | 'sleeping' | 'resuming' | 'held'
 
 export type PublishedTerminal = {
@@ -61,7 +47,7 @@ export type PublishedTerminal = {
   /** In tree order. */
   panes: PublishedPane[]
   chatLeafId?: string
-  /** "Terminal N", the title shown when no other title is set. */
+  /** Fallback "Terminal N" title. */
   defaultTitle?: string
 } & Pick<
   LayoutTerminalCreation,
@@ -106,16 +92,15 @@ export type PublishedBrowserTab = Omit<LayoutBrowserTab, 'createdAt'> & { create
 /** Addressed by its workspace key alone; which partition owns it stays the host's routing. */
 export type PublishedWorkspaceLayout = {
   worktreeId: string
-  /** In the one tab order. */
+  /** In canonical tab order. */
   groups: { id: string; tabIds: string[] }[]
   groupLayout?: TabGroupLayoutNode
-  /** In the one tab order. */
+  /** In canonical tab order. */
   tabs: PublishedTab[]
   editorFiles: PublishedEditorFile[]
   browserTabs: PublishedBrowserTab[]
 }
 
-/** An editor tab's view as main publishes it. */
 export function publishEditorView(editorView: LayoutEditorView): LayoutEditorView {
   const { file } = editorView
   return {
@@ -129,7 +114,6 @@ export function publishEditorView(editorView: LayoutEditorView): LayoutEditorVie
   }
 }
 
-/** An editor file record as main publishes it. */
 export function publishEditorFile(file: LayoutEditorFile): PublishedEditorFile {
   return {
     filePath: file.filePath,

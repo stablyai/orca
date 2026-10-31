@@ -6,14 +6,7 @@ import {
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 
-/**
- * This host's agent health snapshot, as its availability stream last published it; every + menu on
- * any of its workspaces reads this one projection. Keyed by host, runtime instance and pairing, so a
- * restarted or re-paired host reads as not ready until it answers, while a reconnect keeps it.
- *
- * A received snapshot is kept without readers and through lost contact. A first failure has no
- * roster; unlike a received empty frame, it says nothing about which agents this host registered.
- */
+/** One agent-health projection per host/runtime/pairing serves all workspace menus. Restart/re-pair needs a new answer; reconnect/lost readers retain received snapshots. Initial failure has no roster and differs from a received empty frame. */
 export type HostStructuredAgentAvailability =
   | { state: 'pending' | 'unavailable' }
   | { state: 'received'; byAgent: ReadonlyMap<string, AgentSessionAgentAvailability> }
@@ -30,6 +23,7 @@ type Resource = {
   executionHostId: string
   holders: number
   model: HostStructuredAgentAvailability
+  first?: Promise<void>
   /** Set while a stream is open; a lost one reopens on the next acquire, keeping the model. */
   close: (() => void) | null
 }
@@ -51,14 +45,18 @@ function availabilityKey(
 }
 
 function open(key: string, resource: Resource, target: RuntimeClientTarget): void {
+  const { promise, resolve: settled } = Promise.withResolvers<void>()
+  resource.first = promise
   let unsubscribe: (() => void) | null = null
   const close = (): void => {
     resource.close = null
+    settled()
     unsubscribe?.()
   }
   // Only this open's stream, while its entry is current, may publish or be lost.
   const live = (): boolean => resources.get(key) === resource && resource.close === close
   const settle = (byAgent: ReadonlyMap<string, AgentSessionAgentAvailability>): void => {
+    settled()
     resource.model = { state: 'received', byAgent }
     publish()
   }
@@ -124,7 +122,7 @@ export function acquireHostStructuredAgentAvailability(
     }
     released = true
     held.holders -= 1
-    // Why a microtask: a holder that re-acquires in the same commit keeps the stream it has.
+    // Same-commit reacquisition must retain the stream; defer last-holder close to a microtask.
     queueMicrotask(() => {
       if (held.holders === 0) {
         held.close?.()
@@ -150,4 +148,14 @@ export function subscribeHostStructuredAgentAvailability(listener: () => void): 
   return () => {
     listeners.delete(listener)
   }
+}
+
+/** Settlement belongs to this open, even while an older snapshot is retained. */
+export function firstHostStructuredAgentAvailability(
+  owner: HostStructuredAgentAvailabilityOwner
+): Promise<void> {
+  return (
+    resources.get(availabilityKey(owner.executionHostId, owner.runtimeId, owner.pairingRevision))
+      ?.first ?? Promise.resolve()
+  )
 }

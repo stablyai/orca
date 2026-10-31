@@ -1,6 +1,6 @@
 import type { MessagePriority, MessageRow, MessageType } from './orca-runtime-test-mocks.spec'
 
-// Why: these tests only need message-queue semantics; real SQLite would make them fail on unrelated native runtime ABI drift.
+// Test message semantics in memory to avoid unrelated SQLite native ABI failures.
 export class InMemoryOrchestrationMessages {
   private sequence = 0
 
@@ -224,7 +224,17 @@ export class InMemoryOrchestrationMessages {
   ):
     | { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }
     | undefined {
-    return [...this.runs.values()].find((run) => run.coordinator_pane_key === paneKey)
+    return this.runsBoundToPane(paneKey)[0]
+  }
+
+  runsBoundToPane(
+    paneKey: string
+  ): { id: string; coordinator_handle: string | null; coordinator_pane_key: string | null }[] {
+    return [...this.runs.values()].filter((run) => run.coordinator_pane_key === paneKey)
+  }
+
+  listSessionDispatchesForPresentation(): never[] {
+    return []
   }
 
   listWorkerTerminalReleaseBacklog(): never[] {

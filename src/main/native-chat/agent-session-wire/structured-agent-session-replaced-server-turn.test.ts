@@ -1,3 +1,5 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import {
@@ -11,7 +13,7 @@ import {
   completedStructuredAgentTurnSeconds,
   selectStructuredAgentTurnTimings
 } from '../../../shared/structured-agent-session-turn-timing'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { beginAgentSessionRuntimeIncarnationForTest } from '../../runtime/agent-session-runtime-attribution'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
@@ -40,7 +42,6 @@ const TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'cut-turn',
 const REPLY = { ...TURN, ordinal: 1 }
 const NEXT_TURN = { provider: 'codex' as const, threadId: THREAD, turnId: 'next-turn', ordinal: 2 }
 const NEXT_REPLY = { ...NEXT_TURN, ordinal: 3 }
-// The provider's identity cannot be proven either way: the recovery releases it with no proof.
 const UNPROVABLE: AgentSessionOwnerProbe = { outcome: 'indeterminate', reason: 'probe unavailable' }
 
 let rig: RestTestRig
@@ -53,7 +54,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
 async function streamThenServerKilled(): Promise<void> {
@@ -94,7 +95,7 @@ async function streamThenServerKilled(): Promise<void> {
   }
 }
 
-/** The server dies with no exit seen and no settle; a server process starts on the same host. */
+/** Restart after runtime death without observed exit or settlement. */
 async function startServer(options: { newProcess: boolean }): Promise<void> {
   const old = rig.host
   old.stopDelivery()
@@ -103,12 +104,12 @@ async function startServer(options: { newProcess: boolean }): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   if (options.newProcess) {
     beginAgentSessionRuntimeIncarnationForTest()
   }
   rig.clock.now = RESTARTED_AT
-  rig.store = await openTestAgentSessionRecordStore(rig.root)
+  rig.store = await openTestAgentSessionRecordStore(rig.root, { legacySessionTabIds: [SESSION] })
   rig.host = new StructuredAgentSessionHost({
     ...old.deps,
     store: rig.store,
@@ -150,12 +151,11 @@ describe('a server replaced mid-turn on the same execution host', () => {
   it('interrupts the cut turn at its last saved output with no provider identity left', async () => {
     await streamThenServerKilled()
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     await expectCutTurnSettledOnce()
 
     await rig.host.reconcileRestartLeases()
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
-    // Nothing proved the provider gone: the lease keeps no death and no identity.
     const lease = rig.store.getRecord(SESSION)?.lease
     expect(lease).toMatchObject({ claimStatus: 'released', deathEvidence: null })
     expect(lease?.ownerProcess).toBeNull()
@@ -209,21 +209,21 @@ describe('a server replaced mid-turn on the same execution host', () => {
 
   it('revises a turn an earlier start left unverifiable once a new server replaces its owner', async () => {
     await streamThenServerKilled()
-    // The same process reopening its store replaced no runtime: nothing proves the turn over.
+    // Reopening in the same process replaces no runtime and proves no turn end.
     await startServer({ newProcess: false })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     await rig.host.reconcileRestartLeases()
     await rig.host.collaboratorsForTests().serialize(SESSION, async () => {})
     const left = turnsOf((await rig.host.journalSnapshot(SESSION)).items)
     expect(left).toEqual([expect.objectContaining({ state: 'unverifiable' })])
 
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     await expectCutTurnSettledOnce()
 
     const settled = await rig.host.journalSnapshot(SESSION)
     await startServer({ newProcess: true })
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     expect((await rig.host.journalSnapshot(SESSION)).items).toEqual(settled.items)
   })
 
@@ -232,9 +232,13 @@ describe('a server replaced mid-turn on the same execution host', () => {
       deps: Omit<StructuredAgentSessionConversationOpenDeps, 'store'>,
       record: AgentSessionRecord
     ) => {
-      void openStructuredAgentSessionConversationJournal(deps, record, { acquisition: true })
+      void openStructuredAgentSessionConversationJournal(
+        deps,
+        agentSessionConversationView(record),
+        { acquisition: true }
+      )
       // @ts-expect-error a reader open settles, so without the store its turns would stay unverifiable
-      void openStructuredAgentSessionConversationJournal(deps, record)
+      void openStructuredAgentSessionConversationJournal(deps, agentSessionConversationView(record))
     }
     expect(open).toBeTypeOf('function')
   })

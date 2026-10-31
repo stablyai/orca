@@ -1,3 +1,4 @@
+import type { BridgeTerminalToolbar } from './bridge-terminal-key'
 import type { ForegroundNudgeReason } from '../../transport/types'
 import {
   BRIDGE_EXTERNAL_LINK_GRANT,
@@ -13,35 +14,20 @@ import {
   type BridgeHapticsKind
 } from './bridge-haptics-notify'
 import { captureBridgeError } from './bridge-error-capture'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import {
+  BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+  BRIDGE_TERMINAL_KEY_RAIL_GRANT
+} from './bridge-terminal-key'
 
-/**
- * Everything the page posts and hears nothing back about.
- *
- * Seven of the eight post through one guard, but only three reach its throw, and it is not the guard
- * `sendRequest` uses. A call before `init` is a mount-order bug and throws; a call after `close` is
- * an unmounting screen posting one more nudge on its way out, which the native clients answer
- * inertly rather than by throwing into a teardown path nobody wrote a catch for. Nothing here
- * returns a promise, so nothing here can be awaited into a rejection either.
- *
- * Only the three ungated notifies reach that throw. A grant is read off the session, so before `init`
- * there is no grant either and `navigate`, `navigate-back`, `externalLink`, `storage` and the
- * haptic answer false without asking: that is the same false they answer a shell that withheld the
- * grant, and every caller already handles it — `useRouteHandoff` pushes or goes back inside the
- * page instead, where a throw would take down a tap handler nobody wrapped.
- *
- * `notifyPageFault` reads the session instead of requiring it for a different reason: its one caller
- * is an error boundary, and a report that threw would replace the page's last word with an error
- * nobody catches.
- */
+// Ungated calls before init expose mount-order bugs; calls after close stay inert for teardown compatibility. Gated calls return false when no session/grant exists.
+// Fault reporting must never throw from its error-boundary caller; it reads the session without requiring one.
 export type BridgeClientNotificationDeps = {
-  /** False when the frame never left the page. */
   send: (frame: BridgeClientMessage) => boolean
-  /** Throws when `init` has not landed. */
   requireSession: () => void
   isClosed: () => boolean
-  /** What `init.grants.native` named. A grant the shell did not give is a frame it would refuse. */
   hasGrant: (name: string) => boolean
 }
 
@@ -51,14 +37,20 @@ export type BridgeClientNotifications = {
     viewport: { cols: number; rows: number }
   ) => void
   notifyForeground: (reason?: ForegroundNudgeReason) => void
-  notifyNavigate: (href: string) => boolean
+  notifyNavigate: (href: string, replace?: boolean) => boolean
   notifyNavigateBack: () => boolean
   notifyExternalLink: (url: string) => boolean
   notifyStorageWrite: (key: string, value: string | null) => boolean
   notifyHaptics: (kind: BridgeHapticsKind) => boolean
+  notifyLivenessProbe: () => void
   notifyPageFault: (error: unknown) => boolean
   notifyPagePainted: () => void
   notifyBackClaim: (claimed: boolean) => void
+  notifyTerminalKeyRailClaim: (
+    claimed: boolean,
+    inputOwner?: string,
+    toolbar?: BridgeTerminalToolbar
+  ) => void
 }
 
 export function createBridgeClientNotifications(
@@ -88,24 +80,26 @@ export function createBridgeClientNotifications(
         ...(reason === undefined ? {} : { reason })
       })
     },
-    // The one that answers: `notify` is closed, so a shell that granted no `navigate` would refuse
-    // the whole frame, and a tap handler needs to know that before it decides it has navigated.
-    notifyNavigate: (href) =>
+    // Check grants before reporting navigation accepted; the closed shell notify union would otherwise drop the frame.
+    notifyNavigate: (href, replace = false) =>
       deps.hasGrant('navigate') &&
-      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'navigate', href }),
-    // The same grant, read under the same name: `navigate-back` is a verb of `navigate` and never a
-    // grant of its own, so a shell that listed it and not `navigate` has granted nothing.
+      post({
+        v: BRIDGE_PROTOCOL_VERSION,
+        type: 'notify',
+        name: 'navigate',
+        href,
+        ...(replace ? { replace: true } : {})
+      }),
+    // navigate-back uses the navigate grant; a same-named grant is not a capability this protocol declares.
     notifyNavigateBack: () =>
       deps.hasGrant('navigate') &&
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_NAVIGATE_BACK_NOTIFY }),
-    // Checked here as well as at the frame, because the answer is what the caller reports: a page
-    // that posted a refused URL would be told the frame left and show a tap that went nowhere.
+    // Reject URL schemes before posting so false tells the caller its tap went nowhere.
     notifyExternalLink: (url) => {
       if (!deps.hasGrant(BRIDGE_EXTERNAL_LINK_GRANT)) {
         return false
       }
-      // The parser's URL goes on the wire, never the caller's string: the two differ for anything
-      // carrying a stripped tab or newline, and the shell would open what the parser read anyway.
+      // Send the normalized URL the parser checked; stripped controls can make it differ from caller text.
       const target = readBridgeExternalLinkUrl(url)
       if (target === null) {
         return false
@@ -117,16 +111,17 @@ export function createBridgeClientNotifications(
         url: target
       })
     },
-    // The page's writes reach the app's own store, which is the only store it has: its `localStorage`
-    // is off on Android and per-session on iOS, so a pin kept there would forget itself on remount.
+    // Use native app storage: Android disables page localStorage and iOS scopes it to the session, so page-local pins would vanish on remount.
     notifyStorageWrite: (key, value) =>
       deps.hasGrant('storage') &&
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: 'storage', key, value }),
-    // The answer is returned and never logged: a warning per refused frame would be one per row of
-    // a scrolling list, and a tap that did not buzz is every tap on every phone before this page.
+    // Return haptic refusal without logging per-row warnings.
     notifyHaptics: (kind) =>
       deps.hasGrant(BRIDGE_HAPTICS_GRANT) &&
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_HAPTICS_NOTIFY, kind }),
+    notifyLivenessProbe: () => {
+      post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_LIVENESS_PROBE_NOTIFY })
+    },
     notifyPageFault: (error) => {
       if (deps.isClosed() || !deps.hasGrant(BRIDGE_FAULT_GRANT)) {
         return false
@@ -138,12 +133,24 @@ export function createBridgeClientNotifications(
         error: captureBridgeError(error)
       })
     },
-    // Not on a grant: every session takes it, and a page that has painted has nothing else to do.
     notifyPagePainted: () => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_PAGE_PAINTED })
     },
     notifyBackClaim: (claimed) => {
       post({ v: BRIDGE_PROTOCOL_VERSION, type: 'notify', name: BRIDGE_BACK_CLAIM_NOTIFY, claimed })
+    },
+    // Only to a shell that granted the rail: any other refuses the name, and has no rail to draw.
+    notifyTerminalKeyRailClaim: (claimed, inputOwner, toolbar) => {
+      if (deps.hasGrant(BRIDGE_TERMINAL_KEY_RAIL_GRANT)) {
+        post({
+          v: BRIDGE_PROTOCOL_VERSION,
+          type: 'notify',
+          name: BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+          ...(inputOwner === undefined ? {} : { inputOwner }),
+          ...(toolbar === undefined ? {} : { toolbar }),
+          claimed
+        })
+      }
     }
   }
 }

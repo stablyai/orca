@@ -52,6 +52,12 @@ describe('who holds a pane’s terminal, by its foreground process group', () =>
       pane(200, [{ pid: 200, ppid: 101, pgid: 200, stat: 'S+', command: 'bash ./start-agent.sh' }]),
       'shell'
     ],
+    // A pane looping short commands: our own child, already exiting, prints `(comm)` in ps too.
+    [
+      'the pane’s own exiting command',
+      pane(200, [{ pid: 200, ppid: 101, pgid: 200, stat: 'SE+', command: '(git)' }]),
+      'agent'
+    ],
     [
       'an agent stopped in the background',
       pane(101, [{ pid: 200, ppid: 101, pgid: 200, stat: 'T', command: '/opt/bin/claude' }]),
@@ -64,7 +70,12 @@ describe('who holds a pane’s terminal, by its foreground process group', () =>
   it.each([
     ['the root is not on the terminal', pane(101, []).slice(1)],
     ['the terminal has no foreground group', pane(0, [])],
-    ['no process is in the foreground group', pane(300, [])]
+    ['no process is in the foreground group', pane(300, [])],
+    // `su` in the pane: a root shell whose argv neither the in-process reader nor ps recovered.
+    [
+      'the foreground argv is unreadable',
+      pane(200, [{ pid: 200, ppid: 101, pgid: 200, stat: 'S+', command: '(bash)' }])
+    ]
   ])('proves nothing when %s', (_label, rows) => {
     expect(judgeTerminalForeground(rows, 100, 'claude')).toBe('unknown')
   })

@@ -1,37 +1,43 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+// verify-15b: a WSL host pane's wake joined the new prompt onto the restored one.
+import { Terminal } from '@xterm/headless'
+import { describe, expect, it, vi } from 'vitest'
+import type { PtySpawnResult } from '../../../providers/pty-provider-contract'
 import type { OrcaRuntimeService } from '../../../runtime/orca-runtime'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
-import { pendingByPaneKey } from './serializer-state'
 import { seedHeadlessTerminalFromSpawnResult } from './terminal-spawn-restore'
 
-const PANE_KEY = 'tab-1:leaf-1'
+async function rowsAfter(seed: string, liveOutput: string, rows: number): Promise<string[]> {
+  const terminal = new Terminal({ cols: 40, rows, scrollback: 100, allowProposedApi: true })
+  await new Promise<void>((resolve) => terminal.write(seed + liveOutput, resolve))
+  const lines: string[] = []
+  for (let i = 0; i < terminal.buffer.active.length; i++) {
+    lines.push(terminal.buffer.active.getLine(i)?.translateToString(true).trimEnd() ?? '')
+  }
+  terminal.dispose()
+  return lines.filter((line) => line !== '')
+}
 
-describe('seedHeadlessTerminalFromSpawnResult', () => {
-  afterEach(() => {
-    pendingByPaneKey.clear()
-  })
-
-  it('seeds main’s copy from a cold restore a window has declared, only when main owns the layout', () => {
+describe('seeding the host copy from a cold restore', () => {
+  it('parks the cursor below the restored history, so the new shell’s prompt has its own row', async () => {
     const seedHeadlessTerminal = vi.fn()
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seed calls only seedHeadlessTerminal.
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the seed reads only seedHeadlessTerminal from the runtime.
     const runtime = { seedHeadlessTerminal } as unknown as OrcaRuntimeService
-    pendingByPaneKey.set(PANE_KEY, { gen: 1, ownerWebContentsId: 7 })
-
-    seedHeadlessTerminalFromSpawnResult(
-      runtime,
-      { id: 'pty-1', coldRestore: { scrollback: 'history', cwd: '/w' } },
-      PANE_KEY
-    )
-
-    // Main's copy is what a view repaints from later; the window holds nothing until it paints.
-    if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-      expect(seedHeadlessTerminal).toHaveBeenCalledWith('pty-1', 'history', undefined, {
-        cwd: '/w',
-        oscLinks: undefined,
-        preferProviderIfExisting: true
-      })
-    } else {
-      expect(seedHeadlessTerminal).not.toHaveBeenCalled()
+    const result: PtySpawnResult = {
+      id: 'host-pty',
+      coldRestore: {
+        scrollback: 'user@host:~/p8$ cd deep\r\nuser@host:~/p8/deep$ ',
+        cwd: '/home/user/p8/deep',
+        cols: 40,
+        rows: 6
+      }
     }
+
+    seedHeadlessTerminalFromSpawnResult(runtime, result, null)
+
+    const [, seed] = seedHeadlessTerminal.mock.calls[0]!
+    expect(await rowsAfter(seed, 'user@host:~/p8/deep$ ', 6)).toEqual([
+      'user@host:~/p8$ cd deep',
+      'user@host:~/p8/deep$',
+      'user@host:~/p8/deep$'
+    ])
   })
 })

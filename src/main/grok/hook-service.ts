@@ -11,6 +11,10 @@ import {
 } from '../agent-hooks/installer-utils'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
+import {
+  removeGrokHookBackupEntries,
+  removeGrokHookBackupEntriesAsync
+} from './grok-hook-backup-cleanup'
 import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
 import { installRemoteGrokHook } from './grok-hook-remote-install'
 import {
@@ -37,20 +41,15 @@ import {
   recordGrokSymlinkCleanup
 } from './grok-hook-symlink-cleanup-marker'
 
-/** Test seam: the matcher string written for Pre/Post tool lifecycle hooks. */
 export function getGrokToolEventMatcherForTests(): string {
   return GROK_TOOL_EVENT_MATCHER
 }
 
 function getConfigPath(): string {
-  // Why: Grok loads trusted global hook files from $GROK_HOME/hooks/*.json
-  // (or ~/.grok when unset). Honor GROK_HOME so install/status match the same
-  // home Grok and transcript lookup use; keep Orca entries in a dedicated file
-  // so user-authored hook files stay untouched.
+  // Use Grok's selected home and a dedicated managed file so unrelated user hook files stay untouched.
   return join(resolveGrokHomeDir(), 'hooks', 'orca-status.json')
 }
 
-/** Test seam: the command registered for `scriptPath` on the current platform. */
 export function getManagedCommandForTests(scriptPath: string): string {
   return getGrokManagedCommand(scriptPath)
 }
@@ -154,12 +153,7 @@ export class GrokHookService {
       }
     }
 
-    // Why: an existing empty file is an explicit user choice, not a missing config -- the reported
-    // workaround for #15518 was emptying it by hand. Why userInitiated overrides: turning the
-    // setting back on is an equally explicit choice, and the later one. Without this the toggle
-    // silently does nothing forever and the only way back is deleting a file in a hidden directory.
-    // A symlinked empty config is also respected unless its content and file identity match the
-    // marker written by Orca's own prior cleanup.
+    // Empty configs mean user opt-out unless explicitly re-enabled or matched to Orca's own symlink-cleanup marker.
     const configIsSymlink = isSymbolicLinkSync(configPath)
     const reinstallsOwnSymlinkCleanup =
       configIsSymlink &&
@@ -236,14 +230,13 @@ export class GrokHookService {
     if (readGrokHookConfigRawSync(configPath) !== snapshot.raw) {
       return notInstalledStatus(configPath, 'Grok hook config changed during cleanup')
     }
-    // Why the symlink check: unlinking would delete the user's link, not our file. A config they
-    // symlinked into a dotfiles repo is theirs -- strip our entries and write through it instead.
-    // writeHooksJson already resolves the link, so the file they version-control stays connected.
+    // Preserve user-owned symlinks: strip entries through their target instead of unlinking the link.
     if (isOrcaOwnedRemnant(cleanup.config) && !isSymbolicLinkSync(configPath)) {
       rmSync(configPath, { force: true })
     } else {
       writeHooksJson(configPath, cleanup.config)
     }
+    removeGrokHookBackupEntries(configPath)
     return notInstalledStatus(configPath)
   }
 
@@ -292,6 +285,9 @@ export class GrokHookService {
     }
     if (updated && configIsSymlink) {
       await recordGrokSymlinkCleanup(configPath, serialized)
+    }
+    if (updated) {
+      await removeGrokHookBackupEntriesAsync(configPath)
     }
     return updated
       ? notInstalledStatus(configPath)

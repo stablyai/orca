@@ -143,7 +143,7 @@ describe('automation run view state', () => {
     ).toMatchObject({ availability: 'metadata', actionLabel: 'View run', canOpen: false })
   })
 
-  it('keeps skipped or missing-workspace runs as metadata-only history', () => {
+  it('keeps runs without a workspace as metadata-only history', () => {
     expect(
       getAutomationRunViewState({
         run: makeRun({ workspaceId: null, terminalSessionId: null }),
@@ -269,4 +269,20 @@ describe('getAutomationRerunPendingRemainingMs', () => {
       })
     ).toBe(0)
   })
+})
+
+it('opens a Chat by its recorded identity without pretending it has a terminal', () => {
+  expect(
+    getAutomationRunViewState({
+      run: makeRun({
+        sessionKind: 'chat',
+        chatSessionId: 'claude_chat',
+        terminalSessionId: null,
+        terminalPaneKey: null,
+        terminalPtyId: null
+      }),
+      workspaceExists: true,
+      terminalTargetExists: false
+    })
+  ).toMatchObject({ availability: 'chat', canOpen: true, actionLabel: 'View run' })
 })

@@ -1,3 +1,4 @@
+import { classifyTerminalCreationFailure } from '../../../../shared/terminal-start-failure'
 import type { PtyRegistrationClaim } from '../../../runtime/runtime-terminal-state-records'
 import { PaneOwnerContentionError } from './pane-spawn-operation'
 import type { Store } from '../../../persistence'
@@ -16,8 +17,7 @@ import { PtyExitProof } from '../../../pty-exit-proof'
 import { errorMessage } from '../../../../shared/error-message'
 import { retirePersistedStablePaneOwner } from './stable-owner'
 
-/** Tracks a PTY from its spawn reply, before any save: only an observed exit, or a stop on proof,
- *  removes it, so a spawn whose save or stop fails is never forgotten. */
+/** Track before saving; failed save/stop must not make a potentially live process disappear from ownership. */
 export function admitPtySpawnOwnership(
   runtime: OrcaRuntimeService | undefined,
   result: PtySpawnResult
@@ -37,8 +37,7 @@ export function admitPtySpawnOwnership(
   }
 }
 
-/** The runtime's incarnation-scoped start fence, read without failing the commit: registration
- *  reports the early exit itself. */
+/** Read incarnation-scoped early-exit proof without throwing; registration reports refusal itself. */
 function exitedBeforeAdmission(
   runtime: OrcaRuntimeService | undefined,
   result: PtySpawnResult
@@ -69,7 +68,7 @@ export async function discardUnpersistedPtySpawn(
   ) {
     return
   }
-  // Why: this candidate's exit is our cleanup, not the pane's process ending; it must keep the tab.
+  // Discard cleanup is intentional stop, not agent completion; preserve the pane tab.
   const settleStop = runtime?.intentionalPtyStops?.mark(
     result.id,
     'replaced',
@@ -94,8 +93,7 @@ export async function discardUnpersistedPtySpawn(
         ) {
           return
         }
-        // Keep ownership: the process may still run, so it reads unverifiable until it exits or an
-        // orphan sweep reaps it, never forgotten.
+        // Keep potentially live ownership as unverifiable until observed exit or successful cleanup.
         runtime?.markPtyLivenessUnverifiable?.(
           result.id,
           `discard shutdown failed: ${errorMessage(error)}`
@@ -112,11 +110,12 @@ export async function discardUnpersistedPtySpawn(
   }
 }
 
-// Successful registration must not yield before the remaining spawn publication.
+// Successful registration must remain synchronous through spawn publication.
 export function registerPersistedPtySpawn(
   runtime: OrcaRuntimeService | undefined,
   store: Store | undefined,
   claim: PtyRegistrationClaim | undefined,
+  result: PtySpawnResult | undefined,
   ...args: Parameters<OrcaRuntimeService['registerPty']>
 ): Promise<never> | undefined {
   try {
@@ -125,6 +124,7 @@ export function registerPersistedPtySpawn(
     }
     runtime?.registerPty(...args)
   } catch (error) {
+    const failure = classifyTerminalCreationFailure(error, result)
     const [ptyId, worktreeId, connectionId, binding] = args
     // An exit during the binding write precedes runtime surface registration.
     if (
@@ -139,10 +139,10 @@ export function registerPersistedPtySpawn(
         worktreeId,
         connectionId
       ).then(() => {
-        throw error
+        throw failure
       })
     }
-    throw error
+    throw failure
   }
   return undefined
 }

@@ -9,7 +9,7 @@ import { parseTomlKeyPath, parseTomlTableHeaderPath } from './config-toml-key-pa
 import { tableStructuredKey } from './codex-config-settings-upsert'
 import { stripCodexDaemonOverride } from './codex-daemon-socket-path-guard'
 
-// Why: only scalars the Codex TUI persists; each key here is written to the user's real ~/.codex, so grow deliberately.
+// Allowlist settings written back into the user's canonical Codex config.
 export const PROMOTED_CODEX_SETTING_KEYS = [
   'model',
   'model_reasoning_effort',
@@ -17,17 +17,12 @@ export const PROMOTED_CODEX_SETTING_KEYS = [
   'sandbox_mode'
 ] as const
 
-// Why: table keys Codex persists from inside a pane — the TUI pickers' [tui]
-// keys and the [features] switch `codex features enable|disable` writes. Like
-// the top-level list, every key here gets written into the user's real ~/.codex/config.toml.
 export const PROMOTED_CODEX_TABLE_SETTING_KEYS = {
   tui: ['status_line', 'status_line_use_colors', 'terminal_title', 'theme'],
   features: ['daemon_auto_start']
 } as const
 
-// Why: promotion diffs and upserts operate on structured keys — top-level keys
-// keep their bare name, table keys are namespaced <table>.<key> so their baseline
-// entries cannot collide with a top-level key of the same name.
+// Namespace table keys so baseline entries cannot collide with top-level settings.
 export const PROMOTED_STRUCTURED_KEYS: readonly string[] = [
   ...PROMOTED_CODEX_SETTING_KEYS,
   ...Object.entries(PROMOTED_CODEX_TABLE_SETTING_KEYS).flatMap(([table, keys]) =>
@@ -37,14 +32,12 @@ export const PROMOTED_STRUCTURED_KEYS: readonly string[] = [
 
 export type TopLevelSettingValue = {
   raw: string
-  // Why: a multiline string/array value can't be replaced line-by-line, so it's excluded from promotion.
+  // Multiline values cannot be promoted by line edits.
   multiline: boolean
 }
 
 export function readPromotedSettingValues(configPath: string): Map<string, TopLevelSettingValue> {
-  // Why: an unreadable config held no settings only in the sense that we could
-  // not read them. Returning an empty map says the user cleared every promoted
-  // value, and the write below then acts on that.
+  // Unreadable settings must not be mistaken for user deletions.
   const observation = observeAgentStateFile(configPath)
   if (observation.kind === 'absent') {
     return new Map()
@@ -59,7 +52,7 @@ export function readPromotedSettingValuesFromContent(
   config: string
 ): Map<string, TopLevelSettingValue> {
   const result = new Map<string, TopLevelSettingValue>()
-  // Why: Orca's own daemon override is not a user setting, so it must never promote into ~/.codex.
+  // Keep Orca's runtime-only daemon override out of the canonical config.
   for (const setting of scanStructuredSettingLines(stripCodexDaemonOverride(config).split('\n'))) {
     if (PROMOTED_STRUCTURED_KEYS.includes(setting.structuredKey)) {
       result.set(setting.structuredKey, { raw: setting.raw, multiline: setting.multiline })
@@ -70,11 +63,7 @@ export function readPromotedSettingValuesFromContent(
 
 type StructuredSettingLine = TopLevelSettingValue & { index: number; structuredKey: string }
 
-/**
- * Every single-line-scannable assignment keyed by structured path: bare preamble
- * keys, dotted `<table>.<key>` preamble keys, and bare keys in the first
- * `[<table>]` body. Subtables, array tables and later bodies are ignored.
- */
+/** Scan preamble and first-level table assignments; ignore subtables, array tables and repeated bodies. */
 export function scanStructuredSettingLines(lines: readonly string[]): StructuredSettingLine[] {
   const settings: StructuredSettingLine[] = []
   let state = createTomlLineScanState()
@@ -118,7 +107,7 @@ function getStructuredKey(
   bodyTable: string | null
 ): string | null {
   const [first, second, ...rest] = segments
-  // Why: a quoted `"tui.theme"` is one key, not the [tui] table's theme.
+  // A quoted "tui.theme" is one literal key, not the theme entry in [tui].
   if (first === undefined || rest.length > 0 || segments.some((segment) => segment.includes('.'))) {
     return null
   }

@@ -19,8 +19,8 @@ vi.mock('../linear/client', async (importOriginal) => ({
   getStatus: mocks.getStatus
 }))
 
-vi.mock('../linear/linear-sdk', () => ({
-  loadLinearSdk: () => ({
+vi.mock('../linear/linear-sdk', () => {
+  const sdk = {
     // Why: writes build a fresh SDK client per call so the deadline signal can abort it.
     LinearClient: class {
       client = {
@@ -31,8 +31,9 @@ vi.mock('../linear/linear-sdk', () => ({
       deleteComment = mocks.deleteComment
     },
     AuthenticationLinearError: class extends Error {}
-  })
-}))
+  }
+  return { loadLinearSdk: () => sdk, createLinearClient: () => new sdk.LinearClient() }
+})
 
 import { RuntimeLinearReadCommands } from './runtime-linear-read-commands'
 import { acquire, release } from '../linear/linear-request-concurrency'
@@ -89,7 +90,7 @@ function createCommands(emitClientEvent = vi.fn()): RuntimeLinearReadCommands {
     showTerminal: async () => {
       throw new Error('unused')
     },
-    resolveWorktreeSelector: async () => {
+    resolveWorkspaceSelector: async () => {
       throw new Error('unused')
     },
     listResolvedWorktrees: async () => [worktree],
@@ -258,15 +259,17 @@ describe('Linear comment edit and delete', () => {
     }
   )
 
-  it('keeps add uncertainty while preventing an expired queued add from invoking Linear', async () => {
+  it('reports no attempt while preventing an expired queued add from invoking Linear', async () => {
     vi.useFakeTimers()
     await Promise.all([acquire(), acquire(), acquire(), acquire()])
     try {
-      const pending = createCommands().runLinearAgentWrite(
-        (signal) => addIssueCommentForAgent('issue-1', 'body', 'w2', { id: COMMENT_ID, signal }),
+      const pending = createCommands().runLinearAgentAction(
+        async () => null,
+        (_owner, options) =>
+          addIssueCommentForAgent('issue-1', 'body', 'w2', { id: COMMENT_ID, ...options }),
         () => linearError('linear_write_unconfirmed', 'Add was not confirmed.')
       )
-      const rejected = expect(pending).rejects.toMatchObject({ code: 'linear_write_unconfirmed' })
+      const rejected = expect(pending).rejects.toMatchObject({ code: 'linear_timeout' })
       await vi.advanceTimersByTimeAsync(25_000)
       await rejected
       expect(mocks.createComment).not.toHaveBeenCalled()
