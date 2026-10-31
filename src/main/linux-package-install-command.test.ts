@@ -168,7 +168,8 @@ describe('buildLinuxPackageInstallCommand', () => {
     const { buildLinuxPackageInstallCommand } = await loadCommandModule()
     expect(buildLinuxPackageInstallCommand('deb', '/tmp/orca.deb')).toEqual({
       ok: true,
-      command: "/usr/bin/sudo /usr/bin/apt install -- '/tmp/orca.deb'"
+      command:
+        "/usr/bin/sudo /usr/bin/apt -o Binary::file::APT::Sandbox::User=root install -- '/tmp/orca.deb'"
     })
   })
 
@@ -246,7 +247,7 @@ describe('buildLinuxPackageInstallCommand', () => {
     const { buildLinuxPackageInstallCommand } = await loadCommandModule()
     expect(buildLinuxPackageInstallCommand('deb', "/tmp/a b'; id #.deb")).toEqual({
       ok: true,
-      command: `/usr/bin/sudo /usr/bin/apt install -- '/tmp/a b'"'"'; id #.deb'`
+      command: `/usr/bin/sudo /usr/bin/apt -o Binary::file::APT::Sandbox::User=root install -- '/tmp/a b'"'"'; id #.deb'`
     })
   })
 })

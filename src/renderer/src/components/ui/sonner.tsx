@@ -5,12 +5,13 @@ import {
   OctagonXIcon,
   TriangleAlertIcon
 } from 'lucide-react'
-import type { SyntheticEvent } from 'react'
+import { useRef, type SyntheticEvent } from 'react'
 import { Toaster as Sonner, type ToasterProps } from 'sonner'
 import { useAppStore } from '@/store'
 import { MODAL_OVERLAY_CHILD_SELECTOR } from '@/lib/body-overlay-attributes'
 import { NOTIFICATION_CARD_STACK_HEIGHT_VAR } from '@/lib/notification-card-stack-height'
 import { NOTIFICATION_CARD_STACK_BOTTOM } from '@/lib/notification-card-composer-clearance'
+import { useNotificationCardLayoutVarReader } from '@/lib/notification-card-layout-vars'
 
 // Why: a short outcome reads best with its action beside it; the toaster's default wraps actions below.
 export const INLINE_ACTION_CLASS_NAMES = {
@@ -44,9 +45,12 @@ const TOASTER_OFFSET = {
 
 const Toaster = ({ ...props }: ToasterProps) => {
   const theme = useAppStore((s) => s.settings?.theme) || 'system'
+  const wrapperRef = useRef<HTMLDivElement>(null)
+  useNotificationCardLayoutVarReader(wrapperRef)
 
   return (
     <div
+      ref={wrapperRef}
       onPointerDownCapture={(event) => {
         if (
           event.target instanceof Element &&

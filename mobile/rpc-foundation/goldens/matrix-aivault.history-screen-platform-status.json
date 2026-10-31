@@ -115,6 +115,22 @@
         }
       }
     },
+    "3f48bd7d1369": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "ActivityIndicator": 1,
+        "ChevronLeft": 1,
+        "Pressable": 2,
+        "RefreshCw": 1,
+        "SafeAreaView": 1,
+        "Text": 3,
+        "View": 7
+      },
+      "labels": ["Back", "Refresh agent sessions"],
+      "text": ["Agent Session History", "orca-history", "Loading agent sessions…"]
+    },
     "40fa6811eb00": {
       "name": "streams-registered-at-teardown",
       "ordinal": 10,
@@ -640,22 +656,6 @@
         }
       }
     },
-    "d22bb2f62cea": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "ActivityIndicator": 1,
-        "ChevronLeft": 1,
-        "Pressable": 2,
-        "RefreshCw": 1,
-        "SafeAreaView": 1,
-        "Text": 2,
-        "View": 4
-      },
-      "labels": ["Back", "Refresh agent sessions"],
-      "text": ["Agent Session History", "orca-history"]
-    },
     "d302f4eada82": {
       "name": "status.get#1",
       "ordinal": 2,
@@ -718,7 +718,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -730,7 +730,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["7e8b2964ad63"]
         }
       },
@@ -748,7 +748,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -766,7 +766,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -784,7 +784,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -802,7 +802,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -820,7 +820,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -838,7 +838,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -856,7 +856,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -874,7 +874,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -892,7 +892,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -910,7 +910,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -928,7 +928,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -946,7 +946,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -964,7 +964,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -982,7 +982,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -1000,7 +1000,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -1018,7 +1018,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -1036,7 +1036,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -1054,7 +1054,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -1072,7 +1072,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -1090,7 +1090,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       },
@@ -1108,7 +1108,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": []
         }
       },
@@ -1126,7 +1126,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d22bb2f62cea",
+          "state": "3f48bd7d1369",
           "effects": ["40fa6811eb00"]
         }
       }

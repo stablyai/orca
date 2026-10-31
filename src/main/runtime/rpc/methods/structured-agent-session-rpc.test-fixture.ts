@@ -1,7 +1,7 @@
 // Share one dispatcher harness; repopulate stable hostCalls/runtimeCalls objects per test so imports keep their identities.
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { vi } from 'vitest'
-import type { AgentJournalRenderItem } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../../../native-chat/agent-session-journal/journal-store'
 import type { StructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-host'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -71,7 +71,7 @@ function reset(record: Record<string, ReturnType<typeof vi.fn>>): void {
 }
 
 export const STATUS_SESSION = 'session-status'
-export const STATUS_ITEMS: AgentJournalRenderItem[] = [
+export const STATUS_ITEMS: ReturnType<AgentSessionJournal['snapshot']>['items'] = [
   {
     itemId: 'user-1',
     sequence: 1,
@@ -259,7 +259,7 @@ export function dispatcher(
   })
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalNativeChat: true }),
+    getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     // The host reads saved settings privately; follow the client settings each test chose.
     requireStore: () => ({ getSettings: () => runtime.getClientSettings() }),
     registerSubscriptionCleanup: vi.fn(),

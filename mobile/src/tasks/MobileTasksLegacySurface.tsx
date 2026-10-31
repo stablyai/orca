@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -25,7 +26,11 @@ import {
 import { renderMobileTasksChrome } from './mobile-tasks-screen-chrome'
 import { renderMobileTasksListSurface } from './mobile-tasks-list-surface'
 import {
-  renderMobileTasksProviderPicker,
+  mobileTasksSearchVisible,
+  renderMobileTasksSearchControl
+} from './mobile-tasks-search-control'
+import { renderMobileTasksFilterSheet } from './mobile-tasks-filter-sheet'
+import {
   renderMobileTasksRepoPicker,
   renderMobileTasksGitHubIssueSourcePicker,
   renderMobileTasksGitHubViewPicker,
@@ -34,8 +39,7 @@ import {
 } from './mobile-tasks-provider-pickers'
 import {
   renderMobileTasksGitHubProjectPicker,
-  renderMobileTasksGitHubProjectViewPicker,
-  renderMobileTasksGitHubProjectSortPicker
+  renderMobileTasksGitHubProjectViewPicker
 } from './mobile-tasks-github-project-pickers'
 import {
   renderMobileTasksGitHubProjectFieldsPicker,
@@ -48,13 +52,7 @@ import {
   renderMobileTasksLinearTeamPicker,
   renderMobileTasksLinearStatusPicker
 } from './mobile-tasks-filter-pickers'
-import {
-  renderMobileTasksLinearViewPicker,
-  renderMobileTasksLinearGroupPicker,
-  renderMobileTasksLinearOrderPicker,
-  renderMobileTasksLinearDisplayPicker,
-  renderMobileTasksSortPicker
-} from './mobile-tasks-list-display-pickers'
+import { renderMobileTasksLinearDisplayPicker } from './mobile-tasks-list-display-pickers'
 import {
   renderMobileTasksCreateDrawer,
   renderMobileTasksCreateTargetPicker,
@@ -79,11 +77,13 @@ import {
   renderMobileTasksProjectMissingRepoDrawer,
   renderMobileTasksProjectDetailDrawer
 } from './mobile-tasks-project-detail-drawer'
-import { renderMobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
+import { MobileTasksItemDetailDrawer } from './mobile-tasks-item-detail-drawer'
 
 export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentationModel }) {
   const colorScheme = useMobileColorScheme()
   const t = useMobileTranslation()
+  const [searchBarHeight, setSearchBarHeight] = useState(0)
+  const bottomBarHeight = mobileTasksSearchVisible(model) ? searchBarHeight : 0
   const {
     error,
     githubMode,
@@ -200,12 +200,12 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         </View>
       ) : null}
 
-      {renderMobileTasksListSurface(model, colorScheme)}
+      {renderMobileTasksListSurface(model, colorScheme, bottomBarHeight)}
+
+      {renderMobileTasksSearchControl(model, setSearchBarHeight)}
 
       {/* iOS refuses stacked sibling native modals; layer Tasks sheets in one Modal by zIndex. */}
       <BottomDrawerModalHost>
-        {renderMobileTasksProviderPicker(model)}
-
         {renderMobileTasksRepoPicker(model)}
 
         {renderMobileTasksGitHubIssueSourcePicker(model)}
@@ -219,8 +219,6 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
         {renderMobileTasksGitHubProjectPicker(model)}
 
         {renderMobileTasksGitHubProjectViewPicker(model)}
-
-        {renderMobileTasksGitHubProjectSortPicker(model)}
 
         {renderMobileTasksGitHubProjectFieldsPicker(model)}
 
@@ -238,15 +236,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksLinearStatusPicker(model)}
 
-        {renderMobileTasksLinearViewPicker(model)}
-
-        {renderMobileTasksLinearGroupPicker(model)}
-
-        {renderMobileTasksLinearOrderPicker(model)}
-
         {renderMobileTasksLinearDisplayPicker(model)}
 
-        {renderMobileTasksSortPicker(model)}
+        {renderMobileTasksFilterSheet(model)}
 
         {renderMobileTasksCreateDrawer(model)}
 
@@ -276,7 +268,7 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
 
         {renderMobileTasksProjectDetailDrawer(model)}
 
-        {renderMobileTasksItemDetailDrawer(model)}
+        <MobileTasksItemDetailDrawer model={model} />
 
         <ActionSheetModal
           visible={taskUiReady && mergeMethodProjectRow != null}

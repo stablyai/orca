@@ -166,6 +166,7 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
       this.recentPtyOutputById.delete(ptyId)
+      this.launchComposerReadyByPtyId.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)
       this.ptyOutputSequenceById.delete(ptyId)
@@ -225,7 +226,11 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {
         // The bounded verdict register also fences late graphs after the PTY record was pruned.
-        this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
+        this.rememberPtyLivenessVerdict(ptyId, {
+          status: 'exited',
+          incarnationId: exitIncarnationId ?? candidateIncarnation ?? undefined,
+          cause: exitCause
+        })
       }
       if (pty) {
         pty.connected = false

@@ -86,6 +86,10 @@
       "reason": "The shell renders this page for the accounts screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
     },
     {
+      "file": "app/h/[hostId]/automations.web.tsx",
+      "reason": "The served automation route renders its screen directly; the native sibling mounts the shell and imports a native view manager unavailable in the page."
+    },
+    {
       "file": "app/h/[hostId]/source-control/[worktreeId].web.tsx",
       "reason": "The shell renders this page for the source-control hub, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and the route manifest imports every route, so one throwing module takes the whole bundle down. The tab, name and origin params are parsed here exactly as the native sibling parses them, because the page reads them back out of its own URL the way the native screen reads them out of the router."
     },

@@ -33,7 +33,7 @@ export {
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult,
-  agent?: StructuredAgentSessionOptionRecord['agent']
+  agent: StructuredAgentSessionOptionRecord['agent']
 ): AgentSessionOptionCatalog {
   const models: CatalogModel[] = result.models.map((model) =>
     discoveredModel(model, result.fastModeSupport?.supported === true, agent)

@@ -166,7 +166,7 @@ const styles = themedStyleSheet(() => ({
     marginTop: 2
   },
   actionGroup: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     overflow: 'hidden'
   },
@@ -186,7 +186,7 @@ const styles = themedStyleSheet(() => ({
     opacity: 0.58
   },
   actionPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   actionTextBlock: {
     flex: 1,

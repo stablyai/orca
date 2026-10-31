@@ -145,7 +145,15 @@ describe('pairing.delegatedMobileDevice.sync', () => {
     // The mobile allowlist applies, including to sync itself.
     await expect(
       sendRemoteRuntimeRequest(pairedRuntimeConnectionFromOffer(phone), 'worktree.list', {}, 5_000)
-    ).resolves.toMatchObject({ ok: false, error: { code: 'forbidden' } })
+    ).resolves.toMatchObject({ ok: true, result: { worktrees: expect.any(Array) } })
+    await expect(
+      sendRemoteRuntimeRequest(
+        pairedRuntimeConnectionFromOffer(phone),
+        'settings.getAgentLaunch',
+        {},
+        5_000
+      )
+    ).resolves.toMatchObject({ ok: true, result: { settings: expect.any(Object) } })
     await expect(
       sendRemoteRuntimeRequest(
         pairedRuntimeConnectionFromOffer(phone),

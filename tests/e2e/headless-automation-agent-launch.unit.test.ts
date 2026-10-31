@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../src/shared/native-chat/every-agent-chat.test-fixture'
 import '../../src/main/runtime/rpc/unused-default-rpc-methods.test-fixture'
 import type { createChatRendererBridge } from './helpers/automation-chat-renderer-test-harness'
 import { exerciseBusyChatReuse } from './helpers/automation-chat-reuse-test-harness'
@@ -121,7 +122,7 @@ function fixture() {
   const runtime = {
     requireStore: () => ({
       getSettings: () => ({
-        experimentalNativeChat: true,
+        nativeChatProviders: EVERY_AGENT_CHAT,
         workspaceDir: '/fixture',
         nestWorkspaces: false,
         agentDefaultArgs: { claude: '--model sonnet --add-dir docs' }

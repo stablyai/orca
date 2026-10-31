@@ -323,7 +323,10 @@ describe('the structured redrive publication edge', () => {
       const sendMail = async (subject: string) => {
         output.mockClear()
         process.exitCode = undefined
-        await main(['orchestration', 'send', '--to', mailbox, '--subject', subject, '--json'], root)
+        await main(
+          ['orchestration', 'send', '--to', mailbox, '--subject', subject, '--json', '--full'],
+          root
+        )
         expect(process.exitCode, JSON.stringify(output.mock.calls)).toBeUndefined()
         const response: unknown = JSON.parse(String(output.mock.calls.at(-1)?.[0]))
         return idOf(resultOf(response).message)
