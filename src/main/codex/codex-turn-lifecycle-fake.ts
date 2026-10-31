@@ -16,7 +16,11 @@ export type CodexTurnLifecycleFake = {
   run: () => void
   /** Clear active state at interrupt receipt; end() sends completion later. */
   takeInterrupt: () => string
-  end: (status: 'completed' | 'interrupted' | 'failed', errorMessage?: string) => void
+  end: (
+    status: 'completed' | 'interrupted' | 'failed',
+    errorMessage?: string,
+    errorInfo?: string
+  ) => void
   /** Pre-0.148 unopened failures report an error without turn/completed. */
   failUnopened: (message: string) => void
   echo: (clientId: string) => void
@@ -45,7 +49,12 @@ export function codexTurnLifecycleFake(
   let held: Promise<void> | null = null
   let pickedRuns = false
   let aborting: string | null = null
-  const finish = (turnId: string, status: string, errorMessage?: string): void => {
+  const finish = (
+    turnId: string,
+    status: string,
+    errorMessage?: string,
+    errorInfo?: string
+  ): void => {
     // Completing an aborted turn must preserve any replacement turn.
     if (aborting === turnId) {
       aborting = null
@@ -58,7 +67,15 @@ export function codexTurnLifecycleFake(
     notify()('thread/status/changed', { threadId, status: { type: 'idle' } })
     notify()('turn/completed', {
       threadId,
-      turn: { id: turnId, status, ...(errorMessage ? { error: { message: errorMessage } } : {}) }
+      turn: {
+        id: turnId,
+        status,
+        ...(errorMessage
+          ? {
+              error: { message: errorMessage, ...(errorInfo ? { codexErrorInfo: errorInfo } : {}) }
+            }
+          : {})
+      }
     })
   }
 
@@ -146,13 +163,13 @@ export function codexTurnLifecycleFake(
       }
       pickedRuns = true
     },
-    end: (status, errorMessage) => {
+    end: (status, errorMessage, errorInfo) => {
       // An interrupted turn completes before its replacement.
       const turnId = aborting ?? active ?? picked
       if (!turnId) {
         throw new Error('no turn to end')
       }
-      finish(turnId, status, errorMessage)
+      finish(turnId, status, errorMessage, errorInfo)
     },
     failUnopened: (message) => {
       if (!picked || active) {

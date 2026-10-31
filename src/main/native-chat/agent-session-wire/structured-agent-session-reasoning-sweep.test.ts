@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -7,12 +7,8 @@ import {
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import { captureUnfinishedStructuredAgentSessionWork } from './structured-agent-session-unfinished-work'
@@ -20,12 +16,14 @@ import { captureUnfinishedStructuredAgentSessionWork } from './structured-agent-
 const SESSION = 'session-reasoning-sweep'
 const THREAD = 'thread-1'
 const REASONING = { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 1 } as const
+const journals = createTrackedJournalOpener({ scoped: true })
 let root: string
 let journal: AgentSessionJournal
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-reasoning-sweep-'))
-  journal = await openAgentSessionJournal({
+  root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-reasoning-sweep-')))
+  journal = await journals.open({
+    stateDirectory: root,
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -33,15 +31,15 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: codexProviderHandle(THREAD)
     },
-    database: openTestJournalHostDatabase(root),
+    database: journals.database(root),
     now: () => 1_000
   })
 })
 
 afterEach(async () => {
-  await journal.close()
-  await closeTestJournalHostDatabases()
-  await rm(root, { recursive: true, force: true })
+  root = undefined!
+  journal = undefined!
+  await journals.dispose()
 })
 
 async function seedOpenReasoning(turnState: 'running' | 'completed'): Promise<void> {

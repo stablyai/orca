@@ -1,18 +1,16 @@
-import {
-  endedRunningAgentJournalToolCall,
-  type AgentJournalRunningCallEnd
-} from '../../../shared/agent-journal-tool-call-lifecycle'
-import type {
-  AgentJournalItemBody,
-  AgentJournalMessageItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
+import { endedRunningAgentJournalToolCall } from '../../../shared/agent-journal-tool-call-lifecycle'
 import {
   isRunningAgentJournalTurn,
   readAgentJournalTurn
 } from '../../../shared/agent-session-turn-record'
 import { cancelledJournalPromptBody } from './journal-prompt-body-bounds'
 import { endedJournalReasoning } from './journal-reasoning-row'
+import type { AgentJournalRunningCallEnd } from '../../../shared/agent-journal-tool-call-lifecycle'
+import type {
+  AgentJournalItemBody,
+  AgentJournalMessageItem,
+  AgentJournalTurnScope
+} from '../../../shared/agent-session-journal-types'
 
 /** Unsettled lifecycle rows must not be shed under pressure. */
 export function requiresTerminalSettlement(body: AgentJournalItemBody): boolean {
@@ -35,12 +33,17 @@ export function endedUnseenMessageBody(body: AgentJournalItemBody): AgentJournal
 }
 
 /** Settle abandoned calls/prompts; null end leaves calls to their provider, and turn rows to their writer. */
-export function terminalAgentJournalBody(
+export function terminalAgentJournalBody<T>(
   body: AgentJournalItemBody,
-  end: AgentJournalRunningCallEnd | null
+  readEnd: (context: T) => AgentJournalRunningCallEnd | null,
+  context: T
 ): AgentJournalItemBody | null {
   if (body.kind === 'tool-call') {
-    return body.state === 'running' && end ? endedRunningAgentJournalToolCall(body, end) : null
+    if (body.state !== 'running') {
+      return null
+    }
+    const end = readEnd(context)
+    return end ? endedRunningAgentJournalToolCall(body, end) : null
   }
   if (body.kind === 'approval' || body.kind === 'question') {
     return body.resolution.state === 'pending' ? cancelledJournalPromptBody(body) : null

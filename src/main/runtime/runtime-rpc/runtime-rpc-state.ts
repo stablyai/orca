@@ -52,6 +52,9 @@ export class RuntimeRpcState {
   protected networkExposurePromise: Promise<void> | null = null
   // Stop fences new exposure and waits pending rebind before taking transport snapshots (STA-2370).
   protected stopping = false
+  protected runtimeRpcStart: Promise<void> | null = null
+  protected runtimeRpcStop: Promise<void> | null = null
+  protected runtimeRpcRetirement: Promise<unknown[]> | null = null
   protected readonly authToken = randomBytes(24).toString('hex')
   protected readonly keepaliveIntervalMs: number
   protected readonly longPollCap: number

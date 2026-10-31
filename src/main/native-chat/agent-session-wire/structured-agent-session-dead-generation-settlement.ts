@@ -129,10 +129,13 @@ export function planStructuredAgentSessionDeadGeneration(
     })
   }
   const bodies = new Map(allItems.map((item) => [item.itemId, item.body]))
+  const itemBody = (id: string) => bodies.get(id)
+  const readEnd = (item: AgentJournalRenderItem) =>
+    runningCallEnd(item.turnScope, itemBody, input.verdict.state)
   for (const item of items) {
     // Calls inherit turn outcomes; open reasoning ends without adding duplicate unfinished-work evidence.
-    const end = runningCallEnd(item.turnScope, (id) => bodies.get(id), input.verdict.state)
-    const terminal = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
+    const terminal =
+      endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, readEnd, item)
     const body = lostLiveWorkJournalBody(terminal ?? item.body) ?? terminal
     if (body) {
       mutations.push({

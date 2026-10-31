@@ -1,22 +1,6 @@
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemBody,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnLifecycle,
-  type AgentJournalTurnLifecycleState
-} from '../../shared/agent-session-journal-types'
-import {
-  journalLifecycleItemMutation,
-  type JournalLifecycleIdentityMutationInput
-} from '../native-chat/agent-session-journal/journal-row-builders'
-import type {
-  StructuredAgentSessionEventSink,
-  StructuredAgentSessionSinkAdmission
-} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../shared/agent-session-journal-types'
+import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
 import { cancelledJournalPromptBody } from '../native-chat/agent-session-journal/journal-prompt-body-bounds'
-import type { CodexTurnOrdinals } from './codex-structured-item-translation'
-import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import { codexCommandOutlivesTurn } from './codex-command-lifecycle'
 import {
   codexTurnLifecycleBody,
@@ -24,8 +8,23 @@ import {
 } from './codex-structured-journal-translation-turns'
 import { appendCodexLifecycleMutations } from './codex-structured-journal-sink'
 import { codexActiveItemBody, interruptedCodexItemBody } from './codex-unfinished-item-body'
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity,
+  AgentJournalTurnLifecycle,
+  AgentJournalTurnLifecycleState
+} from '../../shared/agent-session-journal-types'
+import type { JournalLifecycleIdentityMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
+import type {
+  StructuredAgentSessionEventSink,
+  StructuredAgentSessionSinkAdmission
+} from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
+import type { CodexTurnOrdinals } from './codex-structured-item-translation'
+import type { CodexStructuredItemStreams } from './codex-structured-item-streams'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 import type { CodexRowAttribution } from './codex-subagent-linkage'
 import type { CodexActiveJournalItem } from './codex-structured-journal-contracts'
+import type { StructuredAgentSessionTransition } from '../native-chat/agent-session-wire/structured-agent-session-transition'
 
 export type CodexPendingJournalPrompt = {
   threadId: string
@@ -109,6 +108,8 @@ export function settleCodexJournalTurn(input: {
   completedAt: number
   /** Unfinished calls inherit this turn-end state on every thread. */
   turnEnd: Extract<AgentJournalTurnLifecycleState, 'completed' | 'interrupted'>
+  transientTerminal?: StructuredAgentSessionTransition['transientTerminal']
+  onAdmitted?: () => void
   sink: StructuredAgentSessionEventSink
   streams: CodexStructuredItemStreams
   activeItems: Map<string, CodexActiveJournalItem>
@@ -161,7 +162,12 @@ export function settleCodexJournalTurn(input: {
   const admission = appendCodexLifecycleMutations(
     input.sink,
     `turn-completed:${input.sessionId}:${input.threadId}:${input.turnId}`,
-    mutations
+    mutations,
+    input.transientTerminal,
+    input.onAdmitted,
+    input.turnLifecycle
+      ? { identity: codexTurnLifecycleIdentity(input.sessionId, input.turnId), state: 'end' }
+      : undefined
   )
   if (!admission.accepted) {
     return admission

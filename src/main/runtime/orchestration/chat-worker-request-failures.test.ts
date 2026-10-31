@@ -1,5 +1,6 @@
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import {
+  registerScopedRequestFailureOwnership,
   SESSION,
   tick,
   rig,
@@ -14,15 +15,17 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import { structuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-failure-text'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { recordStructuredAgentSessionStartFailure } from '../../native-chat/agent-session-wire/structured-agent-session-start-failure-row'
-import type { StructuredAgentSessionEndedChild } from '../../native-chat/agent-session-wire/structured-agent-session-host-types'
 import { hostTestMessage } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { countChatFailureOperations } from './chat-worker-error-operation-counts.test-support'
 import { settleStructuredAgentSessionChildExit } from '../../native-chat/agent-session-wire/structured-agent-session-child-exit'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../../shared/agent-session-record.test-fixture'
+import type { StructuredAgentSessionEndedChild } from '../../native-chat/agent-session-wire/structured-agent-session-host-types'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+
+registerScopedRequestFailureOwnership()
 
 it.each([100, 1000])(
   'bounds real committed observation and one failure with %i saved requests',
@@ -45,11 +48,13 @@ it.each([100, 1000])(
     const ops = await countChatFailureOperations(r.journal, r.root, n)
     r.sessions.set(SESSION, r.session)
     const adoption = { ...ops.counts }
+    process.stdout.write(`CHAT_FAILURE_ADOPTION ${JSON.stringify({ n, adoption })}\n`)
     expect(adoption).toMatchObject({
       baselineItems: 2 * n,
       runningTurnScans: 0,
       runningTurnItems: 0,
-      itemLookups: 3 * n,
+      // Two request reads per saved pair, plus turn pruning and refused lookup.
+      itemLookups: 4 * n,
       submissionsCopied: n,
       submissionVisits: n,
       lineageCopied: 0,
@@ -82,11 +87,13 @@ it.each([100, 1000])(
       ])
     }
     const incremental = { ...ops.counts }
+    process.stdout.write(`CHAT_FAILURE_INCREMENTAL ${JSON.stringify({ n, incremental })}\n`)
     expect(incremental).toEqual({
       baselineItems: 0,
       runningTurnScans: 0,
       runningTurnItems: 0,
-      itemLookups: 30,
+      // Per revision: creation, scope, output request and parent request.
+      itemLookups: 40,
       bodyLookups: 10,
       submissionsCopied: 0,
       submissionVisits: 0,
@@ -119,13 +126,15 @@ it.each([100, 1000])(
     ])
     await tick()
     const failure = { ...ops.counts }
+    process.stdout.write(`CHAT_FAILURE_FINAL ${JSON.stringify({ n, failure })}\n`)
     expect(r.mail()).toHaveLength(1)
     expect(r.mail()[0]?.body).toContain('exact eligible error')
     expect(failure).toMatchObject({
       baselineItems: 0,
       runningTurnScans: 0,
       runningTurnItems: 0,
-      itemLookups: 4,
+      // Two mutations each read creation/scope; two distinct request reads follow.
+      itemLookups: 6,
       bodyLookups: 4,
       submissionsCopied: n + 1,
       submissionVisits: n + 1,
@@ -225,6 +234,20 @@ it.each([100, 1000])('bounds the native root-end scan with %i saved items', asyn
     expect(store.getRecord(SESSION)?.lease.claimStatus).toBe('released')
     expect(log.entries).toEqual([])
     expect(r.mail()).toHaveLength(state === 'running' ? 1 : 0)
+    expect(
+      r.failures.mock.calls.map(([failure]) => ({
+        kind: failure.kind,
+        id: failure.id,
+        outcome: failure.outcome
+      }))
+    ).toEqual(
+      state === 'running' ? [{ kind: 'turn', id: `native:${n - 1}`, outcome: 'interruption' }] : []
+    )
+    expect(new Set(r.mail().map((message) => message.id)).size).toBe(state === 'running' ? 1 : 0)
+    if (state === 'running') {
+      expect(JSON.parse(r.mail()[0]!.payload ?? '{}').requestId).toBe(`native:${n - 1}`)
+    }
+    expect(r.notify).toHaveBeenCalledTimes(state === 'running' ? 1 : 0)
     expect(r.db.getDispatchContextById(r.dispatch().id)?.status).toBe('dispatched')
     vi.restoreAllMocks()
   }
@@ -334,6 +357,18 @@ it('keeps each request’s own saved error when another start fails before the d
     { requestId: 'A', error: 'capacity from A' },
     { requestId: 'orca:B', error: refused.reason }
   ])
+  expect(
+    r.failures.mock.calls.map(([failure]) => ({
+      kind: failure.kind,
+      id: failure.id,
+      outcome: failure.outcome
+    }))
+  ).toEqual([
+    { kind: 'turn', id: 'A', outcome: 'failure' },
+    { kind: 'refused-send', id: 'orca:B', outcome: 'failure' }
+  ])
+  expect(new Set(r.mail().map((message) => message.id)).size).toBe(2)
+  expect(r.notify).toHaveBeenCalledTimes(2)
   expect(r.db.getDispatchContextById(r.dispatch().id)?.status).toBe('dispatched')
 })
 
@@ -479,6 +514,27 @@ it('normalizes linked refused starts, reads explicitly scoped late words past a 
     recovered: true
   })
   await tick()
+  expect(r.mail()).toHaveLength(2)
+  expect(
+    r.failures.mock.calls.map(([failure]) => ({
+      kind: failure.kind,
+      id: failure.id,
+      outcome: failure.outcome
+    }))
+  ).toEqual([
+    { kind: 'turn', id: started.itemId, outcome: 'failure' },
+    { kind: 'refused-send', id: 'orca:hung', outcome: 'failure' }
+  ])
+  expect(new Set(r.mail().map((message) => message.id)).size).toBe(2)
+  expect(r.notify).toHaveBeenCalledTimes(2)
+  await batch(r.journal, 'off-at-read', [
+    turn('off-at-read', 'failure'),
+    words('off-at-read', 'assignment ended before read')
+  ])
+  r.unassign()
+  await tick()
+  expect(r.failures).toHaveBeenCalledTimes(3)
+  expect(r.notify).toHaveBeenCalledTimes(2)
   expect(r.mail()).toHaveLength(2)
 })
 

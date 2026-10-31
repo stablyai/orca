@@ -1,6 +1,6 @@
 // Rejections move rendered rows; submission positions must preserve original send order across replay.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
@@ -34,18 +34,15 @@ export function registerJournalSubmissionPositionsTests(): void {
   }
 
   let root: string | null = null
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   afterEach(async () => {
-    await journals.closeAll()
-    if (root) {
-      await rm(root, { recursive: true, force: true })
-      root = null
-    }
+    root = null
+    await journals.dispose()
   })
 
   async function sendHandedOverThenWithdrawn() {
-    root = await mkdtemp(join(tmpdir(), 'orca-submission-positions-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-submission-positions-')))
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
     const submitted = await journal.appendSubmission({
       clientMessageId: 'send-1',
@@ -79,7 +76,7 @@ export function registerJournalSubmissionPositionsTests(): void {
   } as const
 
   async function sendWithdrawnByItsTurnEnd() {
-    root = await mkdtemp(join(tmpdir(), 'orca-submission-positions-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-submission-positions-')))
     const journal = await journals.open({ identity: IDENTITY, stateDirectory: root })
     await journal.appendSubmission({
       clientMessageId: 'send-1',

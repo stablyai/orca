@@ -6,12 +6,15 @@ import {
   type StructuredAgentSessionAdapter
 } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import { stopCurrentClaudeBackgroundTasks } from './claude-structured-control-actions'
-import { claudeHeldSends, claudeHoldsDispatch } from './claude-command-lifecycle'
+import { claudeHoldsDispatch } from './claude-command-lifecycle'
 import { releaseClaudeAcquisition } from './structured/claude-structured-acquisition-release'
 import { acquireClaudeSession } from './structured/claude-structured-session-acquisition'
 import { supportsClaudeStructuredLocation } from './claude-structured-location-support'
 import * as claudeOptions from './claude-structured-options'
-import { dispatchClaudeMessage } from './claude-structured-message-options'
+import {
+  continueClaudeAfterTransientFailure,
+  dispatchClaudeMessage
+} from './claude-structured-message-options'
 import { readClaudeStructuredSessionOptions } from './claude-structured-session-options'
 import {
   ClaudeAcquisitionRegistry,
@@ -28,7 +31,9 @@ import {
 import { claudeStoppedRequestEndWait } from './claude-request-end-wait'
 import {
   drainClaudeObservedExits,
+  heldClaudeSessionSends,
   observeClaudeSessionExit,
+  requireLiveClaudeSession,
   settleClaudeUnexpectedExit,
   type ClaudeExitLifecycle
 } from './claude-structured-session-exit-lifecycle'
@@ -145,6 +150,15 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     this.sessions.get(sessionId)?.prompts.bindJournalItemId(journalItemId, promptKey)
   }
 
+  continueAfterTransientFailure: NonNullable<
+    StructuredAgentSessionAdapter['continueAfterTransientFailure']
+  > = (input) =>
+    continueClaudeAfterTransientFailure(
+      this.session(input.sessionId),
+      input,
+      this.deps.requestTimeoutMs
+    )
+
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) => {
     const { requestTimeoutMs, logger } = this.deps
     return dispatchClaudeMessage(this.session(input.sessionId), input, requestTimeoutMs, logger)
@@ -200,11 +214,8 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
   requiresModelTransitionRestart = claudeOptions.claudeModelTransitionRestart(this.sessions)
   liveTurnId = (sessionId: string): string | null | undefined =>
     this.sessions.get(sessionId)?.translator?.currentTurnId
-  heldSends = (sessionId: string): ReadonlySet<string> | undefined => {
-    const session = this.sessions.get(sessionId) ?? this.exits.get(sessionId)?.session
-    const held = session && claudeHeldSends(session)
-    return held ?? (this.settledExitErrors.has(sessionId) ? new Set() : undefined)
-  }
+  heldSends = (sessionId: string): ReadonlySet<string> | undefined =>
+    heldClaudeSessionSends(this.exitLifecycle, sessionId)
   holdsLiveProviderProcess = (sessionId: string, acquisitionGeneration: string): boolean => {
     const session = this.sessions.get(sessionId)
     return (
@@ -308,15 +319,6 @@ export class ClaudeStructuredSessionAdapter implements StructuredAgentSessionAda
     })
 
   private session(sessionId: string): ClaudeSession {
-    const session = this.sessions.get(sessionId)
-    if (!session) {
-      // A child that just exited is named by its own diagnostic, not by its absence.
-      throw (
-        this.exits.get(sessionId)?.error ??
-        this.settledExitErrors.get(sessionId) ??
-        new Error(`no live claude stream-json session for ${sessionId}`)
-      )
-    }
-    return session
+    return requireLiveClaudeSession(this.exitLifecycle, sessionId)
   }
 }

@@ -190,18 +190,24 @@ async function publishAfterIdle(id: string): Promise<void> {
 }
 
 beforeEach(async () => {
+  rig = undefined!
   controllers = []
-  rig = await createRestTestRig({ idleSweep: { intervalMs: MAX_TIMER_DELAY_MS } })
+  rig = await createRestTestRig({ idleSweep: { intervalMs: MAX_TIMER_DELAY_MS } }, { scoped: true })
   setStructuredAgentSessionHost(rig.host)
 })
 
 afterEach(async () => {
+  const owned = rig
+  rig = undefined!
   for (const controller of controllers) {
     controller.abort()
   }
   setStructuredAgentSessionHost(null)
-  await rig.dispose()
-  vi.restoreAllMocks()
+  try {
+    await owned?.dispose()
+  } finally {
+    vi.restoreAllMocks()
+  }
 })
 
 describe('subscriber journal lifetime', () => {

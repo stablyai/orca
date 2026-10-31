@@ -1,6 +1,6 @@
 // Unsupported row kinds require a newer reader; sequence mismatches are damage. Neither deletes history.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -15,7 +15,6 @@ import {
   createTrackedJournalOpener,
   insertTestJournalRowJson,
   liveTestJournalRows,
-  openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
@@ -39,15 +38,15 @@ export function registerJournalUnknownRowKindTests(): void {
   const SCOPE = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
 
   let root: string
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-newer-kind-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-newer-kind-')))
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   function item(ordinal: number): AgentJournalItemIdentity {
@@ -80,7 +79,7 @@ export function registerJournalUnknownRowKindTests(): void {
     edit: (put: (seq: number, json: string) => void) => void = () => {}
   ) {
     await journals.closeAll()
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = journals.database(root)
     edit((seq, json) => {
       db.prepare('DELETE FROM journal_rows WHERE session_id = ? AND seq = ?').run(
         IDENTITY.sessionId,
@@ -97,9 +96,10 @@ export function registerJournalUnknownRowKindTests(): void {
   }
 
   function stored(): { seq: number; rowJson: string }[] {
-    return liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId).map(
-      (row) => ({ seq: row.seq, rowJson: row.rowJson })
-    )
+    return liveTestJournalRows(journals.database(root).db, IDENTITY.sessionId).map((row) => ({
+      seq: row.seq,
+      rowJson: row.rowJson
+    }))
   }
 
   function storedKinds(): [number, unknown][] {

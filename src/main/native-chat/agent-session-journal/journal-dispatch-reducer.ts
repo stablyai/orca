@@ -6,7 +6,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import type { AgentJournalAnsweredTurn } from '../../../shared/agent-session-journal-types'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
-import type { JournalReducerState } from './journal-reducer'
+import type { JournalReducerState, JournalReducerSubmission } from './journal-reducer'
 import {
   noteTurnAccepted,
   placeHandedOverMessage,
@@ -17,7 +17,7 @@ import type { JournalRow } from './journal-row-schema'
 export function applyJournalDispatchRow(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'dispatch' }>
-): void {
+): JournalReducerSubmission | undefined {
   const submission = state.submissions.get(row.clientMessageId)
   // Ignored dispatch rows must not change queue cards either.
   if (!submission || !journalDispatchRowApplies(submission)) {
@@ -64,7 +64,7 @@ export function applyJournalDispatchRow(
     noteTurnAccepted(state, submission)
   }
   if (row.state !== 'accepted' || !row.providerItemId) {
-    return
+    return submission
   }
   state.aliases.set(row.providerItemId, agentJournalSubmissionKey(row.clientMessageId))
   state.receipts.set(row.clientMessageId, {
@@ -73,6 +73,7 @@ export function applyJournalDispatchRow(
     cursor: { epoch: row.epoch, sequence: row.seq },
     acceptedAt: row.ts
   })
+  return submission
 }
 
 /** A rebind replaces coverage, including an empty set, before the new child receives input. */

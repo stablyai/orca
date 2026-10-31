@@ -1,38 +1,42 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { mkdtemp, rm } from 'node:fs/promises'
+import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   agentSessionFailureFact,
   MAX_PROVIDER_DIAGNOSTIC_CHARS,
   providerDiagnostic
 } from '../../../shared/agent-session-failure'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import {
   captureUnfinishedStructuredAgentSessionWork,
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-unfinished-work'
-import {
-  closeTestJournalHostDatabases,
-  openTestJournalHostDatabase
-} from '../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
+import { journalLifecycleMutationItemId } from '../agent-session-journal/journal-row-builders'
+import { planStaleStructuredAgentSessionState } from './structured-agent-session-stale-state-settlement'
+import { planStructuredAgentSessionDeadGeneration } from './structured-agent-session-dead-generation-settlement'
+import { providerTimelineSettlement } from '../agent-session-timeline/provider-timeline-settlement'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../agent-session-journal/journal-row-schema'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 const UNEXPECTED_PROVIDER_EXIT_OUTCOME =
   'The agent stopped while this response was in progress. You can continue in this conversation.'
 
 const SESSION = 'session-dead-generation'
 const THREAD = 'thread-1'
+const journals = createTrackedJournalOpener({ scoped: true })
 let root: string
 let journal: AgentSessionJournal
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-dead-generation-'))
-  journal = await openAgentSessionJournal({
+  root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-dead-generation-')))
+  journal = await journals.open({
+    stateDirectory: root,
     identity: {
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -40,15 +44,15 @@ beforeEach(async () => {
       agent: 'codex',
       providerHandle: codexProviderHandle(THREAD)
     },
-    database: openTestJournalHostDatabase(root),
+    database: journals.database(root),
     now: () => 1_000
   })
 })
 
 afterEach(async () => {
-  await journal.close()
-  await closeTestJournalHostDatabases()
-  await rm(root, { recursive: true, force: true })
+  root = undefined!
+  journal = undefined!
+  await journals.dispose()
 })
 
 async function seedUnfinishedWork(): Promise<void> {
@@ -397,7 +401,8 @@ describe('dead structured-session generation settlement', () => {
     ])
 
     await journal.close()
-    journal = await openAgentSessionJournal({
+    journal = await journals.open({
+      stateDirectory: root,
       identity: {
         sessionId: SESSION,
         workspaceId: 'workspace-1',
@@ -405,7 +410,7 @@ describe('dead structured-session generation settlement', () => {
         agent: 'codex',
         providerHandle: codexProviderHandle(THREAD)
       },
-      database: openTestJournalHostDatabase(root),
+      database: journals.database(root),
       now: () => 1_000
     })
     expect(settledProducers()).toEqual(settled)
@@ -474,4 +479,203 @@ describe('whether a dead generation interrupted anything', () => {
       })
     )
   })
+})
+
+it('demands inherited ends only for running calls across real stale, death and timeline plans', async () => {
+  const parents = ['success', 'failure', 'interrupted', 'unverifiable', 'running'] as const
+  for (const parent of parents) {
+    const state = parent === 'success' || parent === 'failure' ? 'completed' : parent
+    await journal.appendItem(
+      { provider: 'orca', clientMessageId: `parent-${parent}` },
+      {
+        kind: 'turn',
+        turnId: parent,
+        state,
+        ...(parent === 'success' || parent === 'failure' ? { outcome: parent } : {})
+      },
+      { fence: 7, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    )
+  }
+  const tool = {
+    kind: 'tool-call' as const,
+    name: 'shell',
+    input: { command: 'preserved' },
+    state: 'running' as const
+  }
+  for (const parent of [...parents, 'missing', 'thread']) {
+    await journal.appendItem({ provider: 'orca', clientMessageId: `call-${parent}` }, tool, {
+      fence: 7,
+      turnScope:
+        parent === 'thread'
+          ? AGENT_JOURNAL_THREAD_SCOPE
+          : { kind: 'turn', turnItemId: `orca:parent-${parent}` }
+    })
+  }
+  const retained: [string, AgentJournalItemBody][] = [
+    [
+      'output',
+      { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: 'retained' }] }
+    ],
+    [
+      'reasoning',
+      {
+        kind: 'message',
+        role: 'assistant',
+        state: 'running',
+        blocks: [{ type: 'text', text: 'thinking' }]
+      }
+    ],
+    ['status', { kind: 'status', text: 'retained' }],
+    ['ended-call', { ...tool, state: 'completed' }]
+  ]
+  for (const [id, body] of retained) {
+    await journal.appendItem({ provider: 'orca', clientMessageId: id }, body, {
+      fence: 7,
+      turnScope: { kind: 'turn', turnItemId: 'orca:unused-parent' }
+    })
+  }
+  const background = {
+    type: 'background-task' as const,
+    taskId: 'background',
+    kind: 'command' as const,
+    label: 'background command',
+    state: 'working' as const,
+    startedAt: 10
+  }
+  const prompt = {
+    kind: 'approval' as const,
+    title: 'Run?',
+    detail: null,
+    options: [{ id: 'yes', label: 'Allow' }],
+    resolution: {
+      state: 'pending' as const,
+      selectedOptionId: null,
+      resolvedBy: null,
+      resolvedAt: null
+    }
+  }
+  for (const [id, body] of [
+    [
+      'background',
+      {
+        kind: 'message',
+        role: 'system',
+        blocks: [{ type: 'text', text: backgroundTaskFallbackText(background) }, background]
+      }
+    ],
+    ['pending', prompt],
+    ['resolved', { ...prompt, resolution: { ...prompt.resolution, state: 'cancelled' } }]
+  ] satisfies [string, AgentJournalItemBody][]) {
+    await journal.appendItem({ provider: 'orca', clientMessageId: id }, body, {
+      fence: 7,
+      turnScope: { kind: 'turn', turnItemId: 'orca:unused-parent' }
+    })
+  }
+  const childCall = await journal.appendItem(
+    { provider: 'codex', threadId: 'child', turnId: 'child-turn', ordinal: 1 },
+    tool,
+    {
+      fence: 7,
+      agentId: 'child',
+      producerKind: 'agent',
+      turnScope: { kind: 'turn', turnItemId: 'orca:parent-interrupted' }
+    }
+  )
+  const before = journal.snapshot()
+  const reads = vi.spyOn(journal, 'itemBody')
+  try {
+    const promptsOnly = providerTimelineSettlement(journal, 'session')
+    expect(promptsOnly.filter((m) => m.kind === 'item' && m.body.kind === 'tool-call')).toEqual([])
+    expect(reads.mock.calls).toHaveLength(0)
+    const plans = [
+      () =>
+        planStaleStructuredAgentSessionState({
+          journal,
+          sessionId: SESSION,
+          fence: 8,
+          acquisitionGeneration: null,
+          deathEvidence: null,
+          replaced: { fence: 7, lastProvenAliveAt: 1_000 }
+        }),
+      () =>
+        planStructuredAgentSessionDeadGeneration({
+          journal,
+          sessionId: SESSION,
+          fence: 8,
+          settlementId: 'demand-death',
+          verdict: { state: 'interrupted' },
+          pendingSubmissionReason: 'exit',
+          showUnexpectedExitOutcome: false
+        }),
+      () => ({
+        mutations: providerTimelineSettlement(journal, 'session', {
+          turns: [],
+          end: { state: 'interrupted' }
+        }),
+        dispatches: []
+      })
+    ]
+    for (const [index, plan] of plans.entries()) {
+      reads.mockClear()
+      const { mutations, dispatches } = plan()
+      expect(dispatches).toEqual([])
+      expect(reads.mock.calls.filter(([id]) => id === 'orca:unused-parent')).toHaveLength(0)
+      if (index !== 1) {
+        for (const parent of [...parents, 'missing']) {
+          expect(reads.mock.calls.filter(([id]) => id === `orca:parent-${parent}`)).toHaveLength(
+            parent === 'interrupted' ? 2 : 1
+          )
+        }
+      }
+      const calls = mutations
+        .filter((m) => m.kind === 'item' && m.body.kind === 'tool-call')
+        .map((m) => ({
+          itemId: journalLifecycleMutationItemId(m),
+          ...(m.kind === 'item' ? { body: m.body } : {})
+        }))
+      expect(calls.map((call) => call.itemId)).toEqual(
+        [...parents, 'missing', 'thread']
+          .map((parent) => `orca:call-${parent}`)
+          .concat(childCall.itemId)
+      )
+      for (const parent of [...parents, 'missing', 'thread']) {
+        expect(calls).toContainEqual(
+          expect.objectContaining({
+            itemId: `orca:call-${parent}`,
+            body: {
+              ...tool,
+              state: 'failed',
+              ...(parent === 'success' || parent === 'failure'
+                ? {}
+                : { endedAs: parent === 'unverifiable' ? 'unverifiable' : 'interrupted' })
+            }
+          })
+        )
+      }
+      expect(calls).toContainEqual({
+        itemId: childCall.itemId,
+        body: { ...tool, state: 'failed', endedAs: 'interrupted' }
+      })
+      const pending = mutations.find((m) => journalLifecycleMutationItemId(m) === 'orca:pending')
+      expect(pending).toMatchObject({ body: { resolution: { state: 'cancelled' } } })
+      for (const id of ['output', 'status', 'ended-call', 'resolved']) {
+        expect(mutations.some((m) => journalLifecycleMutationItemId(m) === `orca:${id}`)).toBe(
+          false
+        )
+      }
+      const lost = mutations.find((m) => journalLifecycleMutationItemId(m) === 'orca:background')
+      expect(lost).toMatchObject({
+        body: {
+          blocks: [
+            { type: 'text', text: expect.stringContaining('background command') },
+            { ...background, state: 'unverifiable' }
+          ]
+        }
+      })
+      expect(JSON.stringify(mutations)).not.toContain('"lostAt"')
+      expect(journal.snapshot()).toEqual(before)
+    }
+  } finally {
+    reads.mockRestore()
+  }
 })

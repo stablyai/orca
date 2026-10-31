@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -42,7 +42,7 @@ export function registerJournalSubagentItemTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   async function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
     return journals.open({
@@ -55,13 +55,13 @@ export function registerJournalSubagentItemTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-subagent-item-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-subagent-item-')))
     clock = 1_000
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   describe('a subagent’s own journal row', () => {

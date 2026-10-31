@@ -3,6 +3,7 @@
 import { createServer, type Server, type Socket } from 'node:net'
 import { chmodSync, existsSync, rmSync } from 'node:fs'
 import type { RpcMessageContext, RpcTransport } from './transport'
+import { errorMessage } from '../../../shared/error-message'
 
 const MAX_RUNTIME_RPC_MESSAGE_BYTES = 1024 * 1024
 const RUNTIME_RPC_SOCKET_IDLE_TIMEOUT_MS = 30_000
@@ -22,11 +23,20 @@ type MessageHandler = (
   context?: RpcMessageContext
 ) => void
 
+type RuntimeRpcNativeListener = {
+  server: Server
+  listened: boolean
+  close: Promise<void> | null
+  retirement: Promise<void> | null
+}
+
 export class UnixSocketTransport implements RpcTransport {
   private readonly endpoint: string
   private readonly kind: 'unix' | 'named-pipe'
   private readonly keepaliveIntervalMs: number
-  private server: Server | null = null
+  private server: RuntimeRpcNativeListener | null = null
+  private starting: Promise<void> | null = null
+  private stopping: Promise<void> | null = null
   private messageHandler: MessageHandler | null = null
   private readonly activeSockets = new Set<Socket>()
 
@@ -40,58 +50,148 @@ export class UnixSocketTransport implements RpcTransport {
     this.messageHandler = handler
   }
 
-  async start(): Promise<void> {
-    if (this.server) {
-      return
+  start(): Promise<void> {
+    if (this.starting) {
+      return this.starting
     }
-
-    if (this.kind === 'unix' && existsSync(this.endpoint)) {
-      rmSync(this.endpoint, { force: true })
-    }
-
-    const server = createServer((socket) => {
-      this.handleConnection(socket)
-    })
-    server.maxConnections = MAX_RUNTIME_RPC_CONNECTIONS
-
-    await new Promise<void>((resolve, reject) => {
-      server.once('error', reject)
-      server.listen(this.endpoint, () => {
-        server.off('error', reject)
-        resolve()
-      })
-    })
-
-    if (this.kind === 'unix') {
-      chmodSync(this.endpoint, 0o600)
-    }
-
-    this.server = server
-  }
-
-  async stop(): Promise<void> {
-    const server = this.server
-    this.server = null
-    if (!server) {
-      return
-    }
-    const closePromise = new Promise<void>((resolve, reject) => {
-      server.close((error) => {
-        if (error) {
-          reject(error)
+    const stopping = this.stopping
+    const operation = Promise.resolve()
+      .then(async () => {
+        if (stopping) {
+          await stopping
+        }
+        const previous = this.server
+        if (previous?.listened && !previous.close) {
           return
         }
-        resolve()
+        if (previous) {
+          previous.retirement = null
+          await this.retireNativeServer(previous)
+        }
+        if (this.kind === 'unix' && existsSync(this.endpoint)) {
+          rmSync(this.endpoint, { force: true })
+        }
+        const server = createServer((socket) => {
+          this.handleConnection(socket)
+        })
+        const owned: RuntimeRpcNativeListener = {
+          server,
+          listened: false,
+          close: null,
+          retirement: null
+        }
+        this.server = owned
+        try {
+          server.maxConnections = MAX_RUNTIME_RPC_CONNECTIONS
+          await new Promise<void>((resolve, reject) => {
+            server.once('error', reject)
+            server.listen(this.endpoint, () => {
+              owned.listened = true
+              server.off('error', reject)
+              resolve()
+            })
+          })
+          if (this.kind === 'unix') {
+            chmodSync(this.endpoint, 0o600)
+          }
+        } catch (error) {
+          try {
+            await this.retireNativeServer(owned)
+          } catch (cleanup) {
+            throw new AggregateError([error, cleanup], errorMessage(error), { cause: error })
+          }
+          throw error
+        }
       })
+      .finally(() => {
+        if (this.starting === operation) {
+          this.starting = null
+        }
+      })
+    this.starting = operation
+    return operation
+  }
+
+  stop(): Promise<void> {
+    if (this.stopping) {
+      return this.stopping
+    }
+    const starting = this.starting
+    const operation = Promise.resolve()
+      .then(async () => {
+        // Initialization reports its cause; failed cleanup remains in the captured retirement.
+        await starting?.catch(() => {})
+        const owned = this.server
+        if (owned) {
+          try {
+            await this.retireNativeServer(owned)
+          } finally {
+            owned.retirement = null
+          }
+        }
+      })
+      .finally(() => {
+        if (this.stopping === operation) {
+          this.stopping = null
+        }
+      })
+    this.stopping = operation
+    return operation
+  }
+
+  private retireNativeServer(owned: RuntimeRpcNativeListener): Promise<void> {
+    if (owned.retirement) {
+      return owned.retirement
+    }
+    const operation = Promise.resolve().then(async () => {
+      const errors: unknown[] = []
+      owned.close ??= new Promise<void>((resolve, reject) => {
+        owned.server.close((error) => {
+          // Node reports not-running only after its close event, including an unbound acquisition.
+          if (error && !('code' in error && error.code === 'ERR_SERVER_NOT_RUNNING')) {
+            reject(error)
+          } else {
+            resolve()
+          }
+        })
+      })
+      // server.close waits for existing sockets; long-poll keepalives must not hold shutdown open.
+      for (const socket of Array.from(this.activeSockets)) {
+        try {
+          socket.destroy()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      let closed = false
+      try {
+        await owned.close
+        closed = true
+      } catch (error) {
+        owned.close = null
+        errors.push(error)
+      }
+      if (closed) {
+        try {
+          if (owned.listened && this.kind === 'unix' && existsSync(this.endpoint)) {
+            rmSync(this.endpoint, { force: true })
+          }
+          if (errors.length === 0 && this.server === owned) {
+            this.server = null
+          }
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (errors.length === 1) {
+        throw errors[0]
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, errorMessage(errors[0]), { cause: errors[0] })
+      }
     })
-    // server.close waits for existing sockets; long-poll keepalives must not hold shutdown open.
-    for (const socket of Array.from(this.activeSockets)) {
-      socket.destroy()
-    }
-    await closePromise
-    if (this.kind === 'unix' && existsSync(this.endpoint)) {
-      rmSync(this.endpoint, { force: true })
-    }
+    owned.retirement = operation
+    return operation
   }
 
   private handleConnection(socket: Socket): void {

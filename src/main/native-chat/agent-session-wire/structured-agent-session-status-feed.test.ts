@@ -1,6 +1,6 @@
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -45,15 +45,15 @@ const USER_IDENTITY = {
 type Indexed = Parameters<typeof indexed>[0]
 
 let root: string
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ scoped: true })
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-agent-status-feed-'))
+  root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-agent-status-feed-')))
 })
 
 afterEach(async () => {
-  await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
+  root = undefined!
+  await journals.dispose()
 })
 
 async function openJournal(sessionId = SESSION, now?: () => number) {

@@ -33,12 +33,17 @@ function codexTurnRowReservedBytes(
 export function reviseCodexTurnRow(
   journal: StructuredAgentSessionRevisionJournal,
   identity: AgentJournalItemIdentity,
-  lifecycle: AgentJournalTurnItem
+  lifecycle: AgentJournalTurnItem,
+  attributionOnly?: true
 ): AgentJournalTurnItem {
   const reservedBytes = codexTurnRowReservedBytes(identity, lifecycle)
   return (
-    resolveAgentJournalTurnRowWrite(journal, { identity }, { lifecycle }, reservedBytes)?.body ??
-    lifecycle
+    resolveAgentJournalTurnRowWrite(
+      journal,
+      { identity },
+      { lifecycle, attributionOnly },
+      reservedBytes
+    )?.body ?? lifecycle
   )
 }
 
@@ -106,6 +111,8 @@ export function publishCodexTurnLifecycle(input: {
   requestedAt?: number
   completedAt?: number
   durationMs?: number
+  attributionOnly?: true
+  liveStart?: true
 }): StructuredAgentSessionSinkAdmission {
   if (input.primaryThreadId !== input.threadId) {
     return ADMITTED
@@ -130,10 +137,27 @@ export function publishCodexTurnLifecycle(input: {
       : {})
   }
   let admission = ADMITTED
-  if (input.sink.tryReviseResolvedItem) {
+  if (input.liveStart && input.sink.tryAppendTransition) {
+    admission = input.sink.tryAppendTransition({
+      turnLifecycle: { identity, state: 'start' },
+      steps: [
+        {
+          kind: 'item',
+          reservedBytes: codexTurnRowReservedBytes(identity, body),
+          options: appendOptions,
+          resolve: (journal) => ({ identity, body: reviseCodexTurnRow(journal, identity, body) })
+        }
+      ],
+      lifecycle: true,
+      publish: false
+    })
+  } else if (input.sink.tryReviseResolvedItem) {
     admission = input.sink.tryReviseResolvedItem(
       codexTurnRowReservedBytes(identity, body),
-      (journal) => ({ identity, body: reviseCodexTurnRow(journal, identity, body) }),
+      (journal) => ({
+        identity,
+        body: reviseCodexTurnRow(journal, identity, body, input.attributionOnly)
+      }),
       appendOptions
     )
   } else if (input.sink.tryAppendItem) {

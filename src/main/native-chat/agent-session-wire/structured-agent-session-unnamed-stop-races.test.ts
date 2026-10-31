@@ -10,17 +10,14 @@ import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
 import { settledWithin } from '../../codex/codex-structured-dispatch-test-support'
 import { CODEX_TURN_OPEN_WAIT_MS } from '../../codex/codex-structured-turn-open-wait'
 import type * as CodexTurnOpenWait from '../../codex/codex-structured-turn-open-wait'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
 import {
   createRestTestRig,
   REST_TEST_CALLER as CALLER,
-  restTestSend,
-  type RestTestRig
+  restTestSend
 } from './structured-agent-session-rest-test-rig'
 import {
   createQueuedMessageTestRig,
-  QUEUED_RIG_CALLER,
-  type QueuedMessageTestRig
+  QUEUED_RIG_CALLER
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -28,6 +25,9 @@ import {
   hostTestAttachParams,
   hostTestOperationId
 } from './structured-agent-session-host-test-data'
+import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+import type { RestTestRig } from './structured-agent-session-rest-test-rig'
+import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 
 const openWaits = vi.hoisted(() => {
   const state: {
@@ -63,6 +63,27 @@ vi.mock('../../codex/codex-structured-turn-open-wait', async (importOriginal) =>
 let restRig: RestTestRig | undefined
 let adapter: CodexStructuredSessionAdapter | undefined
 let queuedRig: QueuedMessageTestRig | undefined
+let recoveryOperations: Promise<unknown>[] = []
+function trackRecoveryOperation(operation: Promise<unknown> | undefined): void {
+  if (!operation) {
+    return
+  }
+  recoveryOperations.push(operation)
+  void operation.catch(() => undefined)
+}
+async function drainRecoveryOperations(): Promise<void> {
+  const failures: unknown[] = []
+  do {
+    for (const result of await Promise.allSettled(recoveryOperations.splice(0))) {
+      if (result.status === 'rejected') {
+        failures.push(result.reason)
+      }
+    }
+  } while (recoveryOperations.length > 0)
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'fixture recovery operations failed')
+  }
+}
 beforeEach(() => {
   openWaits.turnIds.length = 0
   openWaits.ended.length = 0
@@ -74,12 +95,24 @@ afterEach(async () => {
   openWaits.releaseAll?.()
   vi.useRealTimers()
   vi.restoreAllMocks()
-  await adapter?.closeAll()
-  await restRig?.dispose()
-  await queuedRig?.dispose()
+  const owned = { adapter, restRig, queuedRig }
   restRig = undefined
   adapter = undefined
   queuedRig = undefined
+  const failures: unknown[] = []
+  for (const dispose of [
+    () => (owned.restRig ? owned.restRig.dispose() : owned.adapter?.closeAll()),
+    () => owned.queuedRig?.dispose()
+  ]) {
+    try {
+      await dispose()
+    } catch (error) {
+      failures.push(error)
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'Stop fixture cleanup failed')
+  }
 })
 
 function unnamedStop(clientOperationId = hostTestOperationId()) {
@@ -104,6 +137,7 @@ async function admittedCodexSend() {
     codex.connections.at(-1)?.handlers.onNotification?.(method, params)
   const turns = codexTurnLifecycleFake(CODEX_THREAD, () => notify)
   Object.assign(codex.routes, turns.routes)
+  let owner: RestTestRig | undefined
   const provider = adapterFor(codex, {}, [], {
     // A Stop ends Codex's app server, so the next send's child resumes the saved thread.
     resolveLaunch: async () => ({
@@ -115,15 +149,24 @@ async function admittedCodexSend() {
         ? CODEX_THREAD
         : null
     }),
-    onDispatchSettledLate: (settlement) => void restRig?.host.settleLateDispatch(settlement),
+    onDispatchSettledLate: (settlement) =>
+      trackRecoveryOperation(owner?.host.settleLateDispatch(settlement)),
     onEvent: (event) => {
       if (event.type === 'ended' && 'cause' in event) {
-        void restRig?.host.handleAdapterEvent(event)
+        trackRecoveryOperation(owner?.host.handleAdapterEvent(event))
       }
     }
   })
   adapter = provider
-  const current = await createRestTestRig({ adapter: provider })
+  const current = await createRestTestRig(
+    { adapter: provider },
+    {
+      scoped: true,
+      closeAdapter: () => provider.closeAll(),
+      waitForRecovery: drainRecoveryOperations
+    }
+  )
+  owner = current
   restRig = current
   expect(await current.host.attach(CALLER, hostTestAttachParams(null))).toMatchObject({ ok: true })
   const send = restTestSend('work on this')
@@ -290,7 +333,7 @@ it('Codex: a retried Stop replays and never interrupts a later turn', async () =
 })
 
 it('reaches a turn opened before the user echo links it to the send', async () => {
-  queuedRig = await createQueuedMessageTestRig()
+  queuedRig = await createQueuedMessageTestRig({ scopedOwnership: true })
   await queuedRig.workingSend()
   publishCodexTurnLifecycle({
     sink: queuedRig.providerEvents(),
@@ -306,7 +349,7 @@ it('reaches a turn opened before the user echo links it to the send', async () =
 })
 
 it('stops the waiting send when a later send reaches the host just before the Stop', async () => {
-  queuedRig = await createQueuedMessageTestRig({ restartable: true })
+  queuedRig = await createQueuedMessageTestRig({ scopedOwnership: true, restartable: true })
   await queuedRig.workingSend()
   const later = queuedRig.send('sent just before Stop')
   expect(await later.result).toMatchObject({ ok: true })
@@ -316,7 +359,7 @@ it('stops the waiting send when a later send reaches the host just before the St
 })
 
 it('a Stop after a Stop that failed still tries to stop the waiting send', async () => {
-  queuedRig = await createQueuedMessageTestRig({ restartable: true })
+  queuedRig = await createQueuedMessageTestRig({ scopedOwnership: true, restartable: true })
   await queuedRig.workingSend()
   queuedRig.cancelTurn.mockImplementationOnce(async () => {
     throw new Error('interrupt timed out')

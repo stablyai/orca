@@ -234,7 +234,8 @@ function readForward(
       rows: window,
       snapshot,
       afterSequence: cursor.sequence,
-      canonicalItemId: (itemId) => journal.canonicalItemId(itemId)
+      canonicalItemId: (itemId) => journal.canonicalItemId(itemId),
+      stoppedTurnItemId: journal.stoppedTurnItemId
     })
     return result.ok
       ? { ...result, batch: { ...result.batch, items: result.batch.items.map(reader.form) } }

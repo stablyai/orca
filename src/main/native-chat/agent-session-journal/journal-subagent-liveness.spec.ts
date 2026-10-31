@@ -1,5 +1,5 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -41,7 +41,7 @@ export function registerJournalSubagentLivenessTests(): void {
     return clock
   }
 
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   async function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
     return journals.open({
@@ -122,13 +122,13 @@ export function registerJournalSubagentLivenessTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-subagents-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-subagents-')))
     clock = 1_000
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   describe('staleSubagentRosterRevisions', () => {

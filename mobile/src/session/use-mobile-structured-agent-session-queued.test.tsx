@@ -202,6 +202,67 @@ describe('mobile structured queued messages', () => {
     expect(hook!.queued.cards.map((card) => card.messageId)).toEqual(['mail', 'b'])
   })
 
+  it('keeps hidden recovery presentation separate from actual command holds and accepts the host card result', async () => {
+    sendRequest.mockImplementation(async (method) =>
+      method === 'agentSession.send'
+        ? mutationOk({
+            clientMessageId: 'fresh',
+            queued: { messageId: 'fresh', position: 1, state: 'waiting' }
+          })
+        : method === 'agentSession.options'
+          ? ok({ models: [], current: {} })
+          : ok({})
+    )
+    const failed = {
+      kind: 'turn' as const,
+      turnId: 'T',
+      state: 'completed' as const,
+      outcome: 'failure' as const
+    }
+    const event = snapshotEvent({
+      items: [{ itemId: 'turn-T', revision: 1, sequence: 1, observedAt: 1, body: failed }],
+      queuedMessages: []
+    })
+    await mountSession(
+      { ...CAPABLE, conversationStop: true },
+      {
+        ...event,
+        nextQueuedMessageId: null,
+        page: {
+          ...event.page,
+          working: true,
+          latestTurn: { itemId: 'turn-T', observedAt: 1, turn: failed }
+        }
+      }
+    )
+    expect(hook!.isWorking).toBe(true)
+    expect(hook!.canStop).toBe(true)
+    expect(hook!.turnId).toBeNull()
+    expect(hook!.commandRefusalCauses.working).toBe(false)
+    await act(async () => {
+      expect(await hook!.sendWithOutcome('fresh input')).toBe('queued')
+    })
+    expect(calls('agentSession.send')).toHaveLength(1)
+    act(() =>
+      listener?.({
+        ...batchEvent([
+          queuedDraft({
+            messageId: 'fresh',
+            body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'fresh input' }] }
+          })
+        ]),
+        working: false,
+        nextQueuedMessageId: null
+      })
+    )
+    expect(hook!.queued.cards).toMatchObject([
+      { messageId: 'fresh', line: 'fresh input', caption: null, needsAttention: false }
+    ])
+    expect(hook!.isWorking).toBe(false)
+    expect(hook!.commandRefusalCauses.working).toBe(false)
+    expect(onSendError).not.toHaveBeenCalled()
+  })
+
   describe('capability-gated delivery', () => {
     it('scans failure facts only when a returned card needs them', async () => {
       await mountSession(CAPABLE)

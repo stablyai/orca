@@ -3,6 +3,7 @@ import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-
 import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
 import { MAX_PROVIDER_TIMELINE_OPEN_ENTRIES } from './provider-timeline-budget'
 import {
+  registerScopedProviderTimelineOwnership,
   closeProviderTimelineRigs,
   messageText,
   openProviderTimelineRig,
@@ -11,10 +12,11 @@ import {
   providerItemId,
   providerTurnId,
   providerTurnItemId,
-  runningTool,
-  type ProviderTimelineRig
+  runningTool
 } from './provider-timeline-assembler-test-support'
+import type { ProviderTimelineRig } from './provider-timeline-assembler-test-support'
 
+registerScopedProviderTimelineOwnership()
 afterEach(closeProviderTimelineRigs)
 
 /** Settle Stop directly in the journal without notifying the assembler. */

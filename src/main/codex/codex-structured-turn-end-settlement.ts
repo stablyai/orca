@@ -1,3 +1,4 @@
+import type { AgentSessionTransientFailure } from '../../shared/agent-session-provider-retry-policy'
 import {
   agentSessionFailureFact,
   providerDiagnostic,
@@ -169,4 +170,73 @@ export function codexAnsweredTurn(
   return session.dispatchEchoes.hasOpened(session.threadId, turnId)
     ? { answeredInTurn: { turn: codexTurnLifecycleIdentity(sessionId, turnId), via } }
     : {}
+}
+
+const CODEX_TRANSIENT_ERRORS = new Map<string, AgentSessionTransientFailure>([
+  ['serverOverloaded', 'overloaded'],
+  ['responseStreamDisconnected', 'stream-disconnected'],
+  ['httpConnectionFailed', 'connection-failed'],
+  ['responseStreamConnectionFailed', 'connection-failed'],
+  ['internalServerError', 'internal']
+])
+
+export class CodexTransientTurnFailures {
+  private readonly retries = new Map<
+    string,
+    { category: AgentSessionTransientFailure; texts: string[] }
+  >()
+
+  observe(method: string, params: unknown): AgentSessionTransientFailure | undefined {
+    const frame = readCodexJournalRecord(params)
+    const turnId = readCodexTurnId(params)
+    if (!turnId) {
+      return undefined
+    }
+    const key = JSON.stringify([readCodexThreadId(params), turnId])
+    const error = readCodexJournalRecord(
+      method === 'turn/completed' ? readCodexJournalRecord(frame.turn).error : frame.error
+    )
+    const info = error.codexErrorInfo
+    const code = typeof info === 'string' ? info : Object.keys(readCodexJournalRecord(info))[0]
+    const category = code ? CODEX_TRANSIENT_ERRORS.get(code) : undefined
+    const texts = [error.message, error.additionalDetails].filter(
+      (text): text is string => typeof text === 'string' && text.length > 0
+    )
+    if (method === 'error' && frame.willRetry === true) {
+      if (category) {
+        this.retries.set(key, { category, texts })
+      }
+      return undefined
+    }
+    if (method === 'error' && frame.willRetry === false) {
+      const previous = this.retries.get(key)
+      if (category) {
+        this.retries.set(key, { category, texts })
+      } else if (code !== 'other' || !previous?.texts.some((text) => texts.includes(text))) {
+        this.retries.delete(key)
+      }
+      return undefined
+    }
+    if (method !== 'turn/completed') {
+      return undefined
+    }
+    const previous = this.retries.get(key)
+    if (readCodexTurnStatus(params) !== 'failed') {
+      return undefined
+    }
+    return (
+      category ??
+      (code === 'other' && previous?.texts.some((text) => texts.includes(text))
+        ? previous.category
+        : undefined)
+    )
+  }
+
+  acknowledge(params: unknown): void {
+    this.retries.delete(JSON.stringify([readCodexThreadId(params), readCodexTurnId(params)]))
+  }
+
+  clear(): void {
+    this.retries.clear()
+  }
 }

@@ -1,12 +1,9 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import type * as TranscriptLineDecoders from '../transcript-line-decoders'
 import { createLegacyIdentityTracker } from './journal-legacy-identity'
@@ -15,16 +12,15 @@ import {
   prepareLegacyTranscriptImport,
   LEGACY_IMPORT_BLOCK_LIMITS
 } from './journal-legacy-import'
-import { openAgentSessionJournal } from './journal-store-factory'
-import type { AgentSessionJournal } from './journal-store'
-import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
-} from './journal-host-database-test-support'
+import { createTrackedJournalOpener } from './journal-host-database-test-support'
 import {
   claudeProviderHandle,
   codexProviderHandle
 } from '../../../shared/agent-session-provider-handle-encoding'
+import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
+import type { AgentSessionProviderHandle } from '../../../shared/agent-session-provider-handle'
+import type { openAgentSessionJournal } from './journal-store-factory'
+import type { AgentSessionJournal } from './journal-store'
 
 // Existing decoders emit no roster; inject one to exercise import bounds.
 const decodedClaudeOverride = vi.hoisted((): { message: NativeChatMessage | null } => ({
@@ -45,7 +41,7 @@ const CODEX_SESSION = '019fd532-7c11-7a90-b6de-4e1a2c3d5f60'
 
 let root: string
 let clock = 1_000
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ scoped: true })
 
 function tick(): number {
   clock += 1
@@ -78,15 +74,14 @@ async function open(
   sessionId: string,
   overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}
 ): Promise<AgentSessionJournal> {
-  return journals.track(
-    await openAgentSessionJournal({
-      identity: identity(agent, sessionId),
-      database: openTestJournalHostDatabase(root),
-      now: tick,
-      mintEpoch: () => `epoch-${clock}`,
-      ...overrides
-    })
-  )
+  return journals.open({
+    stateDirectory: root,
+    identity: identity(agent, sessionId),
+    database: overrides.database ?? journals.database(root),
+    now: tick,
+    mintEpoch: () => `epoch-${clock}`,
+    ...overrides
+  })
 }
 
 function legacyKey(recordId: string): string {
@@ -205,14 +200,14 @@ const CODEX_LINES = [
 ]
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-journal-import-'))
+  root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-import-')))
   clock = 1_000
 })
 
 afterEach(async () => {
   decodedClaudeOverride.message = null
-  await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
+  root = undefined!
+  await journals.dispose()
 })
 
 describe('claude import', () => {
@@ -526,7 +521,7 @@ describe('import failures', () => {
 
   it('imports a source past 16 MiB, keeping its newest messages', async () => {
     const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'large-source-journal'))
+      database: journals.database(join(root, 'large-source-journal'))
     })
     const filePath = join(root, 'large-source.jsonl')
     const filler = 'x'.repeat(17 * 1024)
@@ -564,7 +559,7 @@ describe('import failures', () => {
     const journalDir = join(root, 'bounded-tool-input-journal')
     const limits = { ...LEGACY_IMPORT_BLOCK_LIMITS, inlineHeadBytes: 64 }
     const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(journalDir)
+      database: journals.database(journalDir)
     })
     const filePath = await writeFixture('oversized-tool-input.jsonl', [
       {
@@ -686,7 +681,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds a Claude tool call that shares its message with narration', async () => {
     const journal = await open('claude', CLAUDE_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'claude-mixed-journal'))
+      database: journals.database(join(root, 'claude-mixed-journal'))
     })
     const filePath = await writeFixture('claude-mixed.jsonl', [
       {
@@ -732,7 +727,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds a Grok tool call that shares its row with assistant text', async () => {
     const journal = await open('grok', CODEX_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'grok-mixed-journal'))
+      database: journals.database(join(root, 'grok-mixed-journal'))
     })
     const filePath = await writeFixture('grok-mixed.jsonl', [
       {
@@ -760,7 +755,7 @@ describe('multi-block legacy messages', () => {
 
   it('bounds an omp execution cell, whose invocation always ships with its output', async () => {
     const journal = await open('omp', CODEX_SESSION, {
-      database: openTestJournalHostDatabase(join(root, 'omp-mixed-journal'))
+      database: journals.database(join(root, 'omp-mixed-journal'))
     })
     const filePath = await writeFixture('omp-mixed.jsonl', [
       {

@@ -1,3 +1,6 @@
+import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
+import type { StructuredAgentSessionConversationDelivery } from './structured-agent-session-host-delivery'
+import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
 import type {
   AgentSessionExecutionLocation,
   AgentSessionRecord
@@ -9,48 +12,14 @@ import type { StructuredAgentSessionConversationLifetime } from './structured-ag
 import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 import type { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 
-import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
-import type { StructuredAgentSessionConversationDelivery } from './structured-agent-session-host-delivery'
-import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-
 type WorkspaceSleepHost = {
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'logger' | 'hasOpenDispatch' | 'now'>
   tasks: StructuredAgentSessionTaskQueue
   lifetime: Pick<StructuredAgentSessionConversationLifetime, 'closeForWorkspaceSleep'>
-  sessions: StructuredAgentSessionConversations
+  sessions: Pick<StructuredAgentSessionConversations, 'get'>
   deliveryRunning: (sessionId: string) => boolean
   childWorkIncomplete: (sessionId: string) => boolean
   publishRecordNotes: (sessionId: string) => void
-}
-
-export function createStructuredAgentSessionWorkspaceSleeper(
-  readHost: () => Pick<WorkspaceSleepHost, 'deps' | 'tasks' | 'lifetime' | 'sessions'> & {
-    clientDelivery: Pick<
-      StructuredAgentSessionClientDelivery,
-      'childWorkIncomplete' | 'publishRecordNotes'
-    >
-    conversationDelivery: Pick<StructuredAgentSessionConversationDelivery, 'loop'>
-    runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'startFlights'>
-  }
-) {
-  return (workspaceId: string, markAsleep?: boolean) => {
-    const host = readHost()
-    return sleepStructuredAgentSessionWorkspace(
-      {
-        deps: host.deps,
-        tasks: host.tasks,
-        lifetime: host.lifetime,
-        sessions: host.sessions,
-        // Starts registered after Stop are newer work.
-        deliveryRunning: (id) =>
-          host.conversationDelivery.loop.isRunning(id) || host.runtimeState.startFlights.has(id),
-        childWorkIncomplete: host.clientDelivery.childWorkIncomplete,
-        publishRecordNotes: host.clientDelivery.publishRecordNotes
-      },
-      workspaceId,
-      markAsleep
-    )
-  }
 }
 
 type WorkspaceSleepVerdict = { stopped: true } | { stopped: false; fence: number } | null
@@ -168,4 +137,31 @@ async function settleWorkspaceSleepChat(
     host.publishRecordNotes(sessionId)
   }
   return marked ? { stopped: true } : null
+}
+
+export function createStructuredAgentSessionWorkspaceSleep(
+  context: () => Omit<
+    WorkspaceSleepHost,
+    'deliveryRunning' | 'childWorkIncomplete' | 'publishRecordNotes'
+  > & {
+    runtimeState: StructuredAgentSessionHostRuntimeState
+    conversationDelivery: StructuredAgentSessionConversationDelivery
+    clientDelivery: StructuredAgentSessionClientDelivery
+  }
+) {
+  return (workspaceId: string, markAsleep?: boolean) => {
+    const ctx = context()
+    return sleepStructuredAgentSessionWorkspace(
+      {
+        ...ctx,
+        // Starts registered after Stop are newer work.
+        deliveryRunning: (id) =>
+          ctx.conversationDelivery.loop.isRunning(id) || ctx.runtimeState.startFlights.has(id),
+        childWorkIncomplete: ctx.clientDelivery.childWorkIncomplete,
+        publishRecordNotes: ctx.clientDelivery.publishRecordNotes
+      },
+      workspaceId,
+      markAsleep
+    )
+  }
 }

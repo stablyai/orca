@@ -1,3 +1,5 @@
+import type { StructuredAgentSessionEventRecovery } from './structured-agent-session-event-recovery'
+import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import * as agentStart from './structured-agent-session-agent-start'
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import type { StructuredAgentSessionClientDelivery } from './structured-agent-session-client-delivery'
@@ -63,4 +65,24 @@ export function createStructuredAgentSessionHostMutationContext(
     acquireAborts: input.runtimeState.acquireAborts,
     now: input.now
   }
+}
+
+export function createStructuredAgentSessionLifetimeContext(
+  input: Pick<
+    Inputs,
+    'deps' | 'runtimeState' | 'sessions' | 'now' | 'clientDelivery' | 'conversationDelivery'
+  > & {
+    eventRecovery: StructuredAgentSessionEventRecovery
+  }
+) {
+  return {
+    deps: input.deps,
+    runtimeState: input.runtimeState,
+    sessions: input.sessions,
+    now: input.now,
+    publishStatus: input.clientDelivery.publishStatus,
+    generationEnded: input.clientDelivery.publishGenerationEnded,
+    wakeDelivery: (sessionId: string) => input.conversationDelivery.loop.wake(sessionId),
+    endExitedChild: input.eventRecovery.endExitedChildUnderSerialize
+  } satisfies StructuredAgentSessionLifetimeContext
 }

@@ -12,7 +12,7 @@ export type AgentSessionPublishedWork = Pick<
   | 'publishedLatestTurn'
   | 'actionablePromptIds'
   | 'actionablePrompts'
-  | 'working'
+  | 'workingIncludingRetry'
   | 'viewKey'
   | 'workViewKey'
   | 'publishedSubmission'
@@ -33,7 +33,7 @@ function publishedWorkFields(
   return {
     latestTurn: work.publishedLatestTurn(latestTurn ?? null),
     ...(Buffer.byteLength(JSON.stringify(ids)) <= 8 * 1024 ? { actionablePromptIds: ids } : {}),
-    working: work.working()
+    working: work.workingIncludingRetry()
   }
 }
 

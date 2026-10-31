@@ -1,3 +1,11 @@
+import type { AgentSessionTransientFailure } from '../../shared/agent-session-provider-retry-policy'
+import {
+  codexTurnLifecycleIdentity,
+  codexTurnLifecycleState,
+  codexTurnOutcome,
+  codexTurnUserItemId,
+  publishCodexTurnLifecycle
+} from './codex-structured-journal-translation-turns'
 import type {
   AgentJournalTurnLifecycle,
   AgentJournalTurnOutcome
@@ -23,12 +31,6 @@ import type {
   CodexDispatchEchoes,
   CodexDispatchRequestOrigin
 } from './codex-structured-dispatch-echo'
-import {
-  codexTurnLifecycleState,
-  codexTurnOutcome,
-  codexTurnUserItemId,
-  publishCodexTurnLifecycle
-} from './codex-structured-journal-translation-turns'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import {
   readCodexTurnDurationMs,
@@ -97,6 +99,7 @@ export class CodexJournalTurnBoundaries {
           threadId: event.threadId,
           turnId,
           state: 'running',
+          liveStart: true,
           startedAt,
           ...(opener ? { userItemId: opener.userItemId, requestedAt: opener.requestedAt } : {})
         })
@@ -148,6 +151,7 @@ export class CodexJournalTurnBoundaries {
       sessionId: input.sessionId,
       threadId: input.threadId,
       turnId: input.turnId,
+      attributionOnly: true,
       state: settledRevision?.state ?? 'running',
       ...revision
     })
@@ -162,7 +166,11 @@ export class CodexJournalTurnBoundaries {
   }
 
   /** Only turn/completed ends a live turn, including failures preceded by an error frame. */
-  complete(event: TurnBoundaryEvent): CodexJournalTranslationAdmission {
+  complete(
+    event: TurnBoundaryEvent,
+    transient?: AgentSessionTransientFailure,
+    onAdmitted?: () => void
+  ): CodexJournalTranslationAdmission {
     const suppressionAdmission = this.deps.flushSuppression()
     if (!suppressionAdmission.accepted) {
       return suppressionAdmission
@@ -213,7 +221,16 @@ export class CodexJournalTurnBoundaries {
       pendingPrompts: this.deps.pendingPrompts,
       ...(this.deps.clearPromptTurn ? { clearPromptTurn: this.deps.clearPromptTurn } : {}),
       attributionFor: this.deps.attributionFor,
-      commandEnd
+      commandEnd,
+      ...(transient && turnLifecycle && event.threadId === this.deps.primaryThreadId()
+        ? {
+            transientTerminal: {
+              identity: codexTurnLifecycleIdentity(event.sessionId, turnId),
+              category: transient
+            }
+          }
+        : {}),
+      onAdmitted
     })
     if (admission.accepted) {
       if (turnLifecycle) {

@@ -1,3 +1,4 @@
+import { continueCodexWithDrainedEvents } from './codex-structured-provider-retry'
 import { projectCodexSessionOptions } from './codex-structured-service-tier'
 import * as codexRewind from './codex-structured-rewind'
 import type { AgentSessionBackgroundTaskState } from '../../shared/agent-session-wire'
@@ -21,13 +22,12 @@ import {
   prepareCodexMessageDispatch,
   readCodexAppliedInputOptions
 } from './codex-structured-message-options'
-import {
-  CodexAcquisitionRegistry,
-  requireLiveCodexSession,
-  type CodexAcquisitionAttempt,
-  type CodexSession,
-  type CodexStructuredSessionAdapterDeps,
-  type CodexStructuredSessionEvent
+import { CodexAcquisitionRegistry, requireLiveCodexSession } from './codex-structured-session-state'
+import type {
+  CodexAcquisitionAttempt,
+  CodexSession,
+  CodexStructuredSessionAdapterDeps,
+  CodexStructuredSessionEvent
 } from './codex-structured-session-state'
 import {
   deliverCodexServerRequest,
@@ -111,9 +111,21 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       notificationRetries: this.notificationRetries,
       deliver: (acquisition, sessionId, event, retainedBytes) =>
         this.deliver(acquisition, sessionId, event, retainedBytes),
-      handleServerRequest: (sessionId, request) => this.handleServerRequest(sessionId, request),
+      handleServerRequest: (sessionId, request) =>
+        void deliverCodexServerRequest(
+          sessionId,
+          this.sessions.get(sessionId),
+          request,
+          (session, event) => this.emit(session, event)
+        ),
       handleUnhandledFrame: (sessionId, kind, payload) =>
-        this.handleUnhandledFrame(sessionId, kind, payload),
+        void deliverCodexUnhandledFrame(
+          sessionId,
+          this.sessions.get(sessionId),
+          kind,
+          payload,
+          (session, event) => this.emit(session, event)
+        ),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
         this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
     })
@@ -175,25 +187,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     return admission
   }
 
-  private handleServerRequest(
-    sessionId: string,
-    request: Parameters<typeof deliverCodexServerRequest>[2]
-  ): void {
-    deliverCodexServerRequest(sessionId, this.sessions.get(sessionId), request, (session, event) =>
-      this.emit(session, event)
-    )
-  }
-
-  private handleUnhandledFrame(sessionId: string, kind: string, params: unknown): void {
-    deliverCodexUnhandledFrame(
-      sessionId,
-      this.sessions.get(sessionId),
-      kind,
-      params,
-      (session, event) => this.emit(session, event)
-    )
-  }
-
   /** Test-only compatibility roster; host decisions use durable child records. */
   backgroundTaskState = (sessionId: string): AgentSessionBackgroundTaskState | null | undefined =>
     this.sessions.get(sessionId)?.backgroundTasks.state
@@ -238,6 +231,10 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
         promptKey,
         turnId
       )
+
+  continueAfterTransientFailure: NonNullable<
+    StructuredAgentSessionAdapter['continueAfterTransientFailure']
+  > = continueCodexWithDrainedEvents.bind(this)
 
   async dispatch(
     input: Parameters<StructuredAgentSessionAdapter['dispatch']>[0]

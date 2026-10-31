@@ -7,8 +7,7 @@ import { recoverStructuredRewind } from './structured-rewind-recovery'
 import {
   createQueuedMessageTestRig,
   eventually,
-  QUEUED_RIG_CALLER as CALLER,
-  type QueuedMessageTestRig
+  QUEUED_RIG_CALLER as CALLER
 } from './structured-agent-session-queued-message-rig.test-fixture'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -16,16 +15,23 @@ import {
 } from './structured-agent-session-host-test-data'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import { structuredQueuePauses } from './structured-agent-session-queued-pause'
+import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { queuePauseHolding } from '../agent-session-journal/queued-message-pause'
+import type { QueuedMessageTestRig } from './structured-agent-session-queued-message-rig.test-fixture'
 
 let rig: QueuedMessageTestRig
 const rewind = vi.fn<NonNullable<StructuredAgentSessionAdapter['rewind']>>()
 
 beforeEach(async () => {
+  rig = undefined!
   rewind.mockReset().mockResolvedValue({ ok: true })
-  rig = await createQueuedMessageTestRig({ restartable: true, rewind })
+  rig = await createQueuedMessageTestRig({ scopedOwnership: true, restartable: true, rewind })
 })
-afterEach(() => rig.dispose())
+afterEach(async () => {
+  const owned = rig
+  rig = undefined!
+  await owned?.dispose()
+})
 
 const journal = () => rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
 const db = () => openTestJournalHostDatabase(rig.root).db
@@ -73,36 +79,84 @@ async function seed() {
   return { old, kept, target, floor, prefix, raw, params }
 }
 
+async function providerTurn(
+  clientMessageId: string,
+  turnId: string,
+  state: 'running' | 'completed'
+) {
+  const threadId = activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle.nativeId
+  rig.providerEvents().appendLifecycleBatch!(
+    `${turnId}:${state}`,
+    [
+      {
+        kind: 'item',
+        identity: { provider: 'codex', threadId, turnId, ordinal: 0 },
+        body: {
+          kind: 'turn',
+          turnId,
+          state,
+          userItemId: agentJournalSubmissionKey(clientMessageId),
+          ...(state === 'completed' ? { outcome: 'success' as const } : {})
+        },
+        turnScope: { kind: 'thread' }
+      }
+    ],
+    { lifecycle: true }
+  )
+  await rig.host.flushStreamedEvents(SESSION)
+  expect(
+    journal()
+      .snapshot()
+      .items.some((item) => readAgentJournalTurn(item.body)?.turnId === turnId)
+  ).toBe(true)
+  if (state === 'running') {
+    expect(rig.host.currentWork(SESSION)?.activeTurnId()).toBe(turnId)
+  }
+}
+
 async function returnedCardAndWaitingCard() {
   const working = await rig.workingSend()
+  await providerTurn(working, 'working-root', 'running')
   const returned = rig.send('returned card', 'queue-if-active')
   const waiting = rig.send('waiting card', 'queue-if-active')
   expect(await returned.result).toMatchObject({ ok: true })
   expect(await waiting.result).toMatchObject({ ok: true })
   await rig.settleAccepted(working, 'working')
+  await providerTurn(working, 'working-root', 'completed')
   await eventually(async () => expect((await rig.handoff(returned.id))?.handedOverAt).toBeDefined())
+  const handoff = await rig.handoffId(returned.id)
+  await providerTurn(handoff, 'returned-root', 'running')
   await rig.stop()
-  await rig.settleRejected(await rig.handoffId(returned.id), 'provider refused the card')
+  await rig.host.collaboratorsForTests().serialize(SESSION, async () => undefined)
+  expect(
+    journal()
+      .snapshot()
+      .items.map((item) => readAgentJournalTurn(item.body))
+  ).toContainEqual(expect.objectContaining({ turnId: 'returned-root', state: 'interrupted' }))
+  await rig.settleRejected(handoff, 'provider refused the card')
   await eventually(async () =>
     expect(await rig.drafts()).toEqual([
       { messageId: returned.id, state: 'returned' },
       { messageId: waiting.id, state: 'waiting' }
     ])
   )
+  expect(structuredQueuePauses(journal()).some((entry) => entry.reason === 'stopped')).toBe(true)
   return { returned: returned.id, waiting: waiting.id }
 }
 
 async function replayedJournal() {
-  const reopened = new AgentSessionJournal({
-    database: openTestJournalHostDatabase(rig.root),
-    identity: {
-      sessionId: SESSION,
-      workspaceId: 'workspace-1',
-      hostId: 'local',
-      agent: 'codex',
-      providerHandle: activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle
-    }
-  })
+  const reopened = rig.trackJournal(
+    new AgentSessionJournal({
+      database: openTestJournalHostDatabase(rig.root),
+      identity: {
+        sessionId: SESSION,
+        workspaceId: 'workspace-1',
+        hostId: 'local',
+        agent: 'codex',
+        providerHandle: activeProviderContext(rig.store.getRecord(SESSION)!).head!.handle
+      }
+    })
+  )
   await reopened.open()
   return reopened
 }
@@ -137,6 +191,7 @@ describe('rewind behind a clear boundary', () => {
     const { waiting } = await returnedCardAndWaitingCard()
     await send('lifts the earlier stop', 'lift')
     const later = await rig.workingSend()
+    await providerTurn(later, 'later-root', 'running')
     await rig.stop()
     await rig.settleAccepted(later, 'stopped-later')
     const target = agentJournalSubmissionKey(later)

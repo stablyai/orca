@@ -1,3 +1,6 @@
+import { journalLifecycleItemMutation } from '../native-chat/agent-session-journal/journal-row-builders'
+import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
+import { reviseCodexTurnRow } from './codex-structured-journal-translation-turns'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
@@ -9,21 +12,20 @@ import type {
   StructuredAgentSessionIdentityResolver,
   StructuredAgentSessionSinkAdmission
 } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
-import {
-  journalLifecycleItemMutation,
-  type JournalLifecycleIdentityMutationInput
-} from '../native-chat/agent-session-journal/journal-row-builders'
+import type { JournalLifecycleIdentityMutationInput } from '../native-chat/agent-session-journal/journal-row-builders'
 import type { CodexPendingJournalPrompt } from './codex-structured-journal-settlement'
 import type { CodexJournalTranslationAdmission } from './codex-structured-journal-contracts'
-import { CODEX_JOURNAL_ADMITTED } from './codex-structured-journal-contracts'
-import { reviseCodexTurnRow } from './codex-structured-journal-translation-turns'
+import type { StructuredAgentSessionTransition } from '../native-chat/agent-session-wire/structured-agent-session-transition'
 
 const ADMITTED: StructuredAgentSessionSinkAdmission = { accepted: true }
 
 export function appendCodexLifecycleMutations(
   sink: StructuredAgentSessionEventSink,
   settlementId: string,
-  mutations: readonly JournalLifecycleIdentityMutationInput[]
+  mutations: readonly JournalLifecycleIdentityMutationInput[],
+  transientTerminal?: StructuredAgentSessionTransition['transientTerminal'],
+  onAdmitted?: () => void,
+  turnLifecycle?: StructuredAgentSessionTransition['turnLifecycle']
 ): StructuredAgentSessionSinkAdmission {
   if (mutations.length === 0) {
     return ADMITTED
@@ -32,6 +34,8 @@ export function appendCodexLifecycleMutations(
   if (sink.tryAppendTransition) {
     // Resolve against the journal at execution time to preserve queued turn revisions.
     admission = sink.tryAppendTransition({
+      transientTerminal,
+      turnLifecycle,
       steps: [
         {
           kind: 'settlement',
@@ -83,6 +87,7 @@ export function appendCodexLifecycleMutations(
   if (!admission.accepted) {
     return admission
   }
+  onAdmitted?.()
   return sink.tryPublish
     ? sink.tryPublish({ lifecycle: true })
     : (sink.publish({ lifecycle: true }), ADMITTED)

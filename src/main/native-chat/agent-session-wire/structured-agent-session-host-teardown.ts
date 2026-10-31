@@ -1,19 +1,18 @@
-// Attempt every teardown phase despite earlier failures; drain conversation writes before closing
-// the shared database last. Queued sends recover on next open.
-
+import type { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { closeStructuredAgentSessionHandovers } from './structured-agent-session-handing-over'
 import type { AgentSessionResumeTrigger } from '../../../shared/agent-session-resume-marker'
 import { SUPERVISED_GRACEFUL_EXIT_MS } from '../../claude/claude-child-exit-proof-ladder'
 import { PROVIDER_SUPERVISOR_MAX_STOP_MS } from '../../provider-process/provider-process-supervisor'
 import { SNAPSHOT_DRAIN_TIMEOUT_MS } from './structured-agent-session-eviction'
 import type { StructuredAgentSessionRestartResume } from './structured-agent-session-restart-resume-host'
-import {
-  evictOwnedStructuredAgentSessions,
-  type StructuredAgentSessionLifetimeContext
-} from './structured-agent-session-host-lifetime'
+import { evictOwnedStructuredAgentSessions } from './structured-agent-session-host-lifetime'
+import type { StructuredAgentSessionLifetimeContext } from './structured-agent-session-host-lifetime'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
+
+// Attempt every teardown phase despite earlier failures; drain conversation writes before closing
+// the shared database last. Queued sends recover on next open.
 
 export type StructuredAgentSessionTeardownPhase = {
   name: string
@@ -177,4 +176,26 @@ export async function flushStructuredAgentSessionHost(
     acknowledgeSessionRelease: (sessionId) =>
       context.deps.adapter.acknowledgeSessionRelease?.(sessionId)
   })
+}
+
+export function stopHostDelivery(this: StructuredAgentSessionHost) {
+  this['sessions'].endPublications()
+  ;[this['conversationDelivery'], this['queued'].drain].forEach((d) => d.dispose())
+  this['providerRetry'].dispose()
+  this['clientDelivery'].requestFailures.clear()
+}
+
+export async function flushHostStreamedEvents(
+  this: StructuredAgentSessionHost,
+  options?: { trigger?: 'quit' | 'update' }
+): Promise<void> {
+  this['stopDelivery']()
+  await flushStructuredAgentSessionHost({
+    ...this['lifetimeContext'](),
+    idleSweep: this['lifetime'],
+    tasks: this['tasks'],
+    restartResume: this['restartResume'],
+    serialize: this['serialize'],
+    trigger: options?.trigger ?? 'quit'
+  }).finally(() => this['clientDelivery'].closeAll())
 }

@@ -33,6 +33,7 @@ import {
   runningRootTurnItemId
 } from './structured-agent-session-orca-stop-row'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
+import type { StructuredAgentSessionConversations } from './structured-agent-session-conversations'
 export type { StructuredAgentSessionStopEnding } from './structured-agent-session-host-stop-event'
 import {
   recordStopEvent,
@@ -220,8 +221,9 @@ export function structuredAgentSessionConversationClosable(
 
 /** Delete before draining so lock-free readers see open-or-absent, never closing; reject noncache handles. */
 export async function closeStructuredAgentSessionConversationUnderSerialize(
-  context: Pick<StructuredAgentSessionLifetimeContext, 'sessions'> & {
-    closeStatus: (sessionId: string) => void
+  context: {
+    sessions: Pick<StructuredAgentSessionConversations, 'get' | 'delete'>
+    closeStatus: (sessionId: string) => (() => void) | void
   },
   sessionId: string,
   atRest = false
@@ -230,9 +232,9 @@ export async function closeStructuredAgentSessionConversationUnderSerialize(
   if (!session || !structuredAgentSessionConversationClosable(session, atRest)) {
     return false
   }
-  context.sessions.delete(sessionId)
-  context.closeStatus(sessionId)
-  await session.journal.close()
+  context.sessions.delete(sessionId, 'retire')
+  const completeRead = context.closeStatus(sessionId)
+  await session.journal.close(completeRead)
   return true
 }
 

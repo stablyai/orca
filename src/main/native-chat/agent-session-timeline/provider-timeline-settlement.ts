@@ -7,7 +7,8 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalItemBody,
   type AgentJournalItemIdentity,
-  type AgentJournalTurnLifecycle
+  type AgentJournalTurnLifecycle,
+  type AgentJournalTurnScope
 } from '../../../shared/agent-session-journal-types'
 import {
   agentJournalTurnBody,
@@ -75,6 +76,9 @@ export function providerTimelineSettlement(
   ending?: ProviderTimelineSettlementEnding
 ): JournalLifecycleMutationInput[] {
   const mutations: JournalLifecycleMutationInput[] = []
+  const itemBody = (id: string) => journal.itemBody(id)
+  const readEnd = (turnScope: AgentJournalTurnScope) =>
+    ending ? runningCallEnd(turnScope, itemBody, ending.end.state) : null
   journal.visitItemsWithLinkage((itemId, _sequence, body, attribution) => {
     const turnScope = attribution.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
     const historical = scope === 'session' && journal.item(itemId)
@@ -84,14 +88,10 @@ export function providerTimelineSettlement(
     const covered =
       scope === 'session' ||
       (turnScope.kind === 'turn' && turnScope.turnItemId === scope.turnItemId)
-    const end =
-      covered && ending && body.kind === 'tool-call' && body.state === 'running'
-        ? runningCallEnd(turnScope, (turnItemId) => journal.itemBody(turnItemId), ending.end.state)
-        : null
     // Background tasks/subagents outlive turns; only session end proves contact loss.
     const settled = !covered
       ? null
-      : (terminalAgentJournalBody(body, end) ??
+      : (terminalAgentJournalBody(body, readEnd, turnScope) ??
         (scope === 'session' ? lostLiveWorkJournalBody(body, ending?.lostAt) : null))
     const identity = settled ? parseAgentJournalItemKey(itemId) : null
     if (settled && identity) {

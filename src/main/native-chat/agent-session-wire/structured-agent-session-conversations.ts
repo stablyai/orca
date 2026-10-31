@@ -1,5 +1,6 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+import type { JournalAppliedSubmission } from '../agent-session-journal/journal-reducer'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { StructuredAgentSessionHostSession } from './structured-agent-session-host-types'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -35,9 +36,10 @@ export class StructuredAgentSessionConversations extends Map<
       observe?: (
         sessionId: string,
         journal: AgentSessionJournal,
-        rows?: readonly JournalRow[]
+        rows?: readonly JournalRow[],
+        applied?: readonly JournalAppliedSubmission[]
       ) => void
-      forget?: (sessionId: string) => void
+      forget?: (sessionId: string, disposition: 'abandon' | 'retire') => void
       deliver: (sessionId: string, journal: AgentSessionJournal) => void
       /** Settle edges write no row and renew no activity clock. */
       deliverSettleEdge?: (sessionId: string, journal: AgentSessionJournal) => void
@@ -68,13 +70,13 @@ export class StructuredAgentSessionConversations extends Map<
       }
     }
     const current = () => this.attachments.get(sessionId) === source
-    const releaseCommit = journal.observeCommits((rows) => {
+    const releaseCommit = journal.observeCommits((rows, applied) => {
       if (!current()) {
         return
       }
       this.publish(sessionId, rows === undefined ? 'reset' : 'commit', rows)
       try {
-        this.delivery.observe?.(sessionId, journal, rows)
+        this.delivery.observe?.(sessionId, journal, rows, applied)
       } catch (error) {
         this.delivery.logger.warn('observing committed requests failed', {
           scope: 'request-outcomes',
@@ -212,10 +214,10 @@ export class StructuredAgentSessionConversations extends Map<
     this.observers.clear()
   }
 
-  override delete(sessionId: string): boolean {
+  override delete(sessionId: string, disposition: 'abandon' | 'retire' = 'abandon'): boolean {
     this.attachments.get(sessionId)?.release()
     this.attachments.delete(sessionId)
-    this.delivery.forget?.(sessionId)
+    this.delivery.forget?.(sessionId, disposition)
     this.activity.delete(sessionId)
     const removed = super.delete(sessionId)
     if (removed) {

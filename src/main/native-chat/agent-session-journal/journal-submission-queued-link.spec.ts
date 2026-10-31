@@ -1,6 +1,6 @@
 // Persist explicit queuedMessageId links; clients must not infer them by comparing unrelated IDs.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -36,7 +36,7 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   function open(): Promise<AgentSessionJournal> {
     return journals.open({
@@ -56,13 +56,13 @@ export function registerJournalSubmissionQueuedLinkTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-queued-link-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-queued-link-')))
     clock = 1_000
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   describe('the submission names the queued draft it hands off', () => {

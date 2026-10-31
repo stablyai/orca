@@ -1,3 +1,4 @@
+import { CodexTransientTurnFailures } from './codex-structured-turn-end-settlement'
 import { createCodexProviderActivityReader } from '../native-chat/agent-session-wire/provider-frame-activity'
 import { recordCodexContextUsage } from './codex-context-usage'
 import { CODEX_TOKEN_USAGE_METHOD } from './codex-subagent-activity'
@@ -59,6 +60,7 @@ export function createCodexJournalTranslator(
     items.streams.flush(threadId)
       ? CODEX_JOURNAL_ADMITTED
       : { accepted: false, reason: 'backpressure' }
+  const transientFailures = new CodexTransientTurnFailures()
   let readActivity = createCodexProviderActivityReader()
   const resetActivity = (threadId: string): void => {
     if (threadId === (deps.primaryThreadId?.() ?? null)) {
@@ -106,6 +108,7 @@ export function createCodexJournalTranslator(
 
   return {
     restoreThread: (threadId, thread) => {
+      transientFailures.clear()
       if (threadId === (deps.primaryThreadId?.() ?? null)) {
         readActivity = createCodexProviderActivityReader()
       }
@@ -148,6 +151,7 @@ export function createCodexJournalTranslator(
         )
       }
       if (event.type === 'ended') {
+        transientFailures.clear()
         const streamAdmission = flushStreams()
         if (!streamAdmission.accepted) {
           return streamAdmission
@@ -212,10 +216,14 @@ export function createCodexJournalTranslator(
       if (event.type !== 'notification') {
         return CODEX_JOURNAL_ADMITTED
       }
-      if (event.method === 'turn/started' || event.method === 'turn/completed') {
-        return event.method === 'turn/started'
-          ? turnBoundaries.start(event)
-          : turnBoundaries.complete(event)
+      const transient = transientFailures.observe(event.method, event.params)
+      if (event.method === 'turn/started') {
+        return turnBoundaries.start(event)
+      }
+      if (event.method === 'turn/completed') {
+        return turnBoundaries.complete(event, transient, () =>
+          transientFailures.acknowledge(event.params)
+        )
       }
       const compaction = compactions.handle(event)
       if (compaction) {
@@ -277,6 +285,7 @@ export function createCodexJournalTranslator(
       genericFrames.flush()
     },
     dispose: () => {
+      transientFailures.clear()
       items.dispose()
       prompts.dispose()
       genericFrames.dispose()

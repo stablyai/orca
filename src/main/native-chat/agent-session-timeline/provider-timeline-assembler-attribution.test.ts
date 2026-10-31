@@ -4,15 +4,17 @@ import { agentJournalTurnBody } from '../../../shared/agent-session-turn-record'
 import {
   backgroundTask,
   backgroundTaskState,
+  registerScopedProviderTimelineOwnership,
   closeProviderTimelineRigs,
   openProviderTimelineRig,
   openUnboundProviderTimelineAssembler,
   pendingApproval,
   providerItemId,
-  providerTurnItemId,
-  type ProviderTimelineRig
+  providerTurnItemId
 } from './provider-timeline-assembler-test-support'
+import type { ProviderTimelineRig } from './provider-timeline-assembler-test-support'
 
+registerScopedProviderTimelineOwnership()
 afterEach(closeProviderTimelineRigs)
 
 const answered = {

@@ -1,9 +1,11 @@
 import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
-import './structured-agent-session-codex-input-admission.spec'
+import { registerCodexSentEnvelope } from './structured-agent-session-codex-sent-envelope.spec'
+import { registerRetryCorrelation } from './structured-agent-session-retry-correlation.spec'
+import { registerRetryCompletion } from './structured-agent-session-retry-completion.spec'
+import { registerCodexProviderRetry } from './structured-agent-session-codex-provider-retry.spec'
 import {
   continuingStructuredAgentSessionInput,
-  finalizingStructuredAgentSessionInput,
-  structuredAgentSessionHandingOver
+  finalizingStructuredAgentSessionInput
 } from './structured-agent-session-handing-over'
 import { measureCodexInputWork } from './structured-agent-session-codex-input-perf-test-support'
 import { registerCodexInputFinalization } from './structured-agent-session-codex-input-finalization.spec'
@@ -13,21 +15,15 @@ import { agentSessionFailureWords } from '../../../shared/agent-session-failure-
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { CodexAppServerRequestError } from '../../codex/app-server/codex-app-server-request-error'
 import { codexStructuredPermissionPolicy } from '../../../shared/codex-permission-policy'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import { journalIdentityFor } from './structured-agent-session-attach'
 import { agentSessionSendSubmission as submission } from '../../../shared/agent-session-wire'
 import { AGENT_JOURNAL_THREAD_SCOPE as turnScope } from '../../../shared/agent-session-journal-types'
-
-import {
-  closeTestJournalHostDatabase,
-  openTestJournalHostDatabase
-} from '../agent-session-journal/journal-host-database-test-support'
+import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
 import { journalDatabasePath } from '../agent-session-journal/journal-host-database'
-import { mkdir, rm } from 'node:fs/promises'
+import { mkdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
-import { CodexAppServerTimeoutError } from '../../codex/codex-app-server-session'
 import {
   THREAD_ID as THREAD,
   adapterFor,
@@ -35,7 +31,6 @@ import {
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { codexTurnLifecycleFake } from '../../codex/codex-turn-lifecycle-fake'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createRestTestRig } from './structured-agent-session-rest-test-rig'
 import {
@@ -46,6 +41,12 @@ import {
 } from './structured-agent-session-host-test-data'
 import { recordingStructuredAgentSessionLogger } from './structured-agent-session-logger-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+import type { StructuredAgentSessionRequestFailure } from './structured-agent-session-request-failures'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { AgentSessionSubscribeEvent } from '../../../shared/agent-session-wire'
+import type { CodexStructuredSessionAdapter } from '../../codex/codex-structured-session-adapter'
+
+import './structured-agent-session-codex-input-admission.spec'
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -70,6 +71,7 @@ const sandbox = {
   excludeTmpdirEnvVar: true,
   excludeSlashTmp: true
 }
+let failures: StructuredAgentSessionRequestFailure[]
 let events: AgentSessionSubscribeEvent[]
 let root: string
 let host: StructuredAgentSessionHost
@@ -78,9 +80,36 @@ let codex: ReturnType<typeof fakeCodex>
 let notify: (method: string, params: unknown) => void
 let launch: { resumeThreadId?: string | null }
 let adapter: CodexStructuredSessionAdapter
+let ownedRig: Awaited<ReturnType<typeof createRestTestRig>> | undefined
+let restartHost: (
+  prepare?: (journal: AgentSessionJournal) => Promise<void>
+) => Promise<StructuredAgentSessionHost>
 
+let recoveryOperations: Promise<unknown>[] = []
+function trackRecoveryOperation(operation: Promise<unknown> | undefined): void {
+  if (!operation) {
+    return
+  }
+  recoveryOperations.push(operation)
+  void operation.catch(() => undefined)
+}
+async function drainRecoveryOperations(): Promise<void> {
+  const failures: unknown[] = []
+  do {
+    for (const result of await Promise.allSettled(recoveryOperations.splice(0))) {
+      if (result.status === 'rejected') {
+        failures.push(result.reason)
+      }
+    }
+  } while (recoveryOperations.length > 0)
+  if (failures.length > 0) {
+    throw new AggregateError(failures, 'fixture recovery operations failed')
+  }
+}
 beforeEach(async () => {
+  ownedRig = undefined
   events = []
+  failures = []
   retained = false
   codex = fakeCodex({
     'config/read': () => config,
@@ -125,25 +154,72 @@ beforeEach(async () => {
         ? {}
         : { permissionPolicy: codexStructuredPermissionPolicy(permissionMode ?? 'ask') })
     }),
-    onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
+    onDispatchSettledLate: (settlement) =>
+      trackRecoveryOperation(host.settleLateDispatch(settlement)),
     onEvent: (event) => {
       if (event.type === 'options-reported' || (event.type === 'ended' && 'cause' in event)) {
-        void host.handleAdapterEvent(event)
+        trackRecoveryOperation(host.handleAdapterEvent(event))
       }
     }
   })
-  const rig = await createRestTestRig({
-    agents: claudeAndCodexDeclared(),
-    logger: recordingStructuredAgentSessionLogger().logger,
-    adapter: Object.assign(adapter, { supportsCreate: () => true }),
-    mintSpawnToken: () => 'spawn-1',
-    hasOpenDispatch: () => retained,
-    probeOwner: undefined,
-    statusSink: undefined,
-    idleSweep: undefined
-  })
+  const rig = await createRestTestRig(
+    {
+      agents: claudeAndCodexDeclared(),
+      logger: recordingStructuredAgentSessionLogger().logger,
+      adapter: Object.assign(adapter, { supportsCreate: () => true }),
+      mintSpawnToken: () => 'spawn-1',
+      hasOpenDispatch: () => retained,
+      onRequestFailure: (failure) => failures.push(failure),
+      probeOwner: undefined,
+      statusSink: undefined,
+      idleSweep: undefined
+    },
+    {
+      scoped: true,
+      closeAdapter: () => adapter.closeAll(),
+      waitForRecovery: drainRecoveryOperations
+    }
+  )
+  ownedRig = rig
   root = rig.root
   host = rig.host
+  restartHost = async (prepare) => {
+    host = await rig.restart({ probeOwner: async () => ({ outcome: 'pid-absent' }) })
+    if (prepare) {
+      const record = rig.store.getRecord(SESSION)!
+      const saved = await rig.ownProfile(root).openJournal({
+        identity: journalIdentityFor(record, hostTestAttachParams(null)),
+        database: openTestJournalHostDatabase(root)
+      })
+      let bodyError: unknown
+      let bodyFailed = false
+      const cleanupErrors: unknown[] = []
+      try {
+        await prepare(saved)
+      } catch (error) {
+        bodyFailed = true
+        bodyError = error
+      } finally {
+        try {
+          await saved.close()
+        } catch (cleanup) {
+          cleanupErrors.push(cleanup)
+        }
+      }
+      if (cleanupErrors.length > 0) {
+        const cleanup = cleanupErrors[0]
+        if (bodyFailed) {
+          throw new AggregateError([bodyError, cleanup], 'saved journal and cleanup failed')
+        }
+        throw cleanup
+      }
+      if (bodyFailed) {
+        throw bodyError
+      }
+    }
+    await openTestChats(host, [SESSION])
+    return host
+  }
   const store = rig.store
   expect(
     await host.attach(
@@ -160,12 +236,42 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  vi.restoreAllMocks()
-  await adapter.closeAll()
-  await host.flushAllStreamedEvents()
-  await closeTestJournalHostDatabase(root)
-  Object.defineProperty(process, 'platform', { configurable: true, value: platform })
-  await rm(root, { recursive: true, force: true })
+  const current = ownedRig
+  ownedRig = undefined
+  const cleanupErrors: unknown[] = []
+  try {
+    vi.useRealTimers()
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+  try {
+    if (vi.isMockFunction(adapter?.disposeSession)) {
+      adapter.disposeSession.mockRestore()
+    }
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+  try {
+    await current?.dispose()
+  } catch (error) {
+    cleanupErrors.push(error)
+  }
+  for (const restore of [
+    () => vi.restoreAllMocks(),
+    () => Object.defineProperty(process, 'platform', { configurable: true, value: platform })
+  ]) {
+    try {
+      restore()
+    } catch (error) {
+      cleanupErrors.push(error)
+    }
+  }
+  if (cleanupErrors.length === 1) {
+    throw cleanupErrors[0]
+  }
+  if (cleanupErrors.length > 1) {
+    throw new AggregateError(cleanupErrors, 'Codex input fixture cleanup failed')
+  }
 })
 
 function stop(turnId?: string) {
@@ -232,6 +338,7 @@ async function began(id: string) {
 }
 
 it('keeps only the original pre-send result when a ready child exits during Auto preparation', async () => {
+  Object.defineProperty(process, 'platform', { configurable: true, value: 'linux' })
   await pick('ask')
   await began(await permissionSend('completed warm turn'))
   turns.end('completed')
@@ -248,6 +355,9 @@ it('keeps only the original pre-send result when a ready child exits during Auto
   await pick('auto')
   const id = await permissionSend('preserve this unsent original')
   const waiting = host.waitForSendSettlement(SESSION, id)
+  let bodyError: unknown
+  let bodyFailed = false
+  const cleanupErrors: unknown[] = []
   try {
     await vi.waitFor(() => expect(read).toHaveBeenCalledOnce())
     expect(adapter.heldSends(SESSION)).toContain(id)
@@ -281,9 +391,26 @@ it('keeps only the original pre-send result when a ready child exits during Auto
     ).toEqual([])
     expect(starts()).toHaveLength(1)
     expect(codex.connections).toHaveLength(1)
+  } catch (error) {
+    bodyFailed = true
+    bodyError = error
   } finally {
-    preparation.resolve(config)
-    await host.flushAllStreamedEvents()
+    try {
+      preparation.resolve(config)
+      await host.flushAllStreamedEvents()
+    } catch (cleanup) {
+      cleanupErrors.push(cleanup)
+    }
+  }
+  if (cleanupErrors.length > 0) {
+    const cleanup = cleanupErrors[0]
+    if (bodyFailed) {
+      throw new AggregateError([bodyError, cleanup], 'Auto preparation body and cleanup failed')
+    }
+    throw cleanup
+  }
+  if (bodyFailed) {
+    throw bodyError
   }
 })
 
@@ -452,6 +579,9 @@ it.each([
     const measured =
       population > 1 ? measureCodexInputWork(host, events, 'history', population) : undefined
     let waiting: ReturnType<typeof host.waitForSendSettlement> | undefined
+    let bodyError: unknown
+    let bodyFailed = false
+    const cleanupErrors: unknown[] = []
     try {
       if (mode === 'auto-before') {
         await pick('auto')
@@ -529,11 +659,28 @@ it.each([
         })
         expect(host['clientDelivery']['sendSettlement']['waiters'].has(SESSION)).toBe(false)
       }
+    } catch (error) {
+      bodyFailed = true
+      bodyError = error
     } finally {
-      refusal.resolve({})
-      host['clientDelivery']['sendSettlement'].closeSession(SESSION)
-      await waiting?.catch(() => {})
-      await measured?.()
+      try {
+        refusal.resolve({})
+        host['clientDelivery']['sendSettlement'].closeSession(SESSION)
+        await waiting?.catch(() => {})
+        await measured?.()
+      } catch (cleanup) {
+        cleanupErrors.push(cleanup)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanup = cleanupErrors[0]
+      if (bodyFailed) {
+        throw new AggregateError([bodyError, cleanup], 'stopped words body and cleanup failed')
+      }
+      throw cleanup
+    }
+    if (bodyFailed) {
+      throw bodyError
     }
   }
 )
@@ -572,193 +719,29 @@ it('preserves successful steering and only current retained work can inherit unk
   expect(starts()[2]?.params).toMatchObject({ clientUserMessageId: idle, sandboxPolicy: sandbox })
 })
 
-it.each(['stop', 'local-abort'] as const)(
-  'keeps an actual sent envelope when %s precedes its Promise delivery and the reply is lost',
-  async (cancellation) => {
-    const collaborators = host.collaboratorsForTests()
-    const session = collaborators.sessions.get(SESSION)!
-    const journal = session.journal
-    const hostChild = session.child!
-    const provider = adapter['sessions'].get(SESSION)!
-    const translator = provider.translator
-    Object.defineProperty(provider.connection, 'closeResult', {
-      get: () => (provider.connection.closed ? { root: 'exited', tree: 'exited' } : undefined)
-    })
-    const echoed = vi.spyOn(provider.dispatchEchoes, 'settle')
-    const persisted = vi.spyOn(journal, 'resolveDispatch')
-    const accepted = vi.spyOn(journal, 'acceptLate')
-    const settledLate = vi.spyOn(host, 'settleLateDispatch')
-    const deps = collaborators.conversationDelivery.loop['deps']
-    const ordered = deps.serialize
-    const lost = Promise.withResolvers<unknown>()
-    const responseObserved = lost.promise.catch(() => {})
-    const replyLost = new CodexAppServerTimeoutError('reply lost after the write')
-    const entered = Promise.withResolvers<void>()
-    const delivery = Promise.withResolvers<void>()
-    const frameDelivery = Promise.withResolvers<void>()
-    const forwarded: Promise<unknown>[] = []
-    codex.routes['turn/start'] = () => lost.promise
-    let stopping: Promise<unknown> | undefined
-    let frameEnded = false
-    let delivered = false
-    const dispatch = adapter.dispatch.bind(adapter)
-    let restoreSerialize: (() => void) | undefined
-    const dispatched = vi.spyOn(adapter, 'dispatch').mockImplementation(async (input) => {
-      const serialized = vi.spyOn(deps, 'serialize').mockImplementation((sessionId, task) => {
-        const invoked = ordered(sessionId, task)
-        const resultDelivery = invoked.then(async (result) => {
-          if (result && typeof result === 'object' && 'kind' in result && result.kind === 'sent') {
-            expect(result).toMatchObject({ kind: 'sent', response: expect.any(Promise) })
-            expect(starts()[0]?.params?.clientUserMessageId).toBe(input.clientMessageId)
-            entered.resolve()
-            await delivery.promise
-            delivered = true
-          }
-          return result
-        })
-        forwarded.push(invoked, resultDelivery)
-        return resultDelivery
-      })
-      restoreSerialize = () => serialized.mockRestore()
-      try {
-        return await dispatch(input)
-      } finally {
-        if (cancellation === 'stop') {
-          await frameDelivery.promise
-        }
-        frameEnded = true
-      }
-    })
-    const id = await permissionSend('one actual write')
-    const waiting = host.waitForSendSettlement(SESSION, id)
-    const waiterObserved = vi.fn()
-    const waiterObserver = waiting.then(waiterObserved, waiterObserved)
-    try {
-      await entered.promise
-      expect(starts()).toHaveLength(1)
-      expect(await row(id)).toMatchObject({ dispatchState: 'pending' })
-      expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(true)
-      expect(frameEnded).toBe(false)
-      expect(waiterObserved).not.toHaveBeenCalled()
-      expect(delivered).toBe(false)
-      if (cancellation === 'stop') {
-        stopping = stop()
-      } else {
-        expect(
-          collaborators.runtimeState.acquireAborts.abort(SESSION, 'local wait cancelled')
-        ).toEqual({ reached: true, handedOver: true })
-      }
-      await vi.waitFor(() => expect(dispatched.mock.calls[0]?.[0].signal?.aborted).toBe(true))
-      expect(delivered).toBe(false)
-      expect(frameEnded).toBe(false)
-      expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(true)
-      delivery.resolve()
-      lost.reject(replyLost)
-      if (cancellation === 'stop') {
-        expect(await stopping).toMatchObject({ ok: true })
-        await vi.waitFor(() => expect(session.child).toBeNull())
-        expect(session.lastEndedChild).toMatchObject({
-          fence: hostChild.fence,
-          generation: hostChild.generation,
-          cause: 'user-stop',
-          rootGone: true
-        })
-        expect(provider.ended).toBe(true)
-        expect(provider.connection.closed).toBe(true)
-        expect(turns.turnId).toBeNull()
-        expect(frameEnded).toBe(false)
-        expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(true)
-        expect(submission((await waiting)?.value)).toMatchObject({
-          dispatchState: 'rejected',
-          rejection: { kind: 'cancelled' },
-          recovered: true
-        })
-        expect(
-          (await host.journalSnapshot(SESSION)).items.filter(
-            (item) => item.body.kind === 'status' && item.body.text === 'Cancellation requested.'
-          )
-        ).toHaveLength(1)
-      } else {
-        expect(submission((await waiting)?.value)).toMatchObject({ dispatchState: 'unknown' })
-        expect(session.child).toBe(hostChild)
-        expect(session.lastEndedChild).toBeUndefined()
-        expect(journal.queuedMessages.userStopInForce()).toBeNull()
-        expect(adapter['sessions'].get(SESSION)).toBe(provider)
-        expect(provider.connection).toBe(codex.connections[0])
-        expect(provider.connection.closed).toBe(false)
-        expect(codex.connections[0]?.closeCount).toBe(0)
-        expect(provider.ended).toBe(false)
-        expect(provider.translator).toBe(translator)
-        expect(translator).not.toBeNull()
-        turns.routes['turn/start']()
-        turns.start()
-        turns.echo(id)
-        await vi.waitFor(async () =>
-          expect(await row(id)).toMatchObject({
-            dispatchState: 'accepted',
-            providerItemId: `codex:${THREAD}:turn-1:0`
-          })
-        )
-        expect(echoed).toHaveBeenCalledWith(id)
-        expect(echoed.mock.results.some((result) => result.value === true)).toBe(true)
-        expect(accepted).toHaveBeenCalledTimes(1)
-        expect(settledLate).toHaveBeenCalledWith({
-          sessionId: SESSION,
-          clientMessageId: id,
-          providerIdentity: { provider: 'codex', threadId: THREAD, turnId: 'turn-1', ordinal: 0 }
-        })
-      }
-      frameDelivery.resolve()
-      await vi.waitFor(() => expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false))
-      expect(structuredAgentSessionHandingOver(journal).has(id)).toBe(false)
-      expect(dispatched).toHaveBeenCalledTimes(1)
-      expect(starts()).toHaveLength(1)
-      expect(codex.connections).toHaveLength(1)
-      expect(frameEnded).toBe(true)
-      await waiterObserver
-      expect(waiterObserved).toHaveBeenCalledTimes(1)
-    } finally {
-      delivery.resolve()
-      frameDelivery.resolve()
-      lost.reject(replyLost)
-      const frames = await Promise.allSettled(dispatched.mock.results.map((result) => result.value))
-      await vi.waitFor(() => expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false))
-      const drains = await Promise.allSettled([
-        responseObserved,
-        waiterObserver,
-        stopping,
-        ...forwarded,
-        ...settledLate.mock.results.map((result) => result.value),
-        ...accepted.mock.results.map((result) => result.value),
-        ...persisted.mock.results.map((result) => result.value)
-      ])
-      await host.flushStreamedEvents(SESSION)
-      restoreSerialize?.()
-      dispatched.mockRestore()
-      settledLate.mockRestore()
-      accepted.mockRestore()
-      persisted.mockRestore()
-      echoed.mockRestore()
-      expect(frames).toEqual([{ status: 'rejected', reason: replyLost }])
-      expect(drains.filter((result) => result.status === 'rejected')).toEqual([])
-    }
-  }
-)
+registerCodexSentEnvelope(codexInputFinalizationFixture)
 
 async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
   const journal = host['sessions'].get(SESSION)!.journal
   const snapshotRoot = join(root, 'crash')
+  const ownership = ownedRig!.ownProfile(snapshotRoot)
   await mkdir(snapshotRoot)
   await openTestJournalHostDatabase(root).db.backup(journalDatabasePath(snapshotRoot))
   const fresh = fakeCodex()
   const restartedAdapter = adapterFor(fresh)
+  ownership.closeAdapter(() => restartedAdapter.closeAll())
+  ownership.database()
   const restarted = new StructuredAgentSessionHost({
     ...host['deps'],
     adapter: restartedAdapter,
-    store: await openTestAgentSessionRecordStore(snapshotRoot),
+    store: ownership.store(await openTestAgentSessionRecordStore(snapshotRoot)),
     journalDatabase: openTestJournalHostDatabase(snapshotRoot),
     probeOwner: async () => ({ outcome: 'pid-absent' })
   })
+  ownership.host(restarted)
+  let bodyError: unknown
+  let bodyFailed = false
+  const cleanupErrors: unknown[] = []
   try {
     await openTestChats(restarted)
     const recovered = await restarted.journalSnapshot(SESSION)
@@ -770,10 +753,25 @@ async function assertInputRecoveredAfterSnapshot(id: string): Promise<void> {
       recovered: true
     })
     expect(fresh.connections).toHaveLength(0)
+  } catch (error) {
+    bodyFailed = true
+    bodyError = error
   } finally {
-    await restarted.flushAllStreamedEvents()
-    await restartedAdapter.closeAll()
-    await closeTestJournalHostDatabase(snapshotRoot)
+    try {
+      await restarted.flushAllStreamedEvents()
+    } catch (cleanup) {
+      cleanupErrors.push(cleanup)
+    }
+  }
+  if (cleanupErrors.length > 0) {
+    const cleanup = cleanupErrors[0]
+    if (bodyFailed) {
+      throw new AggregateError([bodyError, cleanup], 'snapshot body and cleanup failed')
+    }
+    throw cleanup
+  }
+  if (bodyFailed) {
+    throw bodyError
   }
 }
 
@@ -784,6 +782,10 @@ export function codexInputFinalizationFixture() {
     codex,
     config,
     turns,
+    events,
+    failures,
+    notify,
+    envelope,
     permissionSend,
     began,
     submission,
@@ -792,6 +794,8 @@ export function codexInputFinalizationFixture() {
     row,
     starts,
     assertInputRecoveredAfterSnapshot,
+    restartHost: (prepare?: (journal: AgentSessionJournal) => Promise<void>) =>
+      restartHost(prepare),
     conversationFence: () => host['deps'].store.getRecord(SESSION)!.lease.runtimeFence,
     waitForInputFinalization: (journal: AgentSessionJournal, id: string) =>
       vi.waitFor(() => expect(finalizingStructuredAgentSessionInput(journal, id)).toBe(false)),
@@ -801,3 +805,9 @@ export function codexInputFinalizationFixture() {
 }
 
 registerCodexInputFinalization(codexInputFinalizationFixture)
+
+registerCodexProviderRetry(codexInputFinalizationFixture)
+
+registerRetryCompletion(codexInputFinalizationFixture)
+
+registerRetryCorrelation(codexInputFinalizationFixture)

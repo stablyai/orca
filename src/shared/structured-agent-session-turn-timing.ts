@@ -1,16 +1,17 @@
-// Durable host-clock lifecycle endpoints/provider durations keep settled timing identical on desktop/mobile without client clocks.
-
 import { agentJournalSubmissionKey } from './agent-session-journal-item-key'
+import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
+import { agentTurnVerdict } from './agent-turn-outcome'
+import { structuredAgentTurnAnchors } from './native-chat-turn-membership'
+import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
 import type {
   AgentJournalRenderItem,
   AgentJournalSubmission,
   AgentJournalTurnLifecycleState
 } from './agent-session-journal-types'
-import { readAgentJournalTurn, readAgentJournalTurnOutcome } from './agent-session-turn-record'
-import { agentTurnVerdict, type AgentTurnOutcome } from './agent-turn-outcome'
-import { structuredAgentTurnAnchors } from './native-chat-turn-membership'
-import type { NativeChatSettledTurn, NativeChatSettledTurns } from './native-chat-turn-status'
+import type { AgentTurnOutcome } from './agent-turn-outcome'
 import type { AgentSessionLatestTurn } from './agent-session-wire'
+
+// Durable host-clock lifecycle endpoints/provider durations keep settled timing identical on desktop/mobile without client clocks.
 
 export type StructuredAgentTurnTiming = {
   state: AgentJournalTurnLifecycleState
@@ -75,7 +76,7 @@ function readTiming(
 /** One root-turn scan, indexed by provider ID and opener/self anchor (structuredAgentTurnAnchors).
  * Omit untimed anchor rows unless explicitly unverifiable (null). */
 type StructuredAgentJournalTurns = {
-  byAnchor: ReadonlyMap<string, StructuredAgentTurnTiming | null>
+  byAnchor: Map<string, StructuredAgentTurnTiming | null>
   byTurnId: ReadonlyMap<string, StructuredAgentTurnTiming | null>
 }
 
@@ -206,6 +207,27 @@ export function selectStructuredAgentTurnBars(
   runningTiming: StructuredAgentTurnTiming | null
 } {
   const turns = readStructuredAgentJournalTurns(items, submissions)
+  if (latestTurn && !turns.byTurnId.has(latestTurn.turn.turnId)) {
+    // Only an exact loaded opener can own an off-page settled footer.
+    const opener = latestTurn.turn.userItemId
+    const submission = submissions.find((entry) => entry.providerItemId === opener)
+    const anchor = submission ? agentJournalSubmissionKey(submission.clientMessageId) : opener
+    const loaded =
+      anchor &&
+      items.some(
+        (item) =>
+          item.itemId === anchor && item.body.kind === 'message' && item.body.role === 'user'
+      )
+    if (loaded && anchor) {
+      const timing = readTiming(
+        { body: { kind: 'turn', ...latestTurn.turn }, observedAt: latestTurn.observedAt },
+        undefined
+      )
+      if (timing) {
+        turns.byAnchor.set(anchor, timing)
+      }
+    }
+  }
   const unloaded =
     turnId !== null && !turns.byTurnId.has(turnId) && latestTurn?.turn.turnId === turnId
       ? latestTurn

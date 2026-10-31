@@ -25,13 +25,19 @@ let serial = 0
 let warned: ReturnType<typeof vi.spyOn>
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig({ restartable: true })
+  rig = undefined!
+  rig = await createQueuedMessageTestRig({ scopedOwnership: true, restartable: true })
   warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 
 afterEach(async () => {
-  vi.restoreAllMocks()
-  await rig.dispose()
+  const owned = rig
+  rig = undefined!
+  try {
+    await owned?.dispose()
+  } finally {
+    vi.restoreAllMocks()
+  }
 })
 
 function opId(): string {

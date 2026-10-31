@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -29,15 +29,15 @@ export function registerJournalQueuedRejectionBatchTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-queued-rejection-batch-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-queued-rejection-batch-')))
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   async function openWithQueued(...ids: string[]): Promise<AgentSessionJournal> {

@@ -1,6 +1,6 @@
 // A crash after dispatch leaves delivery permanently unknown: replay preserves one message without resending or inferring refusal.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -52,7 +52,7 @@ export function registerJournalCrashBoundaryTests(): void {
 
   const LEGACY_CODEX_TURN_UNNAMED = 'codex app-server started a turn it did not name in time'
 
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   async function open() {
     return journals.open({
@@ -64,13 +64,13 @@ export function registerJournalCrashBoundaryTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-crash-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-crash-')))
     clock = 1_000
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   describe('crash between provider accept and journal commit', () => {

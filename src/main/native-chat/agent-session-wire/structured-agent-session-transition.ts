@@ -1,20 +1,22 @@
-// Admit each event’s writes whole so producer state cannot advance after partial admission.
-// Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
-
+import { stageStructuredAgentSessionProviderTransition } from './structured-agent-session-provider-retry-view'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
+import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
+import type { ProducerTransition } from './structured-agent-session-provider-retry-view'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity
 } from '../../../shared/agent-session-journal-types'
 import type { JournalLifecycleMutationInput } from '../agent-session-journal/journal-row-builders'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import type { JournalStep } from '../agent-session-journal/journal-step-writer'
-import { estimateStructuredAgentSessionItemBytes } from './structured-agent-session-event-sink-estimate'
 import type {
   StructuredAgentSessionItemAppendOptions,
   StructuredAgentSessionSinkAdmission
 } from './structured-agent-session-event-sink'
 import type { StructuredAgentSessionSinkQueue } from './structured-agent-session-event-sink-queue'
-import { structuredAgentSessionJournalAppendOptions } from './structured-agent-session-journal-append-options'
+
+// Admit each event’s writes whole so producer state cannot advance after partial admission.
+// Execute against the latest fold in one queue turn; failure retains the written prefix and skips later steps.
 
 export type StructuredAgentSessionTransitionJournal = Pick<
   AgentSessionJournal,
@@ -45,7 +47,7 @@ export type StructuredAgentSessionTransitionStep =
       ) => readonly JournalLifecycleMutationInput[]
     }
 
-export type StructuredAgentSessionTransition = {
+export type StructuredAgentSessionTransition = ProducerTransition & {
   steps: readonly StructuredAgentSessionTransitionStep[]
   /** Charge the lifecycle budget for ending/settling work. */
   lifecycle: boolean
@@ -69,7 +71,10 @@ export type StructuredAgentSessionTransitionSink = {
 export function createStructuredAgentSessionTransitionMembers(
   queue: StructuredAgentSessionSinkQueue
 ): Required<StructuredAgentSessionTransitionSink> {
-  return { tryAppendTransition: transitionAppend(queue), journalItems: queue.journalItems }
+  return {
+    tryAppendTransition: transitionAppend(queue),
+    journalItems: queue.journalItems
+  }
 }
 
 function transitionAppend(
@@ -84,36 +89,56 @@ function transitionAppend(
       finalTail: transition.finalTail,
       run: async (bound) => {
         const { journal, fence } = bound
-        const wrote = await journal.appendSteps(
-          transition.steps.map((step): JournalStep =>
-            step.kind === 'item'
-              ? {
-                  kind: 'item',
-                  resolve: () => {
-                    const resolved = step.resolve(journal)
-                    if (
-                      resolved &&
-                      estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body) >
-                        step.reservedBytes
-                    ) {
-                      throw new Error(STEP_OVERFLOW)
-                    }
-                    return resolved
-                  },
-                  options: structuredAgentSessionJournalAppendOptions(fence, step.options)
-                }
-              : {
-                  kind: 'settlement',
-                  batch: {
-                    settlementId: step.settlementId,
-                    fence,
-                    ownerFence: fence,
-                    recovered: step.recovered,
-                    resolve: () => step.resolve(journal)
+        let discard: (() => void) | undefined
+        const stage = () => {
+          if ((transition.transientTerminal || transition.turnLifecycle) && !discard) {
+            discard = stageStructuredAgentSessionProviderTransition(journal, transition)
+          }
+        }
+        let wrote: boolean[]
+        try {
+          wrote = await journal.appendSteps(
+            transition.steps.map((step): JournalStep =>
+              step.kind === 'item'
+                ? {
+                    kind: 'item',
+                    resolve: () => {
+                      const resolved = step.resolve(journal)
+                      if (resolved) {
+                        stage()
+                      }
+                      if (
+                        resolved &&
+                        estimateStructuredAgentSessionItemBytes(resolved.identity, resolved.body) >
+                          step.reservedBytes
+                      ) {
+                        throw new Error(STEP_OVERFLOW)
+                      }
+                      return resolved
+                    },
+                    options: structuredAgentSessionJournalAppendOptions(fence, step.options)
                   }
-                }
+                : {
+                    kind: 'settlement',
+                    batch: {
+                      settlementId: step.settlementId,
+                      fence,
+                      ownerFence: fence,
+                      recovered: step.recovered,
+                      resolve: () => {
+                        const mutations = step.resolve(journal)
+                        if (mutations.length) {
+                          stage()
+                        }
+                        return mutations
+                      }
+                    }
+                  }
+            )
           )
-        )
+        } finally {
+          discard?.()
+        }
         if (transition.publish && wrote.includes(true)) {
           bound.publish()
         }

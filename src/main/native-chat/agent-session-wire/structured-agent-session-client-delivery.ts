@@ -267,9 +267,9 @@ export class StructuredAgentSessionClientDelivery {
   ): (() => void) => this.turnCompletionFeed.subscribe(subscriber)
 
   /** Closing handles retains session-list rows; agent-status retains them only while tabs need them. */
-  closeSession(sessionId: string, options: { listed: boolean }): void {
+  closeSession(sessionId: string, options: { listed: boolean }): (() => void) | undefined {
     this.publications?.publish(sessionId, 'detach')
-    this.requestFailures.forget(sessionId)
+    const completeRead = this.requestFailures.forget(sessionId, 'retire')
     this.sendSettlement.closeSession(sessionId)
     if (options.listed) {
       this.statusFeed.revokeLive(sessionId)
@@ -278,12 +278,13 @@ export class StructuredAgentSessionClientDelivery {
     }
     // Reopen rebaselines instead of reannouncing the prior turn.
     this.turnCompletionFeed.forget(sessionId)
+    return completeRead
   }
 
   async closeAll(): Promise<void> {
     this.publications?.endPublications()
-    await this.drainStatusWrites()
     this.requestFailures.clear()
+    await this.drainStatusWrites()
     this.stopAtRestCommandUpdates()
     this.sendSettlement.closeAll()
     this.journalObservers.clear()

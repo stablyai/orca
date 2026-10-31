@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -13,7 +13,6 @@ import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/st
 import { settleObservedExitForTest } from '../agent-session-wire/structured-agent-session-observed-exit.test-fixture'
 import {
   createTrackedJournalOpener,
-  openTestJournalHostDatabase,
   readTestJournalRows
 } from './journal-host-database-test-support'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
@@ -22,7 +21,7 @@ import type { AgentSessionJournal } from './journal-store'
 
 export function registerJournalAtomicTerminalSettlementTests(): void {
   const SESSION = 'atomic-settlement'
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
   let root: string
   let journal: AgentSessionJournal
 
@@ -41,26 +40,25 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-atomic-settlement-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-atomic-settlement-')))
     journal = await open()
   })
 
   afterEach(async () => {
     vi.restoreAllMocks()
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    journal = undefined!
+    await journals.dispose()
   })
 
   function rows() {
-    return readTestJournalRows(openTestJournalHostDatabase(root).db, SESSION, journal.epoch).map(
-      (stored) => {
-        const parsed = parseJournalRow(stored.rowJson)
-        if (!parsed.ok) {
-          throw new Error('test row failed to parse')
-        }
-        return parsed.row
+    return readTestJournalRows(journals.database(root).db, SESSION, journal.epoch).map((stored) => {
+      const parsed = parseJournalRow(stored.rowJson)
+      if (!parsed.ok) {
+        throw new Error('test row failed to parse')
       }
-    )
+      return parsed.row
+    })
   }
 
   async function seedWork(count = 201) {
@@ -111,7 +109,7 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
       'rolls back a later %s rejection, publishes nothing, then retries exactly once',
       async (kind) => {
         await seedWork()
-        const database = openTestJournalHostDatabase(root)
+        const database = journals.database(root)
         const before = journal.snapshot()
         const diskBefore = rows()
         const published: AgentJournalSnapshot[] = []
@@ -397,7 +395,7 @@ export function registerJournalAtomicTerminalSettlementTests(): void {
           showUnexpectedExitOutcome: mode === 'startup',
           ...(mode === 'startup' ? { exitedDuringStartup: { generation: 'start-7' } } : {})
         }
-        const database = openTestJournalHostDatabase(root)
+        const database = journals.database(root)
         const before = journal.snapshot()
         const diskBefore = rows()
         const published: AgentJournalSnapshot[] = []

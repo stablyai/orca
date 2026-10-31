@@ -1,5 +1,8 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { existsSync, mkdtempSync } from 'node:fs'
+import * as fs from 'node:fs'
+import * as net from 'node:net'
+import * as http from 'node:http'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
@@ -9,7 +12,20 @@ import { readRuntimeMetadata, writeRuntimeMetadata } from './runtime-metadata'
 import { createRuntimeTransportMetadata } from './runtime-rpc/runtime-rpc-socket-metadata'
 import { OrcaRuntimeRpcServer } from './runtime-rpc'
 import type { DeviceRegistry } from './device-registry'
+import * as hostDescriptorModule from './host-descriptor'
 import type { RuntimeMetadata } from '../../shared/runtime-bootstrap'
+
+vi.mock('node:net', async (importOriginal) => {
+  return { ...(await importOriginal<typeof net>()) }
+})
+
+vi.mock('node:http', async (importOriginal) => {
+  return { ...(await importOriginal<typeof http>()) }
+})
+
+vi.mock('node:fs', async (importOriginal) => {
+  return { ...(await importOriginal<typeof fs>()) }
+})
 
 vi.mock('../git/worktree', () => {
   const worktrees = [
@@ -26,6 +42,56 @@ vi.mock('../git/worktree', () => {
     listWorktreesStrict: vi.fn().mockResolvedValue(worktrees)
   }
 })
+
+type RpcNativeObservation = {
+  server: net.Server
+  listened: boolean
+  closed: boolean
+  completion: Promise<void>
+}
+
+function observeRpcNativeServer(server: net.Server): RpcNativeObservation {
+  const observation: RpcNativeObservation = {
+    server,
+    listened: false,
+    closed: false,
+    completion: new Promise<void>((resolve) => {
+      server.once('close', () => {
+        observation.closed = true
+        resolve()
+      })
+    })
+  }
+  server.once('listening', () => {
+    observation.listened = true
+  })
+  return observation
+}
+
+// Only the RED negative control needs this exact native owner after production loses it.
+async function emergencyCloseRpcNativeServer(observation: RpcNativeObservation): Promise<void> {
+  if (!observation.listened || observation.closed) {
+    return
+  }
+  let timeout: ReturnType<typeof setTimeout> | undefined
+  const deadline = new Promise<never>((_resolve, reject) => {
+    timeout = setTimeout(() => reject(new Error('RPC native close receipt timed out')), 5_000)
+  })
+  const closing = new Promise<void>((resolve, reject) => {
+    observation.server.close((error) => {
+      if (error) {
+        reject(error)
+      } else {
+        resolve()
+      }
+    })
+  })
+  try {
+    await Promise.race([Promise.all([closing, observation.completion]), deadline])
+  } finally {
+    clearTimeout(timeout)
+  }
+}
 
 describe('OrcaRuntimeRpcServer', () => {
   it('writes runtime metadata with transport details when started', async () => {
@@ -254,4 +320,481 @@ describe('OrcaRuntimeRpcServer', () => {
 
     writeMetadataSpy.mockRestore()
   })
+
+  it.skipIf(process.platform === 'win32')(
+    'retires the actual native listener after post-listen chmod EIO',
+    async () => {
+      const runtime = new OrcaRuntimeService()
+      const userDataPath = mkdtempSync(join('/tmp', 'o-rpc-'))
+      let server: OrcaRuntimeRpcServer | undefined
+      const endpoint = createRuntimeTransportMetadata(
+        userDataPath,
+        process.pid,
+        process.platform,
+        runtime.getRuntimeId()
+      ).endpoint
+      const initiating = Object.assign(new Error('socket chmod failed'), { code: 'EIO' })
+      const native: RpcNativeObservation[] = []
+      const restores: (() => void)[] = []
+      const operations: Promise<unknown>[] = []
+      const errors: unknown[] = []
+      try {
+        const rpc = new OrcaRuntimeRpcServer({ methods: [], runtime, userDataPath })
+        server = rpc
+        expect(Buffer.byteLength(endpoint, 'utf8')).toBeLessThan(104)
+        const create = net.createServer
+        const createSpy = vi.spyOn(net, 'createServer').mockImplementation((...args) => {
+          const acquired = create(...args)
+          native.push(observeRpcNativeServer(acquired))
+          return acquired
+        })
+        restores.push(() => createSpy.mockRestore())
+        const chmod = fs.chmodSync
+        const chmodSpy = vi.spyOn(fs, 'chmodSync').mockImplementation((path, mode) => {
+          if (path === endpoint) {
+            throw initiating
+          }
+          return chmod(path, mode)
+        })
+        restores.push(() => chmodSpy.mockRestore())
+        const started = Promise.allSettled([rpc.start()])
+        operations.push(started)
+        const [result] = await started
+        expect(result?.status).toBe('rejected')
+        if (result?.status !== 'rejected') {
+          throw new Error('chmod failure unexpectedly started RPC')
+        }
+        expect(result.reason).toBe(initiating)
+        expect(chmodSpy).toHaveBeenCalledWith(endpoint, 0o600)
+        expect(native).toHaveLength(1)
+        expect(native[0]?.listened).toBe(true)
+        expect(native[0]?.closed).toBe(true)
+        expect(readRuntimeMetadata(userDataPath)).toBeNull()
+        await rpc.stop()
+        expect(native[0]?.closed).toBe(true)
+        expect(existsSync(endpoint)).toBe(false)
+      } catch (error) {
+        errors.push(error)
+      }
+      for (const restore of restores) {
+        try {
+          restore()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      await Promise.allSettled(operations)
+      let stopped = false
+      try {
+        await server?.stop()
+        stopped = true
+      } catch (error) {
+        errors.push(error)
+      }
+      for (const observation of native) {
+        try {
+          await emergencyCloseRpcNativeServer(observation)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (stopped && native.every((observation) => !observation.listened || observation.closed)) {
+        try {
+          fs.rmSync(userDataPath, { recursive: true, force: true })
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (errors.length === 1) {
+        throw errors[0]
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, 'RPC chmod regression and cleanup failed', {
+          cause: errors[0]
+        })
+      }
+    }
+  )
+
+  it('joins two public stops through held real initialization without publishing after stop', async () => {
+    const userDataPath = mkdtempSync(
+      join(process.platform === 'win32' ? tmpdir() : '/tmp', 'o-rpc-')
+    )
+    let server: OrcaRuntimeRpcServer | undefined
+    const native: RpcNativeObservation[] = []
+    const restores: (() => void)[] = []
+    const errors: unknown[] = []
+    let releaseDescriptor = (): void => {}
+    const heldDescriptor = new Promise<void>((resolve) => {
+      releaseDescriptor = resolve
+    })
+    let started: Promise<PromiseSettledResult<void>[]> | undefined
+    let stopping: Promise<PromiseSettledResult<void>[]> | undefined
+    let completedStops = 0
+    let latePublications = 0
+    try {
+      const rpc = new OrcaRuntimeRpcServer({
+        methods: [],
+        runtime: new OrcaRuntimeService(),
+        userDataPath,
+        enableWebSocket: true,
+        wsPort: 0
+      })
+      server = rpc
+      const create = net.createServer
+      const createSpy = vi.spyOn(net, 'createServer').mockImplementation((...args) => {
+        const acquired = create(...args)
+        native.push(observeRpcNativeServer(acquired))
+        return acquired
+      })
+      restores.push(() => createSpy.mockRestore())
+      const createHttp = http.createServer
+      const httpSpy = vi.spyOn(http, 'createServer').mockImplementation((...args) => {
+        const acquired = createHttp(...args)
+        native.push(observeRpcNativeServer(acquired))
+        return acquired
+      })
+      restores.push(() => httpSpy.mockRestore())
+      const load = hostDescriptorModule.loadHostDescriptor
+      const descriptorSpy = vi
+        .spyOn(hostDescriptorModule, 'loadHostDescriptor')
+        .mockImplementation(async (...args) => {
+          await heldDescriptor
+          return load(...args)
+        })
+      restores.push(() => descriptorSpy.mockRestore())
+      const write = runtimeMetadataModule.writeRuntimeMetadata
+      const writeSpy = vi
+        .spyOn(runtimeMetadataModule, 'writeRuntimeMetadata')
+        .mockImplementation((...args) => {
+          if (completedStops > 0) {
+            latePublications += 1
+          }
+          return write(...args)
+        })
+      restores.push(() => writeSpy.mockRestore())
+      started = Promise.allSettled([rpc.start()])
+      await vi.waitFor(() => expect(descriptorSpy).toHaveBeenCalledOnce())
+      expect(native).toHaveLength(1)
+      expect(native[0]?.listened).toBe(true)
+      const stops = [rpc.stop(), rpc.stop()]
+      stopping = Promise.allSettled(stops)
+      for (const stop of stops) {
+        void stop.then(
+          () => {
+            completedStops += 1
+          },
+          () => {
+            completedStops += 1
+          }
+        )
+      }
+      await new Promise<void>((resolve) => setImmediate(resolve))
+      expect(completedStops).toBe(0)
+    } catch (error) {
+      errors.push(error)
+    }
+    releaseDescriptor()
+    if (started) {
+      const results = await started
+      try {
+        expect(results).toEqual([{ status: 'fulfilled', value: undefined }])
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    if (stopping) {
+      const results = await stopping
+      try {
+        expect(results).toEqual([
+          { status: 'fulfilled', value: undefined },
+          { status: 'fulfilled', value: undefined }
+        ])
+      } catch (error) {
+        errors.push(error)
+      }
+      try {
+        expect(completedStops).toBe(2)
+        expect(latePublications).toBe(0)
+        expect(native).toHaveLength(2)
+        expect(native.every((observation) => observation.listened && observation.closed)).toBe(true)
+        await server?.checkRuntimeMetadataOwnership()
+        expect(latePublications).toBe(0)
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    for (const restore of restores) {
+      try {
+        restore()
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    let stopped = false
+    try {
+      await server?.stop()
+      stopped = true
+    } catch (error) {
+      errors.push(error)
+    }
+    for (const observation of native) {
+      try {
+        await emergencyCloseRpcNativeServer(observation)
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    if (stopped && native.every((observation) => !observation.listened || observation.closed)) {
+      try {
+        fs.rmSync(userDataPath, { recursive: true, force: true })
+      } catch (error) {
+        errors.push(error)
+      }
+    }
+    if (errors.length === 1) {
+      throw errors[0]
+    }
+    if (errors.length > 1) {
+      throw new AggregateError(errors, 'RPC pending initialization and cleanup failed', {
+        cause: errors[0]
+      })
+    }
+  })
+
+  it.skipIf(process.platform === 'win32')(
+    'retains metadata failure and injected post-close unlink debt while joining independent cleanup',
+    async () => {
+      const runtime = new OrcaRuntimeService()
+      const userDataPath = mkdtempSync(join('/tmp', 'o-rpc-'))
+      let server: OrcaRuntimeRpcServer | undefined
+      const endpoint = createRuntimeTransportMetadata(
+        userDataPath,
+        process.pid,
+        process.platform,
+        runtime.getRuntimeId()
+      ).endpoint
+      const initiating = Object.assign(new Error('metadata publication failed'), { code: 'EIO' })
+      const unlinkFailure = Object.assign(new Error('injected post-close unlink failed'), {
+        code: 'EIO'
+      })
+      const native: RpcNativeObservation[] = []
+      const restores: (() => void)[] = []
+      const errors: unknown[] = []
+      const timeline: string[] = []
+      let releaseHttpClose = (): void => {}
+      const heldHttpClose = new Promise<void>((resolve) => {
+        releaseHttpClose = resolve
+      })
+      let rejectUnlink = true
+      let injectResidue = true
+      let unlinkAttempts = 0
+      let httpCloseArrived = false
+      let completedStops = 0
+      let started: Promise<PromiseSettledResult<void>[]> | undefined
+      let stopping: Promise<PromiseSettledResult<void>[]> | undefined
+      try {
+        const rpc = new OrcaRuntimeRpcServer({
+          methods: [],
+          runtime,
+          userDataPath,
+          enableWebSocket: true,
+          wsPort: 0
+        })
+        server = rpc
+        expect(Buffer.byteLength(endpoint, 'utf8')).toBeLessThan(104)
+        const create = net.createServer
+        const createSpy = vi.spyOn(net, 'createServer').mockImplementation((...args) => {
+          const acquired = create(...args)
+          const observation = observeRpcNativeServer(acquired)
+          native.push(observation)
+          acquired.once('close', () => {
+            if (injectResidue && observation.listened) {
+              try {
+                // Node already closed/unlinked S; this is deliberately injected filesystem debt.
+                fs.writeFileSync(endpoint, 'injected post-close residue')
+                timeline.push('unix-native-closed')
+              } catch (error) {
+                errors.push(error)
+              }
+            }
+          })
+          return acquired
+        })
+        restores.push(() => createSpy.mockRestore())
+        const createHttp = http.createServer
+        const httpSpy = vi.spyOn(http, 'createServer').mockImplementation((...args) => {
+          const acquired = createHttp(...args)
+          native.push(observeRpcNativeServer(acquired))
+          const close = acquired.close
+          const closeSpy = vi.spyOn(acquired, 'close').mockImplementation(function (
+            this: http.Server,
+            callback
+          ) {
+            return close.call(this, (error) => {
+              httpCloseArrived = true
+              timeline.push('http-native-closed')
+              void heldHttpClose.then(() => {
+                timeline.push('http-close-delivered')
+                callback?.call(this, error)
+              })
+            })
+          })
+          restores.push(() => closeSpy.mockRestore())
+          return acquired
+        })
+        restores.push(() => httpSpy.mockRestore())
+        const rm = fs.rmSync
+        const rmSpy = vi.spyOn(fs, 'rmSync').mockImplementation((path, options) => {
+          if (path === endpoint) {
+            unlinkAttempts += 1
+            if (rejectUnlink) {
+              throw unlinkFailure
+            }
+          }
+          return rm(path, options)
+        })
+        restores.push(() => rmSpy.mockRestore())
+        const write = runtimeMetadataModule.writeRuntimeMetadata
+        const writeSpy = vi
+          .spyOn(runtimeMetadataModule, 'writeRuntimeMetadata')
+          .mockImplementation((...args) => {
+            if (args[0] !== userDataPath) {
+              return write(...args)
+            }
+            const registry = rpc['deviceRegistry']
+            if (!registry) {
+              throw new Error('real pairing registry was not initialized')
+            }
+            const flush = registry.flushPendingLastSeen
+            const flushSpy = vi.spyOn(registry, 'flushPendingLastSeen').mockImplementation(() => {
+              timeline.push('lastSeen-flush')
+              return flush.call(registry)
+            })
+            restores.push(() => flushSpy.mockRestore())
+            throw initiating
+          })
+        restores.push(() => writeSpy.mockRestore())
+        started = Promise.allSettled([rpc.start()])
+        await vi.waitFor(() => {
+          expect(unlinkAttempts).toBe(1)
+          expect(httpCloseArrived).toBe(true)
+        })
+        const stops = [rpc.stop(), rpc.stop()]
+        stopping = Promise.allSettled(stops)
+        for (const stop of stops) {
+          void stop.then(
+            () => {
+              completedStops += 1
+            },
+            () => {
+              completedStops += 1
+            }
+          )
+        }
+        await new Promise<void>((resolve) => setImmediate(resolve))
+        expect(completedStops).toBe(0)
+        expect(timeline).not.toContain('lastSeen-flush')
+        expect(native).toHaveLength(2)
+        expect(native.every((observation) => observation.listened && observation.closed)).toBe(true)
+      } catch (error) {
+        errors.push(error)
+      }
+      releaseHttpClose()
+      if (started) {
+        const [result] = await started
+        try {
+          expect(result?.status).toBe('rejected')
+          if (result?.status !== 'rejected') {
+            throw new Error('metadata failure unexpectedly started RPC')
+          }
+          expect(result.reason).toBeInstanceOf(AggregateError)
+          if (!(result.reason instanceof AggregateError)) {
+            throw new Error('metadata cleanup failure was not aggregated')
+          }
+          expect(result.reason.message).toBe(initiating.message)
+          expect(result.reason.cause).toBe(initiating)
+          expect(result.reason.errors).toEqual([initiating, unlinkFailure])
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (stopping) {
+        const results = await stopping
+        for (const result of results) {
+          try {
+            expect(result.status).toBe('rejected')
+            if (result.status !== 'rejected') {
+              throw new Error('stop lost pending rollback cleanup failure')
+            }
+            const failures =
+              result.reason instanceof AggregateError ? result.reason.errors : [result.reason]
+            expect(failures).toContain(unlinkFailure)
+          } catch (error) {
+            errors.push(error)
+          }
+        }
+        try {
+          expect(timeline.indexOf('lastSeen-flush')).toBeGreaterThan(
+            timeline.indexOf('http-close-delivered')
+          )
+          expect(readRuntimeMetadata(userDataPath)).toBeNull()
+          expect(server?.['transports']).toEqual([])
+          expect(existsSync(endpoint)).toBe(true)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      rejectUnlink = false
+      injectResidue = false
+      try {
+        await server?.stop()
+        if (stopping) {
+          expect(unlinkAttempts).toBe(2)
+          expect(existsSync(endpoint)).toBe(false)
+          expect(native.every((observation) => observation.listened && observation.closed)).toBe(
+            true
+          )
+        }
+      } catch (error) {
+        errors.push(error)
+      }
+      for (const restore of restores) {
+        try {
+          restore()
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      let stopped = false
+      try {
+        await server?.stop()
+        stopped = true
+      } catch (error) {
+        errors.push(error)
+      }
+      for (const observation of native) {
+        try {
+          await emergencyCloseRpcNativeServer(observation)
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (stopped && native.every((observation) => !observation.listened || observation.closed)) {
+        try {
+          fs.rmSync(userDataPath, { recursive: true, force: true })
+        } catch (error) {
+          errors.push(error)
+        }
+      }
+      if (errors.length === 1) {
+        throw errors[0]
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(errors, 'RPC metadata debt regression and cleanup failed', {
+          cause: errors[0]
+        })
+      }
+    }
+  )
 })

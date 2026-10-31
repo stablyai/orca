@@ -1,6 +1,27 @@
 import type { AgentJournalSnapshot } from '../../../shared/agent-session-journal-types'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { renderJournalState, type JournalReducerState } from './journal-reducer'
+import type { JournalWriteQueue } from './journal-write-queue'
+
+export function closeJournalReadLifetime(
+  queue: JournalWriteQueue,
+  editLeases: { dispose: () => void },
+  completeRead?: (() => void) | void
+): Promise<void> {
+  editLeases.dispose()
+  if (completeRead) {
+    completeRead()
+  }
+  queue.markClosed()
+  return queue.drain()
+}
+
+/** Adoption revokes an unfinished borrow even when it restores the same epoch. */
+export function captureJournalReadSource(read: () => JournalReducerState): () => boolean {
+  const state = read()
+  const epoch = state.epoch
+  return () => read() === state && state.epoch === epoch
+}
 
 /** Only a committed journal owner can certify reuse across public reads. */
 export function createJournalPublicReader() {

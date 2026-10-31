@@ -202,6 +202,13 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     /** Checkpoint between choice application and execution-evidence capture. */
     onExecutionSnapshot?: () => void
   }): Promise<AgentSessionDispatchOutcome>
+  continueAfterTransientFailure?(input: {
+    admitFreshInput: StructuredAgentSessionAdmitFreshInput
+    sessionId: string
+    fence: number
+    options?: AgentSessionExecutionOptions
+    signal: AbortSignal
+  }): Promise<{ state: 'started'; providerTurnRef: string } | { state: 'refused' | 'unknown' }>
   /** Narrow declared rewind per session; agent supplies the resting-session answer. */
   rewindSupport?(sessionId: string, agent?: string): AgentSessionRewindSupport
   /** Observe lost-reply rewind effects without repeating; keptTurnId null means no turns retained. */

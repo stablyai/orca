@@ -97,6 +97,28 @@ describe('runtime RPC startup failure reporting', () => {
     expect(classifyRuntimeRpcStartFailure(error)).toBe('storage_unavailable')
   })
 
+  it('keeps the initiating storage cause and visible message when cleanup also fails', async () => {
+    const initiating = Object.assign(new Error('metadata publication failed'), { code: 'EIO' })
+    const cleanup = Object.assign(new Error('injected post-close unlink failed'), { code: 'EIO' })
+    const error = new AggregateError([initiating, cleanup], initiating.message, {
+      cause: initiating
+    })
+
+    expect(classifyRuntimeRpcStartFailure(error)).toBe('storage_unavailable')
+    await showRuntimeRpcStartupFailureDialog(createParentWindow(), error)
+
+    expect(showMessageBoxMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({
+        detail: expect.stringContaining('Your disk may be full or read-only')
+      })
+    )
+    expect(showMessageBoxMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ detail: expect.stringContaining(`Cause: ${initiating.message}`) })
+    )
+  })
+
   it('walks past an unmapped wrapper code to the mapped cause', () => {
     const error = Object.assign(new Error('failed to publish orca-runtime.json'), {
       code: 'ERR_PUBLISH_FAILED',

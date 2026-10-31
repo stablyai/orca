@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -6,12 +6,6 @@ import {
   agentJournalSubmissionKey,
   boundJournalKeyComponent
 } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentJournalMessageItem,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   AGENT_SESSION_JOURNAL_SCHEMA_VERSION
@@ -24,7 +18,6 @@ import {
 import { structuredAgentSessionPayloadFingerprint } from '../../../shared/structured-agent-session-mutation'
 import {
   createTrackedJournalOpener,
-  openTestJournalHostDatabase,
   insertTestJournalRow
 } from '../agent-session-journal/journal-host-database-test-support'
 import type {
@@ -32,7 +25,6 @@ import type {
   JournalRow,
   JournalTombstoneRow
 } from '../agent-session-journal/journal-row-schema'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { hostTestMessage } from './structured-agent-session-host-test-data'
 import {
@@ -45,6 +37,13 @@ import { shortenedAgentJournalItem } from './agent-session-item-wire-form'
 import { firstStructuredChatNamingPrompt } from '../../../shared/structured-chat-naming-eligibility'
 import { structuredSessionGateFacts } from '../../runtime/orchestration/structured-session-pointer-delivery'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity,
+  AgentJournalMessageItem,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 const IDENTITY: AgentSessionJournalIdentity = {
   sessionId: 'session-1',
@@ -54,7 +53,7 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: codexProviderHandle('thread-1')
 }
 
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ scoped: true })
 let root: string
 let clock = 1_000
 let epochs = 0
@@ -83,7 +82,7 @@ async function appendItems(count: number): Promise<void> {
 }
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-wire-history-'))
+  root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-wire-history-')))
   clock = 1_000
   epochs = 0
   journal = await journals.open({
@@ -98,8 +97,9 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
+  root = undefined!
+  journal = undefined!
+  await journals.dispose()
 })
 
 describe('resolveHistoryLimit', () => {
@@ -129,7 +129,8 @@ describe('readAgentSessionHistory', () => {
       ok: true,
       page: { items: [{ body: { state: 'running' } }], latestTurn: { turn: { state: 'running' } } }
     })
-    openTestJournalHostDatabase(root)
+    journals
+      .database(root)
       .db.prepare(
         "UPDATE journal_rows SET row_json = json_set(row_json, '$.body.state', 'completed') WHERE session_id = ? AND epoch = ? AND seq = ?"
       )
@@ -606,15 +607,35 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
       }) as JournalRow
   )
   await journal.close()
-  const opened = openTestJournalHostDatabase(root)
+  const opened = journals.database(root)
+  let bodyError: unknown
+  let bodyFailed = false
+  const cleanupErrors: unknown[] = []
   try {
     opened.db.exec('BEGIN IMMEDIATE')
     for (const row of full) {
       insertTestJournalRow(opened.db, IDENTITY.sessionId, row)
     }
     opened.db.exec('COMMIT')
+  } catch (error) {
+    bodyFailed = true
+    bodyError = error
   } finally {
-    await opened.close()
+    try {
+      await opened.close()
+    } catch (cleanup) {
+      cleanupErrors.push(cleanup)
+    }
+  }
+  if (cleanupErrors.length > 0) {
+    const cleanup = cleanupErrors[0]
+    if (bodyFailed) {
+      throw new AggregateError([bodyError, cleanup], 'raw journal body and close failed')
+    }
+    throw cleanup
+  }
+  if (bodyFailed) {
+    throw bodyError
   }
   return journals.open({ identity: IDENTITY, stateDirectory: root, now: tick })
 }

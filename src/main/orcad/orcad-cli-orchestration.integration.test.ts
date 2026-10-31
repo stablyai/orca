@@ -11,7 +11,7 @@ import {
 import { createServer } from 'node:net'
 import { tmpdir } from 'node:os'
 import { join, resolve } from 'node:path'
-import { expect, it } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { runProcess } from '@orca/process-host'
 import {
   ORCAD_CLI_ENTRY_FILENAME,
@@ -26,6 +26,8 @@ import {
 } from './orcad-cli-launcher'
 import { resolveBundledOrcadRuntime } from './orcad-bundled-runtime'
 import { skipForMissingInputs } from './orcad-node-slot-fixture'
+import { OrchestrationDb } from '../runtime/orchestration/db'
+import { registerStructuredChatCliRetry } from '../runtime/structured-chat-cli-retry.spec'
 
 const slotDir = resolve('out/orcad')
 const cliEntry = join(slotDir, ...ORCAD_CLI_ENTRY_FILENAME.split('/'))
@@ -182,3 +184,8 @@ it.skipIf(skip)(
   },
   45_000
 )
+
+// The artifact CI lane requires the built CLI; its input check fails rather than silently omitting these cases.
+describe.skipIf(skip)('packaged CLI through real structured runtime recovery', () => {
+  registerStructuredChatCliRetry({ program: runtime!, entry: cliEntry, database: OrchestrationDb })
+})

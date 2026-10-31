@@ -20,7 +20,13 @@ export type JournalStopFailedOn = { turnId: string } | { openedAfter: number }
 
 export type JournalQueuePauseMarks = {
   cleared?: { sequence: number; operationId: string; messageIds: readonly string[]; lifted?: true }
-  latestStop: { sequence: number; event: JournalStopEvent; settle?: JournalStopSettle } | null
+  latestStop: {
+    sequence: number
+    event: JournalStopEvent
+    settle?: JournalStopSettle
+    /** Original queue-action meaning survives removal of its diagnostic target. */
+    retryOnlyTarget?: { turnId: string }
+  } | null
   /** Zero means absent. */
   resumedSequence: number
   /** Zero means absent. */

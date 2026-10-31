@@ -58,7 +58,8 @@ export async function stopEndsWork(
     session
   )
   const working =
-    (drain === 'slow' && journal.stopMarks.latestAcceptedSendUnopened()) || work.working()
+    (drain === 'slow' && journal.stopMarks.latestAcceptedSendUnopened()) ||
+    work.workingIncludingRetry()
   return working && (ending.cause === 'user-close' || !defersToPersonsStop(session, work))
 }
 

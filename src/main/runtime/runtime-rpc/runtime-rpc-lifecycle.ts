@@ -3,7 +3,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
 import { placeUnshownLiveTerminalsBestEffort } from '../terminal/adoption/unshown-live-terminal-placement'
 import type { RuntimeTransportMetadata } from '../../../shared/runtime-bootstrap'
 import { watchRuntimeMetadataOwnership } from '../runtime-metadata-ownership-watch'
-import type { RpcTransport } from '../rpc/transport'
 import { UnixSocketTransport } from '../rpc/unix-socket-transport'
 import { PinnedPortUnavailableError, WebSocketTransport } from '../rpc/ws-transport'
 import {
@@ -16,7 +15,7 @@ import type { DeviceRegistry } from '../device-registry'
 import type { E2EEKeypair } from '../e2ee-keypair'
 import { UnpairedDeviceAuthThrottle } from '../rpc/unpaired-device-auth-throttle'
 import { MobileSocketWiring } from '../rpc/mobile-socket-wiring'
-import { RuntimeRpcWebSocketDispatch } from './runtime-rpc-websocket-dispatch'
+import { RuntimeRpcRetirement } from './runtime-rpc-retirement'
 import {
   formatWsEndpoint,
   WS_BIND_HOST_ALL_INTERFACES,
@@ -29,12 +28,54 @@ import {
 import { errorMessage } from '../../../shared/error-message'
 import { loadHostDescriptor, publishHostDescriptor } from '../host-descriptor'
 
-export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
-  async start(): Promise<void> {
-    if (this.activeTransports.length > 0) {
-      return
+export class RuntimeRpcLifecycle extends RuntimeRpcRetirement {
+  start(): Promise<void> {
+    if (this.runtimeRpcStart) {
+      return this.runtimeRpcStart
     }
+    const stopping = this.runtimeRpcStop
+    const operation = Promise.resolve()
+      .then(async () => {
+        if (stopping) {
+          await stopping
+        }
+        if (!this.stopping && this.transports.length > 0) {
+          return
+        }
+        const previous = this.runtimeRpcRetirement
+        const previousErrors = previous ? await previous : []
+        if (this.runtimeRpcRetirement === previous) {
+          this.runtimeRpcRetirement = null
+        }
+        if (this.activeTransports.length > 0 || previousErrors.length > 0) {
+          const errors = await this.retireRuntimeRpcTransports()
+          if (errors.length > 0) {
+            throw new AggregateError(errors, errorMessage(errors[0]), { cause: errors[0] })
+          }
+          this.runtimeRpcRetirement = null
+        }
+        this.stopping = this.runtimeRpcStop !== null
+        try {
+          await this.initializeRuntimeRpc()
+        } catch (error) {
+          this.stopping = true
+          const errors = await this.retireRuntimeRpcTransports()
+          if (errors.length > 0) {
+            throw new AggregateError([error, ...errors], errorMessage(error), { cause: error })
+          }
+          throw error
+        }
+      })
+      .finally(() => {
+        if (this.runtimeRpcStart === operation) {
+          this.runtimeRpcStart = null
+        }
+      })
+    this.runtimeRpcStart = operation
+    return operation
+  }
 
+  private async initializeRuntimeRpc(): Promise<void> {
     // Sweep sockets orphaned by SIGKILL/OOM; Windows pipes leave no files.
     if (this.platform !== 'win32') {
       sweepOrphanedRuntimeSockets(this.userDataPath, this.pid)
@@ -73,9 +114,8 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
         })
     })
 
+    this.activeTransports.push(socketTransport)
     await socketTransport.start()
-
-    const activeTransports: RpcTransport[] = [socketTransport]
     const transportsMeta: RuntimeTransportMetadata[] = [transportMeta]
 
     // Per-device tokens/E2EE avoid React Native's inability to pin self-signed TLS certificates.
@@ -103,39 +143,28 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
             // Persist fallback ports for paired endpoints (STA-1511); explicit zero remains random for E2E.
             ...(this.wsPort !== 0 ? { fallbackPort: readWsFallbackPort(this.userDataPath) } : {})
           })
+          this.activeTransports.push(transport)
           if (this.wsPort !== 0 && transport.resolvedPort !== this.wsPort) {
             writeWsFallbackPort(this.userDataPath, transport.resolvedPort)
           } else if (transport.persistedFallbackFailed) {
             clearWsFallbackPort(this.userDataPath)
           }
-          activeTransports.push(transport)
           transportsMeta.push({ kind: 'websocket', endpoint })
         } catch (error) {
           // WS is supplementary; keep Unix transport serving if it fails.
           console.error('[runtime] Failed to start WebSocket transport:', error)
-          this.mobileSocketWiring?.dispose()
-          this.mobileSocketWiring = null
           if (error instanceof PinnedPortUnavailableError) {
-            await socketTransport.stop().catch(() => {})
             throw error
           }
+          this.mobileSocketWiring?.dispose()
+          this.mobileSocketWiring = null
         }
       }
     }
 
     // Set live endpoint/token before metadata publication.
-    this.activeTransports = activeTransports
     this.transports = transportsMeta
-
-    try {
-      this.writeMetadata()
-    } catch (error) {
-      // Without metadata CLI cannot discover runtime; close transports rather than serve invisibly.
-      this.activeTransports = []
-      this.transports = []
-      await Promise.all(activeTransports.map((t) => t.stop().catch(() => {}))).catch(() => {})
-      throw error
-    }
+    this.writeMetadata()
 
     this.metadataOwnershipWatch = watchRuntimeMetadataOwnership({
       userDataPath: this.userDataPath,
@@ -144,7 +173,7 @@ export class RuntimeRpcLifecycle extends RuntimeRpcWebSocketDispatch {
       pollIntervalMs: this.metadataOwnershipPollMs,
       republish: () => {
         // Never publish torn-down endpoints.
-        if (this.activeTransports.length === 0) {
+        if (this.stopping || this.transports !== transportsMeta || this.transports.length === 0) {
           return
         }
         this.writeMetadata()

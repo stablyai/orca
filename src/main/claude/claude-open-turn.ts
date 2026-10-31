@@ -1,3 +1,4 @@
+import type { AgentSessionTransientFailure } from '../../shared/agent-session-provider-retry-policy'
 import type { AgentSessionContextUsage } from '../../shared/agent-session-context-usage'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
@@ -30,6 +31,7 @@ export type ClaudeOpenTurnDeps = {
 
 export class ClaudeOpenTurn {
   private current: ClaudeCurrentTurn | null = null
+  transientFailure?: AgentSessionTransientFailure
   usageLimitEvidence: ClaudeUsageLimitEvidence | null = null
   /** Block late output from reopening ended or failed turns until an accepted send arrives. */
   private reopenSuppressed = false
@@ -107,6 +109,7 @@ export class ClaudeOpenTurn {
 
   /** Supersede the previous turn before opening another; a missing result must not leave old work live. */
   open(turn: ClaudeCurrentTurn, observedAt: number): void {
+    this.transientFailure = undefined
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
@@ -125,6 +128,7 @@ export class ClaudeOpenTurn {
 
   /** The host already wrote the command row; only publish its eventual end. */
   beginCommand(turn: ClaudeCurrentTurn): void {
+    this.transientFailure = undefined
     this.usageLimitEvidence = null
     this.deps.onOpen?.()
     if (this.current) {
@@ -149,6 +153,7 @@ export class ClaudeOpenTurn {
   /** The command was never sent; its turn is the host's to settle. */
   forgetCommand(turnId: string): void {
     if (this.current?.command && this.current.turnId === turnId) {
+      this.transientFailure = undefined
       this.usageLimitEvidence = null
       this.inputChoiceWorkObserved = false
       this.current = null
@@ -165,7 +170,11 @@ export class ClaudeOpenTurn {
   }
 
   /** Settle activity and context facts in the same turn revision. */
-  settle(end: ClaudeTurnEnd, contextUsage?: AgentSessionContextUsage): void {
+  settle(
+    end: ClaudeTurnEnd,
+    contextUsage?: AgentSessionContextUsage,
+    transientFailure?: AgentSessionTransientFailure
+  ): void {
     const quotaEnd =
       this.current !== null &&
       end.outcome === undefined &&
@@ -173,11 +182,12 @@ export class ClaudeOpenTurn {
     this.suppressReopenOnFailure(quotaEnd)
     this.cycleWorkObserved = false
     this.inputChoiceWorkObserved = false
+    this.transientFailure = undefined
     this.usageLimitEvidence = null
     // End suppressed work even when no turn is open.
     this.deps.endOpenWork(end.completedAt)
     if (this.current) {
-      this.publish(this.current, end, contextUsage, quotaEnd)
+      this.publish(this.current, end, contextUsage, quotaEnd, transientFailure)
       this.current = null
     }
     this.deps.sink.setActivity?.(null)
@@ -200,7 +210,8 @@ export class ClaudeOpenTurn {
     turn: ClaudeCurrentTurn,
     end?: ClaudeTurnEnd,
     contextUsage?: AgentSessionContextUsage,
-    quotaEnd = false
+    quotaEnd = false,
+    transientFailure?: AgentSessionTransientFailure
   ): void {
     const item = claudeTurnLifecycleItem(turn, end)
     const write = { lifecycle: item.body, ...(contextUsage ? { contextUsage } : {}) }
@@ -209,7 +220,18 @@ export class ClaudeOpenTurn {
     }
     writeAgentJournalTurnRow(this.deps.sink, { identity: item.identity }, write, {
       publish: false,
-      options: { ...item.options, lifecycle: true }
+      ...(!turn.command
+        ? {
+            turnLifecycle: {
+              identity: item.identity,
+              state: end ? ('end' as const) : ('start' as const)
+            }
+          }
+        : {}),
+      options: { ...item.options, lifecycle: true },
+      ...(transientFailure
+        ? { transientTerminal: { identity: item.identity, category: transientFailure } }
+        : {})
     })
     // Separate keys preserve a queued start publication when the end arrives.
     this.deps.sink.publish({ coalescingKey: item.publishCoalescingKey })

@@ -125,10 +125,13 @@ function staleMutations(
     return byDeath.state === 'interrupted' ? byDeath : replacedVerdictFor(item)
   }
   const mutations = provenUnverifiedToolCallRevisions(items, input.deathEvidence, journal, replaced)
+  const itemBody = (id: string) => journal.itemBody(id)
+  const readEnd = (item: AgentJournalRenderItem) =>
+    runningCallEnd(item.turnScope, itemBody, verdictFor(item).state)
   for (const item of items) {
     // Honor existing personal Stop; only running turns need new evidence.
-    const end = runningCallEnd(item.turnScope, (id) => journal.itemBody(id), verdictFor(item).state)
-    const terminal = endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, end)
+    const terminal =
+      endedUnseenMessageBody(item.body) ?? terminalAgentJournalBody(item.body, readEnd, item)
     const body = lostLiveWorkJournalBody(terminal ?? item.body) ?? terminal
     if (body) {
       mutations.push({

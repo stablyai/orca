@@ -1,23 +1,21 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { parseJournalRow } from './journal-row-schema'
+import {
+  createTrackedJournalOpener,
+  liveTestJournalRows,
+  updateTestJournalRowJson
+} from './journal-host-database-test-support'
+import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionContextUsage } from '../../../shared/agent-session-context-usage'
 import type {
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentSessionJournalIdentity
 } from '../../../shared/agent-session-journal-types'
-import { parseJournalRow } from './journal-row-schema'
-import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase,
-  liveTestJournalRows,
-  updateTestJournalRowJson
-} from './journal-host-database-test-support'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 export function registerJournalRowContextUsageTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -59,7 +57,7 @@ export function registerJournalRowContextUsageTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   const open = () =>
     journals.open({
@@ -81,13 +79,13 @@ export function registerJournalRowContextUsageTests(): void {
   })
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-context-usage-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-context-usage-')))
     clock = 1_000
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   describe('context facts on replayed turn rows', () => {
@@ -119,14 +117,34 @@ export function registerJournalRowContextUsageTests(): void {
         { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
       )
       await journal.close()
-      const opened = openTestJournalHostDatabase(root)
+      const opened = journals.database(root)
+      let bodyError: unknown
+      let bodyFailed = false
+      const cleanupErrors: unknown[] = []
       try {
         const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
         const future = JSON.parse(rowJson)
         future.body.contextUsage = { used: { kind: 'measured-later', tokens: 'many' } }
         updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
+      } catch (error) {
+        bodyFailed = true
+        bodyError = error
       } finally {
-        await opened.close()
+        try {
+          await opened.close()
+        } catch (cleanup) {
+          cleanupErrors.push(cleanup)
+        }
+      }
+      if (cleanupErrors.length > 0) {
+        const cleanup = cleanupErrors[0]
+        if (bodyFailed) {
+          throw new AggregateError([bodyError, cleanup], 'raw journal body and close failed')
+        }
+        throw cleanup
+      }
+      if (bodyFailed) {
+        throw bodyError
       }
 
       const reopened = await open()

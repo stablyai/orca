@@ -70,7 +70,7 @@ export function createStructuredAgentSessionConversationLifetime(
         closeStatus: (id) => {
           const tabs = deps().store.getVisibleSessionTabIndex()
           // Legacy stores cannot enumerate tabs; retain the row until restart.
-          host.closeStatus(id, { listed: !tabs.present || tabs.sessionIds.includes(id) })
+          return host.closeStatus(id, { listed: !tabs.present || tabs.sessionIds.includes(id) })
         }
       },
       sessionId,

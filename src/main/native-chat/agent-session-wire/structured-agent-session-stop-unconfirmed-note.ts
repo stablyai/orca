@@ -1,3 +1,4 @@
+import type { ChatStopTarget } from './structured-agent-session-chat-stop-target'
 // The durable Stop receipt stays fixed; this note communicates cancellation uncertainty.
 
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
@@ -59,4 +60,17 @@ export async function writeStructuredAgentSessionStopNote(
         error: noteError
       })
     )
+}
+
+export function noteChatStopUnconfirmed(
+  ctx: AgentSessionTurnContext,
+  target: ChatStopTarget,
+  acceptedTurnId: string | null | undefined,
+  operationId: string,
+  error: unknown
+): Promise<void> {
+  const turnId =
+    acceptedTurnId ??
+    (target.named ? target.turnId : contextStructuredAgentSessionCurrentWork(ctx).activeTurnId())
+  return noteStructuredAgentSessionStopUnconfirmed(ctx, { turnId, operationId }, error)
 }

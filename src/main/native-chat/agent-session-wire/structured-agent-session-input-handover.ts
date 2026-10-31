@@ -1,6 +1,6 @@
 import {
   StructuredAgentSessionInputNotAdmitted,
-  type StructuredAgentSessionInputAdmission
+  admitStructuredAgentSessionInput
 } from './structured-agent-session-input-admission'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
@@ -83,34 +83,16 @@ export function beginStructuredAgentSessionInputHandover(
       failureTextContext: deps.failureTextContext(sessionId),
       record: () => deps.record(sessionId),
 
-      admitFreshInput: async (enqueue, signal, prepare) => {
-        let admission: StructuredAgentSessionInputAdmission | undefined
-        const invoked = deps.serialize(sessionId, async () => {
-          validate(signal)
-          const body = await prepare(binding.fence)
-          validate(signal)
-          const mode = deps.immediatePermission?.(sessionId)
-          if (!mode) {
-            throw new Error('input handover has no permission choice')
-          }
-          admission = enqueue(
-            mode,
-            deps.retainedWork?.(sessionId, next.clientMessageId) === true,
-            body
-          )
-          return admission
-        })
-        try {
-          return await waitForPromiseWithSignal(invoked, signal)
-        } catch (error) {
-          // Enqueue is synchronous; Promise delivery must not turn an actual write into a withdrawal.
-          if (admission?.kind === 'sent') {
-            return admission
-          }
-          validate(signal)
-          throw error
-        }
-      },
+      admitFreshInput: (enqueue, signal, prepare) =>
+        admitStructuredAgentSessionInput({
+          serialize: (task) => deps.serialize(sessionId, task),
+          validate: () => validate(signal),
+          prepare: () => prepare(binding.fence),
+          permission: () => deps.immediatePermission?.(sessionId),
+          inheritRunning: () => deps.retainedWork?.(sessionId, next.clientMessageId) === true,
+          enqueue,
+          signal
+        }),
       continueInput: async (signal, rebind) => {
         const failed = async (
           cause: StartFailure['cause'],

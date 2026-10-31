@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -13,8 +13,7 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import type { JournalHostDatabase } from './journal-host-database'
 import {
   createTrackedJournalOpener,
-  liveTestJournalRows,
-  openTestJournalHostDatabase
+  liveTestJournalRows
 } from './journal-host-database-test-support'
 import type { AgentSessionJournal } from './journal-store'
 
@@ -39,7 +38,7 @@ export function registerJournalItemProvenanceTests(): void {
 
   let root: string
   let database: JournalHostDatabase
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   function item(ordinal: number): AgentJournalItemIdentity {
     return { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal }
@@ -60,13 +59,14 @@ export function registerJournalItemProvenanceTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-provenance-'))
-    database = openTestJournalHostDatabase(root)
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-provenance-')))
+    database = journals.database(root)
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    database = undefined!
+    await journals.dispose()
   })
 
   describe('execution provenance', () => {

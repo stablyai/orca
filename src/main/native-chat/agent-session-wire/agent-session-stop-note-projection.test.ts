@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -26,7 +26,7 @@ import { structuredAgentSessionStopNoteIdentity } from './structured-agent-sessi
 import { HISTORY_PAGE_CONTENT_BUDGET_BYTES } from './agent-session-history-page-bounds'
 import { MOBILE_BRIDGE_MAX_FRAME_BYTES } from '../../../shared/mobile-bridge-frame-bytes'
 
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ scoped: true })
 const turnIdentity = { provider: 'orca', clientMessageId: 'turn-1' } as const
 const turnItemId = agentJournalItemKey(turnIdentity)
 const noteIdentity = structuredAgentSessionStopNoteIdentity('turn-1')
@@ -43,7 +43,7 @@ let root: string
 let journal: AgentSessionJournal
 
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-stop-note-projection-'))
+  root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-stop-note-projection-')))
   journal = await journals.open({
     identity: {
       sessionId: 'session-1',
@@ -56,8 +56,9 @@ beforeEach(async () => {
   })
 })
 afterEach(async () => {
-  await journals.closeAll()
-  await rm(root, { recursive: true, force: true })
+  root = undefined!
+  journal = undefined!
+  await journals.dispose()
 })
 
 async function turn(state: AgentJournalTurnLifecycle['state'], legacy = false) {

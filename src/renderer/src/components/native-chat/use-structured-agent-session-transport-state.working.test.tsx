@@ -59,7 +59,12 @@ function isWorking(state: StructuredAgentSessionState): boolean {
 
 describe('the chat’s Working', () => {
   it('is the host’s answer: a turn an ended agent left running reads as stopped', () => {
-    expect(isWorking(loaded({ working: false }))).toBe(false)
+    const ended = loaded({ working: false })
+    expect(isWorking(ended)).toBe(false)
+    expect(
+      renderHook(() => useStructuredAgentSessionTransportState(ended, true)).result.current
+        .actualWorking
+    ).toBe(false)
     expect(isWorking(loaded({ items: [], working: true }))).toBe(true)
   })
 
@@ -67,4 +72,31 @@ describe('the chat’s Working', () => {
     expect(loaded({}).working).toBeUndefined()
     expect(isWorking(loaded({}))).toBe(true)
   })
+})
+
+it('keeps retry display and Stop busy while actual input/command admission is idle, with older-host fallback', () => {
+  const failed = {
+    ...LEFT_RUNNING,
+    body: {
+      kind: 'turn' as const,
+      turnId: 'T',
+      state: 'completed' as const,
+      outcome: 'failure' as const
+    }
+  }
+  const state = loaded({
+    items: [failed],
+    working: true,
+    latestTurn: { itemId: failed.itemId, observedAt: failed.observedAt, turn: failed.body }
+  })
+  const { result } = renderHook(() => useStructuredAgentSessionTransportState(state, true))
+  expect(result.current).toMatchObject({
+    isWorking: true,
+    actualWorking: false,
+    queueSendsNext: false
+  })
+  const older = renderHook(() =>
+    useStructuredAgentSessionTransportState(loaded({ items: [], working: true }), true)
+  )
+  expect(older.result.current.actualWorking).toBe(true)
 })

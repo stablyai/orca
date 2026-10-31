@@ -29,7 +29,7 @@ export function structuredAgentSessionStopNamesTurnNotLive(
 /** A known non-live turn is ended, including one removed by rewind; unknown turns may still open. */
 export function structuredAgentSessionStopNamesEndedTurn(
   journal: Pick<AgentSessionJournal, 'snapshot' | 'stops'>,
-  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId' | 'working'>,
+  work: Pick<StructuredAgentSessionCurrentWork, 'activeTurnId' | 'workingIncludingRetry'>,
   namedTurnId: string | undefined
 ): boolean {
   const live = work.activeTurnId()
@@ -38,7 +38,7 @@ export function structuredAgentSessionStopNamesEndedTurn(
   }
   return (
     live !== null ||
-    !work.working() ||
+    !work.workingIncludingRetry() ||
     journal.stops.turnWasRemoved(namedTurnId) ||
     structuredAgentSessionNamedTurnScope(journal, namedTurnId) !== null
   )

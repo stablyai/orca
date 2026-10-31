@@ -1,11 +1,15 @@
 import { describe, expect, it } from 'vitest'
-import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
-import type { AgentSessionHistoryPage } from './agent-session-wire'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from './structured-agent-session-reducer'
-import { selectStructuredAgentSettledTurns } from './structured-agent-session-turn-timing'
+import { describeNativeChatTurnStatus } from './native-chat-turn-status'
+import {
+  selectStructuredAgentTurnBars,
+  selectStructuredAgentSettledTurns
+} from './structured-agent-session-turn-timing'
+import type { AgentJournalRenderItem, AgentJournalSubmission } from './agent-session-journal-types'
+import type { AgentSessionHistoryPage } from './agent-session-wire'
 
 function submission(index: number): AgentJournalSubmission {
   return {
@@ -157,4 +161,43 @@ describe('durable turn attribution across paginated history', () => {
     expect(reset.submissions).toEqual([submission(256)])
     expect(selectStructuredAgentSettledTurns(reset.items, reset.submissions).size).toBe(1)
   })
+})
+
+it('uses effective cancellation for exact loaded/off-page and paged footers on desktop and mobile', () => {
+  const [user, rawTurn] = turnItems(0)
+  if (!user || !rawTurn || rawTurn.body.kind !== 'turn') {
+    throw new Error('missing turn fixture')
+  }
+  const turn = {
+    ...rawTurn,
+    body: { ...rawTurn.body, state: 'interrupted' as const, outcome: 'cancellation' as const }
+  }
+  const latest = { itemId: turn.itemId, observedAt: turn.observedAt, turn: turn.body }
+  for (const loaded of [[user], [user, turn]]) {
+    const value = selectStructuredAgentTurnBars(
+      loaded,
+      [submission(0)],
+      null,
+      latest
+    ).settledTurns.get(user.itemId)
+    expect(value).toMatchObject({ workedSeconds: 7, verdict: 'cancellation' })
+    expect(
+      describeNativeChatTurnStatus({
+        workedSeconds: value?.workedSeconds,
+        verdict: value?.verdict,
+        elapsedSeconds: 0
+      })
+    ).toEqual({ key: 'interruptedAfter', duration: '7s' })
+  }
+  expect(
+    selectStructuredAgentTurnBars(turnItems(1), [submission(0)], null, latest).settledTurns.has(
+      user.itemId
+    )
+  ).toBe(false)
+  // A loaded provider result is authoritative over a stale off-page summary.
+  expect(
+    selectStructuredAgentTurnBars([user, rawTurn], [submission(0)], null, latest).settledTurns.get(
+      user.itemId
+    )?.verdict
+  ).not.toBe('cancellation')
 })

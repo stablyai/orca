@@ -49,6 +49,12 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
 
   open: StructuredAgentSessionAdapter['open'] = (input) => this.owner(input.sessionId).open(input)
 
+  continueAfterTransientFailure: NonNullable<
+    StructuredAgentSessionAdapter['continueAfterTransientFailure']
+  > = (input) =>
+    this.owner(input.sessionId).continueAfterTransientFailure?.(input) ??
+    Promise.resolve({ state: 'refused' })
+
   dispatch: StructuredAgentSessionAdapter['dispatch'] = (input) =>
     this.owner(input.sessionId).dispatch(input)
 

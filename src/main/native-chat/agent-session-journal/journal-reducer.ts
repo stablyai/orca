@@ -1,3 +1,4 @@
+import { JournalStoppedTurns } from './journal-stopped-turns'
 import { journalItemDeclaresEcho } from './journal-item-echo'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
@@ -41,6 +42,15 @@ import {
 
 export const MAX_JOURNAL_APPLIED_SETTLEMENT_IDS = 4_096
 
+export type JournalReducerSubmission = AgentJournalSubmission & { submittedSequence: number }
+
+/** Live fold results expire after synchronous committed observation. */
+export type JournalAppliedSubmission = {
+  clientMessageId: string
+  submittedSequence: number
+  sequence: number
+}
+
 export type JournalReducerState = {
   sessionId: string
   epoch: string
@@ -50,6 +60,8 @@ export type JournalReducerState = {
   oldestSequence: number
   highestFence: number
   items: Map<string, AgentJournalRenderItem>
+  turnEndedSequences: Map<string, number>
+  stoppedTurns: JournalStoppedTurns
   /** Creation provenance determines whether an item belongs to current execution. */
   itemFences: Map<string, number>
   /** Later runs may explicitly assume execution of reusable child items. */
@@ -59,7 +71,7 @@ export type JournalReducerState = {
   tombstones: Map<string, number>
   /** Rewound turns remain ended even after their visible records disappear. */
   removedTurnIds: Set<string>
-  submissions: Map<string, AgentJournalSubmission>
+  submissions: Map<string, JournalReducerSubmission>
   receipts: Map<string, AgentJournalAcceptanceReceipt>
   /** Alias provider echoes to existing optimistic submissions to prevent duplicate bubbles. */
   aliases: Map<string, string>
@@ -69,6 +81,8 @@ export type JournalReducerState = {
   derivedTurnScope: JournalDerivedTurnScope
   /** Acceptance survives visible-message rewind; zero means none in this epoch. */
   latestAcceptedTurnSequence: number
+  /** Materialized items precede all eligible submissions and cannot establish operational Stop evidence. */
+  hasAppliedProviderAcceptance: boolean
   queuePauseMarks: JournalQueuePauseMarks
   stoppedHistoryCarried: Map<string, readonly string[]>
   queuedHandOffPlaces: Map<
@@ -91,6 +105,8 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     oldestSequence: 1,
     highestFence: 0,
     items: new Map(),
+    turnEndedSequences: new Map(),
+    stoppedTurns: new JournalStoppedTurns(),
     itemFences: new Map(),
     itemExecutionOwners: new Map(),
     providerActivityAt: new Map(),
@@ -103,6 +119,7 @@ export function createJournalReducerState(sessionId: string, epoch: string): Jou
     appliedSettlementIds: new Set(),
     derivedTurnScope: new JournalDerivedTurnScope(),
     latestAcceptedTurnSequence: 0,
+    hasAppliedProviderAcceptance: false,
     queuePauseMarks: createJournalQueuePauseMarks(),
     stoppedHistoryCarried: new Map(),
     queuedHandOffPlaces: new Map(),
@@ -116,12 +133,22 @@ export function applyJournalRow(
   state: JournalReducerState,
   row: JournalRow,
   savedAt = row.ts
-): void {
-  applyJournalRowFacts(state, row, savedAt)
+): JournalAppliedSubmission | undefined {
+  const submission = applyJournalRowFacts(state, row, savedAt)
+  const applied = submission && {
+    clientMessageId: submission.clientMessageId,
+    submittedSequence: submission.submittedSequence,
+    sequence: row.seq
+  }
   foldJournalQueueRow(state, row)
+  return applied
 }
 
-function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {
+function applyJournalRowFacts(
+  state: JournalReducerState,
+  row: JournalRow,
+  savedAt: number
+): JournalReducerSubmission | undefined {
   state.lastSequence = Math.max(state.lastSequence, row.seq)
   state.highestFence = Math.max(state.highestFence, row.fence)
   if (row.kind === 'epoch') {
@@ -157,6 +184,7 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
   }
   if (isJournalStopOrResumeRow(row)) {
     foldJournalQueuePauseMark(state.queuePauseMarks, row)
+    state.stoppedTurns.accept(state, row)
     return
   }
   if (row.kind === 'tombstone') {
@@ -201,10 +229,9 @@ function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, saved
     return
   }
   if (row.kind === 'submission') {
-    applyJournalSubmission(state, row)
-    return
+    return applyJournalSubmission(state, row)
   }
-  applyJournalDispatchRow(state, row)
+  return applyJournalDispatchRow(state, row)
 }
 
 export function rememberAppliedSettlementId(

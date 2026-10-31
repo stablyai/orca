@@ -35,7 +35,7 @@ import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-se
 export function isMainAgentWorking(
   ctx: Pick<AgentSessionTurnContext, 'journal' | 'fence' | 'currentWork'>
 ): boolean {
-  return contextStructuredAgentSessionCurrentWork(ctx).working()
+  return contextStructuredAgentSessionCurrentWork(ctx).workingIncludingRetry()
 }
 
 /** Never kill a different turn; child exit reads at rest even while its cleanup waits behind Stop. */
@@ -44,7 +44,7 @@ function stillRunsStoppedTurn(
   stoppedTurnId: string | null
 ): boolean {
   const work = contextStructuredAgentSessionCurrentWork(ctx)
-  if (!work.working()) {
+  if (!work.workingIncludingRetry()) {
     return false
   }
   // Working without an open turn after the captured turn means a later send.

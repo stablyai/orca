@@ -1,13 +1,8 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { mkdtemp, readdir, rm } from 'node:fs/promises'
+import { mkdtemp, readdir } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import type {
-  AgentJournalItemBody,
-  AgentJournalItemIdentity,
-  AgentSessionJournalIdentity
-} from '../../../shared/agent-session-journal-types'
 import {
   agentJournalItemKey,
   boundJournalKeyComponent,
@@ -19,16 +14,21 @@ import {
   JOURNAL_RUNNING_PREVIEW_LIMITS
 } from './journal-payload-bounds'
 import { activeStructuredAgentSessionTurnId } from '../../../shared/structured-agent-session-live-turn'
-import { AgentSessionJournalError, type AgentSessionJournal } from './journal-store'
-import type { openAgentSessionJournal } from './journal-store-factory'
+import { AgentSessionJournalError } from './journal-store'
 import {
   createTrackedJournalOpener,
-  openTestJournalHostDatabase,
   liveTestJournalRows,
   deleteTestJournalRow
 } from './journal-host-database-test-support'
-import type Database from '../../sqlite/sync-database'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import type {
+  AgentJournalItemBody,
+  AgentJournalItemIdentity,
+  AgentSessionJournalIdentity
+} from '../../../shared/agent-session-journal-types'
+import type { AgentSessionJournal } from './journal-store'
+import type { openAgentSessionJournal } from './journal-store-factory'
+import type Database from '../../sqlite/sync-database'
 
 export function registerJournalStoreTests(): void {
   const IDENTITY: AgentSessionJournalIdentity = {
@@ -55,7 +55,7 @@ export function registerJournalStoreTests(): void {
     return { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text: value }] }
   }
 
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   async function open(overrides: Partial<Parameters<typeof openAgentSessionJournal>[0]> = {}) {
     return journals.open({
@@ -68,13 +68,13 @@ export function registerJournalStoreTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-')))
     clock = 1_000
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   describe('sequences', () => {
@@ -464,11 +464,31 @@ export function registerJournalStoreTests(): void {
     stateDirectory: string,
     run: (db: Database.Database) => void
   ): Promise<void> {
-    const opened = openTestJournalHostDatabase(stateDirectory)
+    const opened = journals.database(stateDirectory)
+    let bodyError: unknown
+    let bodyFailed = false
+    const cleanupErrors: unknown[] = []
     try {
       run(opened.db)
+    } catch (error) {
+      bodyFailed = true
+      bodyError = error
     } finally {
-      await opened.close()
+      try {
+        await opened.close()
+      } catch (cleanup) {
+        cleanupErrors.push(cleanup)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanup = cleanupErrors[0]
+      if (bodyFailed) {
+        throw new AggregateError([bodyError, cleanup], 'raw journal body and close failed')
+      }
+      throw cleanup
+    }
+    if (bodyFailed) {
+      throw bodyError
     }
   }
 

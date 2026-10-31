@@ -1,12 +1,11 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, expect, it, vi } from 'vitest'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   createTrackedJournalOpener,
-  liveTestJournalRows,
-  openTestJournalHostDatabase
+  liveTestJournalRows
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
@@ -14,19 +13,17 @@ import { createCodexJournalTranslator } from './codex-structured-journal-transla
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
 
 const SESSION = 'codex-atomic'
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ scoped: true })
 let root: string | undefined
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  await journals.closeAll()
-  if (root) {
-    await rm(root, { recursive: true, force: true })
-  }
+  root = undefined
+  await journals.dispose()
 })
 
 it('rolls back the entire Codex exit settlement when a later row fails', async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-codex-atomic-'))
+  root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-codex-atomic-')))
   const options = {
     identity: {
       sessionId: SESSION,
@@ -79,7 +76,7 @@ it('rolls back the entire Codex exit settlement when a later row fails', async (
   published.length = 0
   journal.observeCommits(commits)
   const before = journal.snapshot()
-  const database = openTestJournalHostDatabase(root)
+  const database = journals.database(root)
   const diskBefore = liveTestJournalRows(database.db, SESSION)
   const sawEarlierInserts: number[] = []
   const transaction = database.transaction.bind(database)

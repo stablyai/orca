@@ -1,14 +1,16 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentJournalApprovalItem } from '../../../shared/agent-session-journal-types'
 import {
+  registerScopedProviderTimelineOwnership,
   closeProviderTimelineRigs,
   openProviderTimelineRig,
   providerItemId,
   providerTurnItemId,
   runningTool
 } from './provider-timeline-assembler-test-support'
+import type { AgentJournalApprovalItem } from '../../../shared/agent-session-journal-types'
 
+registerScopedProviderTimelineOwnership()
 afterEach(closeProviderTimelineRigs)
 
 const approval: AgentJournalApprovalItem = {

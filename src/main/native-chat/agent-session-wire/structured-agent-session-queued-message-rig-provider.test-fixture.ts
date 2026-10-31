@@ -131,7 +131,7 @@ export function createQueuedRigProvider(
   }
 
   function working(sessionId: string): boolean {
-    return host().currentWork(sessionId)?.working() ?? false
+    return host().currentWork(sessionId)?.workingIncludingRetry() ?? false
   }
 
   const adapter = options.starting ? scripted : startsWhenPublished(scripted, host)

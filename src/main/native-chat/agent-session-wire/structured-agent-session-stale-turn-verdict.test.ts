@@ -1,21 +1,12 @@
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalItemIdentity,
-  AgentJournalRenderItem,
-  AgentJournalTurnScope
-} from '../../../shared/agent-session-journal-types'
-import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  createTrackedJournalOpener,
-  openTestJournalHostDatabase
-} from '../agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { plannedBatchThrough } from './structured-agent-session-settlement-double.test-fixture'
 import {
@@ -24,6 +15,12 @@ import {
   UNVERIFIABLE_TURN_VERDICT
 } from './structured-agent-session-stale-turn-verdict'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalRenderItem,
+  AgentJournalTurnScope
+} from '../../../shared/agent-session-journal-types'
+import type { AgentSessionDeathEvidence } from '../../../shared/agent-session-record'
 
 const THREAD = 'thread-1'
 const RUNNING_IDENTITY = {
@@ -389,8 +386,11 @@ describe('stale session state on a cold acquire', () => {
 
   it("cancels a subagent's lost prompt as the subagent's, and the session's own as its own", async () => {
     // Producer-free cancellation revisions must retain original attribution.
-    const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ scoped: true })
+    const root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-stale-session-')))
+    let bodyError: unknown
+    let bodyFailed = false
+    const cleanupErrors: unknown[] = []
     try {
       const journal = await journals.open({
         identity: {
@@ -435,16 +435,35 @@ describe('stale session state on a cold acquire', () => {
         ['approval', 2, 'thread-child'],
         ['approval', 2, undefined]
       ])
+    } catch (error) {
+      bodyFailed = true
+      bodyError = error
     } finally {
-      await journals.closeAll()
-      await rm(root, { recursive: true, force: true })
+      try {
+        await journals.dispose()
+      } catch (cleanup) {
+        cleanupErrors.push(cleanup)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanup = cleanupErrors[0]
+      if (bodyFailed) {
+        throw new AggregateError([bodyError, cleanup], 'journal body and cleanup failed')
+      }
+      throw cleanup
+    }
+    if (bodyFailed) {
+      throw bodyError
     }
   })
 
   it('uses provider output after a renewal, excluding a later client message', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ scoped: true })
+    const root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-stale-session-')))
     let now = 100
+    let bodyError: unknown
+    let bodyFailed = false
+    const cleanupErrors: unknown[] = []
     try {
       const journal = await journals.open({
         identity: {
@@ -506,16 +525,35 @@ describe('stale session state on a cold acquire', () => {
       ).toEqual([
         'The agent stopped while this response was in progress. You can continue in this conversation.'
       ])
+    } catch (error) {
+      bodyFailed = true
+      bodyError = error
     } finally {
-      await journals.closeAll()
-      await rm(root, { recursive: true, force: true })
+      try {
+        await journals.dispose()
+      } catch (cleanup) {
+        cleanupErrors.push(cleanup)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanup = cleanupErrors[0]
+      if (bodyFailed) {
+        throw new AggregateError([bodyError, cleanup], 'journal body and cleanup failed')
+      }
+      throw cleanup
+    }
+    if (bodyFailed) {
+      throw bodyError
     }
   })
 
   it('ends a crashed turn at its last proof of life, not at a send accepted before the proof', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ scoped: true })
+    const root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-stale-session-')))
     let now = 100
+    let bodyError: unknown
+    let bodyFailed = false
+    const cleanupErrors: unknown[] = []
     try {
       const journal = await journals.open({
         identity: {
@@ -576,16 +614,35 @@ describe('stale session state on a cold acquire', () => {
       })
 
       expect(turn()).toMatchObject({ state: 'interrupted', completedAt: 210 })
+    } catch (error) {
+      bodyFailed = true
+      bodyError = error
     } finally {
-      await journals.closeAll()
-      await rm(root, { recursive: true, force: true })
+      try {
+        await journals.dispose()
+      } catch (cleanup) {
+        cleanupErrors.push(cleanup)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanup = cleanupErrors[0]
+      if (bodyFailed) {
+        throw new AggregateError([bodyError, cleanup], 'journal body and cleanup failed')
+      }
+      throw cleanup
+    }
+    if (bodyFailed) {
+      throw bodyError
     }
   })
 
   it('revises an unverifiable turn only from a proof naming its own owner, and only once', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ scoped: true })
+    const root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-stale-session-')))
     let now = 100
+    let bodyError: unknown
+    let bodyFailed = false
+    const cleanupErrors: unknown[] = []
     try {
       const journal = await journals.open({
         identity: {
@@ -635,16 +692,35 @@ describe('stale session state on a cold acquire', () => {
       await expect(settle(PROVEN)).resolves.toBe(0)
       expect(journal.cursor()).toEqual(revised)
       expect(journal.snapshot().items.filter((item) => item.body.kind === 'status')).toHaveLength(1)
+    } catch (error) {
+      bodyFailed = true
+      bodyError = error
     } finally {
-      await journals.closeAll()
-      await rm(root, { recursive: true, force: true })
+      try {
+        await journals.dispose()
+      } catch (cleanup) {
+        cleanupErrors.push(cleanup)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanup = cleanupErrors[0]
+      if (bodyFailed) {
+        throw new AggregateError([bodyError, cleanup], 'journal body and cleanup failed')
+      }
+      throw cleanup
+    }
+    if (bodyFailed) {
+      throw bodyError
     }
   })
 
   it('adds one row for a death however many attempts its settle takes to write', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-stale-session-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ scoped: true })
+    const root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-stale-session-')))
     let now = 100
+    let bodyError: unknown
+    let bodyFailed = false
+    const cleanupErrors: unknown[] = []
     try {
       const journal = await journals.open({
         identity: {
@@ -678,7 +754,7 @@ describe('stale session state on a cold acquire', () => {
         journal.snapshot().items.flatMap((item) => readAgentJournalTurn(item.body) ?? [])
       const statusRows = () =>
         journal.snapshot().items.filter((item) => item.body.kind === 'status')
-      const database = openTestJournalHostDatabase(root)
+      const database = journals.database(root)
       const cursor = journal.cursor()
       database.db.exec(`CREATE TEMP TRIGGER reject_later_stale_settlement
         BEFORE INSERT ON journal_rows
@@ -695,9 +771,25 @@ describe('stale session state on a cold acquire', () => {
       await settle()
       expect(turns().filter((turn) => turn.state !== 'interrupted')).toEqual([])
       expect(statusRows()).toHaveLength(1)
+    } catch (error) {
+      bodyFailed = true
+      bodyError = error
     } finally {
-      await journals.closeAll()
-      await rm(root, { recursive: true, force: true })
+      try {
+        await journals.dispose()
+      } catch (cleanup) {
+        cleanupErrors.push(cleanup)
+      }
+    }
+    if (cleanupErrors.length > 0) {
+      const cleanup = cleanupErrors[0]
+      if (bodyFailed) {
+        throw new AggregateError([bodyError, cleanup], 'journal body and cleanup failed')
+      }
+      throw cleanup
+    }
+    if (bodyFailed) {
+      throw bodyError
     }
   })
 

@@ -17,7 +17,7 @@ import type { AgentSessionExecutionOptions } from '../../../shared/agent-session
 import type { JournalHostDatabase } from './journal-host-database'
 import type { JournalLifecycleMutationInput } from './journal-row-builders'
 import type { JournalRow } from './journal-row-schema'
-import type { JournalReducerState } from './journal-reducer'
+import type { JournalAppliedSubmission, JournalReducerState } from './journal-reducer'
 import type { JournalRowWriter } from './journal-row-writer'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import type { JournalWriteBody } from './journal-write-queue'
@@ -28,6 +28,11 @@ export type AgentSessionJournalOptions = {
   now?: () => number
   mintEpoch?: () => string
 }
+
+export type JournalCommitObserver = (
+  rows?: readonly JournalRow[],
+  applied?: readonly JournalAppliedSubmission[]
+) => void
 
 export type JournalReadSince =
   | { ok: true; rows: JournalRow[]; cursor: AgentJournalCursor }
@@ -73,6 +78,12 @@ export type JournalItemAppendOptions = AgentJournalRowAttribution & {
   recovered?: true
 }
 export type JournalTombstoneInput = { fence: number }
+
+export type JournalItemVisitor = (
+  itemId: string,
+  sequence: number,
+  body: AgentJournalItemBody
+) => void
 
 export type JournalItemLinkageVisitor = (
   itemId: string,

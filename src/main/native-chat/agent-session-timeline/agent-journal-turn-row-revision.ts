@@ -1,34 +1,39 @@
-// Resolve revisions from journal state at execution; each writer preserves fields it does not own.
-
 import {
   MAX_CONTEXT_CATEGORIES,
   MAX_CONTEXT_CATEGORY_NAME_CHARS,
-  MAX_CONTEXT_MODEL_ID_CHARS,
-  type AgentSessionContextUsage,
-  type AgentSessionContextWindow
+  MAX_CONTEXT_MODEL_ID_CHARS
 } from '../../../shared/agent-session-context-usage'
 import {
   agentJournalItemKey,
   parseAgentJournalItemKey
 } from '../../../shared/agent-session-journal-item-key'
-import {
-  AGENT_JOURNAL_THREAD_SCOPE,
-  type AgentJournalItemIdentity,
-  type AgentJournalTurnItem
-} from '../../../shared/agent-session-journal-types'
+import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
+import type { StructuredAgentSessionTransition } from '../agent-session-wire/structured-agent-session-transition'
+import type {
+  AgentSessionContextUsage,
+  AgentSessionContextWindow
+} from '../../../shared/agent-session-context-usage'
+import type {
+  AgentJournalItemIdentity,
+  AgentJournalTurnItem
+} from '../../../shared/agent-session-journal-types'
 import type {
   StructuredAgentSessionEventSink,
   StructuredAgentSessionRevisionJournal,
   StructuredAgentSessionRevisionOptions
 } from '../agent-session-wire/structured-agent-session-event-sink'
 
+// Resolve revisions from journal state at execution; each writer preserves fields it does not own.
+
 export type AgentJournalTurnRowTarget = { identity: AgentJournalItemIdentity } | { newest: true }
 
 export type AgentJournalTurnRowWrite = {
   /** Lifecycle writers own all lifecycle fields. */
   lifecycle?: AgentJournalTurnItem
+  /** Request attribution owns only the opener and request time; lifecycle is the creation fallback. */
+  attributionOnly?: true
   /** Replace only the supplied context parts. */
   contextUsage?: AgentSessionContextUsage
   /** Supply a window only when no journal row holds one. */
@@ -84,7 +89,11 @@ function reviseTurnBody(
 ): AgentJournalTurnItem | null {
   const { lifecycle, contextUsage } = write
   const base =
-    lifecycle && current ? { ...withoutLifecycle(current), ...lifecycle } : (lifecycle ?? current)
+    lifecycle && current
+      ? write.attributionOnly
+        ? { ...current, userItemId: lifecycle.userItemId, requestedAt: lifecycle.requestedAt }
+        : { ...withoutLifecycle(current), ...lifecycle }
+      : (lifecycle ?? current)
   if (!base || !contextUsage) {
     return base
   }
@@ -107,7 +116,7 @@ function withoutLifecycle(turn: AgentJournalTurnItem) {
 }
 
 function withFallbackWindow(
-  journal: StructuredAgentSessionRevisionJournal,
+  journal: Pick<StructuredAgentSessionRevisionJournal, 'itemBody' | 'visitItems'>,
   { windowIfNoneHeld, ...write }: AgentJournalTurnRowWrite
 ): AgentJournalTurnRowWrite {
   if (!windowIfNoneHeld || write.contextUsage?.window) {
@@ -123,7 +132,7 @@ function withFallbackWindow(
 }
 
 function findTurnRow(
-  journal: StructuredAgentSessionRevisionJournal,
+  journal: Pick<StructuredAgentSessionRevisionJournal, 'itemBody' | 'visitItems'>,
   target: AgentJournalTurnRowTarget
 ): { itemId: string; body: AgentJournalTurnItem } | null {
   if ('identity' in target) {
@@ -141,6 +150,8 @@ function findTurnRow(
 }
 
 export type AgentJournalTurnRowDelivery = {
+  transientTerminal?: StructuredAgentSessionTransition['transientTerminal']
+  turnLifecycle?: StructuredAgentSessionTransition['turnLifecycle']
   /** False when the caller publishes immediately after queueing. */
   publish: boolean
   options?: Omit<StructuredAgentSessionRevisionOptions, 'turnScope'>
@@ -160,7 +171,7 @@ export function agentJournalTurnRowReservedBytes(
 
 /** Resolve against current journal state; null writes nothing. */
 export function resolveAgentJournalTurnRowWrite(
-  journal: StructuredAgentSessionRevisionJournal,
+  journal: Pick<StructuredAgentSessionRevisionJournal, 'itemBody' | 'visitItems'>,
   target: AgentJournalTurnRowTarget,
   write: AgentJournalTurnRowWrite,
   reservedBytes: number
@@ -179,7 +190,37 @@ export function resolveAgentJournalTurnRowWrite(
     return { identity, body }
   }
   // Unknown fields can exceed the bound; preserve lifecycle delivery anyway.
-  return write.lifecycle ? { identity, body: write.lifecycle } : null
+  if (!write.lifecycle) {
+    return null
+  }
+  const {
+    turnId,
+    state,
+    outcome,
+    userItemId,
+    startedAt,
+    requestedAt,
+    completedAt,
+    durationMs,
+    providerTurnId
+  } = body
+  return {
+    identity,
+    body: write.attributionOnly
+      ? {
+          kind: 'turn',
+          turnId,
+          state,
+          outcome,
+          userItemId,
+          startedAt,
+          requestedAt,
+          completedAt,
+          durationMs,
+          providerTurnId
+        }
+      : write.lifecycle
+  }
 }
 
 /** Lifecycle writes may create rows; context writes only revise. Nonreading sinks receive lifecycle only. */
@@ -187,10 +228,29 @@ export function writeAgentJournalTurnRow(
   sink: StructuredAgentSessionEventSink,
   target: AgentJournalTurnRowTarget,
   write: AgentJournalTurnRowWrite,
-  { publish, options: delivery = {} }: AgentJournalTurnRowDelivery
+  { publish, options: delivery = {}, transientTerminal, turnLifecycle }: AgentJournalTurnRowDelivery
 ): void {
   // Turn records are thread-scoped.
   const options = { ...delivery, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+  if ((transientTerminal || turnLifecycle) && sink.tryAppendTransition) {
+    const reservedBytes = agentJournalTurnRowReservedBytes(target, write)
+    sink.tryAppendTransition({
+      transientTerminal,
+      turnLifecycle,
+      steps: [
+        {
+          kind: 'item',
+          reservedBytes,
+          options,
+          resolve: (journal) =>
+            resolveAgentJournalTurnRowWrite(journal, target, write, reservedBytes)
+        }
+      ],
+      lifecycle: true,
+      publish
+    })
+    return
+  }
   const revise = publish ? sink.tryReviseResolvedItemAndPublish : sink.tryReviseResolvedItem
   if (!revise) {
     if (write.lifecycle && 'identity' in target) {

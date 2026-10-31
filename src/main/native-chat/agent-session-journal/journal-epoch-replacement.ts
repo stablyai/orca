@@ -174,7 +174,14 @@ export function replaceJournalEpoch(input: {
     rows.push(row)
   }
   if (liveStop) {
-    const row = buildJournalStopEventRow({ ...place(), event: liveStop })
+    const previous = input.previous
+    const retryOnly = previous?.stoppedTurns.namesStop(
+      previous,
+      liveStop.turnId,
+      previous.queuePauseMarks.latestStop?.sequence ?? 0
+    )
+    const { turnId: _diagnosticTarget, ...queueMeaning } = liveStop
+    const row = buildJournalStopEventRow({ ...place(), event: retryOnly ? queueMeaning : liveStop })
     applyJournalRow(state, row)
     rows.push(row)
   }

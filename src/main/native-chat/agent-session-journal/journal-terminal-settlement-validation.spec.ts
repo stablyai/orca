@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
@@ -11,15 +11,14 @@ import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/st
 import {
   createTrackedJournalOpener,
   insertTestJournalRowJson,
-  liveTestJournalRows,
-  openTestJournalHostDatabase
+  liveTestJournalRows
 } from './journal-host-database-test-support'
 import { parseJournalRow, type JournalRow } from './journal-row-schema'
 import * as rowTable from './journal-row-table'
 import type { AgentSessionJournal } from './journal-store'
 
 export function registerJournalTerminalSettlementValidationTests(): void {
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
   let root: string
   let journal: AgentSessionJournal
   const identity = { provider: 'orca' as const, clientMessageId: 'old-turn' }
@@ -39,14 +38,15 @@ export function registerJournalTerminalSettlementValidationTests(): void {
   }
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-settlement-validation-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-settlement-validation-')))
     journal = await open()
   })
 
   afterEach(async () => {
     vi.restoreAllMocks()
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    journal = undefined!
+    await journals.dispose()
   })
 
   function settle(observedAt = 1_000, lastProvenAliveAt?: number) {
@@ -78,7 +78,7 @@ export function registerJournalTerminalSettlementValidationTests(): void {
   }
 
   async function saveOldItems(inputs: { itemId: string; revision?: number; body: unknown }[]) {
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = journals.database(root)
     for (const [index, input] of inputs.entries()) {
       const json = JSON.stringify({
         v: 3,
@@ -174,7 +174,7 @@ export function registerJournalTerminalSettlementValidationTests(): void {
       { itemId: 'orca:approval', body: pendingApproval() }
     ])
     const before = journal.snapshot().items.find((item) => item.itemId === saved.itemId)
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = journals.database(root)
     const history = liveTestJournalRows(db, 'validation')
     const commits = vi.fn()
     journal.observeCommits(commits)
@@ -289,7 +289,7 @@ export function registerJournalTerminalSettlementValidationTests(): void {
         }
       ]
       await saveOldItems(inputs)
-      const { db } = openTestJournalHostDatabase(root)
+      const { db } = journals.database(root)
       const history = liveTestJournalRows(db, 'validation')
       const rows: JournalRow[] = []
       const insert = rowTable.insertJournalRow

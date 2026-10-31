@@ -1,139 +1,98 @@
-// Exercise grammar events through the real deferred sink and on-disk journal.
-
+import type {
+  ProviderTimelineRig,
+  UnboundProviderTimelineAssembler
+} from './provider-timeline-assembler-test-data'
+export type {
+  ProviderTimelineRig,
+  UnboundProviderTimelineAssembler
+} from './provider-timeline-assembler-test-data'
+import {
+  SESSION,
+  AGENT,
+  GENERATION,
+  NAMESPACE,
+  providerTurnId
+} from './provider-timeline-assembler-test-data'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type {
-  AgentJournalApprovalItem,
-  AgentJournalItemBody,
-  AgentJournalMessageItem,
-  AgentJournalRenderItem,
-  AgentJournalToolCallItem,
-  AgentJournalTurnLifecycle
-} from '../../../shared/agent-session-journal-types'
 import { readAgentJournalTurn } from '../../../shared/agent-session-turn-record'
-import { backgroundTaskFallbackText } from '../../../shared/native-chat/input/native-chat-background-task-row'
-import {
-  isBackgroundTaskBlock,
-  type NativeChatBackgroundTaskBlock
-} from '../../../shared/native-chat-types'
 import {
   closeTestJournalHostDatabase,
-  createTrackedJournalOpener,
-  type TestJournalOptions
+  createTrackedJournalOpener
 } from '../agent-session-journal/journal-host-database-test-support'
-import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import {
-  createDeferredStructuredAgentSessionEventSink,
-  type StructuredAgentSessionEventSink
-} from '../agent-session-wire/structured-agent-session-event-sink'
+import { createDeferredStructuredAgentSessionEventSink } from '../agent-session-wire/structured-agent-session-event-sink'
 import { testEventSinkLogging } from '../agent-session-wire/structured-agent-session-logger-test-support'
-import {
-  createProviderTimelineAssembler,
-  type ProviderTimelineAssembler,
-  type ProviderTimelineAssemblerDeps
+import { createProviderTimelineAssembler } from './provider-timeline-assembler'
+import type {
+  ProviderTimelineAssembler,
+  ProviderTimelineAssemblerDeps
 } from './provider-timeline-assembler'
 import { settleStaleStructuredAgentSessionState } from '../agent-session-wire/structured-agent-session-dead-generation-settlement'
-import {
-  createLegacyProviderTimelineIdentityScheme,
-  type ProviderTimelineItemFamily
-} from './provider-timeline-identity'
-import { providerTimelineSink, type ProviderTimelineSink } from './provider-timeline-plan'
+import { providerTimelineSink } from './provider-timeline-plan'
+import type { TestJournalOptions } from '../agent-session-journal/journal-host-database-test-support'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import type { ProviderTimelineSink } from './provider-timeline-plan'
 
-export const SESSION = 'session-timeline'
-export const AGENT = 'grok'
-export const GENERATION = 'gen-1'
-export const NAMESPACE = 'provider-session-1'
+export {
+  SESSION,
+  AGENT,
+  GENERATION,
+  NAMESPACE,
+  providerItemId,
+  providerTurnItemId,
+  providerTurnId,
+  runningTool,
+  backgroundTask,
+  backgroundTaskState,
+  assistantText,
+  pendingApproval,
+  messageText
+} from './provider-timeline-assembler-test-data'
+// Exercise grammar events through the real deferred sink and on-disk journal.
 
-const scheme = createLegacyProviderTimelineIdentityScheme({ agent: AGENT, sessionId: SESSION })
-
-export function providerItemId(
-  family: ProviderTimelineItemFamily | 'request',
-  key: string,
-  options: { namespace?: string; thread?: string; generation?: string; incarnation?: number } = {}
-): string {
-  return agentJournalItemKey(
-    family === 'request'
-      ? scheme.request({
-          generation: options.generation ?? GENERATION,
-          key,
-          incarnation: options.incarnation ?? 1
-        })
-      : scheme.item({
-          namespace: options.namespace ?? NAMESPACE,
-          family,
-          key: { source: 'provider', value: key },
-          thread: options.thread ?? null
-        })
-  )
-}
-
-export function providerTurnItemId(turnKey: string, namespace = NAMESPACE): string {
-  return agentJournalItemKey(
-    scheme.turn({ namespace, key: { source: 'provider', value: turnKey } })
-  )
-}
-
-export function providerTurnId(turnKey: string, namespace = NAMESPACE): string {
-  return scheme.turnId({ namespace, key: { source: 'provider', value: turnKey } })
-}
-
-export function runningTool(name: string): AgentJournalToolCallItem {
-  return { kind: 'tool-call', name, input: { name }, state: 'running' }
-}
-
-/** Include the plain-text twin before the structured background-task block. */
-export function backgroundTask(
-  taskId: string,
-  state: NativeChatBackgroundTaskBlock['state']
-): AgentJournalMessageItem {
-  const block: NativeChatBackgroundTaskBlock = {
-    type: 'background-task',
-    taskId,
-    kind: 'command',
-    label: taskId,
-    state
-  }
-  return {
-    kind: 'message',
-    role: 'system',
-    blocks: [{ type: 'text', text: backgroundTaskFallbackText(block) }, block]
-  }
-}
-
-export async function backgroundTaskState(
-  rig: ProviderTimelineRig,
-  item: string
-): Promise<string | undefined> {
-  const body = (await rig.row(providerItemId('item', item)))?.body
-  const block = body?.kind === 'message' ? body.blocks.find(isBackgroundTaskBlock) : undefined
-  return block?.state
-}
-
-export function assistantText(text: string): AgentJournalMessageItem {
-  return { kind: 'message', role: 'assistant', blocks: [{ type: 'text', text }] }
-}
-
-export const pendingApproval: AgentJournalApprovalItem = {
-  kind: 'approval',
-  title: 'Run?',
-  detail: null,
-  options: [{ id: 'allow', label: 'Allow' }],
-  resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-}
-
-export function messageText(body: AgentJournalItemBody | undefined): string | undefined {
-  return body?.kind === 'message' && body.blocks[0]?.type === 'text'
-    ? body.blocks[0].text
-    : undefined
-}
-
-const journals = createTrackedJournalOpener()
+let journals = createTrackedJournalOpener()
 const cleanups: (() => Promise<void>)[] = []
 const roots: string[] = []
+let scopedOwnership = false
+const ownedSinks: { root: string; stop: () => void; drain: () => Promise<void> }[] = []
+export function registerScopedProviderTimelineOwnership(): void {
+  scopedOwnership = true
+  journals = createTrackedJournalOpener({ scoped: true })
+}
 
 export async function closeProviderTimelineRigs(): Promise<void> {
+  if (scopedOwnership) {
+    const owned = ownedSinks.splice(0)
+    const directories = roots.splice(0)
+    const failures: unknown[] = []
+    const blocked = new Set<string>()
+    for (const sink of owned) {
+      try {
+        sink.stop()
+      } catch (error) {
+        blocked.add(sink.root)
+        failures.push(error)
+      }
+    }
+    for (const sink of owned) {
+      try {
+        await sink.drain()
+      } catch (error) {
+        blocked.add(sink.root)
+        failures.push(new Error(`timeline sink retained: ${sink.root}`, { cause: { sink, error } }))
+      }
+    }
+    try {
+      await journals.dispose(directories, [...blocked])
+    } catch (error) {
+      failures.push(error)
+    }
+    if (failures.length > 0) {
+      throw new AggregateError(failures, 'timeline cleanup failed')
+    }
+    return
+  }
   for (const cleanup of cleanups.splice(0)) {
     await cleanup()
   }
@@ -144,17 +103,34 @@ export async function closeProviderTimelineRigs(): Promise<void> {
 }
 
 /** Admit before journal binding to simulate resume events without a journal view. */
-export type UnboundProviderTimelineAssembler = {
-  assembler: ProviderTimelineAssembler
-  bind(): Promise<void>
-  drained(): Promise<void>
-}
 
 export function openUnboundProviderTimelineAssembler(
   journal: AgentSessionJournal,
   overrides: Partial<ProviderTimelineAssemblerDeps> = {}
 ): UnboundProviderTimelineAssembler {
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  let ownedAssembler: ProviderTimelineAssembler | undefined
+  let bound = false
+  if (scopedOwnership) {
+    ownedSinks.push({
+      root: journal['database'].stateDirectory,
+      stop: () => ownedAssembler?.dispose(),
+      drain: async () => {
+        const discarded = !bound && deferred.state().queuedOperations > 0
+        if (!bound) {
+          deferred.close()
+        }
+        const result = await deferred.drained()
+        deferred.close()
+        if (!result.ok) {
+          throw result.error
+        }
+        if (discarded) {
+          throw new Error('unbound timeline sink retained admitted writes at cleanup')
+        }
+      }
+    })
+  }
   const sink = providerTimelineSink(deferred.sink)
   if (!sink) {
     throw new Error('the deferred sink offers transitions')
@@ -169,36 +145,24 @@ export function openUnboundProviderTimelineAssembler(
     schedule: () => () => {},
     ...overrides
   })
-  cleanups.push(async () => {
-    assembler.dispose()
-    deferred.close()
-  })
+  ownedAssembler = assembler
+  if (!scopedOwnership) {
+    cleanups.push(async () => {
+      assembler.dispose()
+      deferred.close()
+    })
+  }
   return {
     assembler,
     bind: async () => {
       deferred.bind({ journal, fence: 1, publish: () => {} })
+      bound = true
       await deferred.drained()
     },
     drained: async () => {
       await deferred.drained()
     }
   }
-}
-
-export type ProviderTimelineRig = {
-  journal: AgentSessionJournal
-  assembler: ProviderTimelineAssembler
-  sink: ProviderTimelineSink
-  eventSink: StructuredAgentSessionEventSink
-  /** Drop buffered text, sweep the dead generation, then create the next child’s assembler. */
-  restart(overrides?: Partial<ProviderTimelineAssemblerDeps>): Promise<ProviderTimelineAssembler>
-  /** Alternate same-generation assembler; leave the original unused. */
-  assemble(overrides?: Partial<ProviderTimelineAssemblerDeps>): ProviderTimelineAssembler
-  rows(): Promise<AgentJournalRenderItem[]>
-  reopenJournal(): Promise<AgentSessionJournal>
-  row(itemId: string): Promise<AgentJournalRenderItem | undefined>
-  turn(turnKey: string, namespace?: string): Promise<AgentJournalTurnLifecycle | undefined>
-  turns(): Promise<AgentJournalTurnLifecycle[]>
 }
 
 export function refusingSink(
@@ -220,6 +184,9 @@ export async function openProviderTimelineRig(
 ): Promise<ProviderTimelineRig> {
   const root = await mkdtemp(join(tmpdir(), 'orca-provider-timeline-'))
   roots.push(root)
+  if (scopedOwnership) {
+    journals.ownRoot(root)
+  }
   const journalOptions: TestJournalOptions = {
     identity: {
       sessionId: SESSION,
@@ -234,10 +201,30 @@ export async function openProviderTimelineRig(
   }
   const journal = await journals.open(journalOptions)
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
+  const assemblers = new Set<ProviderTimelineAssembler>()
+  if (scopedOwnership) {
+    ownedSinks.push({
+      root,
+      stop: () => {
+        for (const assembler of assemblers) {
+          assembler.dispose()
+        }
+      },
+      drain: async () => {
+        const result = await deferred.drained()
+        deferred.close()
+        if (!result.ok) {
+          throw result.error
+        }
+      }
+    })
+  }
   deferred.bind({ journal, fence: 1, publish: () => {} })
-  cleanups.push(async () => {
-    deferred.close()
-  })
+  if (!scopedOwnership) {
+    cleanups.push(async () => {
+      deferred.close()
+    })
+  }
   const sink = providerTimelineSink(deferred.sink)
   if (!sink) {
     throw new Error('the deferred sink offers transitions')
@@ -250,8 +237,8 @@ export async function openProviderTimelineRig(
     windows.clear()
     due.forEach((run) => run())
   }
-  const build = (more: Partial<ProviderTimelineAssemblerDeps> = {}) =>
-    createProviderTimelineAssembler({
+  const build = (more: Partial<ProviderTimelineAssemblerDeps> = {}) => {
+    const assembler = createProviderTimelineAssembler({
       sink,
       sessionId: SESSION,
       agent: AGENT,
@@ -264,6 +251,11 @@ export async function openProviderTimelineRig(
       ...overrides,
       ...more
     })
+    if (scopedOwnership) {
+      assemblers.add(assembler)
+    }
+    return assembler
+  }
   const rows = async () => {
     elapse()
     await deferred.drained()

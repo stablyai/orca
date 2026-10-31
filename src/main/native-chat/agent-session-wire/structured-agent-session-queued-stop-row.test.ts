@@ -16,13 +16,17 @@ import { structuredQueuePauses } from './structured-agent-session-queued-pause'
 let rig: QueuedMessageTestRig
 
 beforeEach(async () => {
+  rig = undefined!
   vi.useFakeTimers()
-  rig = await createQueuedMessageTestRig({ restartable: true })
+  rig = await createQueuedMessageTestRig({ scopedOwnership: true, restartable: true })
 })
 
 afterEach(async () => {
+  const owned = rig
+  rig = undefined!
+  vi.useRealTimers()
   try {
-    await rig.dispose()
+    await owned?.dispose()
   } finally {
     vi.useRealTimers()
   }

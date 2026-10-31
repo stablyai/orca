@@ -41,12 +41,21 @@ export function useStructuredAgentSessionTransportState(
   const turnId = runningStructuredAgentSessionTurnId({ items: journalItems, latestTurn })
   // Prefer current-provider host evidence; older hosts use the same projection as session lists so chat and sidebar agree.
   const hostWorking = enabled ? state.working : undefined
-  const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () =>
-    isStructuredAgentSessionMainAgentWorking(turnId, current.submissions, fence)
+  const derivedWorking = isStructuredAgentSessionMainAgentWorking(
+    turnId,
+    current.submissions,
+    fence
   )
+  const actualWorking =
+    hostWorking === false
+      ? false
+      : latestTurn === undefined
+        ? structuredAgentSessionHostSaysWorking(hostWorking, () => derivedWorking)
+        : derivedWorking
+  const isWorking = structuredAgentSessionHostSaysWorking(hostWorking, () => actualWorking)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(
     enabled ? state.nextQueuedMessageId : null,
-    isWorking
+    actualWorking
   )
   const turnActivity = useMemo(
     () => selectStructuredAgentTurnActivity(journalItems, turnId, enabled ? state.activity : null),
@@ -87,6 +96,7 @@ export function useStructuredAgentSessionTransportState(
     fence,
     turnId,
     isWorking,
+    actualWorking,
     turnActivity,
     turnTiming,
     // null = no drafts or no claim; the projection treats both as an empty list.

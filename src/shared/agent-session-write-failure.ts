@@ -124,6 +124,13 @@ export type AgentSessionWriteFailure =
    *  error inside the method). */
   | { kind: 'unconfirmed' }
 
+export type StructuredAgentSessionWriteOutcome<T> =
+  | { kind: 'done'; value: T }
+  /** Refused or failed, with what to tell the person and the fact it was worded from. */
+  | { kind: 'not-done'; notice: string; failure: AgentSessionWriteFailure }
+  /** Unavailable at entry, so nothing was dispatched. */
+  | { kind: 'dropped' }
+
 /** Read saved details against code; drop newer reasons/verdicts and retain code wording. */
 function agentSessionWriteRefusal(
   code: AgentSessionWireRefusalCode,

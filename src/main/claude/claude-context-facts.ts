@@ -1,3 +1,4 @@
+import type { AgentSessionTransientFailure } from '../../shared/agent-session-provider-retry-policy'
 import {
   contextTokensFromUsage,
   MAX_CONTEXT_MODEL_ID_CHARS,
@@ -136,7 +137,11 @@ export class ClaudeContextFacts {
     )
   }
 
-  settle(message: Record<string, unknown>, end: ClaudeTurnEnd): void {
+  settle(
+    message: Record<string, unknown>,
+    end: ClaudeTurnEnd,
+    transientFailure?: AgentSessionTransientFailure
+  ): void {
     const tokens = this.windowReported
       ? null
       : claudeContextWindowFromResult(message, this.mainModel)
@@ -152,7 +157,7 @@ export class ClaudeContextFacts {
         this.write(facts)
       }
     } else {
-      this.turn.settle(end, facts)
+      this.turn.settle(end, facts, transientFailure)
     }
     this.requestReport(settled)
   }

@@ -17,13 +17,16 @@ import {
 let rig: RestTestRig
 
 beforeEach(async () => {
-  rig = await createRestTestRig({ idleSweep: { intervalMs: 3_600_000 } })
+  rig = undefined!
+  rig = await createRestTestRig({ idleSweep: { intervalMs: 3_600_000 } }, { scoped: true })
   setStructuredAgentSessionHost(rig.host)
 })
 
 afterEach(async () => {
+  const owned = rig
+  rig = undefined!
   setStructuredAgentSessionHost(null)
-  await rig.dispose()
+  await owned?.dispose()
 })
 
 /** Refuse exit settlement and its retry so only conversation reopen can settle the old work. */

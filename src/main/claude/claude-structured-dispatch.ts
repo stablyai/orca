@@ -126,7 +126,10 @@ export async function dispatchClaudeTurn(
     body: AgentJournalMessageItem
     requestedAt?: number
     sentUuid?: string
+    onReplay?: (replay: ReturnType<typeof waitForReplay>) => void
     signal?: AbortSignal
+    /** Prepared automatic input shares the host's synchronous write admission. */
+    admitWrite?: (write: () => Promise<void>) => Promise<void>
   },
   beforeDispatch?: () => Promise<void>
 ): Promise<AgentSessionDispatchOutcome> {
@@ -153,7 +156,7 @@ export async function dispatchClaudeTurn(
     ++session.dispatchSequence
     // Invalidate context reports requested before this send.
     session.translator?.markContextActivity()
-    return waitForReplay(
+    const replay = waitForReplay(
       session,
       acceptsResult,
       sentUuid,
@@ -161,6 +164,8 @@ export async function dispatchClaudeTurn(
       input.clientMessageId ?? null,
       input.requestedAt ?? null
     )
+    input.onReplay?.(replay)
+    return replay
   }
   const message = {
     type: 'user',
@@ -169,7 +174,7 @@ export async function dispatchClaudeTurn(
     parent_tool_use_id: null,
     session_id: session.providerSessionId
   }
-  const pending = { replay: beforeDispatch ? undefined : arm() }
+  const pending = { replay: beforeDispatch || input.admitWrite ? undefined : arm() }
   const authorize = beforeDispatch
     ? async () => {
         await beforeDispatch()
@@ -180,9 +185,23 @@ export async function dispatchClaudeTurn(
       }
     : undefined
   try {
-    await (authorize
-      ? session.connection.send(message, authorize)
-      : session.connection.send(message))
+    const admitWrite = input.admitWrite
+    if (admitWrite) {
+      await beforeDispatch?.()
+      await session.connection.send(message, () =>
+        admitWrite(() => {
+          if (session.dispatchWaiters.length >= MAX_ACTIVE_DISPATCH_WAITERS) {
+            throw claudeUnwrittenUserMessageError(new Error(DISPATCH_REJECTED_QUEUE_FULL))
+          }
+          pending.replay = arm()
+          return Promise.resolve()
+        })
+      )
+    } else {
+      await (authorize
+        ? session.connection.send(message, authorize)
+        : session.connection.send(message))
+    }
   } catch (error) {
     const replay = pending.replay
     if (!replay) {

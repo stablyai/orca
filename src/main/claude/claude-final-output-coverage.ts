@@ -22,6 +22,7 @@ export function createClaudeFinalOutputCoverage(target: StructuredAgentSessionEv
     const admission = result ?? { accepted: true }
     return options.lifecycle ? record(admission) : admission
   }
+  const transition = target.tryAppendTransition
   const revise = target.tryReviseResolvedItem
   const reviseAndPublish = target.tryReviseResolvedItemAndPublish
   const sink: StructuredAgentSessionEventSink = {
@@ -34,6 +35,14 @@ export function createClaudeFinalOutputCoverage(target: StructuredAgentSessionEv
       }
     },
     tryAppendItem: append,
+    ...(transition
+      ? {
+          tryAppendTransition: (input: Parameters<typeof transition>[0]) => {
+            const admission = transition(input)
+            return input.lifecycle ? record(admission) : admission
+          }
+        }
+      : {}),
     ...(revise
       ? {
           tryReviseResolvedItem: (...args: Parameters<typeof revise>) => {

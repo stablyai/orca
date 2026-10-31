@@ -45,6 +45,10 @@ export class StructuredAgentSessionDeliveryLoop {
 
   constructor(private readonly deps: StructuredAgentSessionDeliveryLoopDeps) {}
 
+  isDisposed(): boolean {
+    return this.disposed
+  }
+
   isRunning(sessionId: string): boolean {
     return this.running.has(sessionId)
   }

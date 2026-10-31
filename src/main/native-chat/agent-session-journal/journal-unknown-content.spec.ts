@@ -1,7 +1,7 @@
 // Unknown body kinds remain writable; unsupported mutations/sends require a newer reader.
 // Preserve all stored rows on either unsupported content or damage.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -17,7 +17,6 @@ import {
   createTrackedJournalOpener,
   insertTestJournalRowJson,
   liveTestJournalRows,
-  openTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
 } from './journal-host-database-test-support'
 
@@ -32,15 +31,15 @@ export function registerJournalUnknownContentTests(): void {
   const SCOPE = { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
 
   let root: string
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-journal-newer-content-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-journal-newer-content-')))
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   function item(ordinal: number): AgentJournalItemIdentity {
@@ -52,9 +51,10 @@ export function registerJournalUnknownContentTests(): void {
   }
 
   function stored(): { seq: number; rowJson: string }[] {
-    return liveTestJournalRows(openTestJournalHostDatabase(root).db, IDENTITY.sessionId).map(
-      (row) => ({ seq: row.seq, rowJson: row.rowJson })
-    )
+    return liveTestJournalRows(journals.database(root).db, IDENTITY.sessionId).map((row) => ({
+      seq: row.seq,
+      rowJson: row.rowJson
+    }))
   }
 
   /** Close after injecting rows so the next open replays them. */
@@ -66,7 +66,7 @@ export function registerJournalUnknownContentTests(): void {
     let seq = first.cursor().sequence
     await journals.closeAll()
     const tail = itemRow(epoch, 'codex:thread-1:turn-1:9', { kind: 'status', text: 'after' })
-    const { db } = openTestJournalHostDatabase(root)
+    const { db } = journals.database(root)
     for (const row of [...rows(epoch), tail]) {
       seq += 1
       insertTestJournalRowJson(db, IDENTITY.sessionId, seq, JSON.stringify({ ...row, seq }), 5_000)

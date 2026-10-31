@@ -1,24 +1,17 @@
+import type { OwnedHostTestProfiles } from './structured-agent-session-host-test-profile-cleanup'
+import { drainOwnedHostTestProfiles } from './structured-agent-session-host-test-profile-cleanup'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, vi, type Mock } from 'vitest'
+import { afterEach, beforeEach, expect, vi } from 'vitest'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
-import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
-import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
-import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import {
   createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
-import type {
-  AgentSessionDispatchOutcome,
-  StructuredAgentSessionAdapter
-} from './structured-agent-session-adapter'
-import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { TrackedTestRecoveryCapsule } from './structured-agent-session-host-test-recovery-capsule'
 import {
@@ -33,8 +26,77 @@ import { recordingProductionStructuredAgentSessionLogger } from './structured-ag
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { startsWhenPublished } from './structured-agent-session-instant-start.test-support'
+import type { Mock } from 'vitest'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import type { AgentSessionMutationEnvelope } from '../../../shared/agent-session-wire'
+import type { AgentChildWorkView } from '../../../shared/agent-status-child-work-view'
+import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
+import type {
+  AgentSessionDispatchOutcome,
+  StructuredAgentSessionAdapter
+} from './structured-agent-session-adapter'
+import type { AgentSessionAttachParams } from './structured-agent-session-attach'
 
-const journals = createTrackedJournalOpener()
+let journals = createTrackedJournalOpener()
+
+let scopedOwnership = false
+const ownedProfiles: OwnedHostTestProfiles = []
+
+export function registerScopedHostTestOwnership(): void {
+  scopedOwnership = true
+}
+
+export function ownHostTestProfile(root: string) {
+  if (!scopedOwnership) {
+    throw new Error('host ownership must be selected before setup')
+  }
+  let profile = ownedProfiles.find((entry) => entry.root === root)
+  if (!profile) {
+    profile = {
+      root,
+      journals: createTrackedJournalOpener({ scoped: true }),
+      stores: new Map(),
+      hosts: new Map(),
+      capsules: new Set(),
+      errors: [],
+      stopped: []
+    }
+    profile.journals.ownRoot(root)
+    ownedProfiles.push(profile)
+  }
+  const owned = profile
+  return {
+    journals: owned.journals,
+    database: () => (owned.database = owned.journals.database(root)),
+    store: (store: AgentSessionRecordStore) => {
+      owned.stores.set(store, owned.database!)
+      return store
+    },
+    capsule: (capsule: TrackedTestRecoveryCapsule) => {
+      owned.capsules.add(capsule)
+      return capsule
+    },
+    host: (host: StructuredAgentSessionHost) => {
+      owned.database = owned.journals.database(root, host.deps.journalDatabase)
+      if (!owned.hosts.has(host)) {
+        const state = { completed: false }
+        owned.hosts.set(host, state)
+        const flush = host.flushAllStreamedEvents.bind(host)
+        host.flushAllStreamedEvents = (...args) => {
+          const operation = flush(...args)
+          void operation.then(
+            () => {
+              state.completed = true
+            },
+            () => {}
+          )
+          return operation
+        }
+      }
+      return host
+    }
+  }
+}
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -138,6 +200,11 @@ async function seedApproval(optionId = 'allow'): Promise<{ itemId: string; revis
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-host-'))
+  const ownership = scopedOwnership ? ownHostTestProfile(root) : null
+  if (ownership) {
+    journals = ownership.journals
+  }
+  ownership?.database()
   resetHostTestOperationIds()
   ordinal = 0
   acquire = vi.fn(async ({ fence }) => ({
@@ -162,7 +229,9 @@ beforeEach(async () => {
   answerPrompt = vi.fn(async ({ commit }) => commit())
   setOption = vi.fn(async () => undefined)
   store = await openTestAgentSessionRecordStore(root)
+  ownership?.store(store)
   recoveryCapsule = new TrackedTestRecoveryCapsule(root)
+  ownership?.capsule(recoveryCapsule)
   log = recordingProductionStructuredAgentSessionLogger()
   host = new StructuredAgentSessionHost({
     agents: claudeAndCodexDeclared(),
@@ -175,9 +244,19 @@ beforeEach(async () => {
     mintSpawnToken: () => 'spawn-a',
     now: () => NOW
   })
+  ownership?.host(host)
 })
 
 afterEach(async () => {
+  if (scopedOwnership) {
+    const profiles = ownedProfiles.splice(0)
+    root = undefined!
+    host = undefined!
+    store = undefined!
+    recoveryCapsule = undefined!
+    await drainOwnedHostTestProfiles(profiles)
+    return
+  }
   await host.flushAllStreamedEvents()
   await journals.closeAll()
   // Replaced hosts may still hold recovery-capsule locks under root.
@@ -195,6 +274,11 @@ export function replaceHostTestState(next: {
   store: AgentSessionRecordStore
   host: StructuredAgentSessionHost
 }): void {
+  if (scopedOwnership) {
+    const ownership = ownHostTestProfile(next.host.deps.journalDatabase.stateDirectory)
+    ownership.host(next.host)
+    ownership.store(next.store)
+  }
   store = next.store
   host = next.host
 }

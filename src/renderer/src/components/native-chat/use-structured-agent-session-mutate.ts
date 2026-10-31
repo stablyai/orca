@@ -9,7 +9,8 @@ import {
   agentSessionRefusalFailure,
   agentSessionThrownFailure,
   agentSessionWriteKindForMethod as writeKind,
-  type AgentSessionWriteFailure
+  type AgentSessionWriteFailure,
+  type StructuredAgentSessionWriteOutcome
 } from '../../../../shared/agent-session-write-failure'
 import { structuredAgentSessionPayloadFingerprint } from '../../../../shared/structured-agent-session-mutation'
 import { structuredSessionOperationId } from './structured-agent-session-operation-id'
@@ -26,12 +27,7 @@ import {
   structuredAgentSessionStopIsJoinable
 } from '../../../../shared/structured-agent-session-stop-join'
 
-export type StructuredAgentSessionWriteOutcome<T> =
-  | { kind: 'done'; value: T }
-  /** Refused or failed, with what to tell the person and the fact it was worded from. */
-  | { kind: 'not-done'; notice: string; failure: AgentSessionWriteFailure }
-  /** Unavailable at entry, so nothing was dispatched. */
-  | { kind: 'dropped' }
+export type { StructuredAgentSessionWriteOutcome } from '../../../../shared/agent-session-write-failure'
 
 type ExecutionResult<T> = StructuredAgentSessionWriteOutcome<T> & {
   reportFailure?: (notice: string) => void

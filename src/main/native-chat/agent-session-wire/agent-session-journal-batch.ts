@@ -1,19 +1,17 @@
-// Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
-
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
 import type {
   AgentJournalRenderItem,
-  AgentJournalSnapshot,
-  AgentJournalSubmission
+  AgentJournalSubmission,
+  AgentJournalSnapshot
 } from '../../../shared/agent-session-journal-types'
-import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
-import {
-  isJournalStopOrResumeRow,
-  type JournalRow
-} from '../agent-session-journal/journal-row-schema'
+import { isJournalStopOrResumeRow } from '../agent-session-journal/journal-row-schema'
+import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
+import type { JournalRow } from '../agent-session-journal/journal-row-schema'
+
+// Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
 
 export type JournalBatchProjection =
   | { ok: true; batch: AgentSessionJournalBatch }
@@ -25,6 +23,7 @@ export function projectJournalBatch(input: {
   snapshot: AgentJournalSnapshot
   afterSequence: number
   canonicalItemId?: (itemId: string) => string
+  stoppedTurnItemId?: (turnId: string) => string | undefined
 }): JournalBatchProjection {
   const gap = findSequenceGap(
     input.rows.map((row) => row.seq),
@@ -48,7 +47,14 @@ export function projectJournalBatch(input: {
       continue
     }
     if (isJournalStopOrResumeRow(row)) {
-      // Stop/Resume markers are host-only; publish derived queue pauses separately.
+      const target =
+        row.stopEvent?.reason === 'user-stop' && row.stopEvent.turnId
+          ? input.stoppedTurnItemId?.(row.stopEvent.turnId)
+          : undefined
+      if (target) {
+        touchedItemIds.add(target)
+      }
+      // Markers stay host-only; their effective turn uses the ordinary item path.
       continue
     }
     if (row.kind === 'item' || row.kind === 'tombstone') {

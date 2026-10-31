@@ -19,6 +19,7 @@ type RetryState = {
   timer: ReturnType<typeof setTimeout> | null
   running: boolean
   failed: boolean
+  settled: ReturnType<typeof Promise.withResolvers<void>>
 }
 
 export function createCodexStructuredNotificationRetry(deps: {
@@ -79,6 +80,7 @@ export function createCodexStructuredNotificationRetry(deps: {
         state.bytes = Math.max(0, state.bytes - pending.bytes)
       }
       if (state.events.length === 0) {
+        state.settled.resolve()
         states.delete(sessionId)
       }
     } finally {
@@ -100,6 +102,7 @@ export function createCodexStructuredNotificationRetry(deps: {
     state.bytes = 0
     state.connection.resumeReading?.()
     states.delete(sessionId)
+    state.settled.resolve()
     const session = deps.sessionFor(sessionId)
     if (session?.connection === state.connection) {
       void session.forceCloseUnexpected?.(new Error(reason))
@@ -117,7 +120,16 @@ export function createCodexStructuredNotificationRetry(deps: {
     const bytes = Buffer.byteLength(JSON.stringify({ method, params }), 'utf8')
     let state = states.get(sessionId)
     if (!state || state.connection !== connection) {
-      state = { connection, events: [], bytes: 0, timer: null, running: false, failed: false }
+      state?.settled.resolve()
+      state = {
+        connection,
+        events: [],
+        bytes: 0,
+        timer: null,
+        running: false,
+        failed: false,
+        settled: Promise.withResolvers<void>()
+      }
       states.set(sessionId, state)
     }
     if (state.events.length >= MAX_RETRY_EVENTS) {
@@ -175,6 +187,16 @@ export function createCodexStructuredNotificationRetry(deps: {
       return admission
     },
     retry,
+    /** Join the existing refused-notification owner, not merely the admitted sink prefix. */
+    drained: async (sessionId: string, connection: CodexAppServerConnection): Promise<void> => {
+      const state = states.get(sessionId)
+      if (state?.connection === connection) {
+        await state.settled.promise
+        if (state.failed) {
+          throw new Error('notification delivery failed')
+        }
+      }
+    },
     clear: (sessionId: string, connection: CodexAppServerConnection | null): void => {
       const state = states.get(sessionId)
       if (!state || (connection && state.connection !== connection)) {
@@ -187,6 +209,7 @@ export function createCodexStructuredNotificationRetry(deps: {
       state.bytes = 0
       state.connection.resumeReading?.()
       states.delete(sessionId)
+      state.settled.resolve()
     }
   }
 }

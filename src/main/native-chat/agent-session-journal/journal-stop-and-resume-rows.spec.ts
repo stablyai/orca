@@ -1,6 +1,6 @@
 // Stop/Resume tombstones are neither published history nor evidence that an epoch contains content.
 
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
@@ -38,15 +38,15 @@ export function registerJournalStopAndResumeRowsTests(): void {
   const EPOCH = 'epoch-1'
 
   let root: string
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ scoped: true })
 
   beforeEach(async () => {
-    root = await mkdtemp(join(tmpdir(), 'orca-stop-event-rows-'))
+    root = journals.ownRoot(await mkdtemp(join(tmpdir(), 'orca-stop-event-rows-')))
   })
 
   afterEach(async () => {
-    await journals.closeAll()
-    await rm(root, { recursive: true, force: true })
+    root = undefined!
+    await journals.dispose()
   })
 
   function fold(rows: readonly JournalRow[]) {

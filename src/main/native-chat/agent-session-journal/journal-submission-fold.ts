@@ -6,7 +6,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import { readAgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
 import { journalRenderItem } from './journal-render-item'
 import { statedOrDerivedTurnScope, upsertJournalItem } from './journal-item-fold'
-import type { JournalReducerState } from './journal-reducer'
+import type { JournalReducerState, JournalReducerSubmission } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { journalDispatchRowApplies } from './journal-dispatch-settlement'
 import { DISPATCH_DOUBT_PROVIDER_ENDED_UNANSWERED } from './journal-dispatch-doubt-reasons'
@@ -15,9 +15,9 @@ import { dispatchWasWithdrawn } from '../../../shared/structured-agent-session-d
 export function applyJournalSubmission(
   state: JournalReducerState,
   row: Extract<JournalRow, { kind: 'submission' }>
-): void {
+): JournalReducerSubmission {
   const options = readAgentSessionExecutionOptions(row.options)
-  state.submissions.set(row.clientMessageId, {
+  const submission: JournalReducerSubmission = {
     clientMessageId: row.clientMessageId,
     fence: row.fence,
     payloadFingerprint: row.payloadFingerprint,
@@ -35,7 +35,8 @@ export function applyJournalSubmission(
     // Preserve source presence: unknown/unreadable kinds must not become legacy user sends.
     ...(row.source !== undefined ? { source: { kind: storedSourceKind(row.source) } } : {}),
     ...(options ? { options } : {})
-  })
+  }
+  state.submissions.set(row.clientMessageId, submission)
   const itemId = agentJournalSubmissionKey(row.clientMessageId)
   // Delayed handovers belong to no turn until dispatch names one.
   const turnScope = row.handoverRecorded
@@ -49,6 +50,7 @@ export function applyJournalSubmission(
     // User messages retain admission provenance, not provider execution ownership.
     { fence: row.fence }
   )
+  return submission
 }
 
 /** Place at handover, after intervening work; scope legacy rows from the handover position. */
@@ -152,6 +154,7 @@ export function noteTurnAccepted(
   state: JournalReducerState,
   submission: Pick<AgentJournalSubmission, 'acceptedSequence'>
 ): void {
+  state.hasAppliedProviderAcceptance = true
   if (submission.acceptedSequence !== undefined) {
     state.latestAcceptedTurnSequence = Math.max(
       state.latestAcceptedTurnSequence,

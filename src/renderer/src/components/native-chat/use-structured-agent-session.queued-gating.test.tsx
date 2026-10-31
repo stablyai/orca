@@ -8,7 +8,10 @@ import type {
   AgentJournalRenderItem,
   AgentJournalSubmission
 } from '../../../../shared/agent-session-journal-types'
-import type { AgentSessionQueuedMessage } from '../../../../shared/agent-session-wire'
+import type {
+  AgentSessionLatestTurn,
+  AgentSessionQueuedMessage
+} from '../../../../shared/agent-session-wire'
 import type { StructuredAgentSessionPendingSend } from './structured-agent-session-pending-sends'
 import { agentJournalSubmissionKey } from '../../../../shared/agent-session-journal-item-key'
 import { structuredAgentSessionDeliveryNotices } from './structured-agent-session-delivery-notices'
@@ -16,7 +19,7 @@ import type * as RewindModule from './use-structured-agent-session-rewind'
 
 const mocks = vi.hoisted(() => ({
   call: vi.fn(),
-  sendArgs: Array.of<{ queue?: { capability: string; enabled: boolean } }>(),
+  sendArgs: Array.of<{ isWorking?: boolean; queue?: { capability: string; enabled: boolean } }>(),
   operations: 0,
   rewindPending: false
 }))
@@ -24,6 +27,8 @@ let items: AgentJournalRenderItem[] = []
 let queuedMessages: AgentSessionQueuedMessage[] | undefined
 let submissions: AgentJournalSubmission[] = []
 let nextQueuedMessageId: string | null = null
+let publishedWorking: boolean | undefined
+let latestTurn: AgentSessionLatestTurn | null | undefined
 let pendingSends: StructuredAgentSessionPendingSend[] = []
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
@@ -41,6 +46,8 @@ vi.mock('./use-structured-agent-session-read', () => ({
       status: 'ready',
       error: null,
       hasOlder: false,
+      working: publishedWorking,
+      latestTurn,
       ...(queuedMessages !== undefined ? { queuedMessages, nextQueuedMessageId } : {})
     },
     loadingOlder: false,
@@ -165,6 +172,8 @@ beforeEach(() => {
   queuedMessages = undefined
   submissions = []
   nextQueuedMessageId = null
+  publishedWorking = undefined
+  latestTurn = undefined
   pendingSends = []
   localStorage.clear()
   clearNativeChatDraftCacheForTests()
@@ -181,6 +190,44 @@ describe('against a capable host', () => {
       AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
       AGENT_SESSION_QUEUED_MESSAGES_RUNTIME_CAPABILITY
     ])
+  })
+
+  it('offers Stop during retry display without classifying ordinary sends or commands as queued work', async () => {
+    const failed = {
+      ...RUNNING_TURN,
+      body: {
+        kind: 'turn' as const,
+        turnId: 'T',
+        state: 'completed' as const,
+        outcome: 'failure' as const
+      }
+    }
+    items = [failed]
+    publishedWorking = true
+    latestTurn = { itemId: failed.itemId, observedAt: failed.observedAt, turn: failed.body }
+    answerCommands({ command: 'clear', state: 'completed' })
+    const { result, rerender } = render()
+    expect(result.current).toMatchObject({ isWorking: true, canStop: true, queueSendsNext: false })
+    expect(nativeChatStructuredStopControls(result.current, false).composer.onStop).toEqual(
+      expect.any(Function)
+    )
+    expect(mocks.sendArgs.at(-1)).toMatchObject({ isWorking: false })
+    let outcome: unknown
+    await act(async () => {
+      outcome = await result.current.runConversationCommand('clear')
+    })
+    expect(outcome).toMatchObject({ accepted: true })
+    // The host's existing effective turn fields are what a Stop/reload publishes.
+    const cancelled = {
+      ...failed,
+      body: { ...failed.body, state: 'interrupted' as const, outcome: 'cancellation' as const }
+    }
+    items = [cancelled]
+    latestTurn = { ...latestTurn, turn: cancelled.body }
+    publishedWorking = false
+    rerender()
+    expect(result.current).toMatchObject({ isWorking: false, canStop: false })
+    expect(nativeChatStructuredStopControls(result.current, false).composer.onStop).toBeUndefined()
   })
 
   it('queues sends while the setting is on, immediately when it is off', () => {

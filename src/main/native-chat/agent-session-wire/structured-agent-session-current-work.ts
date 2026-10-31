@@ -1,3 +1,4 @@
+import { structuredAgentSessionProviderRetryPending } from './structured-agent-session-provider-retry-view'
 import {
   reusePromptProjection,
   type PromptProjection
@@ -33,7 +34,7 @@ export type StructuredAgentSessionCurrentWorkJournal = Pick<
   AgentSessionJournal,
   'runningTurn' | 'itemFence' | 'visitItems' | 'submissions' | 'wroteBeforeOpen' | 'item' | 'cursor'
 > &
-  Partial<Pick<AgentSessionJournal, 'readSince'>>
+  Partial<Pick<AgentSessionJournal, 'stopMarks' | 'turnEndedSequence' | 'readSince'>>
 
 export type StructuredAgentSessionWorkEvidence = {
   record: Pick<AgentSessionConversationView, 'ownerObservation' | 'currentFence'> | null
@@ -147,7 +148,7 @@ export class StructuredAgentSessionCurrentWork {
     const sends = this.unansweredSends().map(
       (submission) => `${submission.clientMessageId}:${this.holds(submission) ? 1 : 0}`
     )
-    return `${this.viewKey()}|${this.working() ? 1 : 0}|${sends.join(',')}`
+    return `${this.viewKey()}|${this.workingIncludingRetry() ? 1 : 0}|${sends.join(',')}`
   }
 
   /** Unanswered sends the child no longer holds read uncertain until their later echo/refusal. */
@@ -290,6 +291,10 @@ export class StructuredAgentSessionCurrentWork {
 
   working(): boolean {
     return this.activeTurnId() !== null || this.owesAnySend()
+  }
+
+  workingIncludingRetry(): boolean {
+    return this.working() || structuredAgentSessionProviderRetryPending(this.journal)
   }
 
   /** Project interrupted turns immediately from observed/replaced-runtime death, before settlement persists. */

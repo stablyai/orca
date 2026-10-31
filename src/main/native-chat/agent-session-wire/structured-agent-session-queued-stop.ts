@@ -34,7 +34,10 @@ export function stopReachesUnrecordedWork(
   }
   // This interrupt may return later sends to waiting, so it must hold them.
   return sentSinceStop(ctx.journal, inForce) ||
-    structuredAgentSessionStopNamesTurnNotLive(inForce.event.turnId, live)
+    (structuredAgentSessionStopNamesTurnNotLive(inForce.event.turnId, live) &&
+      !(
+        live === null && ctx.journal.stopNamesCancelledTurn(inForce.event.turnId, inForce.sequence)
+      ))
     ? 'unrecorded'
     : 'repeat'
 }

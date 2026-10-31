@@ -1,3 +1,4 @@
+import { structuredAgentSessionProviderRetryPending } from './structured-agent-session-provider-retry'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
 import { isStructuredAgentSessionCommandEntry } from '../../../shared/structured-agent-session-command-entry'
@@ -27,6 +28,7 @@ export type StructuredAgentSessionJournalProjection = {
   workRevision: number
   /** Stop settlement edges write no row and need an independent cache key. */
   stopRevision: number
+  retryPending: boolean
   state: StructuredAgentSessionStatusState
   acceptedSendKey: string
   firstInputSubmissionKey: string | null
@@ -68,6 +70,7 @@ export class StructuredAgentSessionJournalProjections {
       revision: seen?.operationalRevision ?? 0
     })
     const stopRevision = journal.stopMarks.revision()
+    const retryPending = structuredAgentSessionProviderRetryPending(journal)
     let projection = this.byJournal.get(journal)
     if (
       !projection ||
@@ -77,7 +80,8 @@ export class StructuredAgentSessionJournalProjections {
       projection.fence !== fence ||
       projection.liveFence !== work.liveFence ||
       projection.workRevision !== work.revision ||
-      projection.stopRevision !== stopRevision
+      projection.stopRevision !== stopRevision ||
+      projection.retryPending !== retryPending
     ) {
       // Journal sequence captures sends; lease/live-work/Stop keys capture row-free changes.
       const snapshot = journal.snapshot()
@@ -117,6 +121,7 @@ export class StructuredAgentSessionJournalProjections {
         liveFence: work.liveFence,
         workRevision: work.revision,
         stopRevision,
+        retryPending,
         state: withDiedTurnVerdict(
           projectStructuredAgentSessionStatusState(
             snapshot.items,
@@ -133,6 +138,14 @@ export class StructuredAgentSessionJournalProjections {
           snapshot.submissions,
           work.scope
         )
+      }
+      if (retryPending) {
+        const { turnOutcome: _outcome, ...summary } = projection.state.summary
+        projection.state = {
+          ...projection.state,
+          owesWork: true,
+          summary: { ...summary, status: 'working' }
+        }
       }
       this.byJournal.set(journal, projection)
     }
