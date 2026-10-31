@@ -142,30 +142,42 @@ export async function typeNativeChatCommand(
   return outcome === 'accepted'
 }
 
-export function sendNativeChatTypedCommand(ptyId: string, command: string): NativeChatSendHandle {
+export function sendNativeChatTypedCommand(
+  ptyId: string,
+  command: string,
+  /** A seeded draft's clear, confirmed like a message send's; the command's own Ctrl+U reaches one line. */
+  options?: Pick<NativeChatSendOptions, 'clearInput' | 'confirmCleared'>
+): NativeChatSendHandle {
   const controller = new AbortController()
   return enqueueNativeChatPtySend(
     ptyId,
-    (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS,
-    ({ isCancelled, markSubmitted }) => {
+    (command.length + 1) * AGENT_TUI_COMMAND_KEY_INTERVAL_MS + clearConfirmDurationMs(options),
+    ({ isCancelled, delay, markSubmitted }) => {
       const finish = (outcome: 'accepted' | 'rejected' | 'unknown'): void => {
         if (!isCancelled() && outcome !== 'accepted') {
           clearUnsubmittedAgentInput(ptyId)
         }
         markSubmitted()
       }
-      void typeAgentTuiCommand({
-        command,
-        signal: controller.signal,
-        write: async (key) => {
-          if (isCancelled()) {
-            return 'rejected'
+      const typeCommand = (): void => {
+        void typeAgentTuiCommand({
+          command,
+          signal: controller.signal,
+          write: async (key) => {
+            if (isCancelled()) {
+              return 'rejected'
+            }
+            return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
+              ? 'accepted'
+              : 'rejected'
           }
-          return (await sendRuntimePtyInputVerified(ptyId, key, 'driving'))
-            ? 'accepted'
-            : 'rejected'
-        }
-      }).then(finish, () => finish('rejected'))
+        }).then(finish, () => finish('rejected'))
+      }
+      if (options?.clearInput) {
+        clearThenWrite(ptyId, options, delay, typeCommand)
+      } else {
+        typeCommand()
+      }
     },
     {
       onCancelUnsubmitted: () => {

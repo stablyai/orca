@@ -81,7 +81,7 @@ export function getAgentPromptHeldSubmitBudgetMs(
 }
 
 // Codex dedupes a repeated placeholder label as `[Pasted Content N chars] #2`.
-const PASTED_CONTENT_PLACEHOLDER = /\[Pasted Content (\d+) chars\](?: #\d+)?/g
+export const PASTED_CONTENT_PLACEHOLDER = /\[Pasted Content (\d+) chars\](?: #\d+)?/g
 // Why: a held 10,312-char prompt with 142 LFs read as 10,597 on Windows Codex 0.162.1, i.e. 2 more
 // per LF plus 1 per Enter the burst absorbed; the slack absorbs small counting drift.
 const HELD_PROMPT_EXTRA_CHARS_PER_LINE_FEED = 2

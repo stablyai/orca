@@ -42,6 +42,11 @@ describe('buildAgentTuiClearInput', () => {
     expect(countCtrlU(buildAgentTuiClearInput(10_000))).toBe(2 * AGENT_TUI_CLEAR_MAX_LINES - 1)
     expect(AGENT_TUI_CLEAR_INPUT_MAX).toBe(buildAgentTuiClearInput(AGENT_TUI_CLEAR_MAX_LINES))
   })
+
+  it('keeps the widest burst under the 64-byte chunk Claude Code reads as a paste', () => {
+    // Claude Code 2.1.314 dropped a 64-byte burst and kept a 63-byte one.
+    expect(AGENT_TUI_CLEAR_INPUT_MAX.length).toBeLessThan(64)
+  })
 })
 
 describe('countAgentTuiInputLines', () => {

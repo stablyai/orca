@@ -7,19 +7,32 @@ import {
   nativeChatLaunchDraftTurnBaseline,
   type NativeChatLaunchDraftTurnBaseline
 } from '../../../../shared/native-chat-launch-draft-resolution'
+import {
+  isNativeChatTranscriptUnsettled,
+  type ReadState
+} from './native-chat-live-session-contract'
+import type { NativeChatLaunchSeed } from './native-chat-composer-types'
+import {
+  composerDraftWithTerminalSeed,
+  useNativeChatTerminalDraftPickup,
+  withoutLastLine
+} from './use-native-chat-terminal-draft-pickup'
 
 export function useNativeChatLaunchDraftSignal(args: {
   terminalTabId: string
   agent: string
-  messages: NativeChatMessage[]
-  /** In-flight messages may not be this session’s history; defer baseline capture as mobile does. */
-  transcriptLoading?: boolean
-}): { launchDraft: NativeChatLaunchDraft | null; launchDraftResolved: boolean } {
+  session: { messages: NativeChatMessage[]; readPhase: ReadState['phase'] }
+}): {
+  launchDraft: NativeChatLaunchDraft | null
+  launchDraftResolved: boolean
+  transcriptReady: boolean
+} {
   // Keep the signal pane-agnostic so losing ownership after a split cannot strand an adopted copy.
   const launchDraft = useAppStore((s) => s.nativeChatLaunchDraftByTabId[args.terminalTabId] ?? null)
   const paneLaunchDraft = launchDraft?.agent === args.agent ? launchDraft : null
-  const messages = args.messages
-  const transcriptLoading = args.transcriptLoading === true
+  const messages = args.session.messages
+  // In-flight or awaiting messages may not be this session’s history; defer baseline capture as mobile does, and never re-offer an already-submitted prefill.
+  const transcriptLoading = isNativeChatTranscriptUnsettled(args.session.readPhase)
   // Capture settled user turns to survive host clock skew; an in-flight baseline would mistake backfill for submission.
   const [heldBaseline, setHeldBaseline] = useState<{
     key: string
@@ -44,36 +57,32 @@ export function useNativeChatLaunchDraftSignal(args: {
   const launchDraftResolved = useMemo(
     () =>
       paneLaunchDraft?.resolved === true ||
-      (paneLaunchDraft && !transcriptLoading
+      // A draft read off the input line follows earlier turns; a chat send or the next read retires it.
+      (paneLaunchDraft && !paneLaunchDraft.fromTerminal && !transcriptLoading
         ? launchDraftResolvedByTranscript(paneLaunchDraft, messages, baseline)
         : false),
     [paneLaunchDraft, messages, baseline, transcriptLoading]
   )
-  return { launchDraft: paneLaunchDraft, launchDraftResolved }
+  return {
+    launchDraft: paneLaunchDraft,
+    launchDraftResolved,
+    transcriptReady: args.session.readPhase === 'ready'
+  }
 }
 
-/** Only the owning pane adopts a seed into an empty composer; resolution clears untouched copies even after ownership ends. */
+/** Only the owning pane adopts a seed: into an empty composer, or under the composer's own text for a terminal seed. Resolution clears untouched copies even after ownership ends. */
 export function useNativeChatLaunchDraftAdoption(args: {
   terminalTabId: string
   agent: string
-  launchDraft: NativeChatLaunchDraft | null | undefined
-  launchDraftResolved: boolean
+  launchSeed: NativeChatLaunchSeed | undefined
   draft: string
   setDraft: (next: string, options?: { unsaved?: boolean }) => void
   setCaret: (next: number) => void
-  /** Splits remove ownership from every pane; gate pickup, never cleanup. */
-  ownsTabWideLaunchDraft: boolean
 }): void {
-  const {
-    terminalTabId,
-    agent,
-    launchDraft,
-    launchDraftResolved,
-    draft,
-    setDraft,
-    setCaret,
-    ownsTabWideLaunchDraft
-  } = args
+  const { terminalTabId, agent, launchSeed, draft, setDraft, setCaret } = args
+  const launchDraft = launchSeed?.launchDraft
+  const launchDraftResolved = launchSeed?.launchDraftResolved === true
+  const ownsTabWideLaunchDraft = launchSeed?.ownsTabWideLaunchDraft === true
   useEffect(() => {
     if (!launchDraft || launchDraft.agent !== agent) {
       return
@@ -81,9 +90,17 @@ export function useNativeChatLaunchDraftAdoption(args: {
     if (launchDraftResolved) {
       // After a split neither pane owns the seed; the pane with the untouched copy must still clean up.
       const holdsUntouchedCopy = launchDraft.adopted && draft === launchDraft.text
+      // Sent or cleared in the terminal: drop the copy shown under the composer's own text.
+      const withoutTerminalCopy =
+        launchDraft.fromTerminal && launchDraft.adopted
+          ? withoutLastLine(draft, launchDraft.text)
+          : null
       if (holdsUntouchedCopy) {
         setDraft('')
         setCaret(0)
+      } else if (withoutTerminalCopy !== null) {
+        setDraft(withoutTerminalCopy)
+        setCaret(withoutTerminalCopy.length)
       }
       // Only the owner or its untouched copy may drop a seed; the owner may not have mirrored it yet.
       if (ownsTabWideLaunchDraft || holdsUntouchedCopy) {
@@ -98,12 +115,20 @@ export function useNativeChatLaunchDraftAdoption(args: {
     if (!ownsTabWideLaunchDraft) {
       return
     }
-    // Mark before copying so existing user text permanently declines the seed, even after clearing.
+    // Mark before copying so composer text that declined an Orca seed keeps declining it after clearing.
     useAppStore.getState().markNativeChatLaunchDraftAdopted(terminalTabId)
-    if (draft === '') {
+    if (draft === '' || draft === launchDraft.replacesText) {
       // Do not persist the untouched copy; after reload its seed can no longer replace the TUI input.
       setDraft(launchDraft.text, { unsaved: true })
       setCaret(launchDraft.text.length)
+      return
+    }
+    const withTerminalText = launchDraft.fromTerminal
+      ? composerDraftWithTerminalSeed(draft, launchDraft)
+      : null
+    if (withTerminalText !== null) {
+      setDraft(withTerminalText)
+      setCaret(withTerminalText.length)
     }
   }, [
     agent,
@@ -115,4 +140,6 @@ export function useNativeChatLaunchDraftAdoption(args: {
     setDraft,
     terminalTabId
   ])
+  // After adoption, so a resolved draft is dropped before the pickup reads the store.
+  useNativeChatTerminalDraftPickup({ terminalTabId, agent, launchSeed })
 }
