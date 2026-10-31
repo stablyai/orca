@@ -3,7 +3,7 @@ import type {
   AgentJournalItemBody,
   AgentJournalRenderItem,
   AgentJournalThreadGoal
-} from './agent-session-journal-types'
+} from '../agent-session-journal-types'
 import {
   agentSessionThreadGoalElapsedSeconds,
   agentSessionThreadGoalStatusChange,

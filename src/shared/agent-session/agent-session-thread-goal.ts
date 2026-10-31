@@ -1,14 +1,14 @@
 // Derive the current goal solely from the latest journal transition.
 
-import { isRootAgentJournalItem } from './agent-session-journal-producer'
-import { isAgentSessionContextClear } from './agent-session-context-clear'
+import { isRootAgentJournalItem } from '../agent-session-journal-producer'
+import { isAgentSessionContextClear } from '../agent-session-context-clear'
 import {
   AGENT_JOURNAL_THREAD_GOAL_STATUSES,
   type AgentJournalItemBody,
   type AgentJournalRenderItem,
   type AgentJournalThreadGoal,
   type AgentJournalThreadGoalStatus
-} from './agent-session-journal-types'
+} from '../agent-session-journal-types'
 
 const GOAL_FRAME_KINDS = new Set([
   'notification:thread/goal/updated',
