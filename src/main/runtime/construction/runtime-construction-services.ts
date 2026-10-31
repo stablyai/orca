@@ -14,7 +14,8 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { TuiIdleHookTurn } from '../tui-idle-hook-lane'
 import type { RuledScreen } from '../screen-input-veto'
 import type {
-  TerminalHandleRecord,
+  TerminalHandlePty,
+  TerminalHandleLeaf,
   TerminalWaiter,
   OrchestrationCompatibilityTerminalAuthority
 } from '../runtime-terminal-contracts'
@@ -122,14 +123,8 @@ export abstract class RuntimeConstructionServices {
   protected abstract getLivePtyForHandle(
     handle: string,
     context?: IdentityRead
-  ): {
-    record: TerminalHandleRecord
-    pty: RuntimePtyWorktreeRecord
-  } | null
-  protected abstract getLiveLeafForHandle(handle: string): {
-    record: TerminalHandleRecord
-    leaf: RuntimeLeafRecord
-  }
+  ): TerminalHandlePty | null
+  protected abstract getLiveLeafForHandle(handle: string): TerminalHandleLeaf
   protected abstract getTerminalPtyForHandle(handle: string): { pty: RuntimePtyWorktreeRecord }
   protected abstract getRetainedHandlePty(handle: string): RuntimePtyWorktreeRecord | undefined
   protected abstract getOrchestrationMailboxTerminal(
@@ -284,10 +279,13 @@ export abstract class RuntimeConstructionServices {
   protected abstract getTrackedDisplayTitleForPty(ptyId: string): string | null
   protected abstract getLeavesForPty(ptyId: string): readonly RuntimeLeafRecord[]
   abstract notifyMessageArrived(handle: string, messageType?: string): void
-  protected abstract resolveGitWorktreeSelector(selector: string): Promise<ResolvedWorktree>
+  protected abstract resolveGitWorktreeSelector(
+    selector: string,
+    requiredHostId?: ExecutionHostId
+  ): Promise<ResolvedWorktree>
   protected abstract resolveWorkspaceSelector(
     selector: string,
-    options?: { requireUsableFolderPath?: boolean }
+    options?: { requireUsableFolderPath?: boolean; requiredHostId?: ExecutionHostId }
   ): Promise<ResolvedWorktree>
   protected abstract refreshPtyWorktreeRecordsWithControllerInventory(
     resolvedWorktrees: ResolvedWorktree[],

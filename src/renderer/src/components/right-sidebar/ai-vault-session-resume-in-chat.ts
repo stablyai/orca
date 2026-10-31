@@ -63,7 +63,7 @@ export function resolveAiVaultSessionResumeInChatEligibility(args: {
   > & { structuredSession?: AiVaultSession['structuredSession'] }
   targetWorkspaceId: string | null
   targetWorkspacePath: string | null
-  /** Reuse structured route capability/platform/WSL gates to prevent drift; the Chat UI switch does not apply. */
+  /** Reuse structured route capability/platform/WSL gates to prevent drift; the Chat | CLI choice does not apply. */
   structuredRouteAvailable: boolean
 }): AiVaultResumeInChatEligibility {
   const { session } = args

@@ -21,6 +21,7 @@ import {
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
 import { detailPayloadBody } from './mobile-tasks-provider-detail-types'
+import { SectionHeader } from '../components/list/SectionHeader'
 
 export function renderMobileTasksItemBodyEditor(model: ConnectionPresentationModel) {
   const {
@@ -108,97 +109,100 @@ export function renderMobileTasksItemReviewPanel(model: ConnectionPresentationMo
   return SHOW_MOBILE_DETAIL_REVIEW_PANELS &&
     actionItem.provider === 'github' &&
     actionItem.source.type === 'pr' ? (
-    <View style={styles.detailSection}>
-      <View style={styles.detailSectionHeader}>
-        <Text style={styles.detailSectionTitle}>
-          {translate('tasks.itemReviewSections.reviewersTitle', 'Reviewers')}
-        </Text>
+    <View>
+      <SectionHeader
+        title={translate('tasks.itemReviewSections.reviewersTitle', 'Reviewers')}
+        trailing={
+          detailPayload.provider === 'github' ? getGitHubReviewSummary(detailPayload) : undefined
+        }
+      />
+      <View style={styles.itemSectionBody}>
         {detailPayload.provider === 'github' ? (
-          <Text style={styles.detailSectionMeta}>{getGitHubReviewSummary(detailPayload)}</Text>
+          getGitHubReviewerRows(detailPayload).length === 0 ? (
+            <Text style={styles.detailMuted}>
+              {translate(
+                'tasks.itemReviewSections.noReviewersRequested',
+                'No reviewers requested.'
+              )}
+            </Text>
+          ) : (
+            getGitHubReviewerRows(detailPayload).map((reviewer) => (
+              <View key={reviewer.login} style={styles.reviewerRow}>
+                <View style={styles.reviewerAvatar}>
+                  <Text style={styles.reviewerAvatarText}>
+                    {reviewer.login.slice(0, 1).toUpperCase()}
+                  </Text>
+                </View>
+                <View style={styles.reviewerInfo}>
+                  <Text style={styles.reviewerName} numberOfLines={1}>
+                    {reviewer.login}
+                  </Text>
+                  {reviewer.name ? (
+                    <Text style={styles.reviewerMeta} numberOfLines={1}>
+                      {reviewer.name}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text style={styles.reviewerState}>{reviewer.stateLabel}</Text>
+              </View>
+            ))
+          )
         ) : null}
-      </View>
-      {detailPayload.provider === 'github' ? (
-        getGitHubReviewerRows(detailPayload).length === 0 ? (
+        {itemAssignableUsersLoading ? (
+          <View style={styles.detailLoadingInline}>
+            <ActivityIndicator size="small" color={colors.textSecondary} />
+            <Text style={styles.detailMuted}>
+              {translate('tasks.itemReviewSections.loadingReviewers', 'Loading reviewers...')}
+            </Text>
+          </View>
+        ) : itemAssignableUsersError ? (
+          <Text style={styles.detailError}>{itemAssignableUsersError}</Text>
+        ) : itemReviewerCandidates.length === 0 ? (
           <Text style={styles.detailMuted}>
-            {translate('tasks.itemReviewSections.noReviewersRequested', 'No reviewers requested.')}
+            {translate(
+              'tasks.itemReviewSections.noReviewerSuggestions',
+              'No reviewer suggestions found.'
+            )}
           </Text>
         ) : (
-          getGitHubReviewerRows(detailPayload).map((reviewer) => (
-            <View key={reviewer.login} style={styles.reviewerRow}>
-              <View style={styles.reviewerAvatar}>
-                <Text style={styles.reviewerAvatarText}>
-                  {reviewer.login.slice(0, 1).toUpperCase()}
-                </Text>
-              </View>
-              <View style={styles.reviewerInfo}>
-                <Text style={styles.reviewerName} numberOfLines={1}>
-                  {reviewer.login}
-                </Text>
-                {reviewer.name ? (
-                  <Text style={styles.reviewerMeta} numberOfLines={1}>
-                    {reviewer.name}
-                  </Text>
-                ) : null}
-              </View>
-              <Text style={styles.reviewerState}>{reviewer.stateLabel}</Text>
-            </View>
-          ))
-        )
-      ) : null}
-      {itemAssignableUsersLoading ? (
-        <View style={styles.detailLoadingInline}>
-          <ActivityIndicator size="small" color={colors.textSecondary} />
-          <Text style={styles.detailMuted}>
-            {translate('tasks.itemReviewSections.loadingReviewers', 'Loading reviewers...')}
-          </Text>
-        </View>
-      ) : itemAssignableUsersError ? (
-        <Text style={styles.detailError}>{itemAssignableUsersError}</Text>
-      ) : itemReviewerCandidates.length === 0 ? (
-        <Text style={styles.detailMuted}>
-          {translate(
-            'tasks.itemReviewSections.noReviewerSuggestions',
-            'No reviewer suggestions found.'
-          )}
-        </Text>
-      ) : (
-        <View style={styles.chipRow}>
-          {itemReviewerCandidates.map((user) => {
-            const selected = itemSelectedReviewerLogins.has(user.login.trim().toLowerCase())
-            return (
-              <Pressable
-                key={user.login}
-                style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
-                disabled={mutatingStatus || selected}
-                onPress={() => void requestGitHubReviewers(actionItem, [user.login])}
-              >
-                <View style={styles.issueTypeChipContent}>
-                  {selected ? <Check size={12} color={colors.accentBlue} /> : null}
-                  <Text style={styles.detailChipText}>{user.login}</Text>
-                </View>
-              </Pressable>
-            )
-          })}
-        </View>
-      )}
-      <TextField
-        value={itemReviewersDraft}
-        onChangeText={setItemReviewersDraft}
-        placeholder={translate(
-          'tasks.itemReviewSections.reviewersPlaceholder',
-          'Request reviewers'
+          <View style={styles.chipRow}>
+            {itemReviewerCandidates.map((user) => {
+              const selected = itemSelectedReviewerLogins.has(user.login.trim().toLowerCase())
+              return (
+                <Pressable
+                  key={user.login}
+                  style={[styles.detailChip, selected ? styles.detailChipSelected : undefined]}
+                  disabled={mutatingStatus || selected}
+                  onPress={() => void requestGitHubReviewers(actionItem, [user.login])}
+                >
+                  <View style={styles.issueTypeChipContent}>
+                    {selected ? <Check size={12} color={colors.accentBlue} /> : null}
+                    <Text style={styles.detailChipText}>{user.login}</Text>
+                  </View>
+                </Pressable>
+              )
+            })}
+          </View>
         )}
-        autoCapitalize="none"
-      />
-      <Pressable
-        style={styles.inlineSaveButton}
-        disabled={mutatingStatus || splitReviewerList(itemReviewersDraft).length === 0}
-        onPress={() => void requestGitHubReviewers(actionItem)}
-      >
-        <Text style={styles.inlineSaveText}>
-          {translate('tasks.itemReviewSections.requestReview', 'Request review')}
-        </Text>
-      </Pressable>
+        <TextField
+          value={itemReviewersDraft}
+          onChangeText={setItemReviewersDraft}
+          placeholder={translate(
+            'tasks.itemReviewSections.reviewersPlaceholder',
+            'Request reviewers'
+          )}
+          autoCapitalize="none"
+        />
+        <Pressable
+          style={styles.inlineSaveButton}
+          disabled={mutatingStatus || splitReviewerList(itemReviewersDraft).length === 0}
+          onPress={() => void requestGitHubReviewers(actionItem)}
+        >
+          <Text style={styles.inlineSaveText}>
+            {translate('tasks.itemReviewSections.requestReview', 'Request review')}
+          </Text>
+        </Pressable>
+      </View>
     </View>
   ) : null
 }
@@ -223,86 +227,88 @@ export function renderMobileTasksItemFiles(model: ConnectionPresentationModel) {
   return SHOW_MOBILE_DETAIL_REVIEW_PANELS &&
     detailPayload.provider === 'github' &&
     detailPayload.files.length > 0 ? (
-    <View style={styles.detailSection}>
-      <Text style={styles.detailSectionTitle}>
-        {translate('tasks.itemReviewSections.changedFilesTitle', 'Changed files')}
-      </Text>
-      {detailPayload.files.map((file) =>
-        actionItem.provider === 'github' && actionItem.source.type === 'pr' ? (
-          <View key={file.path} style={styles.fileCard}>
-            <Pressable
-              style={styles.fileActionRow}
-              disabled={mutatingStatus}
-              onPress={() => void toggleGitHubFileExpansion(actionItem, file)}
-            >
-              <Text style={styles.detailLine}>
-                {file.path}
-                {typeof file.additions === 'number' || typeof file.deletions === 'number'
-                  ? ` · +${file.additions ?? 0} -${file.deletions ?? 0}`
-                  : ''}
-              </Text>
-              <Text style={styles.detailSectionMeta}>
-                {expandedPrFilePath === file.path
-                  ? translate('tasks.itemReviewSections.hideFile', 'Hide')
-                  : translate('tasks.itemReviewSections.viewFile', 'View')}
-              </Text>
-            </Pressable>
-            <Pressable
-              style={styles.inlineSaveButtonCompact}
-              disabled={mutatingStatus || !detailPayload.pullRequestId}
-              onPress={() => void toggleGitHubFileViewed(actionItem, file)}
-            >
-              <Text style={styles.inlineSaveText}>
-                {file.viewerViewedState === 'VIEWED'
-                  ? translate('tasks.itemReviewSections.markUnviewed', 'Mark unviewed')
-                  : translate('tasks.itemReviewSections.markViewed', 'Mark viewed')}
-              </Text>
-            </Pressable>
-            {expandedPrFilePath === file.path ? (
-              <View style={styles.filePreview}>
-                {prFileLoadingPath === file.path ? (
-                  <ActivityIndicator size="small" color={colors.textSecondary} />
-                ) : prFileContents[file.path]?.originalIsBinary ||
-                  prFileContents[file.path]?.modifiedIsBinary ? (
-                  <Text style={styles.detailMuted}>
-                    {translate('tasks.itemReviewSections.binaryFile', 'Binary file.')}
-                  </Text>
-                ) : prFileContents[file.path] ? (
-                  <GitHubPrFileDiff
-                    filePath={file.path}
-                    contents={prFileContents[file.path]}
-                    commentDrafts={prFileCommentDrafts}
-                    disabled={mutatingStatus}
-                    onCommentDraftChange={(draftKey, next) =>
-                      setPrFileCommentDrafts((current) => ({
-                        ...current,
-                        [draftKey]: next
-                      }))
-                    }
-                    onSubmitComment={(line) =>
-                      void addGitHubFileReviewComment(actionItem, file, line)
-                    }
-                  />
-                ) : (
-                  <Text style={styles.detailMuted}>
-                    {translate(
-                      'tasks.itemReviewSections.fileContentsUnavailable',
-                      'File contents unavailable.'
-                    )}
-                  </Text>
-                )}
-              </View>
-            ) : null}
-          </View>
-        ) : (
-          <Text key={file.path} style={styles.detailLine}>
-            {file.path}
-            {typeof file.additions === 'number' || typeof file.deletions === 'number'
-              ? ` · +${file.additions ?? 0} -${file.deletions ?? 0}`
-              : ''}
-          </Text>
-        )
-      )}
+    <View>
+      <SectionHeader
+        title={translate('tasks.itemReviewSections.changedFilesTitle', 'Changed files')}
+      />
+      <View style={styles.itemSectionBody}>
+        {detailPayload.files.map((file) =>
+          actionItem.provider === 'github' && actionItem.source.type === 'pr' ? (
+            <View key={file.path} style={styles.fileCard}>
+              <Pressable
+                style={styles.fileActionRow}
+                disabled={mutatingStatus}
+                onPress={() => void toggleGitHubFileExpansion(actionItem, file)}
+              >
+                <Text style={styles.detailLine}>
+                  {file.path}
+                  {typeof file.additions === 'number' || typeof file.deletions === 'number'
+                    ? ` · +${file.additions ?? 0} -${file.deletions ?? 0}`
+                    : ''}
+                </Text>
+                <Text style={styles.detailSectionMeta}>
+                  {expandedPrFilePath === file.path
+                    ? translate('tasks.itemReviewSections.hideFile', 'Hide')
+                    : translate('tasks.itemReviewSections.viewFile', 'View')}
+                </Text>
+              </Pressable>
+              <Pressable
+                style={styles.inlineSaveButtonCompact}
+                disabled={mutatingStatus || !detailPayload.pullRequestId}
+                onPress={() => void toggleGitHubFileViewed(actionItem, file)}
+              >
+                <Text style={styles.inlineSaveText}>
+                  {file.viewerViewedState === 'VIEWED'
+                    ? translate('tasks.itemReviewSections.markUnviewed', 'Mark unviewed')
+                    : translate('tasks.itemReviewSections.markViewed', 'Mark viewed')}
+                </Text>
+              </Pressable>
+              {expandedPrFilePath === file.path ? (
+                <View style={styles.filePreview}>
+                  {prFileLoadingPath === file.path ? (
+                    <ActivityIndicator size="small" color={colors.textSecondary} />
+                  ) : prFileContents[file.path]?.originalIsBinary ||
+                    prFileContents[file.path]?.modifiedIsBinary ? (
+                    <Text style={styles.detailMuted}>
+                      {translate('tasks.itemReviewSections.binaryFile', 'Binary file.')}
+                    </Text>
+                  ) : prFileContents[file.path] ? (
+                    <GitHubPrFileDiff
+                      filePath={file.path}
+                      contents={prFileContents[file.path]}
+                      commentDrafts={prFileCommentDrafts}
+                      disabled={mutatingStatus}
+                      onCommentDraftChange={(draftKey, next) =>
+                        setPrFileCommentDrafts((current) => ({
+                          ...current,
+                          [draftKey]: next
+                        }))
+                      }
+                      onSubmitComment={(line) =>
+                        void addGitHubFileReviewComment(actionItem, file, line)
+                      }
+                    />
+                  ) : (
+                    <Text style={styles.detailMuted}>
+                      {translate(
+                        'tasks.itemReviewSections.fileContentsUnavailable',
+                        'File contents unavailable.'
+                      )}
+                    </Text>
+                  )}
+                </View>
+              ) : null}
+            </View>
+          ) : (
+            <Text key={file.path} style={styles.detailLine}>
+              {file.path}
+              {typeof file.additions === 'number' || typeof file.deletions === 'number'
+                ? ` · +${file.additions ?? 0} -${file.deletions ?? 0}`
+                : ''}
+            </Text>
+          )
+        )}
+      </View>
     </View>
   ) : null
 }

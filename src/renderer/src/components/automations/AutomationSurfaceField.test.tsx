@@ -84,7 +84,7 @@ afterEach(() => {
 })
 
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this pure control reads only the default switch and selected agent/surface.
-const settings = { experimentalNativeChat: true } as GlobalSettings
+const settings = { agentDefaultSurface: 'chat' } as GlobalSettings
 // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: unrelated editor fields are never read by this control.
 const draft = { agentId: 'claude', extraAgentArgs: '--model opus' } as AutomationDraft
 afterEach(cleanup)

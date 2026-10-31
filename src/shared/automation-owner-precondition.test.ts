@@ -61,6 +61,43 @@ function expectConflict(run: () => void, code: string): void {
 }
 
 describe('assertAutomationOwnerFence', () => {
+  it('refuses legacy bare execution of a reselection orphan truthfully and fences stale callers first', () => {
+    const repairContext = {
+      ...context,
+      repoConnectionId: () => 'ssh-1',
+      requiresHostReselection: () => true
+    }
+    const record = automation({
+      runContext: {
+        kind: 'workspace-run',
+        repoId: 'repo-1',
+        projectId: 'logical-project',
+        projectHostSetupId: 'setup',
+        hostId: 'ssh:ssh-1',
+        path: '/captured'
+      }
+    })
+    expect(() =>
+      assertAutomationOwnerFence({
+        automation: record,
+        operation: 'execute',
+        context: repairContext
+      })
+    ).toThrow(
+      'Edit the automation and reselect its host before running it.: automation_target_removed'
+    )
+    expectConflict(
+      () =>
+        assertAutomationOwnerFence({
+          automation: record,
+          operation: 'execute',
+          context: repairContext,
+          expectedOwner: { selector: { kind: 'self' } }
+        }),
+      AUTOMATION_OWNER_CONFLICT_CODES.ownerChanged
+    )
+  })
+
   it('passes when the captured owner still matches', () => {
     expect(() =>
       assertAutomationOwnerFence({

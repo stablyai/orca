@@ -211,6 +211,9 @@ it('shares successful terminal/peer legacy consumers, retries by real writer, an
         expect(helper).toHaveBeenCalledOnce()
         expect(legacyWork).toHaveLength(1)
         expect(sqlTotals(legacyWork[0])).toMatchObject({ get: 2, all: 3 })
+        process.stdout.write(
+          `C2 consumed legacy measured ${JSON.stringify({ population, nativeSelf, totals: sqlTotals(meter.executions), legacyTotals: sqlTotals(legacyWork[0]), selectedPlusLegacy: sqlTotals(meter.executions).selected + legacyWork[0].length, executions: meter.executions })}\n`
+        )
         expect(sqlTotals(meter.executions).selected + legacyWork[0].length).toBeLessThanOrEqual(10)
         if (population === 3 && nativeSelf) {
           const executions = [...meter.executions]
@@ -443,5 +446,205 @@ it('does not demand legacy during late caller-only preparation of the actual ret
     stop()
     helper.mockRestore()
     capture.mockRestore()
+  }
+})
+
+it('keeps failed or malformed explicit acquisition unknown and retries complete facts without losing working explicit actions', async () => {
+  for (const failure of ['read', 'parse'] as const) {
+    const f = deltaFixture()
+    const worker = f.assign('term_worker')
+    const fault = new Error('explicit SQL source failed')
+    let injections = 0
+    const explicitRequest = (sql: string, value: unknown) =>
+      sql.includes("'explicit'") && typeof value === 'string' && value.includes('"id":')
+    const meter = meterCrewSql(f.db.db)
+    meter.control.before = (sql) => {
+      if (
+        failure === 'read' &&
+        injections === 0 &&
+        explicitRequest(sql, meter.executions.at(-1)?.parameters[0])
+      ) {
+        injections++
+        throw fault
+      }
+    }
+    if (failure === 'parse') {
+      const prepare = vi.mocked(f.db.db.prepare).getMockImplementation()
+      if (!prepare) {
+        throw new Error('SQL meter implementation missing')
+      }
+      vi.mocked(f.db.db.prepare).mockImplementation((sql) => {
+        const statement = prepare(sql)
+        return {
+          all: (...params) => {
+            const rows = statement.all(...params)
+            if (injections === 0 && explicitRequest(sql, params[0])) {
+              injections++
+              return rows.map((row) => ({ ...row, status: 9 }))
+            }
+            return rows
+          },
+          get: (...params) => statement.get(...params),
+          run: (...params) => statement.run(...params),
+          iterate: (...params) => statement.iterate(...params),
+          setReadBigInts: (value) => statement.setReadBigInts(value)
+        }
+      })
+    }
+    const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
+    const frames: OrchestrationCrewFrame[] = []
+    const caught: unknown[] = []
+    const stop = subscribeCrew(
+      () => {
+        try {
+          return model.read('term_coord')
+        } catch (error) {
+          caught.push(error)
+          throw error
+        }
+      },
+      model.subscribe,
+      (frame) => frames.push(frame)
+    )
+    try {
+      expect(frames).toEqual([{ type: 'begin', status: 'unknown' }, { type: 'complete' }])
+      expect(caught).toHaveLength(1)
+      if (failure === 'read') {
+        expect(caught[0]).toBe(fault)
+      } else {
+        expect(caught[0]).toMatchObject({
+          name: 'ZodError',
+          issues: expect.arrayContaining([
+            expect.objectContaining({ code: 'invalid_type', path: [0, 'status'] })
+          ])
+        })
+      }
+      expect(injections).toBe(1)
+      const before = meter.executions.length
+      meter.control.phase = 'retry'
+      f.db.crewChanges.notify(new Set(['names']))
+      await Promise.resolve()
+      expect(
+        frames
+          .filter((frame) => frame.type === 'rows')
+          .flatMap((frame) => (frame.type === 'rows' ? frame.rows : []))
+      ).toEqual([expect.objectContaining({ sendAddress: `dispatch:${worker.id}` })])
+      expect(frames.filter((frame) => frame.type === 'begin')).toEqual([
+        { type: 'begin', status: 'unknown' },
+        { type: 'begin', status: 'ok' }
+      ])
+      const complete = model.read('term_coord')
+      expect(complete.sections.managing).toHaveLength(1)
+      expect(complete.sections.managing[0].sendAddress).toBe(`dispatch:${worker.id}`)
+      expect(
+        meter.executions
+          .slice(before)
+          .some(
+            (entry) =>
+              entry.sql.includes("'explicit'") &&
+              typeof entry.parameters[0] === 'string' &&
+              entry.parameters[0].includes('"id":')
+          )
+      ).toBe(true)
+      const equal = frames.length
+      f.db.crewChanges.notify(new Set(['names']))
+      await Promise.resolve()
+      expect(frames).toHaveLength(equal)
+      stop()
+      const reacquired = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
+      expect(reacquired.read('term_coord')).toEqual(complete)
+      expect(injections).toBe(1)
+      process.stdout.write(
+        `C2 explicit fault reach ${JSON.stringify({ failure, injections, frames, exactReadError: failure === 'read' ? caught[0] === fault : undefined, executions: meter.executions })}\n`
+      )
+    } finally {
+      stop()
+      meter.restore()
+    }
+  }
+})
+
+it('keeps failed follow-up facts uncovered until a real wake retries complete values, then releases them', async () => {
+  const f = deltaFixture()
+  const started = f.db.createStartingWorkerDispatch({
+    creator: { kind: 'system' },
+    maxDepth: 10,
+    taskSpec: 'follow-up fault',
+    taskRunId: f.run.id,
+    startOptions: { agent: 'codex' }
+  })
+  f.db.prepareStartingWorkerAuthority({
+    dispatchId: started.dispatch.id,
+    handle: 'term_worker',
+    paneKey: f.handles.get('term_worker')!,
+    processIncarnation: 'process:term_worker',
+    worktreeId: 'folder-worker-host',
+    effects: [],
+    setupState: 'not_applicable',
+    terminalOwnership: 'created'
+  })
+  f.db.markWorkerDispatchReady(started.dispatch.id)
+  f.db.settleWorkerReport({
+    taskId: started.task.id,
+    dispatchId: started.dispatch.id,
+    outcome: 'succeeded',
+    result: 'done'
+  })
+  const fault = new Error('follow-up SQL source failed')
+  let injected = 0
+  const meter = meterCrewSql(f.db.db)
+  meter.control.before = (sql) => {
+    if (!injected && sql.includes('crew_follow_up_seeds')) {
+      injected++
+      throw fault
+    }
+  }
+  const model = new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe)
+  const frames: OrchestrationCrewFrame[] = []
+  const caught: unknown[] = []
+  const stop = subscribeCrew(
+    () => {
+      try {
+        return model.read('term_coord')
+      } catch (error) {
+        caught.push(error)
+        throw error
+      }
+    },
+    model.subscribe,
+    (frame) => frames.push(frame)
+  )
+  try {
+    expect(frames).toEqual([{ type: 'begin', status: 'unknown' }, { type: 'complete' }])
+    expect(caught).toEqual([fault])
+    expect(injected).toBe(1)
+    f.db.crewChanges.notify(new Set(['names']))
+    await Promise.resolve()
+    const output = model.read('term_coord')
+    expect(output.sections.managing[0]?.sendAddress).toBe(`dispatch:${started.dispatch.id}`)
+    expect(
+      meter.executions.filter((entry) => entry.sql.includes('crew_follow_up_seeds'))
+    ).toHaveLength(2)
+    const count = frames.length
+    f.db.crewChanges.notify(new Set(['names']))
+    await Promise.resolve()
+    expect(frames).toHaveLength(count)
+    stop()
+    const before = meter.executions.length
+    f.db.crewChanges.notify(new Set(['topology']))
+    await Promise.resolve()
+    expect(meter.executions).toHaveLength(before)
+    expect(new CrewReadModel(() => f.deps, f.db.crewChanges.subscribe).read('term_coord')).toEqual(
+      output
+    )
+    expect(
+      meter.executions.filter((entry) => entry.sql.includes('crew_follow_up_seeds'))
+    ).toHaveLength(3)
+    process.stdout.write(
+      `Crew follow-up fault retry ${JSON.stringify({ injected, frames, sameError: caught[0] === fault, executions: meter.executions })}\n`
+    )
+  } finally {
+    stop()
+    meter.restore()
   }
 })

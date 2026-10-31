@@ -21,6 +21,8 @@ export function fixture() {
     liveHandle: (handle) => handles.has(handle),
     handleForPane: (pane) => [...handles].find(([, value]) => value === pane)?.[0] ?? null,
     paneForHandle: (handle) => handles.get(handle) ?? null,
+    livePaneForHandle: (handle) => handles.get(handle) ?? null,
+    processForHandle: (handle) => (handles.has(handle) ? `process:${handle}` : null),
     name: (_identity, task) => task ?? 'Duplicate name'
   }
   const run = db.createRun({

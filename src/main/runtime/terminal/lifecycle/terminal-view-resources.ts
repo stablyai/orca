@@ -42,6 +42,10 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
     return this.terminalIdentity.rendererGraphEpoch
   }
 
+  abstract getLiveTerminalPaneKey(
+    handle: string,
+    context?: TerminalIdentityReadContext
+  ): string | null
   abstract createTerminalIdentityRawInputs(): TerminalIdentityRawInputs
   abstract createTerminalIdentityReadContext(
     inputs?: TerminalIdentityRawInputs
@@ -49,6 +53,7 @@ export abstract class OrcaRuntimeWithFitOverrideListeners extends OrcaRuntimeWit
 
   protected crewRuntimeReaders(): CrewRuntimeReaders {
     return {
+      getLiveTerminalPaneKey: this.getLiveTerminalPaneKey.bind(this),
       getTerminalWorktreeIdForHandle: this.getTerminalWorktreeIdForHandle.bind(this),
       getTerminalProcessIncarnation: this.getTerminalProcessIncarnation.bind(this),
       getTerminalHandleForPaneKey: this.getTerminalHandleForPaneKey.bind(this),

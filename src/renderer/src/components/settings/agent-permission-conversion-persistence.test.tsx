@@ -8,6 +8,7 @@ import userEvent from '@testing-library/user-event'
 import { toast } from 'sonner'
 import { useAppStore } from '../../store'
 import { AgentsPane } from './AgentsPane'
+import { AGENTS_INSTALLED_SECTION_ID } from './agents-search'
 import { persist, runtimeCall } from './__fixtures__/settings-persistence-test-fixture'
 import { permissionNotice } from './__fixtures__/permission-notice-test-fixture'
 import { TooltipProvider } from '../ui/tooltip'
@@ -100,7 +101,12 @@ function AgentsHarness() {
 }
 
 function argumentsInput(label: string): HTMLTextAreaElement {
-  const row = screen.getByText(label, { selector: 'span' }).closest('div.py-3')
+  // Scoped to the Installed list; the Open agents as previews also show agent names.
+  const list = document.getElementById(AGENTS_INSTALLED_SECTION_ID)
+  if (!list) {
+    throw new Error('Missing Installed list')
+  }
+  const row = within(list).getByText(label, { selector: 'span' }).closest('div.py-3')
   if (!(row instanceof HTMLElement)) {
     throw new Error('Missing agent row')
   }

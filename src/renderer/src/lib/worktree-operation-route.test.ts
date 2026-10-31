@@ -712,7 +712,12 @@ describe('resolveWorktreeOperationRouteResult', () => {
     const FOLDER_KEY = `folder:${FOLDER_WORKSPACE_ID}`
 
     function folderWorkspace(connectionId: string | null = null) {
-      return { id: FOLDER_WORKSPACE_ID, projectGroupId: 'group-1', connectionId }
+      return {
+        id: FOLDER_WORKSPACE_ID,
+        projectGroupId: 'group-1',
+        folderPath: '/folder',
+        connectionId
+      }
     }
 
     it('routes a local folder workspace to the local runtime (#10251)', () => {

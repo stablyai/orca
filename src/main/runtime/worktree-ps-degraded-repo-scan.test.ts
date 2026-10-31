@@ -352,10 +352,16 @@ describe('worktree.ps on a degraded repo scan', () => {
       { path: REPO_PATH, head: 'abc', branch: 'main', isBare: false, isMainWorktree: true }
     ])
     const store = makeStore()
-    const runtime = new OrcaRuntimeService(partialRuntimeStore(store))
+    const getWorktreeMetaForHost = vi.fn((id: string, hostId: string) =>
+      hostId === 'local' ? store.getWorktreeMeta(id) : undefined
+    )
+    const runtime = new OrcaRuntimeService(
+      partialRuntimeStore({ ...store, getWorktreeMetaForHost })
+    )
 
     await runtime.getWorktreePs(10_000)
 
+    expect(getWorktreeMetaForHost).toHaveBeenCalledWith(MAIN_WORKTREE_ID, 'local')
     expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
   })
 

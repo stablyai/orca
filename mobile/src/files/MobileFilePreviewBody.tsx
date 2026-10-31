@@ -5,6 +5,7 @@ import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileFilePreviewResult } from './mobile-file-preview-request'
 import { MobileFileMarkdownPreview } from './MobileFileMarkdownPreview'
+import type { MarkdownPreviewMode } from './MobileMarkdownPreviewModeBar'
 import { MobileFilePreviewEditableSource } from './MobileFilePreviewEditableSource'
 import { MobileFilePreviewSourceText } from './MobileFilePreviewSourceText'
 import type { MobileFilePreviewLineColumn } from './mobile-file-preview-line-column'
@@ -19,6 +20,8 @@ type Props = {
   relativePath: string
   title: string
   editable: boolean
+  /** Picked in the nav bar's Preview / Source switch. */
+  markdownMode: MarkdownPreviewMode
   draftContent: string
   saveError: string
   lineColumn: MobileFilePreviewLineColumn | null
@@ -91,6 +94,7 @@ export function MobileFilePreviewBody({ preview, ...options }: Props) {
       <EditablePreviewSource {...options} />
     ) : (
       <MobileFileMarkdownPreview
+        mode={options.markdownMode}
         relativePath={options.relativePath}
         client={options.client}
         worktreeId={options.worktreeId}

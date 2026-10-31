@@ -1,3 +1,4 @@
+import { createCrewRecipientFollowUpInputs } from './crew-recipient-follow-up-inputs'
 import {
   crewRecipientOwnerQueries,
   type CrewRecipientRun,
@@ -16,20 +17,19 @@ import {
   activeDispatchMailboxBranch,
   equivalentDispatchMailboxOwners
 } from '../db/dispatch-mailbox-selection'
-import {
-  dispatchAssigneeCoordinatorKey,
-  selectRunBoundDispatchRecipient,
-  selectBareRecipientOwner
-} from '../../rpc/methods/orchestration/messaging/recipient-routing'
-import { federatedControlMailRefusal } from '../../rpc/methods/orchestration/messaging/send-control-mail'
+import { selectBareRecipientOwner } from '../../rpc/methods/orchestration/messaging/recipient-routing'
 import { deriveStructuredSessionMailReach } from '../structured-session-mail-address'
-import { isStructuredWorkerHandle } from '../../../../shared/structured-worker-handle'
 
+import { createCrewRecipientMailboxSelection } from './crew-recipient-mailbox-selection'
 import {
   createCrewRecipientWorkerFacts,
-  heldCrewDispatchWorker,
   type CrewRecipientKey as Key
 } from './crew-recipient-worker-facts'
+export type Recipient = OrcaSessionId | Key
+export type CrewRecipientTerminal = {
+  livePane: (handle: string) => string | null
+  process: (handle: string) => string | null
+}
 const sourceKey = (key: Key) => key.sourceKey ?? key.address
 
 /** Complete keyed facts live only in the disposable host generation; decisions remain request-local. */
@@ -61,6 +61,7 @@ export function createCrewRecipientInputs(
   const {
     keyFor,
     prepare: prepareIdentities,
+    covered: identityCovered,
     livePane
   } = createCrewRecipientWorkerFacts(query, running, canonical, () => {
     visibility()
@@ -87,8 +88,18 @@ export function createCrewRecipientInputs(
   const boundRuns = (key: Key) =>
     runs.get(sourceKey(key))?.filter((run) => runBoundToCoordinator(run, key)) ?? []
   const currentRun = (key: Key) => boundRuns(key)[0]
-  const prepare = (ids: OrcaSessionId[], viewer?: Key) => {
-    prepareIdentities(viewer?.orcaSessionId ? [...ids, viewer.orcaSessionId] : ids)
+  const keyForInput = (input: Recipient) =>
+    typeof input === 'string'
+      ? keyFor(input)
+      : input.orcaSessionId
+        ? keyFor(input.orcaSessionId)
+        : input
+  const paneFor = (key: Key) => (key.orcaSessionId ? livePane(key) : (key.paneKey ?? undefined))
+  const prepare = (ids: Recipient[], viewer?: Key) => {
+    const sessions = ids.flatMap((input) =>
+      typeof input === 'string' ? [input] : input.orcaSessionId ? [input.orcaSessionId] : []
+    )
+    prepareIdentities(viewer?.orcaSessionId ? [...sessions, viewer.orcaSessionId] : sessions)
     const actual = viewer?.orcaSessionId ? keyFor(viewer.orcaSessionId) : viewer
     const caller = actual
       ? {
@@ -102,7 +113,7 @@ export function createCrewRecipientInputs(
         }
       : undefined
     const selected = ids.flatMap((id) => {
-      const key = keyFor(id)
+      const key = keyForInput(id)
       return key && !covered.has(sourceKey(key)) ? [key] : []
     })
     if (caller && !covered.has(sourceKey(caller))) {
@@ -114,7 +125,7 @@ export function createCrewRecipientInputs(
     }
     currentRuns(unique)
     const request = unique.map((key) => {
-      const pane = key === caller ? (key.paneKey ?? undefined) : livePane(key)
+      const pane = key === caller ? (key.paneKey ?? undefined) : paneFor(key)
       return {
         key: sourceKey(key),
         handle: key.address,
@@ -147,7 +158,7 @@ export function createCrewRecipientInputs(
   const candidates = (key: Key, caller = false) => {
     const rows = dispatches.get(sourceKey(key))!
     const handle = rows.filter((row) => row.branch === 'handle')
-    const pane = caller ? (key.paneKey ?? undefined) : livePane(key)
+    const pane = caller ? (key.paneKey ?? undefined) : paneFor(key)
     const exact = rows.filter((row) => row.branch === 'pane')
     const branch = activeDispatchMailboxBranch(handle, pane, exact)
     const suffix = rows.filter((row) => row.branch === 'suffix')
@@ -192,8 +203,8 @@ export function createCrewRecipientInputs(
       ).kind === 'reachable'
     )
   }
-  const resolve = (id: OrcaSessionId, senderRunId?: string) => {
-    const key = keyFor(id)
+  const resolve = (id: Recipient, senderRunId?: string) => {
+    const key = keyForInput(id)
     if (!key || !covered.has(sourceKey(key))) {
       return undefined
     }
@@ -210,8 +221,12 @@ export function createCrewRecipientInputs(
         }
         return [...ids].sort()
       },
-      fallback: () =>
-        fallback(id) === true
+      fallback: () => {
+        const reachable = key.orcaSessionId ? fallback(key.orcaSessionId) : Boolean(key.paneKey)
+        if (reachable === undefined) {
+          throw new Error('Crew recipient source is unavailable')
+        }
+        return reachable
           ? { ok: true, to: key.address, runId: senderRunId }
           : {
               ok: false,
@@ -219,77 +234,40 @@ export function createCrewRecipientInputs(
               message: '',
               warning: { code: 'recipient_unreachable', recipient: key.address, message: '' }
             }
+      }
     })
   }
-  const finish = (
-    ids: OrcaSessionId[],
-    senderRunId: string | undefined,
-    terminal: {
-      livePane: (handle: string) => string | null
-      process: (handle: string) => string | null
-    }
-  ) => {
-    const selections = new Map(ids.map((id) => [id, resolve(id, senderRunId)]))
-    const selected = new Map<string, DispatchInput>()
-    for (const [id, resolution] of selections) {
-      const key = keyFor(id)
-      if (key && resolution?.ok && resolution.to.startsWith('dispatch:')) {
-        const candidate = candidates(key).find((row) => `dispatch:${row.id}` === resolution.to)
-        if (candidate) {
-          selected.set(candidate.id, candidate)
-        }
-      }
-    }
-    const nested = new Map<string, Key>()
-    for (const row of selected.values()) {
-      let held: ReturnType<typeof heldCrewDispatchWorker> = null
-      const key = dispatchAssigneeCoordinatorKey(
-        row,
-        () => row.protocol_version !== null,
-        (handle) => {
-          if (!isStructuredWorkerHandle(handle)) {
-            return terminal.livePane(handle)
-          }
-          held = heldCrewDispatchWorker(handle, row.nested_resource, running, listed)
-          return held?.paneKey ?? null
-        },
-        (handle) =>
-          isStructuredWorkerHandle(handle)
-            ? (held?.processIncarnation ?? null)
-            : terminal.process(handle)
-      )
-      if (key) {
-        nested.set(row.id, { ...key, address: `nested:${row.id}` })
-      }
-    }
-    currentRuns([...nested.values()])
-    return (id: OrcaSessionId): boolean | undefined => {
-      const resolution = selections.get(id)
-      if (!resolution?.ok) {
-        return resolution ? false : undefined
-      }
-      if (!resolution.to.startsWith('dispatch:')) {
-        return true
-      }
-      const row = selected.get(resolution.to.slice('dispatch:'.length))
-      if (!row) {
-        return undefined
-      }
-      if (row.protocol_version !== null) {
-        return !federatedControlMailRefusal(
-          row.id,
-          row.protocol_version,
-          () => row.worker_state ?? undefined
-        )
-      }
-      const key = nested.get(row.id)
-      const redirected = selectRunBoundDispatchRecipient(row, key ? currentRun(key) : undefined)
-      return Boolean(redirected || row.status === 'pending' || row.status === 'dispatched')
-    }
-  }
+  const explicitDispatches = new Map<string, DispatchInput | null>()
+  const namedRuns = new Map<string, CrewRecipientRun | null>()
+  const { followUpNodes, prepareFollowUps } = createCrewRecipientFollowUpInputs(query)
+
+  const { finish, prepareExplicit, explicit } = createCrewRecipientMailboxSelection({
+    query,
+    running,
+    listedSessions: () => {
+      visibility()
+      return listed
+    },
+    currentRuns,
+    currentRun,
+    keyForInput,
+    resolve,
+    candidates,
+    covered,
+    sourceKey,
+    explicitDispatches,
+    namedRuns,
+    followUpNodes,
+    prepareFollowUps,
+    boundRuns
+  })
   return {
     prepare,
+    prepareExplicit,
+    explicit,
+    explicitDispatch: (id: string) => explicitDispatches.get(id),
     keyFor,
+    identityCovered,
     currentRun,
     candidates,
     covered,

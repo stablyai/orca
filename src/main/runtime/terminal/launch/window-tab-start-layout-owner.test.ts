@@ -40,6 +40,11 @@ describe("the window's new tab, started by main in a layout-owner build", () => 
       tabId: TAB_ID,
       leafId: LEAF_ID,
       cwd: '/workspace/sub',
+      resolvedWorkspace: expect.objectContaining({
+        id: WORKTREE_ID,
+        path: '/workspace',
+        connectionId: null
+      }),
       command: 'make dev'
     })
     // Publish starting status so views cannot spawn duplicates; clear it after binding.

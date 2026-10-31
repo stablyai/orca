@@ -1,6 +1,6 @@
 import type { Repo } from '../../../../shared/repo-types'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
-import { getRepoHostIdentity } from './repo-host-identity'
+import { getRepoRowIdentity } from './repo-host-identity'
 import { reconcileCatalogRows } from '../../../../shared/catalog-row-reconcile'
 
 // Reuse structurally equal rows/arrays on IPC echoes after drag reorder or virtualizer memos rebuild and visibly jump. Reference equality cannot compare main-rebuilt/cloned nested Repo fields.
@@ -9,7 +9,7 @@ export function reconcileFetchedRepos(
   previous: readonly Repo[],
   next: readonly Repo[]
 ): readonly Repo[] {
-  return reconcileCatalogRows(previous, next, getRepoHostIdentity)
+  return reconcileCatalogRows(previous, next, getRepoRowIdentity)
 }
 
 /**

@@ -54,7 +54,12 @@ export function recordedCreatorIdentity(creator: DispatchCreator): {
 }
 
 /** Self-dispatch is bookkeeping; pre-v37 rows lack creator identity and conservatively count as parents. */
-export function isSelfCreatedDispatch(row: DispatchContextRow): boolean {
+export function isSelfCreatedDispatch(
+  row: Pick<
+    DispatchContextRow,
+    'creator_pane_key' | 'assignee_pane_key' | 'creator_handle' | 'assignee_handle'
+  >
+): boolean {
   if (row.creator_pane_key && row.assignee_pane_key) {
     return isEquivalentPaneKey(row.creator_pane_key, row.assignee_pane_key)
   }

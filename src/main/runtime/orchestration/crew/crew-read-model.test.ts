@@ -75,7 +75,10 @@ describe('public crew read and stream', () => {
     expect(JSON.stringify(snapshot)).not.toMatch(
       /structworker_|capability|paneKey|process_incarnation|launch_token/
     )
-    db.answerQuestion({
+    const questionLatest = snapshot.sections.managing.find(
+      (row) => row.sendAddress === `dispatch:${worker.id}`
+    )!.latest
+    const answered = db.answerQuestion({
       messageId: asked.message.id,
       runId: run.id,
       body: 'Use B',
@@ -88,13 +91,46 @@ describe('public crew read and stream', () => {
         ?.direction
     ).toBe('to')
     expect(newest.sequence).toBeGreaterThan(mail.sequence)
+    const workerRow = snapshot.sections.managing.find(
+      (row) => row.sendAddress === `dispatch:${worker.id}`
+    )!
+    const answerBeforeGate = db.getMessageById(answered.message.id)
+    expect(answerBeforeGate).toMatchObject({
+      id: answered.message.id,
+      from_handle: `run:${run.id}`,
+      to_handle: `dispatch:${worker.id}`,
+      type: 'status',
+      read: 0,
+      body: 'Use B',
+      sequence: answered.message.sequence
+    })
+    expect(db.getDispatchContextById(helper.id)?.creator_dispatch_id).toBe(worker.id)
     const gate = db.createGate({ taskId: worker.task_id, question: 'Ship?' })
     db.resolveGate(gate.id, 'Yes')
-    expect(
-      buildCrewSnapshot('term_coord', deps).sections.managing.find(
-        (row) => row.sendAddress === `dispatch:${worker.id}`
-      )?.task?.state
-    ).toBe('ready')
+    const answerAfterGate = db.getMessageById(answered.message.id)
+    expect(answerAfterGate).toMatchObject({
+      id: answered.message.id,
+      from_handle: `run:${run.id}`,
+      to_handle: `run:${run.id}`,
+      type: 'status',
+      read: 0,
+      body: answered.message.body,
+      sequence: answered.message.sequence
+    })
+    const reopened = buildCrewSnapshot('term_coord', deps).sections.managing.find(
+      (row) => row.partyKey === workerRow.partyKey
+    )
+    expect(reopened?.task?.state).toBe('ready')
+    expect(reopened).toMatchObject({
+      partyKey: workerRow.partyKey,
+      openTarget: workerRow.openTarget,
+      latest: questionLatest,
+      sendAddress: 'term_worker'
+    })
+    expect(reopened).not.toHaveProperty('pendingQuestion')
+    process.stdout.write(
+      `C2 gate recipient handback ${JSON.stringify({ questionLatest, answerBeforeGate, answerAfterGate, helperCreator: db.getDispatchContextById(helper.id)?.creator_dispatch_id, worker: worker.id, reopened })}\n`
+    )
   })
 
   it('keeps an empty subscription awake for first creation, coalesces changes and resolves cleared chat roots', async () => {
@@ -319,30 +355,6 @@ it('preserves a bound offline manager and the complete committed clear conversat
   })
 })
 
-it('decorates handed-back peer questions after row creation without flattening direct children', () => {
-  const { db, deps, run, assign } = fixture()
-  const parent = assign('term_worker')
-  const helper = assign('term_helper', 'term_worker')
-  const question = db.createQuestion({
-    runId: run.id,
-    dispatchId: helper.id,
-    askerHandle: 'term_helper',
-    to: `dispatch:${parent.id}`,
-    question: 'Choose the helper option?'
-  })
-  db.completeDispatch(parent.id)
-  expect(db.getMessageById(question.message.id)?.to_handle).toBe(`run:${run.id}`)
-  const snapshot = buildCrewSnapshot('term_coord', deps)
-  expect(snapshot.sections.managing.map((row) => row.sendAddress)).toEqual([
-    `dispatch:${parent.id}`
-  ])
-  expect(snapshot.sections.talkingWith).toHaveLength(1)
-  expect(snapshot.sections.talkingWith[0].pendingQuestion?.preview).toBe(
-    'Choose the helper option?'
-  )
-  expect(db.getQuestion(question.message.id)?.status).toBe('pending')
-})
-
 it('uses qualified terminal status and keeps canonical native status without requiring a terminal binding', () => {
   const { deps, assign, handles } = fixture()
   const worker = assign('term_worker')
@@ -417,6 +429,10 @@ it('uses qualified terminal status and keeps canonical native status without req
 it('hydrates expired peer provenance identically in reversed read orders without mutating shared inputs', () => {
   const { db, deps, run, handles } = fixture()
   handles.set('term_old', 'tab_old:aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa')
+  // Synthetic lost identity: this remains the same historical native process.
+  const processForHandle = deps.processForHandle
+  deps.processForHandle = (handle) =>
+    handle === 'term_old' ? 'structured:chat-history' : (processForHandle?.(handle) ?? null)
   const record = agentSessionConversationView(
     agentSessionRecordFixture({ sessionId: 'chat-history' })
   )
@@ -449,11 +465,15 @@ it('hydrates expired peer provenance identically in reversed read orders without
     openTarget: { kind: 'chat', sessionId: 'chat-history' },
     latest: { preview: 'retained alias' }
   })
-  model.read('orca_session_id:chat-history')
+  expect(() => model.read('orca_session_id:chat-history')).toThrow(
+    'Crew caller identity is unavailable'
+  )
   expect(model.read('term_peer')).toEqual(before)
   stop()
   const stopAgain = model.subscribe(() => {})
-  model.read('orca_session_id:chat-history')
+  expect(() => model.read('orca_session_id:chat-history')).toThrow(
+    'Crew caller identity is unavailable'
+  )
   expect(model.read('term_peer')).toEqual(before)
   stopAgain()
 })

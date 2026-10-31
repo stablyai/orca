@@ -6,7 +6,7 @@ export const MAX_CODEX_RECENT_TURN_BYTES = 256 * 1024
 
 export type CodexJournalRequestOrigin = CodexDispatchRequestOrigin & { userItemId: string }
 
-function earlierRequestOrigin(
+export function earlierRequestOrigin(
   candidate: CodexJournalRequestOrigin,
   current: CodexJournalRequestOrigin | undefined
 ): boolean {

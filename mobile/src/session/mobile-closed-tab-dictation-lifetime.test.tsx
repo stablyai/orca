@@ -11,6 +11,7 @@ import {
 } from './native-chat/composer/mobile-native-chat-draft-store'
 import { findByHostType } from '../test-support/react-test-renderer-host-nodes'
 
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {

@@ -59,7 +59,8 @@ function isProjectFieldEmpty(row: GitHubProjectRow, field: GitHubProjectField): 
 
 export function renderMobileTasksGitHubProjectList(
   model: ConnectionPresentationModel,
-  colorScheme: MobileColorScheme
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
 ) {
   const {
     activeGitHubProject,
@@ -80,11 +81,11 @@ export function renderMobileTasksGitHubProjectList(
   } = model
   const count = githubProjectSummaryFields.length - 4
   return githubProjectLoading ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : !activeGitHubProject ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>
         {translate('tasks.githubProjectList.chooseProject', 'Choose a GitHub project')}
       </Text>
@@ -104,15 +105,15 @@ export function renderMobileTasksGitHubProjectList(
       </Pressable>
     </View>
   ) : githubProjectError ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>{githubProjectError}</Text>
     </View>
   ) : githubProjectTable && !githubProjectRepoSlugReady ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : !githubProjectTable || visibleGitHubProjectRows.length === 0 ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>
         {translate('tasks.githubProjectList.noItems', 'No project items')}
       </Text>
@@ -123,7 +124,10 @@ export function renderMobileTasksGitHubProjectList(
       extraData={colorScheme}
       keyExtractor={(entry) => (entry.type === 'group' ? `group:${entry.group.key}` : entry.row.id)}
       ItemSeparatorComponent={() => <View style={styles.separator} />}
-      contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.list,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
       refreshing={githubProjectLoading}
       onRefresh={refreshGitHubProject}
       renderItem={({ item: entry }) => {
