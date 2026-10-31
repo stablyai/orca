@@ -209,10 +209,12 @@ it.each(['', null, '--verbose', undefined])(
     }
     const controls = within(card)
     const model = controls.getByRole('combobox', {
-      name: agentArgs === undefined ? 'Sonnet' : 'Agent default'
+      name: agentArgs === undefined ? 'Sonnet' : 'Same as Claude · Agent default'
     })
     expect(
-      controls.getByRole('combobox', { name: agentArgs === undefined ? 'High' : 'Default' })
+      controls.getByRole('combobox', {
+        name: agentArgs === undefined ? 'High' : 'Same as Claude · Default'
+      })
     ).toBeDefined()
     expect(
       controls.getByText(
@@ -237,7 +239,9 @@ it.each(['', null, '--verbose', undefined])(
     act(() => configure({ experimentalNativeChat: true }))
     expect(controls.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
     expect(
-      controls.getByRole('combobox', { name: agentArgs === undefined ? 'Sonnet' : 'Agent default' })
+      controls.getByRole('combobox', {
+        name: agentArgs === undefined ? 'Sonnet' : 'Same as Claude · Agent default'
+      })
     ).toBeDefined()
     act(() => configure({ experimentalNativeChat: false }))
     expect(controls.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(

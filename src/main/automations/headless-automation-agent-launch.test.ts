@@ -152,10 +152,14 @@ describe('headless automation agent launch', () => {
       expect.objectContaining({ agent: 'aider', prompt: '' })
     )
     expect(runtime.deliverStartupFollowup).toHaveBeenCalledTimes(1)
-    expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith('term_existing', {
-      agent: 'aider',
-      prompt: 'fix the flaky test'
-    })
+    expect(runtime.deliverStartupFollowup).toHaveBeenCalledWith(
+      'term_existing',
+      {
+        agent: 'aider',
+        prompt: 'fix the flaky test'
+      },
+      { terminalCreation: await runtime.launchAgentTerminal.mock.results[0].value }
+    )
     finishDelivery(true)
   })
 

@@ -18,7 +18,11 @@ import type { StructuredAgentSessionLogger } from './structured-agent-session-lo
 import type { JournalOperationReceipt } from '../agent-session-journal/journal-row-writer'
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
 
-type RewindRecoveryDeps = { store: AgentSessionRecordStore; logger: StructuredAgentSessionLogger }
+type RewindRecoveryDeps = {
+  store: AgentSessionRecordStore
+  logger: StructuredAgentSessionLogger
+  nameProviderConversation?: (record: AgentSessionRecord) => void
+}
 
 export function persistRewindRecord(
   store: AgentSessionRecordStore,
@@ -223,13 +227,13 @@ export async function applyStructuredRewindRecovery(
   }
   if (rewind.providerFork?.materialized && !rewind.contextClearOperationId && !alreadyReplaced) {
     const completed = rewind
-    await journal.replaceEpochItems(
-      'handle_forked',
-      fence,
-      cut!.kept,
-      (cursor) =>
+    await journal.replaceEpochItems('handle_forked', fence, cut!.kept, (cursor) =>
+      inheritForkName(
+        deps,
+        sessionId,
         receipt?.(completed, fence, cursor) ??
-        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+          store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+      )
     )
     return
   }
@@ -248,8 +252,12 @@ export async function applyStructuredRewindRecovery(
       fence,
       cut!.kept,
       (cursor) =>
-        receipt?.(completed, fence, cursor) ??
-        store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+        inheritForkName(
+          deps,
+          sessionId,
+          receipt?.(completed, fence, cursor) ??
+            store.conversationReceipts.rewind(sessionId, fence, completed, cursor)
+        )
     )
     return
   }
@@ -287,5 +295,22 @@ export async function settleInterruptedStructuredAgentSessionCommands(
       sessionId,
       error
     })
+  }
+}
+
+function inheritForkName(
+  deps: RewindRecoveryDeps,
+  sessionId: string,
+  receipt: JournalOperationReceipt
+): JournalOperationReceipt {
+  return {
+    write: receipt.write,
+    committed: () => {
+      receipt.committed()
+      const record = deps.store.getRecord(sessionId)
+      if (record?.rewind?.providerFork?.materialized) {
+        deps.nameProviderConversation?.(record)
+      }
+    }
   }
 }

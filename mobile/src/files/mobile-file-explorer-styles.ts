@@ -24,7 +24,7 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
     height: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   backButtonPressed: {
     backgroundColor: colors.bgRaised
@@ -100,7 +100,7 @@ export const fileExplorerStyles = themedStyleSheet(() => ({
     minHeight: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.md

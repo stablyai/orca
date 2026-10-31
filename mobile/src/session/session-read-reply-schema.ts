@@ -48,12 +48,18 @@ export const sessionWorktreeRecordSchema = z
         id: salvagedOptional('id', z.string()),
         displayName: salvagedOptional('displayName', z.string().nullable()),
         repo: salvagedOptional('repo', z.string().nullable()),
+        path: salvagedOptional('path', z.string()),
+        hostId: salvagedOptional('hostId', z.string()),
         diffComments: z.unknown().optional()
       })
     )
   })
   .transform(
-    (reply): (WorktreeDisplayNameSource & { diffComments?: unknown }) | undefined => reply.worktree
+    (
+      reply
+    ):
+      | (WorktreeDisplayNameSource & { path?: string; hostId?: string; diffComments?: unknown })
+      | undefined => reply.worktree
   )
 
 // Require editor content/version/dirty state; host capability and truncation metadata remain optional for compatibility.

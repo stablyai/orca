@@ -101,14 +101,20 @@ export function NativeChatWorkingStatus({
     )
   }
 
+  const active = workedSeconds == null
   return (
     <div
       className={className}
-      data-native-chat-turn-status={workedSeconds == null ? 'active' : 'settled'}
-      aria-label={translate(
-        'components.native-chat.status.responding',
-        NATIVE_CHAT_TURN_STATUS_COPY.responding
-      )}
+      data-native-chat-turn-status={active ? 'active' : 'settled'}
+      // Once settled, screen readers read the visible "Worked for…" text instead.
+      aria-label={
+        active
+          ? translate(
+              'components.native-chat.status.responding',
+              NATIVE_CHAT_TURN_STATUS_COPY.responding
+            )
+          : undefined
+      }
     >
       <span>{label}</span>
       {caret}

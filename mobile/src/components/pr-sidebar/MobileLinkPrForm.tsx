@@ -140,7 +140,7 @@ const styles = themedStyleSheet(() => ({
   submit: {
     marginTop: spacing.lg,
     minHeight: 46,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary,
     alignItems: 'center',
     justifyContent: 'center'

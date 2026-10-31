@@ -4,7 +4,9 @@
       "updateRequired": "此版本的 OpenCode 无法使用所选模型安全启动。请将 OpenCode 更新到受支持的版本，或不指定模型。",
       "invalidConfig": "OpenCode 无法将所选模型应用到启动配置。请检查 OpenCode 启动配置后重试，或不指定模型。",
       "unsupportedLaunch": "OpenCode 无法在此次启动中应用所选模型。请使用受支持的启动参数打开新的本地终端，或不指定模型。"
-    }
+    },
+    "terminalPreparationFailed": "无法为 {{value0}} 打开终端。请检查工作区连接和智能体设置，然后重试。",
+    "terminalPromptFailed": "Orca 已为 {{value0}} 打开终端，但无法传递你的提示。请在该终端中发送提示。"
   },
   "app": {
     "saving": {
@@ -376,7 +378,8 @@
       "installCliForTerminal": "安装 {{value0}} CLI 即可在终端中打开。",
       "chatRuntime": "聊天运行时",
       "chatChoiceTitle": "以聊天或 CLI 打开",
-      "chatChoiceDescription": "选择每个智能体以聊天还是其 CLI 打开。"
+      "chatChoiceDescription": "选择每个智能体以聊天还是其 CLI 打开。",
+      "sameAsChoice": "与 {{agent}} 相同 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "符号链接",
@@ -835,9 +838,7 @@
         "jira": {
           "856083302c": "Jira 连接已被新的请求取代。"
         },
-        "linear": {
-          "37d36984d0": "Linear 连接已被新的请求取代。"
-        },
+        "linear": {},
         "orca": {
           "profiles": {
             "612f7f6861": "创建配置文件失败",
@@ -7150,7 +7151,8 @@
           "506f2acf7a": "正在重置访问...",
           "statusGranted": "已授权",
           "statusUnsupported": "仅限 macOS",
-          "statusNotEnabled": "未启用"
+          "statusNotEnabled": "未启用",
+          "794807aa21": "macOS 隐私与安全性已加入队列；较新的请求或重置可能会替换它"
         },
         "DeveloperPermissionsPane": {
           "4c17304beb": "刷新",
@@ -7703,7 +7705,11 @@
           "191ac34567": "智能体编排",
           "nestedWorkerDepthTitle": "工作智能体嵌套深度",
           "nestedWorkerDepthDescription": "已派发的工作智能体可以再派发自己的工作智能体的层数。设为 1 时智能体树保持扁平：协调者派发工作智能体，这些工作智能体不再派发。",
-          "7bc082f4de": "复制安装命令"
+          "7bc082f4de": "复制安装命令",
+          "workerAutoReleaseTitle": "自动关闭已完成的工作者",
+          "workerAutoReleaseDescription": "除非选择“保持打开”，否则工作者完成后 2 分钟会关闭其终端或聊天。如果它再次开始工作，完成后将重新计时 2 分钟。",
+          "workerAutoReleaseKeywordClose": "关闭",
+          "workerAutoReleaseKeywordRelease": "释放"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "使智能体能够通过 Orca 传递上下文并协调工作。",
@@ -11408,7 +11414,10 @@
         "PluginThemeUseNow": {
           "label": "立即使用：",
           "useForLight": "用于浅色：",
-          "useForDark": "用于深色："
+          "useForDark": "用于深色：",
+          "assignedLight": "已将 {{value0}} 设为浅色主题",
+          "assignedDark": "已将 {{value0}} 设为深色主题",
+          "saveFailed": "无法保存主题。请重试。"
         },
         "PluginContributionActionCommand": {
           "run": "运行",
@@ -12651,6 +12660,15 @@
         },
         "pluginTryAction": {
           "incompleteLanguage": "此语言包过于不完整，无法切换。"
+        },
+        "PluginUpdateReviewToast": {
+          "movedTitle": "{{value0}} {{value1}} 来自不同的仓库",
+          "accessTitle": "{{value0}} {{value1}} 请求更多访问权限",
+          "manyTitle": "{{value0}} 个插件更新等待你审核",
+          "oneDescription": "发布者：{{value0}}。在你审核之前不会更新。",
+          "manyDescription": "在你审核之前不会更新。",
+          "review": "审核",
+          "dismiss": "关闭"
         }
       },
       "right": {
@@ -13135,7 +13153,10 @@
             "abortRebaseFailed": "中止变基失败",
             "abortMergeFailed": "中止合并失败",
             "clearNotesFromWorkspace_other": "清除此工作区中的 {{count}} 条备注？",
-            "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 条备注？"
+            "clearNotesFromFile_other": "清除 {{path}} 中的 {{count}} 条备注？",
+            "markResolved": "标记为已解决",
+            "keepFile": "保留文件",
+            "keepDeletion": "保留删除"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "无法启动选定的智能体。",
@@ -13711,7 +13732,8 @@
                     "edc2d82a2b": "合并正在进行中",
                     "5c3707aa44": "变基正在进行中",
                     "ffe53a1da6": "正在进行 cherry-pick",
-                    "35eb76d323": "操作正在进行中"
+                    "35eb76d323": "操作正在进行中",
+                    "completeMerge": "完成合并"
                   }
                 }
               },
@@ -13740,7 +13762,8 @@
                   "e7876a2bde": "暂存至少一个文件以生成消息。",
                   "0904be2505": "清除消息以重新生成。",
                   "1ea9ba37aa": "在“设置”->“Git”->“源代码管理 AI”中选择一个智能体。"
-                }
+                },
+                "completeMergeFailed": "无法完成合并"
               }
             }
           },
@@ -16077,6 +16100,12 @@
           "view": "查看插件",
           "notNow": "暂不",
           "never": "不再为 .{{value0}} 建议"
+        },
+        "RichMarkdownEmojiMenu": {
+          "chooseEmoji": "选择表情符号"
+        },
+        "richMarkdownBlobImagePaste": {
+          "saveFailed": "无法将粘贴的图片保存到文档旁。重启 Orca 后可能无法加载该图片。"
         }
       },
       "diff": {
@@ -18119,6 +18148,13 @@
           "noMovableChat": "无法运行“{{action}}” — 没有活动且可移动的聊天。",
           "clientUnsupported": "无法运行“{{action}}” — 此客户端和运行时不支持该操作。"
         }
+      },
+      "plugins": {
+        "list": {
+          "PluginsSectionDescription": {
+            "openWith": "打开方式（焦点不在可编辑字段中时）"
+          }
+        }
       }
     },
     "i18n": {
@@ -18166,6 +18202,12 @@
       "forgeCredentialTarget": {
         "unknownHost": "拥有此仓库的计算机尚不清楚。请重新连接它并重试。",
         "thisComputer": "此计算机"
+      },
+      "runtimeGitSyncClient": {
+        "completeMergeNeedsNewerHost": "完成合并需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
+      },
+      "runtimeGitWorkingTreeClient": {
+        "resolveConflictNeedsNewerHost": "解决冲突需要此主机上安装更新版本的 Orca。请更新该主机上的 Orca。"
       }
     },
     "ssh": {
@@ -18857,7 +18899,11 @@
       },
       "agentMessage": {
         "messageFrom": "消息来自",
-        "unnamedSender": "一个智能体"
+        "unnamedSender": "一个智能体",
+        "messageFromCoordinator": "来自协调者的消息",
+        "startedWorker": "已启动工作者",
+        "taskFromCoordinator": "来自协调者的任务",
+        "updateFromWorker": "来自工作者的更新"
       },
       "goal": {
         "placeholder": "描述您的目标，定义可衡量的结果以获得最佳结果",
@@ -19136,7 +19182,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "使用终端智能体继续",
-          "switchToChatView": "在聊天界面中继续"
+          "switchToChatView": "在聊天界面中继续",
+          "allowAutoClose": "允许自动关闭"
         },
         "BrowserTab": {
           "closeOthers": "关闭其他",
@@ -19671,6 +19718,20 @@
       "stepDownload": "下载",
       "stepUnpack": "解压",
       "stepCheck": "检查"
+    },
+    "linearWorkspacePicker": {
+      "search": "搜索 Linear 工作区",
+      "empty": "未找到工作区。",
+      "label": "Linear 工作区",
+      "all": "所有 Linear 工作区",
+      "unavailable": "不可用的 Linear 工作区"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "临时编排工作代理 · 完成后 2 分钟关闭",
+        "finished": "临时编排工作代理已完成 · {{countdown}}后关闭",
+        "keepOpen": "保持打开"
+      }
     }
   },
   "dashboardPopout": {
@@ -20141,6 +20202,9 @@
         "unconfirmed_other": "全部 {{count}} 个智能体未确认",
         "needsAttention_other": "全部 {{count}} 个智能体需要处理"
       }
+    },
+    "cardProperties": {
+      "agentModel": "智能体模型"
     }
   },
   "editor": {
@@ -20682,7 +20746,9 @@
       "scannerBusy": "同时进行的会话扫描过多。请稍等片刻，然后刷新。",
       "scannerMissing": "此 Orca 安装中缺少会话扫描器。重新安装 Orca 可将其恢复。",
       "scannerStopped": "会话扫描器意外停止。请刷新以重试。"
-    }
+    },
+    "sessionAccount": "账户",
+    "sessionAccountUnknown": "未知"
   },
   "common": {
     "retry": "重试",
@@ -21768,7 +21834,8 @@
       "terminalSplitRight": "向右拆分终端",
       "terminalSplitDown": "向下拆分终端",
       "terminalSwitchInputSource": "切换输入法/语言（原生）",
-      "newAgentTab": "新建 {{agent}} 标签页"
+      "newAgentTab": "新建 {{agent}} 标签页",
+      "viewPlugins": "打开插件"
     },
     "group": {
       "global": "全局",
@@ -21980,12 +22047,7 @@
       "fetchMore": "加载更多",
       "connectionFailed": "连接失败",
       "listLabel": "Linear 列表",
-      "projectsLoadFailed": "无法加载项目。",
       "projectNotFound": "未找到项目。",
-      "projectLoadFailed": "无法加载项目。",
-      "projectIssuesLoadFailed": "无法加载项目 issue。",
-      "viewsLoadFailed": "无法加载视图。",
-      "viewContentsLoadFailed": "无法加载视图内容。",
       "issuesLoadFailed": "无法加载 Linear issue。",
       "apiKeyHint": "粘贴你希望 Orca 使用的 Linear 工作区的个人 API 密钥。如果该工作区已连接，Orca 会替换其已存储的密钥。",
       "remoteKeyStorage": "此密钥由当前远程运行时存储。",
@@ -22108,7 +22170,15 @@
     "arguments": "参数",
     "argumentsHint": "仅适用于 CLI 启动。",
     "launchChat": "启动聊天",
-    "launchTerminal": "启动终端"
+    "launchTerminal": "启动终端",
+    "setByArguments": "由参数设置",
+    "searchModels": "搜索模型",
+    "noModels": "没有与搜索匹配的模型。",
+    "legacyModels": "旧版模型",
+    "toggleArguments": "切换参数显示",
+    "argumentsTerminalHint": "仅适用于终端（CLI）启动",
+    "searchAgentModels": "搜索 {{agent}} 模型…",
+    "legacyModelCount": "{{total}} 个模型"
   },
   "wslMove": {
     "entry": {
