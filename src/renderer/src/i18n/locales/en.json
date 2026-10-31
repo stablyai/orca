@@ -5073,6 +5073,13 @@
             },
             "mainWorktree": "main worktree",
             "detached": "detached"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "Click to sign in to GitHub Copilot",
+            "deviceCode": "Copilot sign-in code {{code}} copied — paste it in the browser.",
+            "signInFailed": "Copilot sign-in failed"
           }
         }
       },
