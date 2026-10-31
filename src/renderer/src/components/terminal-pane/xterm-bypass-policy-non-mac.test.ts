@@ -371,13 +371,13 @@ describe('shouldSuppressTerminalImeKeyboardEvent — Windows/Linux', () => {
   })
 
   describe('shouldPreventDefaultTerminalImeCandidateKey', () => {
-    it('prevents the default on candidate keydowns while the guard is active', () => {
+    it('keeps live-composition candidate keys native but prevents trailing candidate keys', () => {
       expect(
         shouldPreventDefaultTerminalImeCandidateKey(
           event({ key: ' ', code: 'Space' }),
           linuxComposing
         )
-      ).toBe(true)
+      ).toBe(false)
       expect(
         shouldPreventDefaultTerminalImeCandidateKey(
           event({ key: '2', code: 'Digit2' }),

@@ -23,6 +23,7 @@ import {
   shouldBypassXtermKeyboardEvent,
   shouldHandleTerminalInterruptKeyboardEvent,
   shouldPreventDefaultTerminalImeCandidateKey,
+  shouldArmTerminalImePendingCandidateKeyRelease,
   shouldSuppressTerminalImeKeyboardEvent,
   shouldSuppressTerminalInterruptKeyup,
   shouldSuppressTerminalModifierKeyboardEvent,
@@ -110,6 +111,10 @@ export function installTerminalPaneInputHandling(context: PaneInputContext): voi
       clearTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event)
       if (shouldPreventDefaultTerminalImeCandidateKey(event, imeKeyboardOptions)) {
         event.preventDefault()
+      }
+      if (shouldArmTerminalImePendingCandidateKeyRelease(event, imeKeyboardOptions)) {
+        // Held repeats can outlive the guard window; arm the release even when the
+        // live-composition keydown stays native so the IME can commit through it (#30334).
         armTerminalImePendingCandidateKeyRelease(pendingTerminalImeCandidateKeyReleases, event, now)
       }
       return false
