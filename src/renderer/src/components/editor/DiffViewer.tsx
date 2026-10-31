@@ -150,6 +150,7 @@ export default function DiffViewer({
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: modifiedModelKey ?? modelKey,
+    draftRetentionKey: modelKey,
     filePath: relativePath,
     worktreeId: worktreeId ?? '',
     comments: worktreeId ? diffComments : [],

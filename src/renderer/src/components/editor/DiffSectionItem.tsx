@@ -69,6 +69,11 @@ export function DiffSectionItem({
       `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}:${section.contentGeneration ?? 0}`,
     [section.contentGeneration, section.key, worktreeId]
   )
+  const draftRetentionKey = useMemo(
+    () =>
+      `diff-section:${encodeURIComponent(worktreeId ?? 'review')}:${encodeURIComponent(section.key)}`,
+    [section.key, worktreeId]
+  )
   const diffEditorFontSize = computeDiffEditorFontSize(
     settings?.terminalFontSize ?? 13,
     editorFontZoomLevel
@@ -123,6 +128,7 @@ export function DiffSectionItem({
   useDiffCommentDecorator({
     editor: hasLineCommentAction ? modifiedEditor : null,
     monacoModelIdentity: `${modelPathBase}:modified`,
+    draftRetentionKey,
     filePath: section.path,
     worktreeId: worktreeId ?? '',
     comments: inlineComments ?? (worktreeId ? diffComments : []),
