@@ -49,6 +49,7 @@ const store = {
   getRepo: () => ({
     id: 'repo-1',
     path: '/tmp/repo',
+    upstream: null,
     displayName: 'repo',
     badgeColor: 'blue',
     addedAt: 1

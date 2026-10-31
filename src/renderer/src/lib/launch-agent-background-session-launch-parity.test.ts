@@ -74,7 +74,11 @@ async function runAutomation(c: AutomationLaunchCase) {
   const spawn = vi.fn(async (_request: Record<string, unknown>) => ({ id: 'pty-1' }))
   vi.stubGlobal('window', {
     dispatchEvent: vi.fn(),
-    api: { pty: { spawn, write: vi.fn(), kill: vi.fn() }, runtime: { call: vi.fn() } }
+    api: {
+      pty: { spawn, write: vi.fn(), kill: vi.fn() },
+      runtime: { call: vi.fn() },
+      worktrees: { updateMeta: vi.fn(async () => null) }
+    }
   })
   await modules.launch.launchAgentBackgroundSession({
     agent: c.agent,
@@ -112,7 +116,10 @@ describe('row 5: desktop automation pty:spawn request', () => {
     await load('linux')
     await load('win32')
   }, 240_000)
-  afterEach(() => vi.unstubAllGlobals())
+  afterEach(async () => {
+    await vi.dynamicImportSettled()
+    vi.unstubAllGlobals()
+  })
 
   it.each([false, true])(
     'retains the selected standalone folder from preparation through launch with copied IDs (reverse=%s)',

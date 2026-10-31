@@ -1,8 +1,9 @@
 import { execFileSync } from 'node:child_process'
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { runProcessSync } from '@orca/process-host'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   changedFileScope,
@@ -44,6 +45,23 @@ describe('changedFileScope', () => {
 
 describe('listChangedFiles', () => {
   let fixture
+  let home
+  beforeEach(() => {
+    home = mkdtempSync(join(tmpdir(), 'flaky-ratchet-home-'))
+    const config = join(home, 'empty.gitconfig')
+    writeFileSync(config, '')
+    for (const key of Object.keys(process.env).filter((key) =>
+      key.toUpperCase().startsWith('GIT_')
+    )) {
+      vi.stubEnv(key, undefined)
+    }
+    vi.stubEnv('HOME', home)
+    vi.stubEnv('USERPROFILE', home)
+    vi.stubEnv('XDG_CONFIG_HOME', home)
+    vi.stubEnv('GIT_CONFIG_GLOBAL', config)
+    vi.stubEnv('GIT_CONFIG_SYSTEM', config)
+    vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
+  })
   const git = (...args) =>
     execFileSync(
       'git',
@@ -62,6 +80,7 @@ describe('listChangedFiles', () => {
     vi.unstubAllEnvs()
     vi.restoreAllMocks()
     rmSync(fixture, { recursive: true, force: true })
+    rmSync(home, { recursive: true, force: true })
   })
 
   it('enforces findings in tracked files whose names Git quotes', () => {
@@ -103,5 +122,67 @@ describe('listChangedFiles', () => {
     ])
     vi.stubEnv('ORCA_CODE_QUALITY_BASE', upstream)
     expect([...listChangedFiles(fixture)]).toEqual(['contribution.txt'])
+  })
+})
+
+describe('listChangedFiles with real Git', () => {
+  it.each([false, true])('selects the actual base when configured=%s', (configured) => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-flaky-ratchet-base-'))
+    try {
+      const config = join(root, 'empty.gitconfig')
+      writeFileSync(config, '')
+      for (const key of Object.keys(process.env).filter((key) =>
+        key.toUpperCase().startsWith('GIT_')
+      )) {
+        vi.stubEnv(key, undefined)
+      }
+      vi.stubEnv('GIT_CONFIG_GLOBAL', config)
+      vi.stubEnv('GIT_CONFIG_SYSTEM', config)
+      vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
+      vi.stubEnv('HOME', root)
+      vi.stubEnv('USERPROFILE', root)
+      vi.stubEnv('XDG_CONFIG_HOME', root)
+      vi.stubEnv('GITHUB_EVENT_NAME', undefined)
+      vi.stubEnv('ORCA_FLAKY_TEST_RATCHET_ALL', undefined)
+      const git = (...args) => {
+        const result = runProcessSync({ program: 'git', args, cwd: root })
+        expect(result.code, result.stderr).toBe(0)
+        return result.stdout.trim()
+      }
+      const commit = (message) =>
+        git(
+          '-c',
+          'user.name=Test',
+          '-c',
+          'user.email=test@example.invalid',
+          'commit',
+          '-qm',
+          message
+        )
+      git('init', '--quiet')
+      git('symbolic-ref', 'HEAD', 'refs/heads/main')
+      expect(realpathSync.native(git('rev-parse', '--absolute-git-dir'))).toBe(
+        realpathSync.native(join(root, '.git'))
+      )
+      writeFileSync(join(root, 'upstream.test.ts'), 'export const upstream = 0\n')
+      git('add', 'upstream.test.ts')
+      commit('fork baseline')
+      git('update-ref', 'refs/remotes/origin/main', 'HEAD')
+      writeFileSync(join(root, 'upstream.test.ts'), 'export const upstream = 1\n')
+      git('add', 'upstream.test.ts')
+      commit('actual main')
+      const actualMain = git('rev-parse', 'HEAD')
+      writeFileSync(join(root, 'feature.test.ts'), 'export const feature = 1\n')
+      git('add', 'feature.test.ts')
+      commit('feature')
+      vi.stubEnv('ORCA_CODE_QUALITY_BASE', configured ? actualMain : undefined)
+
+      expect([...listChangedFiles(root)].sort()).toEqual(
+        configured ? ['feature.test.ts'] : ['feature.test.ts', 'upstream.test.ts']
+      )
+    } finally {
+      vi.unstubAllEnvs()
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })

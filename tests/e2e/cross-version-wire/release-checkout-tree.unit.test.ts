@@ -10,7 +10,7 @@ import {
 } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import * as currentProcessHost from '@orca/process-host'
 import { importReleaseCheckoutModule } from './release-checkout'
 import { extractReleaseCheckoutTree } from './release-checkout-tree'
@@ -18,6 +18,7 @@ import { extractReleaseCheckoutTree } from './release-checkout-tree'
 const temporaryRoots: string[] = []
 
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of temporaryRoots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
@@ -29,6 +30,23 @@ function temporaryDirectory(prefix: string): string {
   temporaryRoots.push(root)
   return root
 }
+
+beforeEach(() => {
+  const home = temporaryDirectory('orca-cross-version-release-home-')
+  const config = join(home, '.gitconfig')
+  writeFileSync(config, '')
+  for (const key of Object.keys(process.env).filter((key) =>
+    key.toUpperCase().startsWith('GIT_')
+  )) {
+    vi.stubEnv(key, undefined)
+  }
+  for (const key of ['HOME', 'USERPROFILE', 'XDG_CONFIG_HOME']) {
+    vi.stubEnv(key, home)
+  }
+  vi.stubEnv('GIT_CONFIG_GLOBAL', config)
+  vi.stubEnv('GIT_CONFIG_SYSTEM', config)
+  vi.stubEnv('GIT_CONFIG_NOSYSTEM', '1')
+})
 
 // Every fixed archive path must exist in a release, or `git archive` refuses the pathspec.
 const RELEASE_SKELETON: Record<string, string> = Object.fromEntries(
@@ -106,6 +124,28 @@ const RELEASE_PROCESS_HOST = {
 }
 
 describe('release checkout workspace packages', () => {
+  it('prepares a release once when the workspace root overlaps archived src', async () => {
+    const { repo, commit } = commitRelease({
+      'pnpm-workspace.yaml': 'packages:\n  - src/*\n',
+      'src/release-overlap/package.json': JSON.stringify({
+        name: '@orca/release-overlap',
+        type: 'module',
+        exports: { '.': { 'orca-source': './src/index.ts', default: './dist/index.js' } }
+      }),
+      'src/release-overlap/src/index.ts': "export const value = 'released-overlap'\n",
+      'src/main/consumer.ts': "export { value } from '@orca/release-overlap'\n",
+      'src/main/stale.test.ts': "throw new Error('stale release spec')\n"
+    })
+    const extracted = temporaryDirectory('orca-cross-version-overlapping-root-')
+    await extractReleaseCheckoutTree(repo, extracted, commit)
+    expect(existsSync(join(extracted, 'src/main/stale.test.ts'))).toBe(false)
+    const loaded = await importReleaseCheckoutModule(
+      { ref: commit, commit, label: 'overlapping-src', root: extracted },
+      'src/main/consumer.ts'
+    )
+    expect(loaded.value).toBe('released-overlap')
+  })
+
   it('loads the release workspace package rather than the current one', async () => {
     expect('releaseOnlyExport' in currentProcessHost).toBe(false)
     const { repo, commit } = commitRelease({

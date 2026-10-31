@@ -22,7 +22,8 @@ export function setLegacySetupScriptLaunchMode(
 
 /** Restores the module-level store slices these activation suites mutate. */
 export function registerWorktreeActivationReset(): void {
-  afterEach(() => {
+  afterEach(async () => {
+    await vi.dynamicImportSettled()
     delete (globalThis as { __ORCA_WEB_CLIENT__?: boolean }).__ORCA_WEB_CLIENT__
     useAppStore.setState((state) => ({
       settings: state.settings

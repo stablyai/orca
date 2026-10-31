@@ -36,6 +36,7 @@ function makeRepo() {
   return {
     id: REPO_ID,
     path: '/tmp/repo',
+    upstream: null,
     displayName: 'repo',
     badgeColor: '#000000',
     addedAt: 1

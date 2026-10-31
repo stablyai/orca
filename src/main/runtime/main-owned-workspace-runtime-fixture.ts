@@ -14,7 +14,8 @@ export const REPO = {
   path: '/workspace',
   displayName: 'repo',
   badgeColor: 'blue',
-  addedAt: 1
+  addedAt: 1,
+  upstream: null
 }
 export const WORKTREE_ID = 'repo-1::/workspace'
 export const TAB_ID = 'tab-1'

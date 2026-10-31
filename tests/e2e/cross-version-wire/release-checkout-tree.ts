@@ -1,6 +1,7 @@
 import { readFile, readdir, rm, writeFile } from 'node:fs/promises'
 import { dirname, join, relative } from 'node:path'
 import { parse } from 'yaml'
+import { mapSettledWithConcurrency } from '../../../src/shared/map-with-concurrency.ts'
 import { createWorkspaceSourceResolver } from '../../../config/scripts/workspace-source-exports.mjs'
 import {
   collectPackageImports,
@@ -119,6 +120,7 @@ async function prepareExtractedTree(
 ): Promise<void> {
   const resolver = workspacePaths.length > 0 ? createWorkspaceSourceResolver(root) : null
   const rendererRoot = join(root, 'src', 'renderer', 'src')
+  const collected = new Set<string>()
   const walk = async (directory: string): Promise<void> => {
     for (const entry of await readdir(directory, { withFileTypes: true })) {
       const full = join(directory, entry.name)
@@ -129,18 +131,7 @@ async function prepareExtractedTree(
       if (!entry.isFile()) {
         continue
       }
-      // Why: stale specs must not enter repo-wide tool walks through the cache.
-      if (isTestSource(entry.name)) {
-        await rm(full)
-        continue
-      }
-      if (isRewritableSource(entry.name)) {
-        let source = await rewriteRendererAliases(full, await readFile(full, 'utf8'), rendererRoot)
-        if (resolver) {
-          source = await rewriteWorkspaceImports(root, full, source, resolver)
-        }
-        collectPackageImports(source, packageImports)
-      }
+      collected.add(full)
     }
   }
   await walk(join(root, 'src'))
@@ -148,6 +139,36 @@ async function prepareExtractedTree(
   for (const path of workspacePaths) {
     if (path !== WORKSPACE_POLICY && !path.startsWith('src/') && !path.startsWith('native/')) {
       await walk(join(root, path))
+    }
+  }
+  const files = [...collected]
+  for (let offset = 0; offset < files.length; offset += 64) {
+    const prepared = await mapSettledWithConcurrency(
+      files.slice(offset, offset + 64),
+      8,
+      async (file) => {
+        // Why: stale specs must not enter repo-wide tool walks through the cache.
+        if (isTestSource(file)) {
+          await rm(file)
+          return
+        }
+        if (!isRewritableSource(file)) {
+          return
+        }
+        let source = await rewriteRendererAliases(file, await readFile(file, 'utf8'), rendererRoot)
+        if (resolver) {
+          source = await rewriteWorkspaceImports(root, file, source, resolver)
+        }
+        return source
+      }
+    )
+    for (const result of prepared) {
+      if (result.status === 'rejected') {
+        throw result.reason
+      }
+      if (result.value !== undefined) {
+        collectPackageImports(result.value, packageImports)
+      }
     }
   }
 }
