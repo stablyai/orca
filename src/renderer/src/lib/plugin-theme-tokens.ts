@@ -15,6 +15,8 @@ type ContrastRule = {
   drop?: readonly string[]
   /** A translucent surface is checked as painted over this opaque one. */
   over?: string
+  /** Also dropped when the theme omitted the surface, which then follows this token. */
+  surfaceSource?: string
 }
 
 const MIN_TEXT_CONTRAST = 4.5
@@ -68,14 +70,20 @@ const CONTRAST_RULES: readonly ContrastRule[] = [
     drop: ['--chat-user-message'],
     over: '--chat-canvas'
   },
-  // A tint the theme omits follows its hue, so a failing tint drops the hue too.
-  ...['added', 'removed'].flatMap((side) =>
-    ['background', 'emphasis'].map((kind): ContrastRule => ({
+  ...['added', 'removed'].flatMap((side): ContrastRule[] => {
+    const tint = (kind: string): ContrastRule => ({
       ...textPair(`--diff-${side}-${kind}`, '--foreground'),
-      drop: [`--diff-${side}-${kind}`, `--diff-${side}`],
+      drop: [`--diff-${side}-${kind}`],
+      surfaceSource: `--diff-${side}`,
       over: '--editor-surface'
-    }))
-  ),
+    })
+    // Chat diff rows paint the hue-mixed text on the line tint over the chat canvas.
+    return [
+      tint('background'),
+      tint('emphasis'),
+      { ...tint('background'), text: `--chat-diff-${side}`, over: '--chat-canvas' }
+    ]
+  }),
   { ...textPair('--editor-surface', '--text-link'), drop: ['--text-link'] },
   ...GIT_DECORATIONS.map((status): ContrastRule => ({
     surface: '--sidebar',
@@ -193,7 +201,11 @@ export function safePluginThemeTokens(
           textColor[3] < 1 ||
           contrastRatio(surfaceColor, textColor) < rule.min)
       ) {
-        changed = drop(...(rule.drop ?? [rule.surface, rule.text])) || changed
+        const dropped = [...(rule.drop ?? [rule.surface, rule.text])]
+        if (rule.surfaceSource && tokens[rule.surface] === undefined) {
+          dropped.push(rule.surfaceSource)
+        }
+        changed = drop(...dropped) || changed
       }
     }
     for (const [ring, surface] of RINGS) {
