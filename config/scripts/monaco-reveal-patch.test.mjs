@@ -48,6 +48,19 @@ it('installs the reveal contract and refuses a version bump that leaves its patc
         'utf8'
       )
     ).toContain("kind: 'anchor'")
+    expect(readFileSync(join(esm, 'common/viewModelEventDispatcher.js'), 'utf8')).toContain(
+      'this.scrollSource !== other.scrollSource'
+    )
+    expect(readFileSync(join(esm, 'common/viewModelEventDispatcher.js'), 'utf8')).toContain(
+      'this.scrollTopDelta = scrollTop - oldScrollTop'
+    )
+    expect(readFileSync(join(esm, 'browser/stableEditorScroll.js'), 'utf8')).toContain("'geometry'")
+    expect(readFileSync(join(esm, 'common/viewLayout/viewLayout.js'), 'utf8')).toContain(
+      "true, 'geometry'"
+    )
+    expect(readFileSync(join(esm, 'contrib/find/browser/findWidget.js'), 'utf8')).toContain(
+      "scrollAdjustment, 1 /* ScrollType.Immediate */, 'geometry'"
+    )
     const find = readFileSync(join(esm, 'contrib/find/browser/findController.js'), 'utf8')
     expect(find).toContain("kind: 'find'")
     expect(find).toContain('this._start(opts, newState).then(')

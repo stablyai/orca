@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { Virtualizer } from '@tanstack/react-virtual'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { DiffSection } from '../../diff-section-types'
+import { useCombinedDiffViewport } from '../../use-combined-diff-extent'
 import { useCombinedDiffScrollAnchors } from '../scroll-viewport/use-combined-diff-scroll-anchors'
 import { useCombinedDiffTreeNavigation } from '../browse-files/use-combined-diff-tree-navigation'
 import { useCombinedDiffSectionIndexMap } from './use-combined-diff-section-index-map'
@@ -73,10 +74,13 @@ function useCombinedDiffSectionPasses({
 } {
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation: 1, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature: 'sig', sections })
+  const { beforeDetachRef, releaseViewport } = useCombinedDiffViewport()
   const anchors = useCombinedDiffScrollAnchors({
+    beforeDetachRef,
+    releaseViewport,
     restorationKey: 'view',
     scrollAnchorRef: SCROLL_ANCHOR_REF,
-    scrollContainerRef: SCROLL_CONTAINER_REF,
+    viewportNode: SCROLL_CONTAINER_REF.current,
     scrollOffsetRef: SCROLL_OFFSET_REF,
     memoryLeaseRef: { current: null },
     virtualizer: FAKE_VIRTUALIZER

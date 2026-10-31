@@ -14,7 +14,9 @@ export function usePRFilesDiffViewPersistence(args: {
   fileTreeCollapsed: boolean
   activeTreeSectionKey: string | null
   loadedIndicesRef: MutableRefObject<Set<number>>
-  scrollContainerRef: RefObject<HTMLDivElement | null>
+  viewportNode: HTMLDivElement | null
+  beforeDetachRef: RefObject<(() => void) | null>
+  releaseViewport: () => void
   pendingRestoreScrollTopRef: MutableRefObject<number | null>
 }): void {
   useEffect(() => {
@@ -23,8 +25,7 @@ export function usePRFilesDiffViewPersistence(args: {
     }
     const preservedScrollTop =
       prFilesDiffScrollTopCache.get(args.viewStateKey) ??
-      args.scrollContainerRef.current?.scrollTop ??
-      0
+      (args.viewportNode ? getCombinedDiffExtent(args.viewportNode).exportView().scrollTop : 0)
     setWithLRU(prFilesDiffViewStateCache, args.viewStateKey, {
       entrySignature: args.entrySignature,
       sections: args.sections,
@@ -43,7 +44,7 @@ export function usePRFilesDiffViewPersistence(args: {
     args.entrySignature,
     args.fileTreeCollapsed,
     args.loadedIndicesRef,
-    args.scrollContainerRef,
+    args.viewportNode,
     args.sectionHeights,
     args.sections,
     args.sideBySide,
@@ -51,7 +52,7 @@ export function usePRFilesDiffViewPersistence(args: {
   ])
 
   useLayoutEffect(() => {
-    const container = args.scrollContainerRef.current
+    const container = args.viewportNode
     if (!container) {
       return
     }
@@ -82,37 +83,32 @@ export function usePRFilesDiffViewPersistence(args: {
     }
 
     container.addEventListener('scroll', cacheScrollPositionOnScroll, { passive: true })
-    return () => {
+    args.beforeDetachRef.current = () => {
       cacheScrollPositionOnTeardown()
       container.removeEventListener('scroll', cacheScrollPositionOnScroll)
     }
+    return args.releaseViewport
   }, [
+    args.beforeDetachRef,
+    args.releaseViewport,
     args.entrySignature,
     args.pendingRestoreScrollTopRef,
-    args.scrollContainerRef,
+    args.viewportNode,
     args.viewStateKey
   ])
 
   useLayoutEffect(() => {
-    const container = args.scrollContainerRef.current
-    const targetScrollTop = args.pendingRestoreScrollTopRef.current
-    if (
-      !container ||
-      targetScrollTop === null ||
-      (args.sections.length === 0 && args.entriesLength > 0)
-    ) {
+    const container = args.viewportNode
+    const targetScrollTop =
+      args.pendingRestoreScrollTopRef.current ??
+      prFilesDiffScrollTopCache.get(args.viewStateKey) ??
+      0
+    if (!container) {
       return
     }
 
     getCombinedDiffExtent(container).importView({ scrollTop: targetScrollTop })
     setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, targetScrollTop)
     args.pendingRestoreScrollTopRef.current = null
-  }, [
-    args.entriesLength,
-    args.pendingRestoreScrollTopRef,
-    args.scrollContainerRef,
-    args.sectionHeights,
-    args.sections,
-    args.viewStateKey
-  ])
+  }, [args.pendingRestoreScrollTopRef, args.viewportNode, args.viewStateKey])
 }

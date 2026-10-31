@@ -1,5 +1,6 @@
+import { useCombinedDiffExtent, useCombinedDiffViewport } from '../use-combined-diff-extent'
 import { getCombinedDiffExtent } from '../combined-diff-extent-dom'
-import React, { useCallback, useRef, useState } from 'react'
+import React, { useCallback, useState } from 'react'
 import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { useWorkspaceFileBrowserActionPredicate } from '@/lib/file-preview'
@@ -73,7 +74,8 @@ export default function CombinedDiffViewer({
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { scrollContainerRef, viewportNode, setViewport, beforeDetachRef, releaseViewport } =
+    useCombinedDiffViewport()
 
   const registry = useCombinedDiffSectionLoadRegistry(sections)
   const entrySet = useCombinedDiffEntrySet({
@@ -136,12 +138,11 @@ export default function CombinedDiffViewer({
     if (container) {
       getCombinedDiffExtent(container).input()
     }
-  }, [])
+  }, [scrollContainerRef])
   const { cleanupActiveScrollbarDrag, handleScrollbarPointerDown, scrollThumb, updateScrollbar } =
     useCombinedDiffScrollbar({ markDirectScrollInput, scrollContainerRef })
   const virtualizer = useCombinedDiffVirtualizer({
     generation,
-    programmaticScrollMarks,
     renderedIndicesRef: registry.renderedIndicesRef,
     rowKeys: sectionRowKeys.rowKeys,
     scrollContainerRef,
@@ -153,11 +154,21 @@ export default function CombinedDiffViewer({
   const anchors = useCombinedDiffScrollAnchors({
     restorationKey: restore.restorationKey,
     scrollAnchorRef: restore.scrollAnchorRef,
-    scrollContainerRef,
+    viewportNode,
+    beforeDetachRef,
+    releaseViewport,
     scrollOffsetRef: restore.scrollOffsetRef,
     memoryLeaseRef: restore.memoryLeaseRef,
     virtualizer
   })
+
+  useCombinedDiffExtent(
+    viewportNode,
+    virtualizer,
+    programmaticScrollMarks.mark,
+    sections,
+    restore.restorationKey
+  )
 
   const toggleSection = useCallback(
     (index: number) => {
@@ -222,7 +233,7 @@ export default function CombinedDiffViewer({
     sideBySide: preferences.sideBySide,
     viewStateKey
   })
-  useCombinedDiffScrollPersistence({ anchors, scrollContainerRef, updateScrollbar })
+  useCombinedDiffScrollPersistence({ viewportNode, updateScrollbar })
 
   const openAlternateDiff = useCallback(() => {
     if (!file.combinedAlternate) {
@@ -244,7 +255,7 @@ export default function CombinedDiffViewer({
   const { setScrollSurfaceMounted } = notes
   const setScrollContainerRef = useCallback(
     (node: HTMLDivElement | null) => {
-      scrollContainerRef.current = node
+      setViewport(node)
       setScrollSurfaceMounted(node !== null)
       if (node === null) {
         cleanupActiveScrollbarDrag()
@@ -252,7 +263,7 @@ export default function CombinedDiffViewer({
       }
       window.requestAnimationFrame(updateScrollbar)
     },
-    [cleanupActiveScrollbarDrag, setScrollSurfaceMounted, updateScrollbar]
+    [cleanupActiveScrollbarDrag, setScrollSurfaceMounted, setViewport, updateScrollbar]
   )
 
   const skippedConflicts = file.skippedConflicts

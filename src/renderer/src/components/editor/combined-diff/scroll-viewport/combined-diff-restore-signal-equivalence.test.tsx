@@ -1,5 +1,12 @@
 // @vitest-environment happy-dom
-import { act, renderHook } from '@testing-library/react'
+import { act, renderHook, render } from '@testing-library/react'
+import { useCallback, useRef, useState } from 'react'
+import {
+  claimCombinedDiffView,
+  readCombinedDiffViewMemory,
+  releaseCombinedDiffView,
+  clearCombinedDiffViewMemory
+} from '../remember-view/combined-diff-view-cache'
 import { afterEach, expect, it, vi } from 'vitest'
 import { Virtualizer } from '@tanstack/react-virtual'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
@@ -9,7 +16,7 @@ import {
   getCombinedDiffExtent,
   publishCombinedDiffMeasurements
 } from '../../combined-diff-extent-dom'
-import { useCombinedDiffExtent } from '../../use-combined-diff-extent'
+import { useCombinedDiffExtent, useCombinedDiffViewport } from '../../use-combined-diff-extent'
 import { useCombinedDiffScrollAnchors } from './use-combined-diff-scroll-anchors'
 
 const section = (key: string): DiffSection => ({
@@ -26,6 +33,7 @@ const section = (key: string): DiffSection => ({
 })
 
 afterEach(() => {
+  clearCombinedDiffViewMemory()
   document.body.replaceChildren()
   vi.unstubAllGlobals()
 })
@@ -70,6 +78,7 @@ it('keeps native Escape ownership through Changes structural rekeys and staged p
   }
   const args = {
     restorationKey: 'view-one',
+    viewportNode: viewport,
     clampRestoreCount: 0,
     generation: 1,
     hasDirectScrollInput: () => false,
@@ -91,8 +100,13 @@ it('keeps native Escape ownership through Changes structural rekeys and staged p
     virtualizer
   }
   const hook = renderHook(() => {
-    useCombinedDiffExtent(args.scrollContainerRef, virtualizer, undefined, sections)
-    return useCombinedDiffScrollAnchors(args)
+    useCombinedDiffExtent(args.scrollContainerRef.current, virtualizer, undefined, sections)
+    const lifecycle = useCombinedDiffViewport()
+    return useCombinedDiffScrollAnchors({
+      ...args,
+      beforeDetachRef: lifecycle.beforeDetachRef,
+      releaseViewport: lifecycle.releaseViewport
+    })
   })
   const owner = getCombinedDiffExtent(viewport)
   expect(viewport.scrollTop).toBe(1547)
@@ -147,4 +161,107 @@ it('keeps native Escape ownership through Changes structural rekeys and staged p
   expect(restores).not.toHaveBeenCalled()
   hook.unmount()
   unmount()
+})
+
+it('imports a saved context on null-then-attached viewport and exports the outgoing node before tab teardown', () => {
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  )
+  const sections = [section('clip-0'), section('clip-a')]
+  const lease = claimCombinedDiffView('tab-route', 'worktree')
+  let node: HTMLDivElement | null = null
+  let attach: () => void = () => {}
+  let detach: () => void = () => {}
+  const scrollRef: { current: HTMLDivElement | null } = { current: null }
+  const virtualizer = new Virtualizer<HTMLDivElement, Element>({
+    count: 2,
+    getScrollElement: () => scrollRef.current,
+    getItemKey: (index) => sections[index]!.key,
+    estimateSize: (index) => (index === 0 ? 2190 : 20000),
+    initialRect: { width: 800, height: 803 },
+    observeElementRect: (_instance, callback) => {
+      callback({ width: 800, height: 803 })
+      return () => {}
+    },
+    observeElementOffset: (_instance, callback) => {
+      callback(scrollRef.current?.scrollTop ?? 0, false)
+      return () => {}
+    },
+    scrollToFn: vi.fn(),
+    onChange: (instance) => publishCombinedDiffMeasurements(instance)
+  })
+  const dispose = virtualizer._didMount()
+  function Viewer() {
+    const [visible, setVisible] = useState(false)
+    const { viewportNode, setViewport, beforeDetachRef, releaseViewport } =
+      useCombinedDiffViewport()
+    const anchor = useRef<VirtualizedScrollAnchor>({ key: 'clip-a', offset: 19067 })
+    const offset = useRef(21257)
+    const memoryLeaseRef = useRef(lease)
+    attach = () => setVisible(true)
+    detach = () => setVisible(false)
+    const ref = useCallback(
+      (element: HTMLDivElement | null) => {
+        const outgoing = scrollRef.current
+        setViewport(element)
+        scrollRef.current = element
+        if (!element && outgoing) {
+          outgoing.scrollTop = 0
+        }
+        node = element
+        if (element) {
+          Object.defineProperty(element, 'clientHeight', { value: 803 })
+        }
+      },
+      [setViewport]
+    )
+    const args = {
+      restorationKey: 'tab-route',
+      viewportNode,
+      beforeDetachRef,
+      releaseViewport,
+      scrollContainerRef: scrollRef,
+      scrollAnchorRef: anchor,
+      scrollOffsetRef: offset,
+      memoryLeaseRef,
+      virtualizer
+    }
+    useCombinedDiffScrollAnchors(args)
+    useCombinedDiffExtent(viewportNode, virtualizer, undefined, sections)
+    virtualizer._willUpdate()
+    return visible ? (
+      <div ref={ref}>
+        <div data-combined-diff-extent="" />
+      </div>
+    ) : null
+  }
+  const view = render(<Viewer />)
+  expect(scrollRef.current).toBeNull()
+  act(() => attach())
+  const outgoing = scrollRef.current
+  if (!outgoing) {
+    throw new Error('Viewport did not attach')
+  }
+  expect(outgoing.scrollTop).toBe(21257)
+  const owner = getCombinedDiffExtent(outgoing)
+  act(() => owner.navigate(21030))
+  act(() => detach())
+  expect(node).toBeNull()
+  expect(readCombinedDiffViewMemory('tab-route')?.scrollTop).toBe(21030)
+  act(() => attach())
+  const incoming = scrollRef.current
+  if (!incoming) {
+    throw new Error('Viewport did not remount')
+  }
+  expect(incoming).not.toBe(outgoing)
+  expect(incoming.scrollTop).toBe(21030)
+  act(() => virtualizer.resizeItem(0, 2390))
+  expect(incoming.scrollTop).toBe(21230)
+  view.unmount()
+  dispose()
+  releaseCombinedDiffView(lease)
 })

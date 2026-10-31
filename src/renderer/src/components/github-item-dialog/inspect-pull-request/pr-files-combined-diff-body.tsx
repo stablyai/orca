@@ -66,7 +66,7 @@ export function PRFilesCombinedDiffBody({
   activeTreeSectionKey: string | null
   viewedSectionKeys: Set<string>
   handleTreeNavigate: (entry: CombinedDiffFileTreeEntry) => void
-  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  scrollContainerRef: React.RefCallback<HTMLDivElement>
   virtualizer: Virtualizer<HTMLDivElement, Element>
   sections: DiffSection[]
   isDark: boolean

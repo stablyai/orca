@@ -1,4 +1,7 @@
-import { useCombinedDiffExtent } from '@/components/editor/use-combined-diff-extent'
+import {
+  useCombinedDiffExtent,
+  useCombinedDiffViewport
+} from '@/components/editor/use-combined-diff-extent'
 import {
   publishCombinedDiffMeasurements,
   observeCombinedDiffOffset,
@@ -10,7 +13,7 @@ import {
   combinedDiffViewportAttributes,
   combinedDiffRowAttributes
 } from '@/components/editor/combined-diff-viewport'
-import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { useVirtualizer } from '@tanstack/react-virtual'
 import type { editor as monacoEditor } from 'monaco-editor'
 import { translate } from '@/i18n/i18n'
@@ -30,6 +33,7 @@ import {
   PR_DIFF_OVERSCAN,
   getPRFileSectionKey,
   gitHubPRFileToBranchEntry,
+  createPRFileDiffSections,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
 import { githubRepoIdentityKey } from '../../../../../shared/github/repository-identity-key'
@@ -121,7 +125,8 @@ export function PRFilesCombinedDiffViewer({
   const [activeTreeSectionKey, setActiveTreeSectionKey] = usePRFileActiveSection(entrySignature)
   // Why: short virtualizer-key token; entrySignature serializes every file and would be copied into every item key.
   const [entryRevision, setEntryRevision] = useState(0)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { scrollContainerRef, viewportNode, setViewport, beforeDetachRef, releaseViewport } =
+    useCombinedDiffViewport()
   const pendingRestoreScrollTopRef = useRef<number | null>(null)
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
@@ -134,7 +139,10 @@ export function PRFilesCombinedDiffViewer({
     sectionsRef.current = sections
   })
 
-  useEffect(() => {
+  const restoredContextRef = useRef<string | null>(null)
+  useLayoutEffect(() => {
+    const restoringContext = restoredContextRef.current !== viewStateKey
+    restoredContextRef.current = viewStateKey
     // Why: bump generation so stale async diff loads from the previous view can't patch the restored sections.
     generationRef.current += 1
     setEntryRevision((revision) => revision + 1)
@@ -150,32 +158,19 @@ export function PRFilesCombinedDiffViewer({
       setSideBySide(cached.sideBySide)
       setFileTreeCollapsed(cached.fileTreeCollapsed)
       setActiveTreeSectionKey(cached.activeTreeSectionKey)
-      pendingRestoreScrollTopRef.current =
-        prFilesDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+      if (restoringContext) {
+        pendingRestoreScrollTopRef.current =
+          prFilesDiffScrollTopCache.get(viewStateKey) ?? cached.scrollTop
+      }
       return
     }
 
     loadedIndicesRef.current.clear()
     loadingIndicesRef.current.clear()
-    pendingRestoreScrollTopRef.current = prFilesDiffScrollTopCache.get(viewStateKey) ?? null
-    setSections(
-      entries.map((entry) => ({
-        key: getPRFileSectionKey(entry.path),
-        path: entry.path,
-        oldPath: entry.oldPath,
-        status: entry.status,
-        added: entry.added,
-        removed: entry.removed,
-        originalContent: '',
-        modifiedContent: '',
-        collapsed: false,
-        loading: true,
-        error: undefined,
-        dirty: false,
-        diffResult: null,
-        largeDiffRenderLimit: null
-      }))
-    )
+    if (restoringContext) {
+      pendingRestoreScrollTopRef.current = prFilesDiffScrollTopCache.get(viewStateKey) ?? 0
+    }
+    setSections(createPRFileDiffSections(entries))
   }, [entries, entrySignature, setActiveTreeSectionKey, setSectionHeights, viewStateKey])
 
   const { loadSection, retrySection, toggleSection, setAllSectionsCollapsed } =
@@ -232,8 +227,6 @@ export function PRFilesCombinedDiffViewer({
     }
   })
 
-  useCombinedDiffExtent(scrollContainerRef, virtualizer, undefined, sections)
-
   useLayoutEffect(() => {
     virtualizer.measure()
   }, [sideBySide, virtualizer])
@@ -248,9 +241,13 @@ export function PRFilesCombinedDiffViewer({
     fileTreeCollapsed,
     activeTreeSectionKey: visibleActiveTreeSectionKey,
     loadedIndicesRef,
-    scrollContainerRef,
+    viewportNode,
+    beforeDetachRef,
+    releaseViewport,
     pendingRestoreScrollTopRef
   })
+
+  useCombinedDiffExtent(viewportNode, virtualizer, undefined, sections, viewStateKey)
 
   const handleTreeNavigate = useCallback(
     (entry: CombinedDiffFileTreeEntry) => {
@@ -352,7 +349,7 @@ export function PRFilesCombinedDiffViewer({
         <div
           {...combinedDiffViewportAttributes}
           style={{ overflowAnchor: 'none' }}
-          ref={scrollContainerRef}
+          ref={setViewport}
           className="min-w-0 flex-1 overflow-auto scrollbar-editor"
         >
           <div data-combined-diff-extent className="relative w-full">

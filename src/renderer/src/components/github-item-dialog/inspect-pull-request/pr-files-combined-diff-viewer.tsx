@@ -1,4 +1,7 @@
-import { useCombinedDiffExtent } from '@/components/editor/use-combined-diff-extent'
+import {
+  useCombinedDiffExtent,
+  useCombinedDiffViewport
+} from '@/components/editor/use-combined-diff-extent'
 import {
   publishCombinedDiffMeasurements,
   observeCombinedDiffOffset,
@@ -24,6 +27,7 @@ import {
   PR_DIFF_OVERSCAN,
   getPRFileSectionKey,
   gitHubPRFileToBranchEntry,
+  createPRFileDiffSections,
   type PRFilesCombinedDiffViewerProps
 } from '@/components/github/pr-file-diff-mapping'
 import { formatRelativeTime } from '@/components/github/work-item-state-presentation'
@@ -106,24 +110,7 @@ function PRFilesCombinedDiffSections({
   const [entries] = useState<GitBranchChangeEntry[]>(() =>
     getCombinedDiffBranchEntriesInTreeOrder('commit', files.map(gitHubPRFileToBranchEntry))
   )
-  const [sections, setSections] = useState<DiffSection[]>(() =>
-    entries.map((entry) => ({
-      key: getPRFileSectionKey(entry.path),
-      path: entry.path,
-      oldPath: entry.oldPath,
-      status: entry.status,
-      added: entry.added,
-      removed: entry.removed,
-      originalContent: '',
-      modifiedContent: '',
-      collapsed: false,
-      loading: true,
-      error: undefined,
-      dirty: false,
-      diffResult: null,
-      largeDiffRenderLimit: null
-    }))
-  )
+  const [sections, setSections] = useState<DiffSection[]>(() => createPRFileDiffSections(entries))
   const fileByPath = useMemo(() => new Map(files.map((file) => [file.path, file])), [files])
   // Why: an inline arrow here re-keys every mounted row's comment decorator on every render.
   const getCommentableLineNumbers = useCallback(
@@ -163,7 +150,7 @@ function PRFilesCombinedDiffSections({
   )
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [activeTreeSectionKey, setActiveTreeSectionKey] = useState<string | null>(null)
-  const scrollContainerRef = useRef<HTMLDivElement>(null)
+  const { scrollContainerRef, viewportNode, setViewport } = useCombinedDiffViewport()
   const loadedIndicesRef = useRef<Set<number>>(new Set())
   const loadingIndicesRef = useRef<Set<number>>(new Set())
   const sectionsRef = useRef<DiffSection[]>(sections)
@@ -264,7 +251,7 @@ function PRFilesCombinedDiffSections({
     }
   })
 
-  useCombinedDiffExtent(scrollContainerRef, virtualizer, undefined, sections)
+  useCombinedDiffExtent(viewportNode, virtualizer, undefined, sections)
 
   useLayoutEffect(() => {
     virtualizer.measure()
@@ -361,7 +348,7 @@ function PRFilesCombinedDiffSections({
       activeTreeSectionKey={activeTreeSectionKey}
       viewedSectionKeys={viewedSectionKeys}
       handleTreeNavigate={handleTreeNavigate}
-      scrollContainerRef={scrollContainerRef}
+      scrollContainerRef={setViewport}
       virtualizer={virtualizer}
       sections={sections}
       isDark={isDark}

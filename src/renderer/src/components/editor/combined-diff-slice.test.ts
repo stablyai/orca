@@ -63,7 +63,25 @@ function fixture() {
   const makePane = (padding: number) => {
     let scroll = padding
     const reveal = signal<editor.IEditorRevealRequest>()
-    const change = signal<{ scrollTop: number; scrollTopChanged: boolean }>()
+    let emittedScroll = padding
+    const changed = signal<{
+      scrollTop: number
+      scrollTopChanged: boolean
+      scrollTopDelta: number
+      scrollSource?: 'geometry'
+    }>()
+    const change = {
+      event: changed.event,
+      fire: (event: {
+        scrollTop: number
+        scrollTopChanged: boolean
+        scrollSource?: 'geometry'
+      }) => {
+        const scrollTopDelta = event.scrollTop - emittedScroll
+        emittedScroll = event.scrollTop
+        changed.fire({ ...event, scrollTopDelta })
+      }
+    }
     const size = signal<void>()
     const replaced = signal<void>()
     const node = document.createElement('div')
@@ -99,7 +117,8 @@ function fixture() {
   const original = makePane(19)
   const modified = makePane(0)
   const layout = vi.fn(() => {
-    original.change.fire({ scrollTop: 200000, scrollTopChanged: true })
+    original.pane.setScrollTop(200000)
+    original.pane.setScrollTop(0)
     modified.size.fire()
   })
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this controller test supplies every diff/pane member the controller calls.
@@ -293,7 +312,7 @@ it('reveals only the requested Find chrome, including an already-open expanded R
 
 it('does not reverse extent changes and does not lose newer input in an invalidated microtask', async () => {
   const f = fixture()
-  f.modified.change.fire({ scrollTop: 400, scrollTopChanged: true })
+  f.modified.change.fire({ scrollTop: 400, scrollTopChanged: true, scrollSource: 'geometry' })
   f.modified.size.fire()
   await Promise.resolve()
   expect(f.writes()).toBe(0)
@@ -432,4 +451,59 @@ it('does not commit a native anchor if its editor is disposed during extent publ
   await Promise.resolve()
   expect(f.viewport.scrollTop).toBe(3700)
   expect(f.writes()).toBe(1)
+})
+
+it.each(['before', 'after'] as const)(
+  'keeps the numeric item point when mode compensation arrives %s size publication',
+  async (order) => {
+    const f = fixture()
+    f.owner.navigate(3000)
+    f.viewport.dispatchEvent(new Event('scroll'))
+    const before = f.writes()
+    const compensation = () => {
+      f.modified.set(0)
+      f.modified.change.fire({ scrollTop: 0, scrollTopChanged: true, scrollSource: 'geometry' })
+      f.original.set(19)
+      f.original.change.fire({ scrollTop: 19, scrollTopChanged: true, scrollSource: 'geometry' })
+    }
+    if (order === 'before') {
+      compensation()
+    }
+    f.modified.size.fire()
+    if (order === 'after') {
+      compensation()
+    }
+    await Promise.resolve()
+    expect(f.viewport.scrollTop).toBe(3000)
+    expect(f.writes()).toBe(before)
+    f.growPrefix(200)
+    expect(f.viewport.scrollTop).toBe(3200)
+    f.dispose()
+  }
+)
+
+it('keeps a real local scroll intent when a queued geometry acknowledgement follows it', async () => {
+  const f = fixture()
+  f.owner.navigate(1000)
+  f.viewport.dispatchEvent(new Event('scroll'))
+  f.modified.set(452)
+  f.modified.change.fire({ scrollTop: 452, scrollTopChanged: true })
+  f.modified.set(0)
+  f.modified.change.fire({ scrollTop: 0, scrollTopChanged: true, scrollSource: 'geometry' })
+  await Promise.resolve()
+  expect(f.viewport.scrollTop).toBe(1020)
+  f.dispose()
+})
+
+it('resolves a new target after queued geometry from the coherent forward pane mapping', async () => {
+  const f = fixture()
+  f.owner.navigate(3000)
+  f.viewport.dispatchEvent(new Event('scroll'))
+  f.modified.set(0)
+  f.modified.change.fire({ scrollTop: 0, scrollTopChanged: true, scrollSource: 'geometry' })
+  f.request()
+  await Promise.resolve()
+  expect(961 - f.viewport.scrollTop).toBeGreaterThanOrEqual(32)
+  expect(980 - f.viewport.scrollTop).toBeLessThanOrEqual(700)
+  f.dispose()
 })

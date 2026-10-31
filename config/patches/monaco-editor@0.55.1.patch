@@ -1,8 +1,7 @@
 diff --git a/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js b/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js
-index cbe9bb8e8bb97ca69e1026d2335857ec7ae32a16..86c4f393b76a4d433be297833188058c99a168e8 100644
 --- a/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js
 +++ b/esm/vs/editor/browser/widget/diffEditor/utils/editorGutter.js
-@@ -27,6 +27,15 @@ class EditorGutter extends Disposable {
+@@ -27,6 +27,15 @@
          this.editorOnDidContentSizeChange = observableSignalFromEvent('onDidContentSizeChange', this._editor.onDidContentSizeChange);
          this.domNodeSizeChanged = observableSignal('domNodeSizeChanged');
          this.views = new Map();
@@ -38,6 +37,24 @@ diff --git a/esm/vs/editor/browser/widget/codeEditor/codeEditorWidget.js b/esm/v
          this._onDidDispose = this._register(new Emitter());
          this.onDidDispose = this._onDidDispose.event;
          this._onDidChangeModelContent = this._register(new Emitter({ deliveryQueue: this._deliveryQueue }));
+@@ -686,7 +689,7 @@
+             scrollLeft: newScrollLeft
+         }, scrollType);
+     }
+-    setScrollTop(newScrollTop, scrollType = 1 /* editorCommon.ScrollType.Immediate */) {
++    setScrollTop(newScrollTop, scrollType = 1 /* editorCommon.ScrollType.Immediate */, scrollSource) {
+         if (!this._modelData) {
+             return;
+         }
+@@ -695,7 +698,7 @@
+         }
+         this._modelData.viewModel.viewLayout.setScrollPosition({
+             scrollTop: newScrollTop
+-        }, scrollType);
++        }, scrollType, scrollSource);
+     }
+     setScrollPosition(position, scrollType = 1 /* editorCommon.ScrollType.Immediate */) {
+         if (!this._modelData) {
 @@ -716,11 +719,13 @@
          const contributionsState = this._contributions.saveViewState();
          const cursorState = this._modelData.viewModel.saveCursorState();
@@ -109,7 +126,17 @@ diff --git a/esm/vs/editor/contrib/find/browser/findController.js b/esm/vs/edito
 diff --git a/monaco.d.ts b/monaco.d.ts
 --- a/monaco.d.ts
 +++ b/monaco.d.ts
-@@ -5967,7 +5967,18 @@
+@@ -520,6 +520,9 @@
+ }
+ 
+ interface IScrollEvent {
++	/** Repository-owned causal acknowledgement, retained through queued and peer scroll events. */
++	readonly scrollSource?: 'geometry';
++	readonly scrollTopDelta: number;
+ 	readonly scrollTop: number;
+ 	readonly scrollLeft: number;
+ 	readonly scrollWidth: number;
+@@ -5967,7 +5970,18 @@
  	/**
  	 * A rich code editor.
  	 */
@@ -128,10 +155,29 @@ diff --git a/monaco.d.ts b/monaco.d.ts
  		/**
  		 * An event emitted when the content of the current model has changed.
  		 * @event
+@@ -6216,7 +6230,7 @@
+ 		/**
+ 		 * Change the scrollTop of the editor's viewport.
+ 		 */
+-		setScrollTop(newScrollTop: number, scrollType?: ScrollType): void;
++		setScrollTop(newScrollTop: number, scrollType?: ScrollType, scrollSource?: 'geometry'): void;
+ 		/**
+ 		 * Change the scroll position of the editor's viewport.
+ 		 */
 diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
 --- a/esm/vs/editor/editor.api.d.ts
 +++ b/esm/vs/editor/editor.api.d.ts
-@@ -5967,7 +5967,18 @@
+@@ -520,6 +520,9 @@
+ }
+ 
+ interface IScrollEvent {
++	/** Repository-owned causal acknowledgement, retained through queued and peer scroll events. */
++	readonly scrollSource?: 'geometry';
++	readonly scrollTopDelta: number;
+ 	readonly scrollTop: number;
+ 	readonly scrollLeft: number;
+ 	readonly scrollWidth: number;
+@@ -5967,7 +5970,18 @@
  	/**
  	 * A rich code editor.
  	 */
@@ -150,6 +196,15 @@ diff --git a/esm/vs/editor/editor.api.d.ts b/esm/vs/editor/editor.api.d.ts
  		/**
  		 * An event emitted when the content of the current model has changed.
  		 * @event
+@@ -6216,7 +6230,7 @@
+ 		/**
+ 		 * Change the scrollTop of the editor's viewport.
+ 		 */
+-		setScrollTop(newScrollTop: number, scrollType?: ScrollType): void;
++		setScrollTop(newScrollTop: number, scrollType?: ScrollType, scrollSource?: 'geometry'): void;
+ 		/**
+ 		 * Change the scroll position of the editor's viewport.
+ 		 */
 diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
 --- a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
 +++ b/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegionsFeature.js
@@ -169,3 +224,349 @@ diff --git a/esm/vs/editor/browser/widget/diffEditor/features/hideUnchangedRegio
                  }
                  this._nodes.bottom.classList.toggle('dragging', false);
                  this._nodes.root.classList.toggle('dragging', false);
+diff --git a/esm/vs/base/common/scrollable.js b/esm/vs/base/common/scrollable.js
+--- a/esm/vs/base/common/scrollable.js
++++ b/esm/vs/base/common/scrollable.js
+@@ -60,7 +60,7 @@
+     withScrollPosition(update) {
+         return new ScrollState(this._forceIntegerValues, this.width, this.scrollWidth, (typeof update.scrollLeft !== 'undefined' ? update.scrollLeft : this.rawScrollLeft), this.height, this.scrollHeight, (typeof update.scrollTop !== 'undefined' ? update.scrollTop : this.rawScrollTop));
+     }
+-    createScrollEvent(previous, inSmoothScrolling) {
++    createScrollEvent(previous, inSmoothScrolling, scrollSource) {
+         const widthChanged = (this.width !== previous.width);
+         const scrollWidthChanged = (this.scrollWidth !== previous.scrollWidth);
+         const scrollLeftChanged = (this.scrollLeft !== previous.scrollLeft);
+@@ -69,6 +69,7 @@
+         const scrollTopChanged = (this.scrollTop !== previous.scrollTop);
+         return {
+             inSmoothScrolling: inSmoothScrolling,
++            scrollSource: scrollSource,
+             oldWidth: previous.width,
+             oldScrollWidth: previous.scrollWidth,
+             oldScrollLeft: previous.scrollLeft,
+@@ -117,9 +118,9 @@
+     getScrollDimensions() {
+         return this._state;
+     }
+-    setScrollDimensions(dimensions, useRawScrollPositions) {
++    setScrollDimensions(dimensions, useRawScrollPositions, scrollSource) {
+         const newState = this._state.withScrollDimensions(dimensions, useRawScrollPositions);
+-        this._setState(newState, Boolean(this._smoothScrolling));
++        this._setState(newState, Boolean(this._smoothScrolling), scrollSource);
+         // Validate outstanding animated scroll position target
+         this._smoothScrolling?.acceptScrollDimensions(this._state);
+     }
+@@ -140,7 +141,7 @@
+     getCurrentScrollPosition() {
+         return this._state;
+     }
+-    setScrollPositionNow(update) {
++    setScrollPositionNow(update, scrollSource) {
+         // no smooth scrolling requested
+         const newState = this._state.withScrollPosition(update);
+         // Terminate any outstanding smooth scrolling
+@@ -148,12 +149,12 @@
+             this._smoothScrolling.dispose();
+             this._smoothScrolling = null;
+         }
+-        this._setState(newState, false);
+-    }
+-    setScrollPositionSmooth(update, reuseAnimation) {
++        this._setState(newState, false, scrollSource);
++    }
++    setScrollPositionSmooth(update, reuseAnimation, scrollSource) {
+         if (this._smoothScrollDuration === 0) {
+             // Smooth scrolling not supported.
+-            return this.setScrollPositionNow(update);
++            return this.setScrollPositionNow(update, scrollSource);
+         }
+         if (this._smoothScrolling) {
+             // Combine our pending scrollLeft/scrollTop with incoming scrollLeft/scrollTop
+@@ -182,6 +183,7 @@
+             const validTarget = this._state.withScrollPosition(update);
+             this._smoothScrolling = SmoothScrollingOperation.start(this._state, validTarget, this._smoothScrollDuration);
+         }
++        this._smoothScrolling.scrollSource = scrollSource;
+         // Begin smooth scrolling animation
+         this._smoothScrolling.animationFrameDisposable = this._scheduleAtNextAnimationFrame(() => {
+             if (!this._smoothScrolling) {
+@@ -200,7 +202,7 @@
+         }
+         const update = this._smoothScrolling.tick();
+         const newState = this._state.withScrollPosition(update);
+-        this._setState(newState, true);
++        this._setState(newState, true, this._smoothScrolling.scrollSource);
+         if (!this._smoothScrolling) {
+             // Looks like someone canceled the smooth scrolling
+             // from the scroll event handler
+@@ -220,14 +222,14 @@
+             this._performSmoothScrolling();
+         });
+     }
+-    _setState(newState, inSmoothScrolling) {
++    _setState(newState, inSmoothScrolling, scrollSource) {
+         const oldState = this._state;
+         if (oldState.equals(newState)) {
+             // no change
+             return;
+         }
+         this._state = newState;
+-        this._onScroll.fire(this._state.createScrollEvent(oldState, inSmoothScrolling));
++        this._onScroll.fire(this._state.createScrollEvent(oldState, inSmoothScrolling, scrollSource));
+     }
+ }
+ class SmoothScrollingUpdate {
+diff --git a/esm/vs/editor/common/viewLayout/viewLayout.js b/esm/vs/editor/common/viewLayout/viewLayout.js
+--- a/esm/vs/editor/common/viewLayout/viewLayout.js
++++ b/esm/vs/editor/common/viewLayout/viewLayout.js
+@@ -78,7 +78,7 @@
+             scrollWidth: dimensions.scrollWidth,
+             height: dimensions.height,
+             scrollHeight: dimensions.scrollHeight
+-        }, true);
++        }, true, 'geometry');
+         const contentWidthChanged = (oldDimensions.contentWidth !== dimensions.contentWidth);
+         const contentHeightChanged = (oldDimensions.contentHeight !== dimensions.contentHeight);
+         if (contentWidthChanged || contentHeightChanged) {
+@@ -91,11 +91,11 @@
+     getCurrentScrollPosition() {
+         return this._scrollable.getCurrentScrollPosition();
+     }
+-    setScrollPositionNow(update) {
+-        this._scrollable.setScrollPositionNow(update);
+-    }
+-    setScrollPositionSmooth(update) {
+-        this._scrollable.setScrollPositionSmooth(update);
++    setScrollPositionNow(update, scrollSource) {
++        this._scrollable.setScrollPositionNow(update, scrollSource);
++    }
++    setScrollPositionSmooth(update, scrollSource) {
++        this._scrollable.setScrollPositionSmooth(update, undefined, scrollSource);
+     }
+     hasPendingScrollAnimation() {
+         return this._scrollable.hasPendingScrollAnimation();
+@@ -345,12 +345,12 @@
+     validateScrollPosition(scrollPosition) {
+         return this._scrollable.validateScrollPosition(scrollPosition);
+     }
+-    setScrollPosition(position, type) {
++    setScrollPosition(position, type, scrollSource) {
+         if (type === 1 /* ScrollType.Immediate */) {
+-            this._scrollable.setScrollPositionNow(position);
++            this._scrollable.setScrollPositionNow(position, scrollSource);
+         }
+         else {
+-            this._scrollable.setScrollPositionSmooth(position);
++            this._scrollable.setScrollPositionSmooth(position, scrollSource);
+         }
+     }
+     hasPendingScrollAnimation() {
+diff --git a/esm/vs/editor/common/viewModel/viewModelImpl.js b/esm/vs/editor/common/viewModel/viewModelImpl.js
+--- a/esm/vs/editor/common/viewModel/viewModelImpl.js
++++ b/esm/vs/editor/common/viewModel/viewModelImpl.js
+@@ -71,7 +71,7 @@
+                 this._viewportStart.invalidate();
+             }
+             this._eventDispatcher.emitSingleViewEvent(new ViewScrollChangedEvent(e));
+-            this._eventDispatcher.emitOutgoingEvent(new ScrollChangedEvent(e.oldScrollWidth, e.oldScrollLeft, e.oldScrollHeight, e.oldScrollTop, e.scrollWidth, e.scrollLeft, e.scrollHeight, e.scrollTop));
++            this._eventDispatcher.emitOutgoingEvent(new ScrollChangedEvent(e.oldScrollWidth, e.oldScrollLeft, e.oldScrollHeight, e.oldScrollTop, e.scrollWidth, e.scrollLeft, e.scrollHeight, e.scrollTop, e.scrollSource));
+         }));
+         this._register(this.viewLayout.onDidContentSizeChange((e) => {
+             this._eventDispatcher.emitOutgoingEvent(e);
+@@ -319,7 +319,7 @@
+                 if (modelRange) {
+                     const viewPosition = this.coordinatesConverter.convertModelPositionToViewPosition(modelRange.getStartPosition());
+                     const viewPositionTop = this.viewLayout.getVerticalOffsetForLineNumber(viewPosition.lineNumber);
+-                    this.viewLayout.setScrollPosition({ scrollTop: viewPositionTop + this._viewportStart.startLineDelta }, 1 /* ScrollType.Immediate */);
++                    this.viewLayout.setScrollPosition({ scrollTop: viewPositionTop + this._viewportStart.startLineDelta }, 1 /* ScrollType.Immediate */, 'geometry');
+                 }
+             }
+             try {
+@@ -1156,7 +1156,7 @@
+         }
+         const viewPosition = coordinatesConverter.convertModelPositionToViewPosition(this.viewportStartModelPosition);
+         const viewPositionTop = viewLayout.getVerticalOffsetForLineNumber(viewPosition.lineNumber);
+-        viewLayout.setScrollPosition({ scrollTop: viewPositionTop + this.startLineDelta }, 1 /* ScrollType.Immediate */);
++        viewLayout.setScrollPosition({ scrollTop: viewPositionTop + this.startLineDelta }, 1 /* ScrollType.Immediate */, 'geometry');
+     }
+ }
+ 
+diff --git a/esm/vs/editor/common/viewModelEventDispatcher.js b/esm/vs/editor/common/viewModelEventDispatcher.js
+--- a/esm/vs/editor/common/viewModelEventDispatcher.js
++++ b/esm/vs/editor/common/viewModelEventDispatcher.js
+@@ -22,6 +22,13 @@
+         this._emitOutgoingEvents();
+     }
+     _addOutgoingEvent(e) {
++        if (e.kind === 3 /* OutgoingViewModelEventKind.ScrollChanged */) {
++            const last = this._outgoingEvents[this._outgoingEvents.length - 1];
++            const merged = last?.kind === e.kind ? last.attemptToMerge(e) : null;
++            if (merged) this._outgoingEvents[this._outgoingEvents.length - 1] = merged;
++            else this._outgoingEvents.push(e);
++            return;
++        }
+         for (let i = 0, len = this._outgoingEvents.length; i < len; i++) {
+             const mergeResult = (this._outgoingEvents[i].kind === e.kind ? this._outgoingEvents[i].attemptToMerge(e) : null);
+             if (mergeResult) {
+@@ -190,8 +197,10 @@
+     }
+ }
+ class ScrollChangedEvent {
+-    constructor(oldScrollWidth, oldScrollLeft, oldScrollHeight, oldScrollTop, scrollWidth, scrollLeft, scrollHeight, scrollTop) {
++    constructor(oldScrollWidth, oldScrollLeft, oldScrollHeight, oldScrollTop, scrollWidth, scrollLeft, scrollHeight, scrollTop, scrollSource) {
+         this.kind = 3 /* OutgoingViewModelEventKind.ScrollChanged */;
++        this.scrollSource = scrollSource;
++        this.scrollTopDelta = scrollTop - oldScrollTop;
+         this._oldScrollWidth = oldScrollWidth;
+         this._oldScrollLeft = oldScrollLeft;
+         this._oldScrollHeight = oldScrollHeight;
+@@ -212,7 +221,10 @@
+         if (other.kind !== this.kind) {
+             return null;
+         }
+-        return new ScrollChangedEvent(this._oldScrollWidth, this._oldScrollLeft, this._oldScrollHeight, this._oldScrollTop, other.scrollWidth, other.scrollLeft, other.scrollHeight, other.scrollTop);
++        if (this.scrollSource !== other.scrollSource) {
++            return null;
++        }
++        return new ScrollChangedEvent(this._oldScrollWidth, this._oldScrollLeft, this._oldScrollHeight, this._oldScrollTop, other.scrollWidth, other.scrollLeft, other.scrollHeight, other.scrollTop, this.scrollSource);
+     }
+ }
+ class ViewZonesChangedEvent {
+diff --git a/esm/vs/editor/browser/stableEditorScroll.js b/esm/vs/editor/browser/stableEditorScroll.js
+--- a/esm/vs/editor/browser/stableEditorScroll.js
++++ b/esm/vs/editor/browser/stableEditorScroll.js
+@@ -32,7 +32,7 @@
+         }
+         if (this._visiblePosition) {
+             const visiblePositionScrollTop = editor.getTopForPosition(this._visiblePosition.lineNumber, this._visiblePosition.column);
+-            editor.setScrollTop(visiblePositionScrollTop + this._visiblePositionScrollDelta);
++            editor.setScrollTop(visiblePositionScrollTop + this._visiblePositionScrollDelta, 1 /* ScrollType.Immediate */, 'geometry');
+         }
+     }
+     restoreRelativeVerticalPositionOfCursor(editor) {
+@@ -45,7 +45,7 @@
+             return;
+         }
+         const offset = editor.getTopForLineNumber(currentCursorPosition.lineNumber) - editor.getTopForLineNumber(this._cursorPosition.lineNumber);
+-        editor.setScrollTop(editor.getScrollTop() + offset, 1 /* ScrollType.Immediate */);
++        editor.setScrollTop(editor.getScrollTop() + offset, 1 /* ScrollType.Immediate */, 'geometry');
+     }
+ }
+ 
+diff --git a/esm/vs/editor/browser/view.js b/esm/vs/editor/browser/view.js
+--- a/esm/vs/editor/browser/view.js
++++ b/esm/vs/editor/browser/view.js
+@@ -491,7 +491,7 @@
+         this._context.viewModel.viewLayout.setScrollPosition({
+             scrollTop: scrollPosition.scrollTop,
+             scrollLeft: scrollPosition.scrollLeft
+-        }, 1 /* ScrollType.Immediate */);
++        }, 1 /* ScrollType.Immediate */, 'geometry');
+         this._context.viewModel.visibleLinesStabilized();
+     }
+     getOffsetForColumn(modelLineNumber, modelColumn) {
+diff --git a/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js b/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js
+--- a/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js
++++ b/esm/vs/editor/browser/widget/diffEditor/components/diffEditorViewZones/diffEditorViewZones.js
+@@ -328,7 +328,7 @@
+                 - (this._originalScrollOffsetAnimated.read(undefined) - this._modifiedScrollOffsetAnimated.read(reader))
+                 - (this._originalTopPadding.read(undefined) - this._modifiedTopPadding.read(reader));
+             if (newScrollTopModified !== this._editors.modified.getScrollTop()) {
+-                this._editors.modified.setScrollTop(newScrollTopModified, 1 /* ScrollType.Immediate */);
++                this._editors.modified.setScrollTop(newScrollTopModified, 1 /* ScrollType.Immediate */, 'geometry');
+             }
+         }));
+         this._register(autorun(reader => {
+@@ -337,7 +337,7 @@
+                 - (this._modifiedScrollOffsetAnimated.read(undefined) - this._originalScrollOffsetAnimated.read(reader))
+                 - (this._modifiedTopPadding.read(undefined) - this._originalTopPadding.read(reader));
+             if (newScrollTopOriginal !== this._editors.original.getScrollTop()) {
+-                this._editors.original.setScrollTop(newScrollTopOriginal, 1 /* ScrollType.Immediate */);
++                this._editors.original.setScrollTop(newScrollTopOriginal, 1 /* ScrollType.Immediate */, 'geometry');
+             }
+         }));
+         this._register(autorun(reader => {
+diff --git a/esm/vs/editor/contrib/find/browser/findWidget.js b/esm/vs/editor/contrib/find/browser/findWidget.js
+--- a/esm/vs/editor/contrib/find/browser/findWidget.js
++++ b/esm/vs/editor/contrib/find/browser/findWidget.js
+@@ -474,7 +474,7 @@
+             viewZone.heightInPx = this._getHeight();
+             this._viewZoneId = accessor.addZone(viewZone);
+             // scroll top adjust to make sure the editor doesn't scroll when adding viewzone at the beginning.
+-            this._codeEditor.setScrollTop(targetScrollTop || this._codeEditor.getScrollTop() + viewZone.heightInPx);
++            this._codeEditor.setScrollTop(targetScrollTop || this._codeEditor.getScrollTop() + viewZone.heightInPx, 1 /* ScrollType.Immediate */, 'geometry');
+         });
+     }
+     _showViewZone(adjustScroll = true) {
+@@ -500,7 +500,7 @@
+                 viewZone.heightInPx = newHeight;
+                 accessor.layoutZone(this._viewZoneId);
+                 if (adjustScroll) {
+-                    this._codeEditor.setScrollTop(this._codeEditor.getScrollTop() + scrollAdjustment);
++                    this._codeEditor.setScrollTop(this._codeEditor.getScrollTop() + scrollAdjustment, 1 /* ScrollType.Immediate */, 'geometry');
+                 }
+                 return;
+             }
+@@ -514,7 +514,7 @@
+                 viewZone.heightInPx = scrollAdjustment;
+                 this._viewZoneId = accessor.addZone(viewZone);
+                 if (adjustScroll) {
+-                    this._codeEditor.setScrollTop(this._codeEditor.getScrollTop() + scrollAdjustment);
++                    this._codeEditor.setScrollTop(this._codeEditor.getScrollTop() + scrollAdjustment, 1 /* ScrollType.Immediate */, 'geometry');
+                 }
+             }
+         });
+@@ -525,7 +525,7 @@
+                 accessor.removeZone(this._viewZoneId);
+                 this._viewZoneId = undefined;
+                 if (this._viewZone) {
+-                    this._codeEditor.setScrollTop(this._codeEditor.getScrollTop() - this._viewZone.heightInPx);
++                    this._codeEditor.setScrollTop(this._codeEditor.getScrollTop() - this._viewZone.heightInPx, 1 /* ScrollType.Immediate */, 'geometry');
+                     this._viewZone = undefined;
+                 }
+             }
+diff --git a/esm/vs/editor/contrib/inlineCompletions/browser/view/ghostText/ghostTextView.js b/esm/vs/editor/contrib/inlineCompletions/browser/view/ghostText/ghostTextView.js
+--- a/esm/vs/editor/contrib/inlineCompletions/browser/view/ghostText/ghostTextView.js
++++ b/esm/vs/editor/contrib/inlineCompletions/browser/view/ghostText/ghostTextView.js
+@@ -403,7 +403,7 @@
+         }
+         const cursorLineNumber = this._editor.getSelection()?.getStartPosition()?.lineNumber;
+         if (cursorLineNumber !== undefined && lineNumber < cursorLineNumber) {
+-            this._editor.setScrollTop(this._editor.getScrollTop() + heightInLines * this._editor.getOption(75 /* EditorOption.lineHeight */));
++            this._editor.setScrollTop(this._editor.getScrollTop() + heightInLines * this._editor.getOption(75 /* EditorOption.lineHeight */), 1 /* ScrollType.Immediate */, 'geometry');
+         }
+     }
+ }
+diff --git a/esm/vs/editor/contrib/inlineCompletions/browser/view/inlineEdits/inlineEditsViews/inlineEditsLineReplacementView.js b/esm/vs/editor/contrib/inlineCompletions/browser/view/inlineEdits/inlineEditsViews/inlineEditsLineReplacementView.js
+--- a/esm/vs/editor/contrib/inlineCompletions/browser/view/inlineEdits/inlineEditsViews/inlineEditsLineReplacementView.js
++++ b/esm/vs/editor/contrib/inlineCompletions/browser/view/inlineEdits/inlineEditsViews/inlineEditsLineReplacementView.js
+@@ -292,7 +292,7 @@
+         changeAccessor.removeZone(this._previousViewZoneInfo.id);
+         const cursorLineNumber = this._editor.cursorLineNumber.get();
+         if (cursorLineNumber !== null && cursorLineNumber >= this._previousViewZoneInfo.lineNumber) {
+-            this._editor.editor.setScrollTop(this._editor.scrollTop.get() - this._previousViewZoneInfo.height);
++            this._editor.editor.setScrollTop(this._editor.scrollTop.get() - this._previousViewZoneInfo.height, 1 /* ScrollType.Immediate */, 'geometry');
+         }
+         this._previousViewZoneInfo = undefined;
+     }
+@@ -305,7 +305,7 @@
+         this._previousViewZoneInfo = { height: viewZoneInfo.height, lineNumber: viewZoneInfo.lineNumber, id: activeViewZone };
+         const cursorLineNumber = this._editor.cursorLineNumber.get();
+         if (cursorLineNumber !== null && cursorLineNumber >= viewZoneInfo.lineNumber) {
+-            this._editor.editor.setScrollTop(this._editor.scrollTop.get() + viewZoneInfo.height);
++            this._editor.editor.setScrollTop(this._editor.scrollTop.get() + viewZoneInfo.height, 1 /* ScrollType.Immediate */, 'geometry');
+         }
+     }
+ };
+diff --git a/esm/vs/editor/browser/viewParts/editorScrollbar/editorScrollbar.js b/esm/vs/editor/browser/viewParts/editorScrollbar/editorScrollbar.js
+--- a/esm/vs/editor/browser/viewParts/editorScrollbar/editorScrollbar.js
++++ b/esm/vs/editor/browser/viewParts/editorScrollbar/editorScrollbar.js
+@@ -67,7 +67,7 @@
+                     domNode.scrollLeft = 0;
+                 }
+             }
+-            this._context.viewModel.viewLayout.setScrollPosition(newScrollPosition, 1 /* ScrollType.Immediate */);
++            this._context.viewModel.viewLayout.setScrollPosition(newScrollPosition, 1 /* ScrollType.Immediate */, 'geometry');
+         };
+         // I've seen this happen both on the view dom node & on the lines content dom node.
+         this._register(addDisposableListener(viewDomNode.domNode, 'scroll', (e) => onBrowserDesperateReveal(viewDomNode.domNode, true, true)));

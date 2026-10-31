@@ -1,3 +1,4 @@
+import type { DiffSection } from '@/components/editor/diff-section-types'
 import {
   MAX_RENDERED_DIFF_COMBINED_CHARACTERS,
   MAX_RENDERED_DIFF_LINES_PER_SIDE,
@@ -37,6 +38,25 @@ export function mapPRFileStatus(status: GitHubPRFile['status']): GitBranchChange
 
 export function getPRFileSectionKey(path: string): string {
   return `combined-commit:${path}`
+}
+
+export function createPRFileDiffSections(entries: readonly GitBranchChangeEntry[]): DiffSection[] {
+  return entries.map((entry) => ({
+    key: getPRFileSectionKey(entry.path),
+    path: entry.path,
+    oldPath: entry.oldPath,
+    status: entry.status,
+    added: entry.added,
+    removed: entry.removed,
+    originalContent: '',
+    modifiedContent: '',
+    collapsed: false,
+    loading: true,
+    error: undefined,
+    dirty: false,
+    diffResult: null,
+    largeDiffRenderLimit: null
+  }))
 }
 
 export function gitHubPRFileToBranchEntry(file: GitHubPRFile): GitBranchChangeEntry {

@@ -1,4 +1,3 @@
-import { useCombinedDiffExtent } from '../../use-combined-diff-extent'
 import {
   publishCombinedDiffMeasurements,
   observeCombinedDiffOffset,
@@ -8,7 +7,6 @@ import { useCombinedDiffFocusRange } from '../../use-combined-diff-focus-range'
 import { useLayoutEffect } from 'react'
 import type React from 'react'
 import { useVirtualizer, type Virtualizer } from '@tanstack/react-virtual'
-import type { ProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import { measureVirtualRowRetainingHiddenSize } from '@/hooks/virtualized-hidden-row-measurement'
 import type { DiffSection } from '../../diff-section-types'
 import { getDiffSectionRowEstimatedHeight } from '../../diff-section-layout'
@@ -18,7 +16,6 @@ const COMBINED_DIFF_OVERSCAN = 5
 
 export function useCombinedDiffVirtualizer({
   generation,
-  programmaticScrollMarks,
   renderedIndicesRef,
   rowKeys,
   scrollContainerRef,
@@ -28,7 +25,6 @@ export function useCombinedDiffVirtualizer({
   sideBySide
 }: {
   generation: number
-  programmaticScrollMarks: ProgrammaticScrollMarks
   renderedIndicesRef: React.RefObject<Set<number>>
   rowKeys: readonly string[]
   scrollContainerRef: React.RefObject<HTMLDivElement | null>
@@ -61,8 +57,6 @@ export function useCombinedDiffVirtualizer({
     // Prebuild keys per section change because TanStack requests every key on each measurement pass.
     getItemKey: (index) => rowKeys[index] ?? `${index}:${generation}`
   })
-
-  useCombinedDiffExtent(scrollContainerRef, virtualizer, programmaticScrollMarks.mark, sections)
 
   // Publish onscreen indices after commit so retry can read them without making render impure or depending on the virtualizer.
   const virtualItems = virtualizer.getVirtualItems()

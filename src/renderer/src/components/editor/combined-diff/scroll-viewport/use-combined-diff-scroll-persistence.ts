@@ -1,34 +1,24 @@
 import { useLayoutEffect } from 'react'
-import type React from 'react'
-import type { CombinedDiffScrollAnchors } from './use-combined-diff-scroll-anchors'
 
 export function useCombinedDiffScrollPersistence({
-  anchors,
-  scrollContainerRef,
+  viewportNode,
   updateScrollbar
 }: {
-  anchors: CombinedDiffScrollAnchors
-  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  viewportNode: HTMLDivElement | null
   updateScrollbar: () => void
 }): void {
-  const { persistScrollAnchor } = anchors
   useLayoutEffect(() => {
-    const container = scrollContainerRef.current
+    const container = viewportNode
     if (!container) {
       return
     }
-    const record = (): void => {
-      persistScrollAnchor()
-      updateScrollbar()
-    }
     const resizeObserver = new ResizeObserver(updateScrollbar)
     resizeObserver.observe(container)
-    container.addEventListener('scroll', record, { passive: true })
+    container.addEventListener('scroll', updateScrollbar, { passive: true })
     updateScrollbar()
     return () => {
-      record()
       resizeObserver.disconnect()
-      container.removeEventListener('scroll', record)
+      container.removeEventListener('scroll', updateScrollbar)
     }
-  }, [persistScrollAnchor, scrollContainerRef, updateScrollbar])
+  }, [viewportNode, updateScrollbar])
 }

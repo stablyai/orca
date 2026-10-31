@@ -19,48 +19,69 @@ export type CombinedDiffScrollAnchors = {
 export function useCombinedDiffScrollAnchors({
   restorationKey,
   scrollAnchorRef,
-  scrollContainerRef,
+  viewportNode,
+  beforeDetachRef,
+  releaseViewport,
   scrollOffsetRef,
   memoryLeaseRef,
   virtualizer
 }: {
   restorationKey: string
   scrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
-  scrollContainerRef: React.RefObject<HTMLDivElement | null>
+  viewportNode: HTMLDivElement | null
+  beforeDetachRef: React.RefObject<(() => void) | null>
+  releaseViewport: () => void
   scrollOffsetRef: React.RefObject<number>
   memoryLeaseRef: React.RefObject<CombinedDiffViewLease | null>
   virtualizer: Virtualizer<HTMLDivElement, Element>
 }): CombinedDiffScrollAnchors {
   const persistScrollAnchor = useCallback((): void => {
-    const container = scrollContainerRef.current
-    if (!container) {
+    if (!viewportNode) {
       return
     }
-    const state = getCombinedDiffExtent(container).exportView()
+    const state = getCombinedDiffExtent(viewportNode).exportView()
     scrollOffsetRef.current = state.scrollTop
     scrollAnchorRef.current = state.anchor ? { ...state.anchor, scrollTop: state.scrollTop } : null
     rememberCombinedDiffView(memoryLeaseRef.current, {
       scrollTop: state.scrollTop,
       scrollAnchor: scrollAnchorRef.current ?? undefined
     })
-  }, [memoryLeaseRef, scrollAnchorRef, scrollContainerRef, scrollOffsetRef])
+  }, [memoryLeaseRef, scrollAnchorRef, viewportNode, scrollOffsetRef])
 
   useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    if (container) {
-      getCombinedDiffExtent(container).importView({
-        scrollTop: scrollOffsetRef.current,
-        anchor: scrollAnchorRef.current
+    if (!viewportNode) {
+      return
+    }
+    const owner = getCombinedDiffExtent(viewportNode)
+    const lease = memoryLeaseRef.current
+    owner.importView({ scrollTop: scrollOffsetRef.current, anchor: scrollAnchorRef.current })
+    const record = (): void => {
+      const state = owner.exportView()
+      const anchor = state.anchor ? { ...state.anchor, scrollTop: state.scrollTop } : null
+      scrollOffsetRef.current = state.scrollTop
+      scrollAnchorRef.current = anchor
+      rememberCombinedDiffView(lease, {
+        scrollTop: state.scrollTop,
+        scrollAnchor: anchor ?? undefined
       })
     }
-  }, [restorationKey, scrollAnchorRef, scrollContainerRef, scrollOffsetRef])
-
-  useLayoutEffect(() => {
-    const container = scrollContainerRef.current
-    container?.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, persistScrollAnchor)
-    return () =>
-      container?.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, persistScrollAnchor)
-  }, [persistScrollAnchor, scrollContainerRef])
+    viewportNode.addEventListener('scroll', record, { passive: true })
+    viewportNode.addEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, record)
+    beforeDetachRef.current = () => {
+      record()
+      viewportNode.removeEventListener('scroll', record)
+      viewportNode.removeEventListener(VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT, record)
+    }
+    return releaseViewport
+  }, [
+    beforeDetachRef,
+    releaseViewport,
+    restorationKey,
+    memoryLeaseRef,
+    scrollAnchorRef,
+    viewportNode,
+    scrollOffsetRef
+  ])
 
   const scrollToSectionIndex = useCallback(
     (index: number): void => {

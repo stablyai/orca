@@ -86,7 +86,7 @@ export function installCombinedDiffSlice(
         height = slice.height
         diff.layout({ width, height })
       }
-      diff.getModifiedEditor().setScrollTop(slice.offset, 1)
+      diff.getModifiedEditor().setScrollTop(slice.offset, 1, 'geometry')
     })
   }
   const commit = (target: number): boolean => {
@@ -155,12 +155,20 @@ export function installCombinedDiffSlice(
           }
           forward()
         } else if (request.kind === 'find') {
+          forward()
           const top = Number.parseFloat(host.style.top || '0')
           reveal(top, top + request.height, 0)
         } else if (request.source === 'restoreState' || request.source === 'modelChange') {
           forward()
         } else {
-          reveal(request.top, request.bottom, request.verticalType, request.minimal)
+          forward()
+          const origin = paneOrigin(requestedPane)
+          reveal(
+            request.top + origin,
+            request.bottom + origin,
+            request.verticalType,
+            request.minimal
+          )
         }
       } else if (scrollDelta) {
         commit(viewport.scrollTop + scrollDelta)
@@ -168,7 +176,6 @@ export function installCombinedDiffSlice(
     })
   }
   const geometryChanged = (): void => {
-    delta = 0
     panes.forEach((pane) => applied.set(pane, pane.getScrollTop()))
     if (!transaction && !frame) {
       frame = requestAnimationFrame(() => {
@@ -190,21 +197,14 @@ export function installCombinedDiffSlice(
         if (transaction) {
           return
         }
-        const origin = paneOrigin(pane)
-        pending = {
-          request:
-            request.kind === 'range'
-              ? { ...request, top: request.top + origin, bottom: request.bottom + origin }
-              : request,
-          pane
-        }
+        pending = { request, pane }
         schedule()
       }),
       pane.onDidScrollChange((event) => {
         if (transaction) {
           return
         }
-        if (event.scrollHeightChanged || event.scrollWidthChanged) {
+        if (event.scrollSource === 'geometry') {
           geometryChanged()
           return
         }
@@ -212,7 +212,7 @@ export function installCombinedDiffSlice(
           return
         }
         // Read peers after synchronization; their following outgoing event is an acknowledgement.
-        const change = event.scrollTop - (applied.get(pane) ?? event.scrollTop)
+        const change = event.scrollTopDelta
         panes.forEach((peer) => applied.set(peer, peer.getScrollTop()))
         if (change) {
           delta += change
@@ -229,6 +229,7 @@ export function installCombinedDiffSlice(
       registerCombinedDiffNavigation(pane.getContainerDomNode(), {
         reveal: (top, bottom, policy) => {
           cancelPending()
+          forward()
           const origin = paneOrigin(pane)
           reveal(top + origin, bottom + origin, policy)
         },
