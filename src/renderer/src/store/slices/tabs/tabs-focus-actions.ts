@@ -1,4 +1,7 @@
-import { presentationActionSet } from '../../workspace-presentation-actions'
+import {
+  presentationActionSet,
+  acceptWorkspacePresentationSelection
+} from '../../workspace-presentation-actions'
 import { workspaceReadState, workspaceSourceTab } from '../../workspace-source-state'
 import type { TabsSlice, TabsSliceGet, TabsSliceSet } from './tabs-slice-contract'
 import {
@@ -138,6 +141,9 @@ export function createTabsFocusActions(
           return state
         }
         const { tab, worktreeId } = found
+        if (opts?.recordFocus !== false) {
+          acceptWorkspacePresentationSelection(state, worktreeId, tab.groupId)
+        }
         if (ORCA_LAYOUT_OWNER_IS_MAIN && tab.isPreview && !opts?.preservePreview) {
           promoted.push(tab)
         }

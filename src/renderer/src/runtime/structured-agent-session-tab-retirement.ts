@@ -22,7 +22,7 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
 import { toRuntimeWorktreeSelector } from './runtime-worktree-selector'
 
-const inFlightRetirements = new Map<string, Promise<boolean>>()
+const inFlightRetirements = new Map<string, Promise<PromiseSettledResult<unknown>[]>>()
 
 function retirementKey(target: RuntimeClientTarget, worktreeId: string, sessionId: string): string {
   return `${target.kind}:${target.kind === 'environment' ? target.environmentId : 'local'}:${worktreeId}:${sessionId}`
@@ -37,29 +37,12 @@ export function retireStructuredAgentSessionTab(args: {
   worktreeId: string
   sessionId: string
   onError?: (error: unknown) => void
+  beforeSend?: () => void
 }): Promise<boolean> {
   retireStructuredAgentSessionReadOwner(args.sessionId, args.target)
   forgetStructuredSessionSelection(args.sessionId, args.target)
   const key = retirementKey(args.target, args.worktreeId, args.sessionId)
-  const existing = inFlightRetirements.get(key)
-  if (existing) {
-    return existing
-  }
-  const hostTabId = `agent-session:${args.sessionId}`
-  // Why: main echoes the host tab id it was asked to close, never this window's tab id.
-  const closeHostTab = () =>
-    withLocalSessionTabCloseOwner(args.worktreeId, hostTabId, () =>
-      callRuntimeRpc(args.target, 'session.tabs.close', {
-        worktree: toRuntimeWorktreeSelector(args.worktreeId),
-        tabId: hostTabId,
-        reason: 'user'
-      })
-    )
-  const promise = Promise.allSettled([
-    closeStructuredAgentSession(args.target, args.sessionId),
-    closeHostTab()
-  ]).then((results) => {
-    inFlightRetirements.delete(key)
+  const resultForCaller = (results: PromiseSettledResult<unknown>[]): boolean => {
     for (const result of results) {
       if (result.status === 'rejected') {
         if (args.onError) {
@@ -69,11 +52,37 @@ export function retireStructuredAgentSessionTab(args: {
         }
       }
     }
-    const [, hostTabClose] = results
-    return hostTabClose.status === 'fulfilled'
+    return results[1]?.status === 'fulfilled'
+  }
+  const existing = inFlightRetirements.get(key)
+  if (existing) {
+    return existing.then(resultForCaller)
+  }
+  const hostTabId = `agent-session:${args.sessionId}`
+  // Why: main echoes the host tab id it was asked to close, never this window's tab id.
+  const closeHostTab = () => {
+    const params = {
+      worktree: toRuntimeWorktreeSelector(args.worktreeId),
+      tabId: hostTabId,
+      reason: 'user' as const
+    }
+    return withLocalSessionTabCloseOwner(args.worktreeId, hostTabId, () =>
+      args.beforeSend
+        ? callRuntimeRpc(args.target, 'session.tabs.close', params, { beforeSend: args.beforeSend })
+        : callRuntimeRpc(args.target, 'session.tabs.close', params)
+    )
+  }
+  const promise = Promise.allSettled([
+    args.beforeSend
+      ? closeStructuredAgentSession(args.target, args.sessionId, args.beforeSend)
+      : closeStructuredAgentSession(args.target, args.sessionId),
+    closeHostTab()
+  ]).then((results) => {
+    inFlightRetirements.delete(key)
+    return results
   })
   inFlightRetirements.set(key, promise)
-  return promise
+  return promise.then(resultForCaller)
 }
 
 /** Re-reads one worktree from the host, including the version already applied, which the window's
@@ -84,7 +93,8 @@ function reacceptHostSessionTabs(
   intentOwner: WebSessionIntentOwner,
   /** This machine's host still lists the chat. */
   stillListed?: { sessionId: string; reopen: () => void },
-  afterReadback?: () => void
+  afterReadback?: () => void,
+  afterSettled?: () => void
 ): void {
   // Lazy imports: both refresh paths apply frames through this module.
   const reread =
@@ -117,6 +127,7 @@ function reacceptHostSessionTabs(
     .catch((error: unknown) =>
       console.warn('[structured-agent-session] tab re-read after a close failed', error)
     )
+    .finally(() => afterSettled?.())
 }
 
 /** Mark cancellation before removing the row so a late host publication cannot resurrect it. */
@@ -130,6 +141,7 @@ export function beginStructuredAgentSessionTabClose(args: {
   /** Main dropped the tab before the host answered: a host still listing the chat shows it again. */
   reopen?: () => void
   afterFailedCloseReadback?: () => void
+  afterCloseSettled?: () => void
 }): void {
   forgetUnlistedCreatedChat(args.worktreeId, args.sessionId)
   if (args.provisional) {
@@ -165,8 +177,11 @@ export function beginStructuredAgentSessionTabClose(args: {
         !hostTabClosed && args.reopen
           ? { sessionId: args.sessionId, reopen: args.reopen }
           : undefined,
-        !hostTabClosed ? args.afterFailedCloseReadback : undefined
+        !hostTabClosed ? args.afterFailedCloseReadback : undefined,
+        args.afterCloseSettled
       )
+    } else {
+      args.afterCloseSettled?.()
     }
   })
 }

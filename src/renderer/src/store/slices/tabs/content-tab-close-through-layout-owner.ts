@@ -46,7 +46,7 @@ function selectAfterClose(
   }
   // Activation focuses the tab's group; the user's focused group stays, and shows its surface.
   if (activeGroupId) {
-    get().focusGroup(worktreeId, activeGroupId)
+    get().focusGroup(worktreeId, activeGroupId, { recordIntent: false })
   }
 }
 
@@ -56,6 +56,8 @@ const closingAsToday = new Set<string>()
 export type ContentTabClose = {
   /** The tab today's close would show next in the group, picked before the close. */
   nextActiveTabId: string | null
+  admitClose?: () => boolean
+  onSettled?: (closed: boolean) => void
   /** Today's close, for a twin main may route to a paired server. */
   closeHere: () => void
   /** Why a browser tab closes: a cleanup close stays off main's reopen list. */
@@ -72,12 +74,23 @@ export function closeContentTabThroughLayoutOwner(
   tab: Pick<Tab, 'id' | 'entityId' | 'worktreeId' | 'groupId' | 'contentType'>,
   close: ContentTabClose
 ): boolean {
+  if (close.admitClose && !close.admitClose()) {
+    close.onSettled?.(false)
+    return true
+  }
   // Today's close of a twin's tab closes its tab-bar entry as today too.
   if (!closesThroughLayoutOwner(tab.contentType) || closingAsToday.has(tab.id)) {
     return false
   }
   // A repeat close joins the one in flight; its waiters (closeFile's cleanup) stay on it.
   if (isTabClosePending(tab.id)) {
+    if (close.onSettled) {
+      afterPendingTab(tab.id, () =>
+        close.onSettled?.(
+          !(get().unifiedTabsByWorktree[tab.worktreeId] ?? []).some((row) => row.id === tab.id)
+        )
+      )
+    }
     return true
   }
   // A close of a tab still opening goes once main answered the open.
@@ -86,15 +99,25 @@ export function closeContentTabThroughLayoutOwner(
       const drawn = get().unifiedTabsByWorktree[tab.worktreeId]?.find((e) => e.id === tab.id)
       if (drawn) {
         closeContentTabThroughLayoutOwner(get, drawn, close)
+      } else {
+        close.onSettled?.(false)
       }
     })
     return true
   }
   const settle = beginPendingTab(tab.id, tab.worktreeId, tab.entityId, { kind: 'close' })
   const dropped = (): void => {
+    if (close.admitClose && !close.admitClose()) {
+      settle(null)
+      close.onSettled?.(false)
+      return
+    }
     // Waiters first: a closeFile's content cleanup must not undo the selection.
     settle(tab.id)
-    close.closed?.()
+    if (!close.admitClose || close.admitClose()) {
+      close.closed?.()
+    }
+    close.onSettled?.(true)
     if (!close.landIfEmptied?.()) {
       selectAfterClose(get, tab, close.nextActiveTabId)
     }
@@ -103,11 +126,14 @@ export function closeContentTabThroughLayoutOwner(
     closingAsToday.add(tab.id)
     let closedId: string | null = null
     try {
-      close.closeHere()
-      closedId = tab.id
+      if (!close.admitClose || close.admitClose()) {
+        close.closeHere()
+        closedId = tab.id
+      }
     } finally {
       closingAsToday.delete(tab.id)
       settle(closedId)
+      close.onSettled?.(closedId !== null)
     }
   }
   const sent = sendLayoutApply(
@@ -124,6 +150,7 @@ export function closeContentTabThroughLayoutOwner(
           dropped()
         } else {
           settle(null)
+          close.onSettled?.(false)
         }
       },
       asToday: closeAsToday,
@@ -136,6 +163,7 @@ export function closeContentTabThroughLayoutOwner(
           closeAsToday()
         } else {
           settle(null)
+          close.onSettled?.(false)
         }
       }
     }

@@ -1,3 +1,4 @@
+import { webSessionOpenFilesForWorktree } from '@/runtime/web-session-tabs-sync/state-equality-files'
 import type { AppState } from '../types'
 import {
   parseExecutionHostId,
@@ -158,7 +159,7 @@ export function collectRemovedHostTwinState(
         }
       }
     }
-    for (const file of state.openFiles) {
+    for (const file of webSessionOpenFilesForWorktree(state, worktreeId)) {
       if (file.worktreeId !== worktreeId) {
         continue
       }
@@ -194,7 +195,7 @@ export function collectRemovedHostTwinState(
       } else if (
         toVisibleTabType(tab.contentType) !== 'editor' ||
         // Why: a stale editor tab with no open file has nothing for the file close to find.
-        !state.openFiles.some((file) => file.id === tab.entityId)
+        !webSessionOpenFilesForWorktree(state, worktreeId).some((file) => file.id === tab.entityId)
       ) {
         removed.otherTabIds.add(tab.id)
         if (tab.contentType === 'agent-session') {

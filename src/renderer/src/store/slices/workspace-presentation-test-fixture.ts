@@ -1,6 +1,13 @@
+import { rawWorkspaceState } from '../workspace-source-state'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { expect } from 'vitest'
-import { createTestStore, makeUnifiedTab, makeTabGroup, makeWorktree } from './store-test-helpers'
+import {
+  createTestStore,
+  makeUnifiedTab,
+  makeTabGroup,
+  makeWorktree,
+  makeOpenFile
+} from './store-test-helpers'
 import { mergeListedWorktreeSpellings } from './worktrees/session/worktree-spelling-merge'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 export const O = 'r::C:\\repo'
@@ -123,4 +130,37 @@ export function frame(
     activeTabId: null,
     activeGroupId: null
   }
+}
+
+export function seedEditors() {
+  const store = seed()
+  const raw = rawWorkspaceState(store.getState())
+  const file = makeOpenFile({ id: 'owned', worktreeId: O, isDirty: true })
+  const foreign = makeOpenFile({
+    id: 'foreign',
+    worktreeId: O,
+    runtimeEnvironmentId: 'box',
+    isDirty: true
+  })
+  store.setState({
+    openFiles: [file, foreign],
+    editorDrafts: { owned: 'unsaved original', foreign: 'other host' },
+    unifiedTabsByWorktree: {
+      ...raw.unifiedTabsByWorktree,
+      [O]: [
+        ...raw.unifiedTabsByWorktree[O],
+        makeUnifiedTab({
+          id: 'editor',
+          entityId: file.id,
+          worktreeId: O,
+          groupId: 'source',
+          contentType: 'editor'
+        })
+      ]
+    }
+  })
+  store
+    .getState()
+    .moveUnifiedTabToGroup('editor', 'left', { activate: true, recordInteraction: false })
+  return store
 }

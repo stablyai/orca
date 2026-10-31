@@ -1,3 +1,4 @@
+import { createBrowserWorkspaceShutdown } from './browser-workspace-shutdown'
 import type {
   BrowserSlice,
   BrowserSliceGet,
@@ -16,7 +17,6 @@ import { getRecentlyClosedTabPosition, pushRecentlyClosedTabKind } from '../rece
 import { getFallbackTabTypeForWorktree, isLocalBrowserPageOwner } from './browser-host-state'
 import { closeRemoteBrowserPageInOwningEnvironment } from './browser-remote-close'
 import { releaseDocPreviewGrant } from '@/lib/doc-preview-grants'
-import { destroyWorkspaceWebviews } from '../browser-webview-cleanup'
 import { omitRecordKeys } from '../worktrees/teardown/record-key-omission'
 import { landOnEmptiedWorktree } from '../tabs/tabs-close-actions'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -33,6 +33,10 @@ export function createBrowserCloseActions(
 ): Pick<BrowserSlice, 'closeBrowserTab' | 'shutdownWorktreeBrowsers'> {
   return {
     closeBrowserTab: (tabId, options) => {
+      if (options?.admitClose && !options.admitClose()) {
+        options.onSettled?.(false)
+        return
+      }
       forgetDesktopCreatedServerTab(tabId)
       // Cleanup unwinds unfinished creation: no host page close and no user reopen history.
       const isCleanup = options?.reason === 'cleanup'
@@ -45,6 +49,9 @@ export function createBrowserCloseActions(
         ? getRecentlyClosedTabPosition(workspaceReadState(get()), contextId, tabId)
         : undefined
       const closeHere = (drawn?: DrawnBrowserTab): void => {
+        if (options?.admitClose && !options.admitClose()) {
+          return
+        }
         let remotePagesToClose: { worktreeId: string; handle: RemoteBrowserPageHandle }[] = []
         // Collect grants outside reducer: revocation is main work and closed docs must become unreadable even if reduction bails.
         let docPageIdsToRelease: string[] = []
@@ -273,7 +280,8 @@ export function createBrowserCloseActions(
           // As today's tab-bar close: a cleanup keeps the selection and counts no interaction.
           isCleanup || options?.preserveWorktreeSelection || !owningWorktreeId
             ? undefined
-            : () => landOnEmptiedWorktree(set, get, owningWorktreeId)
+            : () => landOnEmptiedWorktree(set, get, owningWorktreeId),
+          options
         )
       ) {
         if (!isCleanup) {
@@ -282,37 +290,9 @@ export function createBrowserCloseActions(
         return
       }
       closeHere()
+      options?.onSettled?.(true)
     },
 
-    shutdownWorktreeBrowsers: (worktreeId, options) => {
-      const workspaces = get().browserTabsByWorktree[worktreeId] ?? []
-      // Why: snapshot before the loop — closeBrowserTab empties the array, so set() below couldn't recompute hadBrowserTabs.
-      const hadBrowserTabs = workspaces.length > 0
-      for (const workspace of workspaces) {
-        const browserPagesByWorkspace = get().browserPagesByWorkspace
-        get().closeBrowserTab(workspace.id, options)
-        destroyWorkspaceWebviews(browserPagesByWorkspace, workspace.id)
-      }
-      set((s) => {
-        const removedWorktreeIds = [worktreeId]
-        const nextBrowserTabsByWorktree = omitRecordKeys(
-          s.browserTabsByWorktree,
-          removedWorktreeIds
-        )
-        const nextActiveBrowserTabIdByWorktree = omitRecordKeys(
-          s.activeBrowserTabIdByWorktree,
-          removedWorktreeIds
-        )
-        // Why: reset the global browser surface only when the shut-down worktree is the active one AND had tabs.
-        const shouldResetGlobalBrowser = s.activeWorktreeId === worktreeId && hadBrowserTabs
-        return {
-          browserTabsByWorktree: nextBrowserTabsByWorktree,
-          activeBrowserTabIdByWorktree: nextActiveBrowserTabIdByWorktree,
-          ...(shouldResetGlobalBrowser
-            ? { activeBrowserTabId: null, activeTabType: 'terminal' as const }
-            : {})
-        }
-      })
-    }
+    shutdownWorktreeBrowsers: createBrowserWorkspaceShutdown(set, get)
   }
 }

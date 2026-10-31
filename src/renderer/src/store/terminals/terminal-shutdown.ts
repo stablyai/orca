@@ -30,10 +30,15 @@ export function createTerminalShutdownActions(
 ): Pick<TerminalSlice, 'shutdownWorktreeTerminals'> {
   return {
     shutdownWorktreeTerminals: async (worktreeId, opts) => {
+      if (opts?.canCommit && !opts.canCommit()) {
+        return
+      }
       const keepIdentifiers = opts?.keepIdentifiers ?? false
       const shutdownReason: AgentStatusWorktreeShutdownReason =
         opts?.shutdownReason ?? (keepIdentifiers ? 'manual-sleep' : 'remove-worktree')
-      const tabs = get().tabsByWorktree[worktreeId] ?? []
+      const tabs = (get().tabsByWorktree[worktreeId] ?? []).filter(
+        (tab) => !opts?.onlyTabIds || opts.onlyTabIds.has(tab.id)
+      )
       const rendererShutdownPtyIds = sortedUniquePtyIds(
         tabs.flatMap((tab) => get().ptyIdsByTabId[tab.id] ?? [])
       )
@@ -188,6 +193,10 @@ export function createTerminalShutdownActions(
         }
       }
 
+      if (opts?.canCommit && !opts.canCommit()) {
+        guards.settlePartialRendererStop(rendererShutdownPtyIds)
+        return
+      }
       guards.commitHandlerSnapshots()
       // Switch point: main records a sleep's resumes once the terminals stopped (none on removal).
       if (ORCA_LAYOUT_OWNER_IS_MAIN && !hostStop) {
@@ -203,7 +212,8 @@ export function createTerminalShutdownActions(
         sleepingAgentSessionRecords,
         sleepingPaneKeys: opts?.sleepingPaneKeys,
         tabs,
-        worktreeId
+        worktreeId,
+        scoped: opts?.onlyTabIds !== undefined
       })
     }
   }

@@ -19,7 +19,8 @@ export function applyRemoveWorktreeSuccessState(
   worktreeId: string,
   tabIds: Set<string>,
   executionHostId?: ExecutionHostId,
-  confirmedDiscards?: ConfirmedUnsavedDiscards
+  confirmedDiscards?: ConfirmedUnsavedDiscards,
+  resourcesHandled = false
 ): void {
   // Clear module caches outside store state; reused IDs must re-arm ambiguity warnings.
   forgetAmbiguousOwnerWarnings([worktreeId])
@@ -35,7 +36,7 @@ export function applyRemoveWorktreeSuccessState(
     // Why: clean up per-file editor state for the removed worktree so stale drafts/view modes don't accumulate.
     const removedFileIds = new Set<string>()
     for (const file of s.openFiles) {
-      if (file.worktreeId !== worktreeId) {
+      if (resourcesHandled || file.worktreeId !== worktreeId) {
         continue
       }
       removedFileIds.add(file.id)
@@ -52,8 +53,8 @@ export function applyRemoveWorktreeSuccessState(
     return {
       editorBufferKeepRequest,
       ...removeWorktreeLayout(s, {
-        worktreeIds: new Set(worktreeIds),
-        tabIds,
+        worktreeIds: new Set(resourcesHandled ? [] : worktreeIds),
+        tabIds: resourcesHandled ? new Set() : tabIds,
         activeFileCleared
       }),
       worktreesByRepo: nextWorktreesByRepo,
@@ -78,10 +79,16 @@ export function applyRemoveWorktreeSuccessState(
       remoteBranchConflictByWorktreeId: omitByWorktree(s.remoteBranchConflictByWorktreeId),
       fileSearchStateByWorktree: omitByWorktree(s.fileSearchStateByWorktree),
       remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
-      recentlyClosedEditorTabsByWorktree: omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
-      recentlyClosedTerminalTabsByWorktree: omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
+      recentlyClosedEditorTabsByWorktree: resourcesHandled
+        ? s.recentlyClosedEditorTabsByWorktree
+        : omitByWorktree(s.recentlyClosedEditorTabsByWorktree),
+      recentlyClosedTerminalTabsByWorktree: resourcesHandled
+        ? s.recentlyClosedTerminalTabsByWorktree
+        : omitByWorktree(s.recentlyClosedTerminalTabsByWorktree),
       // Why: a deleted worktree's tabs can never be reopened; purge the kind list with the snapshot stacks above.
-      recentlyClosedTabKindsByWorktree: omitByWorktree(s.recentlyClosedTabKindsByWorktree),
+      recentlyClosedTabKindsByWorktree: resourcesHandled
+        ? s.recentlyClosedTabKindsByWorktree
+        : omitByWorktree(s.recentlyClosedTabKindsByWorktree),
       defaultTerminalTabsAppliedByWorktreeId: omitByWorktree(
         s.defaultTerminalTabsAppliedByWorktreeId
       ),
@@ -90,7 +97,9 @@ export function applyRemoveWorktreeSuccessState(
         ? null
         : s.activeWorkspaceExecutionHostId,
       // Why: closeBrowserTab records a Cmd+Shift+T undo snapshot, but a deleted worktree's tabs can't be restored; purge it.
-      recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
+      recentlyClosedBrowserTabsByWorktree: resourcesHandled
+        ? s.recentlyClosedBrowserTabsByWorktree
+        : omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
       rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree),
       pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
       editorDrafts: omitByFileId(s.editorDrafts),

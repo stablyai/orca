@@ -90,11 +90,21 @@ export function createTabsCloseActions(
             get,
             set
           )
-          for (const source of workspaceSourceClaims(state, worktreeId, tab)) {
+          const claims = workspaceSourceClaims(state, worktreeId, tab)
+          let pendingClaims = claims.length
+          if (!pendingClaims) {
+            restorePlacement.dispose()
+          }
+          for (const source of claims) {
             beginStructuredAgentSessionTabClose({
               target,
               worktreeId: source.workspaceId,
               afterFailedCloseReadback: restorePlacement,
+              afterCloseSettled: () => {
+                if (--pendingClaims === 0) {
+                  restorePlacement.dispose()
+                }
+              },
               sessionId: tab.entityId,
               provisional,
               layoutOwner: state,

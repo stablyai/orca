@@ -27,7 +27,8 @@ export function commitTerminalShutdownState({
   sleepingAgentSessionRecords,
   sleepingPaneKeys,
   tabs,
-  worktreeId
+  worktreeId,
+  scoped = false
 }: {
   exitGuardPtyIds: readonly string[]
   get: TerminalStoreGet
@@ -39,6 +40,7 @@ export function commitTerminalShutdownState({
   sleepingPaneKeys?: readonly string[]
   tabs: readonly TerminalTab[]
   worktreeId: string
+  scoped?: boolean
 }): void {
   settleAttentionRemovedBy(set, get, () =>
     set((state) => {
@@ -47,7 +49,9 @@ export function commitTerminalShutdownState({
         : {
             ...state.tabsByWorktree,
             [worktreeId]: (state.tabsByWorktree[worktreeId] ?? []).map((tab, index) =>
-              clearTransientTerminalState(tab, index)
+              !scoped || tabs.some((removed) => removed.id === tab.id)
+                ? clearTransientTerminalState(tab, index)
+                : tab
             )
           }
       // Use copy-on-write for already-exited workspaces; churning ptyIdsByTabId invalidates whole-map selectors and every sidebar live-PTY memo.
@@ -150,16 +154,18 @@ export function commitTerminalShutdownState({
         }
       }
     })
-  } else {
+  } else if (!scoped) {
     get().clearSleepingAgentSessionsByWorktree(worktreeId)
   }
 
-  get().dropAgentStatusByWorktree(worktreeId, {
-    shutdownReason,
-    sleepingPaneKeys,
-    retainedCompletionEvidence
-  })
-  get().clearPaneForegroundAgentByWorktree(worktreeId)
+  if (!scoped) {
+    get().dropAgentStatusByWorktree(worktreeId, {
+      shutdownReason,
+      sleepingPaneKeys,
+      retainedCompletionEvidence
+    })
+    get().clearPaneForegroundAgentByWorktree(worktreeId)
+  }
   const settledPtyIds = exitGuardPtyIds.filter((ptyId) => !get().isPtyShutdownPending(ptyId))
   markCommittedPtyShutdowns(settledPtyIds)
   settleDeferredPtyShutdownExits(settledPtyIds, 'committed')

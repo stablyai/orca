@@ -285,3 +285,98 @@ it('moves source-only U without a D member bucket; unknown retired live frames p
   await vi.advanceTimersByTimeAsync(5000)
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it.each(['move', 'reselect', 'withdraw'] as const)(
+  'rebases failed-close restoration onto current intent (%s) during the actual ordered reread',
+  async (choice) => {
+    const store = seed()
+    vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+    const first = frame(O, 'chat1', 200)
+    const returning = frame(O, 'chat1', 201)
+    applyStructuredSessionTabSnapshots([first])
+    let answerRead: (value: unknown) => void = () => {
+      throw new Error('read not started')
+    }
+    const pendingRead = new Promise((resolve) => {
+      answerRead = resolve
+    })
+    let ownReadStarted = false
+    vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+      if (method === 'session.tabs.close') {
+        throw new Error('host close refused')
+      }
+      if (method === 'session.tabs.list') {
+        ownReadStarted = true
+        return pendingRead
+      }
+      throw new Error(`unexpected method ${method}`)
+    })
+    store.getState().closeUnifiedTab(C1)
+    expect(store.getState().unifiedTabsByWorktree[D].map((tab) => tab.id)).toEqual([C2])
+    await vi.waitFor(() => expect(ownReadStarted).toBe(true))
+    // The failed close has cleared intent; a normal live publication returns the still-live tab.
+    applyStructuredSessionTabSnapshots([returning])
+    expect(store.getState().unifiedTabsByWorktree[D].some((tab) => tab.id === C1)).toBe(true)
+    store.getState().setTabCustomLabel(C1, 'New choice')
+    const before = store.getState().unifiedTabsByWorktree[D].find((tab) => tab.id === C1)
+    expect(before?.customLabel).toBe('New choice')
+    if (choice === 'move') {
+      store
+        .getState()
+        .moveUnifiedTabToGroup(C1, 'right', { activate: true, recordInteraction: false })
+    } else if (choice === 'reselect') {
+      store.getState().focusGroup(D, before!.groupId)
+      store.getState().activateTab(C1, { worktreeId: D })
+    } else {
+      applyStructuredSessionTabSnapshots([frame(O, 'chat1', 202, false)])
+    }
+    const chosenGroup = store
+      .getState()
+      .unifiedTabsByWorktree[D].find((tab) => tab.id === C1)?.groupId
+    const chosen = store.getState().layoutByWorktree[D]
+    answerRead(returning)
+    await new Promise((resolve) => setTimeout(resolve, 30))
+    const after = store.getState().unifiedTabsByWorktree[D].find((tab) => tab.id === C1)
+    if (choice === 'withdraw') {
+      expect(after).toBeUndefined()
+      return
+    }
+    expect(after?.customLabel).toBe('New choice')
+    expect(after?.groupId).toBe(chosenGroup)
+    expect(store.getState().layoutByWorktree[D]).toEqual(chosen)
+    expect(store.getState().activeGroupIdByWorktree[D]).toBe(chosenGroup)
+  }
+)
+
+it('dispatches native sibling retirement with original source handles before accepted removal and fences late publications', async () => {
+  const store = seed()
+  vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+  const original = frame(O, 'chat1', 200)
+  applyStructuredSessionTabSnapshots([original])
+  const remove = vi.fn(async () => ({}))
+  Object.assign(window.api, { ephemeralVm: { listRuntimes: vi.fn(async () => []) } })
+  window.api.worktrees.remove = remove
+  vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method, _params, options) => {
+    options?.beforeSend?.()
+    if (method !== 'session.tabs.close') {
+      throw new Error(`unexpected method ${method}`)
+    }
+    return {}
+  })
+  expect(await store.getState().removeWorktree({ id: D, executionHostId: 'local' }, true)).toEqual({
+    ok: true
+  })
+  expect(callRuntimeRpc).toHaveBeenCalledWith(
+    { kind: 'local' },
+    'session.tabs.close',
+    { worktree: `id:${O}`, tabId: 'agent-session:chat1', reason: 'user' },
+    expect.objectContaining({ beforeSend: expect.any(Function) })
+  )
+  expect(vi.mocked(callRuntimeRpc).mock.invocationCallOrder.at(-1)).toBeLessThan(
+    remove.mock.invocationCallOrder[0]
+  )
+  expect(rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O]).toBeUndefined()
+  expect(Object.keys(store.getState().workspacePresentations ?? {})).toEqual([])
+  applyStructuredSessionTabSnapshots([original])
+  expect(rawWorkspaceState(store.getState()).unifiedTabsByWorktree[O]).toBeUndefined()
+})

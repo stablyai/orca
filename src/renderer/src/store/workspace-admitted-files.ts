@@ -8,6 +8,7 @@ import {
 import type { OpenFile } from './slices/editor'
 import type { AppState } from './types'
 import { workspacePresentationFor } from './workspace-source-state'
+import { ImmutableInputCache, absentImmutableInput } from '../../../shared/immutable-input-cache'
 
 type FileState = { openFiles: readonly OpenFile[] } & Partial<
   Pick<
@@ -20,7 +21,7 @@ type FileState = { openFiles: readonly OpenFile[] } & Partial<
   >
 >
 const indexes = new WeakMap<readonly OpenFile[], Map<string, OpenFile[]>>()
-const results = new WeakMap<object, Map<string, { inputs: unknown[]; files: OpenFile[] }>>()
+const results = new ImmutableInputCache<OpenFile[]>()
 const empty: OpenFile[] = []
 
 type FileSequence = { next: WeakMap<OpenFile, FileSequence>; files?: OpenFile[] }
@@ -62,12 +63,16 @@ export function workspaceAdmittedFiles(state: FileState, workspaceId: string): O
   const activeHost =
     state.activeWorktreeId === workspaceId ? state.activeWorkspaceExecutionHostId : undefined
   const folders = selectFolderWorkspaces(state)
-  const inputs = [state.openFiles, saved?.baseline, rows, folders, activeHost]
-  const cache = results.get(state) ?? new Map()
-  results.set(state, cache)
-  const prior = cache.get(workspaceId)
-  if (prior && inputs.every((input, at) => input === prior.inputs[at])) {
-    return prior.files
+  const inputs = [
+    state.openFiles,
+    saved?.baseline ?? absentImmutableInput,
+    rows ?? absentImmutableInput,
+    folders ?? absentImmutableInput
+  ]
+  const key = JSON.stringify([workspaceId, activeHost])
+  const prior = results.get(inputs, key)
+  if (prior) {
+    return prior
   }
   const candidateKeys = saved
     ? [
@@ -105,7 +110,7 @@ export function workspaceAdmittedFiles(state: FileState, workspaceId: string): O
     )
   })
   const value = currentFileSequence(files)
-  cache.set(workspaceId, { inputs, files: value })
+  results.set(inputs, key, value)
   return value
 }
 

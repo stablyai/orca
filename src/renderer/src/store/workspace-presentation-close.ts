@@ -1,10 +1,25 @@
+import {
+  structuredAgentSessionTargetForTab,
+  structuredAgentSessionFocusOwner
+} from '@/runtime/structured-agent-session-owner'
+import {
+  captureWebSessionIntentOwner,
+  matchesWebSessionIntentOwner
+} from '@/runtime/web-runtime-session-environment'
+import {
+  localStructuredSessionGeneration,
+  isCurrentLocalStructuredSessionGeneration,
+  localSourceAddressRevision,
+  isCurrentLocalSourceAddress
+} from '@/runtime/local-structured-session-tabs-sync/inventory-generation-fence'
+import { workspacePresentationUserIntent } from '../../../shared/workspace-presentation-user-intent'
 import { restoreWorkspacePresentationGroup } from '../../../shared/workspace-presentation-intent'
 import { editWorkspacePresentationDocuments } from '../../../shared/workspace-presentation-documents'
 import type { AppState } from './types'
 import {
   rawWorkspaceState,
   workspacePresentationFor,
-  workspaceSourceTab,
+  workspaceSourceOccurrence,
   workspaceSourceWrite,
   noteWorkspacePresentationChanges
 } from './workspace-source-state'
@@ -13,7 +28,8 @@ import {
   workspaceEntityKey,
   tabPresentation,
   sourceTabPresentation,
-  isWorkspacePresentationKey
+  sourceTabEntity,
+  workspacePresentationKey
 } from '../../../shared/workspace-presentation'
 export function workspaceSourceClaims(
   state: AppState,
@@ -47,71 +63,143 @@ export function failedWorkspaceTabCloseRestore(
   tabId: string,
   get: () => AppState,
   set: (patch: Partial<AppState>) => void
-): () => void {
+): (() => void) & { dispose: () => void } {
   const saved = workspacePresentationFor(state, workspaceId)
   const placement = saved?.tabs.find((tab) => tab.id === tabId)
   const group = saved?.groups.find((group) => group.id === placement?.groupId)
-  return () => {
-    if (!saved || !placement || !group) {
+  const intent = saved && workspacePresentationUserIntent(saved)
+  const source = workspaceSourceOccurrence(state, tabId, workspaceId)
+  const target = source && structuredAgentSessionTargetForTab(state, source.tab)
+  const owner =
+    target && captureWebSessionIntentOwner(structuredAgentSessionFocusOwner(target).environmentId)
+  const generation = localStructuredSessionGeneration()
+  const addressRevision = localSourceAddressRevision()
+  let settled = false
+  const restore = () => {
+    if (settled || !saved || !placement || !group || !intent) {
       return
     }
+    settled = true
+    intent.release()
     const currentState = get()
     const current = workspacePresentationFor(currentState, workspaceId)
-    if (!current || !workspaceSourceTab(currentState, tabId, workspaceId)) {
+    if (
+      !current ||
+      (owner && !matchesWebSessionIntentOwner(owner)) ||
+      (target?.kind === 'local' &&
+        (!isCurrentLocalStructuredSessionGeneration(generation) ||
+          (source && !isCurrentLocalSourceAddress(source.source.workspaceId, addressRevision)))) ||
+      current.displayWorkspaceId !== saved.displayWorkspaceId ||
+      workspacePresentationKey(current.owner, current.anchor) !==
+        workspacePresentationKey(saved.owner, saved.anchor) ||
+      current.anchor.workspaceId !== saved.anchor.workspaceId ||
+      (() => {
+        const occurrence = workspaceSourceOccurrence(currentState, tabId, workspaceId)
+        return (
+          !occurrence ||
+          workspaceEntityKey(sourceTabEntity(occurrence.tab, occurrence.source)) !==
+            workspaceEntityKey(placement.entity)
+        )
+      })()
+    ) {
       return
     }
-    const live = current.tabs.find(
-      (tab) => workspaceEntityKey(tab.entity) === workspaceEntityKey(placement.entity)
-    )
-    if (!live) {
-      return
+    const untouched = (key: string): boolean => !intent.touched.has(key)
+    const entity = workspaceEntityKey(placement.entity)
+    const live = current.tabs.find((tab) => workspaceEntityKey(tab.entity) === entity)
+    const tab = live ?? placement
+    const canPlace =
+      untouched(`tab:${tab.id}:groupId`) &&
+      untouched('layout') &&
+      untouched(`order:${group.id}`) &&
+      untouched(`selection:${group.id}`) &&
+      (!live || (untouched(`order:${live.groupId}`) && untouched(`selection:${live.groupId}`)))
+    const restored = { ...tab }
+    for (const field of [
+      'customLabel',
+      'color',
+      'isPinned',
+      'viewMode',
+      'lastFocusedAt'
+    ] as const) {
+      if (
+        untouched(`tab:${tab.id}:${field}`) &&
+        (!live || live[field] === placement[field] || live[field] == null)
+      ) {
+        Object.assign(restored, { [field]: placement[field] })
+      }
     }
     let groups = current.groups
-      .filter((entry) => entry.id !== group.id)
-      .map((entry) => ({
-        ...entry,
-        tabOrder: entry.tabOrder.filter((id) => id !== live.id),
-        activeTabId:
-          entry.activeTabId === live.id
-            ? (entry.tabOrder.find((id) => id !== live.id) ?? null)
-            : entry.activeTabId
-      }))
-    const existing = current.groups.find((entry) => entry.id === group.id)
-    const restoredGroup = existing
-      ? { ...existing, tabOrder: [...new Set([...existing.tabOrder, live.id])] }
-      : { ...group, tabOrder: [live.id], activeTabId: live.id }
-    const following = saved.groups
-      .slice(saved.groups.indexOf(group) + 1)
-      .find((entry) => groups.some((candidate) => candidate.id === entry.id))
-    const at = following ? groups.findIndex((entry) => entry.id === following.id) : groups.length
-    groups.splice(at, 0, restoredGroup)
-    const originalGroupIds = new Set(saved.groups.map((entry) => entry.id))
-    groups = groups.filter((entry) => entry.tabOrder.length || originalGroupIds.has(entry.id))
-    const tabs = current.tabs.map((tab) => (tab === live ? placement : tab))
-    const retainedGroups = new Set(
-      groups
-        .filter((entry) => entry.id !== group.id || entry.tabOrder.some((id) => id !== live.id))
-        .map((entry) => entry.id)
-    )
-    const layout = restoreWorkspacePresentationGroup(
-      saved.layout,
-      prunePresentationLayout(current.layout, retainedGroups),
-      group.id
-    )
-    const document = { ...current, tabs, groups, layout }
-    const key = Object.entries(currentState.workspacePresentations ?? {}).find(
-      ([, value]) => value === current
-    )?.[0]
-    if (key && isWorkspacePresentationKey(key)) {
-      const documents = editWorkspacePresentationDocuments(
-        currentState.workspacePresentations ?? {},
-        key,
-        document
+    let layout = current.layout
+    let activeGroupId = current.activeGroupId
+    if (canPlace) {
+      restored.groupId = group.id
+      groups = current.groups
+        .filter((entry) => entry.id !== group.id)
+        .map((entry) => ({
+          ...entry,
+          tabOrder: entry.tabOrder.filter((id) => id !== tab.id),
+          activeTabId:
+            entry.activeTabId === tab.id
+              ? (entry.tabOrder.find((id) => id !== tab.id) ?? null)
+              : entry.activeTabId
+        }))
+      const existing = current.groups.find((entry) => entry.id === group.id)
+      const order = (existing?.tabOrder ?? []).filter((id) => id !== tab.id)
+      order.splice(Math.min(group.tabOrder.indexOf(placement.id), order.length), 0, tab.id)
+      const restoredGroup = {
+        ...group,
+        ...existing,
+        tabOrder: order,
+        activeTabId: untouched(`selection:${group.id}`)
+          ? group.activeTabId
+          : (existing?.activeTabId ?? tab.id)
+      }
+      const following = saved.groups
+        .slice(saved.groups.indexOf(group) + 1)
+        .find((entry) => groups.some((candidate) => candidate.id === entry.id))
+      groups.splice(
+        following ? groups.findIndex((entry) => entry.id === following.id) : groups.length,
+        0,
+        restoredGroup
       )
-      noteWorkspacePresentationChanges(documents, [key])
-      set(workspaceSourceWrite({ workspacePresentations: documents }, { documents: [key] }))
+      const original = new Set(saved.groups.map((entry) => entry.id))
+      groups = groups.filter((entry) => entry.tabOrder.length || original.has(entry.id))
+      const retained = new Set(
+        groups
+          .filter((entry) => entry.id !== group.id || entry.tabOrder.some((id) => id !== tab.id))
+          .map((entry) => entry.id)
+      )
+      layout = restoreWorkspacePresentationGroup(
+        saved.layout,
+        prunePresentationLayout(current.layout, retained),
+        group.id
+      )
+      if (untouched('selection') && saved.activeGroupId === group.id) {
+        activeGroupId = group.id
+      }
+    } else if (!live) {
+      return
     }
+    const tabs = live
+      ? current.tabs.map((entry) => (entry === live ? restored : entry))
+      : [...current.tabs, restored]
+    const document = { ...current, tabs, groups, layout, activeGroupId }
+    const key = workspacePresentationKey(current.owner, current.anchor)
+    const documents = editWorkspacePresentationDocuments(
+      currentState.workspacePresentations ?? {},
+      key,
+      document
+    )
+    noteWorkspacePresentationChanges(documents, [key])
+    set(workspaceSourceWrite({ workspacePresentations: documents }, { documents: [key] }))
   }
+  return Object.assign(restore, {
+    dispose: () => {
+      settled = true
+      intent?.release()
+    }
+  })
 }
 
 /** A real native close retracts every admitted contribution of that physical conversation. */

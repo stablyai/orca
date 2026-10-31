@@ -12,6 +12,7 @@ import type { WorktreePurgeTarget } from '../../worktree-purge-target'
 import { getFolderWorkspaceHostId } from '../../../../../../shared/folder-workspace-execution-host'
 import { getProjectGroupHostId } from '../../project-group-owner-routing'
 import {
+  type RemovedHostTwinState,
   collectRemovedHostTwinState,
   removedHostCanonicalizer,
   twinSelectionPatch
@@ -28,7 +29,10 @@ import {
   retirePurgedTabLaunches
 } from './purged-structured-launch-retirement'
 import { buildWorktreePurgeSurfacePatch } from './worktree-purge-surface-patch'
-import { noticeRemovedUnsavedFiles } from './removed-workspace-unsaved-files'
+import {
+  noticeRemovedUnsavedFiles,
+  type ConfirmedUnsavedDiscards
+} from './removed-workspace-unsaved-files'
 import {
   selectDetectedWorktreesByRepo,
   selectFolderWorkspaces,
@@ -141,15 +145,21 @@ export function buildHostTwinPurgeState(
   s: AppState,
   hostId: ExecutionHostId,
   twinHostIds: ReadonlyMap<string, readonly ExecutionHostId[]>,
-  changedPaneKeys?: Set<string>
+  changedPaneKeys?: Set<string>,
+  accepted?: {
+    removed: RemovedHostTwinState
+    confirmedDiscards?: ConfirmedUnsavedDiscards
+    wholeSource?: boolean
+  }
 ): Partial<AppState> {
   const twinIds = new Set(twinHostIds.keys())
-  const removed = collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
+  const removed = accepted?.removed ?? collectRemovedHostTwinState(s, twinIds, hostId, twinHostIds)
   const canonical = (worktreeId: string) =>
     removedHostCanonicalizer(s, worktreeId, hostId, twinHostIds.get(worktreeId) ?? [])
   const cancelledSessionIds = cancelStructuredLaunchesForWorktrees(
     twinIds,
-    (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId
+    (worktreeId, launchHostId) => canonical(worktreeId)(launchHostId) === hostId,
+    accepted?.removed.conversationIds
   )
   const terminalTabs: { id: string; ptyId: string | null }[] = []
   for (const worktreeId of twinIds) {
@@ -199,7 +209,11 @@ export function buildHostTwinPurgeState(
       }
     }
   }
-  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(s, doomed.removedFileIds)
+  const editorBufferKeepRequest = noticeRemovedUnsavedFiles(
+    s,
+    doomed.removedFileIds,
+    accepted?.confirmedDiscards
+  )
   const omitters = createWorktreePurgeOmitters(s, new Set(), doomed)
   const tabPrefixedSleeping = {
     sleepingAgentSessionsByPaneKey: omitters.omitByPaneKeyTabPrefix(
@@ -217,16 +231,18 @@ export function buildHostTwinPurgeState(
         : []
   )
   const layout = removeWorktreeLayout(s, {
-    worktreeIds: new Set(),
+    worktreeIds: accepted?.wholeSource ? twinIds : new Set(),
     tabIds: doomed.doomedTabIds,
     activeFileCleared: s.activeFileId != null && removed.fileIds.has(s.activeFileId),
-    kept: {
-      worktreeIds: twinIds,
-      terminalTabIds: removed.terminalTabIds,
-      fileIds: removed.fileIds,
-      browserTabIds: removed.browserTabIds,
-      unifiedTabIds: removed.otherTabIds
-    }
+    kept: accepted?.wholeSource
+      ? undefined
+      : {
+          worktreeIds: twinIds,
+          terminalTabIds: removed.terminalTabIds,
+          fileIds: removed.fileIds,
+          browserTabIds: removed.browserTabIds,
+          unifiedTabIds: removed.otherTabIds
+        }
   })
   const active = s.activeWorktreeId && twinIds.has(s.activeWorktreeId) ? s.activeWorktreeId : null
   // Why only then: re-deriving an untouched selection could switch the visible surface.
@@ -242,7 +258,9 @@ export function buildHostTwinPurgeState(
     editorBufferKeepRequest,
     ...layout,
     // Why: a group may now show a surviving tab of another kind, so selection is derived again.
-    ...(selectionRemoved ? buildActiveSurfacePatch({ ...s, ...layout }, active) : {}),
+    ...(selectionRemoved && !accepted?.wholeSource
+      ? buildActiveSurfacePatch({ ...s, ...layout }, active)
+      : {}),
     ...buildWorktreePurgeSurfacePatch(
       s,
       omitters,
@@ -258,8 +276,9 @@ export function buildHostTwinPurgeState(
       s,
       (sourceId, sourceHost) =>
         twinIds.has(sourceId) &&
-        sourceHost !== undefined &&
-        canonical(sourceId)(sourceHost) === hostId
+        (sourceHost === undefined
+          ? accepted?.wholeSource === true
+          : canonical(sourceId)(sourceHost) === hostId)
     )
   }
 }

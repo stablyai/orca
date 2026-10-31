@@ -1,5 +1,5 @@
 import {
-  sourceTabPresentation,
+  sourceTabEntity,
   workspaceEntityKey,
   workspaceSourceOwnsTab
 } from '../../../shared/workspace-presentation'
@@ -13,6 +13,7 @@ import type {
   WorkspaceSourceRef
 } from '../../../shared/workspace-presentation'
 import type { WorkspacePresentationIndex } from './workspace-presentation-index'
+import { workspaceTabCandidates } from '../lib/structured-chat-tab-index'
 export type WorkspaceCompositionState = { workspacePresentations?: WorkspacePresentationDocuments }
 export const readViews = new WeakMap<object, (raw: AppState) => AppState>()
 export function workspaceReadState(state: AppState): AppState {
@@ -36,6 +37,25 @@ type SourceTabState = {
   unifiedTabsByWorktree?: Record<string, readonly Tab[] | undefined>
   workspacePresentations?: WorkspacePresentationDocuments
 }
+const placements = new WeakMap<
+  WorkspacePresentation['tabs'],
+  Map<string, WorkspacePresentation['tabs'][number]>
+>()
+function placementFor(saved: WorkspacePresentation, id: string) {
+  let index = placements.get(saved.tabs)
+  if (!index) {
+    index = new Map()
+    for (const tab of saved.tabs) {
+      for (const key of [tab.id, tab.entity.entityId]) {
+        if (!index.has(key)) {
+          index.set(key, tab)
+        }
+      }
+    }
+    placements.set(saved.tabs, index)
+  }
+  return index.get(id)
+}
 
 /** Resolve the actual host-qualified occurrence, never an outer group or lexical path alias. */
 export function workspaceSourceOccurrence(
@@ -46,17 +66,14 @@ export function workspaceSourceOccurrence(
   const raw = rawStates.get(state)
   const tabs = raw?.unifiedTabsByWorktree ?? state.unifiedTabsByWorktree ?? {}
   const presentation = workspacePresentationFor(state, workspaceId)
-  const placement = presentation?.tabs.find(
-    (tab) => tab.id === tabId || tab.entity.entityId === tabId
-  )
+  const placement = presentation && placementFor(presentation, tabId)
   if (presentation) {
     for (const { source } of presentation.baseline) {
-      const tab = tabs[source.workspaceId]?.find(
+      const tab = workspaceTabCandidates(tabs[source.workspaceId], tabId).find(
         (candidate) =>
           workspaceSourceOwnsTab(candidate, source) &&
-          (candidate.id === tabId || candidate.entityId === tabId) &&
           (!placement ||
-            workspaceEntityKey(sourceTabPresentation(candidate, source).entity) ===
+            workspaceEntityKey(sourceTabEntity(candidate, source)) ===
               workspaceEntityKey(placement.entity))
       )
       if (tab) {
@@ -65,7 +82,7 @@ export function workspaceSourceOccurrence(
     }
     return undefined
   }
-  const tab = tabs[workspaceId]?.find((tab) => tab.id === tabId || tab.entityId === tabId)
+  const tab = workspaceTabCandidates(tabs[workspaceId], tabId)[0]
   const source: WorkspaceSourceRef | undefined = tab
     ? { hostId: tab.executionHostId ?? 'local', workspaceId: tab.worktreeId }
     : undefined

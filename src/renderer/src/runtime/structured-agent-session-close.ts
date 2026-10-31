@@ -5,7 +5,8 @@ import { callStructuredAgentSession } from './structured-agent-session-client'
 
 export async function closeStructuredAgentSession(
   target: RuntimeClientTarget,
-  sessionId: string
+  sessionId: string,
+  beforeSend?: () => void
 ): Promise<'closed' | 'unsupported'> {
   if (
     target.kind === 'environment' &&
@@ -16,6 +17,8 @@ export async function closeStructuredAgentSession(
   ) {
     return 'unsupported'
   }
-  await callStructuredAgentSession(target, 'agentSession.close', { sessionId })
+  await (beforeSend
+    ? callStructuredAgentSession(target, 'agentSession.close', { sessionId }, { beforeSend })
+    : callStructuredAgentSession(target, 'agentSession.close', { sessionId }))
   return 'closed'
 }

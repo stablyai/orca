@@ -3,11 +3,24 @@ import { isWorkspacePresentationKey } from '../../../shared/workspace-presentati
 import { reduceWorkspacePresentation } from '../../../shared/workspace-presentation-intent'
 import type { TabsSliceSet } from './slices/tabs/tabs-slice-contract'
 import type { AppState } from './types'
+import { noteWorkspacePresentationSelection } from '../../../shared/workspace-presentation-user-intent'
 import {
   noteWorkspacePresentationChanges,
   workspaceReadState,
   bindingIndexes
 } from './workspace-source-state'
+import { workspacePresentationFor } from './workspace-source-state'
+
+export function acceptWorkspacePresentationSelection(
+  state: AppState,
+  workspaceId: string,
+  groupId: string
+): void {
+  const saved = workspacePresentationFor(state, workspaceId)
+  if (saved) {
+    noteWorkspacePresentationSelection(saved, groupId)
+  }
+}
 
 const layoutKeys = [
   'unifiedTabsByWorktree',

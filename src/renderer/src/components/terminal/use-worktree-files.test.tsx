@@ -1,104 +1,90 @@
 // @vitest-environment happy-dom
-
-import { cleanup, renderHook } from '@testing-library/react'
-import { afterEach, describe, expect, it } from 'vitest'
-import type { OpenFile } from '@/store/slices/editor'
+import { act, cleanup, renderHook } from '@testing-library/react'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import type { StoreApi } from 'zustand'
+import type { AppState } from '@/store/types'
+import type * as StoreModule from '@/store'
+import { createTestStore, makeOpenFile } from '@/store/slices/store-test-helpers'
 import { useWorktreeFiles } from './use-worktree-files'
 
-const ACTIVE_WORKTREE_ID = 'wt-active'
-const OTHER_WORKTREE_ID = 'wt-other'
-type WorktreeFilesProps = { openFiles: OpenFile[]; worktreeId: string | null }
-
-function installFilterReadCounter(files: OpenFile[], worktreeIdReads: { value: number }): void {
-  const filter = files.filter.bind(files)
-  Object.defineProperty(files, 'filter', {
-    configurable: true,
-    value: (predicate: (file: OpenFile, index: number, array: OpenFile[]) => unknown): OpenFile[] =>
-      filter((file, index, array) => {
-        worktreeIdReads.value += 1
-        return predicate(file, index, array)
-      })
-  })
-}
-
-function makeCountedOpenFiles(count: number): {
-  files: OpenFile[]
-  worktreeIdReads: { value: number }
-} {
-  const worktreeIdReads = { value: 0 }
-  const files = Array.from({ length: count }, (_, index) => {
-    const worktreeId = index % 2 === 0 ? ACTIVE_WORKTREE_ID : OTHER_WORKTREE_ID
-    return {
-      id: `file-${index}`,
-      filePath: `/repo/${index}.ts`,
-      relativePath: `${index}.ts`,
-      language: 'typescript',
-      isDirty: false,
-      mode: 'edit',
-      worktreeId
-    } as OpenFile
-  })
-  installFilterReadCounter(files, worktreeIdReads)
-  return { files, worktreeIdReads }
-}
-
-afterEach(cleanup)
-
-describe('useWorktreeFiles', () => {
-  it('does not rescan stable open files across 100 unchanged renders', () => {
-    const { files, worktreeIdReads } = makeCountedOpenFiles(10_000)
-    const view = renderHook<OpenFile[], WorktreeFilesProps>(
-      ({ openFiles, worktreeId }: WorktreeFilesProps) => useWorktreeFiles(openFiles, worktreeId),
-      {
-        initialProps: {
-          openFiles: files,
-          worktreeId: ACTIVE_WORKTREE_ID
-        } satisfies WorktreeFilesProps
+const holder = vi.hoisted((): { store?: StoreApi<AppState> } => ({}))
+vi.mock('@/store', async (load) => {
+  const actual = await load<typeof StoreModule>()
+  const { useStore } = await import('zustand')
+  return {
+    ...actual,
+    useAppStore: <T,>(selector: (state: AppState) => T) => {
+      if (!holder.store) {
+        throw new Error('missing test store')
       }
-    )
-    const first = view.result.current
-
-    expect(first).toHaveLength(5_000)
-    expect(worktreeIdReads.value).toBe(10_000)
-
-    for (let render = 0; render < 100; render += 1) {
-      view.rerender({ openFiles: files, worktreeId: ACTIVE_WORKTREE_ID })
+      return useStore(holder.store, selector)
     }
-
-    expect(view.result.current).toBe(first)
-    expect(worktreeIdReads.value).toBe(10_000)
-  })
-
-  it('recomputes when the open-file array or rendered worktree changes', () => {
-    const { files, worktreeIdReads } = makeCountedOpenFiles(10)
-    const view = renderHook<OpenFile[], WorktreeFilesProps>(
-      ({ openFiles, worktreeId }: WorktreeFilesProps) => useWorktreeFiles(openFiles, worktreeId),
-      {
-        initialProps: {
-          openFiles: files,
-          worktreeId: ACTIVE_WORKTREE_ID
-        } satisfies WorktreeFilesProps
+  }
+})
+const ACTIVE = 'repo::/active'
+const OTHER = 'repo::/other'
+function countedFiles(count: number) {
+  let reads = 0
+  const files = Array.from({ length: count }, (_, at) => {
+    const file = makeOpenFile({ id: `file-${at}`, worktreeId: at % 2 ? OTHER : ACTIVE })
+    return new Proxy(file, {
+      get(target, key, receiver) {
+        if (key === 'worktreeId') {
+          reads++
+        }
+        return Reflect.get(target, key, receiver)
       }
-    )
+    })
+  })
+  return { files, reads: () => reads }
+}
+afterEach(() => {
+  cleanup()
+  vi.restoreAllMocks()
+})
+describe('useWorktreeFiles', () => {
+  it('selects 5000 current files and does no population work across 100 unchanged renders and unrelated writes', async () => {
+    const { files, reads } = countedFiles(10_000)
+    const store = createTestStore()
+    holder.store = store
+    store.setState({ openFiles: files })
+    const view = renderHook(({ id }) => useWorktreeFiles(id), { initialProps: { id: ACTIVE } })
+    await act(async () => {})
+    const first = view.result.current
+    expect(first).toHaveLength(5000)
+    const warmed = reads()
+    expect(warmed).toBeGreaterThanOrEqual(10_000)
+    for (let at = 0; at < 100; at++) {
+      view.rerender({ id: ACTIVE })
+      act(() => store.setState({ activeFileId: `unrelated-${at}` }))
+    }
+    expect(view.result.current).toBe(first)
+    expect(reads()).toBe(warmed)
+  })
+  it('indexes cloned inputs correctly and delivers changed records, members, workspace and null', () => {
+    const { files, reads } = countedFiles(10)
+    const store = createTestStore()
+    holder.store = store
+    store.setState({ openFiles: files })
+    const view = renderHook(({ id }: { id: string | null }) => useWorktreeFiles(id), {
+      initialProps: { id: ACTIVE }
+    })
     const first = view.result.current
     expect(first).toHaveLength(5)
-    expect(worktreeIdReads.value).toBe(10)
-
-    const replacementFiles = [...files]
-    installFilterReadCounter(replacementFiles, worktreeIdReads)
-    view.rerender({ openFiles: replacementFiles, worktreeId: ACTIVE_WORKTREE_ID })
-    const replacement = view.result.current
-    expect(replacement).not.toBe(first)
-    expect(replacement).toHaveLength(5)
-    expect(worktreeIdReads.value).toBe(20)
-
-    view.rerender({ openFiles: replacementFiles, worktreeId: OTHER_WORKTREE_ID })
+    const warmed = reads()
+    act(() => store.setState({ openFiles: [...files] }))
+    expect(view.result.current).toEqual(first)
+    expect(view.result.current).toBe(first)
+    expect(reads()).toBeGreaterThan(warmed)
+    act(() => store.getState().markFileDirty(files[0].id, true))
+    const changed = store.getState().openFiles[0]
+    expect(view.result.current).not.toBe(first)
+    expect(view.result.current[0]).toBe(changed)
+    act(() => store.setState({ openFiles: [changed, ...files.slice(2)] }))
     expect(view.result.current).toHaveLength(5)
-    expect(view.result.current).not.toBe(replacement)
-    expect(worktreeIdReads.value).toBe(30)
-
-    view.rerender({ openFiles: replacementFiles, worktreeId: null })
+    view.rerender({ id: OTHER })
+    expect(view.result.current).toHaveLength(4)
+    view.rerender({ id: null })
     expect(view.result.current).toEqual([])
-    expect(worktreeIdReads.value).toBe(30)
   })
 })

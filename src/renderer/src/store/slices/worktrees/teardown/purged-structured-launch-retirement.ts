@@ -70,13 +70,15 @@ export function retirePurgedTabLaunches(
 /** Cancels provisional structured-chat launches in these worktrees, on the given host only. */
 export function cancelStructuredLaunchesForWorktrees(
   worktreeIdSet: ReadonlySet<string>,
-  ownedByHost?: (worktreeId: string, executionHostId: ExecutionHostId) => boolean
+  ownedByHost?: (worktreeId: string, executionHostId: ExecutionHostId) => boolean,
+  onlySessionIds?: ReadonlySet<string>
 ): Set<string> {
   const cancelledSessionIds = new Set<string>()
   for (const launch of structuredLaunchStates()) {
     const worktreeId = launch.intent.worktreeId
     if (
       worktreeIdSet.has(worktreeId) &&
+      (!onlySessionIds || onlySessionIds.has(launch.intent.sessionId)) &&
       (!ownedByHost || ownedByHost(worktreeId, launch.intent.executionHostId)) &&
       shouldRetainStructuredAgentSessionLaunchTab(worktreeId, launch.intent.sessionId)
     ) {
@@ -103,6 +105,7 @@ export function cancelStructuredLaunchesForWorktrees(
       record.executionHostId === 'local' &&
       worktreeId &&
       worktreeIdSet.has(worktreeId) &&
+      (!onlySessionIds || onlySessionIds.has(record.sessionId)) &&
       (!ownedByHost || ownedByHost(worktreeId, record.executionHostId)) &&
       !cancelledSessionIds.has(record.sessionId)
     ) {

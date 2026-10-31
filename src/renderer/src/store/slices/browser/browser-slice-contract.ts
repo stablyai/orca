@@ -155,7 +155,12 @@ export type BrowserSlice = {
   ) => Promise<boolean>
   closeBrowserTab: (
     tabId: string,
-    options?: { reason?: 'cleanup'; preserveWorktreeSelection?: boolean }
+    options?: {
+      reason?: 'cleanup'
+      preserveWorktreeSelection?: boolean
+      admitClose?: () => boolean
+      onSettled?: (closed: boolean) => void
+    }
   ) => void
   shutdownWorktreeBrowsers: (
     worktreeId: string,

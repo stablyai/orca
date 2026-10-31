@@ -6,8 +6,8 @@ import { act, cleanup, render, renderHook, waitFor } from '@testing-library/reac
 import type { StoreApi } from 'zustand'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
-import { seed, O, D, C1 } from './workspace-presentation-test-fixture'
-import { makeOpenFile, makeUnifiedTab, makeWorktree, createTestStore } from './store-test-helpers'
+import { seed, seedEditors, O, D, C1 } from './workspace-presentation-test-fixture'
+import { makeOpenFile, makeUnifiedTab, makeWorktree } from './store-test-helpers'
 import { createStoreSessionMockApi } from './store-session-test-harness'
 import { rawWorkspaceState } from '../workspace-source-state'
 import { workspaceAdmittedFiles } from '../workspace-admitted-files'
@@ -80,36 +80,8 @@ afterEach(() => {
 })
 
 function editors() {
-  const store = seed()
+  const store = seedEditors()
   holder.store = store
-  const raw = rawWorkspaceState(store.getState())
-  const file = makeOpenFile({ id: 'owned', worktreeId: O, isDirty: true })
-  const foreign = makeOpenFile({
-    id: 'foreign',
-    worktreeId: O,
-    runtimeEnvironmentId: 'box',
-    isDirty: true
-  })
-  store.setState({
-    openFiles: [file, foreign],
-    editorDrafts: { owned: 'unsaved original', foreign: 'other host' },
-    unifiedTabsByWorktree: {
-      ...raw.unifiedTabsByWorktree,
-      [O]: [
-        ...raw.unifiedTabsByWorktree[O],
-        makeUnifiedTab({
-          id: 'editor',
-          entityId: file.id,
-          worktreeId: O,
-          groupId: 'source',
-          contentType: 'editor'
-        })
-      ]
-    }
-  })
-  store
-    .getState()
-    .moveUnifiedTabToGroup('editor', 'left', { activate: true, recordInteraction: false })
   return store
 }
 
@@ -706,64 +678,3 @@ it('replaces source-owned previews through real close and restores a supported f
     store.getState().unifiedTabsByWorktree[D].find((tab) => tab.entityId === restored.id)?.groupId
   ).toBe('left')
 })
-
-it.each([10, 100])(
-  'releases no-history file derivation roots with replaceable inputs after %i real closes/purges',
-  async (count) => {
-    const { workspaceAdmittedFiles } = await import('../workspace-admitted-files')
-    const store = createTestStore()
-    const files = Array.from({ length: count }, (_, at) =>
-      makeOpenFile({
-        id: `released-${at}`,
-        worktreeId: `release::/folder-${at}`,
-        filePath: `/folder-${at}/file.ts`
-      })
-    )
-    store.setState({ openFiles: files, activeWorktreeId: null, activeFileId: null })
-    // Observe weak-root ownership, not GC timing. Keeping receipts here deliberately prevents collection.
-    const roots: { key: object; value: Map<string, { inputs: unknown[]; files: unknown[] }> }[] = []
-    const original = WeakMap.prototype.set
-    WeakMap.prototype.set = function (
-      this: WeakMap<WeakKey, unknown>,
-      key: WeakKey,
-      value: unknown
-    ) {
-      if (value instanceof Map && typeof key !== 'symbol') {
-        roots.push({ key, value })
-      }
-      return original.call(this, key, value)
-    }
-    try {
-      for (const file of files) {
-        expect(
-          workspaceAdmittedFiles(store.getState(), file.worktreeId).map((row) => row.id)
-        ).toEqual([file.id])
-        store.getState().closeFile(file.id, { captureRecentlyClosed: false })
-      }
-      store.setState(
-        buildWorktreePurgeState(
-          store.getState(),
-          files.map((file) => ({ id: file.worktreeId, hostId: 'local' }))
-        )
-      )
-      expect(store.getState().openFiles).toEqual([])
-      expect(workspaceAdmittedFiles(store.getState(), files[0].worktreeId)).toEqual([])
-    } finally {
-      WeakMap.prototype.set = original
-    }
-    const caches = roots.filter(({ value }) =>
-      [...value.values()].some((row) => Array.isArray(row?.inputs))
-    )
-    expect(caches.length).toBeGreaterThanOrEqual(count)
-    for (const { key, value } of caches) {
-      expect(typeof key).toBe('object')
-      for (const row of value.values()) {
-        if (Array.isArray(row?.inputs)) {
-          // A stable action/owner may never root an obsolete inventory. Each root dies with its exact state.
-          expect(Reflect.get(key, 'openFiles')).toBe(row.inputs[0])
-        }
-      }
-    }
-    expect(store.getState().recentlyClosedEditorTabsByWorktree).toEqual({})
-  }
-)

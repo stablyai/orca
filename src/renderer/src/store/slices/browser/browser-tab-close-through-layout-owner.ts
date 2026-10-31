@@ -43,7 +43,8 @@ export function closeBrowserTabThroughLayoutOwner(
   browserTabId: string,
   reason: 'user' | 'cleanup',
   closeHere: (drawn?: DrawnBrowserTab) => void,
-  landIfEmptied?: () => boolean
+  landIfEmptied?: () => boolean,
+  lifecycle?: { admitClose?: () => boolean; onSettled?: (closed: boolean) => void }
 ): boolean {
   const state = get()
   const entry = Object.values(state.unifiedTabsByWorktree)
@@ -75,6 +76,7 @@ export function closeBrowserTabThroughLayoutOwner(
       ? pickNextActiveTab(dedupeTabOrder(group.tabOrder), group.recentTabIds, entry.id, tabs)
       : (group?.activeTabId ?? null)
   return closeContentTabThroughLayoutOwner(get, entry, {
+    ...lifecycle,
     nextActiveTabId,
     recordClose: reason,
     closeHere: () => closeHere(),

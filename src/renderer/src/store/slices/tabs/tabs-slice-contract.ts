@@ -143,7 +143,7 @@ export type TabsSlice = {
       precedingTabIds: readonly string[]
     }
   ) => string
-  focusGroup: (worktreeId: string, groupId: string) => void
+  focusGroup: (worktreeId: string, groupId: string, options?: { recordIntent?: false }) => void
   closeEmptyGroup: (worktreeId: string, groupId: string) => boolean
   createEmptySplitGroup: (
     worktreeId: string,

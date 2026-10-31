@@ -3,6 +3,7 @@ import type { Tab } from '../../../shared/tab-types'
 type StructuredTabIndex = {
   byId: ReadonlyMap<string, Tab>
   bySessionId: ReadonlyMap<string, Tab>
+  occurrences: ReadonlyMap<string, readonly Tab[]>
 }
 const indexes = new WeakMap<readonly Tab[], StructuredTabIndex>()
 
@@ -14,16 +15,30 @@ function indexTabs(tabs: readonly Tab[] | undefined): StructuredTabIndex | undef
   if (!index) {
     const byId = new Map<string, Tab>()
     const bySessionId = new Map<string, Tab>()
+    const occurrences = new Map<string, Tab[]>()
     for (const tab of tabs) {
+      for (const key of new Set([tab.id, tab.entityId])) {
+        const bucket = occurrences.get(key) ?? []
+        bucket.push(tab)
+        occurrences.set(key, bucket)
+      }
       if (tab.contentType === 'agent-session') {
         byId.set(tab.id, tab)
         bySessionId.set(tab.entityId, tab)
       }
     }
-    index = { byId, bySessionId }
+    index = { byId, bySessionId, occurrences }
     indexes.set(tabs, index)
   }
   return index
+}
+
+/** Preserve array order and duplicate host-qualified occurrences for the common address resolver. */
+export function workspaceTabCandidates(
+  tabs: readonly Tab[] | undefined,
+  id: string
+): readonly Tab[] {
+  return indexTabs(tabs)?.occurrences.get(id) ?? []
 }
 
 type TabsByWorkspace = Readonly<Record<string, readonly Tab[] | undefined>> | undefined

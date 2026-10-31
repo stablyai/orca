@@ -5,6 +5,7 @@ import type { Tab, TabGroup, TabGroupLayoutNode } from './tab-types'
 import type { WorkspaceSessionState } from './workspace-session-state-types'
 import { parseWslUncPath } from './wsl-paths'
 import { rewriteWorktreeIdPath } from './worktree/id'
+import { ImmutableInputCache, absentImmutableInput } from './immutable-input-cache'
 
 export const WORKSPACE_PRESENTATION_PREFIX = 'workspacePresentation:v1:'
 export type WorkspacePresentationKey = `workspacePresentation:v1:${string}`
@@ -188,24 +189,28 @@ export function sourceTabPresentation(
   tab: Tab,
   source: WorkspaceSourceRef
 ): WorkspaceTabPresentation {
+  return { ...tabPresentation(tab, source.hostId), entity: sourceTabEntity(tab, source) }
+}
+
+export function sourceTabEntity(
+  tab: Pick<Tab, 'executionHostId' | 'contentType' | 'entityId'>,
+  source: WorkspaceSourceRef
+): WorkspaceEntityRef {
   // The saved association contains row-qualified physical-host evidence, distinct from transport.
   const executionHostId =
     source.executionHostId && (!tab.executionHostId || tab.executionHostId === source.hostId)
       ? source.executionHostId
       : tab.executionHostId
-  return tabPresentation({ ...tab, executionHostId }, source.executionHostId ?? source.hostId)
+  return {
+    hostId: executionHostId ?? source.executionHostId ?? source.hostId,
+    contentType: tab.contentType,
+    entityId: tab.entityId
+  }
 }
 export function workspaceEntityKey(entity: WorkspaceEntityRef): string {
   return JSON.stringify([entity.hostId, entity.contentType, entity.entityId])
 }
-type BaselineCacheEntry = {
-  tabs: Tab[] | undefined
-  groups: TabGroup[] | undefined
-  layout: TabGroupLayoutNode | undefined
-  active: string | undefined
-  baseline: WorkspaceSourceBaseline
-}
-const baselineCaches = new WeakMap<object, Map<string, BaselineCacheEntry>>()
+const baselineCaches = new ImmutableInputCache<WorkspaceSourceBaseline>()
 
 export function sourceBaseline(
   session: WorkspaceSessionState,
@@ -216,19 +221,15 @@ export function sourceBaseline(
   const groups = session.tabGroups?.[id]
   const layout = session.tabGroupLayouts?.[id]
   const active = session.activeGroupIdByWorktree?.[id]
-  const key = JSON.stringify([source.hostId, source.executionHostId, id])
-  const cacheOwner = tabs ?? groups ?? session.unifiedTabs ?? session
-  const cache = baselineCaches.get(cacheOwner) ?? new Map<string, BaselineCacheEntry>()
-  baselineCaches.set(cacheOwner, cache)
-  const old = cache.get(key)
-  if (
-    old &&
-    old.tabs === tabs &&
-    old.groups === groups &&
-    old.layout === layout &&
-    old.active === active
-  ) {
-    return old.baseline
+  const key = JSON.stringify([source.hostId, source.executionHostId, id, active])
+  const inputs = [
+    tabs ?? absentImmutableInput,
+    groups ?? absentImmutableInput,
+    layout ?? absentImmutableInput
+  ]
+  const old = baselineCaches.get(inputs, key)
+  if (old) {
+    return old
   }
   const baseline = {
     source,
@@ -239,10 +240,8 @@ export function sourceBaseline(
     layout,
     activeGroupId: active
   }
-  const value =
-    old && JSON.stringify(old.baseline) === JSON.stringify(baseline) ? old.baseline : baseline
-  cache.set(key, { tabs, groups, layout, active, baseline: value })
-  return value
+  baselineCaches.set(inputs, key, baseline)
+  return baseline
 }
 
 export function prunePresentationLayout(

@@ -156,6 +156,8 @@ export type TerminalActions = {
       sleepingPaneKeys?: string[]
       expectedRuntimePtyIds?: string[]
       backendOwnsPtyTeardown?: boolean
+      onlyTabIds?: ReadonlySet<string>
+      canCommit?: () => boolean
       /** Main stops these terminals itself: the window only guards and then commits its panes. */
       hostStop?: Promise<HostTerminalStop>
       onAdmitted?: () => void

@@ -101,3 +101,8 @@ export function createMirroredEditorFileResolver(
     }
   }
 }
+
+/** Stable resource lookup also fences a captured operation after a file changes workspace. */
+export function indexedOpenFileById(files: readonly OpenFile[], id: string): OpenFile | undefined {
+  return fileIndex(files).byId.get(id)
+}

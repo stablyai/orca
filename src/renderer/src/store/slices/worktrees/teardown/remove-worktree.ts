@@ -1,3 +1,12 @@
+import { recordWorktreeRemovalFailure } from './worktree-removal-failure'
+import {
+  captureWorkspaceRemovalScope,
+  assertWorkspaceRemovalScopeCurrent
+} from './workspace-removal-scope'
+import {
+  closeWorkspaceRemovalNativeSources,
+  tearDownWorkspaceRemovalResources
+} from './workspace-removal-resources'
 import type { WorktreeSlice } from '../../worktree-helpers'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { RemoveWorktreeResult } from '../../../../../../shared/worktree/create-types'
@@ -7,8 +16,6 @@ import { ensureHooksConfirmed } from '@/lib/ensure-hooks-confirmed'
 import { runtimeTargetForOwnerEnvironment } from '../../../../runtime/runtime-client-target'
 import { forgetHugeRepoWarningDismissalsForWorktrees } from '@/lib/source-control-huge-repo-warning-dismissals'
 import { forgetWorktreeSleepIntent } from '@/lib/worktree-sleep-intent'
-import { readIpcErrorDetail } from '@/lib/ipc-error'
-import { isArchiveHookRemovalError } from '../../../../../../shared/worktree/archive-hook-removal-gate'
 import {
   resolveWorktreeOperationRouteResult,
   resolveWorktreeOperationRouteResultForHost
@@ -21,11 +28,6 @@ import {
   refuseUnprovableRemoteHostRouting
 } from './host-qualified-worktree-removal'
 import { resolveSameIdSurvivingHostId } from './host-qualified-worktree-row-removal'
-import {
-  classifyWorktreeForceDeleteReason,
-  getLockedWorktreeRemovalReason,
-  isLockedWorktreeRemovalError
-} from '../../../../../../shared/worktree/removal'
 import { preservedBranchCleanupKey } from '../../../../../../shared/preserved-branch-cleanup'
 import { getWorktreeDeleteStateKey } from './worktree-delete-state'
 import { pruneHostedReviewLinkMutationGenerations } from '../metadata/hosted-review-link-mutation'
@@ -70,6 +72,12 @@ export function createRemoveWorktree(
     } = start
     const sameIdSurvivingHostId =
       catalogSameIdSurvivingHostId ?? options?.sameIdSurvivingHostId ?? null
+    const scope = captureWorkspaceRemovalScope(
+      get(),
+      { id: worktreeId, hostId: hostId ?? 'local' },
+      removalRoute
+    )
+    const beforeRemoval = captureWorktreeStateBeforeRemoval(get(), worktreeId, hostId)
     const deleteStateKey = getWorktreeDeleteStateKey(get(), worktreeId, requiredExecutionHostId)
     set((s) => ({
       deleteStateByWorktreeId: {
@@ -102,7 +110,6 @@ export function createRemoveWorktree(
         worktreeId,
         requiredExecutionHostId
       )
-      const beforeRemoval = captureWorktreeStateBeforeRemoval(get(), worktreeId, hostId)
       if (!policy.forgetLocalOnly) {
         removalGenerationGuard?.assertCurrent()
       }
@@ -113,6 +120,16 @@ export function createRemoveWorktree(
         : refuseUnprovableRemoteHostRouting(get, worktreeId, target.kind)
       if (unprovableRemoteRouting) {
         throw new Error(unprovableRemoteRouting)
+      }
+      assertWorkspaceRemovalScopeCurrent(get(), scope)
+      if (!policy.forgetLocalOnly) {
+        options?.assertBeforeDispatch?.()
+        await closeWorkspaceRemovalNativeSources(
+          get,
+          scope,
+          policy.options?.allowUnverifiedPtyStop === true
+        )
+        assertWorkspaceRemovalScopeCurrent(get(), scope)
       }
       let removalResult: RemoveWorktreeResult
       let snapshotPruneHandledByLocalMain = policy.forgetLocalOnly || target.kind === 'local'
@@ -125,7 +142,10 @@ export function createRemoveWorktree(
           get,
           target,
           options: policy.options,
-          assertCurrent: () => removalGenerationGuard?.assertCurrent()
+          assertCurrent: () => {
+            removalGenerationGuard?.assertCurrent()
+            assertWorkspaceRemovalScopeCurrent(get(), scope)
+          }
         })
       } catch (error) {
         if (
@@ -164,6 +184,7 @@ export function createRemoveWorktree(
         }
       }
 
+      assertWorkspaceRemovalScopeCurrent(get(), scope)
       if (!snapshotPruneHandledByLocalMain) {
         await recordRemovedWorktreeSnapshotPrune({
           worktreeId,
@@ -172,6 +193,9 @@ export function createRemoveWorktree(
         })
       }
 
+      assertWorkspaceRemovalScopeCurrent(get(), scope)
+      await tearDownWorkspaceRemovalResources(set, get, scope, options?.confirmedDiscards)
+      assertWorkspaceRemovalScopeCurrent(get(), scope)
       // Same-ID survivor keeps shared surfaces; remove only confirmed host row, but still clean its unshared VM (completeSameIdHostScopedRemoval).
       if (requiredExecutionHostId) {
         const currentSameIdSurvivingHostId = resolveSameIdSurvivingHostId(
@@ -235,6 +259,7 @@ export function createRemoveWorktree(
         hostId,
         requiredExecutionHostId,
         beforeRemoval,
+        scope,
         catalogVersion: removalResult?.catalogVersion,
         confirmedDiscards: options?.confirmedDiscards
       })
@@ -286,33 +311,7 @@ export function createRemoveWorktree(
           }
         : { ok: true as const }
     } catch (err) {
-      // Why: git refusing a non-force delete for dirty/untracked files is a handled user decision, not an app error.
-      console.warn('Failed to remove worktree:', err)
-      // Strip IPC/channel wrappers so the user-facing refusal leads the toast.
-      const error = readIpcErrorDetail(err) ?? (err instanceof Error ? err.message : String(err))
-      const forceDeleteReason = classifyWorktreeForceDeleteReason(
-        error,
-        policy.force,
-        policy.options?.allowUnverifiedPtyStop === true
-      )
-      const locked = isLockedWorktreeRemovalError(error)
-      // Only archive-hook refusal can be retried via waiver rather than state repair; expose that toast choice (#19334).
-      const canWaiveArchiveHook = isArchiveHookRemovalError(error)
-      set((s) => ({
-        deleteStateByWorktreeId: {
-          ...s.deleteStateByWorktreeId,
-          [deleteStateKey]: {
-            isDeleting: false,
-            ...(requiredExecutionHostId ? { executionHostId: requiredExecutionHostId } : {}),
-            error,
-            canForceDelete: forceDeleteReason !== null,
-            forceDeleteReason,
-            ...(canWaiveArchiveHook ? { canWaiveArchiveHook: true } : {}),
-            ...(locked ? { lockReason: getLockedWorktreeRemovalReason(error) } : {})
-          }
-        }
-      }))
-      return { ok: false as const, error }
+      return recordWorktreeRemovalFailure(set, deleteStateKey, requiredExecutionHostId, policy, err)
     }
   }
 }

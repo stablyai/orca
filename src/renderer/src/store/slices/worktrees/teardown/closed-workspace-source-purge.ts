@@ -12,25 +12,36 @@ export function purgeClosedWorkspaceSources(
     source: (entry: T, context: string) => { workspaceId: string; hostId?: ExecutionHostId }
   ): Record<string, T[]> => {
     let next: Record<string, T[]> | undefined
-    for (const [context, entries] of Object.entries(map)) {
+    for (const [context, entries] of Object.entries(map ?? {})) {
       const kept = entries.filter((entry) => {
         const owner = source(entry, context)
         return !removed(owner.workspaceId, owner.hostId)
       })
       if (kept.length !== entries.length) {
-        ;(next ??= { ...map })[context] = kept
+        next ??= { ...map }
+        if (kept.length) {
+          next[context] = kept
+        } else {
+          Reflect.deleteProperty(next, context)
+        }
       }
     }
-    return next ?? map
+    return next ?? map ?? {}
   }
   return {
     recentlyClosedEditorTabsByWorktree: prune(
       state.recentlyClosedEditorTabsByWorktree,
-      (entry) => ({ workspaceId: entry.worktreeId, hostId: getOpenFileExecutionHostId(entry) })
+      (entry, context) => ({
+        workspaceId: entry.worktreeId ?? context,
+        hostId: getOpenFileExecutionHostId(entry)
+      })
     ),
     recentlyClosedBrowserTabsByWorktree: prune(
       state.recentlyClosedBrowserTabsByWorktree,
-      (entry) => ({ workspaceId: entry.workspace.worktreeId, hostId: entry.sourceHostId })
+      (entry, context) => ({
+        workspaceId: entry.workspace.worktreeId ?? context,
+        hostId: entry.sourceHostId
+      })
     ),
     recentlyClosedTerminalTabsByWorktree: prune(
       state.recentlyClosedTerminalTabsByWorktree,

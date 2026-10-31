@@ -7,6 +7,7 @@ import {
   type WorkspaceSourceRef
 } from './workspace-presentation'
 import { editWorkspacePresentationDocuments } from './workspace-presentation-documents'
+import { noteWorkspacePresentationUserIntent } from './workspace-presentation-user-intent'
 
 export function isPresentationOnlyCommand(command: {
   type: string
@@ -37,7 +38,7 @@ export function reduceWorkspacePresentation(
   intent: WorkspacePresentationIntent
 ): WorkspacePresentation {
   const entities = new Map(saved.tabs.map((tab) => [tab.id, tab.entity]))
-  return {
+  const next: WorkspacePresentation = {
     ...saved,
     tabs: intent.tabs.map((tab) => ({
       ...tabPresentation(tab, saved.anchor.executionHostId ?? saved.anchor.hostId),
@@ -53,6 +54,8 @@ export function reduceWorkspacePresentation(
     layout: intent.layout,
     activeGroupId: intent.activeGroupId
   }
+  noteWorkspacePresentationUserIntent(saved, next)
+  return next
 }
 
 /** The physical owner supplies its exact locator coverage; sibling sources never move by equivalence. */

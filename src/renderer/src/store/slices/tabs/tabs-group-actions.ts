@@ -11,6 +11,7 @@ import { workspaceRootGroupId } from '../../../../../shared/workspace-layout/wor
 import { insertTabIdIntoOrder } from '../../../../../shared/workspace-layout/tab-order'
 import { resolveUnifiedTabCreatePlacement } from './tabs-create-placement'
 import { ownsGlobalSelection } from '../../global-selection-owner'
+import { acceptWorkspacePresentationSelection } from '../../workspace-presentation-actions'
 
 type SplitGroupState = Pick<
   TabsSlice,
@@ -130,8 +131,11 @@ export function createTabsGroupActions(
       return groupId
     },
 
-    focusGroup: (worktreeId, groupId) =>
+    focusGroup: (worktreeId, groupId, options) =>
       set((state) => {
+        if (options?.recordIntent !== false) {
+          acceptWorkspacePresentationSelection(state, worktreeId, groupId)
+        }
         const groupAlreadyFocused = state.activeGroupIdByWorktree[worktreeId] === groupId
         const nextActiveGroupIdByWorktree = groupAlreadyFocused
           ? state.activeGroupIdByWorktree

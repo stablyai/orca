@@ -338,26 +338,31 @@ describe('structured agent session tab retirement', () => {
     warn.mockRestore()
   })
 
-  it('deduplicates concurrent host retirement', async () => {
-    let release!: () => void
-    mocks.closeSession.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          release = () => resolve('closed')
-        })
-    )
-    retireStructuredAgentSessionTab({
+  it('deduplicates concurrent host retirement while delivering provider failure evidence to each owner', async () => {
+    const failure = new Error('provider close failed')
+    const provider = Promise.withResolvers<'closed' | 'unsupported'>()
+    mocks.closeSession.mockReturnValue(provider.promise)
+    const firstError = vi.fn()
+    const joinedError = vi.fn()
+    const first = retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
-      sessionId: 'session-1'
+      sessionId: 'session-1',
+      onError: firstError
     })
-    retireStructuredAgentSessionTab({
+    const joined = retireStructuredAgentSessionTab({
       target,
       worktreeId: 'wt-1',
-      sessionId: 'session-1'
+      sessionId: 'session-1',
+      onError: joinedError
     })
     expect(mocks.closeSession).toHaveBeenCalledTimes(1)
-    release()
+    provider.reject(failure)
+    expect(await first).toBe(true)
+    expect(await joined).toBe(true)
+    expect(firstError).toHaveBeenCalledWith(failure)
+    expect(joinedError).toHaveBeenCalledWith(failure)
+    expect(mocks.callRuntime).toHaveBeenCalledTimes(1)
   })
 
   it('retires an unmounted created reader only on the owning host', async () => {

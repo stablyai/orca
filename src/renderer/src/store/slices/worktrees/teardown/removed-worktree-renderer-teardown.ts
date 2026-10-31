@@ -1,3 +1,7 @@
+import {
+  assertWorkspaceRemovalScopeCurrent,
+  type WorkspaceRemovalScope
+} from './workspace-removal-scope'
 import type { ExecutionHostId } from '../../../../../../shared/execution-host'
 import type { WorktreeSliceGet, WorktreeSliceSet } from '../listing/worktree-slice-types'
 import type { WorktreeCatalogVersion } from '../../../../../../shared/worktree/catalog-version'
@@ -11,12 +15,10 @@ import { disposeRemovedWorktreeParkedTerminalWatchers } from '../../../../compon
 import { detachedHeadAutoDerivedDisplayNames } from '../metadata/detached-head-display-name'
 import { applyRemoveWorktreeSuccessState } from './remove-worktree-store-cleanup'
 import { purgeOrphanedRuntimeSshProjects } from './orphaned-runtime-ssh-project-purge'
-import { deleteWorkspaceChatDrafts } from './removed-worktree-chat-drafts'
 import {
   flushPurgedWorkspaceEdits,
   type ConfirmedUnsavedDiscards
 } from './removed-workspace-unsaved-files'
-import { forgetDesktopCreatedServerTabsOf } from '@/lib/desktop-created-server-tabs'
 import type { WorktreeStateBeforeRemoval } from './worktree-state-before-removal'
 
 /** After backend success: unregister browsers before other teardown, then dispose SSH relay only after terminals so mounted panes cannot hit a missing relay. */
@@ -27,6 +29,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
   hostId: ExecutionHostId | undefined
   requiredExecutionHostId: ExecutionHostId | null
   beforeRemoval: WorktreeStateBeforeRemoval
+  scope: WorkspaceRemovalScope
   /** The catalog the host's removal produced, when the host stamps it. */
   catalogVersion?: WorktreeCatalogVersion
   confirmedDiscards?: ConfirmedUnsavedDiscards
@@ -44,29 +47,6 @@ export async function tearDownRemovedWorktreeRendererState(args: {
       )
     )
   }
-  // Why the captured keys: closing a structured chat keeps its conversation's draft, and a listing
-  // refresh may already have dropped these tabs.
-  deleteWorkspaceChatDrafts(beforeRemoval.chatDraftKeys)
-  forgetDesktopCreatedServerTabsOf(worktreeId)
-  for (const tab of get().unifiedTabsByWorktree[worktreeId] ?? []) {
-    if (tab.contentType === 'agent-session') {
-      get().closeUnifiedTab(tab.id, {
-        preserveWorktreeSelection: true,
-        recordInteraction: false
-      })
-    }
-  }
-  // Only successful backend removal retires surfaces; browsers unregister first. Selection follows row removal when successor is chosen.
-  await Promise.resolve(
-    get().shutdownWorktreeBrowsers(worktreeId, { preserveWorktreeSelection: true })
-  )
-  // Why here too: an SSH or paired workspace's pages use this desktop's profile, which that host's removal never reaches.
-  void get().deleteManagedBrowserSessionProfile({ kind: 'worktree', id: worktreeId })
-  await get().shutdownWorktreeTerminals(worktreeId, {
-    shutdownReason: 'remove-worktree',
-    // The backend removal above already killed the workspace's PTYs.
-    backendOwnsPtyTeardown: true
-  })
   // Why: dispose the SSH relay AFTER terminal teardown so a still-mounted pane can't hit a gone relay and toast "SSH not active".
   const runtimeCleanup = await cleanupEphemeralVmRuntimesForDeleted(
     requiredExecutionHostId
@@ -77,6 +57,7 @@ export async function tearDownRemovedWorktreeRendererState(args: {
         }
       : { workspaceIds: [worktreeId] }
   )
+  assertWorkspaceRemovalScopeCurrent(get(), args.scope)
   const tabs = get().tabsByWorktree[worktreeId] ?? []
   const tabIds = new Set(tabs.map((t) => t.id))
 
@@ -97,7 +78,8 @@ export async function tearDownRemovedWorktreeRendererState(args: {
     worktreeId,
     tabIds,
     requiredExecutionHostId ?? hostId,
-    args.confirmedDiscards
+    args.confirmedDiscards,
+    true
   )
   // Purge destroyed-target projects after row removal so selection clears with the row, not earlier.
   await purgeOrphanedRuntimeSshProjects(get, runtimeCleanup.destroyedSshTargetIds)
