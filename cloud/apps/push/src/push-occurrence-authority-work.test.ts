@@ -7,9 +7,21 @@ import {
   within
 } from './durable-push-store.test-fixture.js'
 import { authorityFixture, required, TOKEN } from './push-occurrence-authority.test-fixture.js'
-import { record, ownerCleanup } from './push-owner-integration.test-fixture.js'
+import { record, text, ownerCleanup } from './push-owner-integration.test-fixture.js'
+import type { SqlRow } from './push-database.js'
 
 afterEach(cleanupDurablePushFixtures)
+
+function admissionRelation(rows: SqlRow[]) {
+  return rows
+    .map((row) => ({ ...row }))
+    .toSorted(
+      (left, right) =>
+        text(left.batch_id).localeCompare(text(right.batch_id)) ||
+        text(left.destination).localeCompare(text(right.destination)) ||
+        text(left.route_key).localeCompare(text(right.route_key))
+    )
+}
 
 it.each([false, true])(
   'bounds covered handoff C/V10/100 with P1, held provider=%s',
@@ -137,16 +149,16 @@ it('bounds real admitted key churn by distinct live batch/domain facts and fence
         expect(insertion.returnedBytes).toBe(Buffer.byteLength(JSON.stringify([{ changes: 1 }])))
         associationBytes.push(insertion.parameterBytes)
         const repeatStart = f.work.length
-        const admitted = await f.rows('push_batch_admissions')
+        const admitted = admissionRelation(await f.rows('push_batch_admissions'))
         await admission.renew()
         await admission.renew()
         expect(Number(required((await f.rows('push_occurrence_domains'))[0]).lease_until)).toBe(
           f.clock() + 30_000
         )
         await f.server.worker.runDue()
-        expect(await f.rows('push_batch_admissions')).toEqual(admitted)
+        expect(admissionRelation(await f.rows('push_batch_admissions'))).toEqual(admitted)
         expect(await admission.acquire(await f.device(f.a.registrationId))).toBe('admitted')
-        expect(await f.rows('push_batch_admissions')).toEqual(admitted)
+        expect(admissionRelation(await f.rows('push_batch_admissions'))).toEqual(admitted)
         const repeats = f.work
           .slice(repeatStart)
           .filter((entry) => entry.sql.startsWith('INSERT INTO push_batch_admissions'))
@@ -159,7 +171,7 @@ it('bounds real admitted key churn by distinct live batch/domain facts and fence
       expect(associationBytes.reduce((sum, bytes) => sum + bytes, 0)).toBe(
         required(associationBytes[0]) * count
       )
-      const proof = await f.rows('push_batch_admissions')
+      const proof = admissionRelation(await f.rows('push_batch_admissions'))
       expect(new Set(proof.map((row) => row.route_key)).size).toBe(count)
       expect(
         proof.every(
@@ -167,7 +179,7 @@ it('bounds real admitted key churn by distinct live batch/domain facts and fence
         )
       ).toBe(true)
       await f.server.deliveryStore.finish({ ...queued, lease: 'not-the-owner' })
-      expect(await f.rows('push_batch_admissions')).toEqual(proof)
+      expect(admissionRelation(await f.rows('push_batch_admissions'))).toEqual(proof)
       f.work.length = 0
       f.locks.length = 0
       await f.send(f.a, f.read())

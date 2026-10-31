@@ -63,8 +63,8 @@ it('runs actual pinned old/new schema, grammar and workers in both directions wi
     ) {
       throw new Error('Missing original archived schema parser')
     }
-    expect(record(await oldGrammar.safeParse.call(oldGrammar, f.alert())).success).toBe(false)
-    expect(record(await oldGrammar.safeParse.call(oldGrammar, legacy)).success).toBe(true)
+    expect(record(await oldGrammar.safeParse(f.alert())).success).toBe(false)
+    expect(record(await oldGrammar.safeParse(legacy)).success).toBe(true)
     expect(PushNotificationSchema.safeParse(legacy).success).toBe(true)
     expect(await archivedCall(oldStore, 'accept', f.a.host, registrationId, legacy)).toBe('queued')
     await legacyDb.close()

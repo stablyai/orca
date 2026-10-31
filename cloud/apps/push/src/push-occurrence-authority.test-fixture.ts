@@ -1,4 +1,4 @@
-import { expect } from 'vitest'
+import { expect, vi } from 'vitest'
 import nacl from 'tweetnacl'
 import { pushRouteDeclarationContent, type PushNotification } from '@orca-cloud/push-contract'
 import type { ApnsRequest, ApnsResponse } from './apns-http2-transport.js'
@@ -13,6 +13,7 @@ import {
 import { deriveHostFingerprint } from './host-fingerprint.js'
 import { integer, record, text, ownerCleanup } from './push-owner-integration.test-fixture.js'
 import type { PushDatabase, SqlRow } from './push-database.js'
+import type { QueuedPushDelivery } from './durable-push-store.js'
 import {
   observeAuthority,
   type AuthorityWork,
@@ -32,6 +33,105 @@ export function required<T>(value: T | undefined | null): T {
   }
   return value
 }
+
+export async function observePopulationOutcomes(f: Awaited<ReturnType<typeof authorityFixture>>) {
+  const events: {
+    method: string
+    clock: number
+    completedAt?: number
+    queued: Pick<QueuedPushDelivery, 'id' | 'lease' | 'attempts' | 'expiresAt'>
+    input: unknown
+    outcome: 'entered' | 'returned' | 'error'
+    result?: unknown
+    error?: unknown
+    saved?: SqlRow[]
+    diagnostic?: { error: unknown }
+  }[] = []
+  const pending: Promise<unknown>[] = []
+  const restores: (() => void)[] = []
+  const restore = async () => {
+    const cleanup = ownerCleanup()
+    for (const release of restores.toReversed()) {
+      await cleanup.run(release)
+    }
+    cleanup.finish()
+  }
+  async function invoke<T>(
+    method: string,
+    queued: QueuedPushDelivery,
+    input: unknown,
+    run: () => Promise<T>
+  ): Promise<T> {
+    const event: (typeof events)[number] = {
+      method,
+      clock: f.clock(),
+      queued: {
+        id: queued.id,
+        lease: queued.lease,
+        attempts: queued.attempts,
+        expiresAt: queued.expiresAt
+      },
+      input,
+      outcome: 'entered'
+    }
+    events.push(event)
+    try {
+      const operation = run()
+      pending.push(operation)
+      const result = await operation
+      event.result = result
+      event.completedAt = f.clock()
+      event.outcome = 'returned'
+      if (method === 'defer') {
+        try {
+          event.saved = await f.db.query('SELECT * FROM push_delivery_batches WHERE batch_id = ?', [
+            queued.id
+          ])
+        } catch (error) {
+          event.diagnostic = { error }
+        }
+      }
+      return result
+    } catch (error) {
+      event.outcome = 'error'
+      event.completedAt = f.clock()
+      event.error = error
+      throw error
+    }
+  }
+  const store = f.server.deliveryStore
+  const admission = store.admission.bind(store)
+  const defer = store.defer.bind(store)
+  const finish = store.finish.bind(store)
+  try {
+    const port = vi.spyOn(store, 'admission').mockImplementation((queued) => {
+      const actual = admission(queued)
+      return {
+        acquire: (device) => invoke('acquire', queued, undefined, () => actual.acquire(device)),
+        finalize: (sent) => invoke('finalize', queued, sent, () => actual.finalize(sent)),
+        renew: () => invoke('renew', queued, undefined, () => actual.renew())
+      }
+    })
+    restores.push(() => port.mockRestore())
+    const parked = vi
+      .spyOn(store, 'defer')
+      .mockImplementation((queued) => invoke('defer', queued, undefined, () => defer(queued)))
+    restores.push(() => parked.mockRestore())
+    const finished = vi
+      .spyOn(store, 'finish')
+      .mockImplementation((queued, retryAfterMs) =>
+        invoke('finish', queued, retryAfterMs, () => finish(queued, retryAfterMs))
+      )
+    restores.push(() => finished.mockRestore())
+    return { events, restore, join: () => Promise.allSettled(pending) }
+  } catch (error) {
+    const cleanup = ownerCleanup({ failed: true, error })
+    await cleanup.run(restore)
+    cleanup.finish()
+    throw error
+  }
+}
+
 export async function authorityFixture(
   options: {
     database?: (db: PushDatabase) => PushDatabase

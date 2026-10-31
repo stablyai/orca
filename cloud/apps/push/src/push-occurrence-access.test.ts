@@ -217,7 +217,9 @@ it('bounds natural retention/expiry join candidates, skips held rows and preserv
             f.database.dialect,
             `${table}:${axis}:${count}`
           )
-          if (f.database.dialect === 'postgres') expect(plan.changed).toBe(2)
+          if (f.database.dialect === 'postgres') {
+            expect(plan.changed).toBe(2)
+          }
         }
         expect(await contents()).toEqual(before) // EXPLAIN ANALYZE mutations rolled back on the owned diagnostic connection.
         f.work.length = 0
