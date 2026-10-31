@@ -174,10 +174,14 @@ it('does not resurrect an in-flight alert after a dismissal and transient provid
     platform: 'ios',
     token: 'ab'.repeat(32)
   })
-  if (!registered.ok) throw new Error('Registration failed')
+  if (!registered.ok) {
+    throw new Error('Registration failed')
+  }
   const phone = registered.registrationId
   const device = await devices.findById(phone)
-  if (!device) throw new Error('Missing registered device')
+  if (!device) {
+    throw new Error('Missing registered device')
+  }
   await store.accept('host', phone, notification(1))
   const inFlight = (await store.claim())!
   await store.accept('host', phone, {
@@ -185,6 +189,12 @@ it('does not resurrect an in-flight alert after a dismissal and transient provid
     notificationId: notification(1).notificationId
   })
   await store.finish(inFlight, 1000)
+  const dismissal = (await store.claim())!
+  expect(dismissal.notification).toEqual({
+    ...notification(2, 'dismiss'),
+    notificationId: notification(1).notificationId
+  })
+  await store.finish(dismissal)
   expect(await store.claim()).toBeNull()
   advance(1000)
   const retry = await store.claim()
@@ -194,9 +204,6 @@ it('does not resurrect an in-flight alert after a dismissal and transient provid
   expect(retry.id).toBe(inFlight.id)
   expect(await store.admission(retry).acquire(device)).toBe('superseded')
   await store.finish(retry)
-  const dismissal = (await store.claim())!
-  expect(dismissal.notification.kind).toBe('dismiss')
-  await store.finish(dismissal)
   expect(await store.claim()).toBeNull()
   expect(await store.pendingCount(phone)).toBe(0)
 })

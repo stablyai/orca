@@ -69,12 +69,15 @@ export async function retireCoveredPushBatches(
   now: number
 ): Promise<void> {
   for (const batch of covered) {
-    if (!batch.id) continue
+    if (!batch.id) {
+      continue
+    }
     const removed = await tx.query(
       "DELETE FROM push_delivery_batches WHERE batch_id = ? AND state = 'pending' AND lease_until <= ? RETURNING batch_id",
       [batch.id, now]
     )
-    if (removed.length)
+    if (removed.length) {
       await tx.query('DELETE FROM push_batch_admissions WHERE batch_id = ?', [batch.id])
+    }
   }
 }

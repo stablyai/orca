@@ -11,92 +11,154 @@ import { record, ownerCleanup } from './push-owner-integration.test-fixture.js'
 
 afterEach(cleanupDurablePushFixtures)
 
-it('bounds actual covered handoff SQL/rows/locks at N10/100 while a provider is held', async () => {
-  const samples: { count: number; queries: number; rows: number }[] = []
-  for (const count of [10, 100]) {
-    const entered = Promise.withResolvers<void>()
-    const held = Promise.withResolvers<void>()
-    const f = await authorityFixture({
-      provider: async () => {
-        entered.resolve()
-        await held.promise
-        return { status: 200, body: '' }
-      }
-    })
-    let running: Promise<void> | undefined
-    let primary: { failed: true; error: unknown } | undefined
-    try {
-      for (let seq = 1; seq <= count; seq++) {
-        await f.send(f.a, f.alert(seq))
-      }
-      running = f.server.worker.runDue()
-      await within(entered.promise, 5000)
-      expect(f.requests).toHaveLength(1)
-      expect(await f.rows('push_batch_admissions')).toHaveLength(1)
-      f.work.length = 0
-      f.locks.length = 0
-      await f.send(f.a, f.read(count + 1))
-      const work = [...f.work]
-      const writes = work.filter((row) => row.sql.startsWith('INSERT INTO push_occurrence_domains'))
-      const history = work.filter((row) => row.sql.includes('JOIN push_delivery_batches b'))
-      expect(writes).toHaveLength(count)
-      expect(f.locks.filter((key) => key.startsWith('push-claim:'))).toHaveLength(count)
-      expect(work.filter((row) => row.sql.startsWith('SELECT * FROM push_devices'))).toHaveLength(1)
-      expect(work.filter((row) => row.sql.startsWith('SELECT version, hosts_json'))).toHaveLength(1)
-      expect(history).toHaveLength(Math.ceil(count / 100))
-      expect(history.reduce((sum, row) => sum + row.rows, 0)).toBe(1)
-      expect(work.filter((row) => row.sql.startsWith('INSERT INTO push_batch_admissions'))).toEqual(
-        []
-      )
-      expect(
-        (await f.rows('push_occurrence_domains')).every((row) => row.state === 'dismissed')
-      ).toBe(true)
-      expect(await f.rows('push_delivery_batches')).toHaveLength(2) // issued head and its local retraction
-      samples.push({
-        count,
-        queries: work.length,
-        rows: work.reduce((sum, row) => sum + row.rows, 0)
+it.each([false, true])(
+  'bounds covered handoff C/V10/100 with P1, held provider=%s',
+  async (hold) => {
+    const samples: { count: number; queries: number; rows: number }[] = []
+    for (const count of [10, 100]) {
+      const entered = Promise.withResolvers<void>()
+      const held = Promise.withResolvers<void>()
+      const f = await authorityFixture({
+        provider: async () => {
+          entered.resolve()
+          if (hold) {
+            await held.promise
+          }
+          return { status: 200, body: '' }
+        }
       })
-      held.resolve()
-      await running
-      await f.settle()
-      expect(f.requests).toHaveLength(2)
-      expect(record(record(JSON.parse(required(f.requests[1]).body)).orca).kind).toBe('dismiss')
-      expect(await f.rows('push_delivery_batches')).toEqual([])
-      expect(await f.rows('push_batch_admissions')).toEqual([])
-    } catch (error) {
-      primary = { failed: true, error }
+      let running: Promise<void> | undefined
+      let primary: { failed: true; error: unknown } | undefined
+      try {
+        for (let seq = 1; seq <= count; seq++) {
+          await f.send(f.a, f.alert(seq))
+        }
+        if (hold) {
+          running = f.server.worker.runDue()
+          await within(entered.promise, 5000)
+        } else {
+          const queued = required(await f.server.deliveryStore.claim())
+          const admission = f.server.deliveryStore.admission(queued)
+          expect(await admission.acquire(await f.device(f.a.registrationId))).toBe('admitted')
+          await admission.finalize(false)
+          await f.server.deliveryStore.finish(queued, 1000)
+        }
+        expect(f.requests).toHaveLength(hold ? 1 : 0)
+        expect(await f.rows('push_batch_admissions')).toHaveLength(1)
+        f.work.length = 0
+        f.locks.length = 0
+        await f.send(f.a, f.read(count + 1))
+        const work = [...f.work]
+        const writes = work.filter((row) =>
+          row.sql.startsWith('INSERT INTO push_occurrence_domains')
+        )
+        const history = work.filter((row) => row.sql.includes('JOIN push_delivery_batches b'))
+        expect(writes).toHaveLength(count)
+        expect(f.locks.filter((key) => key.startsWith('push-claim:'))).toHaveLength(count)
+        expect(work.filter((row) => row.sql.startsWith('SELECT * FROM push_devices'))).toHaveLength(
+          1
+        )
+        expect(work.filter((row) => row.sql.startsWith('SELECT version, hosts_json'))).toHaveLength(
+          1
+        )
+        expect(history).toHaveLength(Math.ceil(count / 100))
+        expect(history.reduce((sum, row) => sum + row.rows, 0)).toBe(1)
+        expect(
+          work.filter((row) => row.sql.startsWith('INSERT INTO push_batch_admissions'))
+        ).toEqual([])
+        expect(
+          (await f.rows('push_occurrence_domains')).every((row) => row.state === 'dismissed')
+        ).toBe(true)
+        expect(await f.rows('push_delivery_batches')).toHaveLength(hold ? 2 : 1) // issued head and its local retraction
+        samples.push({
+          count,
+          queries: work.length,
+          rows: work.reduce((sum, row) => sum + row.rows, 0)
+        })
+        held.resolve()
+        await running
+        await f.settle()
+        expect(f.requests).toHaveLength(hold ? 2 : 1)
+        expect(record(record(JSON.parse(required(f.requests.at(-1)).body)).orca).kind).toBe(
+          'dismiss'
+        )
+        expect(await f.rows('push_delivery_batches')).toEqual([])
+        expect(await f.rows('push_batch_admissions')).toEqual([])
+      } catch (error) {
+        primary = { failed: true, error }
+      }
+      const cleanup = ownerCleanup(primary)
+      await cleanup.run(() => held.resolve())
+      await cleanup.run(() => running)
+      await cleanup.run(() => f.close())
+      cleanup.finish()
     }
-    const cleanup = ownerCleanup(primary)
-    await cleanup.run(() => held.resolve())
-    await cleanup.run(() => running)
-    await cleanup.run(() => f.close())
-    cleanup.finish()
+    expect(required(samples[1]).queries).toBeLessThanOrEqual(required(samples[0]).queries * 10)
+    expect(required(samples[1]).rows).toBeLessThanOrEqual(required(samples[0]).rows * 10)
   }
-  expect(required(samples[1]).queries).toBeLessThanOrEqual(required(samples[0]).queries * 10)
-  expect(required(samples[1]).rows).toBeLessThanOrEqual(required(samples[0]).rows * 10)
-})
+)
 
 it('bounds real admitted key churn by distinct live batch/domain facts and fenced finish', async () => {
   const samples: number[] = []
   for (const count of [10, 100]) {
     const f = await authorityFixture()
+    const associationBytes: number[] = []
     let primary: { failed: true; error: unknown } | undefined
     try {
       await f.send(f.a, f.alert())
       const queued = required(await f.server.deliveryStore.claim())
+      const originalExpiry = queued.expiresAt
       for (let index = 0; index < count; index++) {
+        f.advance(2000)
+        const live = required((await f.rows('push_delivery_batches'))[0])
+        expect(live.batch_id).toBe(queued.id)
+        expect(live.lease_token).toBe(queued.lease)
+        expect(Number(live.lease_until)).toBeGreaterThan(f.clock())
+        expect(Number(live.expires_at)).toBe(originalExpiry)
+        expect(f.clock()).toBeLessThan(originalExpiry)
+        await f.server.deliveryStore.renew(queued)
+        expect(Number(required((await f.rows('push_delivery_batches'))[0]).lease_until)).toBe(
+          f.clock() + 30_000
+        )
         const key = nacl.sign.keyPair()
         await f.register(f.a.session, TOKEN, Buffer.from(key.publicKey).toString('base64url'))
         await f.declare([f.a.host], 1, key)
         const admission = f.server.deliveryStore.admission(queued)
+        const start = f.work.length
         expect(await admission.acquire(await f.device(f.a.registrationId))).toBe('admitted')
+        const insertion = required(
+          f.work
+            .slice(start)
+            .find((entry) => entry.sql.startsWith('INSERT INTO push_batch_admissions'))
+        )
+        expect(insertion.params).toHaveLength(5)
+        expect(insertion.changes).toBe(1)
+        expect(insertion.rows).toBe(1) // Driver mutation receipt, not a stored-row scan.
+        expect(insertion.returnedBytes).toBe(Buffer.byteLength(JSON.stringify([{ changes: 1 }])))
+        associationBytes.push(insertion.parameterBytes)
+        const repeatStart = f.work.length
+        const admitted = await f.rows('push_batch_admissions')
         await admission.renew()
         await admission.renew()
+        expect(Number(required((await f.rows('push_occurrence_domains'))[0]).lease_until)).toBe(
+          f.clock() + 30_000
+        )
+        await f.server.worker.runDue()
+        expect(await f.rows('push_batch_admissions')).toEqual(admitted)
         expect(await admission.acquire(await f.device(f.a.registrationId))).toBe('admitted')
-        expect(await f.rows('push_batch_admissions')).toHaveLength(index + 1)
+        expect(await f.rows('push_batch_admissions')).toEqual(admitted)
+        const repeats = f.work
+          .slice(repeatStart)
+          .filter((entry) => entry.sql.startsWith('INSERT INTO push_batch_admissions'))
+        expect(repeats).toHaveLength(1)
+        expect(required(repeats[0]).parameterBytes).toBe(insertion.parameterBytes)
+        expect(admitted).toHaveLength(index + 1)
         await admission.finalize(false)
       }
+      expect(new Set(associationBytes).size).toBe(1)
+      expect(associationBytes.reduce((sum, bytes) => sum + bytes, 0)).toBe(
+        required(associationBytes[0]) * count
+      )
       const proof = await f.rows('push_batch_admissions')
       expect(new Set(proof.map((row) => row.route_key)).size).toBe(count)
       expect(
@@ -114,6 +176,19 @@ it('bounds real admitted key churn by distinct live batch/domain facts and fence
           .filter((row) => row.sql.includes('JOIN push_delivery_batches b'))
           .reduce((sum, row) => sum + row.rows, 0)
       ).toBe(count)
+      const history = f.work.filter((row) => row.sql.includes('JOIN push_delivery_batches b'))
+      expect(history).toHaveLength(1)
+      expect(required(history[0]).returnedBytes).toBe(
+        Buffer.byteLength(
+          JSON.stringify(
+            proof.map((row) => ({
+              batch_id: row.batch_id,
+              destination: row.destination,
+              route_key: row.route_key
+            }))
+          )
+        )
+      )
       expect(
         f.work.filter((row) => row.sql.startsWith('INSERT INTO push_occurrence_domains'))
       ).toHaveLength(count)

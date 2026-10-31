@@ -54,9 +54,17 @@ it('runs actual pinned old/new schema, grammar and workers in both directions wi
     ])
     const { origin: _origin, occurrence: _occurrence, ...legacy } = f.alert()
     const oldContract = await old.load('contract/index')
-    const oldGrammar = record(oldContract.PushNotificationSchema)
-    expect(record(await archivedCall(oldGrammar, 'safeParse', f.alert())).success).toBe(false)
-    expect(record(await archivedCall(oldGrammar, 'safeParse', legacy)).success).toBe(true)
+    const oldGrammar = oldContract.PushNotificationSchema
+    if (
+      !oldGrammar ||
+      typeof oldGrammar !== 'object' ||
+      !('safeParse' in oldGrammar) ||
+      typeof oldGrammar.safeParse !== 'function'
+    ) {
+      throw new Error('Missing original archived schema parser')
+    }
+    expect(record(await oldGrammar.safeParse.call(oldGrammar, f.alert())).success).toBe(false)
+    expect(record(await oldGrammar.safeParse.call(oldGrammar, legacy)).success).toBe(true)
     expect(PushNotificationSchema.safeParse(legacy).success).toBe(true)
     expect(await archivedCall(oldStore, 'accept', f.a.host, registrationId, legacy)).toBe('queued')
     await legacyDb.close()
@@ -141,7 +149,7 @@ it('runs actual pinned old/new schema, grammar and workers in both directions wi
     await cleanup.run(() => worker.stop())
   }
   await cleanup.run(() => f.close())
-  for (const db of owned.reverse()) {
+  for (const db of owned.toReversed()) {
     await cleanup.run(() => db.close())
   }
   await cleanup.run(() => old?.close())

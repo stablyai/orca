@@ -123,9 +123,13 @@ it('parses a covered leased alert once through pre-provider handoff and fenced f
     platform: 'ios',
     token: 'ab'.repeat(32)
   })
-  if (!registered.ok) throw new Error('Registration failed')
+  if (!registered.ok) {
+    throw new Error('Registration failed')
+  }
   const device = await devices.findById(registered.registrationId)
-  if (!device) throw new Error('Missing registered device')
+  if (!device) {
+    throw new Error('Missing registered device')
+  }
   const input = notification(1)
   await store.accept('host', device.registrationId, input)
   await db.query(
@@ -134,7 +138,9 @@ it('parses a covered leased alert once through pre-provider handoff and fenced f
   )
   const parse = vi.spyOn(JSON, 'parse')
   const queued = await store.claim()
-  if (!queued) throw new Error('Missing covered lease')
+  if (!queued) {
+    throw new Error('Missing covered lease')
+  }
   expect(await store.admission(queued).acquire(device)).toBe('superseded')
   await store.finish(queued)
   expect(await store.claim()).toBeNull()

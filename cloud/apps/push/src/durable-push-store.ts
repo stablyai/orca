@@ -105,7 +105,9 @@ export class DurablePushStore {
       )
       await fenceDismissedOccurrences(tx, host, registrationId, fences, now)
       await retireCoveredPushBatches(tx, fences, now)
-      if (covered) return 'queued'
+      if (covered) {
+        return 'queued'
+      }
       await tx.query(
         `INSERT INTO push_delivery_batches(batch_id, host_fingerprint, registration_id, kind, payload_json, state, due_at, expires_at, lease_until, attempts, created_at)
         VALUES (?, ?, ?, ?, ?, 'pending', ?, ?, 0, 0, ?)`,
@@ -211,8 +213,9 @@ export class DurablePushStore {
           "DELETE FROM push_delivery_batches WHERE batch_id = ? AND lease_token = ? AND state = 'pending' RETURNING batch_id",
           [delivery.id, delivery.lease]
         )
-        if (removed.length)
+        if (removed.length) {
           await tx.query('DELETE FROM push_batch_admissions WHERE batch_id = ?', [delivery.id])
+        }
       })
       return
     }

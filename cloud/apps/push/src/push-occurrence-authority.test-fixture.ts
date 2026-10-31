@@ -13,6 +13,16 @@ import {
 import { deriveHostFingerprint } from './host-fingerprint.js'
 import { integer, record, text, ownerCleanup } from './push-owner-integration.test-fixture.js'
 import type { PushDatabase, SqlRow } from './push-database.js'
+import {
+  observeAuthority,
+  type AuthorityWork,
+  type AuthorityActivity
+} from './push-occurrence-observation.test-fixture.js'
+export {
+  observeAuthority,
+  type AuthorityWork,
+  type AuthorityActivity
+} from './push-occurrence-observation.test-fixture.js'
 
 export const TOKEN = 'ab'.repeat(32)
 export const NEXT_TOKEN = 'cd'.repeat(32)
@@ -22,34 +32,6 @@ export function required<T>(value: T | undefined | null): T {
   }
   return value
 }
-export type AuthorityWork = { sql: string; params: unknown[]; rows: number }
-export function observeAuthority(
-  db: PushDatabase,
-  work: AuthorityWork[],
-  locks: string[]
-): PushDatabase {
-  return {
-    dialect: db.dialect,
-    lockQuotaScope: (key) => db.lockQuotaScope(key),
-    tryLockSharedScope: (key) => db.tryLockSharedScope(key),
-    close: () => db.close(),
-    query: async (sql, params = []) => {
-      const rows = await db.query(sql, params)
-      work.push({ sql, params, rows: rows.length })
-      return rows
-    },
-    lockScope: async (key) => {
-      locks.push(key)
-      await db.lockScope(key)
-    },
-    tryLockScope: async (key) => {
-      locks.push(key)
-      return db.tryLockScope(key)
-    },
-    transaction: (run) => db.transaction((tx) => run(observeAuthority(tx, work, locks)))
-  }
-}
-
 export async function authorityFixture(
   options: {
     database?: (db: PushDatabase) => PushDatabase
@@ -59,7 +41,8 @@ export async function authorityFixture(
   const f = await fixture()
   const work: AuthorityWork[] = []
   const locks: string[] = []
-  const database = observeAuthority(options.database?.(f.db) ?? f.db, work, locks)
+  const activity: AuthorityActivity = { transactions: [], advisory: [] }
+  const database = observeAuthority(options.database?.(f.db) ?? f.db, work, locks, activity)
   const requests: ApnsRequest[] = []
   const server = createPushServer(testPushConfig(), database, {
     now: f.clock,
@@ -180,6 +163,7 @@ export async function authorityFixture(
       database,
       work,
       locks,
+      activity,
       server,
       a,
       b,

@@ -1,5 +1,6 @@
 import { afterEach, expect, it } from 'vitest'
 import nacl from 'tweetnacl'
+import { createHash } from 'node:crypto'
 import {
   cleanupDurablePushFixtures,
   durablePushTestDatabaseUrl,
@@ -18,16 +19,44 @@ import { record, ownerCleanup } from './push-owner-integration.test-fixture.js'
 
 afterEach(cleanupDurablePushFixtures)
 
+type ProviderAttempt = {
+  phase: 'original' | 'restarted'
+  status: 200 | 503
+  host: string
+  path: string
+  pushType: string | undefined
+  collapse: string | undefined
+  body: Record<string, unknown>
+}
+function providerAttempt(
+  request: ApnsRequest,
+  phase: ProviderAttempt['phase'],
+  status: ProviderAttempt['status']
+): ProviderAttempt {
+  return {
+    phase,
+    status,
+    host: request.host,
+    path: request.path,
+    pushType: request.headers['apns-push-type'],
+    collapse: request.headers['apns-collapse-id'],
+    body: record(JSON.parse(request.body))
+  }
+}
+
 it.each(['before-failure', 'after-failure'] as const)(
   'retains actual admitted historical authority after removal/read %s and restart',
   async (order) => {
     const entered = Promise.withResolvers<void>()
     const held = Promise.withResolvers<void>()
+    const transcript: ProviderAttempt[] = []
     const f = await authorityFixture({
-      provider: async () => {
+      provider: async (request) => {
         entered.resolve()
         await held.promise
-        return { status: 503, body: '' }
+        const response = { status: 503 as const, body: '' }
+        transcript.push(providerAttempt(request, 'original', response.status))
+        return response
       }
     })
     let running: Promise<void> | undefined
@@ -55,7 +84,9 @@ it.each(['before-failure', 'after-failure'] as const)(
         now: f.clock,
         apnsTransport: async (request) => {
           restartedRequests.push(request)
-          return { status: 200, body: '' }
+          const response = { status: 200 as const, body: '' }
+          transcript.push(providerAttempt(request, 'restarted', response.status))
+          return response
         }
       })
       expect((await f.rows('push_occurrence_domains')).map((row) => row.state)).toEqual([
@@ -64,11 +95,50 @@ it.each(['before-failure', 'after-failure'] as const)(
       await f.send(f.b, f.alert())
       f.advance(2000)
       await restarted.worker.runDue()
-      expect(restartedRequests).toHaveLength(1)
-      expect(record(record(JSON.parse(required(restartedRequests[0]).body)).orca).kind).toBe(
-        'dismiss'
+      const tuple = {
+        hostFingerprint: f.a.host,
+        notificationId: 'subject',
+        notificationEpoch: 'epoch',
+        source: 'agent-task-complete',
+        agentState: 'finished'
+      }
+      const destination = { host: 'api.push.apple.com', path: `/3/device/${TOKEN}` }
+      const alert: ProviderAttempt = {
+        ...destination,
+        phase: 'original',
+        status: 503,
+        pushType: 'alert',
+        collapse: createHash('sha256')
+          .update(JSON.stringify(['admitted-v1', f.b.host, 'subject']))
+          .digest('hex'),
+        body: {
+          aps: { alert: { title: 'Done', body: '' }, sound: 'default', 'thread-id': f.a.host },
+          orca: {
+            ...tuple,
+            kind: 'alert',
+            notificationSeq: 1,
+            origin: f.b.host,
+            occurrence: f.alert().occurrence
+          }
+        }
+      }
+      const dismissal: ProviderAttempt = {
+        ...destination,
+        phase: 'restarted',
+        status: 200,
+        pushType: 'background',
+        collapse: undefined,
+        body: {
+          aps: { 'content-available': 1 },
+          orca: { ...tuple, kind: 'dismiss', notificationSeq: 2 }
+        }
+      }
+      expect(transcript).toEqual(
+        order === 'before-failure'
+          ? [alert, { ...dismissal, phase: 'original', status: 503 }, dismissal]
+          : [alert, dismissal]
       )
-      expect(f.requests).toHaveLength(1)
+      expect(f.requests).toHaveLength(transcript.length - restartedRequests.length)
       expect(await f.rows('push_delivery_batches')).toEqual([])
       expect(await f.rows('push_batch_admissions')).toEqual([])
     } catch (error) {
