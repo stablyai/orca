@@ -151,6 +151,17 @@ vi.mock('./antigravity-usage-fetcher', () => ({
   })
 }))
 
+vi.mock('./muse-usage-fetcher', () => ({
+  fetchMuseRateLimits: async () => ({
+    provider: 'muse',
+    session: null,
+    weekly: null,
+    updatedAt: fixture.now,
+    error: null,
+    status: 'unavailable'
+  })
+}))
+
 import { RateLimitService } from './service'
 import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
 import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'

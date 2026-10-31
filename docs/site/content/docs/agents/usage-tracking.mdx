@@ -2,7 +2,7 @@
 title: Usage & rate-limit tracking
 ---
 
-Orca fetches usage for Claude Code, Codex, Gemini, OpenCode Go, Kimi Code, MiniMax, Grok, Antigravity, Cursor, and GLM Coding Plan and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
+Orca fetches usage for Claude Code, Codex, Gemini, OpenCode Go, Kimi Code, MiniMax, Grok, Antigravity, Cursor, GLM Coding Plan, and Muse Code and surfaces it in the status bar, so you know how close you are to a rate limit before an agent stalls.
 
 ## What's shown
 
@@ -23,6 +23,8 @@ For Claude, Orca requests `https://api.anthropic.com/api/oauth/usage` with the t
 - Expanding the account list in the status bar's Claude account switcher, which fetches your other saved Claude accounts. The list opens expanded when an account needs sign-in.
 - Orca Mobile or the web client connecting to this host or refreshing usage, which also fetches your other saved Claude accounts.
 
+For Muse, Orca runs `muse usage --json` using the CLI's existing login on the execution host, without starting a model turn. It shows session and weekly quota; missing allowance appears as **Usage unavailable**.
+
 ## Multi-account accounting
 
 The status bar always reflects the _active_ account. Other configured accounts are visible in the account switcher with their own usage.
@@ -40,7 +42,7 @@ Rows without live numbers show a short status instead: **Loading usage…**, **n
 
 ### Mobile
 
-On the companion app, open the host **Accounts** screen for the same switcher/usage readout. When Codex has earned **rate-limit reset** credits, spend one from that screen (see [Mobile companion](/docs/mobile)).
+On the companion app, open the host **Accounts** screen for Claude and Codex account usage. When Codex has earned **rate-limit reset** credits, spend one from that screen (see [Mobile companion](/docs/mobile)).
 
 ## Estimated cost (Stats)
 

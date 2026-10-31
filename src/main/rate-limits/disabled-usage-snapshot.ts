@@ -1,8 +1,11 @@
 import type { ProviderRateLimits } from '../../shared/rate-limit-types'
 // A null slot means loading to readers; a disabled meter must settle instead.
-export function antigravityUsageDisabledSnapshot(now: number = Date.now()): ProviderRateLimits {
+export function createDisabledUsageSnapshot(
+  provider: ProviderRateLimits['provider'],
+  now: number = Date.now()
+): ProviderRateLimits {
   return {
-    provider: 'antigravity',
+    provider,
     session: null,
     weekly: null,
     updatedAt: now,

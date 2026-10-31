@@ -10,6 +10,7 @@ export type UsageProviderSettings = Pick<
 > & {
   // Antigravity setup is a checked item plus PATH detection; agy usage needs no Gemini OAuth.
   antigravityUsageConfigured: boolean
+  museUsageConfigured?: boolean
   // Why: MiniMax/Grok sign-in live on disk, not in settings; main sets these each poll.
   minimaxCookieConfigured: boolean
   minimaxApiKeyConfigured: boolean
@@ -32,6 +33,7 @@ type UsageProviderSnapshots = {
   grok: ProviderRateLimits | null | undefined
   cursor: ProviderRateLimits | null | undefined
   zcode?: ProviderRateLimits | null
+  muse?: ProviderRateLimits | null
 }
 
 type UsageProviderId = ProviderRateLimits['provider']
@@ -55,8 +57,13 @@ export function isProviderConfigured(
   provider: ProviderRateLimits | null | undefined
 ): provider is ProviderRateLimits {
   // Older main processes may omit newer provider keys during HMR.
-  if (provider == null || provider.status === 'unavailable') {
+  if (provider == null) {
     return false
+  }
+  if (provider.status === 'unavailable') {
+    return (
+      provider.provider === 'muse' && provider.usageMetadata?.failureKind === 'usage-unavailable'
+    )
   }
   if (provider.status === 'fetching' && !hasUsageData(provider)) {
     return false
@@ -74,6 +81,7 @@ export function hasUsageProviderSettings(
     Boolean(settings?.opencodeSessionCookie?.trim()) ||
     settings?.opencodeGoApiKeyConfigured === true ||
     settings?.antigravityUsageConfigured === true ||
+    settings?.museUsageConfigured === true ||
     settings?.minimaxCookieConfigured === true ||
     settings?.minimaxApiKeyConfigured === true ||
     settings?.grokAuthConfigured === true ||
@@ -107,6 +115,9 @@ export function hasUsageProviderSettingsForProvider(
   if (providerId === 'antigravity') {
     // The agy probe needs only the PATH-gated checked item, independent of Gemini OAuth.
     return settings.antigravityUsageConfigured === true
+  }
+  if (providerId === 'muse') {
+    return settings.museUsageConfigured === true
   }
   if (providerId === 'minimax') {
     return settings.minimaxCookieConfigured === true || settings.minimaxApiKeyConfigured === true
@@ -175,7 +186,9 @@ export function isUsageEmptyState(
     isProviderSnapshotPending(providers.minimax) ||
     isProviderSnapshotPending(providers.grok) ||
     isProviderSnapshotPending(providers.cursor) ||
-    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode))
+    (providers.zcode !== undefined && isProviderSnapshotPending(providers.zcode)) ||
+    (hasUsageProviderSettingsForProvider('muse', settings) &&
+      isProviderSnapshotPending(providers.muse))
   ) {
     return false
   }
@@ -190,6 +203,7 @@ export function isUsageEmptyState(
     !isProviderConfigured(providers.minimax) &&
     !isProviderConfigured(providers.grok) &&
     !isProviderConfigured(providers.cursor) &&
-    !isProviderConfigured(providers.zcode)
+    !isProviderConfigured(providers.zcode) &&
+    !isProviderConfigured(providers.muse)
   )
 }

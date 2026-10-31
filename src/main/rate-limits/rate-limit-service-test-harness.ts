@@ -13,6 +13,7 @@ import { readCursorAuthSession } from './cursor-auth'
 import { fetchOpenCodeGoUsage } from './opencode-go-usage-source-selection'
 import { fetchZcodeRateLimits } from './zcode-usage-fetcher'
 import { fetchAntigravityRateLimits } from './antigravity-usage-fetcher'
+import { fetchMuseRateLimits } from './muse-usage-fetcher'
 import { hasMiniMaxSessionCookie } from '../minimax/minimax-cookie-store'
 
 export type Deferred<T> = {
@@ -91,6 +92,7 @@ export function mockFreshBackgroundProviderFetches(): void {
   vi.mocked(fetchMiniMaxRateLimits).mockImplementation(async () => okProvider('minimax', 0))
   vi.mocked(fetchGrokRateLimits).mockImplementation(async () => unavailableProvider('grok'))
   vi.mocked(fetchCursorRateLimits).mockImplementation(async () => unavailableProvider('cursor'))
+  vi.mocked(fetchMuseRateLimits).mockImplementation(async () => unavailableProvider('muse'))
   vi.mocked(fetchZcodeRateLimits).mockImplementation(async () => unavailableProvider('zcode'))
   vi.mocked(fetchAntigravityRateLimits).mockImplementation(async () =>
     unavailableProvider('antigravity')
@@ -112,6 +114,7 @@ export function resetRateLimitProviderMocks(): void {
     status: 'unavailable'
   })
   vi.mocked(fetchCursorRateLimits).mockResolvedValue(unavailableProvider('cursor'))
+  vi.mocked(fetchMuseRateLimits).mockResolvedValue(unavailableProvider('muse'))
   vi.mocked(fetchZcodeRateLimits).mockResolvedValue(unavailableProvider('zcode'))
   vi.mocked(fetchAntigravityRateLimits).mockResolvedValue(unavailableProvider('antigravity'))
   vi.mocked(hasMiniMaxSessionCookie).mockReturnValue(false)

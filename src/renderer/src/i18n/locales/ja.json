@@ -154,7 +154,10 @@
         "antigravityToggleDescription": "アクティブなワークスペースの Antigravity サブスクリプション使用量を表示します。",
         "grokToggleDescription": "Grok CLI でサインインしている場合に Grok サブスクリプションのクレジット使用量を表示します。",
         "cursorToggleDescription": "cursor-agent または Cursor IDE でサインインしている場合に Cursor プランの使用状況を表示します。",
-        "zcodeToggleDescription": "ZCode コーディングプランのクォータ使用量を表示します。"
+        "zcodeToggleDescription": "ZCode コーディングプランのクォータ使用量を表示します。",
+        "museTitle": "Muse 使用量",
+        "museDescription": "Meta Muse のサブスクリプションクォータをステータスバーに表示します。",
+        "museToggleDescription": "Muse CLI から取得したサブスクリプションクォータを表示します。"
       },
       "menuBarIcon": {
         "title": "メニューバーアイコンを表示",

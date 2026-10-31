@@ -630,7 +630,10 @@
         "antigravityToggleDescription": "Show Antigravity subscription usage for the active workspace.",
         "grokToggleDescription": "Show Grok subscription credit usage when signed in via Grok CLI.",
         "cursorToggleDescription": "Show Cursor plan usage when signed in through cursor-agent or Cursor IDE.",
-        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage."
+        "zcodeToggleDescription": "Show ZCode Coding Plan quota usage.",
+        "museTitle": "Muse Usage",
+        "museDescription": "Show Meta Muse subscription quota in the status bar.",
+        "museToggleDescription": "Show Muse subscription quota from the Muse CLI."
       },
       "menuBarIcon": {
         "title": "Show Menu Bar Icon",

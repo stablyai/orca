@@ -38,6 +38,7 @@ import { normalizeUiLanguage } from '../../../../shared/ui-language'
 import { migratePortugueseUiLanguageOnLoad } from '../../../../shared/portuguese-ui-language-migration'
 import { normalizeUsagePercentageDisplay } from '../../../../shared/usage-percentage-display'
 import { mergeWorkspaceCleanupUIState } from '../../../../shared/workspace-cleanup-ui-state'
+import { mergeHostMuseStatusBarPreference } from './web-muse-status-bar-preference'
 
 export function mergeWebUIState(
   base: PersistedUIState,
@@ -100,6 +101,7 @@ export function mergeHostWebUIState(
   return {
     ...mergeWebUIState(local, incoming),
     ...pinned,
+    ...mergeHostMuseStatusBarPreference(local, incoming),
     // Old hosts omit this field; a cached arm must not make their strict ui.set reject mode changes.
     statusBarCompactChangeNoticeDismissed: incoming.statusBarCompactChangeNoticeDismissed !== false
   }

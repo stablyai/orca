@@ -4,6 +4,15 @@ export type SettledProviderResult =
   | { status: 'fulfilled'; value: ProviderRateLimits }
   | { status: 'rejected'; reason: unknown }
 
+export function settleSiblingProviderFetch(
+  pending: Promise<ProviderRateLimits>
+): Promise<SettledProviderResult> {
+  return pending.then(
+    (value) => ({ status: 'fulfilled', value }),
+    (reason) => ({ status: 'rejected', reason })
+  )
+}
+
 export function settleSiblingProviderResult(
   provider: ProviderRateLimits['provider'],
   settled: SettledProviderResult

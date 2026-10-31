@@ -227,6 +227,7 @@ export function getDefaultUIState(): PersistedUIState {
     _workspaceStatusesDefaultWorkflowMigrated: true,
     _workspaceStatusesDefaultVisualsMigrated: true,
     statusBarItems: [...DEFAULT_STATUS_BAR_ITEMS],
+    _museStatusBarDefaultAdded: false,
     statusBarVisible: true,
     usagePercentageDisplay: DEFAULT_USAGE_PERCENTAGE_DISPLAY,
     statusBarUsageMode: DEFAULT_STATUS_BAR_USAGE_MODE,

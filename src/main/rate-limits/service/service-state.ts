@@ -14,6 +14,7 @@ import {
   type OpenCodeGoRateLimitConfig,
   type MiniMaxRateLimitConfig,
   type AntigravityUsageEnabledResolver,
+  type MuseUsageEnabledResolver,
   type ZcodePlanRateLimitConfig,
   type GeminiCliOAuthEnabledResolver,
   type NormalizedCodexAccountSelectionTarget,
@@ -32,6 +33,7 @@ export abstract class RateLimitServiceState {
     opencodeGo: null,
     kimi: null,
     antigravity: null,
+    muse: null,
     minimax: null,
     grok: null,
     cursor: null,
@@ -54,6 +56,7 @@ export abstract class RateLimitServiceState {
     minimax: 0,
     grok: 0,
     antigravity: 0,
+    muse: 0,
     cursor: 0,
     zcode: 0
   }
@@ -67,6 +70,7 @@ export abstract class RateLimitServiceState {
     minimax: 0,
     grok: 0,
     antigravity: 0,
+    muse: 0,
     cursor: 0,
     zcode: 0
   }
@@ -110,6 +114,7 @@ export abstract class RateLimitServiceState {
   protected zcodePlanConfigResolver: (() => ZcodePlanRateLimitConfig) | null = null
   protected geminiCliOAuthEnabledResolver: GeminiCliOAuthEnabledResolver | null = null
   protected antigravityUsageEnabledResolver: AntigravityUsageEnabledResolver | null = null
+  protected museUsageEnabledResolver: MuseUsageEnabledResolver | null = null
   protected inactiveClaudeAccountsResolver: (() => InactiveClaudeAccountInfo[]) | null = null
   protected inactiveCodexAccountsResolver: (() => InactiveCodexAccountInfo[]) | null = null
   protected networkProxySettingsResolver: (() => NetworkProxySettings) | null = null

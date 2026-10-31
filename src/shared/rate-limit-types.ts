@@ -1,5 +1,5 @@
 export type RateLimitWindow = {
-  /** Percentage of the window consumed (0–100). */
+  /** Provider-reported percentage consumed; may exceed 100 when over quota. */
   usedPercent: number
   /** Window duration in minutes: 300 (5h) or 10080 (7d). */
   windowMinutes: number
@@ -95,6 +95,7 @@ export type ProviderRateLimits = {
     | 'minimax'
     | 'grok'
     | 'antigravity'
+    | 'muse'
     | 'cursor'
     | 'zcode'
   /** 5-hour session window, null if not available. */
@@ -177,6 +178,7 @@ export type RateLimitState = {
   opencodeGo: ProviderRateLimits | null
   kimi: ProviderRateLimits | null
   antigravity: ProviderRateLimits | null
+  muse: ProviderRateLimits | null
   minimax: ProviderRateLimits | null
   grok: ProviderRateLimits | null
   cursor: ProviderRateLimits | null

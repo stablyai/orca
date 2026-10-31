@@ -3,6 +3,7 @@ import type { AgentSessionAttachmentClipboardTarget } from '../../../../shared/a
 import { saveClipboardImageAsWebAgentSessionAttachment } from './web-agent-session-attachment-upload'
 import { savePastedTextAsWebAgentSessionAttachment } from './web-pasted-text-upload'
 import { createWebExplorerRootSync } from './web-explorer-root-sync'
+import { createWebMuseStatusBarPreference } from './web-muse-status-bar-preference'
 import { createWebJiraFilterStateApi } from './web-jira-filter-state-api'
 import type { PreloadApi } from '../../../../preload/api-types'
 import { assertClipboardTextWithinLimitWithYield } from '../../../../shared/clipboard-text'
@@ -33,12 +34,14 @@ import { UI_STORAGE_KEY, noopUnsubscribe, writeJson } from './web-storage'
 /** Combines browser-local preferences with host persistence; acknowledged writes remain distinct from best-effort writes. */
 export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
   const explorerRoots = createWebExplorerRootSync()
+  const museStatusBar = createWebMuseStatusBarPreference()
   /** Captures the target host and strips browser-local or unsupported fields before sending a UI update. */
   const prepareHostUpdates = (updates: Parameters<PreloadApi['ui']['set']>[0]) => {
     const environmentId = requireActiveEnvironmentOrNull()?.id
     const hostUpdates = omitPairingLocalUiFields(updates)
     explorerRoots.prepare(environmentId, hostUpdates)
-    return { environmentId, hostUpdates }
+    const strippedMuseStatusBar = museStatusBar.prepare(environmentId, hostUpdates)
+    return { environmentId, hostUpdates, strippedMuseStatusBar }
   }
   let zoomLevel = readLocalWebUIState().uiZoomLevel
   return {
@@ -51,6 +54,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
         if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
           return readLocalWebUIState()
         }
+        museStatusBar.read(environmentId, result.ui)
         await explorerRoots.read(environmentId, result.ui)
         if (environmentId !== requireActiveEnvironmentOrNull()?.id) {
           return readLocalWebUIState()
@@ -94,9 +98,10 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       const next = mergeWebUIState(readLocalWebUIState(), updates)
       writeJson(UI_STORAGE_KEY, next)
       zoomLevel = next.uiZoomLevel
-      const { environmentId, hostUpdates } = prepareHostUpdates(updates)
+      const { environmentId, hostUpdates, strippedMuseStatusBar } = prepareHostUpdates(updates)
       await callRuntimeResult('ui.set', hostUpdates, 15_000)
       explorerRoots.acknowledge(environmentId, hostUpdates)
+      museStatusBar.assertAcknowledged(strippedMuseStatusBar)
       if (
         updates.explorerDisplayRootByWorktree !== undefined &&
         hostUpdates.explorerDisplayRootByWorktree === undefined
@@ -188,9 +193,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
       Promise.reject(new Error('Selection clipboard is unavailable in the web client')),
     writeClipboardImage: () => Promise.resolve(),
     writeClipboardFile: () => Promise.resolve({ ok: false, reason: 'unsupported-platform' }),
-    performNativePaste: () => {
-      document.execCommand?.('paste')
-    },
+    performNativePaste: () => void document.execCommand?.('paste'),
     performNativeSelectionAction: (action) => {
       document.execCommand?.(action === 'copy' ? 'copy' : 'selectAll')
     },

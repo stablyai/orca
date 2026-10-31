@@ -30,6 +30,8 @@ vi.mock('@/components/ui/dropdown-menu', () => ({
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { UsageRosterPanel, UsageRow } from './UsageRosterPanel'
+import { ProviderSegment } from './StatusBarProviderSegment'
+import { getUsageRosterRowState } from './usage-roster-row-state'
 
 const signedOutCodex: ProviderRateLimits = {
   provider: 'codex',
@@ -41,6 +43,51 @@ const signedOutCodex: ProviderRateLimits = {
 }
 
 describe('UsageRow', () => {
+  it('renders missing Muse allowance as unavailable and real zero usage as zero percent', () => {
+    const unavailable: ProviderRateLimits = {
+      provider: 'muse',
+      session: null,
+      weekly: null,
+      updatedAt: 0,
+      error: 'Muse did not report a usage allowance.',
+      status: 'unavailable',
+      usageMetadata: { source: 'cli', failureKind: 'usage-unavailable' }
+    }
+    const row = renderToStaticMarkup(
+      <UsageRow
+        p={unavailable}
+        display="used"
+        state={getUsageRosterRowState(unavailable, false)}
+        showSignInAction={false}
+        now={mocks.now}
+      />
+    )
+    const chip = renderToStaticMarkup(
+      <ProviderSegment p={unavailable} compact={false} display="used" />
+    )
+    expect(row).toContain('Usage unavailable')
+    expect(row).toContain('data-agent-icon="muse"')
+    expect(row).not.toContain('Sign in')
+    expect(row).not.toContain('%')
+    expect(chip).toContain('--')
+    expect(chip).not.toContain('data-usage-bar')
+    const zero = renderToStaticMarkup(
+      <ProviderSegment
+        p={{
+          ...unavailable,
+          status: 'ok',
+          error: null,
+          usageMetadata: { source: 'cli' },
+          session: { usedPercent: 0, windowMinutes: 300, resetsAt: null, resetDescription: null }
+        }}
+        compact={false}
+        display="used"
+      />
+    )
+    expect(zero).toContain('0%')
+    expect(zero).toContain('data-usage-bar')
+  })
+
   beforeEach(() => {
     mocks.useResetCountdownClock.mockClear()
   })

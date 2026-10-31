@@ -139,6 +139,7 @@ export function createProviderAccountServices(
   setAntigravityNativeCredentialChangeListener(() =>
     rateLimits.invalidateAntigravityCredentialState()
   )
+  rateLimits.setMuseUsageEnabledResolver(() => store.getUI().statusBarItems.includes('muse'))
   rateLimits.setNetworkProxySettingsResolver(() => store.getSettings())
   rateLimits.setInactiveClaudeAccountsResolver(() => {
     const settings = store.getSettings()
