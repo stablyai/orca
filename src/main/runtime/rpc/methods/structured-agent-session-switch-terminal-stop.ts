@@ -13,6 +13,16 @@ import { mainAgentState } from '../../../../shared/main-agent-status'
 import type { AiVaultAgent } from '../../../../shared/ai-vault-types'
 import type { captureStructuredSwitchTerminalSource } from './structured-agent-session-switch-source'
 
+/** False consent: the client left it to this host, so a replying terminal agent is refused. */
+export function requireTerminalSwitchConsent(
+  row: ReturnType<RpcContext['runtime']['agentTransitions']['latestRow']>,
+  consented: boolean | undefined
+): void {
+  if (consented === false && row && mainAgentState(row) === 'working') {
+    throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'turnActive' })
+  }
+}
+
 /**
  * A terminal source's stop: Escape a replying agent, let it record its own end of that turn
  * (bounded), then stop the exact process with exit proof. Nothing here waits on the transcript to
@@ -36,13 +46,11 @@ export async function stopStructuredSwitchTerminalSource(input: {
   const { ctx, host, sessionId, close, deadline } = input
   // Checked where the stop is admitted (before the Escape, at its write, and before the exit), so
   // a turn the user started while the switch prepared is never stopped without their yes.
-  const requireConsent = (): void => {
-    const row =
-      input.consented === false ? ctx.runtime.agentTransitions.latestRow(input.paneKey) : null
-    if (row && mainAgentState(row) === 'working') {
-      throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'turnActive' })
-    }
-  }
+  const requireConsent = (): void =>
+    requireTerminalSwitchConsent(
+      input.consented === false ? ctx.runtime.agentTransitions.latestRow(input.paneKey) : null,
+      input.consented
+    )
   requireConsent()
   const awaitBoundary = input.boundary
     ? await armSwitchTurnBoundaryWait(

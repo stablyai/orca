@@ -27,7 +27,10 @@ import {
 } from './structured-agent-session-switch-source'
 import { executeStructuredSessionTerminalSwitch } from './structured-agent-session-switch-terminal-execution'
 import { agentLaunchMovesHostWindow } from './agent-launch-tab-publication'
-import { stopStructuredSwitchTerminalSource } from './structured-agent-session-switch-terminal-stop'
+import {
+  requireTerminalSwitchConsent,
+  stopStructuredSwitchTerminalSource
+} from './structured-agent-session-switch-terminal-stop'
 import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session-lease-adjudication'
 import { mainAgentState } from '../../../../shared/main-agent-status'
 import { captureSwitchStoppedCliTurn } from '../../../native-chat/agent-session-wire/structured-agent-session-switch-import'
@@ -149,6 +152,8 @@ async function switchToChat(
     : undefined
   const paneKey = close ? `${close.source.tabId}:${close.source.leafId}` : undefined
   const row = paneKey ? ctx.runtime.agentTransitions.latestRow(paneKey) : null
+  // A replying agent without consent is refused before the transcript is read; the stop re-checks.
+  requireTerminalSwitchConsent(row, execution.consented)
   const adopt = createIdentity?.adopt
   const retainedSource =
     !adopt && source
