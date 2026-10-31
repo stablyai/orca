@@ -186,10 +186,22 @@ it.each([
 })
 
 describe('submit settle before Enter', () => {
+  /** An idle proof the test settles by hand, after advancing the fake clock. */
+  function heldProof(): { claim: () => Promise<boolean>; settle: (idle: boolean) => void } {
+    let settle: (idle: boolean) => void = () => {
+      throw new Error('proof not started')
+    }
+    const proof = new Promise<boolean>((resolve) => {
+      settle = resolve
+    })
+    return { claim: () => proof, settle: (idle) => settle(idle) }
+  }
+
   async function submitTimes(text: string, idleShell: boolean, proofMs = 0): Promise<number[]> {
     vi.useFakeTimers()
     const startedAt = Date.now()
     const enters: number[] = []
+    const proof = heldProof()
     const writer = new RuntimeTerminalWriter(
       (_id, data) => {
         if (data === '\r') {
@@ -200,14 +212,13 @@ describe('submit settle before Enter', () => {
       () => 'linux',
       () => null,
       undefined,
-      () =>
-        new Promise<boolean>((resolve) => {
-          setTimeout(() => resolve(idleShell), proofMs)
-        })
+      proof.claim
     )
     const pending = writer.writeAction('pty', { text, enter: true }, `${text}\r`, {
       inputKind: 'driving'
     })
+    await vi.advanceTimersByTimeAsync(proofMs)
+    proof.settle(idleShell)
     await vi.advanceTimersByTimeAsync(5000)
     await pending
     return enters
@@ -237,6 +248,7 @@ describe('submit settle before Enter', () => {
     vi.useFakeTimers()
     const writes: string[] = []
     const controller = new AbortController()
+    const proof = heldProof()
     const writer = new RuntimeTerminalWriter(
       (_id, data) => {
         writes.push(data)
@@ -245,10 +257,7 @@ describe('submit settle before Enter', () => {
       () => 'linux',
       () => null,
       undefined,
-      () =>
-        new Promise<boolean>((resolve) => {
-          setTimeout(() => resolve(true), 200)
-        })
+      proof.claim
     )
     const pending = writer.writeAction('pty', { text: 'ls', enter: true }, 'ls\r', {
       inputKind: 'driving',
@@ -257,7 +266,8 @@ describe('submit settle before Enter', () => {
     const rejected = expect(pending).rejects.toThrow('request_aborted')
     await vi.advanceTimersByTimeAsync(100)
     controller.abort()
-    await vi.advanceTimersByTimeAsync(200)
+    proof.settle(true)
+    await vi.advanceTimersByTimeAsync(1000)
     await rejected
     expect(writes).toEqual(['ls'])
   })
