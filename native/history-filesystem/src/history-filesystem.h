@@ -31,6 +31,10 @@ class Directory {
   void link(const std::string& name, const std::string& target);
   std::string readLink(const std::string& name);
   void removeEmpty(const std::string& name);
+  std::string read(const std::string& name);
+  void write(const std::string& name, const std::string& data, bool create);
+  void unlink(const std::string& name);
+  std::string identity(const std::string& name);
   bool same(Directory& other);
   bool sameDevice(Directory& other);
   void close();

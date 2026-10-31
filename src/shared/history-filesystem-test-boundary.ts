@@ -34,6 +34,11 @@ export function observeHistoryFilesystem(
       link: (name, target) => observe('link', [name, target], () => directory.link(name, target)),
       readLink: (name) => observe('readLink', [name], () => directory.readLink(name)),
       removeEmpty: (name) => observe('removeEmpty', [name], () => directory.removeEmpty(name)),
+      read: (name) => observe('read', [name], () => directory.read(name)),
+      write: (name, data, create) =>
+        observe('write', [name, data, create], () => directory.write(name, data, create)),
+      unlink: (name) => observe('unlink', [name], () => directory.unlink(name)),
+      identity: (name) => observe('identity', [name], () => directory.identity(name)),
       same: (other) => predicate('same', other, () => directory.same(unwrap(other))),
       sameDevice: (other) =>
         predicate('sameDevice', other, () => directory.sameDevice(unwrap(other))),

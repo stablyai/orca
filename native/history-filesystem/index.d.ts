@@ -16,6 +16,14 @@ export type HistoryDirectory = {
   link(name: string, target: string): void
   readLink(name: string): string
   removeEmpty(name: string): void
+  /** Reads a regular file; a link is refused, never followed. */
+  read(name: string): Buffer
+  /** `create` makes the file exclusively; otherwise an existing file is overwritten from its start, never created. */
+  write(name: string, data: string, create: boolean): void
+  /** Removes a non-directory entry itself, never a link's referent. */
+  unlink(name: string): void
+  /** The entry's own volume and file ID as `dev:ino`; equal for two names of one file. */
+  identity(name: string): string
   same(other: HistoryDirectory): boolean
   sameDevice(other: HistoryDirectory): boolean
   close(): void

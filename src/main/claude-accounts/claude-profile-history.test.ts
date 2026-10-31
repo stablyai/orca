@@ -15,6 +15,8 @@ vi.mock('node:fs', async (original) => {
   }
 })
 import { shareClaudeProfileHistory } from './claude-profile-history'
+import { mergeClaudeProfilePromptHistory } from './claude-profile-prompt-history'
+import { createClaudeProfileReport } from './claude-profile-report'
 const roots: string[] = []
 function fixture() {
   const root = fs.realpathSync(fs.mkdtempSync(join(tmpdir(), 'claude-profile-history-')))
@@ -405,9 +407,9 @@ describe('consuming publication interleavings with the actual addon', () => {
       })
       try {
         const report = await f.share()
-        expect(report.warnings).toContainEqual(
-          expect.objectContaining({ surface: 'history.jsonl', code: 'retained-conflict' })
-        )
+        // The rival's link went back in place: this setup is done.
+        expect(report.surfaces['history.jsonl']).toBe('unchanged')
+        expect(report.warnings).toEqual([])
       } finally {
         stop()
       }
@@ -440,4 +442,101 @@ describe('consuming publication interleavings with the actual addon', () => {
       expect(f.history()).toBe('private\nnative\n')
     }
   )
+  itLinks('publishes when another setup consumed the moved-aside link first', async () => {
+    const f = fixture(),
+      source = join(f.profileHome, 'history.jsonl')
+    fs.writeFileSync(source, 'private\n')
+    const rival = join(f.profileHome, 'history.jsonl.orca-profile-merge-1')
+    let consumed = false
+    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path, args) => {
+      if (operation !== 'move' || path !== f.profileHome) {
+        return
+      }
+      if (args[0] === 'history.jsonl' && !fs.existsSync(rival)) {
+        // A rival staged the original and published its link after this setup's check.
+        fs.renameSync(source, rival)
+        fs.symlinkSync(join(f.defaultHome, 'history.jsonl'), source)
+      } else if (args[2] === 'history.jsonl' && !consumed) {
+        consumed = true
+        fs.unlinkSync(join(f.profileHome, String(args[0])))
+      }
+    })
+    try {
+      const report = await f.share()
+      expect(consumed).toBe(true)
+      expect(report.surfaces['history.jsonl']).toBe('linked')
+      expect(report.warnings).toEqual([])
+    } finally {
+      stop()
+    }
+    expect(fs.realpathSync(source)).toBe(fs.realpathSync(join(f.defaultHome, 'history.jsonl')))
+    await f.share()
+    expect(f.history()).toBe('private\n')
+  })
+
+  itLinks('a stale cursor write cannot reach a new copy claimed under a reused name', async () => {
+    const f = fixture()
+    const claim = join(f.profileHome, 'history.jsonl.orca-profile-claim-0000000000000000')
+    const fill = (content: string) => {
+      fs.mkdirSync(claim)
+      fs.writeFileSync(join(claim, 'history.jsonl'), content)
+    }
+    const merge = () =>
+      mergeClaudeProfilePromptHistory(
+        f.profileHome,
+        f.defaultHome,
+        'linux',
+        createClaudeProfileReport()
+      )
+    // A claimed copy an interrupted setup left behind.
+    fill('old-1\n')
+    let reused = false
+    const stop = observeHistoryFilesystem(loadHistoryFilesystem(), (operation, path) => {
+      if (!reused && operation === 'write' && path === claim) {
+        reused = true
+        // Before this drain records its cursor, later setups merge and retire the copy, and a
+        // new copy of equal length is claimed under the same name.
+        merge()
+        merge()
+        expect(fs.existsSync(claim)).toBe(false)
+        fill('new-2\n')
+      }
+    })
+    try {
+      await f.share()
+    } finally {
+      stop()
+    }
+    expect(reused).toBe(true)
+    expect(fs.readdirSync(claim)).toEqual(['history.jsonl'])
+    expect(fs.readFileSync(join(claim, 'history.jsonl'), 'utf8')).toBe('new-2\n')
+    await f.share()
+    await f.share()
+    expect(f.history()).toBe('old-1\nnew-2\n')
+    expect(fs.existsSync(claim)).toBe(false)
+  })
+
+  itLinks('leaves no leftover population that grows with completed races', async () => {
+    const after = async (races: number) => {
+      const f = fixture()
+      fs.writeFileSync(join(f.profileHome, 'history.jsonl'), 'p\n')
+      await f.share()
+      for (let race = 1; race <= races; race++) {
+        // What completed races leave: a moved-aside link, a cursor whose copy another setup
+        // retired, and a late cursor in a retired claim.
+        const pending = join(f.profileHome, 'history.jsonl.orca-profile-merge')
+        fs.symlinkSync(join(f.defaultHome, 'history.jsonl'), `${pending}-${race}`)
+        fs.writeFileSync(`${pending}-${races + race}.offset`, '2\n')
+        const claim = join(f.profileHome, `history.jsonl.orca-profile-claim-${race}`)
+        fs.mkdirSync(claim)
+        fs.writeFileSync(join(claim, 'offset'), '2\n')
+      }
+      await f.share()
+      expect(f.history()).toBe('p\n')
+      return fs.readdirSync(f.profileHome).sort()
+    }
+    const few = await after(5)
+    expect(await after(50)).toEqual(few)
+    expect(few.filter((name) => name.startsWith('history.jsonl'))).toEqual(['history.jsonl'])
+  })
 })

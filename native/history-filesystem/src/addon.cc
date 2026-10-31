@@ -84,17 +84,23 @@ class Capability : public Napi::ObjectWrap<Capability> {
       if (method == "mkdir") d.mkdir(name, info.Length() > 1 && !info[1].IsUndefined() ? &other(info, 1) : nullptr);
       else if (method == "link") d.link(name, text(info, 1, false));
       else if (method == "readLink") return Napi::String::New(env, d.readLink(name));
+      else if (method == "read") { auto data = d.read(name); return Napi::Buffer<char>::Copy(env, data.data(), data.size()); }
+      else if (method == "write") d.write(name, text(info, 1, false), info.Length() > 2 && info[2].IsBoolean() && info[2].As<Napi::Boolean>().Value());
+      else if (method == "unlink") d.unlink(name);
+      else if (method == "identity") return Napi::String::New(env, d.identity(name));
       else if (method == "removeEmpty") d.removeEmpty(name);
       return env.Undefined();
     } catch (const history::Failure& failure) { return error(info.Env(), failure); }
   }
 #define METHOD(name) Napi::Value name(const Napi::CallbackInfo& info) { return call(info, #name); }
   METHOD(close) METHOD(entries) METHOD(same) METHOD(sameDevice) METHOD(open) METHOD(kind) METHOD(move) METHOD(mkdir) METHOD(link) METHOD(readLink) METHOD(removeEmpty)
+  METHOD(read) METHOD(write) METHOD(unlink) METHOD(identity)
 #undef METHOD
   static Napi::Function define(Napi::Env env, Addon* addon) {
     return DefineClass(env, "HistoryDirectory", {
 #define OP(name) InstanceMethod(#name, &Capability::name)
-      OP(close), OP(entries), OP(same), OP(sameDevice), OP(open), OP(kind), OP(move), OP(mkdir), OP(link), OP(readLink), OP(removeEmpty)
+      OP(close), OP(entries), OP(same), OP(sameDevice), OP(open), OP(kind), OP(move), OP(mkdir), OP(link), OP(readLink), OP(removeEmpty),
+      OP(read), OP(write), OP(unlink), OP(identity)
 #undef OP
     }, addon);
   }

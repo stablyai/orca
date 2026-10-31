@@ -48,15 +48,23 @@ const fsAllowances: Record<string, readonly string[]> = {
   // This write targets process stdin, not a file.
   'claude-accounts/claude-command-process.ts': ['write'],
   'claude-accounts/claude-profile-prompt-history.ts': [
-    'appendFileSync',
     'linkSync',
-    'openSync',
-    'renameSync',
-    'rmSync',
+    'open',
     'symlinkSync',
-    'unlinkSync',
+    'unlink',
     'writeFileSync',
     'writeFileAtomically'
+  ],
+  // `mkdir`/`open`/`write`/`unlink` are anchored operations inside prompt-history claims.
+  'claude-accounts/claude-profile-prompt-history-pending.ts': [
+    'appendFileSync',
+    'mkdir',
+    'open',
+    'openSync',
+    'unlink',
+    'unlinkSync',
+    'write',
+    'writeFileSync'
   ],
   'claude-accounts/claude-profile-provisioning.ts': [
     'publishFileWithoutOverwrite',

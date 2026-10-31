@@ -7,6 +7,9 @@
 #include <cstring>
 #include <limits>
 
+#ifndef IO_REPARSE_TAG_APPEXECLINK
+#define IO_REPARSE_TAG_APPEXECLINK (0x8000001BL)
+#endif
 // ntifs.h declaration; winternl.h exposes only NtCreateFile.
 extern "C" NTSTATUS NTAPI NtSetInformationFile(HANDLE, PIO_STATUS_BLOCK, PVOID, ULONG, FILE_INFORMATION_CLASS);
 
@@ -46,7 +49,7 @@ static std::string utf8(const std::wstring& text) {
 static HANDLE native(Directory& directory) { return reinterpret_cast<HANDLE>(directory.handle()); }
 struct CloseHandleDeleter { void operator()(void* value) const { if (value && value != INVALID_HANDLE_VALUE) CloseHandle(value); } };
 using OwnedHandle = std::unique_ptr<void, CloseHandleDeleter>;
-static OwnedHandle child(Directory& parent, const std::string& name, ACCESS_MASK access, ULONG disposition = 1, ULONG options = 0, ULONG share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE) {
+static OwnedHandle child(Directory& parent, const std::string& name, ACCESS_MASK access, ULONG disposition = 1, ULONG options = 0, ULONG share = FILE_SHARE_READ | FILE_SHARE_WRITE | FILE_SHARE_DELETE, bool reparse = true) {
   std::wstring path = wide(name);
   if (path.size() > std::numeric_limits<USHORT>::max() / sizeof(wchar_t)) throw failure("entry-name", ERROR_INVALID_PARAMETER);
   UNICODE_STRING unicode;
@@ -57,7 +60,7 @@ static OwnedHandle child(Directory& parent, const std::string& name, ACCESS_MASK
   IO_STATUS_BLOCK status;
   // FILE_OPEN_REPARSE_POINT is type-neutral: inspect the opened entry before traversal.
   NTSTATUS code = NtCreateFile(&result, access | SYNCHRONIZE, &attributes, &status, nullptr,
-      FILE_ATTRIBUTE_NORMAL, share, disposition, options | 0x00200000 | 0x00000020, nullptr, 0);
+      FILE_ATTRIBUTE_NORMAL, share, disposition, options | (reparse ? 0x00200000 : 0) | 0x00000020, nullptr, 0);
   if (code < 0) throw failure("NtCreateFile", RtlNtStatusToDosError(code));
   return OwnedHandle(result);
 }
@@ -66,6 +69,7 @@ static FILE_ATTRIBUTE_TAG_INFO tag(HANDLE value) {
   if (!GetFileInformationByHandleEx(value, FileAttributeTagInfo, &result, sizeof(result))) throw failure("FileAttributeTagInfo");
   return result;
 }
+static bool linkTag(ULONG value) { return value == IO_REPARSE_TAG_SYMLINK || value == IO_REPARSE_TAG_MOUNT_POINT || value == IO_REPARSE_TAG_APPEXECLINK; }
 static void requireDirectory(HANDLE value) {
   auto attrs = tag(value);
   if (!(attrs.FileAttributes & FILE_ATTRIBUTE_DIRECTORY) || (attrs.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) throw failure("open-directory", ERROR_DIRECTORY);
@@ -112,8 +116,13 @@ std::vector<std::string> Directory::entries() {
 Kind Directory::kind(const std::string& name) {
   try {
     auto opened = child(*this, name, FILE_READ_ATTRIBUTES);
-    auto attrs = tag(opened.get()).FileAttributes;
-    if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) return Kind::Link;
+    auto found = tag(opened.get());
+    auto attrs = found.FileAttributes;
+    if (attrs & FILE_ATTRIBUTE_REPARSE_POINT) {
+      // Like the runtime's lstat: these tags are links; other reparse files (dedup, cloud, compression) are files.
+      // Reparse directories stay opaque, since open() refuses to traverse them.
+      if (linkTag(found.ReparseTag) || (attrs & FILE_ATTRIBUTE_DIRECTORY)) return Kind::Link;
+    }
     if (attrs & FILE_ATTRIBUTE_DIRECTORY) return Kind::Directory;
     return attrs & FILE_ATTRIBUTE_DEVICE ? Kind::Other : Kind::File;
   } catch (const Failure& error) { if (error.code == "ENOENT") return Kind::Missing; throw; }
@@ -188,6 +197,51 @@ void Directory::removeEmpty(const std::string& name) {
   requireDirectory(opened.get());
   FILE_DISPOSITION_INFO remove = {TRUE};
   if (!SetFileInformationByHandle(opened.get(), FileDispositionInfo, &remove, sizeof(remove))) throw failure("FileDispositionInfo");
+}
+constexpr ULONG FILE_NON_DIRECTORY = 0x00000040;
+// Without FILE_SHARE_DELETE the entry cannot be renamed or replaced while this handle is held.
+static OwnedHandle regular(Directory& parent, const std::string& name, ACCESS_MASK access, ULONG disposition = 1) {
+  auto opened = child(parent, name, access | FILE_READ_ATTRIBUTES, disposition, FILE_NON_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE);
+  auto found = tag(opened.get());
+  if (!(found.FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT)) return opened;
+  if (linkTag(found.ReparseTag)) throw Failure("open-file", "ELOOP", 0);
+  // A dedup, cloud or compressed file's content comes from its filter, so reopen the pinned entry through it.
+  return child(parent, name, access, 1, FILE_NON_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE, false);
+}
+std::string Directory::read(const std::string& name) {
+  auto file = regular(*this, name, FILE_READ_DATA);
+  std::string result;
+  std::vector<char> buffer(64 * 1024);
+  for (;;) {
+    DWORD count = 0;
+    if (!ReadFile(file.get(), buffer.data(), static_cast<DWORD>(buffer.size()), &count, nullptr)) throw failure("ReadFile");
+    if (count == 0) return result;
+    result.append(buffer.data(), count);
+  }
+}
+void Directory::write(const std::string& name, const std::string& data, bool create) {
+  auto file = regular(*this, name, FILE_WRITE_DATA, create ? 2 : 1);
+  for (size_t written = 0; written < data.size();) {
+    DWORD count = 0;
+    if (!WriteFile(file.get(), data.data() + written, static_cast<DWORD>(data.size() - written), &count, nullptr)) throw failure("WriteFile");
+    written += count;
+  }
+}
+void Directory::unlink(const std::string& name) {
+  auto opened = child(*this, name, DELETE | FILE_READ_ATTRIBUTES, 1, FILE_NON_DIRECTORY, FILE_SHARE_READ | FILE_SHARE_WRITE);
+  // FileDispositionInfoEx with DELETE | POSIX_SEMANTICS releases the name at once, so the emptied container can be
+  // removed; older volumes fall back. Spelled numerically because the SDK hides them below a Windows 10 target.
+  DWORD posix = 0x1 | 0x2;
+  if (SetFileInformationByHandle(opened.get(), static_cast<FILE_INFO_BY_HANDLE_CLASS>(21), &posix, sizeof(posix))) return;
+  FILE_DISPOSITION_INFO remove = {TRUE};
+  if (!SetFileInformationByHandle(opened.get(), FileDispositionInfo, &remove, sizeof(remove))) throw failure("FileDispositionInfo");
+}
+std::string Directory::identity(const std::string& name) {
+  auto opened = child(*this, name, FILE_READ_ATTRIBUTES);
+  BY_HANDLE_FILE_INFORMATION result;
+  if (!GetFileInformationByHandle(opened.get(), &result)) throw failure("GetFileInformationByHandle");
+  auto index = (static_cast<unsigned long long>(result.nFileIndexHigh) << 32) | result.nFileIndexLow;
+  return std::to_string(result.dwVolumeSerialNumber) + ":" + std::to_string(index);
 }
 bool Directory::same(Directory& other) { auto a = info(*this), b = info(other); return a.dwVolumeSerialNumber == b.dwVolumeSerialNumber && a.nFileIndexHigh == b.nFileIndexHigh && a.nFileIndexLow == b.nFileIndexLow; }
 bool Directory::sameDevice(Directory& other) { return info(*this).dwVolumeSerialNumber == info(other).dwVolumeSerialNumber; }

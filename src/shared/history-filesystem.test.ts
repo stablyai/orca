@@ -205,6 +205,36 @@ describe('actual history filesystem addon', () => {
     }
   })
 
+  it('reads, writes and removes files only through the opened directory', () => {
+    const f = fixture()
+    try {
+      const source = join(f.root, 'source')
+      f.from.write('cursor', '00000000000000000012\n', true)
+      expect(() => f.from.write('cursor', 'again', true)).toThrow(/EEXIST/)
+      f.from.write('cursor', '00000000000000000034\n', false)
+      expect(f.from.read('cursor').toString('utf8')).toBe('00000000000000000034\n')
+      expect(() => f.from.write('absent', '1', false)).toThrow(/ENOENT/)
+      linkSync(join(source, 'cursor'), join(source, 'alias'))
+      expect(f.from.identity('alias')).toBe(f.from.identity('cursor'))
+      f.from.unlink('alias')
+      expect(f.from.read('cursor').toString('utf8')).toBe('00000000000000000034\n')
+      symlinkSync(
+        join(f.root, 'destination'),
+        join(source, 'view'),
+        process.platform === 'win32' ? 'junction' : 'dir'
+      )
+      expect(() => f.from.read('view')).toThrow()
+      expect(() => f.from.write('view', '1', false)).toThrow()
+      f.from.unlink('cursor')
+      expect(f.from.kind('cursor')).toBeNull()
+      expect(() => f.from.read('cursor')).toThrow(/ENOENT/)
+    } finally {
+      f.from.close()
+      f.to.close()
+      f.parent.close()
+    }
+  })
+
   it('keeps opened parent authority when its old pathname is reused as a link', () => {
     const f = fixture()
     try {

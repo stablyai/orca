@@ -60,15 +60,30 @@ static int statAt(int descriptor, const char* name, struct stat* value, int flag
   return fstatat(descriptor, name, value, flags);
 #endif
 }
-static struct stat info(Directory& directory) {
+static struct stat statOf(int descriptor) {
   struct stat value;
 #ifdef HISTORY_RAW_STAT
-  int result = static_cast<int>(syscall(SYS_fstat, fd(directory), &value));
+  int result = static_cast<int>(syscall(SYS_fstat, descriptor, &value));
 #else
-  int result = fstat(fd(directory), &value);
+  int result = fstat(descriptor, &value);
 #endif
   if (result != 0) throw failure("fstat");
   return value;
+}
+static struct stat info(Directory& directory) { return statOf(fd(directory)); }
+struct OwnedFile {
+  int value;
+  explicit OwnedFile(int value) : value(value) {}
+  OwnedFile(OwnedFile&& other) noexcept : value(other.value) { other.value = -1; }
+  OwnedFile(const OwnedFile&) = delete;
+  ~OwnedFile() { if (value >= 0) ::close(value); }
+};
+// O_NONBLOCK keeps a FIFO from blocking before the regular-file check.
+static OwnedFile regular(Directory& parent, const std::string& name, int flags) {
+  OwnedFile file{openat(fd(parent), name.c_str(), flags | O_NOFOLLOW | O_CLOEXEC | O_NONBLOCK, 0600)};
+  if (file.value < 0) throw failure("openat-file");
+  if (!S_ISREG(statOf(file.value).st_mode)) throw failure("open-file", EINVAL);
+  return file;
 }
 std::unique_ptr<Directory> Directory::root(const std::string& path, bool follow) {
   int result = ::open(path.c_str(), O_RDONLY | O_DIRECTORY | O_CLOEXEC | (follow ? 0 : O_NOFOLLOW));
@@ -138,6 +153,35 @@ std::string Directory::readLink(const std::string& name) {
 }
 void Directory::removeEmpty(const std::string& name) {
   if (unlinkat(fd(*this), name.c_str(), AT_REMOVEDIR) != 0) throw failure("unlinkat-directory");
+}
+std::string Directory::read(const std::string& name) {
+  auto file = regular(*this, name, O_RDONLY);
+  std::string result;
+  std::vector<char> buffer(64 * 1024);
+  for (;;) {
+    auto count = ::read(file.value, buffer.data(), buffer.size());
+    if (count < 0 && errno == EINTR) continue;
+    if (count < 0) throw failure("read");
+    if (count == 0) return result;
+    result.append(buffer.data(), static_cast<size_t>(count));
+  }
+}
+void Directory::write(const std::string& name, const std::string& data, bool create) {
+  auto file = regular(*this, name, O_WRONLY | (create ? O_CREAT | O_EXCL : 0));
+  for (size_t written = 0; written < data.size();) {
+    auto count = pwrite(file.value, data.data() + written, data.size() - written, static_cast<off_t>(written));
+    if (count < 0 && errno == EINTR) continue;
+    if (count < 0) throw failure("pwrite");
+    written += static_cast<size_t>(count);
+  }
+}
+void Directory::unlink(const std::string& name) {
+  if (unlinkat(fd(*this), name.c_str(), 0) != 0) throw failure("unlinkat");
+}
+std::string Directory::identity(const std::string& name) {
+  struct stat value;
+  if (statAt(fd(*this), name.c_str(), &value, AT_SYMLINK_NOFOLLOW) != 0) throw failure("fstatat");
+  return std::to_string(static_cast<unsigned long long>(value.st_dev)) + ":" + std::to_string(static_cast<unsigned long long>(value.st_ino));
 }
 bool Directory::same(Directory& other) { auto a = info(*this), b = info(other); return a.st_dev == b.st_dev && a.st_ino == b.st_ino; }
 bool Directory::sameDevice(Directory& other) { return info(*this).st_dev == info(other).st_dev; }
