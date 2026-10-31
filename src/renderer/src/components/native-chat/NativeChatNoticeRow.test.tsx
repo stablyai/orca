@@ -231,6 +231,9 @@ describe('the row a usage limit leaves', () => {
   } as const
 
   it('says when the limit resets in this clock, and offers Continue Now only once it has', () => {
+    if (!isAdmissibleAgentJournalItemBody(row) || row.kind !== 'status') {
+      throw new Error('Historical status fixture was not admitted')
+    }
     vi.useFakeTimers({
       now: new Date(2026, 9, 18, 12, 30),
       toFake: ['Date', 'setTimeout', 'clearTimeout']
