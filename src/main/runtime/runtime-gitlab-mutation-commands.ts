@@ -22,6 +22,7 @@ import {
 } from '../gitlab/client'
 import { getRepoRoutingConnectionId } from '../../shared/execution-host'
 import { invalidateHostedReviewBranchCache } from '../source-control/hosted-review-branch-cache'
+import { refreshGitLabApprovals } from '../gitlab/mr-approval-batch'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 
 type LocalGitArgs = [] | [{ wslDistro?: string }]
@@ -224,7 +225,10 @@ export class RuntimeGitLabMutationCommands {
         ...this.deps.getLocalGitArgs(repo)
       )
     } finally {
-      // Why: the sidebar refresh reads through this host's 60s review cache; drop it so approvals show at once.
+      if (updates.approval) {
+        await refreshGitLabApprovals(repo.path)
+      }
+      // Why: the sidebar refresh reads through this host's 60s review cache; drop it so approval merge status shows at once.
       invalidateHostedReviewBranchCache(repo.path, getStoredRepoExecutionHostId(repo))
     }
   }

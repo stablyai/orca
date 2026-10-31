@@ -16,6 +16,7 @@ import type { ProjectRef } from '../gitlab/gl-utils'
 import type { GitLabRepoSelectorArgs } from './gitlab-repo-access'
 import { assertRegisteredRepo, localGitOptionArgs, repoConnectionId } from './gitlab-repo-access'
 import { invalidateHostedReviewBranchCache } from '../source-control/hosted-review-branch-cache'
+import { refreshGitLabApprovals } from '../gitlab/mr-approval-batch'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 
 export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
@@ -83,7 +84,10 @@ export function registerGitLabMergeRequestMutationHandlers(store: Store): void {
           ...localGitOptionArgs(store, repo)
         )
       } finally {
-        // Why: the sidebar refresh reads through the host's 60s review cache; drop it so approvals show at once.
+        if (args.updates.approval) {
+          await refreshGitLabApprovals(repo.path)
+        }
+        // Why: the sidebar refresh reads through the host's 60s review cache; drop it so approval merge status shows at once.
         invalidateHostedReviewBranchCache(repo.path, getStoredRepoExecutionHostId(repo))
       }
     }
