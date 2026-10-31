@@ -26,16 +26,25 @@ export type AgentModelCatalogBinding = {
   projecting?: Promise<void>
 }
 
+/** Canonical account proof survives folder churn; only the transient requests share the cap. */
 export function bindAgentModelCatalogScope(
   bindings: Map<string, AgentModelCatalogBinding>,
   key: string,
-  bound: AgentModelCatalogBinding
+  bound: AgentModelCatalogBinding,
+  requestKey: (params: AgentModelCatalogReadParams) => string
 ): void {
   bindings.set(key, bound)
-  while (bindings.size > 256) {
-    const oldest = bindings.keys().next().value
-    if (oldest !== undefined) {
-      bindings.delete(oldest)
+  const canonical = ['claude', 'codex'].map((agent) => requestKey({ agent }))
+  const limit = 256 + canonical.filter((key) => bindings.has(key)).length
+  if (bindings.size <= limit) {
+    return
+  }
+  for (const candidate of bindings.keys()) {
+    if (!canonical.includes(candidate)) {
+      bindings.delete(candidate)
+      if (bindings.size <= limit) {
+        break
+      }
     }
   }
 }
@@ -208,7 +217,7 @@ export function projectAgentModelCatalogSnapshot(
     deps.agentReadsProjectModelConfig?.(params.agent) === false
       ? { defaultHoldsInEveryWorkspace: true as const }
       : {}),
-    ...(result && (bound.folder !== undefined || bound.exact)
+    ...(result && ((independent && !params.legacy) || bound.folder !== undefined || bound.exact)
       ? { modelsDifferByWorkspace: true as const }
       : {}),
     ...(!params.savedOnly &&

@@ -193,7 +193,7 @@ export function createAgentModelCatalogService(
         !params.legacy &&
         !savedOnly
       ) {
-        bindAgentModelCatalogScope(bindings, bindingKey, bound)
+        bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey)
       }
       const scope = await resolveAgentModelCatalogScope(
         deps,
@@ -209,7 +209,7 @@ export function createAgentModelCatalogService(
       }
       const { fingerprint, exact, resolved, cwd } = scope
       Object.assign(bound, { fingerprint, exact, cwd })
-      bindAgentModelCatalogScope(bindings, bindingKey, bound)
+      bindAgentModelCatalogScope(bindings, bindingKey, bound, requestKey)
       bound.projecting = projectAgentModelCatalogDefault(
         deps,
         params.agent,

@@ -20,6 +20,8 @@ import { structuredAgentSessionShownSnapshot } from '../../../shared/structured-
 import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
 import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
 import type { AgentModelCatalogServiceDeps } from './agent-model-catalog-service-contract'
+import * as catalogBindings from './agent-model-catalog-snapshot'
+import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
   AgentModelCatalogStore,
@@ -85,6 +87,7 @@ function harness(
   const resolveAccountHome = vi.fn<AgentModelCatalogServiceDeps['resolveAccountHome']>(
     async () => HOME
   )
+  const probes = { [agent]: probe }
   const service = createAgentModelCatalogService({
     store,
     getConversation: (id) => agentSessionConversationView(record(id, agent)),
@@ -93,7 +96,7 @@ function harness(
     resolveAccountHome,
     recordWorkspacePath: async (saved) => FOLDERS[saved.sessionId] ?? null,
     workspaceMayOverrideDefaultModel: async () => false,
-    probes: { [agent]: probe },
+    probes,
     ...overrides
   })
   const hold = (folder: string): (() => void) => {
@@ -105,6 +108,7 @@ function harness(
   onTestFinished(() => service.stop())
   return {
     service,
+    probes,
     store,
     runs,
     hold,
@@ -258,6 +262,80 @@ for (const agent of ['claude', 'codex'] as const) {
       ).toBeNull()
     })
 
+    it('retains current canonical account proof under N/10N transient binding pressure', async () => {
+      for (const count of [260, 2600]) {
+        let bindings: Map<string, AgentModelCatalogBinding> | undefined
+        let evictionVisits = 0
+        const bind = catalogBindings.bindAgentModelCatalogScope
+        const bindSpy = vi
+          .spyOn(catalogBindings, 'bindAgentModelCatalogScope')
+          .mockImplementation((map, ...args) => {
+            if (!bindings) {
+              bindings = map
+              const keys = map.keys.bind(map)
+              vi.spyOn(map, 'keys').mockImplementation(function* () {
+                for (const key of keys()) {
+                  evictionVisits++
+                  yield key
+                }
+              })
+            }
+            return bind(map, ...args)
+          })
+        const h = harness(agent)
+        try {
+          const other = agent === 'claude' ? 'codex' : 'claude'
+          h.probes[other] = h.probes[agent]
+          const save = vi.fn()
+          await h.store.attachPersistence({ load: async () => [], save, flush: async () => {} })
+          await h.service.read({ agent, waitForListing: true })
+          await h.service.read({ agent: other, waitForListing: true })
+          save.mockClear()
+          const base = agentModelCatalogFingerprint({ agent, accountHome: HOME, wslDistro: null })
+          const publish = vi.spyOn(h.store, 'recordSuccess')
+          for (let index = 0; index < count; index++) {
+            const workspacePath = `/binding-pressure-${index}`
+            h.byFolder[workspacePath] = { ...listing([]), complete: false }
+            await h.service.demand({ agent, workspacePath })
+          }
+          expect(h.store.observation(base)).not.toBeNull()
+          const resolutions = h.resolveAccountHome.mock.calls.length
+          const scopes = h.resolve.mock.calls.length
+          const probes = h.runs.length
+          const cold = { agent, workspacePath: '/unseen-after-pressure' }
+          expect(ids(await h.service.read(cold))).toEqual(h.full)
+          expect(bindings?.size).toBe(258)
+          expect(evictionVisits).toBeGreaterThanOrEqual(count - 256)
+          expect(evictionVisits).toBeLessThanOrEqual(3 * (count - 256))
+          expect(ids(await h.read('a'))).toEqual(h.full)
+          expect(ids(await h.service.read({ ...cold, agent: other }))).toEqual(h.full)
+          expect(save).not.toHaveBeenCalled()
+          expect(h.resolveAccountHome).toHaveBeenCalledTimes(resolutions)
+          expect(h.resolve).toHaveBeenCalledTimes(scopes)
+          expect(h.runs).toHaveLength(probes)
+          expect(publish).not.toHaveBeenCalled()
+          h.store.expireFailures(agent)
+          h.service.retireContext()
+          expect(ids(await h.service.read(cold))).toBeNull()
+          expect(bindings?.size).toBe(1)
+          expect(ids(await h.service.read({ ...cold, agent: other }))).toEqual(h.full)
+          expect(ids(await h.read('a'))).toEqual(h.full)
+          await h.service.read({ agent, waitForListing: true })
+          expect(ids(await h.service.read(cold))).toEqual(h.full)
+          h.service.stop()
+          expect(await h.service.read(cold)).toEqual({ origin: 'unknown' })
+          expect(await h.read('a')).toEqual({ origin: 'unknown' })
+          expect(bindings?.size).toBe(0)
+          process.stdout.write(
+            `CANONICAL_BINDING_PRESSURE ${JSON.stringify({ agent, requests: count, evictionVisits, retainedBeforeRetirement: 258, probesBeforeCold: probes })}\n`
+          )
+        } finally {
+          h.service.stop()
+          bindSpy.mockRestore()
+        }
+      }
+    })
+
     it('roundtrips the account inventory and serves cold reads while prewarm scope resolution is suspended', async () => {
       const directory = await mkdtemp(join(tmpdir(), 'pr-36646-account-reload-'))
       onTestFinished(() => rm(directory, { recursive: true, force: true }))
@@ -278,6 +356,11 @@ for (const agent of ['claude', 'codex'] as const) {
       await vi.waitFor(() => expect(h.resolve).toHaveBeenCalled())
       expect(ids(await h.read('a'))).toEqual(h.full)
       expect(ids(await h.service.read({ agent, workspacePath: '/cold' }))).toEqual(h.full)
+      expect(await h.service.read({ agent, savedOnly: true })).toMatchObject({
+        modelsDifferByWorkspace: true,
+        listingNamesConfiguredModel: false
+      })
+      expect(h.service.snapshot({ agent, verifiedOnly: true })).toEqual({ origin: 'unknown' })
       expect(h.runs).toEqual([])
       expect(save).not.toHaveBeenCalled()
       expect(h.resolveAccountHome).toHaveBeenCalledTimes(1)
