@@ -17,15 +17,12 @@ const packet = import.meta.dirname,
 const output = resolve(root, 'r4-evidence'),
   prefix = 'config/ci/pr35764-r4/'
 const productionHead = '2dbb5681fad6542581f0d8802120faccb371a20f'
-const subject = 'PR35764 R4 decoder continuation one held comparison'
-const continuationParent = '33ac33e9ed25c206086afe561bfd2bf1ae694b0a'
+const subject = 'PR35764 R4 lock lookup continuation one held comparison'
+const continuationParent = '9f6b35c47806de90dd59ec4e80cf852148660c1b'
 const modifiedPaths = [
   '.github/workflows/pr35764-r4-once.yml',
   'config/ci/pr35764-r4/installation-metadata.mjs',
-  'config/ci/pr35764-r4/module-observation.mjs',
-  'config/ci/pr35764-r4/package-resolution.mjs',
-  'config/ci/pr35764-r4/run-once.mjs',
-  'config/ci/pr35764-r4/vitest.config.mjs'
+  'config/ci/pr35764-r4/run-once.mjs'
 ]
 const overlayFiles = [
   'engine/logging-only.diff',
@@ -83,7 +80,7 @@ function identity() {
     git('show', '-s', '--format=%P', 'HEAD') !== continuationParent ||
     git('show', '-s', '--format=%s', 'HEAD') !== subject
   ) {
-    throw new Error('R4 requires the one decoder-continuation child of published33ac')
+    throw new Error('R4 requires the one lock-lookup continuation child of published9f6b35c')
   }
   const changed = git('diff', '--name-status', productionHead, 'HEAD').split('\n')
   if (
@@ -120,10 +117,10 @@ function identity() {
   return {
     head,
     continuationParent,
-    continuationOrdinal: 2,
-    priorConsumedRun: '41157454166',
-    priorConsumedHead: continuationParent,
-    priorActualDirectCliInvocations: 1,
+    continuationOrdinal: 3,
+    priorConsumedRuns: ['41157454166', '41179615237'],
+    priorConsumedHeads: ['33ac33e9ed25c206086afe561bfd2bf1ae694b0a', continuationParent],
+    priorActualDirectCliInvocations: 2,
     modified,
     productionHead,
     mainSelectionRouteHead: pins.mainSelectionRouteHead,

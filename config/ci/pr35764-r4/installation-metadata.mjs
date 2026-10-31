@@ -87,7 +87,11 @@ export function fields(text, indent) {
     if (!line.trim() || line.trimStart().startsWith('#') || line.search(/\S/) !== indent) {
       continue
     }
-    const match = line.slice(indent).match(/^('(?:[^']|'')*'|"(?:[^"\\]|\\.)*"|[^:]+):(?: (.*))?$/)
+    const entry = line.slice(indent)
+    const match =
+      entry.startsWith("'") || entry.startsWith('"')
+        ? entry.match(/^('(?:[^']|'')*'|"(?:[^"\\]|\\.)*")[ \t]*:(?:[ \t]+(.*))?$/)
+        : entry.match(/^((?:[^:]|:(?![ \t]|$))+?)[ \t]*:(?:[ \t]+(.*))?$/)
     if (!match) {
       throw new Error(`N1 unsupported relevant mapping: ${line}`)
     }
@@ -100,7 +104,7 @@ export function fields(text, indent) {
     ) {
       end++
     }
-    const key = scalar(match[1])
+    const key = scalar(match[1].trimEnd())
     if (found.some((x) => x.key === key)) {
       throw new Error(`N1 duplicate relevant metadata key: ${key}`)
     }
@@ -213,8 +217,8 @@ export function readInstallationMetadata({
     ],
     stage: 'before-read',
     error: null,
-    priorRun: '41157454166',
-    continuationOrdinal: 2
+    priorRuns: ['41157454166', '41179615237'],
+    continuationOrdinal: 3
   }
   const receiptFile = resolve(output, 'installation-metadata-receipt.json')
   const persist = (exclusive = false) => {
