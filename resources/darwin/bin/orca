@@ -19,7 +19,29 @@ if [ -z "$APP_PATH" ]; then
 fi
 
 CONTENTS="$APP_PATH/Contents"
-ELECTRON="$CONTENTS/MacOS/Orca"
+INFO_PLIST="$CONTENTS/Info.plist"
+if [ ! -f "$INFO_PLIST" ]; then
+	echo "Unable to read CFBundleExecutable: missing $INFO_PLIST" >&2
+	exit 1
+fi
+
+if ! EXECUTABLE_NAME="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleExecutable' "$INFO_PLIST" 2>/dev/null)" \
+	|| [ -z "$EXECUTABLE_NAME" ]; then
+	echo "Unable to read CFBundleExecutable from $INFO_PLIST" >&2
+	exit 1
+fi
+if [[ "$EXECUTABLE_NAME" == */* || "$EXECUTABLE_NAME" == *$'\n'* \
+	|| "$EXECUTABLE_NAME" == *$'\r'* \
+	|| "$EXECUTABLE_NAME" == "." || "$EXECUTABLE_NAME" == ".." ]]; then
+	echo "Invalid CFBundleExecutable in $INFO_PLIST" >&2
+	exit 1
+fi
+
+ELECTRON="$CONTENTS/MacOS/$EXECUTABLE_NAME"
+if [ ! -x "$ELECTRON" ]; then
+	echo "CFBundleExecutable is not executable: $ELECTRON" >&2
+	exit 1
+fi
 # The unpacked entrypoint runs directly in Electron's Node mode.
 CLI="$CONTENTS/Resources/app.asar.unpacked/out/cli/index.js"
 
