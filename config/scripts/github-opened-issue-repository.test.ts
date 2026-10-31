@@ -87,7 +87,11 @@ import { findTaskPageDialogWorkItem } from '../../src/renderer/src/components/ta
 import { getTaskPageRepoSourceContext } from '../../src/renderer/src/components/task-page/task-page-source-context'
 import { workItemsCacheKey } from '../../src/renderer/src/store/github/cache-identity'
 import { createTestStore } from '../../src/renderer/src/store/slices/github-slice-test-harness'
-import { materializeTaskPageItemList } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-pages'
+import {
+  materializeTaskPageItemList,
+  reapplyPendingTaskPageGitHubMutationsToCache
+} from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-pages'
+import { setRuntimeEnvironmentConnectionGenerationForTests } from '../../src/renderer/src/store/slices/runtime-status-connection-generation'
 import { getLastConfirmedClientValue } from '../../src/renderer/src/components/task-page/github/task-page-github-confirmed-client-values'
 import { RuntimeRpcCallError } from '../../src/renderer/src/runtime/runtime-rpc-result'
 import { getTaskSourceCacheScope } from '../../src/shared/task-source-context'
@@ -346,6 +350,162 @@ it.each(
     expect(cache.projectItem(shown).state).toBe(listItem.url === openedItem.url ? 'closed' : 'open')
   }
 )
+
+it.each(
+  [true, false].flatMap(
+    (tracked) =>
+      [
+        { tracked, from: 'open', to: 'closed' },
+        { tracked, from: 'closed', to: 'open' }
+      ] as const
+  )
+)(
+  'a failed $to edit leaves stored copies as they were through a refresh (tracked=$tracked)',
+  async ({ tracked, from, to }) => {
+    const store = createTestStore()
+    store.setState({ repos: [registeredRepo], recordFeatureInteraction: vi.fn() })
+    fixture.store = store
+    const cache = store.getState().githubTaskCache
+    const binding = cache.capture(registeredRepo, sourceContext)!
+    if (!tracked) {
+      await cache.readCanonical(fork, binding, () => Promise.reject(unsupported()))
+    }
+    const row = { ...fork, state: from }
+    const key = workItemsCacheKey(registeredRepo.id, 36, '', getTaskSourceCacheScope(sourceContext))
+    store.setState({ workItemsCache: { [key]: { data: [row], fetchedAt: 1 } } })
+    fixture.apiUpdate.mockRejectedValueOnce(new Error('denied'))
+    let pending = Promise.resolve()
+    let pages = [row]
+    runGHEditStateChange({
+      newState: to,
+      localState: from,
+      item: row,
+      itemNumber: fork.number,
+      itemRepoId: fork.repoId,
+      repoPath: registeredRepo.path,
+      sourceContext,
+      projectOrigin: undefined,
+      issueRepo,
+      run: (_key, options) => {
+        pending = (async () => {
+          options.onOptimistic?.()
+          // A Tasks refresh lands while the edit is in flight, with search still lagging.
+          reapplyPendingTaskPageGitHubMutationsToCache({
+            items: store.getState().workItemsCache[key]?.data ?? [],
+            patchWorkItem: store.getState().patchWorkItem,
+            sourceContextByRepoId: new Map([[registeredRepo.id, sourceContext]])
+          })
+          pages = materializeTaskPageItemList({
+            networkItems: [row],
+            previousItems: pages,
+            queryKey: 'current-upstream-list'
+          })
+          await options.mutate().catch(() => options.onRevert?.())
+        })()
+        return pending
+      },
+      onStateChange: vi.fn(),
+      patchProjectRowIfNeeded: vi.fn(),
+      onMutated: vi.fn()
+    })
+    await pending
+    const raw = store.getState().workItemsCache[key]!.data![0]
+    const shown = [raw, pages[0]].map((copy) => cache.projectItem(copy).state)
+    expect([raw.state, pages[0].state, ...shown]).toEqual([from, from, from, from])
+    expect(
+      getLastConfirmedClientValue(
+        getTaskSourceCacheScope(sourceContext),
+        fork.repoId,
+        fork.id,
+        'state'
+      )
+    ).toBeUndefined()
+  }
+)
+
+it('lets a record own a close that began on an unsupported server and succeeded after a reconnect', async () => {
+  setRuntimeEnvironmentConnectionGenerationForTests('p34245-takeover', 1)
+  const remote = { ...registeredRepo, executionHostId: 'runtime:p34245-takeover' }
+  const remoteSource = getTaskPageRepoSourceContext(remote, 'github')!
+  const store = createTestStore()
+  store.setState({
+    repos: [remote],
+    runtimeStatusByEnvironmentId: new Map(),
+    recordFeatureInteraction: vi.fn()
+  })
+  fixture.store = store
+  const cache = store.getState().githubTaskCache
+  await cache.readCanonical(fork, cache.capture(remote, remoteSource)!, () =>
+    Promise.reject(unsupported())
+  )
+  expect(cache.canTrack(cache.capture(remote, remoteSource)!)).toBe(false)
+  runGHEditStateChange({
+    newState: 'closed',
+    localState: 'open',
+    item: fork,
+    itemNumber: fork.number,
+    itemRepoId: fork.repoId,
+    repoPath: remote.path,
+    sourceContext: remoteSource,
+    projectOrigin: undefined,
+    issueRepo,
+    // The write is in flight while the upgraded server reconnects, then it succeeds.
+    run: async (_key, options) => {
+      options.onOptimistic?.()
+      setRuntimeEnvironmentConnectionGenerationForTests('p34245-takeover', 2)
+      store.setState({ runtimeStatusByEnvironmentId: new Map() })
+      options.onSuccess?.()
+    },
+    onStateChange: vi.fn(),
+    patchProjectRowIfNeeded: vi.fn(),
+    onMutated: vi.fn()
+  })
+  const scope = getTaskSourceCacheScope(remoteSource)
+  expect(getLastConfirmedClientValue(scope, fork.repoId, fork.id, 'state')).toBeUndefined()
+  const binding = cache.capture(remote, remoteSource)!
+  expect(cache.isPending(fork, binding) || cache.readRevision(fork, binding) > 0).toBe(true)
+  expect(cache.projectItem(cache.acceptSearch([fork], binding)[0]).state).toBe('closed')
+})
+
+it('sends a duplicate close with its reason even when the issue already reads closed', async () => {
+  fixture.store = createTestStore()
+  fixture.store.setState({ repos: [], recordFeatureInteraction: vi.fn() })
+  let pending: Promise<void> = Promise.resolve()
+  runGHEditStateChange({
+    newState: 'closed',
+    closeAction: { stateReason: 'duplicate', duplicateOf: 42 },
+    localState: 'closed',
+    item: { ...fork, state: 'closed' },
+    itemNumber: fork.number,
+    itemRepoId: fork.repoId,
+    repoPath: registeredRepo.path,
+    sourceContext,
+    projectOrigin: undefined,
+    issueRepo,
+    run: (_key, options) => {
+      pending = options.mutate().then(() => options.onSuccess?.())
+      return pending
+    },
+    onStateChange: vi.fn(),
+    patchProjectRowIfNeeded: vi.fn(),
+    onMutated: vi.fn()
+  })
+  await pending
+  expect(fixture.apiUpdate).toHaveBeenCalledWith(
+    expect.objectContaining({
+      updates: expect.objectContaining({ stateReason: 'duplicate', duplicateOf: 42 })
+    })
+  )
+  // The hold covers only the confirmed state, never the duplicate metadata.
+  expect(
+    getLastConfirmedClientValue(
+      getTaskSourceCacheScope(sourceContext),
+      fork.repoId,
+      fork.id,
+      'state'
+    )
+  ).toBe('closed')
+})
 
 it('keeps ordinary metadata caches distinct by canonical repository and host', () => {
   const identities = [

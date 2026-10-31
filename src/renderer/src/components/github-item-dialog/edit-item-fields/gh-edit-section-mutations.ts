@@ -60,8 +60,10 @@ export function runGHEditStateChange({
     return
   }
   // The record publishes Tasks copies; the dialog patches only its own state and Project origin row.
-  let settle: (success: boolean) => GitHubWorkItem = () => item
-  let authority: { revert: () => boolean } | null = null
+  const before = { ...item, state: localState }
+  const change = { state: newState }
+  // Set only for an edit a record owns from the start; it settles through that owner.
+  let owner: ((success: boolean) => GitHubWorkItem) | undefined
   void run('state', {
     mutate: () =>
       runIssueUpdate({
@@ -77,10 +79,24 @@ export function runGHEditStateChange({
             : { state: newState }
       }),
     onOptimistic: () => {
-      // Where no task record can own the edit (no binding, or a server without the item route), main's
-      // confirmed-state hold keeps a lagging search from reopening it; a record that takes over retires it.
-      if (!isTrackedEdit(item, sourceContext)) {
-        authority = assertTaskPageGitHubDialogStateAuthority({
+      // An edit no record can own yet touches no stored copy until it is confirmed.
+      if (isTrackedEdit(item, sourceContext)) {
+        owner = beginEdit(before, sourceContext, change)
+      }
+      onStateChange(newState)
+      patchProjectRowIfNeeded({ state: newState })
+    },
+    onRevert: () => {
+      // Rollback restores what this dialog showed, as main's prevState did.
+      const current = owner ? owner(false) : before
+      onStateChange(current.state)
+      patchProjectRowIfNeeded({ state: current.state })
+    },
+    onSuccess: () => {
+      if (!owner && !isTrackedEdit(item, sourceContext)) {
+        // Still no record can own it (no binding, or a server without the item route): main's confirmed
+        // hold keeps a lagging search from reopening it; a record that later takes over retires it.
+        assertTaskPageGitHubDialogStateAuthority({
           repoId: itemRepoId,
           itemId: item.id,
           state: newState,
@@ -88,19 +104,9 @@ export function runGHEditStateChange({
           ownerRepo: projectOrigin ?? issueRepo
         })
       }
-      // Rollback restores what this dialog showed, as main's prevState did.
-      settle = beginEdit({ ...item, state: localState }, sourceContext, { state: newState })
-      onStateChange(newState)
-      patchProjectRowIfNeeded({ state: newState })
-    },
-    onRevert: () => {
-      authority?.revert()
-      const current = settle(false)
-      onStateChange(current.state)
-      patchProjectRowIfNeeded({ state: current.state })
-    },
-    onSuccess: () => {
-      const current = settle(true)
+      // An edit that began untracked is admitted now: a record that can own it (after a reconnect or
+      // upgrade) settles it, else the untracked publisher applies it once.
+      const current = (owner ?? beginEdit(before, sourceContext, change))(true)
       useAppStore.getState().recordFeatureInteraction('github-tasks')
       patchProjectRowIfNeeded({ state: current.state })
       onMutated()
