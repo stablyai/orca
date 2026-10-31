@@ -5,7 +5,6 @@ import { addressedGitHubIssueItem } from '@/lib/github-task-target'
 
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useAppStore } from '@/store'
-import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import { canUseGitHubRepoContext } from '@/lib/github-source-runtime-context'
 import {
   normalizeItemDialogTab,
@@ -29,7 +28,10 @@ import {
   withWorkItemDetailsItem,
   workItemDetailsCache
 } from './work-item-details-cache'
-import { startWorkItemDetailsFetch } from './work-item-details-fetch-settle'
+import {
+  loadOrdinaryWorkItemDetails,
+  startWorkItemDetailsFetch
+} from './work-item-details-fetch-settle'
 
 import { syncPRFileViewedState } from './pr-file-viewed-change'
 
@@ -65,7 +67,7 @@ export function useGitHubItemDialogDetails({
         : null,
     [projectOrigin, workItem]
   )
-  const { target, detailsCacheKey, optimisticKey, ...refresh } = useGitHubTaskRefresh({
+  const { binding, detailsCacheKey, optimisticKey, ...refresh } = useGitHubTaskRefresh({
     workItem,
     repoPath,
     effectiveRepoId,
@@ -150,6 +152,10 @@ export function useGitHubItemDialogDetails({
   const error = cachedEntry?.error && !cachedEntry?.details ? cachedEntry.error : null
   const detailsLoaded = Boolean(cachedEntry?.details)
 
+  const ordinaryLoadRef = useRef<{
+    attempt: ReturnType<typeof startWorkItemDetailsFetch>
+    binding: typeof binding
+  } | null>(null)
   // Invalidation can remove an open entry without changing fetch dependencies; a tick forces refetch.
   const [refetchTick, setRefetchTick] = useState(0)
   useEffect(() => {
@@ -173,26 +179,29 @@ export function useGitHubItemDialogDetails({
       return
     }
 
-    if (cached?.pending) {
+    // A load started on an earlier connection is cancelled and re-run; the entry keeps what it showed.
+    const own = ordinaryLoadRef.current
+    if (cached?.pending && (own?.attempt.pending !== cached.pending || own.binding === binding)) {
       return
     }
-    const binding = target && cache?.capture(target.repo, target.source)
-    startWorkItemDetailsFetch(detailsCacheKey, async () => {
-      const result = await lookupGitHubWorkItemDetailsForSource({
-        repoPath: repoPath ?? '',
-        repoId: effectiveRepoId,
-        sourceContext,
-        number: workItem.number,
-        type: workItem.type,
-        ownerRepo: issueRepository
-      })
-      return result && binding
-        ? withWorkItemDetailsItem(
-            result,
-            cache.acceptSearch([{ ...workItem, ...result.item }], binding)[0]
-          )
-        : result
-    })
+    own?.attempt.cancel()
+    const attempt = startWorkItemDetailsFetch(
+      detailsCacheKey,
+      () =>
+        loadOrdinaryWorkItemDetails(
+          {
+            repoPath: repoPath ?? '',
+            repoId: effectiveRepoId,
+            sourceContext,
+            ownerRepo: issueRepository,
+            item: workItem
+          },
+          cache,
+          binding
+        ),
+      { accepts: () => !binding || cache.current(binding) }
+    )
+    ordinaryLoadRef.current = { attempt, binding }
   }, [
     canUseDetailsRepoContext,
     repoPath,
@@ -202,7 +211,7 @@ export function useGitHubItemDialogDetails({
     detailsCacheKey,
     issueRepository,
     refetchTick,
-    target,
+    binding,
     cache
   ])
 

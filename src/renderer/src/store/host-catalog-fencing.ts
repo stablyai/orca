@@ -45,20 +45,29 @@ export function captureHostIdentityFence(route: HostRoute): HostIdentityFence {
   }
 }
 
+/** The same machine, across reconnects: only a re-pair to a different machine changes it. */
+export function isHostIdentityContinued(fence: HostIdentityFence): boolean {
+  const { route } = fence
+  if (route.target.kind !== 'environment') {
+    return true
+  }
+  const { environmentId } = route.target
+  // Why continuity: a re-pair proven to be the same machine keeps the identity.
+  return (
+    resolveContinuedRuntimeEnvironmentRevision(environmentId, fence.pairingRevision) ===
+    getRuntimeEnvironmentRevision(environmentId)
+  )
+}
+
 export function isHostIdentityFenceCurrent(fence: HostIdentityFence): boolean {
   const { route } = fence
-  if (route.target.kind === 'environment') {
-    const { environmentId } = route.target
-    // Why continuity: a re-pair proven to be the same machine keeps the identity.
-    if (
-      resolveContinuedRuntimeEnvironmentRevision(environmentId, fence.pairingRevision) !==
-        getRuntimeEnvironmentRevision(environmentId) ||
-      getRuntimeEnvironmentConnectionGeneration(environmentId) !== fence.runtimeConnectionGeneration
-    ) {
-      return false
-    }
-  }
-  return sshTargetConnectionGeneration(route) === fence.sshTargetConnectionGeneration
+  return (
+    isHostIdentityContinued(fence) &&
+    (route.target.kind !== 'environment' ||
+      getRuntimeEnvironmentConnectionGeneration(route.target.environmentId) ===
+        fence.runtimeConnectionGeneration) &&
+    sshTargetConnectionGeneration(route) === fence.sshTargetConnectionGeneration
+  )
 }
 
 export type HostCatalogKind = 'repos' | 'project-groups' | 'folder-workspaces'

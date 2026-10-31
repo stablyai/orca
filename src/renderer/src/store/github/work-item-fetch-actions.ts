@@ -96,7 +96,7 @@ export const createWorkItemFetchActions = (
     const binding = requestState.githubTaskCache.capture(repo, options?.sourceContext)
     const cached = get().workItemsCache[key]
     if (!options?.force && isFresh(cached, WORK_ITEMS_CACHE_TTL)) {
-      return get().githubTaskCache.projectItems(cached.data ?? [])
+      return cached.data ?? []
     }
 
     const requestInvalidationNonce = requestState.workItemsInvalidationNonce

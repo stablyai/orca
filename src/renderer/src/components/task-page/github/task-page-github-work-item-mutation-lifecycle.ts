@@ -169,9 +169,8 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
   deletePendingTaskPageGitHubOp(args.key)
   const item = pending.settleAccepted?.(false) ?? args.item
   const merged = getRegistryMergedTaskPageGitHubWorkItem(item, args.key.sourceScope)
-  if (pending.settleAccepted) {
-    // The common base has already published the surviving operations.
-  } else if (listOp) {
+  // A record-owned edit never wrote stored copies, so dropping its token is the whole rollback.
+  if (!pending.settleAccepted && listOp) {
     args.patchWorkItem(
       args.key.itemId,
       listOp.family === 'assignees'
@@ -180,7 +179,7 @@ export function rollbackTaskPageGitHubWorkItemMutation(args: {
       args.key.repoId,
       { sourceContext: args.sourceContext }
     )
-  } else {
+  } else if (!pending.settleAccepted) {
     const recomposed = getRegistryMergedTaskPageGitHubWorkItem(
       { ...args.item, ...pending.previous },
       args.key.sourceScope

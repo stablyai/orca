@@ -1,6 +1,10 @@
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-item-types'
 import type { GitHubTaskRecordCache, TaskBinding } from '@/store/github/task-record-cache'
-import type { GitHubTaskTarget } from '@/lib/github-task-target'
+import { githubTaskRpcOptions, type GitHubTaskTarget } from '@/lib/github-task-target'
+import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
@@ -27,18 +31,38 @@ export async function loadCanonicalGitHubTaskDetails(
       ownerRepo: target.ownerRepo,
       canonical: true,
       accepts: () => accepts() && owned(),
-      rpcOptions: target.rpcOptions
+      rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
     }).catch(() => null)
     return loaded.details && accepts() && owned()
       ? { ...target.item, ...loaded.details.item }
       : null
   })
+  // Stored as read; the dialog adds pending edits when it renders.
   return accepted && loaded.details
-    ? withWorkItemDetailsItem(
-        loaded.details,
-        cache.projectItem({ ...target.item, ...loaded.details.item })
-      )
+    ? withWorkItemDetailsItem(loaded.details, { ...target.item, ...loaded.details.item })
     : null
+}
+
+/** An ordinary lenient load, pinned to the connection its binding was captured on. */
+export async function loadOrdinaryWorkItemDetails(
+  args: Omit<Parameters<typeof lookupGitHubWorkItemDetailsForSource>[0], 'number' | 'type'> & {
+    item: GitHubWorkItem
+  },
+  cache: GitHubTaskRecordCache,
+  binding: TaskBinding | undefined
+): Promise<GitHubWorkItemDetails | null> {
+  const { item, ...lookup } = args
+  const result = await lookupGitHubWorkItemDetailsForSource({
+    ...lookup,
+    number: item.number,
+    type: item.type,
+    ...(binding && {
+      rpcOptions: githubTaskRpcOptions(useAppStore.getState, binding.observation.fence)
+    })
+  })
+  return result && binding
+    ? withWorkItemDetailsItem(result, cache.acceptSearch([{ ...item, ...result.item }], binding)[0])
+    : result
 }
 
 type FetchAcceptance = {
@@ -112,6 +136,7 @@ export function startWorkItemDetailsFetch(
   const settled = settleWorkItemDetailsFetch({ ...options, detailsCacheKey: key, inflight })
   return {
     settled,
+    pending: inflight,
     cancel() {
       const current = workItemDetailsCache.get(key)
       if (current?.pending === inflight) {

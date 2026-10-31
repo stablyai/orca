@@ -131,6 +131,7 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
       const common =
         input.item.type === 'issue' &&
         (input.intent.type === 'setState' || input.intent.type === 'toggleAssignee')
+      // The user acts on what the row showed, pending edits included; this value is never stored.
       const currentItem = cache?.projectItem(input.item) ?? input.item
       const built = buildTaskPageGitHubWorkItemMutationPatch(currentItem, input.intent)
       let settle: ((success: boolean) => GitHubWorkItem) | undefined

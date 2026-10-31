@@ -18,6 +18,8 @@ import type {
 } from '../../../../../shared/github/work-item-types'
 import { buildTaskSourceContextFromRepo } from '../../../../../shared/task-source-context'
 import { useGitHubTaskRefresh } from './use-github-task-refresh'
+import { useGitHubItemDialogDetails } from './use-github-item-dialog-details'
+import { setRuntimeEnvironmentConnectionGenerationForTests } from '@/store/slices/runtime-status-connection-generation'
 import { patchCachedWorkItemBody, workItemDetailsCache } from './work-item-details-cache'
 import { useGitHubTaskItems } from '@/hooks/useGitHubTaskItems'
 
@@ -358,5 +360,56 @@ describe('Refresh task with real shared record and mounted copy', () => {
       await refresh
     })
     expect(node.textContent).toBe('After pending|idle')
+  })
+
+  it('keeps the dialog body and a just-posted comment through a reconnect, reading on the new connection', async () => {
+    setRuntimeEnvironmentConnectionGenerationForTests('p34245-dialog', 1)
+    const remote = { ...repo, executionHostId: 'runtime:p34245-dialog' }
+    const remoteSource = buildTaskSourceContextFromRepo({
+      provider: 'github',
+      projectId: repo.id,
+      repo: remote
+    })!
+    mocks.store!.setState({ repos: [remote], runtimeStatusByEnvironmentId: new Map() })
+    const reconnect = (generation: number) =>
+      act(async () => {
+        setRuntimeEnvironmentConnectionGenerationForTests('p34245-dialog', generation)
+        mocks.store!.setState({ runtimeStatusByEnvironmentId: new Map() })
+      })
+    let dialog!: ReturnType<typeof useGitHubItemDialogDetails>
+    function Dialog() {
+      dialog = useGitHubItemDialogDetails({
+        workItem: row,
+        repoPath: repo.path,
+        effectiveRepoId: repo.id,
+        sourceContext: remoteSource
+      })
+      const comments = dialog.details?.comments.map((comment) => comment.body).join()
+      return <output>{`${dialog.details?.body}|${comments}|${dialog.error}`}</output>
+    }
+    const old = deferred<GitHubWorkItemDetails>()
+    mocks.details
+      .mockReturnValueOnce(old.promise)
+      .mockResolvedValueOnce({ ...details, body: 'Loaded body' })
+    await act(async () => root.render(<Dialog />))
+    await flush()
+    const key = dialog.detailsCacheKey
+    // A load started before the reconnect is re-run on the new connection; its late answer is refused.
+    await reconnect(2)
+    await act(async () => old.resolve({ ...details, body: 'Old connection' }))
+    expect(node.textContent).toBe('Loaded body||null')
+    const comment = { id: 7, author: 'alice', authorAvatarUrl: '', createdAt: '', url: '' }
+    await act(async () => dialog.appendOptimisticComment({ ...comment, body: 'Just posted' }))
+    // The reconnect reloads the entry; the server's answer may not include the new comment yet.
+    mocks.details.mockResolvedValue({ ...details, body: 'Loaded body' })
+    await reconnect(3)
+    expect(node.textContent).toBe('Loaded body|Just posted|null')
+    await reconnect(4)
+    await flush()
+    expect(dialog.detailsCacheKey).toBe(key)
+    expect(node.textContent).toBe('Loaded body|Just posted|null')
+    mocks.details.mockResolvedValueOnce({ ...details, body: 'Refreshed body' })
+    await act(async () => dialog.refreshTask())
+    expect(node.textContent).toBe('Refreshed body|Just posted|null')
   })
 })

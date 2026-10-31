@@ -1,4 +1,3 @@
-import { setRuntimeEnvironmentConnectionGenerationForTests } from './runtime-status-connection-generation'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
@@ -807,19 +806,4 @@ describe('shared GitHub task records through production store actions', () => {
       expect(lookup).not.toHaveBeenCalled()
     }
   )
-  it('keeps every row through a connection change and drops only the old record', async () => {
-    setRuntimeEnvironmentConnectionGenerationForTests('p34245-test', 1)
-    const remote = { ...repo, executionHostId: 'runtime:p34245-test' }
-    const { store, cache, binding } = setup([remote])
-    const rows = [row, { ...row, id: 'issue:43', number: 43, url: `${row.url.slice(0, -2)}43` }]
-    await cache.readCanonical(row, binding, async () => ({ ...row, title: 'Confirmed' }))
-    const response = deferred<GitHubWorkItem>()
-    const read = cache.readCanonical(row, binding, () => response.promise)
-    setRuntimeEnvironmentConnectionGenerationForTests('p34245-test', 2)
-    store.setState({ runtimeStatusByEnvironmentId: new Map() })
-    response.resolve({ ...row, title: 'Old connection' })
-    expect(await read).toBe(false)
-    expect(cache.projectItems(rows)).toBe(rows)
-    expect(cache.acceptSearch(rows, binding)).toEqual(rows)
-  })
 })

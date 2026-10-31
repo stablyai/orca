@@ -84,11 +84,17 @@ vi.mock('../discuss-item/conversation-tab', () => ({
 vi.mock('../edit-item-fields/gh-edit-section-top-columns', () => ({
   GHEditSectionTopColumns: (props: {
     localAssignees: string[]
+    localLabels: string[]
     onAssigneeToggle: (login: string) => void
+    onLabelToggle: (label: string) => void
+    onStateChange: (state: 'open' | 'closed') => void
   }) => (
     <>
       <output data-field="dialog">{props.localAssignees.join(',')}</output>
+      <output data-field="labels">{props.localLabels.join(',')}</output>
       <button onClick={() => props.onAssigneeToggle('alice')}>Assign me</button>
+      <button onClick={() => props.onLabelToggle('bug')}>Label bug</button>
+      <button onClick={() => props.onStateChange('closed')}>Close</button>
     </>
   )
 }))
@@ -387,6 +393,21 @@ describe('issue dialog edits reach the Tasks row through the shared record', () 
       expect(shown().tasks).toEqual(['Renamed on GitHub', 'closed', ['triaged'], ['bob', 'alice']])
     }
   )
+
+  it('keeps an in-flight label chip when the state changes meanwhile', async () => {
+    const label = deferred<{ ok: boolean }>()
+    mocks.update.mockReturnValueOnce(label.promise)
+    await renderDialog()
+    await settle()
+    await click('Label bug')
+    expect(text('labels')).toBe('bug')
+    await click('Close')
+    await settle()
+    expect(text('labels')).toBe('bug')
+    await act(async () => label.resolve({ ok: false }))
+    await settle()
+    expect(text('labels')).toBe('')
+  })
 
   it('keeps the first ordinary load when Refresh is clicked during it and reports a strict failure once', async () => {
     const ordinary = deferred<unknown>()

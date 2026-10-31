@@ -10,7 +10,7 @@ import { parseHostAuthorityKey } from '../../../shared/host-authority'
 import type { AppState } from '@/store/types'
 import { getWorkItemRepo } from './work-item-repo-row'
 import { hostRouteForAuthority } from '@/runtime/runtime-client-target'
-import { captureHostIdentityFence, isHostIdentityFenceCurrent } from '@/store/host-catalog-fencing'
+import { captureHostIdentityFence, type HostIdentityFence } from '@/store/host-catalog-fencing'
 
 export function githubTaskIdentity(item: Pick<GitHubWorkItem, 'url'>): string {
   const link = parseGitHubIssueOrPRLink(item.url)
@@ -61,43 +61,39 @@ export function githubTaskExecutionIdentity(repo: Repo | undefined): string {
   const fence = captureHostIdentityFence(hostRouteForAuthority(authority))
   return JSON.stringify([fence.runtimeConnectionGeneration, fence.sshTargetConnectionGeneration])
 }
+/** The issue a dialog edits or refreshes, keyed by its account/source binding, never one connection. */
 export function captureGitHubTaskTarget(
-  get: () => Pick<AppState, 'repos' | 'runtimeStatusByEnvironmentId'>,
+  get: () => Pick<AppState, 'repos'>,
   item: GitHubWorkItem,
   source: TaskSourceContext
 ) {
-  const resolve = () =>
-    getWorkItemRepo(get().repos, {
-      repoId: item.repoId,
-      repoHostId: item.repoHostId ?? source.hostId
-    })
-  const repo = resolve()
+  const repo = getWorkItemRepo(get().repos, {
+    repoId: item.repoId,
+    repoHostId: item.repoHostId ?? source.hostId
+  })
   const ownerRepo = parseGitHubIssueOrPRLink(item.url)?.slug
-  if (!repo || !ownerRepo) {
+  if (!repo || !ownerRepo || getRepoExecutionHostId(repo) !== source.hostId) {
     return null
   }
-  const hostId = getRepoExecutionHostId(repo)
-  const authority = parseHostAuthorityKey(hostId)
-  if (hostId !== source.hostId || !authority) {
-    return null
-  }
-  const fence = captureHostIdentityFence(hostRouteForAuthority(authority))
-  const binding = (row: typeof repo | undefined) => row && githubTaskBinding(row)
   return {
     item,
     source,
     repo,
     ownerRepo,
-    key: `${githubTaskSourceKey(source)}\0${binding(repo)}\0${githubTaskExecutionIdentity(repo)}\0${githubTaskIdentity(item)}`,
-    current: () => binding(resolve()) === binding(repo) && isHostIdentityFenceCurrent(fence),
-    rpcOptions: {
-      expectedEnvironmentPairingRevision: fence.pairingRevision,
-      expectedEnvironmentRuntimeId:
-        fence.route.target.kind === 'environment'
-          ? get().runtimeStatusByEnvironmentId.get(fence.route.target.environmentId)?.status
-              ?.runtimeId
-          : undefined
-    }
+    key: `${githubTaskSourceKey(source)}\0${githubTaskBinding(repo)}\0${githubTaskIdentity(item)}`
+  }
+}
+/** Pins a request to the machine and runtime its binding was captured on. */
+export function githubTaskRpcOptions(
+  get: () => Pick<AppState, 'runtimeStatusByEnvironmentId'>,
+  { route, pairingRevision }: HostIdentityFence
+) {
+  return {
+    expectedEnvironmentPairingRevision: pairingRevision,
+    expectedEnvironmentRuntimeId:
+      route.target.kind === 'environment'
+        ? get().runtimeStatusByEnvironmentId.get(route.target.environmentId)?.status?.runtimeId
+        : undefined
   }
 }
 

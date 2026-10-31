@@ -56,46 +56,49 @@ export function useGitHubTaskRefresh({
         })
       : undefined
   )
+  // A reconnect re-captures the binding (the fence each read and send carries); the target and its data keys stay.
   const executionIdentity = useAppStore(() => githubTaskExecutionIdentity(registeredRepo))
   const issueSourcePreference = registeredRepo?.issueSourcePreference
-  const { target } = useMemo(
-    () => ({
-      executionIdentity,
-      target:
-        workItem?.type === 'issue' && sourceContext && registeredRepo
-          ? captureGitHubTaskTarget(useAppStore.getState, workItem, sourceContext)
-          : null
-    }),
-    [workItem, sourceContext, registeredRepo, executionIdentity]
+  const target = useMemo(
+    () =>
+      workItem?.type === 'issue' && sourceContext && registeredRepo
+        ? captureGitHubTaskTarget(useAppStore.getState, workItem, sourceContext)
+        : null,
+    [workItem, sourceContext, registeredRepo]
   )
   const cache = useAppStore((s) => s.githubTaskCache)
-  const binding = useMemo(
-    () => (target ? cache.capture(target.repo, target.source) : undefined),
-    [cache, target]
+  const { binding } = useMemo(
+    () => ({
+      executionIdentity,
+      binding: target ? cache.capture(target.repo, target.source) : undefined
+    }),
+    [cache, target, executionIdentity]
   )
   const bindingKey = binding ? `${target?.key}\0${cache.bindingIdentity(binding)}` : target?.key
-  // Disabled until known; a server known to lack canonical details explains why in the tooltip.
+  // Disabled until known for this connection; a server known to lack canonical details explains why in the tooltip.
+  const capabilityKey = target && `${target.key}\0${executionIdentity}`
   const [refreshCapability, setRefreshCapability] = useState<{
     key: string
     supported: boolean
   } | null>(null)
   const checkRefreshCapability = useEffectEvent(() => {
     let cancelled = false
-    if (!target) {
+    if (!target || !capabilityKey) {
       return
     }
     const host = getGitHubSourceRuntimeHost(target.source)
     if (!host) {
-      setRefreshCapability({ key: target.key, supported: true })
+      setRefreshCapability({ key: capabilityKey, supported: true })
       return
     }
+    const checked = binding
     void runtimeEnvironmentSupportsCapability(
       host.environmentId,
       GITHUB_CANONICAL_DETAILS_RUNTIME_CAPABILITY
     )
       .then((supported) => {
-        if (!cancelled && target.current()) {
-          setRefreshCapability({ key: target.key, supported })
+        if (!cancelled && checked && cache.current(checked)) {
+          setRefreshCapability({ key: capabilityKey, supported })
         }
       })
       .catch(() => {
@@ -107,8 +110,8 @@ export function useGitHubTaskRefresh({
       cancelled = true
     }
   })
-  useEffect(() => checkRefreshCapability(), [target?.key])
-  const capability = target && refreshCapability?.key === target.key ? refreshCapability : null
+  useEffect(() => checkRefreshCapability(), [capabilityKey])
+  const capability = refreshCapability?.key === capabilityKey ? refreshCapability : null
   const [refreshing, setRefreshing] = useState(false)
   const [acceptedRefresh, setAcceptedRefresh] = useState(0)
   const mounted = useMountedRef()
@@ -142,7 +145,7 @@ export function useGitHubTaskRefresh({
       : null
   const optimisticKey = target?.key ?? detailsCacheKey ?? ''
   const refreshTask = useCallback(async () => {
-    if (!target || !binding || !detailsCacheKey || !target.current()) {
+    if (!target || !binding || !detailsCacheKey || !cache.current(binding)) {
       return
     }
     intentRef.current?.()
@@ -152,7 +155,7 @@ export function useGitHubTaskRefresh({
     // The record's own pending edits and write revision fence this read; no second registry.
     const unsubscribeCache = cache.subscribe(() => wake())
     const unsubscribeStore = useAppStore.subscribe(() => {
-      if (!target.current()) {
+      if (!cache.current(binding)) {
         dispose()
       }
     })
@@ -169,7 +172,7 @@ export function useGitHubTaskRefresh({
         }
       }
     }
-    const alive = () => live && target.current() && cache.current(binding)
+    const alive = () => live && cache.current(binding)
     intentRef.current = dispose
     setRefreshing(true)
     try {
@@ -236,6 +239,7 @@ export function useGitHubTaskRefresh({
 
   return {
     target,
+    binding,
     detailsCacheKey,
     optimisticKey,
     refreshTask,

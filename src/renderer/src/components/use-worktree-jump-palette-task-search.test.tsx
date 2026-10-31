@@ -168,3 +168,52 @@ it('shows an accepted GitHub task record over the stale search row it returned',
   })
   useAppStore.setState({ repos: [] })
 })
+
+it('filters to open after pending edits apply: a pending reopen shows and a failure removes it', async () => {
+  const repo: Repo = { id: 'repo', path: '/repo', displayName: 'Repo', badgeColor: '', addedAt: 1 }
+  const issue = (number: number, state: GitHubWorkItem['state']): GitHubWorkItem => ({
+    id: `issue:${number}`,
+    repoId: repo.id,
+    type: 'issue',
+    number,
+    title: `#${number}`,
+    state,
+    labels: [],
+    assignees: [],
+    url: `https://github.com/acme/widgets/issues/${number}`,
+    author: null,
+    updatedAt: '2026-10-31T12:00:02Z'
+  })
+  const closed = issue(42, 'closed'),
+    open = issue(43, 'open')
+  useAppStore.setState({ repos: [repo] })
+  const cache = useAppStore.getState().githubTaskCache
+  const binding = cache.capture(repo)!
+  const reopen = cache.operation(closed, binding, { state: 'open' })
+  const close = cache.operation(open, binding, { state: 'closed' })
+  const source = buildTaskSourceContextFromRepo({ provider: 'github', projectId: repo.id, repo })!
+  vi.mocked(createCmdJTaskSearchRequests).mockReturnValue([
+    {
+      id: 'github',
+      provider: 'github',
+      hostLabel: 'Local',
+      run: async () =>
+        [closed, open].map((item) =>
+          makeCmdJTaskSearchResult({ provider: 'github', issue: item }, source, repo.id, 'Local')
+        )
+    }
+  ])
+  const { result } = renderHook(useWorktreeJumpPaletteTaskSearch, { initialProps: input })
+  await act(async () => vi.advanceTimersByTimeAsync(600))
+  const numbers = () =>
+    result.current.taskItems.map(({ result: { task } }) =>
+      task.provider === 'github' ? task.issue.number : null
+    )
+  expect(numbers()).toEqual([42])
+  act(() => {
+    reopen(false)
+    close(false)
+  })
+  expect(numbers()).toEqual([43])
+  useAppStore.setState({ repos: [] })
+})

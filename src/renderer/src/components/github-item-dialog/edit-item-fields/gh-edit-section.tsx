@@ -80,7 +80,7 @@ function GHEditSectionItem({
     useShallow((s) => getGitHubRepoRoutingTarget(s, item.repoId ?? null, sourceContext))
   )
   const { isPending, run } = useImmediateMutation()
-  // Patch Project rows too; the task record updates only workItemsCache, leaving projectViewCache stale.
+  // The origin Project row shows this edit even where no task record projects it (untracked, another host's view).
   const patchProjectRowIfNeeded = useCallback(
     (patch: Parameters<typeof patchProjectRowContent>[2]) => {
       if (!projectOrigin) {

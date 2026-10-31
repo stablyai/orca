@@ -163,8 +163,11 @@ export function useWorktreeJumpPaletteTaskSearch({
   const projected = useGitHubTaskItems(githubItems)
   const taskItems = useMemo(() => {
     let index = 0
-    return (current?.results ?? EMPTY_RESULTS).map((raw) => {
+    return (current?.results ?? EMPTY_RESULTS).flatMap((raw) => {
       const issue = raw.task.provider === 'github' ? projected[index++] : undefined
+      if (issue && issue.state !== 'open') {
+        return []
+      }
       const result =
         raw.task.provider === 'github' && issue && issue !== raw.task.issue
           ? makeCmdJTaskSearchResult(
@@ -174,7 +177,7 @@ export function useWorktreeJumpPaletteTaskSearch({
               raw.hostLabel
             )
           : raw
-      return { id: result.id, type: 'task' as const, result }
+      return [{ id: result.id, type: 'task' as const, result }]
     })
   }, [current?.results, projected])
   const retryTaskSearch = (): void => setRetryNonce((value) => value + 1)

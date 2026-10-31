@@ -22,7 +22,11 @@ import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { structuralValuesEqual } from '../../../../shared/structural-value-equality'
 import { nextProviderRequestId } from './request-coordination'
 import { projectViewSourceScope } from './cache-identity'
-import { isHostIdentityFenceCurrent } from '../host-catalog-fencing'
+import {
+  isHostIdentityContinued,
+  isHostIdentityFenceCurrent,
+  type HostIdentityFence
+} from '../host-catalog-fencing'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import { patchGitHubProjectRowContent } from './project-row-actions'
@@ -53,6 +57,8 @@ type AcceptedTask = {
   readOrder: number
   needsRead: boolean
   read?: { revision: number; light: boolean; promise: Promise<boolean> }
+  /** When its last owned read came back unusable: it waits for an external delivery, oldest first. */
+  failedAt?: number
   /** Replaced whenever what the record projects may have changed. */
   stamp: object
 }
@@ -65,6 +71,13 @@ const login = (value: string) => value.toLowerCase()
 const sorted = (values: readonly string[]) => [...values].sort().join('\0')
 const logins = (item: TaskFacts) => item.assignees?.map((user) => login(user.login))
 const bindingKey = (repo: Repo) => `${getRepoExecutionHostId(repo)}\0${repo.id}`
+/** The connection a fence was captured on; a reconnect or upgrade makes server support unknown again. */
+const connection = ({
+  pairingRevision,
+  runtimeConnectionGeneration,
+  sshTargetConnectionGeneration
+}: HostIdentityFence) =>
+  `${pairingRevision}\0${runtimeConnectionGeneration}\0${sshTargetConnectionGeneration}`
 const sources = (record: AcceptedTask) =>
   record.binding.observation.associations.map(({ source }) => source)
 
@@ -154,12 +167,14 @@ function newestFirst(a: AcceptedTask, b: AcceptedTask) {
 }
 
 export class GitHubTaskRecordCache {
-  private bindings = new Map<string, { signature: string; incarnation: object; id: number }>()
+  private bindings = new Map<
+    string,
+    { signature: string; incarnation: object; id: number; unsupported?: string }
+  >()
   private records = new Map<string, AcceptedTask>()
   private listeners = new Set<() => void>()
   private projections = new WeakMap<GitHubWorkItem, { stamp: object; value: GitHubWorkItem }>()
   private revision = 0
-  private unsupported = new WeakSet<object>()
   constructor(private store: Pick<StoreApi<AppState>, 'getState'>) {}
   subscribe = (listener: () => void) => {
     this.listeners.add(listener)
@@ -185,14 +200,21 @@ export class GitHubTaskRecordCache {
       }
     }
     let changed = false
+    const reconnected = new Set<object>()
     for (const [key, record] of this.records) {
-      if (!this.current(record.binding)) {
-        this.records.delete(key)
+      const observed = record.binding
+      if (!this.keep(key, record)) {
         changed = true
+      } else if (record.binding !== observed) {
+        reconnected.add(record.binding.incarnation)
       }
     }
     if (changed) {
       this.notify()
+    }
+    // A reconnect is a new chance for a read still owed on that binding.
+    for (const incarnation of reconnected) {
+      this.wake(incarnation)
     }
   }
   capture(repo: Repo | undefined, source?: TaskSourceContext | null): TaskBinding | undefined {
@@ -210,6 +232,40 @@ export class GitHubTaskRecordCache {
       isHostIdentityFenceCurrent(fence)
     )
   }
+  /** Same account, repo and machine: what a record's data belongs to, unlike one connection's fence. */
+  private owns(binding: TaskBinding) {
+    const { hostId, repoId, fence } = binding.observation
+    return (
+      this.bindings.get(`${hostId}\0${repoId}`)?.incarnation === binding.incarnation &&
+      isHostIdentityContinued(fence)
+    )
+  }
+  private repo(repoId: string, hostId: string) {
+    return (this.store.getState().repos ?? []).find(
+      (r) => r.id === repoId && getRepoExecutionHostId(r) === hostId
+    )
+  }
+  /** A reconnect re-captures the owner's observation; losing the account, repo or machine ends it. */
+  private keep(key: string, record: AcceptedTask) {
+    if (this.current(record.binding)) {
+      return true
+    }
+    const { repoId, hostId, source } = record.binding.observation
+    const repo = this.owns(record.binding) ? this.repo(repoId, hostId) : undefined
+    const observation = repo && captureGitHubTaskObservation(repo, source)
+    if (observation) {
+      record.binding = { observation, incarnation: record.binding.incarnation }
+      if (this.current(record.binding)) {
+        return true
+      }
+    }
+    this.records.delete(key)
+    return false
+  }
+  private unsupported(binding: TaskBinding) {
+    const { hostId, repoId, fence } = binding.observation
+    return this.bindings.get(`${hostId}\0${repoId}`)?.unsupported === connection(fence)
+  }
   bindingIdentity(binding: TaskBinding) {
     const { hostId, repoId } = binding.observation
     return this.bindings.get(`${hostId}\0${repoId}`)?.id ?? 0
@@ -220,12 +276,10 @@ export class GitHubTaskRecordCache {
   private record(item: GitHubWorkItem, binding: TaskBinding) {
     const key = this.key(item, binding.observation.hostId)
     const record = this.records.get(key)
-    if (record && !this.current(record.binding)) {
-      // A record whose own fence went stale dies here, whichever store field moved.
-      this.records.delete(key)
-      return undefined
-    }
-    return record?.binding.incarnation === binding.incarnation && this.current(binding)
+    return record &&
+      this.keep(key, record) &&
+      record.binding.incarnation === binding.incarnation &&
+      this.current(binding)
       ? record
       : undefined
   }
@@ -341,15 +395,11 @@ export class GitHubTaskRecordCache {
     const record = hostId && this.records.get(this.key(row, hostId))
     return record && this.current(record.binding) ? this.projectWith(row, record) : row
   }
-  projectItems(rows: readonly GitHubWorkItem[]): readonly GitHubWorkItem[] {
-    const projected = rows.map((row) => this.projectItem(row))
-    return projected.every((row, index) => row === rows[index]) ? rows : projected
-  }
   acceptSearch(
     rows: readonly GitHubWorkItem[],
     binding: TaskBinding | undefined
   ): readonly GitHubWorkItem[] {
-    return rows.map((item) => {
+    const stored = rows.map((item) => {
       const record = binding && this.record(item, binding)
       if (!record) {
         return item
@@ -379,18 +429,41 @@ export class GitHubTaskRecordCache {
       ) {
         record.needsRead = true
       }
-      // This delivery wakes a read still owed; the caller stores the row, so it carries no pending change.
-      if (record.needsRead) {
+      // A first owed read runs now; one that already failed waits for its turn below. The caller stores
+      // the row, so it carries no pending change.
+      if (record.needsRead && record.failedAt === undefined) {
         void this.verify(record)
       }
       return this.stored(item, record)
     })
+    if (binding && this.current(binding)) {
+      this.wake(binding.incarnation)
+    }
+    return stored
+  }
+  /** Each external delivery retries at most one owed read per binding, the longest-waiting first. */
+  private wake(incarnation: object) {
+    let next: AcceptedTask | undefined
+    for (const record of this.records.values()) {
+      if (
+        record.binding.incarnation === incarnation &&
+        record.needsRead &&
+        !record.pending.size &&
+        !record.read &&
+        (!next || (record.failedAt ?? 0) < (next.failedAt ?? 0))
+      ) {
+        next = record
+      }
+    }
+    if (next) {
+      void this.verify(next)
+    }
   }
   /** A live record keeps tracking its started edits even after its server proves unsupported. */
   canTrack(binding: TaskBinding, item?: GitHubWorkItem) {
     return (
       !!(item && this.record(item, binding)) ||
-      (this.current(binding) && !this.unsupported.has(binding.incarnation))
+      (this.current(binding) && !this.unsupported(binding))
     )
   }
   /** Settle returns the caller's item with the owner's surviving changes (or the accepted value). */
@@ -419,7 +492,9 @@ export class GitHubTaskRecordCache {
       record.pending.delete(token)
       record.revision = nextProviderRequestId()
       if (success) {
+        // A newly settled write is owed its own first read, whatever an earlier read's outcome was.
         record.needsRead = true
+        record.failedAt = undefined
         if (record.base) {
           record.base = applyTaskChange(record.base, change)
         } else {
@@ -447,10 +522,10 @@ export class GitHubTaskRecordCache {
       }
       this.retire(record)
       this.emit(record)
-      if (this.unsupported.has(binding.incarnation) && !record.pending.size) {
+      if (this.unsupported(record.binding) && !record.pending.size) {
         // A server without the item route keeps no unresolved record once its last edit settles.
         this.records.delete(this.key(item, binding.observation.hostId))
-      } else if (record.needsRead) {
+      } else if (record.needsRead && record.failedAt === undefined) {
         void this.verify(record)
       }
       return value()
@@ -480,9 +555,7 @@ export class GitHubTaskRecordCache {
   }
   private async itemRead(url: string, binding: TaskBinding, accepts: () => boolean) {
     const { repoId, hostId, source } = binding.observation
-    const repo = (this.store.getState().repos ?? []).find(
-      (r) => r.id === repoId && getRepoExecutionHostId(r) === hostId
-    )
+    const repo = this.repo(repoId, hostId)
     const link = parseGitHubIssueOrPRLink(url)
     if (!repo || !link) {
       return null
@@ -530,8 +603,10 @@ export class GitHubTaskRecordCache {
     attempt.promise = (async () => {
       try {
         const result = await load(accepts)
+        if (!accepts()) {
+          return false
+        }
         if (
-          !accepts() ||
           !result ||
           result.type !== item.type ||
           result.number !== item.number ||
@@ -540,6 +615,8 @@ export class GitHubTaskRecordCache {
           (Number.isFinite(version(record.base)) &&
             (!Number.isFinite(version(result)) || version(result) < version(record.base)))
         ) {
+          // Unusable is not a reading: keep what is known and park until an external delivery.
+          record.failedAt = nextProviderRequestId()
           return false
         }
         // This reading was captured after every confirmed edit settled, so it covers them.
@@ -547,19 +624,27 @@ export class GitHubTaskRecordCache {
         record.confirmed = undefined
         record.readOrder = readOrder
         record.needsRead = false
+        record.failedAt = undefined
         this.emit(record)
         return true
       } catch (error) {
+        const { hostId, repoId, fence } = binding.observation
+        const entry = this.bindings.get(`${hostId}\0${repoId}`)
         if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-          this.unsupported.add(binding.incarnation)
-          // Records with edits in flight stay until those settle so a failure still rolls back; a confirmed
-          // change is already on the copies, so idle records simply retire.
-          for (const [key, entry] of this.records) {
-            if (entry.binding.incarnation === binding.incarnation && !entry.pending.size) {
-              this.records.delete(key)
+          // Only the connection that answered lacks the route; a late old answer says nothing new.
+          if (entry && this.current(binding)) {
+            entry.unsupported = connection(fence)
+            // Records with edits in flight stay until those settle; a confirmed change is already on the
+            // copies, so idle records simply retire.
+            for (const [key, owner] of this.records) {
+              if (owner.binding.incarnation === binding.incarnation && !owner.pending.size) {
+                this.records.delete(key)
+              }
             }
+            this.notify()
           }
-          this.notify()
+        } else if (accepts()) {
+          record.failedAt = nextProviderRequestId()
         }
         return false
       } finally {
@@ -710,12 +795,22 @@ export class GitHubTaskRecordCache {
               PROJECT_ASSIGNEE_LIMIT
             )))
       for (const candidate of matches) {
-        // A board fetch also wakes an owner without a base that still owes its read.
-        if (conflict || (!candidate.base && candidate.needsRead)) {
+        if (conflict) {
           candidate.needsRead = true
+        }
+        if (conflict && candidate.failedAt === undefined) {
           void this.verify(candidate)
         }
       }
+    }
+    // A board fetch is an external delivery for every binding on its source.
+    const scope = projectViewSourceScope(target)
+    for (const incarnation of new Set(
+      [...this.records.values()]
+        .filter((record) => record.binding.observation.hostId === scope)
+        .map((record) => record.binding.incarnation)
+    )) {
+      this.wake(incarnation)
     }
   }
   /** Publish only title, state and label/assignee membership; board fields and profiles stay the row's. */

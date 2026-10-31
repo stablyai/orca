@@ -88,15 +88,11 @@ export function touchWorkItemDetailsCache(key: string, entry: WorkItemDetailsCac
 }
 
 export function invalidateWorkItemDetailsCacheForKey(key: string): void {
-  workItemDetailsCacheGeneration += 1
   const existed = workItemDetailsCache.delete(key)
   if (existed) {
     notifyWorkItemDetailsCache()
   }
 }
-
-// Fence pending fetches on every invalidation so pre-mutation results cannot restore stale entries.
-export let workItemDetailsCacheGeneration = 0
 
 // Without an exact key, invalidate matching repo/type/number entries across source preferences.
 export function invalidateWorkItemDetailsCacheByMatch(args: {
@@ -124,7 +120,6 @@ export function invalidateWorkItemDetailsCacheByMatch(args: {
     }
   }
   if (removed) {
-    workItemDetailsCacheGeneration += 1
     notifyWorkItemDetailsCache()
   }
 }

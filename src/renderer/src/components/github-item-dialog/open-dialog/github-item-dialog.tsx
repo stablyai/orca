@@ -1,4 +1,4 @@
-import React, { useCallback, useEffect, useMemo, useState } from 'react'
+import React, { useCallback, useEffect, useEffectEvent, useMemo, useState } from 'react'
 import { toast } from 'sonner'
 import { useAllWorktrees } from '@/store/selectors'
 import { useAppStore } from '@/store'
@@ -120,10 +120,16 @@ export default function GitHubItemDialog({
     if (resolvedWorkItemState) {
       setLocalState(resolvedWorkItemState)
     }
-    if (workItemLabels) {
-      setLocalLabels(workItemLabels)
+  }, [workItemId, resolvedWorkItemState])
+  // Chips follow the displayed item (its pending edits included), and only when its labels change.
+  const displayedLabels = displayWorkItem?.labels ?? workItemLabels
+  const syncLabels = useEffectEvent(() => {
+    if (displayedLabels) {
+      setLocalLabels(displayedLabels)
     }
-  }, [workItemId, resolvedWorkItemState, workItemLabels])
+  })
+  const displayedLabelsKey = displayedLabels?.join('\0')
+  useEffect(() => syncLabels(), [workItemId, displayedLabelsKey])
 
   // Why: a just-closed Radix overlay can leave `pointer-events: none` on <body>, killing header button clicks; poll a few frames to clear it.
   useEffect(() => {
