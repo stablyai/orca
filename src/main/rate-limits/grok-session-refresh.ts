@@ -1,10 +1,12 @@
 import { homedir } from 'node:os'
+import { sharedPromiseSettlementWaiters } from '../../shared/promise-settlement-waiters'
 import { getGrokHome, readGrokAuthSession, type GrokAuthReadResult } from './grok-auth'
 import { grokAccessTokenNeedsCliRefresh } from './grok-auth-expiry'
 import { noteGrokAuthForScheduledRefresh } from './grok-token-refresh-schedule'
 
 // `sessions list` lets the CLI refresh near-expiry auth without sending a chat.
 const GROK_SESSIONS_LIST_ARGS = ['sessions', 'list'] as const
+const GROK_SESSIONS_LIST_SETUP_TIMEOUT_MS = 10_000
 const GROK_SESSIONS_LIST_TIMEOUT_MS = 20_000
 const GROK_SESSIONS_LIST_MAX_OUTPUT_BYTES = 64 * 1024
 // Stay under the schedule's one-minute retry so a failed refresh can run again.
@@ -66,15 +68,15 @@ export async function readGrokAuthForUsage(
 
 async function runGrokSessionsList(signal?: AbortSignal): Promise<void> {
   try {
-    const { hostShellEnvironment } = await import('../runtime/structured-agent-shell-environment')
-    // Pin the same normalized auth home as the reader, including its default.
-    const env = { ...(await hostShellEnvironment()), GROK_HOME: getGrokHome() }
-    const { resolveCommandOnLocalPath } = await import('../ipc/command-path-resolver')
-    const program = await resolveCommandOnLocalPath('grok', { env })
-    if (!program) {
+    // Filesystem lookup cannot be cancelled; only a timely setup may spawn the CLI.
+    const prepared = await sharedPromiseSettlementWaiters(prepareGrokSessionsList()).wait({
+      signal,
+      timeoutMs: GROK_SESSIONS_LIST_SETUP_TIMEOUT_MS
+    })
+    if (!prepared || signal?.aborted) {
       return
     }
-    const { runProcess } = await import('@orca/process-host')
+    const { program, env, runProcess } = prepared
     await runProcess({
       program,
       args: GROK_SESSIONS_LIST_ARGS,
@@ -87,4 +89,17 @@ async function runGrokSessionsList(signal?: AbortSignal): Promise<void> {
   } catch {
     // Auth-file state determines usability and scheduled retries even when the CLI fails.
   }
+}
+
+async function prepareGrokSessionsList() {
+  const { hostShellEnvironment } = await import('../runtime/structured-agent-shell-environment')
+  // Pin the same normalized auth home as the reader, including its default.
+  const env = { ...(await hostShellEnvironment()), GROK_HOME: getGrokHome() }
+  const { resolveCommandOnLocalPath } = await import('../ipc/command-path-resolver')
+  const program = await resolveCommandOnLocalPath('grok', { env })
+  if (!program) {
+    return null
+  }
+  const { runProcess } = await import('@orca/process-host')
+  return { program, env, runProcess }
 }
