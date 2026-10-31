@@ -223,6 +223,18 @@ export function isNativeChatEditDraft(scopeKey: string): boolean {
   return scopeKey.startsWith('queued-edit:')
 }
 
+const LAUNCH_PROMPT_SCOPE_PREFIX = 'agent-launch:'
+
+/** The first prompt typed in an agent's launch panel, before any chat or terminal exists. */
+export function nativeChatLaunchPromptDraftScopeKey(worktreeId: string, agent: string): string {
+  return `${LAUNCH_PROMPT_SCOPE_PREFIX}${worktreeId}:${agent}`
+}
+
+/** Edit and launch-prompt scopes share the input machinery but never enter draft persistence. */
+export function isNativeChatMemoryOnlyDraft(scopeKey: string): boolean {
+  return isNativeChatEditDraft(scopeKey) || scopeKey.startsWith(LAUNCH_PROMPT_SCOPE_PREFIX)
+}
+
 export function closeNativeChatEditDraft(scopeKey: string): void {
   const target = ephemeralDrafts.get(scopeKey)
   if (target?.scopeKey === scopeKey) {

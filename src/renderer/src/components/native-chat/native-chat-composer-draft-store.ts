@@ -27,6 +27,7 @@ import {
   notifyDraftAppend,
   ephemeralDrafts,
   isNativeChatEditDraft,
+  isNativeChatMemoryOnlyDraft,
   reconcileRestoredImageChecks,
   type DraftAppend,
   type DraftRecord
@@ -166,7 +167,7 @@ export function updateNativeChatComposerDraft(
     installNativeChatDraftRecord(scopeKey)
     reconcileRestoredImageChecks(scopeKey, [])
     notifyScope(scopeKey)
-    if (!isNativeChatEditDraft(scopeKey)) {
+    if (!isNativeChatMemoryOnlyDraft(scopeKey)) {
       persistNativeChatComposerDraft(scopeKey, 'immediate', append)
     }
     return
@@ -188,7 +189,7 @@ export function updateNativeChatComposerDraft(
   installNativeChatDraftRecord(scopeKey, record, position)
   reconcileRestoredImageChecks(scopeKey, record.images)
   notifyScope(scopeKey)
-  if (isNativeChatEditDraft(scopeKey)) {
+  if (isNativeChatMemoryOnlyDraft(scopeKey)) {
     return
   }
   persistNativeChatComposerDraft(scopeKey, persist, append)
@@ -239,7 +240,7 @@ export function appendToNativeChatComposerDraft(
     return true
   }
   return (
-    isNativeChatEditDraft(scopeKey) ||
+    isNativeChatMemoryOnlyDraft(scopeKey) ||
     journalNativeChatComposerDraftAddition(scopeKey, placed, after.savedAt)
   )
 }
@@ -333,6 +334,7 @@ export {
   captureNativeChatEditDraftDestination,
   redirectNativeChatEditDraft,
   isNativeChatEditDraft,
+  nativeChatLaunchPromptDraftScopeKey,
   closeNativeChatEditDraft,
   type NativeChatEditDraftDestination
 } from './native-chat-composer-draft-memory'

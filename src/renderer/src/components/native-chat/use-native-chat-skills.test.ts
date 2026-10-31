@@ -139,6 +139,20 @@ describe('floating workspace skill discovery', () => {
     })
   })
 
+  it('scans the folder a launch panel will start its agent in, before any tab exists', () => {
+    expect(
+      resolveNativeChatSkillDiscoveryContext(
+        { ...floatingInputs, unifiedTabsByWorktree: {} },
+        'agent-launch:floating:codex',
+        FLOATING_TERMINAL_WORKTREE_ID
+      )
+    ).toMatchObject({
+      cwd: '/home/me/scratch',
+      runtimeTarget: { kind: 'local' },
+      discoveryTarget: { cwd: '/home/me/scratch', worktreeId: FLOATING_TERMINAL_WORKTREE_ID }
+    })
+  })
+
   it('stays not-ready until the floating directory resolves', () => {
     expect(
       resolveNativeChatSkillDiscoveryContext(

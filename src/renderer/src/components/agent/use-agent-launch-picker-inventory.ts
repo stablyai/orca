@@ -93,9 +93,10 @@ export function useAgentLaunchPickerInventory(
             arguments: undefined,
             defaultsPending: true,
             structuredDefaultsPending: entry.surfaces.includes('chat'),
-            ownerKey: key
+            ownerKey: key,
+            worktreeId
           }))
-        : build(settings).map((entry) => ({ ...entry, ownerKey: key })),
+        : build(settings).map((entry) => ({ ...entry, ownerKey: key, worktreeId })),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- The semantic key covers rows, detection, target and defaults without restarting for object identity.
     [key]
   )
@@ -179,7 +180,8 @@ export function useAgentLaunchPickerInventory(
                       defaultsPending: false,
                       structuredDefaultsPending:
                         entry.surfaces.includes('chat') && !structuredKnown,
-                      ownerKey: key
+                      ownerKey: key,
+                      worktreeId
                     }))
                   : undefined
               },

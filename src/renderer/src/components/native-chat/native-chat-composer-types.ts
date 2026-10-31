@@ -134,6 +134,9 @@ export type NativeChatComposerProps = {
    *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
    *  file-backed pastes. The pending transport reports no session options or context usage. */
   workspacePending?: true
+  /** The first prompt in an agent's launch panel: one line that grows, Attach as its only control,
+   *  no /resume, the launch workspace's skills, and a draft kept in memory until the launch. */
+  launchPrompt?: { placeholder: string }
   /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
   steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
@@ -170,4 +173,6 @@ export type NativeChatComposerHandle = {
   pasteFromClipboard: () => void
   /** Whether a node is inside the composer's own input, not merely the chat pane. */
   contains: (node: Node | null) => boolean
+  /** Sends the draft as Enter would, for a send control outside the composer. */
+  submit?: () => void
 }

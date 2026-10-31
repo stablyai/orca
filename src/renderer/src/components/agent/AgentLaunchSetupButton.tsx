@@ -148,6 +148,12 @@ export function AgentLaunchSetupButton({
         onClick={(event) => event.stopPropagation()}
         // Hovering another menu row moves focus there; only a click outside or Escape closes the panel.
         onFocusOutside={(event) => event.preventDefault()}
+        // The prompt's open / or @ menu takes Escape first.
+        onEscapeKeyDown={(event) => {
+          if (content.current?.querySelector('[contenteditable][aria-expanded="true"]')) {
+            event.preventDefault()
+          }
+        }}
         onCloseAutoFocus={(event) => {
           if (!closeFocus.current.restore) {
             event.preventDefault()

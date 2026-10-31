@@ -6,6 +6,7 @@ import {
   type NativeChatPickerState
 } from './use-native-chat-picker-state'
 import {
+  NATIVE_CHAT_RESUME_COMMAND,
   useNativeChatResumeCommand,
   type NativeChatResumeCommand
 } from './use-native-chat-resume-command'
@@ -21,14 +22,17 @@ export function useNativeChatComposerCommandPicker(
     | 'sessionSkills'
     | 'onPickerOpened'
     | 'onPickerDemand'
+    | 'launchWorktreeId'
     | keyof ResumeArgs['editor']
   > &
     Pick<ResumeArgs, 'editor' | 'setNotice'> & {
       structuredTransport: NativeChatStructuredComposerTransport | undefined
-      editing?: boolean
+      /** An edit saves into a queued message; a launch prompt has no session to resume and
+       *  lists its workspace's skills. */
+      mode?: 'edit' | 'launch'
     }
 ): { picker: NativeChatPickerState; resume: NativeChatResumeCommand } {
-  const { structuredTransport, editor, setNotice, editing, ...pickerArgs } = args
+  const { structuredTransport, editor, setNotice, mode, ...pickerArgs } = args
   const { agent, terminalTabId } = pickerArgs
   const { agentCommands, sessionSkills } = useNativeChatComposerCatalog(agent, structuredTransport)
   const reported = structuredTransport?.sessionCommands
@@ -38,11 +42,15 @@ export function useNativeChatComposerCommandPicker(
     [agent, reported, hostSetsGoals]
   )
   const commandAvailable = useCallback(
-    (name: string) => !editing || acceptsText(`/${name}`),
-    [editing, acceptsText]
+    (name: string) =>
+      mode === 'launch'
+        ? name !== NATIVE_CHAT_RESUME_COMMAND
+        : mode !== 'edit' || acceptsText(`/${name}`),
+    [mode, acceptsText]
   )
   const picker = useNativeChatPickerState({
     ...pickerArgs,
+    ...(mode === 'launch' ? { launchWorktreeId: structuredTransport?.worktreeId } : {}),
     ...editor,
     agentCommands,
     commandAvailable,

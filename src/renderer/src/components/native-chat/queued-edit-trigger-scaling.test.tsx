@@ -115,7 +115,7 @@ it.each([10, 100])(
             setActiveSuggestion: () => {}
           },
           structuredTransport: target,
-          editing,
+          mode: editing ? 'edit' : undefined,
           setNotice: () => {}
         })
       },
