@@ -46,6 +46,8 @@ function panel(worker: OrchestrationCrewRow) {
     <CrewPanelContent
       target={local}
       party="term_owner"
+      canMention={false}
+      mention={vi.fn()}
       snapshot={{
         ...emptyCrew('ok'),
         sections: { managedBy: [], managing: [worker], talkingWith: [] }
