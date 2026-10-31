@@ -126,7 +126,7 @@ function getActiveIdsForFloatingEntry(entry: TypeCyclableTab): {
     activeBrowserTabId: entry.type === 'browser' ? entry.id : null,
     activeFileId: entry.type === 'editor' ? entry.id : null,
     activeTabId: entry.type === 'terminal' ? entry.id : null,
-    activeTabType: entry.type
+    activeTabType: entry.type === 'agents' ? 'editor' : entry.type
   }
 }
 

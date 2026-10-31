@@ -1,7 +1,8 @@
 import { ContextMenu, ContextMenuTrigger } from '@/components/ui/context-menu'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { useSortable } from '@dnd-kit/sortable'
-import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks, Smartphone } from 'lucide-react'
+import { GitCompareArrows, Eye, ShieldAlert, Pin, ListChecks } from 'lucide-react'
+import { syntheticTabIcon } from './synthetic-tab-icon'
 import { Input } from '@/components/ui/input'
 import { TabHoverCard } from './TabHoverCard'
 import { basename } from '@/lib/path'
@@ -93,7 +94,6 @@ export default function EditorFileTab({
   const isCheckDetails = file.mode === 'check-details'
   const isMarkdownPreviewTab = file.mode === 'markdown-preview'
   const customEditor = useTabCustomEditor(file)
-  // Why: simulator tabs reuse this chrome with a synthetic path an icon theme would map to its file icon.
   const ModeIcon = isConflictReview
     ? ShieldAlert
     : isCheckDetails
@@ -102,9 +102,7 @@ export default function EditorFileTab({
         ? GitCompareArrows
         : isMarkdownPreviewTab
           ? Eye
-          : file.language === 'simulator'
-            ? Smartphone
-            : null
+          : syntheticTabIcon(file.language)
   const tabIcon = (className: string): React.ReactNode => (
     <PluginContributionIcon
       url={customEditor?.iconUrl}
@@ -360,7 +358,7 @@ export default function EditorFileTab({
         {file.isDirty && (
           <span className="absolute size-1.5 rounded-full bg-foreground/60 group-hover:hidden group-focus-within:hidden" />
         )}
-        {!isPinned && (
+        {(!isPinned || file.language === 'agents') && (
           <EditorFileTabCloseButton
             fileIsDirty={file.isDirty}
             showsSelectionChrome={isActive}

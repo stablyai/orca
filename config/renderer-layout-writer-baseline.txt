@@ -15,6 +15,7 @@
 1 src/renderer/src/components/status-bar/workspace-space-decision-inputs.ts
 2 src/renderer/src/components/tab-bar/terminal-tab-activity-status.ts
 3 src/renderer/src/components/tab-bar/use-tab-bar-runtime-model-worktree-write-probe.ts
+3 src/renderer/src/components/tab-group/tab-group-panel-active-tab-props.ts # Agents tab card groups, kept off the layout (#21560)
 1 src/renderer/src/components/tab-group/useTabGroupWorkspaceModel.ts
 1 src/renderer/src/components/terminal-pane/pty-connection-test-deps.ts
 4 src/renderer/src/components/terminal-pane/terminal-recovery-ledger-test-store.ts
@@ -81,6 +82,9 @@
 2 src/renderer/src/store/slices/tab-group-reference-repair.ts
 4 src/renderer/src/store/slices/tab-group-state.ts
 1 src/renderer/src/store/slices/tabs-hydration.ts
+4 src/renderer/src/store/slices/tabs/agent-card-group-assignment.ts # Agents tab card groups, kept off the layout (#21560)
+4 src/renderer/src/store/slices/tabs/agent-cards-actions.ts # Agents tab card groups, kept off the layout (#21560)
+1 src/renderer/src/store/slices/tabs/agent-cards-projection.ts # Agents tab card groups, kept off the layout (#21560)
 4 src/renderer/src/store/slices/tabs/create-tabs-slice.ts
 17 src/renderer/src/store/slices/tabs/tabs-close-actions.ts
 14 src/renderer/src/store/slices/tabs/tabs-create-actions.ts

@@ -176,6 +176,8 @@ export function buildFullWorktreePurgeState(
     pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
     rightSidebarTabByWorktree: pruneRightSidebarTabByWorktree(),
     rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree ?? {}),
+    agentCardGroupIdsByWorktree: omitByWorktree(s.agentCardGroupIdsByWorktree),
+    maximizedGroupIdByWorktree: omitByWorktree(s.maximizedGroupIdByWorktree),
     gitStatusByWorktree: omitByWorktree(s.gitStatusByWorktree),
     remoteStatusesByWorktree: omitByWorktree(s.remoteStatusesByWorktree),
     gitStatusHeadByWorktree: omitByWorktree(s.gitStatusHeadByWorktree),

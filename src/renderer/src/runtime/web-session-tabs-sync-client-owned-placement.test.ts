@@ -551,7 +551,8 @@ describe('client-owned tab placement for paired worktrees', () => {
       reservedEmptyGroupFallbackTabId: null,
       currentActiveGroupId: PREVIEW_GROUP,
       currentLayout: SPLIT_LAYOUT,
-      isGroupReserved: () => false
+      isGroupReserved: () => false,
+      isGroupOffLayout: () => false
     })
     expect(result.groups?.map((group) => group.id)).toEqual([PREVIEW_GROUP])
     expect(result.layout && layoutLeafGroupIds(result.layout)).toEqual([PREVIEW_GROUP])

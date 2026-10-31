@@ -69,6 +69,10 @@ export function activateCyclableTab(store: AppStoreState, next: TypeCyclableTab)
       store.activateTab?.(next.tabId)
     }
     store.setActiveTabType('agent-session', worktreeId)
+  } else if (next.type === 'agents') {
+    if (next.tabId) {
+      store.activateTab?.(next.tabId)
+    }
   } else {
     // setActiveFile selects the entity; activateTab disambiguates its split copy.
     store.setActiveFile(next.id)

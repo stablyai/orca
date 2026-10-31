@@ -1,5 +1,6 @@
 import { useCallback, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
+import { useAgentCardGridClip } from './agent-card-grid-clip'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
 import { subscribeTabGroupBodyRect, type TabGroupBodyRect } from './tab-group-body-geometry'
 import { UNFOCUSED_SPLIT_GROUP_OPACITY } from './split-group-dim'
@@ -94,6 +95,8 @@ export function RetainedPaneHost({
       window.clearTimeout(settledRetryId)
     }
   }, [anchorName, fitTerminal, isVisible, measuredFallbackRect])
+
+  useAgentCardGridClip(overlayRef, groupId, isVisible, measuredFallbackRect)
 
   const visibleOpacity = dimmed ? UNFOCUSED_SPLIT_GROUP_OPACITY : 1
   const style: React.CSSProperties = useMemo(

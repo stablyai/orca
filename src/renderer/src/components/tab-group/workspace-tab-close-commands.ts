@@ -5,6 +5,7 @@ import { needsSavePromptOnClose } from '@/store/slices/editor/buffers/editor-buf
 import { requestEditorFileClose } from '../editor/editor-autosave'
 import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { closeWorkspaceBrowserTab } from '@/lib/workspace-browser-tab-close'
+import { guardPinnedTabClose, resolvePinnedTabLabel } from '@/store/pinned-tab-close-guard'
 import { isEditorTabContentType } from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { admitStructuredAgentSession } from '@/lib/agent-session/structured-agent-session-busy'
 import { readStructuredChatTabName } from '@/runtime/structured-chat-tab-name'
@@ -92,6 +93,18 @@ export function createWorkspaceTabCloseCommands({
       } else {
         close()
       }
+      return
+    }
+    if (item.contentType === 'agents') {
+      // Why the guard rather than a plain close: this tab hosts live agents, so the guard
+      // turns it into one prompt about ending them and closes the agents themselves.
+      guardPinnedTabClose({
+        isPinned: item.isPinned === true,
+        tabLabel: resolvePinnedTabLabel(useAppStore.getState(), worktreeId, item.id),
+        onClose: () => closeUnifiedTab(item.id),
+        worktreeId,
+        tabId: item.id
+      })
       return
     }
     if (item.contentType === 'terminal') {

@@ -4,7 +4,7 @@ import { sanitizeRecentTabIds } from '../../store/slices/tab-group-state'
 export type TabCycleType = WorkspaceVisibleTabType
 
 export type TypeCyclableTab = {
-  type: TabCycleType
+  type: TabCycleType | 'agents'
   id: string
   tabId?: string
 }

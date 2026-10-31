@@ -18,6 +18,7 @@ import {
   type ExecutionHostId
 } from '../../../../shared/execution-host'
 import { getPaletteOwnershipWorktreeIds } from '@/lib/unified-tab-host-ownership'
+import { isCardedAgentTab } from '@/store/slices/tabs/agent-card-tabs'
 
 export type OpenTabSearchEntries = {
   workspaceTabs: readonly SearchableWorkspaceTab[]
@@ -44,6 +45,7 @@ export type OpenTabSearchEntryState = Pick<
   | 'tabsByWorktree'
   | 'unifiedTabsByWorktree'
   | 'worktreesByRepo'
+  | 'agentCardGroupIdsByWorktree'
 > & {
   executionHostId: ExecutionHostId
   generatedTitlesEnabled: boolean
@@ -157,7 +159,8 @@ export function selectOpenTabSearchEntryState(
     tabsByWorktree: state.tabsByWorktree,
     unifiedTabsByWorktree: state.unifiedTabsByWorktree,
     worktree,
-    worktreesByRepo: selectWorktreesByRepo(state)
+    worktreesByRepo: selectWorktreesByRepo(state),
+    agentCardGroupIdsByWorktree: state.agentCardGroupIdsByWorktree
   }
 }
 
@@ -227,7 +230,13 @@ export function buildOpenTabSearchEntries(
       activeFileIdByWorktree: state.activeFileIdByWorktree,
       activeTabTypeByWorktree: state.activeTabTypeByWorktree,
       generatedTitlesEnabled: state.generatedTitlesEnabled
-    }),
+    }).filter(
+      (entry) =>
+        !isCardedAgentTab(
+          { agentCardGroupIdsByWorktree: state.agentCardGroupIdsByWorktree ?? {} },
+          entry.tab
+        )
+    ),
     browserPages: buildOpenTabSearchBrowserPages(state, scope),
     simulatorTabs: buildSearchableSimulatorTabs({
       ...scope,

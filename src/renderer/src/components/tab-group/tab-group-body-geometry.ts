@@ -16,10 +16,14 @@ type GroupBodyGeometrySource = {
   listeners: Set<TabGroupBodyRectListener>
   observer: ResizeObserver
   observedBody: HTMLElement | null
+  // The agent-cards grid is the one ancestor that scrolls under a pane host, moving it without a resize.
+  scrollAncestor: HTMLElement | null
+  onScroll: () => void
   rect: TabGroupBodyRect | null
 }
 
 const RECT_MIN_CHANGE_PX = 1
+const AGENT_CARDS_SCROLL_SELECTOR = '[data-orca-agent-cards]'
 
 const bodiesByGroupId = new Map<string, HTMLElement>()
 const sourcesByGroupId = new Map<string, Set<GroupBodyGeometrySource>>()
@@ -67,6 +71,16 @@ function measureAllSources(): void {
   }
 }
 
+function syncScrollAncestor(source: GroupBodyGeometrySource, next: HTMLElement | null): void {
+  if (next === source.scrollAncestor) {
+    return
+  }
+  // Why no capture: the grid is the scroll target, and capture would re-measure on every inner scroll.
+  source.scrollAncestor?.removeEventListener('scroll', source.onScroll)
+  next?.addEventListener('scroll', source.onScroll)
+  source.scrollAncestor = next
+}
+
 function syncObservedBody(source: GroupBodyGeometrySource): void {
   const body = bodiesByGroupId.get(source.groupId) ?? null
   if (body === source.observedBody) {
@@ -79,6 +93,7 @@ function syncObservedBody(source: GroupBodyGeometrySource): void {
     source.observer.observe(body)
   }
   source.observedBody = body
+  syncScrollAncestor(source, body?.closest<HTMLElement>(AGENT_CARDS_SCROLL_SELECTOR) ?? null)
 }
 
 function onGroupBodyChanged(groupId: string): void {
@@ -114,6 +129,8 @@ function acquireSource(groupId: string, container: HTMLElement): GroupBodyGeomet
     listeners: new Set(),
     observer: new ResizeObserver(() => measureSource(source)),
     observedBody: null,
+    scrollAncestor: null,
+    onScroll: () => measureSource(source),
     rect: null
   }
   source.observer.observe(container)
@@ -131,6 +148,7 @@ function acquireSource(groupId: string, container: HTMLElement): GroupBodyGeomet
 
 function releaseSource(source: GroupBodyGeometrySource): void {
   source.observer.disconnect()
+  syncScrollAncestor(source, null)
   const sources = sourcesByGroupId.get(source.groupId)
   sources?.delete(source)
   if (sources?.size === 0) {

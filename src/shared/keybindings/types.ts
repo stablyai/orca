@@ -122,6 +122,8 @@ export type KeybindingActionId =
   | 'terminal.splitRight'
   | 'terminal.splitDown'
   | 'terminal.switchInputSource'
+  | 'tiling.focusPaneByIndex'
+  | 'tiling.toggleMaximizePane'
   | 'terminal.toggleNativeChat'
   | PluginKeybindingActionId
 

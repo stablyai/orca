@@ -6,7 +6,7 @@ import {
 import type { AppState } from '@/store/types'
 import type { BrowserTab as BrowserTabState } from '../../../../shared/browser-workspace-types'
 import type { GitFileStatus } from '../../../../shared/git-status-types'
-import type { Tab, WorkspaceVisibleTabType } from '../../../../shared/tab-types'
+import type { Tab } from '../../../../shared/tab-types'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { resolveTerminalTabTitle } from '../../../../shared/tab-title-resolution'
 import type { OpenFile } from '../../store/slices/editor'
@@ -53,6 +53,13 @@ export type TabBarItem =
       unifiedTabId: string
       isPinned: boolean
       data: Tab & { contentType: 'agent-session' }
+    }
+  | {
+      type: 'agents'
+      id: string
+      unifiedTabId: string
+      isPinned: boolean
+      data: Tab
     }
 
 /** The terminal tab as the strip shows it: its title resolved against the generated-titles setting. */
@@ -138,6 +145,7 @@ export function buildOrderedTabItems({
   browserTabIds,
   simulatorTabIds,
   agentSessionTabIds,
+  agentsTabIds,
   terminalMap,
   editorMap,
   browserMap,
@@ -150,6 +158,7 @@ export function buildOrderedTabItems({
   browserTabIds: string[]
   simulatorTabIds: string[]
   agentSessionTabIds: string[]
+  agentsTabIds: string[]
   terminalMap: Map<string, TerminalTab & { unifiedTabId?: string }>
   editorMap: Map<string, OpenFile & { tabId?: string }>
   browserMap: Map<string, BrowserTabState & { tabId?: string }>
@@ -162,7 +171,8 @@ export function buildOrderedTabItems({
     editorFileIds,
     browserTabIds,
     simulatorTabIds,
-    agentSessionTabIds
+    agentSessionTabIds,
+    agentsTabIds
   )
   const items: TabBarItem[] = []
   for (const id of ids) {
@@ -213,6 +223,17 @@ export function buildOrderedTabItems({
       })
       continue
     }
+    const agentsTab = unifiedTabByVisibleId.get(id)
+    if (agentsTab?.contentType === 'agents') {
+      items.push({
+        type: 'agents',
+        id,
+        unifiedTabId: agentsTab.id,
+        isPinned: agentsTab.isPinned === true,
+        data: agentsTab
+      })
+      continue
+    }
     const agentSession = agentSessionMap.get(id)
     if (agentSession) {
       items.push({
@@ -239,41 +260,6 @@ export function buildTabDropIndicators(
     indicators.set(edge.visibleTabId, edge.side)
   }
   return indicators
-}
-
-export function findActiveVisibleTabId(
-  items: readonly TabBarItem[],
-  active: {
-    activeTabId: string | null
-    activeFileId?: string | null
-    activeBrowserTabId?: string | null
-    activeSimulatorTabId?: string | null
-    activeTabType?: WorkspaceVisibleTabType
-  }
-): string | null {
-  const activeItem = items.find((item) => {
-    if (item.type === 'terminal') {
-      return (
-        (active.activeTabType === 'terminal' || active.activeTabType === 'simulator') &&
-        item.id === active.activeTabId
-      )
-    }
-    if (item.type === 'browser') {
-      return active.activeTabType === 'browser' && item.id === active.activeBrowserTabId
-    }
-    if (item.type === 'simulator') {
-      return active.activeTabType === 'simulator' && item.id === active.activeSimulatorTabId
-    }
-    if (item.type === 'agent-session') {
-      // Structured-chat callers pass their unified tab ID; the background terminal’s activeTabId cannot identify this item.
-      return active.activeTabType === 'agent-session' && item.id === active.activeTabId
-    }
-    return (
-      (active.activeTabType === 'editor' || active.activeTabType === 'simulator') &&
-      active.activeFileId === item.id
-    )
-  })
-  return activeItem?.id ?? null
 }
 
 export function buildTabStripLayoutKey(

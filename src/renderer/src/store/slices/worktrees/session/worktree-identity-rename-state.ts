@@ -25,6 +25,8 @@ const WORKTREE_ID_KEYED_MAP_KEYS = [
   'pendingReconnectTabByWorktree',
   'rightSidebarTabByWorktree',
   'rightSidebarExplorerViewByWorktree',
+  'agentCardGroupIdsByWorktree',
+  'maximizedGroupIdByWorktree',
   'gitStatusByWorktree',
   'gitStatusHeadByWorktree',
   'gitStatusReadErrorByWorktree',

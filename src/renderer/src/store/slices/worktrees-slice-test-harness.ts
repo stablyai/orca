@@ -169,6 +169,8 @@ export function createTestStore() {
         groupsByWorktree: {},
         activeGroupIdByWorktree: {},
         layoutByWorktree: {},
+        // Why: projectWorktreeTabModelReconciliation reads this map unconditionally (tabs-reconciliation.ts).
+        agentCardGroupIdsByWorktree: {},
         openFiles: [],
         editorDrafts: {},
         markdownViewMode: {},

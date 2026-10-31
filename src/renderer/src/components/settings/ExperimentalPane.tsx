@@ -9,6 +9,7 @@ import { HiddenExperimentalGroup } from './HiddenExperimentalGroup'
 import { NumberField, SettingsSwitch } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
 import { AgentDashboardExperimentalSetting } from './AgentDashboardExperimentalSetting'
+import { TiledAgentsExperimentalSetting } from './TiledAgentsExperimentalSetting'
 import { EphemeralVmsExperimentalSetting } from './EphemeralVmsExperimentalSetting'
 import { BrowserExtensionsExperimentalSetting } from './BrowserExtensionsExperimentalSetting'
 import { WslHostsExperimentalSetting } from './WslHostsExperimentalSetting'
@@ -40,6 +41,9 @@ export function ExperimentalPane({
   const showAgentDashboard = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().agentDashboard
   ])
+  const showTiledAgents = matchesSettingsSearch(searchQuery, [
+    getExperimentalSearchEntry().tiledAgents
+  ])
   const showTerminalAttention = matchesSettingsSearch(searchQuery, [
     getExperimentalSearchEntry().terminalAttention
   ])
@@ -60,6 +64,10 @@ export function ExperimentalPane({
     <div className="space-y-4">
       {showAgentDashboard ? (
         <AgentDashboardExperimentalSetting settings={settings} updateSettings={updateSettings} />
+      ) : null}
+
+      {showTiledAgents ? (
+        <TiledAgentsExperimentalSetting settings={settings} updateSettings={updateSettings} />
       ) : null}
 
       {showPet ? (

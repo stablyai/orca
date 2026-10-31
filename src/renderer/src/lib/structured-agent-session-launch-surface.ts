@@ -172,9 +172,15 @@ export function openStructuredAgentSessionProvisionalTab(args: {
   const group = state.groupsByWorktree?.[args.worktreeId]?.find((entry) =>
     entry.tabOrder.includes(tabId)
   )
+  const requestedGroupId =
+    address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId
+  // Why below the reuse return: resolving mints an agent card group, and a re-opened session
+  // that lands on its existing tab would leave that group registered but forever empty.
+  // Why optional call: launch tests fake @/store with partial doubles that have no tabs actions.
   const targetGroupId =
     group?.id ??
-    (address?.worktreeId === args.worktreeId ? address.targetGroupId : args.targetGroupId)
+    state.resolveAgentLaunchGroupId?.(args.worktreeId, requestedGroupId) ??
+    requestedGroupId
   const drawHere = (): Tab => {
     const tab = state.createUnifiedTab(args.worktreeId, 'agent-session', {
       id: tabId,

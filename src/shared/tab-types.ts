@@ -24,6 +24,7 @@ export type TabContentType =
   | 'agent-session'
   | 'browser'
   | 'simulator'
+  | 'agents' // container: hosts this worktree's agent cards, holds no session of its own
 
 export type WorkspaceVisibleTabType =
   | 'terminal'

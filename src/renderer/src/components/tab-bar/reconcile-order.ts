@@ -5,14 +5,16 @@ export function reconcileTabOrder(
   editorIds: string[],
   browserIds: string[] = [],
   simulatorIds: string[] = [],
-  agentSessionIds: string[] = []
+  agentSessionIds: string[] = [],
+  agentsIds: string[] = []
 ): string[] {
   const validIds = new Set([
     ...terminalIds,
     ...editorIds,
     ...browserIds,
     ...simulatorIds,
-    ...agentSessionIds
+    ...agentSessionIds,
+    ...agentsIds
   ])
   // Deduplicate at the render boundary because persisted drop/move/hydration races can leave repeated React keys.
   const result: string[] = []
@@ -28,7 +30,8 @@ export function reconcileTabOrder(
     ...editorIds,
     ...browserIds,
     ...simulatorIds,
-    ...agentSessionIds
+    ...agentSessionIds,
+    ...agentsIds
   ]) {
     if (!inResult.has(id)) {
       result.push(id)

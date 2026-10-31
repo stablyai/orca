@@ -42,7 +42,7 @@ export type TabBarProps = {
   activeFileId?: string | null
   activeBrowserTabId?: string | null
   activeSimulatorTabId?: string | null
-  activeTabType?: WorkspaceVisibleTabType
+  activeTabType?: WorkspaceVisibleTabType | 'agents'
   onActivateFile?: (fileId: string) => void
   onCloseFile?: (fileId: string) => void
   onActivateBrowserTab?: (tabId: string) => void

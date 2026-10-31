@@ -185,6 +185,32 @@ function TabBarItemRow({
     }
     return <EditorFileTab {...fileTabProps} file={simulatorFile} onMakePermanent={() => {}} />
   }
+  if (item.type === 'agents') {
+    const agentsFile: OpenFile & { tabId: string } = {
+      id: item.id,
+      tabId: item.id,
+      // Why the model label, not a literal: EditorFileTab shows `filePath`, so a literal would
+      // keep this tab English in every other locale.
+      filePath: item.data.label,
+      relativePath: item.data.label,
+      worktreeId,
+      language: 'agents',
+      isPreview: false,
+      isDirty: false,
+      // Why read-only: this is a synthetic file. Without it the tab is renameable, and
+      // committing that rename would ask the disk to rename a path that does not exist.
+      mode: 'edit',
+      readOnly: true
+    }
+    return (
+      <EditorFileTab
+        {...fileTabProps}
+        file={agentsFile}
+        isPinned={true}
+        onMakePermanent={() => {}}
+      />
+    )
+  }
   return (
     <EditorFileTab
       {...fileTabProps}

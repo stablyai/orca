@@ -99,6 +99,7 @@ export function prepareWebSessionTabsSnapshotGroups(
         tabId: tab.id,
         groupId: clientGroupIdByLocalTabId.get(tab.id) ?? tab.groupId
       }))
+    const cardGroupIds = new Set(state.agentCardGroupIdsByWorktree?.[worktreeId] ?? [])
     return reconcileClientOwnedTabPlacement({
       currentGroups,
       worktreeId,
@@ -111,7 +112,8 @@ export function prepareWebSessionTabsSnapshotGroups(
       currentActiveGroupId: state.activeGroupIdByWorktree[worktreeId] ?? null,
       currentLayout: state.layoutByWorktree[worktreeId] ?? null,
       isGroupReserved: (groupId) =>
-        isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId })
+        isWebSessionBrowserPlacementGroupReserved({ worktreeId, groupId }),
+      isGroupOffLayout: (groupId) => cardGroupIds.has(groupId)
     })
   })()
   const nextGroups = (() => {

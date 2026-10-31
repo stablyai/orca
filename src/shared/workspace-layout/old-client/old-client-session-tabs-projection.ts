@@ -160,6 +160,9 @@ function projectTab(tab: LayoutTab, scope: Scope): RuntimeMobileSessionSnapshotT
     // A simulator needs the desktop to draw it; the window lists none either.
     case 'simulator':
       return []
+    // The Agents tab only hosts desktop cards; session.tabs has no kind for it.
+    case 'agents':
+      return []
   }
 }
 

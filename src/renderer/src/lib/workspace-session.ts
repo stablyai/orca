@@ -52,6 +52,7 @@ export type WorkspaceSessionSnapshot = Pick<
   | 'groupsByWorktree'
   | 'layoutByWorktree'
   | 'activeGroupIdByWorktree'
+  | 'agentCardGroupIdsByWorktree'
   | 'sshConnectionStates'
   | 'repos'
   | 'worktreesByRepo'
@@ -104,7 +105,8 @@ export const SESSION_RELEVANT_FIELDS = [
   'clientHostedBrowserCloseIntentsByEnvironment',
   'pairedTerminalTabCloseIntentsByEnvironment',
   'pendingReconnectPtyIdByTabId',
-  'deferredSshSessionIdsByTabId'
+  'deferredSshSessionIdsByTabId',
+  'agentCardGroupIdsByWorktree'
 ] as const satisfies readonly (keyof WorkspaceSessionSnapshot)[]
 
 type _MissingSessionField = Exclude<

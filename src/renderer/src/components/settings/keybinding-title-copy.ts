@@ -159,7 +159,11 @@ const STATIC_TITLE_COPY = {
     translate(
       'keybindings.title.terminalSwitchInputSource',
       'Switch input source / language (native)'
-    )
+    ),
+  'tiling.focusPaneByIndex': () =>
+    translate('keybindings.title.tilingFocusPaneByIndex', 'Focus Tiled Pane 1 to 9'),
+  'tiling.toggleMaximizePane': () =>
+    translate('keybindings.title.tilingToggleMaximizePane', 'Toggle Maximize Tiled Pane')
 } satisfies Record<StaticKeybindingActionId, () => string>
 
 const GROUP_COPY = {

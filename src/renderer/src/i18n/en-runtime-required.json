@@ -1204,6 +1204,14 @@
       },
       "terminal": {
         "pane": {
+          "PinnedTabCloseDialog": {
+            "agentsCloseConfirm": "Close {{count}} agents",
+            "agentsCloseConfirm_one": "Close {{count}} agent",
+            "agentsCloseConfirm_other": "Close {{count}} agents",
+            "agentsCloseDescription": "This tab is running {{count}} agents. Closing it ends them.",
+            "agentsCloseDescription_one": "This tab is running {{count}} agent. Closing it ends it.",
+            "agentsCloseDescription_other": "This tab is running {{count}} agents. Closing it ends them."
+          },
           "TerminalErrorToast": {
             "hostTerminalCap": "The host is already running as many terminals as Orca allows. Close a terminal you no longer need, then try again.",
             "ptyAllocationLimit": "Your system cannot allocate any more pty devices. Close some terminals you are not using, in Orca or another program, then try again.",

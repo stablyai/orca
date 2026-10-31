@@ -18,6 +18,9 @@ export function tabItemLabel(
   if (item.type === 'agent-session') {
     return savedName ?? item.data.label
   }
+  if (item.type === 'agents') {
+    return item.data.label
+  }
   if (item.type === 'simulator') {
     return formatSimulatorTabLabel(item.data.label)
   }

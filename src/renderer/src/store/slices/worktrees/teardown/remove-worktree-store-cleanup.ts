@@ -93,6 +93,9 @@ export function applyRemoveWorktreeSuccessState(
       recentlyClosedBrowserTabsByWorktree: omitByWorktree(s.recentlyClosedBrowserTabsByWorktree),
       rightSidebarExplorerViewByWorktree: omitByWorktree(s.rightSidebarExplorerViewByWorktree),
       pendingReconnectTabByWorktree: omitByWorktree(s.pendingReconnectTabByWorktree),
+      // Why: card registries name the worktree's groups; leaving them makes a deleted worktree look restorable.
+      agentCardGroupIdsByWorktree: omitByWorktree(s.agentCardGroupIdsByWorktree),
+      maximizedGroupIdByWorktree: omitByWorktree(s.maximizedGroupIdByWorktree),
       editorDrafts: omitByFileId(s.editorDrafts),
       markdownViewMode: omitByFileId(s.markdownViewMode),
       markdownRichModeSizeOverride: omitByFileId(s.markdownRichModeSizeOverride),

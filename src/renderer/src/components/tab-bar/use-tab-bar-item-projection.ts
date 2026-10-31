@@ -7,9 +7,9 @@ import {
   buildOrderedTabItems,
   buildTabDropIndicators,
   buildTabStripLayoutKey,
-  findActiveVisibleTabId,
   type TabBarItem
 } from './tab-bar-item-model'
+import { findActiveVisibleTabId } from './tab-bar-active-visible-tab'
 import type { DropIndicator } from './drop-indicator'
 import { sameStringArray } from '@/runtime/web-session-tabs-sync/state-equality-core'
 
@@ -76,6 +76,13 @@ export function useTabBarItemProjection({
         .map((tab) => tab.id),
     [unifiedTabs, resolvedGroupId]
   )
+  const agentsTabIds = useMemo(
+    () =>
+      unifiedTabs
+        .filter((tab) => tab.groupId === resolvedGroupId && tab.contentType === 'agents')
+        .map((tab) => tab.id),
+    [unifiedTabs, resolvedGroupId]
+  )
   const agentSessionTabIds = useMemo(
     () => agentSessionTabs?.map((tab) => tab.id) ?? [],
     [agentSessionTabs]
@@ -89,6 +96,7 @@ export function useTabBarItemProjection({
         browserTabIds,
         simulatorTabIds,
         agentSessionTabIds,
+        agentsTabIds,
         terminalMap,
         editorMap,
         browserMap,
@@ -102,6 +110,7 @@ export function useTabBarItemProjection({
       browserTabIds,
       simulatorTabIds,
       agentSessionTabIds,
+      agentsTabIds,
       terminalMap,
       editorMap,
       browserMap,

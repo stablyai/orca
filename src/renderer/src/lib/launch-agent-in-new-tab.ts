@@ -47,7 +47,7 @@ export function launchAgentInNewTabWithOutcome(
   const {
     agent,
     worktreeId,
-    groupId,
+    groupId: callerGroupId,
     prompt,
     agentArgs,
     sessionOptions,
@@ -63,6 +63,11 @@ export function launchAgentInNewTabWithOutcome(
     activate
   } = args
   const store = useAppStore.getState()
+  // Why: resolving mints an agent card group, so call it only once a branch is committed to
+  // creating a tab; an early return afterwards would strand a registered but empty group.
+  // Why optional call: launch tests fake @/store with partial doubles.
+  const resolveCommittedGroupId = (): string | undefined =>
+    store.resolveAgentLaunchGroupId?.(worktreeId, callerGroupId) ?? callerGroupId
   const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
   if (!executionContext) {
     args.focusIntent?.cancel()
@@ -97,7 +102,9 @@ export function launchAgentInNewTabWithOutcome(
       plan,
       worktreeId,
       ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
-      ...(groupId ? { groupId } : {}),
+      // Why the caller's group, unresolved: the provisional tab opener resolves it itself, at
+      // the point it commits to creating the tab rather than reusing an existing one.
+      ...(callerGroupId ? { groupId: callerGroupId } : {}),
       ...(beforeSurfaceOpen ? { beforeSurfaceOpen } : {}),
       ...(args.onStructuredHostDeclined ? { onHostDeclined: args.onStructuredHostDeclined } : {}),
       // The host's "no" opens this same launch as a terminal, with the caller's arguments.
@@ -150,7 +157,7 @@ export function launchAgentInNewTabWithOutcome(
       agent,
       worktreeId,
       environmentId: runtimeEnvironmentId,
-      groupId,
+      groupId: resolveCommittedGroupId(),
       cwd: initialCwd,
       buildStartup,
       sessionOptions,
@@ -182,10 +189,11 @@ export function launchAgentInNewTabWithOutcome(
     pasteDraftAfterLaunch !== null &&
     newTabPromptLaunchesThroughHost({ promptDelivery, pastesPrompt: true, isRemote })
   ) {
+    const hostGroupId = resolveCommittedGroupId()
     const launched = launchNewTabPromptThroughHost({
       agent,
       worktreeId,
-      ...(groupId ? { groupId } : {}),
+      ...(hostGroupId ? { groupId: hostGroupId } : {}),
       prompt: trimmedPrompt,
       ...(agentArgs !== undefined ? { agentArgs } : {}),
       ...(sessionOptions ? { sessionOptions } : {}),
@@ -206,7 +214,7 @@ export function launchAgentInNewTabWithOutcome(
       promptDeliveryResult: launched.promptDeliveryResult
     }
   }
-  const tab = store.createTab(worktreeId, groupId, undefined, {
+  const tab = store.createTab(worktreeId, resolveCommittedGroupId(), undefined, {
     launchAgent: agent,
     quickCommandLabel,
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),

@@ -11,6 +11,9 @@ import { closeTerminalTab } from '../terminal/terminal-tab-actions'
 import { resolveGroupTabFromVisibleId } from './tab-group-visible-id'
 import { getTabPaneBodyDroppableId, type HoveredTabInsertion } from './useTabDragSplit'
 import { tabGroupBodyAnchorName } from './tab-group-body-anchor'
+import { tabGroupPanelFrameClassName } from './tab-group-panel-frame-class-name'
+import { resolveTabGroupPanelActiveTabProps } from './tab-group-panel-active-tab-props'
+import { AgentCardsSurface } from './AgentCardsSurface'
 import { registerTabGroupBody } from './tab-group-body-geometry'
 import { observeTabGroupBodyGridSize } from '@/runtime/sync-runtime-graph'
 import { translate } from '@/i18n/i18n'
@@ -125,16 +128,12 @@ export default function TabGroupPanel({
     [bodyAnchorName]
   )
 
+  const activeTabProps = resolveTabGroupPanelActiveTabProps(activeTab)
+
   const tabBar = (
     <TabBar
       tabs={terminalTabs}
-      activeTabId={
-        activeTab?.contentType === 'terminal'
-          ? activeTab.entityId
-          : activeTab?.contentType === 'agent-session'
-            ? activeTab.id
-            : null
-      }
+      activeTabId={activeTabProps.activeTabId}
       groupId={groupId}
       onCloseSplitPane={hasSplitGroups ? commands.closeGroup : undefined}
       worktreeId={worktreeId}
@@ -182,27 +181,10 @@ export default function TabGroupPanel({
       clientHostedBrowserRows={clientHostedRows}
       groupActiveTabId={activeTab?.id ?? null}
       agentSessionTabs={agentSessionItems}
-      activeFileId={
-        activeTab?.contentType === 'terminal' ||
-        activeTab?.contentType === 'agent-session' ||
-        activeTab?.contentType === 'browser' ||
-        activeTab?.contentType === 'simulator'
-          ? null
-          : activeTab?.id
-      }
+      activeFileId={activeTabProps.activeFileId}
       activeBrowserTabId={activeTab?.contentType === 'browser' ? activeTab.entityId : null}
       activeSimulatorTabId={activeTab?.contentType === 'simulator' ? activeTab.id : null}
-      activeTabType={
-        activeTab?.contentType === 'terminal'
-          ? 'terminal'
-          : activeTab?.contentType === 'agent-session'
-            ? 'agent-session'
-            : activeTab?.contentType === 'browser'
-              ? 'browser'
-              : activeTab?.contentType === 'simulator'
-                ? 'simulator'
-                : 'editor'
-      }
+      activeTabType={activeTabProps.activeTabType}
       onActivateFile={commands.activateEditor}
       onCloseFile={commands.closeItem}
       onActivateBrowserTab={commands.activateBrowser}
@@ -248,19 +230,17 @@ export default function TabGroupPanel({
   )
   return (
     <div
-      // Dim unfocused splits only when siblings exist; keep vertical seams neutral and change only the bottom focus border.
-      className={`group/tab-group relative flex flex-col flex-1 min-w-0 min-h-0 overflow-hidden${
-        hasSplitGroups
-          ? // Why: skip border-l/border-r on edge-touching groups; the split-layout wrapper and right sidebar already paint borders at those seams (double line otherwise).
-            ` ${
-              touchesLeftEdge || suppressLeftBorder ? '' : 'border-l'
-            } ${touchesRightEdge || suppressRightBorder ? '' : 'border-r'} ${
-              touchesBottomEdge || suppressBottomBorder ? '' : 'border-b'
-            } border-border ${
-              isFocused && !touchesBottomEdge && !suppressBottomBorder ? 'border-b-accent' : ''
-            }`
-          : ''
-      }`}
+      // Dim unfocused splits only when siblings exist.
+      className={tabGroupPanelFrameClassName({
+        hasSplitGroups,
+        touchesLeftEdge,
+        touchesRightEdge,
+        touchesBottomEdge,
+        suppressLeftBorder,
+        suppressRightBorder,
+        suppressBottomBorder,
+        isFocused
+      })}
       style={hasSplitGroups && !isFocused ? { opacity: UNFOCUSED_SPLIT_GROUP_OPACITY } : undefined}
       onPointerDown={commands.focusGroup}
       // Why: keyboard/AT focus can enter a split group without a pointer event, so sync group focus to DOM focus for global shortcuts.
@@ -336,7 +316,8 @@ export default function TabGroupPanel({
           activeTab.contentType !== 'terminal' &&
           activeTab.contentType !== 'agent-session' &&
           activeTab.contentType !== 'browser' &&
-          activeTab.contentType !== 'simulator' && (
+          activeTab.contentType !== 'simulator' &&
+          activeTab.contentType !== 'agents' && (
             // Why: a capture-phase owner, so Monaco never sees the drop and the file opens as a tab here.
             <div ref={attachEditorFileDropOwner} className="absolute inset-0 flex min-h-0 min-w-0">
               {/* Why: split groups render editor content in a plain relative pane body, not the legacy Terminal.tsx flex column. */}
@@ -361,6 +342,10 @@ export default function TabGroupPanel({
               <EditorRevealFlash viewStateId={activeTab.id} />
             </div>
           )}
+
+        {activeTab?.contentType === 'agents' && (
+          <AgentCardsSurface worktreeId={worktreeId} groupId={groupId} />
+        )}
 
         {/* Why: terminal/browser/simulator/structured-chat panes render at the worktree level; tab activation only changes overlay visibility and never remounts a live surface. */}
       </div>

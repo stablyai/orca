@@ -302,6 +302,7 @@ type NavState = Pick<
   | 'tabsByWorktree'
   | 'openFiles'
   | 'browserTabsByWorktree'
+  | 'agentCardGroupIdsByWorktree'
 >
 
 function makeState(overrides: Partial<NavState>): NavState {
@@ -313,6 +314,7 @@ function makeState(overrides: Partial<NavState>): NavState {
     tabsByWorktree: {},
     openFiles: [],
     browserTabsByWorktree: {},
+    agentCardGroupIdsByWorktree: {},
     ...overrides
   }
 }
@@ -435,6 +437,7 @@ describe('group order matches the rendered tab strip', () => {
       browserTabIds: [],
       simulatorTabIds: [],
       agentSessionTabIds: [],
+      agentsTabIds: [],
       terminalMap: terminalMap as never,
       editorMap: new Map(),
       browserMap: new Map(),

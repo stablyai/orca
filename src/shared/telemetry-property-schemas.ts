@@ -140,6 +140,7 @@ export const launchSourceSchema = z.enum([
   'conflict_resolution',
   'source_control_recovery',
   'terminal_context_menu',
+  'agent_card_plus',
   'native_chat',
   'explain_commit',
   // Launches the host performs for a caller outside the desktop app.
@@ -203,6 +204,7 @@ export const SETTINGS_CHANGED_WHITELIST = [
   'experimentalBrowserExtensions',
   'experimentalActivity',
   'experimentalAgentDashboardPopout',
+  'experimentalTiledAgents',
   'experimentalTerminalAttention',
   'experimentalAgentHibernation',
   'experimentalEphemeralVms',

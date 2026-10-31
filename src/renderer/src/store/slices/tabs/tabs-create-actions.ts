@@ -134,6 +134,7 @@ export function createTabsCreateActions(
         const nextRecent = shouldActivate
           ? pushRecentTabId(sanitizedRecent, created.id)
           : sanitizedRecent
+        const currentLayout = state.layoutByWorktree[worktreeId]
         return {
           unifiedTabsByWorktree: {
             ...state.unifiedTabsByWorktree,
@@ -149,10 +150,14 @@ export function createTabsCreateActions(
             })
           },
           activeGroupIdByWorktree,
-          layoutByWorktree: {
-            ...state.layoutByWorktree,
-            [worktreeId]: state.layoutByWorktree[worktreeId] ?? { type: 'leaf', groupId: group.id }
-          }
+          ...(currentLayout
+            ? {}
+            : {
+                layoutByWorktree: {
+                  ...state.layoutByWorktree,
+                  [worktreeId]: { type: 'leaf', groupId: group.id }
+                }
+              })
         }
       })
       if (init?.recordInteraction !== false) {
