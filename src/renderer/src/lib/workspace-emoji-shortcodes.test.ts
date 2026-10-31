@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   applyWorkspaceEmojiSuggestion,
   getActiveWorkspaceEmojiShortcode,
+  getWorkspaceEmojiPickerDefaults,
   insertWorkspaceEmojiAtSelection,
   replaceCompletedWorkspaceEmojiShortcode
 } from './workspace-emoji-shortcodes'
@@ -67,5 +68,13 @@ describe('insertWorkspaceEmojiAtSelection', () => {
       cursor: 7
     })
     expect(insertWorkspaceEmojiAtSelection('', 4, 9, '✨')).toEqual({ value: '✨ ', cursor: 2 })
+  })
+})
+
+describe('getWorkspaceEmojiPickerDefaults', () => {
+  it('resolves every curated shortcode to a distinct emoji', () => {
+    const defaults = getWorkspaceEmojiPickerDefaults()
+    expect(defaults).toHaveLength(48)
+    expect(new Set(defaults.map((entry) => entry.emoji)).size).toBe(48)
   })
 })

@@ -21849,7 +21849,8 @@
       "linkedCount_one": "{{count}} linked",
       "linkedCount_other": "{{count}} linked",
       "addEmoji": "Add emoji",
-      "addEmojiTooltip": "Add emoji (or type :)"
+      "addEmojiTooltip": "Add emoji (or type :)",
+      "noEmojiFound": "No emoji found"
     },
     "attachments": {
       "updateRuntime": "Update the remote runtime to change workspace links",

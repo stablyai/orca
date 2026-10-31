@@ -1,19 +1,11 @@
-import { Suspense, useRef, useState, type RefObject } from 'react'
+import { useRef, useState, type RefObject } from 'react'
 import { Smile } from 'lucide-react'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import { lazyWithRetry } from '@/lib/lazy-with-retry'
 import { insertWorkspaceEmojiAtSelection } from '@/lib/workspace-emoji-shortcodes'
 import { cn } from '@/lib/utils'
-
-const WorkspaceEmojiPicker = lazyWithRetry(
-  () =>
-    import('./WorkspaceEmojiPicker').then((module) => ({
-      default: module.WorkspaceEmojiPicker
-    })),
-  { reloadKey: 'workspace-emoji-picker' }
-)
+import { WorkspaceEmojiPickerPanel } from './WorkspaceEmojiPickerPanel'
 
 type WorkspaceEmojiPickerButtonProps = {
   className?: string
@@ -114,9 +106,7 @@ export function WorkspaceEmojiPickerButton({
           inputRef.current?.setSelectionRange(cursor, cursor)
         }}
       >
-        <Suspense fallback={<div className="h-[340px] w-[320px]" />}>
-          <WorkspaceEmojiPicker onPick={handlePick} />
-        </Suspense>
+        {open ? <WorkspaceEmojiPickerPanel onPick={handlePick} /> : null}
       </PopoverContent>
     </Popover>
   )

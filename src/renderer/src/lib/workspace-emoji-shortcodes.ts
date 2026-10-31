@@ -162,3 +162,66 @@ export function insertWorkspaceEmojiAtSelection(
     cursor: before.length + inserted.length
   }
 }
+
+// Shown before the user searches: emoji that read well as workspace markers, eight per picker row.
+// Only emoji-presentation code points: text-default ones (gear, warning, sun) render as monochrome glyphs.
+const WORKSPACE_EMOJI_PICKER_DEFAULT_SHORTCODES = [
+  'rocket',
+  'bug',
+  'sparkles',
+  'fire',
+  'zap',
+  'test_tube',
+  'package',
+  'wrench',
+  'hammer',
+  'nut_and_bolt',
+  'construction',
+  'rotating_light',
+  'lock',
+  'key',
+  'shield',
+  'broom',
+  'memo',
+  'books',
+  'bookmark',
+  'pushpin',
+  'paperclip',
+  'link',
+  'clipboard',
+  'calendar',
+  'bulb',
+  'mag',
+  'eyes',
+  'speech_balloon',
+  'bell',
+  'lifebuoy',
+  'robot',
+  'microscope',
+  'white_check_mark',
+  'no_entry',
+  'hourglass',
+  'trophy',
+  'star',
+  'tada',
+  'dart',
+  'puzzle_piece',
+  'seedling',
+  'cherry_blossom',
+  'rainbow',
+  'sunflower',
+  'crescent_moon',
+  'purple_heart',
+  'coffee',
+  'ghost'
+] as const
+
+let pickerDefaults: readonly WorkspaceEmojiSuggestion[] | null = null
+
+export function getWorkspaceEmojiPickerDefaults(): readonly WorkspaceEmojiSuggestion[] {
+  pickerDefaults ??= WORKSPACE_EMOJI_PICKER_DEFAULT_SHORTCODES.flatMap((shortcode) => {
+    const entry = exactShortcodeIndex().get(shortcode)
+    return entry ? [entry] : []
+  })
+  return pickerDefaults
+}
