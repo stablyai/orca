@@ -111,6 +111,7 @@
         "nameInvalid": "名稱不可包含斜線，也不可為 \".\" / \"..\"",
         "parentRequired": "必須指定上層目錄",
         "parentNotAbsolute": "上層目錄必須是絕對路徑",
+        "parentInaccessible": "無法存取上層目錄：{{detail}}",
         "targetInaccessible": "無法存取目標路徑：{{detail}}",
         "targetNotEmpty": "此位置已存在「{{name}}」，且內容不為空。",
         "targetNotFolder": "此位置已存在「{{name}}」，且不是資料夾。",

@@ -111,6 +111,7 @@
         "nameInvalid": "Name darf weder Schrägstriche enthalten noch \".\" / \"..\" sein",
         "parentRequired": "Übergeordnetes Verzeichnis ist erforderlich",
         "parentNotAbsolute": "Übergeordnetes Verzeichnis muss ein absoluter Pfad sein",
+        "parentInaccessible": "Zugriff auf übergeordnetes Verzeichnis nicht möglich: {{detail}}",
         "targetInaccessible": "Zugriff auf Zielpfad nicht möglich: {{detail}}",
         "targetNotEmpty": "„{{name}}“ existiert bereits an diesem Ort und ist nicht leer.",
         "targetNotFolder": "„{{name}}“ existiert bereits an diesem Ort und ist kein Ordner.",

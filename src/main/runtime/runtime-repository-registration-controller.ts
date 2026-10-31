@@ -33,6 +33,28 @@ type RuntimeRepositoryRegistrationDependencies = {
   notifyReposChanged: () => void
 }
 
+// Why: a trailing space is a legal directory name (Google Drive exports them), so a
+// picker-returned parent that exists as a directory exactly as requested wins; the
+// trim stays only for typed typos and raw spellings naming a non-directory (a file).
+// Other probe failures must surface instead of silently relocating the project.
+async function resolveCreateParentPathRawFirst(requestedPath: string): Promise<string> {
+  const trimmed = requestedPath.trim()
+  if (!trimmed || trimmed === requestedPath) {
+    return trimmed
+  }
+  try {
+    if ((await stat(requestedPath)).isDirectory()) {
+      return requestedPath
+    }
+    return trimmed
+  } catch (error) {
+    if (!isENOENT(error)) {
+      throw error
+    }
+    return trimmed
+  }
+}
+
 export class RuntimeRepositoryRegistrationController {
   constructor(private readonly deps: RuntimeRepositoryRegistrationDependencies) {}
 
@@ -124,7 +146,15 @@ export class RuntimeRepositoryRegistrationController {
   > {
     const store = this.requireStore()
     const trimmedName = name.trim()
-    const trimmedParentPath = parentPath.trim()
+    let parentDir: string
+    try {
+      parentDir = await resolveCreateParentPathRawFirst(parentPath)
+    } catch (error) {
+      // Why: an unexpected probe failure (EACCES...) must not fall back to the trimmed
+      // spelling and create the project in a directory the user did not pick.
+      const message = error instanceof Error ? error.message : String(error)
+      return repoCreateFailure('parentInaccessible', { detail: message })
+    }
     const repoKind: 'git' | 'folder' = kind === 'folder' ? 'folder' : 'git'
     if (!trimmedName) {
       return repoCreateFailure('nameEmpty')
@@ -132,21 +162,21 @@ export class RuntimeRepositoryRegistrationController {
     if (/[\\/]/.test(trimmedName) || trimmedName === '.' || trimmedName === '..') {
       return repoCreateFailure('nameInvalid')
     }
-    if (!trimmedParentPath) {
+    if (!parentDir) {
       return repoCreateFailure('parentRequired')
     }
-    if (!isAbsolute(trimmedParentPath)) {
+    if (!isAbsolute(parentDir)) {
       return repoCreateFailure('parentNotAbsolute')
     }
     try {
-      await refuseWslHostWindowsDrivePath(trimmedParentPath)
+      await refuseWslHostWindowsDrivePath(parentDir)
     } catch (error) {
       // An optional field: older clients read only `error`.
       return error instanceof WslHostWindowsDriveRefusalError
         ? { error: error.message, windowsDriveRefusal: error.data }
         : { error: error instanceof Error ? error.message : String(error) }
     }
-    const targetPath = join(trimmedParentPath, trimmedName)
+    const targetPath = join(parentDir, trimmedName)
     // Qualify by host: identical SSH paths name another machine's directory.
     const findLocalAtTarget = (): Repo | undefined =>
       store
@@ -162,7 +192,7 @@ export class RuntimeRepositoryRegistrationController {
 
     let createdDir = false
     try {
-      await mkdir(trimmedParentPath, { recursive: true })
+      await mkdir(parentDir, { recursive: true })
       const existingStat = await stat(targetPath).catch((error: unknown) => {
         if (isENOENT(error)) {
           return null

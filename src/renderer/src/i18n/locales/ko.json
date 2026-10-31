@@ -20210,6 +20210,7 @@
         "nameInvalid": "이름에 슬래시를 포함하거나 \".\" / \"..\"로 지정할 수 없습니다",
         "parentRequired": "상위 디렉터리가 필요합니다",
         "parentNotAbsolute": "상위 디렉터리는 절대 경로여야 합니다",
+        "parentInaccessible": "상위 디렉터리에 접근할 수 없습니다: {{detail}}",
         "targetInaccessible": "대상 경로에 접근할 수 없습니다: {{detail}}",
         "targetNotEmpty": "이 위치에 \"{{name}}\"이(가) 이미 있으며 비어 있지 않습니다.",
         "targetNotFolder": "이 위치에 \"{{name}}\"이(가) 이미 있으며 폴더가 아닙니다.",

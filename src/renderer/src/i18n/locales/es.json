@@ -21137,6 +21137,7 @@
         "nameInvalid": "El nombre no puede contener barras ni ser \".\" / \"..\"",
         "parentRequired": "Se requiere un directorio padre",
         "parentNotAbsolute": "El directorio padre debe ser una ruta absoluta",
+        "parentInaccessible": "No se puede acceder al directorio padre: {{detail}}",
         "targetInaccessible": "No se puede acceder a la ruta de destino: {{detail}}",
         "targetNotEmpty": "\"{{name}}\" ya existe en esta ubicación y no está vacío.",
         "targetNotFolder": "\"{{name}}\" ya existe en esta ubicación y no es una carpeta.",

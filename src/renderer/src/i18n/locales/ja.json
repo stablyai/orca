@@ -20210,6 +20210,7 @@
         "nameInvalid": "名前にスラッシュは使用できず、\".\" / \"..\" にもできません",
         "parentRequired": "親ディレクトリは必須です",
         "parentNotAbsolute": "親ディレクトリは絶対パスである必要があります",
+        "parentInaccessible": "親ディレクトリにアクセスできません: {{detail}}",
         "targetInaccessible": "対象パスにアクセスできません: {{detail}}",
         "targetNotEmpty": "この場所にはすでに「{{name}}」が存在し、空ではありません。",
         "targetNotFolder": "この場所にはすでに「{{name}}」が存在し、フォルダーではありません。",

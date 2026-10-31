@@ -20895,6 +20895,7 @@
         "nameInvalid": "Le nom ne peut pas contenir de barres obliques ni être \".\" / \"..\"",
         "parentRequired": "Le répertoire parent est requis",
         "parentNotAbsolute": "Le répertoire parent doit être un chemin absolu",
+        "parentInaccessible": "Impossible d’accéder au répertoire parent : {{detail}}",
         "targetInaccessible": "Impossible d’accéder au chemin cible : {{detail}}",
         "targetNotEmpty": "« {{name}} » existe déjà à cet emplacement et n’est pas vide.",
         "targetNotFolder": "« {{name}} » existe déjà à cet emplacement et n’est pas un dossier.",

@@ -466,6 +466,7 @@
         "nameInvalid": "O nome não pode conter barras nem ser \".\" / \"..\"",
         "parentRequired": "O diretório pai é obrigatório",
         "parentNotAbsolute": "O diretório pai deve ser um caminho absoluto",
+        "parentInaccessible": "Não é possível acessar o diretório pai: {{detail}}",
         "targetInaccessible": "Não é possível acessar o caminho de destino: {{detail}}",
         "targetNotEmpty": "\"{{name}}\" já existe neste local e não está vazio.",
         "targetNotFolder": "\"{{name}}\" já existe neste local e não é uma pasta.",

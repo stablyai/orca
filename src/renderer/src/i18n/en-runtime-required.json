@@ -2238,6 +2238,7 @@
         "initialCommitFailed": "Failed to create initial commit: {{detail}}",
         "nameEmpty": "Name cannot be empty",
         "nameInvalid": "Name cannot contain slashes or be \".\" / \"..\"",
+        "parentInaccessible": "Cannot access parent directory: {{detail}}",
         "parentNotAbsolute": "Parent directory must be an absolute path",
         "parentRequired": "Parent directory is required",
         "prepareDirectoryFailed": "Failed to prepare directory: {{detail}}",

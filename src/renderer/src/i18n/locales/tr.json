@@ -111,6 +111,7 @@
         "nameInvalid": "Ad eğik çizgi içeremez veya \".\" / \"..\" olamaz",
         "parentRequired": "Üst dizin gereklidir",
         "parentNotAbsolute": "Üst dizin mutlak bir yol olmalıdır",
+        "parentInaccessible": "Üst dizine erişilemiyor: {{detail}}",
         "targetInaccessible": "Hedef yola erişilemiyor: {{detail}}",
         "targetNotEmpty": "\"{{name}}\" bu konumda zaten var ve boş değil.",
         "targetNotFolder": "\"{{name}}\" bu konumda zaten var ve bir klasör değil.",

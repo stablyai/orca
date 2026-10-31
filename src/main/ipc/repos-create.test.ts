@@ -8,6 +8,7 @@ const {
   mockStore,
   mkdirMock,
   accessMock,
+  statMock,
   readdirMock,
   rmMock,
   gitExecFileAsyncMock,
@@ -26,6 +27,7 @@ const {
   },
   mkdirMock: vi.fn(),
   accessMock: vi.fn(),
+  statMock: vi.fn(),
   readdirMock: vi.fn(),
   rmMock: vi.fn(),
   gitExecFileAsyncMock: vi.fn(),
@@ -45,6 +47,7 @@ vi.mock('electron', () => ({
 vi.mock('fs/promises', () => ({
   mkdir: mkdirMock,
   access: accessMock,
+  stat: statMock,
   readdir: readdirMock,
   rm: rmMock
 }))
@@ -122,6 +125,7 @@ describe('repos:create', () => {
     prepareLocalWorktreeRootForRepoMock.mockReset().mockResolvedValue(undefined)
 
     accessMock.mockReset().mockRejectedValue(new Error('ENOENT'))
+    statMock.mockReset().mockRejectedValue(new Error('ENOENT'))
     readdirMock.mockReset().mockResolvedValue([])
     mkdirMock.mockReset().mockResolvedValue(undefined)
     rmMock.mockReset().mockResolvedValue(undefined)
@@ -251,6 +255,88 @@ describe('repos:create', () => {
 
     expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp', { recursive: true })
     expect(mkdirMock).toHaveBeenNthCalledWith(2, tmpPath('brand-new'), { recursive: false })
+  })
+
+  // A trailing space is a legal POSIX directory name (Google Drive exports them), so a
+  // picked parent that exists exactly as typed must win over the typed-typo trim.
+  it('creates inside a picked parent whose name ends in a space', async () => {
+    const spacedParent = '/tmp/gdrive repo '
+    statMock.mockImplementation(async (probed: string) => {
+      if (probed === spacedParent) {
+        return { isDirectory: () => true }
+      }
+      throw new Error('ENOENT')
+    })
+
+    const result = await callCreate({ parentPath: spacedParent, name: 'proj', kind: 'folder' })
+
+    expect(mkdirMock).toHaveBeenNthCalledWith(1, spacedParent, { recursive: true })
+    expect(mkdirMock).toHaveBeenNthCalledWith(2, join(spacedParent, 'proj'), { recursive: false })
+    expect(mockStore.addRepo).toHaveBeenCalledWith(
+      expect.objectContaining({ path: join(spacedParent, 'proj') })
+    )
+    expect(result).toHaveProperty('repo.path', join(spacedParent, 'proj'))
+  })
+
+  // The flip side: a typed typo whose trimmed spelling exists keeps the old cleanup.
+  it('falls back to the trimmed spelling when the raw parent does not exist', async () => {
+    accessMock.mockImplementation(async (probed: string) => {
+      if (probed === '/tmp/typo') {
+        return undefined
+      }
+      throw new Error('ENOENT')
+    })
+
+    const result = await callCreate({ parentPath: '/tmp/typo ', name: 'proj', kind: 'folder' })
+
+    expect(mkdirMock).toHaveBeenNthCalledWith(1, '/tmp/typo', { recursive: true })
+    expect(result).toHaveProperty('repo.path', join('/tmp/typo', 'proj'))
+  })
+
+  // A raw spelling that names a file must not win raw-first: only an existing
+  // directory may, so the trim can still reach the directory the user meant.
+  it('falls back to the trimmed directory when the raw parent names a file', async () => {
+    const rawParent = '/tmp/file parent '
+    const trimmedParent = '/tmp/file parent'
+    statMock.mockImplementation(async (probed: string) => {
+      if (probed === rawParent) {
+        return { isDirectory: () => false }
+      }
+      throw new Error('ENOENT')
+    })
+    accessMock.mockImplementation(async (probed: string) => {
+      if (probed === rawParent) {
+        // access() succeeds on any existing file — how the raw probe used to
+        // mistake a file for the picked parent.
+        return undefined
+      }
+      throw new Error('ENOENT')
+    })
+
+    const result = await callCreate({ parentPath: rawParent, name: 'proj', kind: 'folder' })
+
+    expect(mkdirMock).toHaveBeenNthCalledWith(1, trimmedParent, { recursive: true })
+    expect(mkdirMock).toHaveBeenNthCalledWith(2, join(trimmedParent, 'proj'), { recursive: false })
+    expect(result).toHaveProperty('repo.path', join(trimmedParent, 'proj'))
+  })
+
+  // A probe failure that is not "absent" (EACCES, ELOOP...) must surface as an error,
+  // not silently fall back to the trimmed spelling and create in an unchosen directory.
+  it('returns an error when probing the raw parent fails with EACCES', async () => {
+    const lockedParent = '/tmp/locked repo '
+    statMock.mockRejectedValue(
+      Object.assign(new Error('EACCES: permission denied, access'), { code: 'EACCES' })
+    )
+
+    const result = await callCreate({ parentPath: lockedParent, name: 'proj', kind: 'folder' })
+
+    expect(result).toEqual({
+      error: 'Cannot access parent directory: EACCES: permission denied, access',
+      errorCode: 'parentInaccessible',
+      errorDetail: 'EACCES: permission denied, access'
+    })
+    expect(mkdirMock).not.toHaveBeenCalled()
+    expect(mockStore.addRepo).not.toHaveBeenCalled()
   })
 
   it('creates a missing default parent before creating the project directory', async () => {

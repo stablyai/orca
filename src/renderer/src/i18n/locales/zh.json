@@ -20211,6 +20211,7 @@
         "nameInvalid": "名称不能包含斜杠，也不能是 \".\" / \"..\"",
         "parentRequired": "必须指定父目录",
         "parentNotAbsolute": "父目录必须为绝对路径",
+        "parentInaccessible": "无法访问父目录：{{detail}}",
         "targetInaccessible": "无法访问目标路径：{{detail}}",
         "targetNotEmpty": "此位置已存在“{{name}}”，且不为空。",
         "targetNotFolder": "此位置已存在“{{name}}”，且不是文件夹。",
