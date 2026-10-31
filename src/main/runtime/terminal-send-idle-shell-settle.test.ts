@@ -25,7 +25,7 @@ const C = '\x1b]133;C\x07'
 const D0 = '\x1b]133;D;0\x07'
 const IDLE_PROMPT = `${A}$ ${B}ls\r\n${C}file\r\n${D0}${A}$ ${B}`
 
-type PaneSetup = { output?: string; launchAgent?: 'aider'; foregroundAgent?: 'aider' }
+type PaneSetup = { output?: string; launchAgent?: 'claude'; foregroundAgent?: 'claude' }
 
 /** Milliseconds from send to the Enter write, after the pane painted `output`. */
 async function enterDelayAfter({ output, launchAgent, foregroundAgent }: PaneSetup) {
@@ -73,8 +73,8 @@ describe('terminal.send Enter settle on a plain shell', () => {
 
   it.each<[string, PaneSetup]>([
     ['a command is running', { output: `${A}$ ${B}sleep 9\r\n${C}` }],
-    ['an agent was launched in the pane', { output: IDLE_PROMPT, launchAgent: 'aider' }],
-    ['an agent holds the foreground', { output: IDLE_PROMPT, foregroundAgent: 'aider' }],
+    ['an agent was launched in the pane', { output: IDLE_PROMPT, launchAgent: 'claude' }],
+    ['an agent holds the foreground', { output: IDLE_PROMPT, foregroundAgent: 'claude' }],
     ['the shell has no integration', { output: 'user@host:~$ ' }],
     ['nothing has been painted yet', {}]
   ])('keeps the settle when %s', async (_name, setup) => {

@@ -7,8 +7,8 @@ const A = '\x1b]133;A\x07'
 const B = '\x1b]133;B\x07'
 const C = '\x1b]133;C\x07'
 const D0 = '\x1b]133;D;0\x07'
-// Real OMP PTY bytes: each bubble paints its own `A … B C D;0` zone while the app runs (#10923).
-const OMP_TRANSCRIPT = readFileSync(
+// Captured agent CLI PTY bytes: each bubble paints its own `A … B C D;0` zone while the app runs (#10923).
+const APP_ZONE_TRANSCRIPT = readFileSync(
   join(__dirname, '../runtime/__fixtures__/omp-user-bubble-osc133-zone.txt'),
   'utf8'
 )
@@ -41,7 +41,7 @@ describe('idle at a shell prompt', () => {
   })
 
   it("ignores a running app's own prompt zones", () => {
-    expect(idleAfter(`${A}$ ${B}omp\r\n${C}`, OMP_TRANSCRIPT, `${A}> `)).toBe(false)
+    expect(idleAfter(`${A}$ ${B}agent\r\n${C}`, APP_ZONE_TRANSCRIPT, `${A}> `)).toBe(false)
   })
 
   it('is not idle on the alternate screen or after a full reset', () => {
