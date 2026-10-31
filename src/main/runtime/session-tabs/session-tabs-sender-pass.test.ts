@@ -45,7 +45,7 @@ function runtime(terminals: number) {
       issueLeafHandle: unissued,
       issuePtyHandle: unissued,
       readLeafHandle: (leaf) => `term_${leaf.tabId}`,
-      readPtyHandle: () => null,
+      readPtyHandles: () => () => null,
       makePaneKey: (leaf) => `${leaf.tabId}:${leafOf(Number(leaf.tabId.slice(3)))}`,
       getWorktreeId: () => null,
       getHandleForPaneKey: () => null,

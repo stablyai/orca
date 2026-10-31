@@ -84,7 +84,7 @@ function host(n: number) {
         issueLeafHandle: unissued,
         issuePtyHandle: unissued,
         readLeafHandle: (leaf) => handleOf(Number(leaf.tabId.slice(3))),
-        readPtyHandle: () => null,
+        readPtyHandles: () => () => null,
         makePaneKey: (leaf) => `${leaf.tabId}:${leafOf(Number(leaf.tabId.slice(3)))}`,
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,

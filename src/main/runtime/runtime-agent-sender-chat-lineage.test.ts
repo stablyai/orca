@@ -76,7 +76,7 @@ async function chats(history: number) {
       issueLeafHandle: unissued,
       issuePtyHandle: unissued,
       readLeafHandle: () => null,
-      readPtyHandle: () => null,
+      readPtyHandles: () => () => null,
       makePaneKey: () => '',
       getWorktreeId: () => null,
       getHandleForPaneKey: () => null,

@@ -96,7 +96,7 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
         issueLeafHandle: unissued,
         issuePtyHandle: unissued,
         readLeafHandle: (l) => handles.get(l.tabId) ?? null,
-        readPtyHandle: () => null,
+        readPtyHandles: () => () => null,
         makePaneKey: (l) => pane(l.tabId),
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,

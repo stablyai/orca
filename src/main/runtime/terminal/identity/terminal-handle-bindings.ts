@@ -101,7 +101,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       issueLeafHandle: (leaf) => this.issueHandle(leaf),
       issuePtyHandle: (pty) => this.issuePtyHandle(pty),
       readLeafHandle: (leaf) => this.peekLeafHandle(leaf),
-      readPtyHandle: (pty) => this.peekPtyHandle(pty)
+      readPtyHandles: () => this.peekPtyHandles()
     }
   }
 
@@ -130,15 +130,24 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     return retained?.incarnationId === incarnationId ? retained.handle : null
   }
 
-  /** The handle a terminal with no leaf already holds, as issuePtyHandle would return it, without
-   *  issuing or restamping one. */
-  protected peekPtyHandle(pty: RuntimePtyWorktreeRecord): string | null {
-    const retained = this.handleByPtyIncarnation.get(pty.ptyId)
-    if (retained?.incarnationId === pty.incarnationId) {
-      return retained.handle
+  /** For one read of many terminals: the handle each terminal with no leaf already holds, as
+   *  issuePtyHandle would return it, without issuing or restamping one. The record fallback is
+   *  indexed once per read, not scanned once per terminal. */
+  protected peekPtyHandles(): (pty: RuntimePtyWorktreeRecord) => string | null {
+    let records: Map<string, string> | undefined
+    return (pty) => {
+      const retained = this.handleByPtyIncarnation.get(pty.ptyId)
+      if (retained?.incarnationId === pty.incarnationId) {
+        return retained.handle
+      }
+      // Issuing reuses either one, record or not (a start-time handle outlives cleared records).
+      const direct = this.handleByPtyId.get(pty.ptyId)
+      if (direct) {
+        return direct
+      }
+      records ??= this.ptyRecordHandles()
+      return records.get(pty.ptyId) ?? null
     }
-    // Issuing reuses either one, record or not (a start-time handle outlives cleared records).
-    return this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
@@ -188,6 +197,22 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     })
     this.setPtyHandle(pty.ptyId, handle)
     return handle
+  }
+
+  /** findHandleForPtyRecord for every terminal at once: each one's first matching record. */
+  private ptyRecordHandles(): Map<string, string> {
+    const handles = new Map<string, string>()
+    for (const [handle, record] of this.handles) {
+      if (
+        record.runtimeId === this.runtimeId &&
+        record.ptyId &&
+        record.tabId.startsWith('pty:') &&
+        !handles.has(record.ptyId)
+      ) {
+        handles.set(record.ptyId, handle)
+      }
+    }
+    return handles
   }
 
   protected findHandleForPtyRecord(ptyId: string): string | null {

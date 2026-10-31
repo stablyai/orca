@@ -77,7 +77,7 @@ function host(workers: number, path: string = ':memory:') {
         issueLeafHandle: unissued,
         issuePtyHandle: unissued,
         readLeafHandle: (leaf) => `term_${leaf.tabId}`,
-        readPtyHandle: () => null,
+        readPtyHandles: () => () => null,
         makePaneKey: (leaf) => pane(Number(leaf.tabId.slice(4))),
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,

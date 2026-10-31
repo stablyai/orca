@@ -25,7 +25,8 @@ import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sen
  *  changes terminal identity, so a terminal with no issued handle has no sender row. */
 export type AgentSenderHandleReads = {
   readLeafHandle(leaf: RuntimeLeafRecord): string | null
-  readPtyHandle(pty: RuntimePtyWorktreeRecord): string | null
+  /** One reader per walk, so a lookup that must index records does it once per build. */
+  readPtyHandles(): (pty: RuntimePtyWorktreeRecord) => string | null
 }
 
 /** Orchestration issues terminal handles; sender rows only read the ones already issued. */
@@ -175,11 +176,12 @@ export class RuntimeAgentSenderAssociations {
         )
       }
     }
+    const readPtyHandle = this.deps.readPtyHandles()
     for (const pty of ptys.values()) {
       this.work.ptyVisits++
       const paneKey = this.deps.paneOf(pty).paneKey
       if (paneKey && !panes.has(paneKey)) {
-        terminal(this.deps.readPtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)
+        terminal(readPtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)
       }
     }
     return panes
