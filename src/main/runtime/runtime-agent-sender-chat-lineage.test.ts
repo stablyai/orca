@@ -19,6 +19,10 @@ import {
 import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
+const unissued = (): never => {
+  throw new Error('a sender build issued a terminal handle')
+}
+
 afterEach(() => vi.restoreAllMocks())
 
 /** A committed /clear: the durable forward pointer the reverse index is derived from. */
@@ -68,8 +72,11 @@ async function chats(history: number) {
       getLeaves: () => [],
       getPtys: () => [],
       paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
-      issueLeafHandle: () => '',
-      issuePtyHandle: () => '',
+      // Orchestration issues handles; sender rows only read the ones already issued.
+      issueLeafHandle: unissued,
+      issuePtyHandle: unissued,
+      readLeafHandle: () => null,
+      readPtyHandle: () => null,
       makePaneKey: () => '',
       getWorktreeId: () => null,
       getHandleForPaneKey: () => null,

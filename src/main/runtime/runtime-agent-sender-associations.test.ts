@@ -34,6 +34,10 @@ import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-worker-history'
 import { structuredMailSource } from './orchestration/structured-mail-source'
 import { scaleStore } from './agent-session-scale.test-fixture'
 
+const unissued = (): never => {
+  throw new Error('a sender build issued a terminal handle')
+}
+
 const dbs: OrchestrationDb[] = []
 afterEach(() => {
   for (const db of dbs.splice(0)) {
@@ -88,8 +92,11 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
         getLeaves: () => leaves,
         getPtys: () => ptys,
         paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
-        issueLeafHandle: (l) => handles.get(l.tabId) ?? '',
-        issuePtyHandle: () => '',
+        // Orchestration issues handles; sender rows only read the ones already issued.
+        issueLeafHandle: unissued,
+        issuePtyHandle: unissued,
+        readLeafHandle: (l) => handles.get(l.tabId) ?? null,
+        readPtyHandle: () => null,
         makePaneKey: (l) => pane(l.tabId),
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,

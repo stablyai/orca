@@ -18,15 +18,34 @@ import {
 } from './runtime-agent-sender-worker-history'
 import { readAgentSenderGeneration } from './runtime-agent-sender-history-triggers'
 import type { OrchestrationDb } from './orchestration/db'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
 
-type Dependencies = RuntimeAgentOrchestrationDependencies & {
-  peerFingerprint(): string | undefined
-  /** This host's principal as the paired environment authenticates it, and that peer's key. */
-  principal(environmentId: string): AgentSenderPrincipal | undefined
-  /** Moves when a pairing changes, so principals are read again only then. */
-  pairingGeneration(): number
+/** The handles terminals already hold, read without issuing one: display bookkeeping never
+ *  changes terminal identity, so a terminal with no issued handle has no sender row. */
+export type AgentSenderHandleReads = {
+  readLeafHandle(leaf: RuntimeLeafRecord): string | null
+  readPtyHandle(pty: RuntimePtyWorktreeRecord): string | null
 }
+
+/** Orchestration issues terminal handles; sender rows only read the ones already issued. */
+export type TerminalHandleAccess = Pick<
+  RuntimeAgentOrchestrationDependencies,
+  'issueLeafHandle' | 'issuePtyHandle'
+> &
+  AgentSenderHandleReads
+
+type Dependencies = Omit<
+  RuntimeAgentOrchestrationDependencies,
+  'issueLeafHandle' | 'issuePtyHandle'
+> &
+  AgentSenderHandleReads & {
+    peerFingerprint(): string | undefined
+    /** This host's principal as the paired environment authenticates it, and that peer's key. */
+    principal(environmentId: string): AgentSenderPrincipal | undefined
+    /** Moves when a pairing changes, so principals are read again only then. */
+    pairingGeneration(): number
+  }
 /** Bounded like the hook server's per-pane maps; eviction only forgets an old respawn. */
 const MAX_HANDLE_INCARNATIONS = 4096
 
@@ -121,12 +140,18 @@ export class RuntimeAgentSenderAssociations {
     const panes = new Map<string, AgentSenderPane & { original: boolean }>()
     const ptys = new Map([...this.deps.getPtys()].map((pty) => [pty.ptyId, pty]))
     const terminal = (
-      handle: string,
+      handle: string | null,
       paneKey: string | null,
       worktreeId: string | null,
       ptyId: string | null
     ) => {
-      if (!paneKey || !worktreeId || isStructuredWorkerHandle(handle) || !parsePaneKey(paneKey)) {
+      if (
+        !handle ||
+        !paneKey ||
+        !worktreeId ||
+        isStructuredWorkerHandle(handle) ||
+        !parsePaneKey(paneKey)
+      ) {
         return
       }
       const pty = ptyId ? ptys.get(ptyId) : undefined
@@ -143,7 +168,7 @@ export class RuntimeAgentSenderAssociations {
       this.work.leafVisits++
       if (leaf.ptyId) {
         terminal(
-          this.deps.issueLeafHandle(leaf),
+          this.deps.readLeafHandle(leaf),
           this.deps.makePaneKey(leaf),
           leaf.worktreeId,
           leaf.ptyId
@@ -154,7 +179,7 @@ export class RuntimeAgentSenderAssociations {
       this.work.ptyVisits++
       const paneKey = this.deps.paneOf(pty).paneKey
       if (paneKey && !panes.has(paneKey)) {
-        terminal(this.deps.issuePtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)
+        terminal(this.deps.readPtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)
       }
     }
     return panes

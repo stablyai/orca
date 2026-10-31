@@ -7,6 +7,7 @@ import {
 import type { RuntimeConstructionServices } from './runtime-construction-services'
 import { environmentStoreWriteCount } from '../../../shared/runtime-environment-store-file'
 import type { AgentSenderPrincipal } from '../runtime-agent-sender-history'
+import type { AgentSenderHandleReads } from '../runtime-agent-sender-associations'
 
 type SenderHost = Pick<
   RuntimeConstructionServices,
@@ -15,7 +16,7 @@ type SenderHost = Pick<
 
 export function createRuntimeAgentProjections(
   host: SenderHost,
-  dependencies: RuntimeAgentOrchestrationDependencies
+  dependencies: RuntimeAgentOrchestrationDependencies & AgentSenderHandleReads
 ) {
   let historyChecked = false
   let peerKey: () => string | null = () => null

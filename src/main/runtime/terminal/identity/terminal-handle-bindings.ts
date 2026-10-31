@@ -6,6 +6,7 @@ import type {
 } from '../../runtime-terminal-state-records'
 import { randomUUID } from 'node:crypto'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
+import type { TerminalHandleAccess } from '../../runtime-agent-sender-associations'
 
 export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected abstract getLeafKey(tabId: string, leafId: string): string
@@ -93,6 +94,52 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     })
     this.handleByLeafKey.set(leafKey, preAllocated)
     return preAllocated
+  }
+
+  protected terminalHandleAccess(): TerminalHandleAccess {
+    return {
+      issueLeafHandle: (leaf) => this.issueHandle(leaf),
+      issuePtyHandle: (pty) => this.issuePtyHandle(pty),
+      readLeafHandle: (leaf) => this.peekLeafHandle(leaf),
+      readPtyHandle: (pty) => this.peekPtyHandle(pty)
+    }
+  }
+
+  /** The handle this leaf's terminal already holds, as issueHandle would return it, without
+   *  issuing, adopting or rebinding one: readers must never change terminal identity. */
+  protected peekLeafHandle(leaf: RuntimeLeafRecord): string | null {
+    const existing = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
+    const record = existing ? this.handles.get(existing) : undefined
+    if (
+      existing &&
+      record?.rendererGraphEpoch === this.rendererGraphEpoch &&
+      record.ptyId === leaf.ptyId &&
+      record.ptyGeneration === leaf.ptyGeneration
+    ) {
+      return existing
+    }
+    if (!leaf.ptyId) {
+      return null
+    }
+    const preAllocated = this.handleByPtyId.get(leaf.ptyId)
+    if (preAllocated) {
+      return preAllocated
+    }
+    const retained = this.handleByPtyIncarnation.get(leaf.ptyId)
+    const incarnationId = this.ptysById.get(leaf.ptyId)?.incarnationId ?? null
+    return retained?.incarnationId === incarnationId ? retained.handle : null
+  }
+
+  /** The handle a terminal with no leaf already holds, as issuePtyHandle would return it, without
+   *  issuing or restamping one. */
+  protected peekPtyHandle(pty: RuntimePtyWorktreeRecord): string | null {
+    const retained = this.handleByPtyIncarnation.get(pty.ptyId)
+    if (retained?.incarnationId === pty.incarnationId) {
+      return retained.handle
+    }
+    const existing = this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
+    const record = existing ? this.handles.get(existing) : undefined
+    return record?.runtimeId === this.runtimeId && record.ptyId === pty.ptyId ? existing : null
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {

@@ -34,6 +34,10 @@ import {
 } from '@/components/native-chat/native-chat-agent-sender.test-fixture'
 import { makeTab } from '@/store/slices/store-test-helpers'
 
+const unissued = (): never => {
+  throw new Error('a sender build issued a terminal handle')
+}
+
 beforeEach(() => {
   resetSenderStore()
   resetWebSessionTabsSnapshotFreshnessForTests()
@@ -76,8 +80,11 @@ function host(n: number) {
         getLeaves: () => leaves,
         getPtys: () => ptys,
         paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
-        issueLeafHandle: (leaf) => handleOf(Number(leaf.tabId.slice(3))),
-        issuePtyHandle: () => '',
+        // Orchestration issues handles; sender rows only read the ones already issued.
+        issueLeafHandle: unissued,
+        issuePtyHandle: unissued,
+        readLeafHandle: (leaf) => handleOf(Number(leaf.tabId.slice(3))),
+        readPtyHandle: () => null,
         makePaneKey: (leaf) => `${leaf.tabId}:${leafOf(Number(leaf.tabId.slice(3)))}`,
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,

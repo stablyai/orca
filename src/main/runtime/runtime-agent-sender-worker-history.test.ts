@@ -9,6 +9,10 @@ import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixt
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
 import { AgentSenderWorkerHistory } from './runtime-agent-sender-worker-history'
 
+const unissued = (): never => {
+  throw new Error('a sender build issued a terminal handle')
+}
+
 const dbs: OrchestrationDb[] = []
 afterEach(() => {
   for (const db of dbs.splice(0)) {
@@ -69,8 +73,11 @@ function host(workers: number, path: string = ':memory:') {
         getLeaves: () => leaves,
         getPtys: () => ptys,
         paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
-        issueLeafHandle: (leaf) => `term_${leaf.tabId}`,
-        issuePtyHandle: () => '',
+        // Orchestration issues handles; sender rows only read the ones already issued.
+        issueLeafHandle: unissued,
+        issuePtyHandle: unissued,
+        readLeafHandle: (leaf) => `term_${leaf.tabId}`,
+        readPtyHandle: () => null,
         makePaneKey: (leaf) => pane(Number(leaf.tabId.slice(4))),
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,

@@ -40,12 +40,18 @@ it.each([50, 500])(
     const { senders } = runtime['agentProjections']
     const leaves = runtime['leaves']
     const ptysById = runtime['ptysById']
-    leaves.set('live', {
-      ...MIRROR_LEAVES_STEP_1[0],
-      tabId: 'tab_h0',
-      worktreeId: 'workspace',
-      ptyId: 'pty-live'
-    })
+    // A terminal the runtime knows, with the handle it issued when it learned of it.
+    const openTerminal = (key: string, tabId: string) => {
+      const leaf = {
+        ...MIRROR_LEAVES_STEP_1[0],
+        tabId,
+        worktreeId: 'workspace',
+        ptyId: `pty-${key}`
+      }
+      leaves.set(key, leaf)
+      runtime['issueHandle'](leaf)
+    }
+    openTerminal('live', 'tab_h0')
     runtime.mobileSessionTabsByWorktree.set('workspace', {
       worktree: 'workspace',
       publicationEpoch: 'host',
@@ -93,12 +99,7 @@ it.each([50, 500])(
     expect(touch).not.toHaveBeenCalled()
 
     // A real identity change, a new terminal, reaches only the worktree whose scope changed.
-    leaves.set('opened', {
-      ...MIRROR_LEAVES_STEP_1[0],
-      tabId: 'tab_h1',
-      worktreeId: 'workspace',
-      ptyId: 'pty-opened'
-    })
+    openTerminal('opened', 'tab_h1')
     await send('after identity change')
     await new Promise((resolve) => setTimeout(resolve, 0))
     expect(touch.mock.calls.map(([worktreeId]) => worktreeId)).toEqual(['workspace'])

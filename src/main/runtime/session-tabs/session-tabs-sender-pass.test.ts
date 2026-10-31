@@ -6,6 +6,10 @@ import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-typ
 import { OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees as Inventory } from './session-tabs-inventory'
 import { OrcaRuntimeWithScheduleMobileSessionTabsChanged as Publication } from './session-tabs-change-publication'
 
+const unissued = (): never => {
+  throw new Error('a sender build issued a terminal handle')
+}
+
 const WORKTREES = 20
 
 // The runtime's own pass methods under test; protected, so reached through their prototypes.
@@ -37,8 +41,11 @@ function runtime(terminals: number) {
       getLeaves: () => leaves,
       getPtys: () => ptys,
       paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
-      issueLeafHandle: (leaf) => `term_${leaf.tabId}`,
-      issuePtyHandle: () => '',
+      // Orchestration issues handles; sender rows only read the ones already issued.
+      issueLeafHandle: unissued,
+      issuePtyHandle: unissued,
+      readLeafHandle: (leaf) => `term_${leaf.tabId}`,
+      readPtyHandle: () => null,
       makePaneKey: (leaf) => `${leaf.tabId}:${leafOf(Number(leaf.tabId.slice(3)))}`,
       getWorktreeId: () => null,
       getHandleForPaneKey: () => null,
