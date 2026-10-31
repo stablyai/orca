@@ -73,13 +73,14 @@ async function keptStoppedPane() {
     initialPtyId: ptyId,
     initialLeafId: pane.leafId
   })
+  const spawn = vi.fn(async () => ({ id: ptyId, incarnationId, isReattach: true }))
   const onExit = vi.fn<typeof window.api.pty.onExit>((listener) => {
     dispatchExit = listener
     return () => {}
   })
   const noop = (): (() => void) => () => {}
   Object.assign(window.api.pty, {
-    spawn: vi.fn(async () => ({ id: ptyId, incarnationId, isReattach: true })),
+    spawn,
     onData: noop,
     onExit,
     onReplay: noop,
@@ -121,6 +122,7 @@ async function keptStoppedPane() {
     transport,
     automaticClose,
     died,
+    spawn,
     source,
     stoppedForReplace: () =>
       exit({ id: ptyId, code: 0, incarnationId, preserveRendererBinding: 'closing' }),
@@ -244,6 +246,82 @@ it('settles a pane that was parked when main settled it, once it is shown', asyn
       expect.objectContaining({ paneId: kept.pane.id, exitCode: 0 })
     )
     expect(kept.automaticClose).not.toHaveBeenCalled()
+  } finally {
+    kept.dispose()
+  }
+})
+
+it('settles a pane parked after its exit when shown, without reattaching the stopped process', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    kept.stoppedForReplace()
+    await flushAsyncTicks(5)
+    kept.park()
+    kept.modules.sources.noteStoppedSwitchSource(kept.source)
+    await flushAsyncTicks(5)
+    expect(kept.died).not.toHaveBeenCalled()
+    kept.spawn.mockClear()
+    await kept.reveal()
+    expect(kept.spawn).not.toHaveBeenCalled()
+    expect(kept.died).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ paneId: kept.pane.id, exitCode: 0 })
+    )
+    expect(kept.automaticClose).not.toHaveBeenCalled()
+  } finally {
+    kept.dispose()
+  }
+})
+
+it('does no settlement work for store writes outside the held pane, however many', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    kept.stoppedForReplace()
+    kept.park()
+    kept.modules.sources.noteStoppedSwitchSource({
+      ...kept.source,
+      replacedBySessionId: 'session-1'
+    })
+    await flushAsyncTicks(5)
+    const { getStoppedSwitchSourceReconcileCountForTests: reconciles } = kept.modules.sources
+    const unrelatedWrites = async (count: number): Promise<number> => {
+      const before = reconciles()
+      for (let i = 0; i < count; i += 1) {
+        const state = kept.store.getState()
+        kept.store.setState({
+          terminalLayoutsByTabId: {
+            ...state.terminalLayoutsByTabId,
+            [`other-tab-${i}`]: state.terminalLayoutsByTabId[kept.tab.id]!
+          },
+          unifiedTabsByWorktree: {
+            ...state.unifiedTabsByWorktree,
+            'other-worktree': [
+              ...(state.unifiedTabsByWorktree['other-worktree'] ?? []),
+              { ...state.unifiedTabsByWorktree[kept.source.worktreeId]![0]!, id: `other-${i}` }
+            ]
+          }
+        })
+        await flushAsyncTicks(1)
+      }
+      return reconciles() - before
+    }
+    expect(await unrelatedWrites(20)).toBe(0)
+    expect(await unrelatedWrites(200)).toBe(0)
+    // A write to the pane's own slice still settles it once it is shown.
+    const state = kept.store.getState()
+    const tabs = state.unifiedTabsByWorktree[kept.source.worktreeId] ?? []
+    kept.store.setState({
+      unifiedTabsByWorktree: {
+        ...state.unifiedTabsByWorktree,
+        [kept.source.worktreeId]: [
+          ...tabs,
+          { ...tabs[0]!, id: 'chat-tab', entityId: 'session-1', contentType: 'agent-session' }
+        ]
+      }
+    })
+    await flushAsyncTicks(5)
+    expect(reconciles()).toBeGreaterThan(0)
+    await kept.reveal()
+    expect(kept.died).toHaveBeenCalledOnce()
   } finally {
     kept.dispose()
   }

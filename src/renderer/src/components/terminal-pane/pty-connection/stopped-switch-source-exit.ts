@@ -1,4 +1,4 @@
-import { watchStoppedSwitchSource } from '../stopped-switch-sources'
+import { readStoppedSwitchSource, watchStoppedSwitchSource } from '../stopped-switch-sources'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /**
@@ -9,16 +9,12 @@ import type { ConnectPanePtySession } from './connect-pane-pty-session'
 export function holdClosingExit(
   session: ConnectPanePtySession,
   ptyId: string,
-  exitCode: number
+  exitCode: number,
+  incarnationId: string | null = session.inputModeOwnerIncarnationId ?? null
 ): void {
   session.stopWatchingStoppedSwitchSource?.()
   session.stopWatchingStoppedSwitchSource = watchStoppedSwitchSource(
-    {
-      tabId: session.deps.tabId,
-      leafId: session.pane.leafId,
-      ptyId,
-      incarnationId: session.inputModeOwnerIncarnationId ?? null
-    },
+    { tabId: session.deps.tabId, leafId: session.pane.leafId, ptyId, incarnationId, exitCode },
     () => {
       session.stopWatchingStoppedSwitchSource = null
       if (session.disposed || session.handledExitPtyId !== ptyId) {
@@ -34,4 +30,23 @@ export function holdClosingExit(
       })
     }
   )
+}
+
+/**
+ * A pane remounting onto a process a switch stopped (its exit was handled before it was parked)
+ * has nothing to reattach: it stays stopped and takes main's settlement, as it would have mounted.
+ */
+export function remountStoppedSwitchSource(
+  session: ConnectPanePtySession,
+  ptyId: string | null
+): boolean {
+  const stopped = ptyId
+    ? readStoppedSwitchSource(session.deps.tabId, session.pane.leafId, ptyId)
+    : null
+  if (!ptyId || !stopped) {
+    return false
+  }
+  session.handledExitPtyId = ptyId
+  holdClosingExit(session, ptyId, stopped.exitCode, stopped.incarnationId)
+  return true
 }

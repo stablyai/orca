@@ -14,6 +14,7 @@ import {
   isSessionOwnedByWorktree
 } from './paired-parked-terminal-restore'
 import { startDeferredSessionReattachUnlessHiddenAgentResume } from './hidden-agent-resume-deferral'
+import { remountStoppedSwitchSource } from './stopped-switch-source-exit'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -28,6 +29,9 @@ export function runDeferredSessionReattachChoice(session: ConnectPanePtySession)
     session.deps.restoredLeafId && session.deps.restoredPtyIdByLeafId
       ? (session.deps.restoredPtyIdByLeafId[session.deps.restoredLeafId] ?? null)
       : null
+  if (remountStoppedSwitchSource(session, restoredPtyId)) {
+    return
+  }
   const storeSnapshot = useAppStore.getState()
   const existingPtyId = storeSnapshot.tabsByWorktree[session.deps.worktreeId]?.find(
     (t) => t.id === session.deps.tabId
