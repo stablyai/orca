@@ -7,7 +7,6 @@ import {
   sideStripOffset,
   useSessionSideStripInset
 } from './session-side-strip-inset'
-import { useDuoChatExpanded } from './duo-chat-width'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
@@ -39,7 +38,6 @@ export function MobileSessionActiveContent({
   const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const [paneFrame, setPaneFrame] = useState({ width: 0, height: 0 })
-  const duoChatExpanded = useDuoChatExpanded()
   const { main: stripInset } = useSessionSideStripInset(
     controller.canDockPanel && controller.activePanel !== null
   )
@@ -330,7 +328,6 @@ export function MobileSessionActiveContent({
         </View>
         <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
           <MobileDictationMeterContext.Provider value={dictation.meter}>
-            <View pointerEvents="box-none" style={[StyleSheet.absoluteFillObject, !duoChatExpanded && sideStripOffset(stripInset)]}>
             <MobileAgentMessageProvider
               key={JSON.stringify([hostId, executionHost, worktreeId])}
               tabs={controller.sessionTabs}
@@ -363,7 +360,6 @@ export function MobileSessionActiveContent({
                 hostName={executionHost === undefined && hostProfile ? hostTitle : null}
               />
             </MobileAgentMessageProvider>
-            </View>
           </MobileDictationMeterContext.Provider>
         </MobileNativeChatDictationPreviewContext.Provider>
         {toastMessage && (
@@ -373,6 +369,7 @@ export function MobileSessionActiveContent({
         )}
       </View>
     )
+
 
   return (
     <View

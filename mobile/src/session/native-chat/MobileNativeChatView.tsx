@@ -214,7 +214,7 @@ export function MobileNativeChatView({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
-  const { bottomPad, fitScreenCorners, widthToggle } = useChatBottomFit(keyboardInset)
+  const { bottomPad, composerFit, transcriptInset } = useChatBottomFit(keyboardInset)
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
 
   // Memoize list derivation to keep downstream autoscroll/renderItem dependencies stable.
@@ -338,7 +338,7 @@ export function MobileNativeChatView({
           title={t('session.nativeChatView.loading', 'Loading conversation…')}
         />
       ) : (
-        <GestureHandlerRootView style={styles.listWrap}>
+        <GestureHandlerRootView style={[styles.listWrap, transcriptInset]}>
           <MobileNativeChatDisclosureContext.Provider value={disclosures}>
             <MobileNativeChatScrollRootsBoundary
               {...{ rowKeys, layoutKey }}
@@ -391,7 +391,7 @@ export function MobileNativeChatView({
       {trayContent}
       <View style={promptOwnsInput ? styles.hidden : undefined}>
         <MobileNativeChatDraftComposer
-          {...{ fitScreenCorners, widthToggle }}
+          {...composerFit}
           draftScopeKey={composerScopeKey}
           structured={structuredActivityUi ? structuredComposer : null}
           draftKey={draftKey}

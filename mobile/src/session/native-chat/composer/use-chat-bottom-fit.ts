@@ -1,7 +1,9 @@
+import type { ViewStyle } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useShellSideRail } from '../../../layout/use-shell-side-rail'
 import { useReleasedSideInset } from '../../../layout/released-side-inset'
 import { toggleDuoChatExpanded, useDuoChatExpanded } from '../../duo-chat-width'
+import { sideStripMargin } from '../../session-side-strip-inset'
 
 export type ChatWidthToggle = { expanded: boolean; onToggle: () => void }
 
@@ -11,8 +13,9 @@ export type ChatWidthToggle = { expanded: boolean; onToggle: () => void }
  */
 export function useChatBottomFit(keyboardInset: number): {
   bottomPad: number
-  fitScreenCorners: boolean
-  widthToggle: ChatWidthToggle | null
+  composerFit: { fitScreenCorners: boolean; widthToggle: ChatWidthToggle | null }
+  /** Collapsed, the transcript keeps clear of the column; the composer keeps its width. */
+  transcriptInset: ViewStyle | null
 } {
   const insets = useSafeAreaInsets()
   const sideRail = useShellSideRail()
@@ -21,7 +24,10 @@ export function useChatBottomFit(keyboardInset: number): {
   const bottomInset = sideRail ? 0 : insets.bottom
   return {
     bottomPad: keyboardInset > 0 ? keyboardInset + bottomInset : bottomInset,
-    fitScreenCorners: sideRail && keyboardInset === 0,
-    widthToggle: released ? { expanded, onToggle: toggleDuoChatExpanded } : null
+    composerFit: {
+      fitScreenCorners: sideRail && keyboardInset === 0,
+      widthToggle: released ? { expanded, onToggle: toggleDuoChatExpanded } : null
+    },
+    transcriptInset: expanded ? null : sideStripMargin(released)
   }
 }
