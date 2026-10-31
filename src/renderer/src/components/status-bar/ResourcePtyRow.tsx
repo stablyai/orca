@@ -1,5 +1,5 @@
 import { memo } from 'react'
-import { ArrowUpRight, ChevronRight, Terminal } from 'lucide-react'
+import { ArrowUpRight, ChevronRight } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Checkbox } from '@/components/ui/checkbox'
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible'
@@ -57,7 +57,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
       <Collapsible>
         <div className="flex min-w-0 items-center gap-1">
           <Checkbox
-            className="mx-1"
+            className="ml-1"
             checked={selected}
             disabled={ending || !!endUnavailable}
             aria-label={translate('resourceManager.pty.selectNamed', 'Select {{terminal}}', {
@@ -69,7 +69,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
             <Button
               variant="ghost"
               size="sm"
-              className="group min-w-0 flex-1 justify-start"
+              className="group min-w-0 flex-1 justify-start has-[>svg]:pl-1"
               aria-label={translate(
                 'resourceManager.pty.detailsNamed',
                 'Details for {{terminal}}',
@@ -79,7 +79,6 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
               )}
             >
               <ChevronRight className="size-3 shrink-0 transition-transform group-data-[state=open]:rotate-90" />
-              <Terminal className="size-3 shrink-0 text-muted-foreground" />
               <span className="truncate text-xs">{row.label}</span>
             </Button>
           </CollapsibleTrigger>

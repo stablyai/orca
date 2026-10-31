@@ -82,7 +82,7 @@ export function ResourcePtyList({
             return (
               <div
                 key={item.key}
-                className="flex justify-between px-4 py-1 text-xs text-muted-foreground"
+                className="flex justify-between py-1 pr-4 pl-3 text-xs text-muted-foreground"
               >
                 <span className="truncate">{item.name}</span>
                 <span>{item.count}</span>
