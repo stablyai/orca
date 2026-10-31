@@ -15,6 +15,7 @@ import type { WorktreeStartupLaunch } from '../../shared/worktree/launch-types'
 import type { TaskSourceContext } from '../../shared/task-source-context'
 import type { WorktreeStartupDraftPaste } from './runtime-worktree-agent-startup'
 import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
+import type { BranchPrefixStrategy } from '../../shared/ui-chrome-types'
 import type { RuntimeRepoSelector } from './runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {
@@ -50,6 +51,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   nestWorkspaces?: boolean
   refreshLocalBaseRefOnWorktreeCreate?: boolean
   localBaseRefSuggestionDismissed?: boolean
+  branchPrefix?: BranchPrefixStrategy
+  branchPrefixCustom?: string
   sparseCheckout?: { directories: string[]; presetId?: string }
   pushTarget?: GitPushTarget
   runHooks?: boolean

@@ -192,7 +192,9 @@ describe('worktree remote runtime mutations', () => {
         activeRuntimeEnvironmentId: 'env-1',
         nestWorkspaces: false,
         refreshLocalBaseRefOnWorktreeCreate: true,
-        localBaseRefSuggestionDismissed: false
+        localBaseRefSuggestionDismissed: false,
+        branchPrefix: 'custom',
+        branchPrefixCustom: 'devel'
       },
       worktreesByRepo: { repo1: [] }
     })
@@ -226,6 +228,8 @@ describe('worktree remote runtime mutations', () => {
         nestWorkspaces: false,
         refreshLocalBaseRefOnWorktreeCreate: true,
         localBaseRefSuggestionDismissed: false,
+        branchPrefix: 'custom',
+        branchPrefixCustom: 'devel',
         telemetrySource: 'sidebar',
         displayName: 'Feature title',
         linkedIssue: 123,
