@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, createElement, type ReactNode } from 'react'
 import { createRoot } from 'react-dom/client'
+import type * as ReactNative from 'react-native'
 import { expect, it, vi } from 'vitest'
 import { MobileChatAttachmentPreview } from './MobileChatAttachmentPreview'
 import { activateMobileUiLocale } from '../i18n/mobile-i18n'
@@ -10,7 +11,7 @@ import {
   ATTACHMENT_TEXT_PAGE_BYTES
 } from '../../../src/shared/attachment-text-source'
 
-vi.mock('react-native', () => vi.importActual<typeof import('react-native')>('react-native-web'))
+vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 vi.mock('../platform/text-input-font-size', () => import('../platform/text-input-font-size.web'))
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: ({ children }: { children: ReactNode }) => createElement('div', null, children),

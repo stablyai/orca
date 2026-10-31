@@ -42,17 +42,16 @@ export function NativeChatTextAttachmentPreview({
     read
   )
   type Navigation = 'first' | 'prev' | 'next' | 'last'
-  type FieldCommit = ReturnType<typeof Promise.withResolvers<NonNullable<typeof display> | null>>
+  type FieldCommit = PromiseWithResolvers<typeof display> & { ready?: true }
   const pendingCommit = useRef<FieldCommit | null>(null)
   const [pressedNavigation, setPressedNavigation] = useState<Navigation | null>(null)
-  const [settledCommit, setSettledCommit] = useState<FieldCommit | null>(null)
+  const [commitRevision, setCommitRevision] = useState(0)
   useEffect(() => {
-    if (settledCommit && pendingCommit.current === settledCommit) {
+    if (pendingCommit.current?.ready) {
+      pendingCommit.current.resolve(display)
       pendingCommit.current = null
-      settledCommit.resolve(display)
-      setSettledCommit(null)
     }
-  }, [settledCommit, display])
+  }, [commitRevision, display])
   useEffect(() => {
     setPressedNavigation(null)
     return () => {
@@ -81,7 +80,7 @@ export function NativeChatTextAttachmentPreview({
       page <= source.pageCount &&
       !(display?.page === page - 1 && display.subpage === 0)
     ) {
-      const commit = Promise.withResolvers<NonNullable<typeof display> | null>()
+      const commit: FieldCommit = Promise.withResolvers<typeof display>()
       pendingCommit.current = commit
       void load(page - 1).then(() => {
         if (pendingCommit.current === commit) {
@@ -89,7 +88,8 @@ export function NativeChatTextAttachmentPreview({
             pendingCommit.current = null
             commit.resolve(null)
           } else {
-            setSettledCommit(commit)
+            commit.ready = true
+            setCommitRevision((revision) => revision + 1)
           }
         }
       })
