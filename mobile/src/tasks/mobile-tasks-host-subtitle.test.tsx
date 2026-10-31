@@ -60,7 +60,7 @@ function StatusBar({ hostId }: { hostId: string }) {
     router: { back: () => {} },
     taskUiReady: true
   } as unknown as ConnectionPresentationModel
-  return createElement(MobileTasksStatusBar, { model })
+  return createElement(MobileTasksStatusBar, { model, accessory: null })
 }
 
 async function renderStatusBar(hostId: string): Promise<ReactTestRenderer> {
