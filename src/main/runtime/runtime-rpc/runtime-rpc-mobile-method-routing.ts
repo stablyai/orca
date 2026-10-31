@@ -163,7 +163,11 @@ export const EXECUTION_HOST_METHODS = [
   'projectGroup.list',
   'project.list',
   'projectHostSetup.list',
+  // Add project registers, creates or clones on the host that will own the project.
+  'repo.add',
   'repo.baseRefDefault',
+  'repo.clone',
+  'repo.create',
   'repo.gitAvailable',
   'repo.hooks',
   'repo.list',

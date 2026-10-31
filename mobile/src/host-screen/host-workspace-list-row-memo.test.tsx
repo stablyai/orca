@@ -98,7 +98,7 @@ function listProps(worktrees: Worktree[]) {
   const polled: Worktree[] = JSON.parse(JSON.stringify(worktrees))
   const sections = buildSections(polled, 'name', NO_WORKSPACE_ROW_FILTERS, '', 'none', new Set())
   const controller = {
-    actions: { openWorktreeSession: noop, openNewWorktreeModal: noop },
+    actions: { openWorktreeSession: noop, openCreateMenu: noop },
     activeWorktreeScroll: { sectionListRef: stable.ref, onScrollToIndexFailed: noop },
     catalog: { refreshing: false, onRefresh: noop },
     connectionVerdict: { kind: 'normal', label: 'Connected' },

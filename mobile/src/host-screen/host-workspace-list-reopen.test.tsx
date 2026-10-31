@@ -50,7 +50,7 @@ function listWith(rows: number) {
   }
   const sections = rows > 0 ? [section] : []
   const controller = {
-    actions: { openWorktreeSession: () => {}, openNewWorktreeModal: () => {} },
+    actions: { openWorktreeSession: () => {}, openCreateMenu: () => {} },
     activeWorktreeScroll: { sectionListRef: { current: null }, onScrollToIndexFailed: () => {} },
     catalog: { refreshing: false, onRefresh: () => {} },
     collapsedGroups: new Set(),

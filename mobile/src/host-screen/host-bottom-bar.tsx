@@ -47,8 +47,10 @@ export function HostBottomBar({
       }}
       primary={{
         icon: Plus,
-        accessibilityLabel: t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
-        onPress: actions.openNewWorktreeModal,
+        accessibilityLabel: actions.addProjectSupported
+          ? t('hostScreen.hostBottomBar.create', 'Create')
+          : t('hostScreen.hostBottomBar.newWorkspace', 'New workspace'),
+        onPress: actions.openCreateMenu,
         disabled: connState !== 'connected'
       }}
       onCoveredHeightChange={onCoveredHeightChange}

@@ -16,6 +16,7 @@ vi.mock('lucide-react-native', () => ({ Moon: 'Moon', Pin: 'Pin', PinOff: 'PinOf
 vi.mock('../agent-history/worktree-navigation-actions', () => ({
   buildWorktreeNavigationActions: () => []
 }))
+vi.mock('../add-project/AddProjectSheet', () => ({ AddProjectSheet: 'AddProjectSheet' }))
 vi.mock('../components/ActionSheetModal', () => ({ ActionSheetContent: 'ActionSheetContent' }))
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/ConfirmModal', () => ({ ConfirmModal: 'ConfirmModal' }))

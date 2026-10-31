@@ -64,6 +64,7 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     client: desktopClient,
     serverClients,
     hostId,
+    initialRepoId,
     hostLabelById,
     existingWorktreePaths,
     existingWorktrees,
@@ -75,7 +76,8 @@ function NewWorktreeModalContent(props: NewWorktreeModalProps) {
     client: desktopClient,
     serverClients,
     hostId,
-    visible
+    visible,
+    initialRepoId
   })
   // Route picked-repo operations to its host; desktop settings/accounts stay on desktop.
   const repoServer = selectedRepo ? serverOf(selectedRepo) : undefined

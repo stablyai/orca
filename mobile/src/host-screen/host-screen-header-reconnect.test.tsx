@@ -57,7 +57,7 @@ function controllerWith(forceReconnectHost: ForceReconnect) {
     actions: {
       leaveHost: () => {},
       navigateFromHostList: () => {},
-      openNewWorktreeModal: () => {}
+      openCreateMenu: () => {}
     },
     connectionVerdict: {
       kind: 'unreachable',

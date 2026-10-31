@@ -35,7 +35,7 @@ function render(fields: { connState: string; activeFilterCount: number }) {
     setSearch: vi.fn(),
     setShowWorkspaceOptions: vi.fn()
   }
-  const actions = { openNewWorktreeModal: vi.fn() }
+  const actions = { openCreateMenu: vi.fn() }
   const controller = {
     actions,
     activeFilterCount: fields.activeFilterCount,
@@ -76,7 +76,7 @@ describe('the workspace list bottom bar', () => {
   it('opens New workspace only while connected', () => {
     const { actions } = render({ connState: 'connected', activeFilterCount: 0 })
     act(() => button('New workspace').props.onPress())
-    expect(actions.openNewWorktreeModal).toHaveBeenCalledTimes(1)
+    expect(actions.openCreateMenu).toHaveBeenCalledTimes(1)
     act(() => renderer?.unmount())
     render({ connState: 'reconnecting', activeFilterCount: 0 })
     expect(button('New workspace').props.disabled).toBe(true)

@@ -55,7 +55,7 @@ function listWith(fields: { actionError: string; setActionError: (value: string)
   const rows = [{ worktreeId: 'wt-1', repo: 'orca' }]
   const sections = [{ key: 'all', title: '', data: rows }]
   const controller = {
-    actions: { openWorktreeSession: () => {}, openNewWorktreeModal: () => {} },
+    actions: { openWorktreeSession: () => {}, openCreateMenu: () => {} },
     activeWorktreeScroll: { sectionListRef: { current: null }, onScrollToIndexFailed: () => {} },
     catalog: { refreshing: false, onRefresh: () => {} },
     connState: 'connected',
