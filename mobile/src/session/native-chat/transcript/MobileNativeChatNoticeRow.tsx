@@ -57,6 +57,42 @@ function noticeLineText(
     : notice.text
 }
 
+function NoticeDisclosureSummary({
+  summary,
+  expanded,
+  fontScale,
+  onPress,
+  onLongPress
+}: {
+  summary: string
+  expanded: boolean
+  fontScale: number
+  onPress: () => void
+  onLongPress?: () => void
+}): React.JSX.Element {
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={summary}
+      aria-expanded={expanded}
+      onPress={onPress}
+      onLongPress={onLongPress}
+      style={styles.disclosure}
+    >
+      <View style={expanded ? toolStyles.caretOpen : undefined}>
+        <ChevronRight size={16 * fontScale} color={colors.textMuted} />
+      </View>
+      <Text
+        selectable={INLINE_TEXT_SELECTION}
+        numberOfLines={1}
+        style={[styles.faint, scaledType(typography.bodySize, fontScale), styles.summary]}
+      >
+        {summary}
+      </Text>
+    </Pressable>
+  )
+}
+
 // Render system notices separately so they cannot read as the agent’s own prose.
 export function MobileNativeChatNoticeRow({
   blocks,
@@ -107,23 +143,13 @@ export function MobileNativeChatNoticeRow({
       const payload = notice.providerFrame?.payload
       return (
         <View>
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={summary}
-            accessibilityState={{ expanded }}
+          <NoticeDisclosureSummary
+            summary={summary}
+            expanded={expanded}
+            fontScale={fontScale}
             onPress={() => setExpanded((open) => !open)}
             onLongPress={onLongPress}
-            style={styles.disclosure}
-          >
-            <ChevronRight
-              size={16 * fontScale}
-              color={colors.textMuted}
-              style={expanded && toolStyles.caretOpen}
-            />
-            <Text numberOfLines={1} style={[aside, styles.summary]}>
-              {summary}
-            </Text>
-          </Pressable>
+          />
           {expanded ? (
             <MobileNativeChatOwnedScrollView
               positionKey={detailId}

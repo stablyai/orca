@@ -293,12 +293,18 @@ describe('MobileNativeChatMessage status notices', () => {
             node.props.accessibilityLabel?.includes('View details.')
         )
       expect(button().props.accessibilityLabel).toBe(heading)
-      expect(button().props.accessibilityState.expanded).toBe(false)
+      expect(button().props['aria-expanded']).toBe(false)
       const detailTexts = () =>
-        tree.root.findAll((node) => String(node.type) === 'Text' && node.props.selectable === true)
+        tree.root.findAll(
+          (node) =>
+            String(node.type) === 'Text' &&
+            node.props.selectable === true &&
+            Array.isArray(node.props.children) &&
+            node.props.children.includes(text)
+        )
       expect(detailTexts()).toHaveLength(0)
       act(() => button().props.onPress())
-      expect(button().props.accessibilityState.expanded).toBe(true)
+      expect(button().props['aria-expanded']).toBe(true)
       const detail = detailTexts()[0]
       expect(detail.props.children.join('')).toContain(text)
       expect(detail.props.children.join('')).toContain(head)
@@ -316,7 +322,7 @@ describe('MobileNativeChatMessage status notices', () => {
       const translated = tree.root.find(
         (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === french
       )
-      expect(translated.props.accessibilityState.expanded).toBe(true)
+      expect(translated.props['aria-expanded']).toBe(true)
       expect(detailTexts()[0].props.children.join('')).toContain(
         'Réponse du fournisseur tronquée (taille d’origine : 99999 octets).'
       )
