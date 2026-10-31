@@ -174,6 +174,8 @@ describe('ChatBehaviorSetting follow-up behavior', () => {
       const { container } = renderSetting({ nativeChatQueueFollowUps: saved }, updateSettings)
       const toggle = container.querySelector<HTMLButtonElement>(FOLLOW_UP_SWITCH)!
       expect(toggle.getAttribute('aria-checked')).toBe(String(saved !== false))
+      // The alternate is described relative to the switch, so the copy holds on and off.
+      expect(container.textContent).toContain('Cmd/Ctrl+Enter does the opposite for one message.')
       fireEvent.click(toggle)
       expect(updateSettings).toHaveBeenCalledWith({ nativeChatQueueFollowUps: saved === false })
     }
@@ -196,6 +198,9 @@ it('renders the Queue switch and description using the German catalog', async ()
     ).toBe('true')
     expect(container.textContent).toContain(copy.followUpBehaviorTitle)
     expect(container.textContent).toContain(copy.followUpBehaviorCopy)
+    expect(copy.followUpBehaviorCopy).toContain(
+      'Cmd/Strg+Enter macht für eine Nachricht das Gegenteil.'
+    )
   } finally {
     await act(async () => {
       await i18n.changeLanguage('en')
