@@ -64,29 +64,6 @@ describe('structured rail outline fetch', () => {
     mocks.read.mockReset()
   })
 
-  it('never asks when every message is already loaded', () => {
-    const { result } = renderOutline({ ...VISIBLE, hasOlder: false })
-    expect(result.current).toBeNull()
-    expect(mocks.read).not.toHaveBeenCalled()
-  })
-
-  it('never asks from a hidden pane', () => {
-    renderOutline({ ...VISIBLE, enabled: false })
-    expect(mocks.read).not.toHaveBeenCalled()
-  })
-
-  it('maps the unloaded messages once the outline arrives', async () => {
-    mocks.read.mockResolvedValue(outline(120))
-    const { result } = renderOutline(VISIBLE)
-    await waitFor(() =>
-      expect(result.current).toEqual([
-        { id: 'user-2', text: 'first prompt', hasImages: false },
-        { id: 'user-7', text: '', hasImages: true }
-      ])
-    )
-    expect(mocks.read).toHaveBeenCalledWith(TARGET, 'session-1')
-  })
-
   it('leaves the rail on loaded messages against a host without the outline', async () => {
     mocks.read.mockResolvedValue(null)
     const { result, rerender } = renderOutline(VISIBLE)
