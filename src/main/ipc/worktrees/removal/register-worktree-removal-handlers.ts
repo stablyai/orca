@@ -1,3 +1,4 @@
+import { withWorkspaceServerRemoval } from '../../../servers/workspace-server-removal'
 import { ipcMain } from 'electron'
 import { getLocalWorktreeCatalogVersion } from '../../../local-worktree-scan-generation'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -66,63 +67,69 @@ export function registerWorktreeRemovalHandlers(context: WorktreeIpcContext): vo
     }
 
     // Coalesce concurrent UI requests so only one operation touches Git and disk.
-    const removal = withWorktreeSpan({ stage: 'remove', path: worktreePath }, async () => {
-      const nestedPreservedBranches = args.approvedNestedWorktrees
-        ? await removeApprovedNestedWorktrees({
-            context,
-            repo,
-            worktreePath,
-            hostId: removalHostId,
-            removalArgs: args,
-            remove
-          })
-        : []
-      const expectedCheckout = args.approvedNestedWorktrees?.find((item) =>
-        areWorktreePathsEqual(item.path, worktreePath)
-      )
-      const executionArgs = expectedCheckout ? { ...args, expectedCheckout } : args
-      const accept = async (): Promise<RemoveWorktreeResult> =>
-        // Another client may acquire removal while this request waits for acceptance.
-        waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
-          ? { removing: true }
-          : executeWorktreeRemoval(
-              context,
-              executionArgs,
-              repo,
-              repoId,
-              worktreePath,
-              removalHostId
-            )
-      let accepted: RemoveWorktreeResult
-      let result: RemoveWorktreeResult
-      try {
-        accepted = await (repo.connectionId
-          ? accept()
-          : runSerializedWorktreeRemovalAcceptance(repo.path, accept))
-        result = await finishAcceptedWorktreeRemoval(accepted, args.worktreeId, removalHostId)
-      } catch (error) {
-        if (nestedPreservedBranches.length > 0) {
-          throw new Error(
-            `${error instanceof Error ? error.message : String(error)} Branches kept after nested deletions: ${nestedPreservedBranches.map((item) => item.branchName).join(', ')}.`,
-            { cause: error }
+    const removal = withWorkspaceServerRemoval(
+      context.runtime,
+      args.worktreeId,
+      removalHostId,
+      () =>
+        withWorktreeSpan({ stage: 'remove', path: worktreePath }, async () => {
+          const nestedPreservedBranches = args.approvedNestedWorktrees
+            ? await removeApprovedNestedWorktrees({
+                context,
+                repo,
+                worktreePath,
+                hostId: removalHostId,
+                removalArgs: args,
+                remove
+              })
+            : []
+          const expectedCheckout = args.approvedNestedWorktrees?.find((item) =>
+            areWorktreePathsEqual(item.path, worktreePath)
           )
-        }
-        throw error
-      }
-      if (!accepted.removing) {
-        options?.onWorktreeLifecycle?.({
-          kind: 'removed',
-          worktreeId: args.worktreeId,
-          path: worktreePath
+          const executionArgs = expectedCheckout ? { ...args, expectedCheckout } : args
+          const accept = async (): Promise<RemoveWorktreeResult> =>
+            // Another client may acquire removal while this request waits for acceptance.
+            waitForPendingWorktreeRemoval(args.worktreeId, removalHostId)
+              ? { removing: true }
+              : executeWorktreeRemoval(
+                  context,
+                  executionArgs,
+                  repo,
+                  repoId,
+                  worktreePath,
+                  removalHostId
+                )
+          let accepted: RemoveWorktreeResult
+          let result: RemoveWorktreeResult
+          try {
+            accepted = await (repo.connectionId
+              ? accept()
+              : runSerializedWorktreeRemovalAcceptance(repo.path, accept))
+            result = await finishAcceptedWorktreeRemoval(accepted, args.worktreeId, removalHostId)
+          } catch (error) {
+            if (nestedPreservedBranches.length > 0) {
+              throw new Error(
+                `${error instanceof Error ? error.message : String(error)} Branches kept after nested deletions: ${nestedPreservedBranches.map((item) => item.branchName).join(', ')}.`,
+                { cause: error }
+              )
+            }
+            throw error
+          }
+          if (!accepted.removing) {
+            options?.onWorktreeLifecycle?.({
+              kind: 'removed',
+              worktreeId: args.worktreeId,
+              path: worktreePath
+            })
+          }
+          // Stamp inside the shared promise so coalesced callers receive the same resulting catalog.
+          return {
+            ...result,
+            ...(nestedPreservedBranches.length > 0 ? { nestedPreservedBranches } : {}),
+            catalogVersion: getLocalWorktreeCatalogVersion(repoId)
+          }
         })
-      }
-      // Stamp inside the shared promise so coalesced callers receive the same resulting catalog.
-      return {
-        ...result,
-        ...(nestedPreservedBranches.length > 0 ? { nestedPreservedBranches } : {}),
-        catalogVersion: getLocalWorktreeCatalogVersion(repoId)
-      }
-    })
+    )
     worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: removal })
     try {
       return await removal

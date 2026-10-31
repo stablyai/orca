@@ -47,6 +47,7 @@ export type OrcadManagedIdleExitPorts = {
   automationsBusy: () => boolean
   /** Exit would shut down the emulators Orca started for a workspace. */
   emulatorsBusy: () => Promise<boolean>
+  managedServersBusy: () => boolean
   activationFenceExists: (root: string) => Promise<boolean>
 }
 
@@ -84,6 +85,7 @@ export function createOrcadIdleProbes(
     { name: 'chat-providers', read: () => verdict(ports.hasChatProviders()) },
     { name: 'migration', read: () => verdict(ports.hasStagedMigration()) },
     { name: 'automations', read: () => verdict(ports.automationsBusy()) },
+    { name: 'servers', read: () => verdict(ports.managedServersBusy()) },
     { name: 'emulators', read: async () => verdict(await ports.emulatorsBusy()) },
     {
       name: 'activation',

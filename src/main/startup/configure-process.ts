@@ -1,5 +1,7 @@
 import { app } from 'electron'
 import { quitProcess } from './process-quit-request'
+import type { WorkspaceServerProcessManager } from '../servers/workspace-server-process-manager'
+import { registerServeSignalHandlers } from './serve-signal-handlers'
 import { existsSync, mkdirSync } from 'node:fs'
 import { homedir } from 'node:os'
 import { join, resolve } from 'node:path'
@@ -22,6 +24,8 @@ const HTTP1_COMPATIBILITY_ENV_VAR = 'ORCA_DISABLE_HTTP2'
 const TRUE_ENV_VALUES = new Set(['1', 'true', 'yes', 'on'])
 const FALSE_ENV_VALUES = new Set(['0', 'false', 'no', 'off'])
 let devParentShutdownRequested = false
+type DevParentServers = Pick<WorkspaceServerProcessManager, 'close' | 'forceClose'>
+let resolveDevParentServers: () => DevParentServers | undefined = () => undefined
 
 type NetworkCompatibilityOptions = {
   env?: NodeJS.ProcessEnv
@@ -101,12 +105,19 @@ function getProcessPathDelimiter(): string {
 }
 
 function requestDevParentShutdown(): void {
+  if (devParentShutdownRequested) {
+    return
+  }
   devParentShutdownRequested = true
+  const servers = resolveDevParentServers()
+  // A renderer quit veto must not keep detached dev servers alive.
+  void servers?.close().catch((error) => console.error('[servers] Shutdown failed:', error))
   quitProcess()
 
   const forceExitTimer = setTimeout(() => {
-    // Force exit after grace: macOS quit handlers/window guards can stall dev shutdown.
-    app.exit(0)
+    void Promise.resolve(servers?.forceClose())
+      .catch((error) => console.error('[servers] Forced shutdown failed:', error))
+      .finally(() => app.exit(0))
   }, DEV_PARENT_SHUTDOWN_GRACE_MS)
 
   forceExitTimer.unref()
@@ -294,18 +305,22 @@ export function installDevParentWatchdog(isDev: boolean): void {
   timer.unref()
 }
 
-export function installDevParentSignalQuit(isDev: boolean): void {
+export function installDevParentSignalQuit(
+  isDev: boolean,
+  resolveServers: () => DevParentServers | undefined = () => undefined
+): void {
   if (!isDev) {
     return
   }
 
-  const onSignal = (): void => {
-    // Forwarded dev shutdown must also stop the detached daemon rather than preserve warm reattach.
-    requestDevParentShutdown()
+  resolveDevParentServers = resolveServers
+  const register = (): void => {
+    registerServeSignalHandlers(process, requestDevParentShutdown, ['SIGINT', 'SIGTERM'])
   }
-
-  process.once('SIGINT', onSignal)
-  process.once('SIGTERM', onSignal)
+  register()
+  if (!app.isReady()) {
+    app.once('ready', register)
+  }
 }
 
 export function enableMainProcessGpuFeatures(): void {

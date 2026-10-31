@@ -1,16 +1,32 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { registerServeSignalHandlers } from './serve-signal-handlers'
+
+const { closeServers, forceCloseServers, readyListeners } = vi.hoisted(() => ({
+  closeServers: vi.fn(async () => {}),
+  forceCloseServers: vi.fn(async () => {}),
+  readyListeners: new Array<() => void>()
+}))
+vi.mock('./serve-signal-handlers', () => ({ registerServeSignalHandlers: vi.fn() }))
 
 vi.mock('electron', () => ({
   app: {
     quit: vi.fn(),
     exit: vi.fn(),
-    isPackaged: false
+    isPackaged: false,
+    isReady: vi.fn(() => false),
+    once: vi.fn((event: string, listener: () => void) => {
+      if (event === 'ready') {
+        readyListeners.push(listener)
+      }
+    })
   }
 }))
 
 afterEach(() => {
   vi.useRealTimers()
   vi.restoreAllMocks()
+  vi.clearAllMocks()
+  readyListeners.splice(0)
 })
 
 describe('installDevParentDisconnectQuit', () => {
@@ -141,61 +157,73 @@ describe('installDevParentWatchdog', () => {
 })
 
 describe('installDevParentSignalQuit', () => {
-  it('quits the dev app when the supervisor forwards a terminal signal', async () => {
+  it('rearms persistent signal handlers after Electron ready and starts cleanup once', async () => {
     const { app } = await import('electron')
     const {
       installDevParentSignalQuit,
       isDevParentShutdownRequested,
       resetDevParentShutdownRequestForTests
     } = await import('./configure-process')
-
     vi.useFakeTimers()
     resetDevParentShutdownRequestForTests()
-    const originalOnce = process.once.bind(process)
-    const signalHandlers = new Map<string | symbol, () => void>()
-
-    process.once = ((event: string | symbol, listener: (...args: any[]) => void) => {
-      signalHandlers.set(event, listener as () => void)
-      return process
-    }) as NodeJS.Process['once']
-
-    vi.mocked(app.quit).mockClear()
-    vi.mocked(app.exit).mockClear()
-
-    try {
-      installDevParentSignalQuit(true)
-    } finally {
-      process.once = originalOnce
-    }
-
-    expect(signalHandlers.has('SIGINT')).toBe(true)
-    expect(signalHandlers.has('SIGTERM')).toBe(true)
-    expect(isDevParentShutdownRequested()).toBe(false)
-
-    signalHandlers.get('SIGTERM')?.()
-
+    installDevParentSignalQuit(true, () => ({ close: closeServers, forceClose: forceCloseServers }))
+    expect(registerServeSignalHandlers).toHaveBeenCalledTimes(1)
+    expect(registerServeSignalHandlers).toHaveBeenCalledWith(process, expect.any(Function), [
+      'SIGINT',
+      'SIGTERM'
+    ])
+    expect(readyListeners).toHaveLength(1)
+    readyListeners[0]?.()
+    expect(registerServeSignalHandlers).toHaveBeenCalledTimes(2)
+    const shutdown = vi.mocked(registerServeSignalHandlers).mock.calls[0]?.[1]
+    expect(shutdown).toBeTypeOf('function')
+    shutdown?.()
+    shutdown?.()
     expect(isDevParentShutdownRequested()).toBe(true)
-    expect(app.quit).toHaveBeenCalledTimes(1)
+    expect(closeServers).toHaveBeenCalledOnce()
+    expect(app.quit).toHaveBeenCalledOnce()
     expect(app.exit).not.toHaveBeenCalled()
-
     await vi.advanceTimersByTimeAsync(3000)
+    expect(forceCloseServers).toHaveBeenCalledOnce()
+    expect(app.exit).toHaveBeenCalledExactlyOnceWith(0)
+  })
+
+  it('waits for owned process termination before the forced exit even if normal quit stalls', async () => {
+    const { app } = await import('electron')
+    const { installDevParentSignalQuit, resetDevParentShutdownRequestForTests } =
+      await import('./configure-process')
+    vi.useFakeTimers()
+    resetDevParentShutdownRequestForTests()
+    let release = () => {}
+    forceCloseServers.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          release = resolve
+        })
+    )
+    installDevParentSignalQuit(true, () => ({ close: closeServers, forceClose: forceCloseServers }))
+    vi.mocked(registerServeSignalHandlers).mock.calls[0]?.[1]()
+    await vi.advanceTimersByTimeAsync(3000)
+    expect(forceCloseServers).toHaveBeenCalledOnce()
+    expect(app.exit).not.toHaveBeenCalled()
+    release()
+    await vi.advanceTimersByTimeAsync(0)
     expect(app.exit).toHaveBeenCalledWith(0)
+  })
+
+  it('registers immediately without waiting for a ready event that already happened', async () => {
+    const { app } = await import('electron')
+    const { installDevParentSignalQuit } = await import('./configure-process')
+    vi.mocked(app.isReady).mockReturnValueOnce(true)
+    installDevParentSignalQuit(true, () => ({ close: closeServers, forceClose: forceCloseServers }))
+    expect(registerServeSignalHandlers).toHaveBeenCalledOnce()
+    expect(readyListeners).toHaveLength(0)
   })
 
   it('does not register signal handlers outside supervised dev runs', async () => {
     const { installDevParentSignalQuit } = await import('./configure-process')
-    const originalOnce = process.once.bind(process)
-    const onceSpy = vi.fn(originalOnce)
-
-    process.once = onceSpy as NodeJS.Process['once']
-
-    try {
-      installDevParentSignalQuit(false)
-    } finally {
-      process.once = originalOnce
-    }
-
-    expect(onceSpy).not.toHaveBeenCalledWith('SIGINT', expect.any(Function))
-    expect(onceSpy).not.toHaveBeenCalledWith('SIGTERM', expect.any(Function))
+    installDevParentSignalQuit(false)
+    expect(registerServeSignalHandlers).not.toHaveBeenCalled()
+    expect(readyListeners).toHaveLength(0)
   })
 })

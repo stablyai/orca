@@ -1,5 +1,9 @@
-import { defineMethod } from '../core'
+import { bindStructuredAgentSessionStream } from './structured-agent-session-status-stream'
+import { defineMethod, defineStreamingMethod } from '../core'
 import {
+  WorkspaceServerStartParams,
+  WorkspaceServerStopParams,
+  WorkspaceServerScopeParams,
   WorkspacePortKillHostParams,
   WorkspacePortKillParams,
   WorkspacePortProbePageParams,
@@ -9,6 +13,45 @@ import {
 import { probeWorkspacePortPage } from '../../../ports/workspace-port-page-probe'
 
 export const WORKSPACE_PORT_METHODS = [
+  defineMethod({
+    name: 'workspaceServers.start',
+    permission: 'workspace',
+    params: WorkspaceServerStartParams,
+    handler: async (params, { runtime }) => runtime.startManagedWorkspaceServer(params)
+  }),
+  defineMethod({
+    name: 'workspaceServers.stop',
+    permission: 'workspace',
+    params: WorkspaceServerStopParams,
+    handler: async (params, { runtime }) => {
+      const scope = await runtime.resolveWorkspaceServerScope(
+        params.worktree,
+        params.executionHostId
+      )
+      return runtime.workspaceServers.stop(scope.id, params.port, params.runId)
+    }
+  }),
+  defineStreamingMethod({
+    name: 'workspaceServers.subscribe',
+    permission: 'workspace',
+    params: WorkspaceServerScopeParams,
+    handler: async (params, ctx, emit) => {
+      const scope = await ctx.runtime.resolveWorkspaceServerScope(
+        params.worktree,
+        params.executionHostId
+      )
+      let dispose = () => {}
+      const id = `workspace-servers:${ctx.connectionId ?? 'local'}:${ctx.requestId ?? ''}`
+      const stream = bindStructuredAgentSessionStream(ctx, id, () => dispose())
+      if (stream.isClosed()) {
+        return
+      }
+      dispose = ctx.runtime.workspaceServers.subscribe(scope.id, emit)
+      if (stream.isClosed()) {
+        dispose()
+      }
+    }
+  }),
   defineMethod({
     name: 'workspacePorts.scan',
     permission: 'workspace',

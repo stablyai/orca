@@ -1,3 +1,4 @@
+import { stopWorkspaceServersForRemoval } from '../../../servers/workspace-server-removal'
 import { removeWorktree } from '../../../git/worktree-removal'
 import { usesNativeWindowsRemoval } from '../../../git/windows-worktree-removal'
 import type { Repo } from '../../../../shared/repo-types'
@@ -98,6 +99,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
+    await stopWorkspaceServersForRemoval(runtime, args.worktreeId, removalHostId)
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
@@ -128,6 +130,7 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
+    await stopWorkspaceServersForRemoval(runtime, args.worktreeId, removalHostId)
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,

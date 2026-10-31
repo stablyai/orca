@@ -1,3 +1,5 @@
+import type { WorkspaceServerProcessManager } from '../servers/workspace-server-process-manager'
+import { removeFloatingFolderWorkspace } from './workspaces/remove-floating-folder-workspace'
 import type { WorkspaceAttachmentMutation } from '../../shared/workspace-attachment-mutation'
 import { refuseWslHostWindowsDrivePath } from './wsl-host-windows-drive-guard'
 import type { FolderWorkspace } from '../../shared/folder-workspace-types'
@@ -20,15 +22,14 @@ import {
   runtimeVisibleFolderWorkspaces,
   runtimeVisibleProjectGroups
 } from './runtime-visible-catalog'
-import { folderWorkspaceKey } from '../../shared/workspace-scope'
 import {
-  assertWslMoveProjectWritable,
   assertWslMoveRepoWritable,
   isLocalWslMoveRow,
   shouldDropWslMoveProjectUpdate
 } from '../persistence/moving-wsl-projects/wsl-move-scope-guard'
 
-type RuntimeProjectGroupDependencies = {
+export type RuntimeProjectGroupDependencies = {
+  workspaceServers?: WorkspaceServerProcessManager
   getStore: () => RuntimeStore | null
   // `connectionId` narrows twins by their SSH target; undefined keeps the plain selector.
   resolveRepo: (selector: string, connectionId?: string | null) => Promise<Repo>
@@ -255,40 +256,6 @@ export class RuntimeProjectGroupController {
   }
 
   async deleteFolderWorkspace(folderWorkspaceId: string): Promise<{ deleted: boolean }> {
-    const store = this.deps.getStore()
-    if (!store?.removeFolderWorkspace) {
-      throw new Error('runtime_unavailable')
-    }
-    const workspace = store.getFolderWorkspaces?.().find((entry) => entry.id === folderWorkspaceId)
-    if (workspace && isLocalWslMoveRow(workspace)) {
-      assertWslMoveProjectWritable(store, { folderWorkspaceId })
-    }
-    if (workspace) {
-      const worktreeId = folderWorkspaceKey(folderWorkspaceId)
-      // Mixed-host groups have no single PTY target; skip the sweep so forgetting still succeeds.
-      let connectionId: string | null | undefined
-      try {
-        connectionId = this.deps.resolveFolderConnectionId(workspace)
-      } catch (error) {
-        console.warn(`[folder-workspace] skipping PTY teardown for ${worktreeId}:`, error)
-      }
-      if (connectionId !== undefined) {
-        await this.deps.teardownFolderWorkspacePtys(worktreeId, connectionId)
-      }
-      this.deps.cleanupRemovedFolderWorkspaceState(worktreeId)
-    }
-    const deleted = store.removeFolderWorkspace(folderWorkspaceId)
-    if (deleted) {
-      this.deps.notifyReposChanged()
-      // The same removal a worktree announces, so its consumers end work held there too.
-      if (workspace) {
-        this.deps.emitWorktreeLifecycle({
-          kind: 'removed',
-          worktreeId: folderWorkspaceKey(folderWorkspaceId),
-          path: workspace.folderPath
-        })
-      }
-    }
-    return { deleted }
+    return await removeFloatingFolderWorkspace(this.deps, folderWorkspaceId)
   }
 }

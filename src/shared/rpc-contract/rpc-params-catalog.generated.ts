@@ -673,7 +673,10 @@ import {
   WorkspacePortKillParams,
   WorkspacePortProbePageParams,
   WorkspacePortScanHostParams,
-  WorkspacePortScanParams
+  WorkspacePortScanParams,
+  WorkspaceServerScopeParams,
+  WorkspaceServerStartParams,
+  WorkspaceServerStopParams
 } from './workspace-ports-params'
 import { SetCollapsedParams } from './workspace-view-collapse-params'
 import { WorktreeCreate, WorktreePrefetchCreateBase } from './worktree-create-params'
@@ -1498,6 +1501,9 @@ export const RPC_PARAMS_BY_METHOD = {
   'workspacePorts.probePage': WorkspacePortProbePageParams,
   'workspacePorts.scan': WorkspacePortScanParams,
   'workspacePorts.scanHost': WorkspacePortScanHostParams,
+  'workspaceServers.start': WorkspaceServerStartParams,
+  'workspaceServers.stop': WorkspaceServerStopParams,
+  'workspaceServers.subscribe': WorkspaceServerScopeParams,
   'worktree.activate': WorktreeActivate,
   'worktree.adoptProvisionedRoot': WorktreeAdoptProvisionedRoot,
   'worktree.create': WorktreeCreate,

@@ -1,5 +1,5 @@
 import { useMemo } from 'react'
-import { Plug, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
+import { Server, Files, GitBranch, ListChecks, Workflow } from 'lucide-react'
 import { useAppStore } from '@/store'
 import { useRepoById } from '@/store/selectors'
 import { isFolderRepo } from '../../../../shared/repo-kind'
@@ -118,10 +118,9 @@ export function useRightSidebarActivityItems({
       },
       {
         id: 'ports',
-        icon: Plug,
-        title: translate('auto.components.right.sidebar.index.441733b630', 'Ports'),
-        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut,
-        sshOnly: true
+        icon: Server,
+        title: translate('auto.components.right.sidebar.index.servers', 'Servers'),
+        shortcut: portsShortcut === 'Unassigned' ? '' : portsShortcut
       },
       // Append plugin tabs to preserve built-in navigation positions.
       ...getPluginPanelActivityItems(visiblePluginPanels, pluginPanelErrors)

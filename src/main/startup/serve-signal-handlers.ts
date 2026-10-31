@@ -9,9 +9,10 @@ export type ServeSignalSource = {
 
 export function registerServeSignalHandlers(
   signalSource: ServeSignalSource,
-  quitApplication: () => void
+  quitApplication: () => void,
+  signals: readonly ServeSignal[] = ['SIGINT', 'SIGTERM', 'SIGHUP']
 ): void {
-  for (const signal of ['SIGINT', 'SIGTERM', 'SIGHUP'] as const) {
+  for (const signal of signals) {
     // After ready, remove every listener to release Node's handle, then re-add so Node reclaims signals Electron replaced.
     const existing = signalSource.listeners(signal)
     for (const listener of existing) {
@@ -21,6 +22,8 @@ export function registerServeSignalHandlers(
       signalSource.on(signal, listener)
     }
     // Keep handlers installed across duplicate signals so default termination cannot bypass cleanup.
-    signalSource.on(signal, quitApplication)
+    if (!existing.includes(quitApplication)) {
+      signalSource.on(signal, quitApplication)
+    }
   }
 }

@@ -44,9 +44,20 @@ beforeEach(() => {
 
 afterEach(() => vi.unstubAllEnvs())
 
-it.each(['provider', 'client', 'request', 'recent request'])(
+it.each([
+  'provider',
+  'client',
+  'request',
+  'recent request',
+  'server',
+  'server during activation',
+  'client during activation',
+  'provider during activation',
+  'request during activation'
+])(
   'rechecks a returning %s after daemon retirement before requesting an idle shutdown',
   async (returning) => {
+    let serverBusy = false
     const activity = { openConnections: 0, requestsInFlight: 0, lastRequestAt: 0 }
     const retire = Promise.withResolvers<{ retirement: string; reason: null }>()
     vi.mocked(retireOrcadDaemonIfIdle).mockImplementationOnce(async () => ({
@@ -58,11 +69,12 @@ it.each(['provider', 'client', 'request', 'recent request'])(
     bindOrcadIdleShutdown(shutdown)
     await beginOrcadIdleExit('test-profile').start({
       rpc: {
-        readClientActivity: () => activity
+        readClientActivity: () => ({ ...activity })
       },
       agentStates: () => [],
       hasStagedMigration: () => false,
       automationsBusy: () => false,
+      managedServersBusy: () => serverBusy,
       emulatorsBusy: async () => false,
       registerCleanup: () => {}
     })
@@ -70,12 +82,29 @@ it.each(['provider', 'client', 'request', 'recent request'])(
     if (!installed) {
       throw new Error('idle monitor was not installed')
     }
+    const activation = Promise.withResolvers<boolean>()
+    const activationStarted = Promise.withResolvers<void>()
+    if (returning.endsWith('during activation')) {
+      vi.spyOn(installed.ports, 'activationFenceExists').mockImplementationOnce(() => {
+        activationStarted.resolve()
+        return activation.promise
+      })
+    }
     const stopping = installed.stop({ quietSince: 0, stoppedAt: 900_000, timeoutMs: 900_000 })
+    serverBusy = returning === 'server'
     hasLoadedProviders.mockReturnValue(returning === 'provider')
     activity.openConnections = returning === 'client' ? 1 : 0
     activity.requestsInFlight = returning === 'request' ? 1 : 0
     activity.lastRequestAt = returning === 'recent request' ? 1 : 0
     retire.resolve({ retirement: 'retired', reason: null })
+    if (returning.endsWith('during activation')) {
+      await activationStarted.promise
+      serverBusy = returning === 'server during activation'
+      activity.openConnections = returning === 'client during activation' ? 1 : 0
+      activity.requestsInFlight = returning === 'request during activation' ? 1 : 0
+      hasLoadedProviders.mockReturnValue(returning === 'provider during activation')
+      activation.resolve(false)
+    }
 
     expect(await stopping).toBe(false)
     expect(shutdown).not.toHaveBeenCalled()

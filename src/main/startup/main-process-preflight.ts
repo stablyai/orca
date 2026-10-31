@@ -284,7 +284,7 @@ function initializeMainProcessPreflight(options: MainProcessPreflightOptions): b
   const shouldCoupleToDevParent = isDev && !state.isServeMode
   installDevParentDisconnectQuit(shouldCoupleToDevParent)
   installDevParentWatchdog(shouldCoupleToDevParent)
-  installDevParentSignalQuit(shouldCoupleToDevParent)
+  installDevParentSignalQuit(shouldCoupleToDevParent, () => state.runtime?.workspaceServers)
   // #16761: install supervisor disconnect after canonical path setup but before any await, which would allow orphaning before listener installation.
   installServeSupervisorDisconnectQuit(state.isServeMode)
   // Use captured userData for the next-launch press-and-hold record.

@@ -1,3 +1,4 @@
+import { stopWorkspaceServersForRemoval } from '../../servers/workspace-server-removal'
 import type { OrcaRuntimeWithRemoveManagedWorktree } from './workspace-removal'
 import type { RuntimeStore } from '../runtime-store-contract'
 import type { RuntimeWorktreeRemovalTarget } from '../runtime-worktree-selection'
@@ -49,6 +50,7 @@ export async function removeOrphanOrFolderWorktree({
         `Workspace identity for ${removalTarget.id} no longer belongs to ${cleanupHostId}. Refresh projects and try again.`
       )
     }
+    await stopWorkspaceServersForRemoval(runtime, removalTarget.id, orphanHost?.id)
     const ptyProvider = runtime.getLocalProvider()
     const externalOrphanHost = orphanHost?.kind === 'ssh' || orphanHost?.kind === 'runtime'
     if (ptyProvider) {
@@ -109,6 +111,7 @@ export async function removeOrphanOrFolderWorktree({
   // Use the resolved SSH owner, including executionHostId-only rows; runtime-nested targets belong to that environment's namespace.
   const folderHost = parseExecutionHostId(removalHostId)
   const folderConnectionId = folderHost?.kind === 'ssh' ? folderHost.targetId : null
+  await stopWorkspaceServersForRemoval(runtime, removalTarget.id, removalHostId)
   await teardownFolderWorkspacePtys(
     {
       runtime,

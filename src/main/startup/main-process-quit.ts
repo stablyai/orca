@@ -239,6 +239,7 @@ function installWillQuitHandler(): void {
     ]).then(() => {})
     disposeDesktopBrowserBridge()
     const browserClientHostShutdown = shutdownPairedRuntimeBrowserClientHosts()
+    const workspaceServerShutdown = state.runtime?.workspaceServers?.close() ?? Promise.resolve()
     const skillUploadShutdown = state.runtime?.disposeSkillUploadSessions() ?? Promise.resolve()
     // Capture ownership before awaits let other teardown paths clear runtime state.
     const ownedPid = process.pid
@@ -264,6 +265,7 @@ function installWillQuitHandler(): void {
     const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
     // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     settleTeardownWithinDeadline([
+      { name: 'workspace-servers', promise: workspaceServerShutdown },
       { name: 'daemon', promise: daemonTeardown },
       { name: 'browser', promise: browserShutdown },
       { name: 'runtime-rpc', promise: rpcStopAndClear },

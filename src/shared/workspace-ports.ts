@@ -33,6 +33,8 @@ export type WorkspacePort =
       owner: WorkspacePortOwner
       /** Prefer this origin for open/copy when a workspace PTY printed a URL matching the listener’s port. Excludes path, query, fragment and userinfo. */
       advertisedUrl?: string
+      /** PTY that printed the advertised URL, on the runtime that owns this scan. */
+      sourcePtyId?: string
     })
   | (WorkspacePortBase & {
       kind: 'container'

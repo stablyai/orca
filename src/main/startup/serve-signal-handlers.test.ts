@@ -54,3 +54,16 @@ describe('registerServeSignalHandlers', () => {
     expect(quitApplication).toHaveBeenCalledOnce()
   })
 })
+
+it('rearms existing handlers without duplicating the shutdown callback', () => {
+  const source = new EventEmitter()
+  const quit = vi.fn()
+  registerServeSignalHandlers(signalSourceFor(source), quit, ['SIGINT', 'SIGTERM'])
+  registerServeSignalHandlers(signalSourceFor(source), quit, ['SIGINT', 'SIGTERM'])
+  source.emit('SIGTERM')
+  source.emit('SIGTERM')
+  expect(quit).toHaveBeenCalledTimes(2)
+  expect(source.listenerCount('SIGTERM')).toBe(1)
+  expect(source.listenerCount('SIGINT')).toBe(1)
+  expect(source.listenerCount('SIGHUP')).toBe(0)
+})

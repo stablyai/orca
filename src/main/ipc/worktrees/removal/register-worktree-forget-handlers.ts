@@ -1,3 +1,7 @@
+import {
+  withWorkspaceServerRemoval,
+  stopWorkspaceServersForRemoval
+} from '../../../servers/workspace-server-removal'
 import { ipcMain } from 'electron'
 import type {
   RemoveWorktreeResult,
@@ -80,69 +84,77 @@ export function registerWorktreeForgetHandlers(context: WorktreeIpcContext): voi
         throw new Error(`Worktree deletion already in progress: ${args.worktreeId}`)
       }
 
-      const forget = (async (): Promise<RemoveWorktreeResult> => {
-        const isFolderRootOf = (candidate: Repo): boolean =>
-          isFolderRepo(candidate) && args.worktreeId === getFolderWorkspaceRootId(candidate)
-        const fallbackRepos = args.hostId
-          ? store
-              .getRepos()
-              .filter((candidate) => getRepoExecutionHostId(candidate) === args.hostId)
-          : store.getRepos()
-        if (repo ? isFolderRootOf(repo) : fallbackRepos.some(isFolderRootOf)) {
-          throw new Error(
-            'Cannot delete the project root workspace. Remove the folder project instead.'
-          )
-        }
+      const forget = withWorkspaceServerRemoval(
+        runtime,
+        args.worktreeId,
+        resolveWorktreeRemovalOwnerHostId(store, args.worktreeId, repo, args.hostId),
+        async (): Promise<RemoveWorktreeResult> => {
+          const isFolderRootOf = (candidate: Repo): boolean =>
+            isFolderRepo(candidate) && args.worktreeId === getFolderWorkspaceRootId(candidate)
+          const fallbackRepos = args.hostId
+            ? store
+                .getRepos()
+                .filter((candidate) => getRepoExecutionHostId(candidate) === args.hostId)
+            : store.getRepos()
+          if (repo ? isFolderRootOf(repo) : fallbackRepos.some(isFolderRootOf)) {
+            throw new Error(
+              'Cannot delete the project root workspace. Remove the folder project instead.'
+            )
+          }
 
-        const ownerHostId = resolveWorktreeRemovalOwnerHostId(
-          store,
-          args.worktreeId,
-          repo,
-          args.hostId
-        )
-        const ownerHost = parseExecutionHostId(ownerHostId)
-        const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
-        // Off-host teardown must never include same-ID local inventory.
-        await killAllProcessesForWorktree(args.worktreeId, {
-          runtime,
-          resolvedWorktreeId: args.worktreeId,
-          ...(ownerHost?.kind === 'ssh' ? { resolvedConnectionId: ownerHost.targetId } : {}),
-          ...(ownerHost?.kind === 'runtime'
-            ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
-            : {}),
-          localProvider: getLocalPtyProvider(),
-          onPtyStopped: clearProviderPtyState,
-          // Metadata removal must retire structured chats even when no provider child is attached.
-          closeStructuredSessions: teardownStops('worktree-removal', 'structured-chat'),
-          ...(externalHost ? { includeProviderInventory: false, includeLocalRegistry: false } : {})
-        }).catch((err) => {
-          console.warn(`[worktree-teardown] forget-local failed for ${args.worktreeId}:`, err)
-        })
-
-        runtime.clearOptimisticReconcileToken(args.worktreeId)
-        // Resolve omitted hosts too, or orphan cleanup purges the local partition and leaves remote state.
-        removeWorktreeMetadataAndTransientState(
-          { store, runtime },
-          args.worktreeId,
-          ownerHost?.id,
-          args.snapshotPruneBatchId
-        )
-        // Cached authorization outlives metadata; invalidate it before the forgotten path can remain accessible.
-        invalidateAuthorizedRootsCache()
-        if (ownerHost?.id) {
-          preservedBranchCleanupByScope.delete(
-            preservedBranchCleanupScopeKey({ worktreeId: args.worktreeId, hostId: ownerHost.id })
+          const ownerHostId = resolveWorktreeRemovalOwnerHostId(
+            store,
+            args.worktreeId,
+            repo,
+            args.hostId
           )
-        } else {
-          for (const [key, target] of preservedBranchCleanupByScope) {
-            if (target.worktreeId === args.worktreeId) {
-              preservedBranchCleanupByScope.delete(key)
+          const ownerHost = parseExecutionHostId(ownerHostId)
+          const externalHost = ownerHost?.kind === 'ssh' || ownerHost?.kind === 'runtime'
+          await stopWorkspaceServersForRemoval(runtime, args.worktreeId, ownerHostId)
+          // Off-host teardown must never include same-ID local inventory.
+          await killAllProcessesForWorktree(args.worktreeId, {
+            runtime,
+            resolvedWorktreeId: args.worktreeId,
+            ...(ownerHost?.kind === 'ssh' ? { resolvedConnectionId: ownerHost.targetId } : {}),
+            ...(ownerHost?.kind === 'runtime'
+              ? { resolvedRuntimeEnvironmentId: ownerHost.environmentId }
+              : {}),
+            localProvider: getLocalPtyProvider(),
+            onPtyStopped: clearProviderPtyState,
+            // Metadata removal must retire structured chats even when no provider child is attached.
+            closeStructuredSessions: teardownStops('worktree-removal', 'structured-chat'),
+            ...(externalHost
+              ? { includeProviderInventory: false, includeLocalRegistry: false }
+              : {})
+          }).catch((err) => {
+            console.warn(`[worktree-teardown] forget-local failed for ${args.worktreeId}:`, err)
+          })
+
+          runtime.clearOptimisticReconcileToken(args.worktreeId)
+          // Resolve omitted hosts too, or orphan cleanup purges the local partition and leaves remote state.
+          removeWorktreeMetadataAndTransientState(
+            { store, runtime },
+            args.worktreeId,
+            ownerHost?.id,
+            args.snapshotPruneBatchId
+          )
+          // Cached authorization outlives metadata; invalidate it before the forgotten path can remain accessible.
+          invalidateAuthorizedRootsCache()
+          if (ownerHost?.id) {
+            preservedBranchCleanupByScope.delete(
+              preservedBranchCleanupScopeKey({ worktreeId: args.worktreeId, hostId: ownerHost.id })
+            )
+          } else {
+            for (const [key, target] of preservedBranchCleanupByScope) {
+              if (target.worktreeId === args.worktreeId) {
+                preservedBranchCleanupByScope.delete(key)
+              }
             }
           }
+          notifyWorktreesChanged(mainWindow, repoId)
+          return {}
         }
-        notifyWorktreesChanged(mainWindow, repoId)
-        return {}
-      })()
+      )
       worktreeRemovalsInFlight.set(inFlightKey, { optionsKey, promise: forget })
       try {
         return await forget

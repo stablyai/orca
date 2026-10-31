@@ -1,3 +1,7 @@
+import {
+  launchManagedWorkspaceServer,
+  type ManagedWorkspaceServerStart
+} from '../../servers/workspace-server-launch'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import type { OrcaRuntimeWithResolveBrowserNetworkExecutionHostForWorktree } from '../terminal/launch/terminal-workspace-scope'
@@ -207,6 +211,29 @@ export abstract class OrcaRuntimeWithListManagedWorktrees extends OrcaRuntimeWit
     worktreeSelector: string
   ): Promise<TerminalWorkspaceLaunchScope> {
     return await this.resolveTerminalWorkspaceLaunchScope(worktreeSelector)
+  }
+
+  async resolveWorkspaceServerScope(worktree: string, expectedHost: string) {
+    const target = await this.resolveRuntimeFileTarget(worktree)
+    if (target.executionHostId !== expectedHost || target.executionHostId !== 'local') {
+      throw new Error(
+        'Managed servers require the workspace host runtime. Direct SSH requires a paired Orca host.'
+      )
+    }
+    const scope = await this.showTerminalWorkspaceLaunchScope(worktree)
+    if (scope.connectionId) {
+      throw new Error('Use the paired runtime to manage this server.')
+    }
+    return scope
+  }
+
+  async startManagedWorkspaceServer(args: ManagedWorkspaceServerStart) {
+    return launchManagedWorkspaceServer(args, {
+      servers: this.workspaceServers,
+      resolveScope: () => this.resolveWorkspaceServerScope(args.worktree, args.executionHostId),
+      scanPorts: () => this.scanWorkspacePorts(),
+      getSettings: () => this.store?.getSettings()
+    })
   }
 
   async scanWorkspacePorts(repoId?: string): Promise<WorkspacePortScanResult> {

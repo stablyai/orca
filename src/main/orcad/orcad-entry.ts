@@ -280,6 +280,7 @@ async function startOrcadRuntime(
   void runtime.sidebarFacts?.reconcileSortStampTiers(getLocalPtyProvider())
 
   // Run after RPC stops; later dismissal records save synchronously until exit.
+  registerCleanup(() => runtime.workspaceServers?.close())
   registerCleanup(() => runtime.closeNotificationDismissals())
   // Stop recovery retries before final profile flush.
   registerCleanup(() => runtime.stopLegacyWorkerTerminalRecovery())
@@ -340,8 +341,8 @@ async function startOrcadRuntime(
     agentStates: () => agentHookServer.getStatusSnapshot(),
     hasStagedMigration: () => profileStore.hasStagedOrcadMigrationCatalog(),
     automationsBusy: () => orcadAutomationsKeepHostBusy(profileStore),
-    emulatorsBusy: async () =>
-      (await runtime.getEmulatorBridge()?.hasLiveManagedSessions()) ?? false,
+    managedServersBusy: () => runtime.workspaceServers.hasActiveServers(),
+    emulatorsBusy: async () => runtime.getEmulatorBridge()?.hasLiveManagedSessions() ?? false,
     registerCleanup
   })
   return { readiness }

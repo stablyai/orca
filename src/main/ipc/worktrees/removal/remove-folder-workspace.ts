@@ -1,3 +1,4 @@
+import { stopWorkspaceServersForRemoval } from '../../../servers/workspace-server-removal'
 import type { Repo } from '../../../../shared/repo-types'
 import { parseExecutionHostId, type ExecutionHostId } from '../../../../shared/execution-host'
 import type { RemoveWorktreeResult } from '../../../../shared/worktree/create-types'
@@ -26,6 +27,7 @@ export async function removeFolderWorkspace(
     throw new Error('Cannot delete the project root workspace. Remove the folder project instead.')
   }
   const ownerHost = parseExecutionHostId(removalHostId)
+  await stopWorkspaceServersForRemoval(runtime, args.worktreeId, removalHostId)
   // Shared-root folder removal has no Git step to close shells; stop them before dropping metadata.
   await withWorktreeRemoveStageSpan('pty_sweep', 'folder', async () => {
     // Fence by resolved repo ownership; same-ID metadata can describe another host's workspace.

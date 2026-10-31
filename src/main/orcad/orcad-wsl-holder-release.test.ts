@@ -67,6 +67,7 @@ async function idleStop(
     agentStates: () => [],
     hasStagedMigration: () => false,
     automationsBusy: () => false,
+    managedServersBusy: () => false,
     emulatorsBusy: async () => false,
     registerCleanup: () => {}
   })

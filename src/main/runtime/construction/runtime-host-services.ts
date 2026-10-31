@@ -1,3 +1,4 @@
+import { WorkspaceServerProcessManager } from '../../servers/workspace-server-process-manager'
 import type * as Calls from './runtime-host-service-calls'
 import type { RuntimeConstructionBindings as HostBindings } from './runtime-construction-dependencies'
 
@@ -42,7 +43,7 @@ import { RuntimeRepositoryForkBackfill } from '../runtime-repository-fork-backfi
 import { RuntimeWorkspaceSessionController } from '../runtime-workspace-session-controller'
 import { RuntimeAiVaultCommands } from '../runtime-ai-vault-commands'
 import { ClaudeAgentTeamsService } from '../claude-agent-teams-service'
-import { teardownFolderWorkspacePtys } from '../folder-workspace-pty-teardown'
+import { createFolderWorkspacePtyTeardown } from '../folder-workspace-pty-teardown'
 import { countRepoTerminalsNotKnownExited } from '../project-removal-impact'
 
 export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeWithTerminalDrivers {
@@ -291,20 +292,19 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
       )
   })
 
+  readonly workspaceServers = new WorkspaceServerProcessManager()
+
   protected readonly projectGroups = new RuntimeProjectGroupController({
+    workspaceServers: this.workspaceServers,
     getStore: () => this.store,
     resolveRepo: (...args) => this.managedWorktreeQueries.resolveRepoForConnection(...args),
     notifyReposChanged: () => this.notifyReposChanged(),
     resolveFolderConnectionId: (workspace) => this.resolveFolderWorkspaceConnectionId(workspace),
-    teardownFolderWorkspacePtys: (...target) =>
-      teardownFolderWorkspacePtys(
-        {
-          runtime: this,
-          getLocalProvider: () => this.getLocalProvider(),
-          onPtyStopped: this.onPtyStopped
-        },
-        ...target
-      ),
+    teardownFolderWorkspacePtys: createFolderWorkspacePtyTeardown(() => ({
+      runtime: this,
+      getLocalProvider: () => this.getLocalProvider(),
+      onPtyStopped: this.onPtyStopped
+    })),
     cleanupRemovedFolderWorkspaceState: (worktreeId) => {
       if (this.store) {
         this.removeWorktreeMetadataAndHistory(this.store, worktreeId)
@@ -334,6 +334,7 @@ export abstract class OrcaRuntimeWithPreservedBranchCleanup extends OrcaRuntimeW
 
   protected readonly repositorySettings = new RuntimeRepositorySettingsController({
     ...this.repositoryCatalogDeps,
+    workspaceServers: this.workspaceServers,
     resolveRepo: (selector) => this.resolveRepoSelector(selector),
     forgetTerminalTopology: (repoId) => this.terminalTopologyRevisionByRepoId.delete(repoId),
     stopProjectTerminals: (repo, options) => this.stopTerminalsForProject(repo, options),

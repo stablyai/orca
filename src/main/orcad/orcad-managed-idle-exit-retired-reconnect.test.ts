@@ -73,6 +73,7 @@ async function stopWithReturningClient(
     agentStates: () => [],
     hasStagedMigration: () => false,
     automationsBusy: () => automationsBusy,
+    managedServersBusy: () => false,
     emulatorsBusy: async () => false,
     registerCleanup: () => {}
   })

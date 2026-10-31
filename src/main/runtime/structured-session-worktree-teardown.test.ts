@@ -3,6 +3,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { IPtyProvider } from '../providers/pty-provider-contract'
 import { ABANDONED_SWEEP_GRACE_MS } from './forced-sweep-settlement'
+import { WorkspaceServerProcessManager } from '../servers/workspace-server-process-manager'
 
 const hostRef: { current: unknown } = { current: null }
 
@@ -313,6 +314,38 @@ describe('worktree teardown and structured agent sessions', () => {
     )
     expect(host.closed).toEqual(['s1', 's2'])
     expect(result.structuredStopped).toBe(2)
+  })
+
+  it('closes owned structured children after a hung managed-server stop under Force Delete', async () => {
+    vi.useFakeTimers({ toFake: ['Date', 'setTimeout', 'clearTimeout'] })
+    const manager = new WorkspaceServerProcessManager()
+    vi.spyOn(manager, 'stopWorktree').mockReturnValue(new Promise(() => {}))
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    try {
+      const host = installHost({
+        records: [record('s1', WORKTREE), record('s2', OTHER_WORKTREE)],
+        visible: ['s1', 's2']
+      })
+      const outcome = killAllProcessesForWorktree(WORKTREE, {
+        ...destructiveDeps({ allowUnverifiedStop: true, timeoutMs: 100 }),
+        runtime: runtimeDouble({
+          workspaceServers: manager,
+          stopTerminalsForWorktree: async () => ({ stopped: 0 }),
+          getPtyLivenessVerdict: () => ({ status: 'exited' })
+        })
+      })
+      const checked = expect(outcome).resolves.toMatchObject({ structuredStopped: 1 })
+      void checked.catch(() => undefined)
+      await vi.advanceTimersByTimeAsync(100 + ABANDONED_SWEEP_GRACE_MS)
+      await checked
+      expect(host.closed).toEqual(['s1'])
+      expect([...host.visible]).toEqual(['s2'])
+      expect(listStructuredSessionsForWorktree(WORKTREE, {}).live).toEqual([])
+      expect(listStructuredSessionsForWorktree(OTHER_WORKTREE, {}).live).toHaveLength(1)
+    } finally {
+      warn.mockRestore()
+      vi.useRealTimers()
+    }
   })
 
   it('still removes under force when a close does not settle, and says so', async () => {

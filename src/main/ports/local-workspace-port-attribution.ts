@@ -1,3 +1,4 @@
+import { WORKSPACE_SERVER_OUTPUT_SOURCE_PREFIX } from '../../shared/workspace-server-process'
 import path from 'node:path'
 import { realpath } from 'node:fs/promises'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
@@ -183,7 +184,14 @@ export function enrichPort(
       protocol: advertised?.protocol ?? base.protocol,
       kind: 'workspace',
       owner,
-      ...(advertised ? { advertisedUrl: advertised.origin } : {})
+      ...(advertised
+        ? {
+            advertisedUrl: advertised.origin,
+            ...(!advertised.ptyId.startsWith(WORKSPACE_SERVER_OUTPUT_SOURCE_PREFIX)
+              ? { sourcePtyId: advertised.ptyId }
+              : {})
+          }
+        : {})
     }
   }
   if (isContainerProcess(port)) {

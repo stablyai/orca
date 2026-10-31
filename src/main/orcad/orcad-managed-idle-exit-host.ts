@@ -38,6 +38,7 @@ type OrcadIdleExitRuntimePorts = {
   hasStagedMigration: () => boolean
   automationsBusy: () => boolean
   emulatorsBusy: () => Promise<boolean>
+  managedServersBusy: () => boolean
   /** Stop the monitor before recording signal-driven shutdown. */
   registerCleanup: (cleanup: () => void) => void
 }
@@ -88,6 +89,7 @@ async function startOrcadManagedIdleExit(
     hasStagedMigration: input.hasStagedMigration,
     automationsBusy: input.automationsBusy,
     emulatorsBusy: input.emulatorsBusy,
+    managedServersBusy: input.managedServersBusy,
     activationFenceExists
   }
   // Client/terminal evidence is already checked; recheck other work exit would destroy.
@@ -114,12 +116,15 @@ async function startOrcadManagedIdleExit(
       const retiringPid = getCurrentDaemonPid()
       const outcome = await stopForIdle(input, evidence, retireOrcadDaemonIfIdle)
       // Clients/providers can return while the retirement reply is pending.
+      const nonTerminalWork = await hasNonTerminalWork()
       const activity = input.rpc.readClientActivity()
       if (
         hasChatProviders() ||
         activity.openConnections > 0 ||
         activity.requestsInFlight > 0 ||
-        activity.lastRequestAt > evidence.quietSince
+        activity.lastRequestAt > evidence.quietSince ||
+        nonTerminalWork ||
+        input.managedServersBusy()
       ) {
         discardOrcadIdleStopRecord(input.userDataPath)
         const daemon = await recoverDaemonAfterCancelledIdleStop(outcome, {
@@ -133,7 +138,7 @@ async function startOrcadManagedIdleExit(
             await restartDaemon({ expectedDaemonPid: retiringPid, endpointMayBeGone: true })
           }
         })
-        if (daemon === 'serving' || (await hasNonTerminalWork())) {
+        if (daemon === 'serving' || (await hasNonTerminalWork()) || input.managedServersBusy()) {
           return false
         }
         idleRecord.requestShutdown(requestIdleShutdown)
