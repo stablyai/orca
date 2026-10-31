@@ -1,3 +1,7 @@
+import type * as WorkspaceAndProjectStateModule from '../../../tasks/use-mobile-tasks-workspace-and-project-state'
+import type * as HostedMetadataModule from '../../../tasks/use-mobile-tasks-hosted-metadata-actions'
+import { useLayoutEffect, useRef } from 'react'
+import { useCommittedOwnerProjection, useTaskActionMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -56,6 +60,8 @@ const GITHUB_PR_ITEM = {
   title: 'A pull request',
   source: {
     id: 'github:pr:12',
+    url: 'https://github.com/owner/repo/pull/12',
+    prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' },
     repoId: REPO_ID,
     number: 12,
     type: 'pr',
@@ -152,12 +158,14 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    useTaskActionMountOwners(modules, context, model, spec.fixture)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -191,9 +199,11 @@ export function taskItemHostedMetadataMountAdapters(
   const load = <T>(file: string): T => modules.load<T>(`mobile/src/tasks/${file}`)
   function hostedMetadata(item: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
-      mountModelHook(context, {
-        useHook: (model) =>
-          load<typeof import('../../../tasks/use-mobile-tasks-hosted-metadata-actions')>(
+      mountModelHook(modules, context, {
+        useHook: (
+          model: Parameters<typeof HostedMetadataModule.useMobileTasksHostedMetadataActions>[0]
+        ) =>
+          load<typeof HostedMetadataModule>(
             'use-mobile-tasks-hosted-metadata-actions.tsx'
           ).useMobileTasksHostedMetadataActions(model),
         fixture: {
@@ -229,8 +239,23 @@ export function taskItemHostedMetadataMountAdapters(
     const useActions = load<typeof import('../../../tasks/use-mobile-tasks-linear-item-actions')>(
       'use-mobile-tasks-linear-item-actions.tsx'
     ).useMobileTasksLinearItemActions
-    return mountModelHook(context, {
-      useHook: (model) => useActions(model),
+    const useWorkspace = load<typeof WorkspaceAndProjectStateModule>(
+      'use-mobile-tasks-workspace-and-project-state.tsx'
+    ).useMobileTasksWorkspaceAndProjectState
+    return mountModelHook(modules, context, {
+      useHook: (model: Parameters<typeof useActions>[0]) => {
+        const initialDraft = useRef(model.linearCommentDraft)
+        const { linearCommentDraft, setLinearCommentDraft } = useWorkspace(
+          mountFixture<Parameters<typeof useWorkspace>[0]>({
+            setActionItem: model.setActionItem
+          })
+        )
+        useLayoutEffect(() => {
+          setLinearCommentDraft(initialDraft.current)
+        }, [setLinearCommentDraft])
+        useCommittedOwnerProjection(context, { linearCommentDraft })
+        return useActions(Object.assign(model, { linearCommentDraft, setLinearCommentDraft }))
+      },
       fixture: {
         linearCommentDraft: 'a linear comment',
         linearSubIssueTitle: 'A sub-issue',
@@ -240,6 +265,12 @@ export function taskItemHostedMetadataMountAdapters(
         error: ''
       },
       actions: ({ actions }) => ({
+        'edit-comment': ({ body }) => {
+          if (typeof body !== 'string') {
+            throw new Error('A Linear comment edit requires text')
+          }
+          actions().setLinearCommentDraft(body)
+        },
         comment: () => actions().addLinearComment(mountFixture(LINEAR_ITEM)),
         'sub-issue-open': () =>
           actions().openLinearSubIssue(

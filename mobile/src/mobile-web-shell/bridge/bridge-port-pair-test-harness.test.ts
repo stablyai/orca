@@ -21,6 +21,65 @@ function plainShellClient(record: string[]): RpcClient {
 }
 
 describe('the bridge port pair', () => {
+  it.each(['microtask', 'drainNow'] as const)(
+    'delivers each exact queued witness independently of the scheduling scope (%s)',
+    async (delivery) => {
+      let ambient: string | null = null
+      const seen: (string | null)[] = []
+      const rpc = plainShellClient([])
+      rpc.sendRequest = (method) => {
+        seen.push(ambient)
+        return Promise.resolve({ id: method, ok: true, result: method })
+      }
+      const pair = createBridgePortPair({
+        rpc,
+        observation: {
+          capturePost: (json, direction) => {
+            const message: { type?: string; id?: string } = JSON.parse(json)
+            const owner = direction === 'shell' && message.type === 'request' ? message.id! : null
+            return {
+              enqueued: () => {},
+              runDelivery: (receive) => {
+                const old = ambient
+                ambient = owner
+                try {
+                  receive()
+                } finally {
+                  ambient = old
+                }
+              }
+            }
+          },
+          receivePage: () => {}
+        }
+      })
+      try {
+        for (let turn = 0; turn < 4; turn += 1) {
+          pair.drainNow()
+        }
+        ambient = 'unrelated scheduling scope'
+        pair.client.notifyForeground()
+        const first = pair.client.sendRequest('first')
+        const second = pair.client.sendRequest('second')
+        if (delivery === 'drainNow') {
+          pair.drainNow()
+        }
+        await pair.flush()
+        const ids = pair
+          .readToShell()
+          .flatMap((message) => (message.type === 'request' ? [message.id] : []))
+        expect(seen).toEqual(ids)
+        expect(ambient).toBe('unrelated scheduling scope')
+        await expect(first).resolves.toMatchObject({ result: 'first' })
+        await expect(second).resolves.toMatchObject({ result: 'second' })
+      } finally {
+        pair.client.close()
+        pair.host.dispose()
+        await pair.flush()
+      }
+    }
+  )
+
   it('delivers init synchronously so a caller can mount in the same turn', () => {
     const pair = createFakeBridgePortPair()
     try {

@@ -1,3 +1,8 @@
+import {
+  matchesGitHubWorkItemTarget,
+  resolveGitHubWorkItemTarget,
+  githubWorkItemTargetKey
+} from '../../../src/shared/github/work-item-target'
 import type { PRCheckDetail } from '../../../src/shared/github/check-types'
 import type { PRInfo } from '../../../src/shared/github/pull-request-types'
 import type { GitPushTarget } from '../../../src/shared/worktree/types'
@@ -73,7 +78,7 @@ export type PrSidebarLoadDeps = {
   ) => Promise<GitHubPrReadOutcome<PRInfo | null>>
   fetchWorkItemDetails: (
     worktreeId: string,
-    args: { prNumber: number }
+    args: { prNumber: number; prRepo?: GitHubPrRepoSlug | null }
   ) => Promise<GitHubPrReadOutcome<GitHubWorkItemDetails | null>>
   fetchPRChecks: (
     worktreeId: string,
@@ -210,11 +215,20 @@ export async function loadPrSidebarData(
 export async function loadPrSidebarDetails(
   deps: PrSidebarLoadDeps,
   worktreeId: string,
-  prNumber: number
+  pr: PRInfo
 ): Promise<GitHubWorkItemDetails | null> {
   try {
-    const outcome = await deps.fetchWorkItemDetails(worktreeId, { prNumber })
-    return outcome.ok ? outcome.result : null
+    const target = resolveGitHubWorkItemTarget({ ...pr, type: 'pr' })
+    if (!target) {
+      return null
+    }
+    const outcome = await deps.fetchWorkItemDetails(worktreeId, {
+      prNumber: pr.number,
+      prRepo: target.repository
+    })
+    return outcome.ok && matchesGitHubWorkItemTarget(outcome.result?.item, target)
+      ? outcome.result
+      : null
   } catch {
     // Details failure leaves the PR usable without comments.
     return null
@@ -227,10 +241,16 @@ export function resolvePrSidebarDetailsAfterPhase2(args: {
   prior: GitHubWorkItemDetails | null
   pr: PRInfo
 }): GitHubWorkItemDetails {
-  if (args.fetched != null) {
+  const target = resolveGitHubWorkItemTarget({ ...args.pr, type: 'pr' })
+  if (target && args.fetched != null && matchesGitHubWorkItemTarget(args.fetched.item, target)) {
     return args.fetched
   }
-  if (args.prior != null) {
+  if (
+    target &&
+    args.prior != null &&
+    !isPrSidebarDetailsPlaceholder(args.prior) &&
+    matchesGitHubWorkItemTarget(args.prior.item, target)
+  ) {
     return args.prior
   }
   return emptyPrSidebarDetails(args.pr)
@@ -272,4 +292,9 @@ export function shouldSoftRefreshPrSidebarOnHeadChange(kind: PrSidebarState['kin
 
 export function shouldApplyResult(resultSeq: number, latestSeq: number): boolean {
   return resultSeq === latestSeq
+}
+
+export function prSidebarResourceKey(pr: PRInfo): string {
+  const target = resolveGitHubWorkItemTarget({ ...pr, type: 'pr' })
+  return target ? githubWorkItemTargetKey(target) : pr.url
 }

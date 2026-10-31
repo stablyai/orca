@@ -1,3 +1,4 @@
+import { useMobileTasksSelection } from './github-task-identity'
 import {
   type GitHubIssueSourceError,
   type GitHubIssueSourceFallback,
@@ -22,7 +23,6 @@ import { newTabRepoListRead } from '../session/mobile-session-read-operations'
 import { useHostProtocolGates } from '../components/host-protocol-gates-context'
 import { useTaskHostRepos } from './use-task-host-repos'
 import {
-  type ActionableTaskItem,
   DEFAULT_LINEAR_DISPLAY_PROPERTIES,
   type GitHubPreset,
   type GitHubProjectRow,
@@ -176,7 +176,11 @@ export function useMobileTasksRouteAndItemState() {
     client: null
   })
   const [error, setError] = useState('')
-  const [actionItem, setActionItem] = useState<ActionableTaskItem | null>(null)
+  const itemState = useMobileTasksItemState()
+  const { actionItem, setActionItem, claimPublication } = useMobileTasksSelection(
+    client,
+    itemState.detailPayload
+  )
   const [mergeMethodTaskItem, setMergeMethodTaskItem] = useState<
     Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }> | null
   >(null)
@@ -186,8 +190,8 @@ export function useMobileTasksRouteAndItemState() {
     useState<PendingProjectGitHubMerge | null>(null)
   const [pendingHostedStateChange, setPendingHostedStateChange] =
     useState<PendingHostedStateChange | null>(null)
-  const itemState = useMobileTasksItemState()
   return {
+    claimPublication,
     hostId,
     taskSource,
     router,

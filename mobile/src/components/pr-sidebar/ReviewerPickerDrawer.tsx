@@ -1,10 +1,14 @@
+import { githubRepoIdentityKey } from '../../../../src/shared/github/repository-identity-key'
 import { useEffect, useMemo, useState } from 'react'
 import { ActivityIndicator, Pressable, Text, View } from 'react-native'
 import { Check, Search } from 'lucide-react-native'
 import { colors } from '../../theme/mobile-theme'
 import { useMobileColorScheme } from '../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../i18n/use-mobile-translation'
-import type { GitHubAssignableUser } from '../../../../src/shared/github/pull-request-types'
+import type {
+  GitHubAssignableUser,
+  GitHubOwnerRepo
+} from '../../../../src/shared/github/pull-request-types'
 import type { RpcClient } from '../../transport/rpc-client'
 import { fetchAssignableUsers } from '../../session/github-pr-rpc'
 import { BottomDrawer } from '../BottomDrawer'
@@ -15,6 +19,7 @@ type Props = {
   visible: boolean
   onClose: () => void
   client: RpcClient | null
+  prRepo: GitHubOwnerRepo | null
   worktreeId: string
   // Logins already requested/reviewing (+ author) — surfaced at the top of the list.
   seededLogins: string[]
@@ -35,6 +40,7 @@ export function ReviewerPickerDrawer({
   onClose,
   client,
   worktreeId,
+  prRepo,
   seededLogins,
   isRequested,
   onToggle
@@ -44,13 +50,21 @@ export function ReviewerPickerDrawer({
   const [load, setLoad] = useState<LoadState>({ status: 'idle' })
   const [query, setQuery] = useState('')
 
+  const targetKey = prRepo ? githubRepoIdentityKey(prRepo) : null
   useEffect(() => {
     if (!visible || !client) {
       return
     }
     let cancelled = false
+    const generation = client.getGeneration?.()
+    const stop = client.onStateChange((state) => {
+      if (state !== 'connected' || client.getGeneration?.() !== generation) {
+        cancelled = true
+        setLoad({ status: 'idle' })
+      }
+    })
     setLoad({ status: 'loading' })
-    void fetchAssignableUsers(client, worktreeId)
+    void fetchAssignableUsers(client, worktreeId, prRepo)
       .then((outcome) => {
         if (cancelled) {
           return
@@ -68,8 +82,9 @@ export function ReviewerPickerDrawer({
       })
     return () => {
       cancelled = true
+      stop()
     }
-  }, [visible, client, worktreeId])
+  }, [visible, client, worktreeId, targetKey])
 
   const ordered = useMemo(() => {
     if (load.status !== 'loaded') {

@@ -30,14 +30,29 @@ const PR: PRInfo = {
   number: 7,
   title: 'Feat',
   state: 'open',
-  url: 'u',
+  url: 'https://github.corp/fork/widgets/pull/7',
   checksStatus: 'success',
   updatedAt: 'now',
   mergeable: 'MERGEABLE',
   reviewDecision: null,
   headSha: 'sha-pr'
-} as unknown as PRInfo
-const DETAILS = { item: { number: 7 }, checks: [] } as unknown as GitHubWorkItemDetails
+}
+const DETAILS: GitHubWorkItemDetails = {
+  item: {
+    id: 'PR_7',
+    number: 7,
+    type: 'pr',
+    url: PR.url,
+    title: 'PR',
+    state: 'open',
+    labels: [],
+    updatedAt: '',
+    author: null
+  },
+  body: 'body',
+  comments: [],
+  checks: []
+}
 const CHECKS: PRCheckDetail[] = [
   { name: 'ci', status: 'completed', conclusion: 'success', url: null }
 ]
@@ -327,14 +342,14 @@ describe('loadPrSidebarDetails (phase 2)', () => {
   }
 
   it('returns the fetched details', async () => {
-    expect(await loadPrSidebarDetails(deps(), 'w', 7)).toBe(DETAILS)
+    expect(await loadPrSidebarDetails(deps(), 'w', PR)).toBe(DETAILS)
   })
 
   it('is non-fatal — a details failure yields null rather than erroring the sidebar', async () => {
     const d = deps({
       fetchWorkItemDetails: vi.fn(async () => fail<GitHubWorkItemDetails | null>('network down'))
     })
-    expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
+    expect(await loadPrSidebarDetails(d, 'w', PR)).toBeNull()
   })
 
   it('is non-fatal when fetchWorkItemDetails rejects (no escaping rejection)', async () => {
@@ -343,7 +358,7 @@ describe('loadPrSidebarDetails (phase 2)', () => {
         throw new Error('transport closed')
       })
     })
-    expect(await loadPrSidebarDetails(d, 'w', 7)).toBeNull()
+    expect(await loadPrSidebarDetails(d, 'w', PR)).toBeNull()
   })
 })
 
@@ -375,7 +390,7 @@ describe('resolvePrSidebarDetailsAfterPhase2', () => {
   })
 
   it('keeps prior details when the fetch is non-fatal null', () => {
-    const prior = emptyPrSidebarDetails(PR)
+    const prior = DETAILS
     expect(resolvePrSidebarDetailsAfterPhase2({ fetched: null, prior, pr: PR })).toBe(prior)
   })
 

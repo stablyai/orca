@@ -1,3 +1,4 @@
+import { githubTaskKey, sameGitHubTask, requireGitHubTaskTarget } from './github-task-identity'
 import { useClipboardWriter } from '../platform/clipboard'
 import type { HostedMetadataActionsModel } from './use-mobile-tasks-hosted-metadata-actions'
 import {
@@ -21,38 +22,62 @@ import {
   githubReviewerRequest
 } from './mobile-task-item-state-operations'
 
-export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataActionsModel) {
+export type HostedCommentReviewActionsInput = Pick<
+  HostedMetadataActionsModel,
+  | 'claimPublication'
+  | 'client'
+  | 'copiedLinkResetTimerRef'
+  | 'detailPayload'
+  | 'itemCommentDraft'
+  | 'itemReviewersDraft'
+  | 'tryBeginMutation'
+  | 'setActionItem'
+  | 'setCopiedLinkKey'
+  | 'setDetailPayload'
+  | 'setError'
+  | 'setItemCommentDraft'
+  | 'setItemReviewersDraft'
+  | 'setItems'
+>
+
+export function useMobileTasksHostedCommentReviewActions<
+  Model extends HostedCommentReviewActionsInput
+>(model: Model) {
   // Use the native clipboard seam; iOS custom-scheme pages lack the secure context required by web clipboard APIs.
   const clipboard = useClipboardWriter()
   const {
+    claimPublication,
     client,
     copiedLinkResetTimerRef,
     detailPayload,
     itemCommentDraft,
     itemReviewersDraft,
-    mutatingStatus,
+    tryBeginMutation,
     setActionItem,
     setCopiedLinkKey,
     setDetailPayload,
     setError,
     setItemCommentDraft,
     setItemReviewersDraft,
-    setItems,
-    setMutatingStatus
+    setItems
   } = model
   const addHostedItemComment = useCallback(
     async (
       item: Extract<TaskItem, { provider: 'github' }> | Extract<TaskItem, { provider: 'gitlab' }>
     ): Promise<void> => {
-      if (!client || mutatingStatus) {
+      if (!client) {
         return
       }
       const body = itemCommentDraft.trim()
       if (!body) {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
       setError('')
+      const isCurrent = claimPublication(item)
       try {
         const written =
           item.provider === 'github'
@@ -63,7 +88,8 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
                     repo: `id:${item.source.repoId}`,
                     number: item.source.number,
                     body,
-                    type: item.source.type
+                    type: item.source.type,
+                    prRepo: requireGitHubTaskTarget(item.source).repository
                   },
                   { timeoutMs: 30_000 }
                 )
@@ -96,6 +122,9 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         if (written.ok === false) {
           throw new Error(written.error ?? 'Failed to add comment')
         }
+        if (!isCurrent()) {
+          return
+        }
         const comment: DetailComment = written.comment ?? {
           id: `local-${Date.now()}`,
           body,
@@ -105,18 +134,23 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         setItemCommentDraft('')
         setDetailPayload((current) =>
           current &&
-          ((item.provider === 'github' && current.provider === 'github') ||
+          ((item.provider === 'github' &&
+            current.provider === 'github' &&
+            current.targetKey === githubTaskKey(item.source)) ||
             (item.provider === 'gitlab' && current.provider === 'gitlab'))
             ? { ...current, comments: [...current.comments, comment] }
             : current
         )
       } catch (err) {
+        if (!isCurrent()) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to add comment')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, itemCommentDraft, mutatingStatus]
+    [claimPublication, client, itemCommentDraft, tryBeginMutation]
   )
 
   const copyTaskLink = useCallback(
@@ -147,21 +181,26 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
 
   const requestGitHubReviewers = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>, logins?: string[]): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!client || item.source.type !== 'pr') {
         return
       }
       const reviewers = logins ?? splitReviewerList(itemReviewersDraft)
       if (reviewers.length === 0) {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
       setError('')
+      const isCurrent = claimPublication(item)
       try {
         const reply = await githubReviewerRequest.request(
           client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
+            prRepo: requireGitHubTaskTarget(item.source).repository,
             reviewers
           },
           { timeoutMs: 30_000 }
@@ -169,6 +208,9 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         const result = githubReviewerRequest.interpret(reply)
         if (result.ok === false) {
           throw new Error(result.error ?? 'Failed to request reviewers')
+        }
+        if (!isCurrent()) {
+          return
         }
         const nextReviewRequests = (() => {
           const byLogin = new Map<string, GitHubAssignableUser>()
@@ -193,7 +235,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           return Array.from(byLogin.values())
         })()
         setActionItem((current) =>
-          current?.provider === 'github' && current.source.id === item.source.id
+          sameGitHubTask(current, item)
             ? {
                 ...current,
                 source: { ...current.source, reviewRequests: nextReviewRequests }
@@ -202,7 +244,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         )
         setItems((current) =>
           current.map((candidate) =>
-            candidate.provider === 'github' && candidate.source.id === item.source.id
+            sameGitHubTask(candidate, item)
               ? {
                   ...candidate,
                   source: { ...candidate.source, reviewRequests: nextReviewRequests }
@@ -211,7 +253,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           )
         )
         setDetailPayload((current) =>
-          current?.provider === 'github'
+          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
             ? { ...current, reviewRequests: nextReviewRequests }
             : current
         )
@@ -219,39 +261,52 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           setItemReviewersDraft('')
         }
       } catch (err) {
+        if (!isCurrent()) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to request reviewers')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, detailPayload, itemReviewersDraft, mutatingStatus]
+    [claimPublication, client, detailPayload, itemReviewersDraft, tryBeginMutation]
   )
 
   const refreshGitHubChecks = useCallback(
     async (item: Extract<TaskItem, { provider: 'github' }>): Promise<void> => {
-      if (!client || mutatingStatus || item.source.type !== 'pr') {
+      if (!client || item.source.type !== 'pr') {
         return
       }
-      setMutatingStatus(true)
+      const finish = tryBeginMutation()
+      if (!finish) {
+        return
+      }
       setError('')
+      const isCurrent = claimPublication(item)
       try {
         const reply = await githubPullRequestChecksRead.request(
           client,
           {
             repo: `id:${item.source.repoId}`,
             prNumber: item.source.number,
+            prRepo: requireGitHubTaskTarget(item.source).repository,
             headSha: detailPayload?.provider === 'github' ? detailPayload.headSha : undefined,
             noCache: true
           },
           { timeoutMs: 30_000 }
         )
         const checks = githubPullRequestChecksRead.interpret(reply)
+        if (!isCurrent()) {
+          return
+        }
         const checksSummary = buildGitHubCheckSummary(checks)
         setDetailPayload((current) =>
-          current?.provider === 'github' ? { ...current, checks } : current
+          current?.provider === 'github' && current.targetKey === githubTaskKey(item.source)
+            ? { ...current, checks }
+            : current
         )
         setActionItem((current) =>
-          current?.provider === 'github' && current.source.id === item.source.id
+          sameGitHubTask(current, item)
             ? {
                 ...current,
                 source: { ...current.source, checksSummary }
@@ -260,7 +315,7 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
         )
         setItems((current) =>
           current.map((candidate) =>
-            candidate.provider === 'github' && candidate.source.id === item.source.id
+            sameGitHubTask(candidate, item)
               ? {
                   ...candidate,
                   source: { ...candidate.source, checksSummary }
@@ -269,12 +324,15 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
           )
         )
       } catch (err) {
+        if (!isCurrent()) {
+          return
+        }
         setError(err instanceof Error ? err.message : 'Failed to refresh checks')
       } finally {
-        setMutatingStatus(false)
+        finish()
       }
     },
-    [client, detailPayload, mutatingStatus]
+    [claimPublication, client, detailPayload, tryBeginMutation]
   )
   return Object.assign(model, {
     addHostedItemComment,
@@ -285,6 +343,5 @@ export function useMobileTasksHostedCommentReviewActions(model: HostedMetadataAc
   })
 }
 
-export type HostedCommentReviewActionsModel = ReturnType<
-  typeof useMobileTasksHostedCommentReviewActions
->
+export type HostedCommentReviewActionsModel = HostedMetadataActionsModel &
+  ReturnType<typeof useMobileTasksHostedCommentReviewActions>

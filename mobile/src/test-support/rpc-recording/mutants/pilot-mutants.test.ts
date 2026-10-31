@@ -1,3 +1,5 @@
+import type * as GithubPrEntityReplySchemaModule from '../../../session/github-pr-entity-reply-schema'
+import type * as TaskItemDetailReplySchemaModule from '../../../tasks/task-item-detail-reply-schema'
 import { resolve } from 'node:path'
 import { describe, expect, it } from 'vitest'
 import { pilotGoldens } from '../derived-goldens'
@@ -9,6 +11,7 @@ import { vitestRecordingScheduler } from '../vitest-recording-scheduler'
 import { operationMutation, type Mutation } from './operation-mutations'
 import type { Recording } from '../recording-scenario'
 import type { RecordedValue } from '../recording-values'
+import { operationModuleLoader } from '../operation-module-loader'
 
 const root = resolve(import.meta.dirname, '../../../../..')
 const input = readScenarios(
@@ -36,7 +39,6 @@ const mutants: Record<string, Mutation> = {
   'terminal-input-send-refused': 'terminal-send-refusal-restores-draft',
   'terminal-worktree-connection-resolved': 'worktree-connection-first-repo',
   'pr-sidebar-checks-refused': 'pr-sidebar-checks-failure-state',
-  'tk-item-detail-metadata': 'assignable-user-avatar-null-collapse',
   'worktree-catalog-snapshot-unreadable': 'worktree-catalog-unchecked-reader',
   'mobile-web-bundle-fetch-paged': 'mobile-web-bundle-chunk-placement'
 }
@@ -67,4 +69,46 @@ describe('RPC main recording mutants', () => {
       expect(result.verdict).toBe('killed')
     })
   }
+
+  it('Tasks detail assignable users: kills assignable-user-avatar-null-collapse', () => {
+    const users = [{ login: 'octocat', name: 'Octo', avatarUrl: null }]
+    const original = operationModuleLoader(root)
+    const mutated = operationModuleLoader(
+      root,
+      operationMutation('assignable-user-avatar-null-collapse')
+    )
+    const read = (modules: ReturnType<typeof operationModuleLoader>) => {
+      const { githubAssignableUsersSchema } = modules.load<typeof TaskItemDetailReplySchemaModule>(
+        'mobile/src/tasks/task-item-detail-reply-schema.ts'
+      )
+      const result = githubAssignableUsersSchema.safeParse(users)
+      if (!result.success) {
+        throw result.error
+      }
+      return result.data
+    }
+    const accepted = read(original)
+    expect(original.mutationsApplied()).toBe(0)
+    expect(accepted).toStrictEqual(users)
+    expect(Object.hasOwn(accepted[0]!, 'avatarUrl')).toBe(true)
+    expect(accepted[0]!.avatarUrl).toBeNull()
+
+    const changed = read(mutated)
+    expect(mutated.mutationsApplied()).toBe(1)
+    expect(changed).toStrictEqual([{ login: 'octocat', name: 'Octo', avatarUrl: undefined }])
+    expect(changed).not.toStrictEqual(accepted)
+
+    for (const modules of [original, mutated]) {
+      const { assignableUsersSchema } = modules.load<typeof GithubPrEntityReplySchemaModule>(
+        'mobile/src/session/github-pr-entity-reply-schema.ts'
+      )
+      const session = assignableUsersSchema.safeParse(users)
+      if (!session.success) {
+        throw session.error
+      }
+      expect(session.data).toStrictEqual([{ login: 'octocat', name: 'Octo', avatarUrl: '' }])
+    }
+    expect(original.mutationsApplied()).toBe(0)
+    expect(mutated.mutationsApplied()).toBe(1)
+  })
 })

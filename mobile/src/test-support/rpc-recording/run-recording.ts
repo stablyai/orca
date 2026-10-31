@@ -1,18 +1,15 @@
+import { recordingStep, requireCheckpointClock } from './recording-step'
+import { materializeScenario } from './scenario-execution-mode'
+import { RecordingFault } from './recording-fault'
 import { recordUnhandledRejections } from './unhandled-recording'
-import {
-  captureError,
-  captureValue,
-  observeSettlement,
-  rejectedSettlement,
-  type Settlement,
-  type RecordedValue
-} from './recording-values'
+import { captureValue, type Settlement, type RecordedValue } from './recording-values'
 import type {
   MountAdapter,
   Recording,
   RecordingScenario,
   RecordingScheduler,
-  MountedOperation
+  MountedOperation,
+  Observation
 } from './recording-scenario'
 import { ScriptedRpcTransport, type ScriptedClientWrapper } from './scripted-rpc-transport'
 import { createWriteOrdinal } from './write-ordinal'
@@ -23,134 +20,164 @@ export async function runRecording(
   scheduler: RecordingScheduler,
   wrapClient?: ScriptedClientWrapper
 ): Promise<Recording> {
-  await scheduler.start()
-  // Share ordinals across requests, payloads and effects so cross-list reordering remains visible even without requests.
-  const nextWriteOrdinal = createWriteOrdinal()
-  const transport = new ScriptedRpcTransport(scheduler.elapsed, nextWriteOrdinal, wrapClient)
+  const ordinal = createWriteOrdinal()
+  const fault = new RecordingFault()
   const effects: { name: string; ordinal: number; value: RecordedValue }[] = []
   const settlements: Record<string, Settlement> = {}
   const recording: Recording = { scenario: scenario.id, checkpoints: [] }
-  const effect = (name: string, value: unknown) => {
-    effects.push({ name, ordinal: nextWriteOrdinal(), value: captureValue(value) })
-  }
-  const stopUnhandled = recordUnhandledRejections(effect)
+  const effect = (name: string, value: unknown) =>
+    fault.capture('effect', () => {
+      const captured = captureValue(value)
+      effects.push({ name, ordinal: ordinal(), value: captured })
+    })
+  let transport: ScriptedRpcTransport | undefined
   let mounted: MountedOperation | undefined
-  const ids = new Set<string>()
-  let advanced = 0
+  let stopUnhandled: (() => void) | undefined
+  let schedulerAttempted = false
+  let schedulerStarted = false
   let cleaned = false
-  const teardown = async (): Promise<void> => {
-    cleaned = true
-    await mounted?.dispose()
-    // Drain due cleanup timers before reading registries so deferred closes cannot look like unclosed subscriptions.
-    await scheduler.flush()
-    // Read registries before transport teardown: builder-less leaks emit no unsubscribe payload to observe.
-    const registered = transport.registeredStreams()
-    if (registered.length) {
-      effect('streams-registered-at-teardown', registered)
+  let checkingFault = false
+  let body: { error: unknown } | undefined
+  const cleanupErrors: unknown[] = []
+  const attempt = async (cleanup: () => unknown) => {
+    try {
+      await cleanup()
+    } catch (error) {
+      cleanupErrors.push(error)
     }
-    transport.dispose()
-    // Flush teardown rejections into the cleanup checkpoint.
-    await scheduler.flush()
+  }
+  const check = () => {
+    checkingFault = true
+    fault.check()
+    checkingFault = false
+  }
+  const snapshot = (state: RecordedValue): Observation =>
+    fault.capture('snapshot', () => ({
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the transport's captured attempts contain only Recording values.
+      sender: structuredClone(transport!.requests) as unknown as RecordedValue,
+      payloads: structuredClone(transport!.payloads),
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: settlements were captured at their original boundaries.
+      settlements: structuredClone(settlements) as unknown as RecordedValue,
+      state,
+      effects: structuredClone(effects)
+    }))
+  const teardown = async () => {
+    cleaned = true
+    if (mounted) {
+      await attempt(() => mounted!.dispose())
+    }
+    if (schedulerStarted) {
+      await attempt(() => scheduler.flush())
+    }
+    if (transport) {
+      await attempt(() => {
+        const streams = transport!.registeredStreams()
+        if (streams.length) {
+          effect('streams-registered-at-teardown', streams)
+        }
+      })
+      await attempt(() => transport!.dispose())
+      if (schedulerStarted) {
+        await attempt(() => scheduler.flush())
+      }
+      await attempt(() => transport!.causality.assertTransparentCalls())
+      await attempt(() => transport!.causality.close())
+    }
   }
   try {
-    mounted = mount({ client: transport.client, effect })
+    scenario = materializeScenario(scenario, scenario.lineage?.mode ?? 'native')
+    schedulerAttempted = true
+    await scheduler.start()
+    schedulerStarted = true
+    transport = new ScriptedRpcTransport(
+      scheduler.elapsed,
+      ordinal,
+      wrapClient,
+      fault,
+      undefined,
+      (acquired) => {
+        transport = acquired
+      }
+    )
+    stopUnhandled = recordUnhandledRejections(effect, (restore) => {
+      stopUnhandled = restore
+    })
+    mounted = mount({
+      client: transport.client,
+      effect,
+      captureObservation: (origin, read) => fault.capture(origin, read)
+    })
+    let advanced = 0
+    const ids = new Set<string>()
     for (const step of scenario.steps) {
-      if ('action' in step) {
-        if (ids.has(step.id)) {
-          throw new Error(`Duplicate action: ${step.id}`)
-        }
-        ids.add(step.id)
-        try {
-          const value =
-            step.action === 'disconnect'
-              ? transport.disconnect()
-              : step.action === 'cutover'
-                ? transport.cutover()
-                : mounted.action(step.action, step.args ?? {})
-          observeSettlement(value, scheduler.elapsed, (state) => {
-            settlements[step.id] = state
-          })
-        } catch (error) {
-          settlements[step.id] = rejectedSettlement(error, scheduler.elapsed())
-        }
-      } else if ('complete' in step) {
-        const pending = transport.outstanding(step.complete)
-        if (!step.optional || pending) {
-          const params =
-            step.optional && step.paramsFollowDivergence ? pending?.params : step.params
-          transport.complete(step.complete, params, step.reply, step.reject)
-        }
-      } else if ('frame' in step) {
-        const crash = transport.frame(step.frame, step.params, step.reply)
-        if (crash) {
-          // Record listener crashes as product outcomes; mismatched scenarios still throw.
-          effect('stream-listener-crash', {
-            frame: step.frame,
-            error: captureError(crash.error)
-          })
-        }
-      } else if ('bind' in step) {
-        if (!step.optional || transport.outstanding(step.request)) {
-          transport.bind(step.bind, step.request, step.params)
-        }
-      } else if ('advance' in step) {
+      if ('advance' in step) {
         advanced += step.advance
         await scheduler.advance(step.advance)
+      } else {
+        recordingStep(
+          scenario,
+          step,
+          transport,
+          mounted,
+          settlements,
+          scheduler,
+          effect,
+          fault,
+          ids
+        )
       }
+      check()
       await scheduler.flush()
+      check()
       if ('checkpoint' in step) {
-        // Assert checkpoint time against scripted advances instead of storing a redundant clock value.
-        if (scheduler.elapsed() !== advanced) {
-          throw new Error(
-            `Checkpoint clock drifted: ${scenario.id} ${step.checkpoint} at ${scheduler.elapsed()}, scripted ${advanced}`
-          )
-        }
+        requireCheckpointClock(scenario, step, scheduler, advanced)
         recording.checkpoints.push({
           id: step.checkpoint,
-          observation: {
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a structured clone of recorded requests is recorded data.
-            sender: structuredClone(transport.requests) as unknown as RecordedValue,
-            payloads: structuredClone(transport.payloads),
-            // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a structured clone of recorded settlements is recorded data.
-            settlements: structuredClone(settlements) as unknown as RecordedValue,
-            state: captureValue(mounted.state()),
-            effects: structuredClone(effects)
-          }
+          observation: snapshot(
+            fault.capture('checkpoint state', () => captureValue(mounted!.state()))
+          )
         })
       }
     }
     if (!recording.checkpoints.length) {
       throw new Error(`No checkpoints: ${scenario.id}`)
     }
-    // Clean up before building the recording so teardown effects reach a checkpoint; capture state before unmount destroys it.
-    const beforeCleanup = effects.length
-    const stateAtCleanup = captureValue(mounted.state())
+    const beforeCleanup = JSON.stringify(
+      snapshot(fault.capture('cleanup baseline', () => captureValue(mounted!.state())))
+    )
+    const stateAtCleanup = fault.capture('cleanup state', () => captureValue(mounted!.state()))
     await teardown()
-    if (effects.length !== beforeCleanup) {
-      recording.checkpoints.push({
-        id: 'cleanup',
-        observation: {
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a structured clone of recorded requests is recorded data.
-          sender: structuredClone(transport.requests) as unknown as RecordedValue,
-          payloads: structuredClone(transport.payloads),
-          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a structured clone of recorded settlements is recorded data.
-          settlements: structuredClone(settlements) as unknown as RecordedValue,
-          state: stateAtCleanup,
-          effects: structuredClone(effects)
-        }
-      })
+    const afterCleanup = snapshot(stateAtCleanup)
+    if (JSON.stringify(afterCleanup) !== beforeCleanup) {
+      recording.checkpoints.push({ id: 'cleanup', observation: afterCleanup })
     }
-    return recording
+  } catch (error) {
+    if (!checkingFault) {
+      body = { error }
+    }
   } finally {
-    try {
-      if (!cleaned) {
-        await teardown()
-      }
-    } finally {
-      stopUnhandled()
-      scheduler.stop()
+    if (!cleaned) {
+      await teardown()
+    }
+    if (stopUnhandled) {
+      await attempt(stopUnhandled)
+    }
+    if (schedulerAttempted) {
+      await attempt(() => scheduler.stop())
     }
   }
+  const errors = [
+    ...(fault.failure ? [fault.failure.error] : []),
+    ...(body ? [body.error] : []),
+    ...cleanupErrors
+  ]
+  if (errors.length === 1) {
+    throw errors[0]
+  }
+  if (errors.length) {
+    throw new AggregateError(errors, 'Recording and cleanup failed')
+  }
+  return recording
 }
 
 export async function runRecordingMutant(

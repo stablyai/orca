@@ -108,9 +108,13 @@ export function connectMobileRelayRpcSession(args: {
 
   const client: MobileRelayRpcSession = {
     async sendRequest(method, params, options) {
+      if (options?.failWhenDisconnected && state !== 'connected') {
+        throw new Error(`Not connected: ${method}`)
+      }
       const budget = openRpcRequestBudget(options)
       await waitForConnected(budget.timeoutMs)
       const timeoutMs = resolvePostConnectRequestTimeout(budget, requestTimeoutMs)
+      options?.beforeSend?.()
       return sendRpc(method, params, timeoutMs, false, options?.envelope)
     },
 
