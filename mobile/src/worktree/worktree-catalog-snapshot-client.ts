@@ -1,3 +1,4 @@
+import { z } from 'zod'
 import type { RpcClient } from '../transport/rpc-client'
 import type { Worktree } from './workspace-list-sections'
 import { worktreeCatalogRead } from './worktree-catalog-operations'
@@ -8,6 +9,8 @@ export const WORKTREE_PS_FULL_LIMIT = 10_000
 export type WorktreeCatalogAdmission<T> =
   | { kind: 'full'; snapshotId: string | null; worktrees: T[] }
   | { kind: 'unchanged'; snapshotId: string }
+  // Entries are rows, or indexes into the catalog the caller holds under baseSnapshotId.
+  | { kind: 'delta'; snapshotId: string; baseSnapshotId: string; rowsFromBase: (number | T)[] }
   | { kind: 'invalid' }
 
 export type PendingWorktreeCatalog = {
@@ -21,34 +24,44 @@ export type WorktreeCatalogFetchResult =
   | { kind: 'response'; pending: PendingWorktreeCatalog }
   | { kind: 'request_failed'; code: string }
 
-function validSnapshotId(value: unknown): string | null {
-  return typeof value === 'string' && value.length > 0 && value.length <= 128 ? value : null
-}
+const snapshotIdSchema = z.string().min(1).max(128)
 
-export function admitWorktreeCatalogResponse<T>(
+// Rows stay opaque, as consumers validate their own projections; malformed fields read as absent.
+const catalogReplySchema = z.looseObject({
+  worktrees: z.array(z.custom<Worktree>()).optional().catch(undefined),
+  snapshotId: snapshotIdSchema.optional().catch(undefined),
+  unchanged: z.boolean().optional().catch(undefined),
+  baseSnapshotId: snapshotIdSchema.optional().catch(undefined),
+  rowsFromBase: z
+    .array(z.union([z.number(), z.custom<Worktree>()]))
+    .optional()
+    .catch(undefined)
+})
+
+export function admitWorktreeCatalogResponse(
   result: unknown,
   requestedSnapshotId: string | null
-): WorktreeCatalogAdmission<T> {
-  if (!result || typeof result !== 'object') {
+): WorktreeCatalogAdmission<Worktree> {
+  const parsed = catalogReplySchema.safeParse(result)
+  if (!parsed.success) {
     return { kind: 'invalid' }
   }
-  const response = result as {
-    snapshotId?: unknown
-    unchanged?: unknown
-    worktrees?: unknown
-  }
+  const { worktrees, unchanged, baseSnapshotId, rowsFromBase } = parsed.data
+  const snapshotId = parsed.data.snapshotId ?? null
   // Rows identify a full response; a future unchanged field must not reclassify one.
-  if (Array.isArray(response.worktrees)) {
-    return {
-      kind: 'full',
-      snapshotId: validSnapshotId(response.snapshotId),
-      worktrees: response.worktrees as T[]
-    }
+  if (worktrees) {
+    return { kind: 'full', snapshotId, worktrees }
   }
-
-  const snapshotId = validSnapshotId(response.snapshotId)
-  if (response.unchanged === true && snapshotId && snapshotId === requestedSnapshotId) {
+  if (unchanged === true && snapshotId && snapshotId === requestedSnapshotId) {
     return { kind: 'unchanged', snapshotId }
+  }
+  if (
+    snapshotId &&
+    requestedSnapshotId !== null &&
+    baseSnapshotId === requestedSnapshotId &&
+    rowsFromBase
+  ) {
+    return { kind: 'delta', snapshotId, baseSnapshotId, rowsFromBase }
   }
   return { kind: 'invalid' }
 }
@@ -69,7 +82,8 @@ export class WorktreeCatalogSnapshotClient {
     const requestedSnapshotId = this.snapshotId
     const reply = await worktreeCatalogRead.request(client, {
       limit: WORKTREE_PS_FULL_LIMIT,
-      afterSnapshotId: requestedSnapshotId
+      afterSnapshotId: requestedSnapshotId,
+      acceptRowDelta: true
     })
     const catalog = worktreeCatalogRead.interpret(reply)
     if (!catalog.accepted) {
@@ -83,7 +97,7 @@ export class WorktreeCatalogSnapshotClient {
     return {
       kind: 'response',
       pending: {
-        admission: admitWorktreeCatalogResponse<Worktree>(catalog.value, requestedSnapshotId),
+        admission: admitWorktreeCatalogResponse(catalog.value, requestedSnapshotId),
         client,
         hostId
       }
@@ -104,11 +118,40 @@ export class WorktreeCatalogSnapshotClient {
       return null
     }
 
-    this.snapshotId = pending.admission.snapshotId
-    if (pending.admission.kind === 'full') {
-      this.confirmedWorktrees = pending.admission.worktrees
+    const { admission } = pending
+    if (admission.kind === 'delta') {
+      const rebuilt =
+        admission.baseSnapshotId === this.snapshotId && this.confirmedWorktrees
+          ? rebuildFromBase(admission.rowsFromBase, this.confirmedWorktrees)
+          : null
+      if (!rebuilt) {
+        this.snapshotId = null
+        return null
+      }
+      this.confirmedWorktrees = rebuilt
+    } else if (admission.kind === 'full') {
+      this.confirmedWorktrees = admission.worktrees
     }
+    this.snapshotId = admission.snapshotId
     // Reassert confirmed host rows on unchanged polls too, overriding optimistic local edits.
-    return this.confirmedWorktrees
+    // A copy: the next delta indexes into these rows, so a caller sorting in place must not reorder them.
+    return this.confirmedWorktrees ? [...this.confirmedWorktrees] : null
   }
+}
+
+// Null when an index falls outside the base; the caller then asks for a full catalog.
+function rebuildFromBase(rowsFromBase: (number | Worktree)[], base: Worktree[]): Worktree[] | null {
+  const rows: Worktree[] = []
+  for (const entry of rowsFromBase) {
+    if (typeof entry !== 'number') {
+      rows.push(entry)
+      continue
+    }
+    const row = Number.isInteger(entry) ? base[entry] : undefined
+    if (!row) {
+      return null
+    }
+    rows.push(row)
+  }
+  return rows
 }
