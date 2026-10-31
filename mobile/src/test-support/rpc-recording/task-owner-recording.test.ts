@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest'
 import { pilotMountAdapters } from './pilot-mount-adapters'
 import { runRecording } from './run-recording'
 import { readScenarios } from './scenario-input'
+import { materializeScenario } from './scenario-execution-mode'
 import { vitestRecordingScheduler } from './vitest-recording-scheduler'
 import { ScriptedRpcTransport } from './scripted-rpc-transport'
 import { captureValue } from './recording-values'
@@ -185,6 +186,9 @@ describe('committed production task owners in recording adapters', () => {
           { checkpoint: 'terminal-unchanged' },
           { action: 'unmount', id: 'unmount' },
           { action: 'mount', id: 'remount' },
+          ...(id === 'tk-linear-item'
+            ? [{ action: 'edit-comment', id: 'fresh-draft', args: { body: 'a linear comment' } }]
+            : []),
           { action, id: 'fresh' },
           { checkpoint: 'fresh-pending' },
           { ...completion, complete: completion.complete.replace('#1', '#2') },
@@ -366,7 +370,7 @@ describe('committed production task owners in recording adapters', () => {
   ])(
     '%s retires a real pending read, reselects, refreshes and remounts',
     async (id, payloadField, loadingField) => {
-      const base = pilot(id)
+      const base = materializeScenario(pilot(id), 'native')
       const completions = base.steps.filter((step) => 'complete' in step)
       // GitLab hydration commits a changed selected source, then the production effect reads it once more.
       const hydration = id === 'tk-item-detail-gitlab'

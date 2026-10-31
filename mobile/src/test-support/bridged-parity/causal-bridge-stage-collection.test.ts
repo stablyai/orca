@@ -171,7 +171,22 @@ describe('actual publication and device replies', () => {
       const last = terminal(recording)
       expect(last.state).toEqual({ labels: ['label'] })
       expect(last.effects).toEqual([
-        { name: 'after-original-subscribe', ordinal: expect.any(Number), value: { returned: true } }
+        {
+          name: 'after-original-subscribe',
+          ordinal: expect.any(Number),
+          value: { returned: true }
+        },
+        {
+          name: 'streams-registered-at-teardown',
+          ordinal: expect.any(Number),
+          value: [
+            {
+              method: 'runtime.clientEvents.subscribe',
+              payload: 'runtime.clientEvents.subscribe#1',
+              cancelled: true
+            }
+          ]
+        }
       ])
       if (!Array.isArray(last.payloads) || !Array.isArray(last.effects)) {
         throw new Error('Missing actual publication bytes/effect')
@@ -211,7 +226,18 @@ describe('actual publication and device replies', () => {
       )
     ).toEqual(['runtime.clientEvents.subscribe', 'github.listLabels'])
     expect(original.effects).toEqual([
-      { name: 'after-original-subscribe', ordinal: expect.any(Number), value: { returned: true } }
+      { name: 'after-original-subscribe', ordinal: expect.any(Number), value: { returned: true } },
+      {
+        name: 'streams-registered-at-teardown',
+        ordinal: expect.any(Number),
+        value: [
+          {
+            method: 'runtime.clientEvents.subscribe',
+            payload: 'runtime.clientEvents.subscribe#1',
+            cancelled: true
+          }
+        ]
+      }
     ])
   })
 

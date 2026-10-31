@@ -524,7 +524,7 @@ async function bridgeOnlyVerdict(
             id: child.frame!.id,
             deviceToken: 'recording-device',
             method: request.method,
-            params: step.params
+            params: request.params
           })
         )
         expect(probe.completion!.ordinal).toBeLessThan(child.ordinal)

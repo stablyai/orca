@@ -16,6 +16,7 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { createFakeRpcClient, rpcSuccess } from '../mobile-web-shell/bridge-host-test-fakes'
 import type { DetailPayload, GitHubDetailFile } from './mobile-tasks-provider-detail-types'
 import type { TaskItem } from './mobile-tasks-project-workspace-types'
+import { item, projectRow } from './github-task-identity.test-fixture'
 import { githubTaskKey, useMobileTasksSelection } from './github-task-identity'
 import { useMobileTasksGithubCheckFileActions } from './use-mobile-tasks-github-check-file-actions'
 import {
@@ -46,30 +47,6 @@ afterEach(async () => {
     await act(async () => renderer.unmount())
   }
 })
-function item(owner: string): Extract<TaskItem, { provider: 'github' }> {
-  return {
-    key: owner,
-    provider: 'github',
-    title: owner,
-    subtitle: '',
-    status: 'Open',
-    updatedAt: '',
-    source: {
-      id: 'pr:93',
-      repoId: 'clone',
-      repoName: 'clone',
-      type: 'pr',
-      number: 93,
-      title: owner,
-      state: 'open',
-      labels: [],
-      author: null,
-      updatedAt: '',
-      url: `https://github.corp/${owner}/widgets/pull/93`,
-      prRepo: { owner, repo: 'widgets', host: 'github.corp' }
-    }
-  }
-}
 const file: GitHubDetailFile = {
   path: 'same.ts',
   additions: 1,
@@ -77,7 +54,9 @@ const file: GitHubDetailFile = {
   status: 'modified',
   viewerViewedState: 'UNVIEWED'
 }
-function details(selected: Extract<TaskItem, { provider: 'github' }>): DetailPayload {
+function details(
+  selected: Extract<TaskItem, { provider: 'github' }>
+): Extract<DetailPayload, { provider: 'github' }> {
   return {
     provider: 'github',
     targetKey: githubTaskKey(selected.source),
@@ -112,7 +91,7 @@ async function mount() {
   const noop = () => {}
   const committed: { name: string; value: RecordedValue }[] = []
   let current!: ReturnType<typeof ProbeModel>
-  let select!: (selected: typeof a | null) => void
+  let select!: (selected: Extract<TaskItem, { provider: 'github' }> | null) => void
   let selectProject!: (selected: GitHubProjectRow | null) => void
   function ProbeModel() {
     const itemState = useMobileTasksItemState()
@@ -276,7 +255,10 @@ async function mount() {
     current = ProbeModel()
     return React.createElement(
       'TaskDetail',
-      { title: current.actionItem?.title, body: current.detailPayload?.body },
+      {
+        title: current.actionItem?.title,
+        body: current.detailPayload?.provider === 'github' ? current.detailPayload.body : undefined
+      },
       React.createElement(
         'Comment',
         {
@@ -306,7 +288,8 @@ async function mount() {
     client,
     committed,
     read: () => current,
-    select: async (selected: typeof a | null) => act(async () => select(selected)),
+    select: async (selected: Extract<TaskItem, { provider: 'github' }> | null) =>
+      act(async () => select(selected)),
     providerPages,
     renderer: renderers.at(-1)!,
     selectProject: async (selected: GitHubProjectRow | null) =>
@@ -636,24 +619,26 @@ it.each([10, 100])(
         }
       }
       await f.select(selected)
-      expect(f.renderer.root.findByType('TaskDetail').props.body).toBe('fork')
+      expect(f.renderer.root.find((node) => node.type === 'TaskDetail').props.body).toBe('fork')
     }
     // No hidden list attempt or status frame crosses the actual RpcClient boundary, hence no downstream gh/provider page can be admitted.
     expect(f.client.requests).toEqual([])
     await act(async () => f.read().setItemCommentDraft('visible comment'))
     let comment!: Promise<void>
     await act(async () => {
-      comment = f.renderer.root.findByType('Comment').props.onPress()
+      comment = f.renderer.root.find((node) => node.type === 'Comment').props.onPress()
     })
     await f.answer({
       ok: true,
       comment: { id: 'visible', body: 'visible comment', author: 'me', createdAt: '' }
     })
     await comment
-    expect(f.renderer.root.findByType('Comment').children).toContain('visible comment')
+    expect(f.renderer.root.find((node) => node.type === 'Comment').children).toContain(
+      'visible comment'
+    )
     let close!: Promise<void>
     await act(async () => {
-      close = f.renderer.root.findByType('CloseReopen').props.onPress()
+      close = f.renderer.root.find((node) => node.type === 'CloseReopen').props.onPress()
     })
     await f.answer({ ok: true })
     await close
@@ -664,24 +649,6 @@ it.each([10, 100])(
     ])
   }
 )
-function projectRow(owner: string): GitHubProjectRow {
-  return {
-    id: owner,
-    itemType: 'PULL_REQUEST',
-    updatedAt: '',
-    content: {
-      number: 93,
-      title: owner,
-      body: '',
-      url: `https://github.corp/${owner}/widgets/pull/93`,
-      state: 'OPEN',
-      isDraft: false,
-      repository: `${owner}/widgets`,
-      labels: [],
-      assignees: []
-    }
-  }
-}
 it('the actual Project detail reset retires a task file and X→Y Project file before its successor paints', async () => {
   const f = await mount()
   let task!: Promise<void>

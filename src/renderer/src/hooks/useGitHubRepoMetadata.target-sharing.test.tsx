@@ -28,6 +28,7 @@ import type { GitHubOwnerRepo } from '../../../shared/github/pull-request-types'
 import type { Repo } from '../../../shared/repo-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { resolveGitHubRepoExecution } from '../../../main/github/github-api-repository'
 
 const provider = vi.hoisted(() => ({ exec: vi.fn(), rpc: vi.fn(), evaluations: 0, rows: 0 }))
 function row(host: 'local' | `runtime:${string}`, user: string): Repo {
@@ -110,11 +111,11 @@ vi.mock('@/store', () => ({
       metadataStore((state) => {
         provider.evaluations++
         const repos = new Proxy(state.repos, {
-          get(target, key, receiver) {
+          get(target, key: Exclude<keyof Repo[], number> | `${number}`, _receiver: unknown) {
             if (typeof key === 'string' && /^\d+$/.test(key)) {
               provider.rows++
             }
-            return Reflect.get(target, key, receiver)
+            return target[key]
           }
         })
         return select({ ...state, repos })
@@ -135,9 +136,9 @@ vi.mock('../../../main/github/gh-utils', () => ({
 vi.mock('../../../main/github/github-api-repository', () => ({
   resolveGitHubRepoExecution: async (
     _path: string,
-    ownerRepo: object,
+    ownerRepo: Parameters<typeof resolveGitHubRepoExecution>[1],
     _connection: unknown,
-    options: object
+    options: Parameters<typeof resolveGitHubRepoExecution>[3]
   ) => ({ ownerRepo, ghOptions: options })
 }))
 const roots: ReturnType<typeof createRoot>[] = []

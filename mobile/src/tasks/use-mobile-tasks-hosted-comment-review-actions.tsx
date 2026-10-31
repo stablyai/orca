@@ -343,6 +343,5 @@ export function useMobileTasksHostedCommentReviewActions<
   })
 }
 
-export type HostedCommentReviewActionsModel = ReturnType<
-  typeof useMobileTasksHostedCommentReviewActions
->
+export type HostedCommentReviewActionsModel = HostedMetadataActionsModel &
+  ReturnType<typeof useMobileTasksHostedCommentReviewActions>

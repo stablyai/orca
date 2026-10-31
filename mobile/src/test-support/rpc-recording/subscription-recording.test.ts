@@ -362,6 +362,23 @@ async function runStreamInput(
         return pair.client
       }
     )
+    const retainedEffects = recording.checkpoints.at(-1)!.observation.effects
+    if (!Array.isArray(retainedEffects)) {
+      throw new Error('Missing actual runner effects')
+    }
+    effects.length = 0
+    for (const effect of retainedEffects) {
+      if (
+        !effect ||
+        typeof effect !== 'object' ||
+        Array.isArray(effect) ||
+        typeof effect.name !== 'string' ||
+        !('value' in effect)
+      ) {
+        throw new Error('Unreadable actual runner effect')
+      }
+      effects.push({ name: effect.name, value: effect.value })
+    }
     outcome = { recording }
   } catch (error) {
     outcome = { error }
@@ -415,7 +432,9 @@ describe('actual stream result partitions', () => {
                 ? 'runtime.clientEvents.subscribe#2'
                 : 'nativeChat.subscribe#2'
             )
-            expect(run.actions.at(-1)).toBe('cutover')
+            expect(run.actions.at(-1)).toBe(
+              operation === 'session.live-worktree-name' ? 'mount' : 'load-earlier'
+            )
             expect(run.actions).not.toContain('unmount')
             expect(run.reads.at(-1)).toMatchObject(
               operation === 'session.live-worktree-name'
@@ -437,6 +456,9 @@ describe('actual stream result partitions', () => {
               throw run.outcome.error
             }
             const last = run.outcome.recording.checkpoints.at(-1)!.observation
+            if (operation !== 'notifications.desktop-stream') {
+              expect(last.settlements).toMatchObject({ cutover: { status: 'fulfilled' } })
+            }
             expect(run.actions.at(-1)).toBe(
               operation === 'notifications.desktop-stream' ? 'stop' : 'unmount'
             )
@@ -541,12 +563,15 @@ describe('actual stream result partitions', () => {
             }
             expect(run.outcome.error.origin).toBe('scripted-frame-opening')
             expect(run.outcome.error.request).toBe('runtime.clientEvents.subscribe#2')
-            expect(run.actions).toEqual(['start', 'cutover'])
+            expect(run.actions).toEqual(['start'])
           } else {
             if ('error' in run.outcome) {
               throw run.outcome.error
             }
-            expect(run.actions).toEqual(['start', 'cutover', 'stop'])
+            expect(run.actions).toEqual(['start', 'stop'])
+            expect(run.outcome.recording.checkpoints.at(-1)!.observation.settlements).toMatchObject(
+              { cutover: { status: 'fulfilled' } }
+            )
             expect(run.outcome.recording.checkpoints.at(-1)!.observation.state).toEqual({
               fetchWorktrees: expected[0],
               fetchRepoMetadata: expected[1],
@@ -623,7 +648,7 @@ describe('actual stream result partitions', () => {
             if ('error' in run.outcome) {
               expect(segment.lineage!.partition).toBe('result-absent')
               expect(run.outcome.error).toBeInstanceOf(RecordingStreamGuard)
-              expect(run.actions).toEqual(['start', 'cutover'])
+              expect(run.actions).toEqual(['start'])
               expect(run.reads.at(-1)).toEqual({
                 fetchWorktrees: 2,
                 fetchRepoMetadata: 2,

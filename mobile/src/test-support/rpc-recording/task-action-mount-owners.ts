@@ -23,8 +23,10 @@ function useTaskStateAndSelection(
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mount adapter stores its actual recording client in this field.
   const selection = useMobileTasksSelection(model.client as RpcClient, state.detailPayload)
   useLayoutEffect(() => {
+    const isStateKey = (key: string): key is keyof typeof state => key in state
     for (const [field, value] of Object.entries(fixture)) {
-      const setter = Reflect.get(state, `set${field[0].toUpperCase()}${field.slice(1)}`)
+      const setterName = `set${field[0].toUpperCase()}${field.slice(1)}`
+      const setter: unknown = isStateKey(setterName) ? state[setterName] : undefined
       if (typeof setter === 'function') {
         setter(value)
       }

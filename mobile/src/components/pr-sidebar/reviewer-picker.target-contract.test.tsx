@@ -13,6 +13,7 @@ import type { GitHubWorkItemDetails } from '../../../../src/shared/github/work-i
 import type { Repo } from '../../../../src/shared/repo-types'
 const io = vi.hoisted(() => ({ gh: vi.fn(), resolved: vi.fn(), requestReviewer: vi.fn() }))
 vi.mock('react-native', () => ({
+  StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
   View: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   ScrollView: ({ children }: React.PropsWithChildren) => <div>{children}</div>,
   Text: ({ children }: React.PropsWithChildren) => <span>{children}</span>,

@@ -1,4 +1,5 @@
-import { useTaskActionMountOwners } from '../task-action-mount-owners'
+import { useLayoutEffect, useRef } from 'react'
+import { useCommittedOwnerProjection, useTaskActionMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -234,8 +235,23 @@ export function taskItemHostedMetadataMountAdapters(
     const useActions = load<typeof import('../../../tasks/use-mobile-tasks-linear-item-actions')>(
       'use-mobile-tasks-linear-item-actions.tsx'
     ).useMobileTasksLinearItemActions
+    const useWorkspace = load<
+      typeof import('../../../tasks/use-mobile-tasks-workspace-and-project-state')
+    >('use-mobile-tasks-workspace-and-project-state.tsx').useMobileTasksWorkspaceAndProjectState
     return mountModelHook(modules, context, {
-      useHook: (model) => useActions(model),
+      useHook: (model: Parameters<typeof useActions>[0]) => {
+        const initialDraft = useRef(model.linearCommentDraft)
+        const { linearCommentDraft, setLinearCommentDraft } = useWorkspace(
+          mountFixture<Parameters<typeof useWorkspace>[0]>({
+            setActionItem: model.setActionItem
+          })
+        )
+        useLayoutEffect(() => {
+          setLinearCommentDraft(initialDraft.current)
+        }, [setLinearCommentDraft])
+        useCommittedOwnerProjection(context, { linearCommentDraft })
+        return useActions(Object.assign(model, { linearCommentDraft, setLinearCommentDraft }))
+      },
       fixture: {
         linearCommentDraft: 'a linear comment',
         linearSubIssueTitle: 'A sub-issue',
@@ -245,6 +261,12 @@ export function taskItemHostedMetadataMountAdapters(
         error: ''
       },
       actions: ({ actions }) => ({
+        'edit-comment': ({ body }) => {
+          if (typeof body !== 'string') {
+            throw new Error('A Linear comment edit requires text')
+          }
+          actions().setLinearCommentDraft(body)
+        },
         comment: () => actions().addLinearComment(mountFixture(LINEAR_ITEM)),
         'sub-issue-open': () =>
           actions().openLinearSubIssue(

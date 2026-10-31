@@ -92,10 +92,16 @@ describe('other detail providers', () => {
     const github: ActionableTaskItem = {
       ...gitlab,
       provider: 'github',
-      source: { ...gitlab.source, type: 'pr', state: 'open' }
+      source: {
+        ...gitlab.source,
+        type: 'pr',
+        state: 'open',
+        url: 'https://github.com/owner/repo/pull/12',
+        prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' }
+      }
     }
     const fixture = await mount(github)
-    await fixture.transport.answer(success({ body: 'GitHub body' }))
+    await fixture.transport.answer(success({ body: 'GitHub body', item: github.source }))
     expect(fixture.transport.requests).toHaveLength(1)
     expect(fixture.state()).toMatchObject({ loading: false, payload: { provider: 'github' } })
     const issue = {

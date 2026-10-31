@@ -1,5 +1,6 @@
 import { act } from 'react'
 import type * as GitRunner from '../../../../../main/git/runner'
+import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 // @vitest-environment happy-dom
 import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
@@ -87,7 +88,7 @@ vi.mock('../../../../../main/github/gh-utils', () => ({
   classifyGhError: () => ({ type: 'not_found', message: 'Not found' }),
   acquire: vi.fn(),
   release: vi.fn(),
-  ghRepoExecOptions: (context: object) => context,
+  ghRepoExecOptions: (context: GitHubRepoContext) => context,
   githubRepoContext: (repoPath: string) => ({ cwd: repoPath }),
   getOwnerRepoForRemote: async (_path: string, remote: string) =>
     io.host === 'github.com'

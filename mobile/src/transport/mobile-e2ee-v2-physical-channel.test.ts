@@ -133,8 +133,8 @@ async function authenticate(ctx: ReturnType<typeof setup>): Promise<void> {
   await ctx.channel.handleMessage(Buffer.from(response).toString('base64'))
 }
 
-function assertReleasedPhysicalChannel(channel: object): void {
-  const queue = Reflect.get(channel, 'outboundQueue')
+function assertReleasedPhysicalChannel(channel: MobileE2EEV2PhysicalChannel): void {
+  const queue = channel['outboundQueue']
   if (!queue || typeof queue.evidence !== 'function') {
     throw new Error('physical channel queue diagnostic seam changed')
   }
@@ -631,7 +631,7 @@ describe('direct v2 original-socket queue ownership', () => {
         }
         phase = 'drain'
         socket.bufferedAmount = 0
-        await vi.advanceTimersByTimeAsync(20)
+        await vi.advanceTimersByTimeAsync(25)
         if (mode === 'live') {
           expect(socket.sent).toHaveLength(before + 1)
           const raw = socket.sent.at(-1)

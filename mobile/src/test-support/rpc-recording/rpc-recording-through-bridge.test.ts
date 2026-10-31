@@ -318,7 +318,7 @@ async function probeCase(
           allowed
             ? {
                 ok: true,
-                result: isKeyedObject(operationStep.reply) ? operationStep.reply.result : undefined
+                result: [{ login: 'octocat', name: 'Octo Cat', avatarUrl: '' }]
               }
             : { ok: false, error: probeFailure(partition, lifecycle) }
         )
