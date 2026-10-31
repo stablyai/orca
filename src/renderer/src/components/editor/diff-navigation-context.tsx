@@ -1,5 +1,6 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react'
 import type { editor } from 'monaco-editor'
+import { useAppStore } from '@/store'
 import { installMonacoDiffChangeNavigationShortcut } from './editor-shortcuts'
 
 export type DiffEditorRegistrationContextValue = {
@@ -31,6 +32,32 @@ function countChanges(diffEditor: editor.IStandaloneDiffEditor): number {
   return diffEditor.getLineChanges()?.length ?? 0
 }
 
+// Whether the cursor sits at the file's edge change in the travel direction —
+// the point where the next press should cross into the adjacent file rather
+// than wrap. Deletions report modifiedStartLineNumber 0, so floor it at 1.
+function isAtBoundaryChange(
+  diffEditor: editor.IStandaloneDiffEditor,
+  direction: 'next' | 'previous'
+): boolean {
+  const changes = diffEditor.getLineChanges()
+  if (!changes || changes.length === 0) {
+    return false
+  }
+  const position = diffEditor.getModifiedEditor().getPosition()
+  if (!position) {
+    return false
+  }
+  const changeLine = (change: editor.ILineChange): number =>
+    Math.max(1, change.modifiedStartLineNumber)
+  const edgeChange = direction === 'next' ? changes.at(-1) : changes[0]
+  if (!edgeChange) {
+    return false
+  }
+  return direction === 'next'
+    ? position.lineNumber >= changeLine(edgeChange)
+    : position.lineNumber <= changeLine(edgeChange)
+}
+
 export function DiffNavigationProvider({
   children
 }: {
@@ -43,6 +70,24 @@ export function DiffNavigationProvider({
   // Use state so sibling header controls repaint when diff computation changes their enabled state.
   const [changeCount, setChangeCount] = useState(0)
 
+  // At the file's edge change, hand off to the adjacent changed file (order
+  // owned by the Source Control panel, which auto-scrolls the newly opened file
+  // to its first change). Fall back to same-file wrap when there's no next file
+  // or the panel is unmounted.
+  const advance = useCallback((direction: 'next' | 'previous') => {
+    const diffEditor = editorRef.current
+    if (!diffEditor) {
+      return
+    }
+    if (isAtBoundaryChange(diffEditor, direction)) {
+      const navigate = useAppStore.getState().changedFileDiffNavigator
+      if (navigate?.(direction)) {
+        return
+      }
+    }
+    diffEditor.goToDiff(direction)
+  }, [])
+
   const registerDiffEditor = useCallback((diffEditor: editor.IStandaloneDiffEditor) => {
     editorRef.current = diffEditor
     updateSubRef.current?.dispose()
@@ -53,9 +98,12 @@ export function DiffNavigationProvider({
       }
     })
     shortcutCleanupRef.current?.()
-    shortcutCleanupRef.current = installMonacoDiffChangeNavigationShortcut(diffEditor)
+    shortcutCleanupRef.current = installMonacoDiffChangeNavigationShortcut(
+      diffEditor.getContainerDomNode(),
+      advance
+    )
     setChangeCount(countChanges(diffEditor))
-  }, [])
+  }, [advance])
 
   const unregisterDiffEditor = useCallback((diffEditor: editor.IStandaloneDiffEditor) => {
     // A stale disposal must not clear a newly registered replacement editor.
@@ -71,12 +119,12 @@ export function DiffNavigationProvider({
   }, [])
 
   const goToPreviousDiff = useCallback(() => {
-    editorRef.current?.goToDiff('previous')
-  }, [])
+    advance('previous')
+  }, [advance])
 
   const goToNextDiff = useCallback(() => {
-    editorRef.current?.goToDiff('next')
-  }, [])
+    advance('next')
+  }, [advance])
 
   useEffect(() => {
     return () => {
