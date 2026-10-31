@@ -101,4 +101,29 @@ export abstract class OrcaRuntimeWithSpawnSwitchTerminal extends OrcaRuntimeWith
       signal: args.signal
     })
   }
+
+  /**
+   * A switch's terminal that no tab will show once the switch failed with its client connected:
+   * ended only while it is still that exact process and nothing views it. Refused or unreachable,
+   * it stays for a retry's create to adopt through the claim; one it adopted was never its own.
+   */
+  async discardSwitchTerminal(terminal: RuntimeTerminalCreate): Promise<void> {
+    const pty = terminal.ptyId ? this.ptysById.get(terminal.ptyId) : undefined
+    if (
+      !pty?.incarnationId ||
+      terminal.agentSessionDisposition === 'adopted' ||
+      this.hasTerminalViewer(pty.ptyId)
+    ) {
+      return
+    }
+    // Main attaches what it spawns, so the viewer check is main's own, as for a window's fenced kill.
+    await this.ptyController
+      ?.killFenced?.({
+        id: pty.ptyId,
+        expectedIncarnationId: pty.incarnationId,
+        requireNoAgentOwner: false,
+        requireUnattached: false
+      })
+      .catch(() => undefined)
+  }
 }

@@ -82,14 +82,24 @@ export async function executeStructuredSessionTerminalSwitch(
       signal: deadline.signal
     })
   )
-  check()
-  const placed = await ctx.runtime.placeSwitchTerminal(record.location.workspaceId, {
-    terminal,
-    chatSessionId: sessionId,
-    windowTabId: execution?.sourceTabId,
-    activate: true,
-    focusWindow: agentLaunchMovesHostWindow(ctx)
-  })
+  let placed: Awaited<ReturnType<typeof ctx.runtime.placeSwitchTerminal>>
+  try {
+    check()
+    placed = await ctx.runtime.placeSwitchTerminal(record.location.workspaceId, {
+      terminal,
+      chatSessionId: sessionId,
+      windowTabId: execution?.sourceTabId,
+      activate: true,
+      focusWindow: agentLaunchMovesHostWindow(ctx)
+    })
+  } catch (error) {
+    // A connected client hears this failure and keeps its chat, so nothing will show this
+    // terminal; after a lost connection the client's retry adopts it instead.
+    if (!ctx.signal?.aborted) {
+      await ctx.runtime.discardSwitchTerminal(terminal)
+    }
+    throw error
+  }
   // A chat tab the layout owner kept stays listed; only a replaced one leaves the saved tabs.
   if (placed.replaced) {
     await host.setSessionTabVisibility(sessionId, false)

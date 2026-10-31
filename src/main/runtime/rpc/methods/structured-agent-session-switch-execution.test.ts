@@ -446,6 +446,57 @@ it('puts the switched terminal in the chat tab’s slot and closes the chat tab,
   ).toBe(false)
 })
 
+it.each([
+  ['connected', 1],
+  ['viewed', 0],
+  ['adopted', 0],
+  ['disconnected', 0]
+] as const)(
+  'ends a terminal no tab will show only for a connected client, fenced and unviewed: %s',
+  async (shape, discards) => {
+    const { runtime } = setupMainOwnedWorkspace()
+    vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
+      id: WORKTREE_ID,
+      path: rig.root,
+      connectionId: null,
+      repo: null,
+      folderWorkspace: null
+    })
+    const incarnationId = '55555555-5555-4555-8555-555555555555'
+    const killFenced = vi.fn(async () => ({ outcome: 'ended' as const }))
+    runtime.setPtyController({
+      spawn: async () => ({ id: 'switch-pty', incarnationId }),
+      killFenced,
+      write: () => true,
+      kill: () => true,
+      stopAndWait: async () => true,
+      getForegroundProcess: async () => null
+    })
+    const spawn = runtime.spawnSwitchTerminal.bind(runtime)
+    vi.spyOn(runtime, 'spawnSwitchTerminal').mockImplementation(async (...args) => ({
+      ...(await spawn(...args)),
+      ...(shape === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
+    }))
+    vi.spyOn(runtime, 'hasTerminalViewer').mockReturnValue(shape === 'viewed')
+    vi.spyOn(runtime, 'placeSwitchTerminal').mockRejectedValue(new Error('terminal_handle_stale'))
+    const result = await executeStructuredSessionSwitch(
+      { sessionId: id, execution: { invocationId: `to-terminal-${shape}` } },
+      { runtime, ...(shape === 'disconnected' ? { signal: AbortSignal.abort() } : {}) },
+      'terminal'
+    )
+    expect(result.status).not.toBe('completed')
+    expect(killFenced).toHaveBeenCalledTimes(discards)
+    if (discards) {
+      expect(killFenced).toHaveBeenCalledWith({
+        id: 'switch-pty',
+        expectedIncarnationId: incarnationId,
+        requireNoAgentOwner: false,
+        requireUnattached: false
+      })
+    }
+  }
+)
+
 it('re-issuing a switch whose first answer was lost adopts the terminal it started', async () => {
   await savedTranscript()
   const { runtime, session } = setupMainOwnedWorkspace()
