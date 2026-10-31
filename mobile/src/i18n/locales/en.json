@@ -2716,7 +2716,11 @@
     "nativeChatProse": {
       "attachedImage": "Attached image",
       "image": "image",
-      "openImageHint": "Opens the image full size"
+      "openImageHint": "Opens the image full size",
+      "loadingImage": "Loading image",
+      "imageUnavailable": "Image unavailable",
+      "retryImageHint": "Tries to load it again",
+      "retryImage": "Image unavailable — tap to retry"
     },
     "nativeChatToolLine": {
       "durationMilliseconds": "{{milliseconds}}ms",

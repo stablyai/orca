@@ -8,6 +8,7 @@ import {
   type MobileNativeChatRowOverlays
 } from './mobile-native-chat-row-overlays'
 import type { MobileNativeChatConversation } from '../../use-mobile-native-chat-conversation-state'
+import { stubRpcClient } from '../../../transport/rpc-client-test-stub'
 
 vi.mock('react-native', () => ({
   Image: 'Image',
@@ -47,6 +48,29 @@ let renderer: ReactTestRenderer | null = null
 afterEach(() => {
   act(() => renderer?.unmount())
   renderer = null
+})
+
+it('closes a host image when its owning client changes and never reopens it on return', () => {
+  const first = { client: stubRpcClient(), worktreeId: 'w1' }
+  const second = { client: stubRpcClient(), worktreeId: 'w1' }
+  const render = (imageSource: typeof first) => (
+    <MobileNativeChatRowOverlaysHost
+      conversation={{ surfaceId: 'tab-a', sessionId: 's1' }}
+      imageSource={imageSource}
+    >
+      <Row />
+    </MobileNativeChatRowOverlaysHost>
+  )
+  act(() => {
+    renderer = create(render(first))
+  })
+  act(() => overlays?.openImage({ uri: 'data:image/png;base64,AA==', label: 'Host image' }))
+  const images = () => renderer!.root.findAll((node) => String(node.type) === 'Modal')
+  expect(images()).toHaveLength(1)
+  act(() => renderer!.update(render(second)))
+  expect(images()).toHaveLength(0)
+  act(() => renderer!.update(render(first)))
+  expect(images()).toHaveLength(0)
 })
 
 describe.each([
