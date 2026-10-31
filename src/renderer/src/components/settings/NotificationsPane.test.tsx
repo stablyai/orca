@@ -1,10 +1,11 @@
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 
-import { sendNotificationSettingsTestNotification } from './NotificationsPane'
+import { NotificationsPane, sendNotificationSettingsTestNotification } from './NotificationsPane'
 
 const { toastError, toastMessage, toastSuccess } = vi.hoisted(() => ({
   toastError: vi.fn(),
@@ -20,6 +21,14 @@ vi.mock('sonner', () => ({
   }
 }))
 
+const { appPlatformHolder } = vi.hoisted(() => ({
+  appPlatformHolder: { value: 'darwin' as NodeJS.Platform }
+}))
+
+vi.mock('@/lib/renderer-app-platform', () => ({
+  getRendererAppPlatform: () => appPlatformHolder.value
+}))
+
 function createSettings(): GlobalSettings {
   return createGlobalSettingsFixture({
     notifications: {
@@ -27,6 +36,7 @@ function createSettings(): GlobalSettings {
       agentTaskComplete: true,
       terminalBell: true,
       suppressWhenFocused: true,
+      showDockBadge: true,
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 50,
@@ -45,6 +55,24 @@ describe('NotificationsPane', () => {
 
   afterEach(() => {
     vi.unstubAllGlobals()
+  })
+
+  it('shows the Show Dock Badge toggle on macOS', () => {
+    appPlatformHolder.value = 'darwin'
+    const html = renderToStaticMarkup(
+      <NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />
+    )
+
+    expect(html).toContain('Show Dock Badge')
+  })
+
+  it('hides the Show Dock Badge toggle off macOS', () => {
+    appPlatformHolder.value = 'win32'
+    const html = renderToStaticMarkup(
+      <NotificationsPane settings={createSettings()} updateSettings={vi.fn()} />
+    )
+
+    expect(html).not.toContain('Show Dock Badge')
   })
 
   it('uses native main-process delivery even when renderer permission is stale denied on macOS', async () => {

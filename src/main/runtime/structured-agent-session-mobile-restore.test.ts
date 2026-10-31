@@ -31,6 +31,7 @@ function wire(host: StructuredAgentSessionHost, controller: RuntimeMobileNotific
       agentTaskComplete: true,
       terminalBell: true,
       suppressWhenFocused: false,
+      showDockBadge: true,
       customSoundId: 'system',
       customSoundPath: null,
       customSoundVolume: 1,
