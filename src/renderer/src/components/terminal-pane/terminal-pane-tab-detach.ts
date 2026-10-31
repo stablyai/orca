@@ -7,6 +7,11 @@ import type { TerminalLeafMoveRequest } from '../../../../shared/terminal-leaf-m
 import { commitTerminalSurfaceClose } from '@/store/terminals/terminal-surface-close-intent'
 import type { PaneCwdEntry } from './resolve-split-cwd'
 import { detachTerminalLayoutLeaf } from './terminal-layout-leaf-detach'
+import {
+  holdTerminalMoveKeys,
+  terminalLeafMoveKey,
+  terminalTabMoveKey
+} from './terminal-leaf-move-guard'
 import { moveLeafThroughLayoutOwner } from './terminal-pane-detach-layout-owner'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import {
@@ -102,22 +107,22 @@ type DetachTerminalPaneToTabArgs = {
   worktreeId: string
 }
 
-// Leaves whose move main is committing; a repeat drop meanwhile is a no-op.
-const leavesMovingToNewTab = new Set<string>()
-
 /** Main commits leaf/binding/pane records before target tab creation so reattach cannot race another owner (STA-9259). After commitment the window only rolls forward. */
 export async function detachTerminalPaneToTab(
   args: DetachTerminalPaneToTabArgs
 ): Promise<DetachedTerminalPaneTab | null> {
   const leafId = args.manager?.getLeafId(args.sourcePaneId)
-  if (!leafId || leavesMovingToNewTab.has(leafId)) {
+  // Shared with the join into a tab: a repeat drop, or the other kind of move on this leaf or tab, is a no-op.
+  const release = leafId
+    ? holdTerminalMoveKeys([terminalLeafMoveKey(leafId), terminalTabMoveKey(args.sourceTabId)])
+    : null
+  if (!leafId || !release) {
     return null
   }
-  leavesMovingToNewTab.add(leafId)
   try {
     return await moveLeafToNewTab(args, leafId)
   } finally {
-    leavesMovingToNewTab.delete(leafId)
+    release()
   }
 }
 

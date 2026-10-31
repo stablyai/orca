@@ -42,6 +42,8 @@ const NODE_RUNTIME_INCLUDE = [
   // These reach Node SQLite through a shared helper or a dynamic import, which the scan skips.
   'src/main/claude/claude-transcript-catch-up.test.ts',
   'src/main/claude/claude-transcript-duration.test.ts',
+  'src/main/ipc/pty/ipc/leaf-move-identity-wiring.test.ts',
+  'src/main/runtime/layout-apply-moved-pane-identity.test.ts',
   'tests/e2e/native-chat-startup-option-pickers.unit.test.ts',
   'src/main/ai-vault/session-document-consumer-replacement.test.ts',
   'src/main/ai-vault-search/session-search-dependent-transcripts.test.ts',

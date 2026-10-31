@@ -207,6 +207,17 @@
   pointer-events: none;
 }
 
+/* A join target that would refuse the drop reads as unavailable, not as a drop zone. */
+.tab-drop-overlay[data-disabled] {
+  background: color-mix(in srgb, var(--muted-foreground) 14%, transparent);
+  border: 2px dashed color-mix(in srgb, var(--muted-foreground) 55%, transparent);
+}
+
+.tab-drop-overlay[data-disabled] .tab-drop-overlay__label {
+  background: var(--background);
+  color: var(--foreground);
+}
+
 .pane-drop-overlay[data-pane-drop-overlay-kind='insertion'] {
   background: var(--chart-2);
   border: 0;
@@ -215,8 +226,8 @@
 
 .tab-drop-overlay__label {
   font-size: 11px;
-  color: var(--primary-foreground);
-  background: color-mix(in srgb, var(--chart-2) 20%, transparent);
+  color: var(--foreground);
+  background: color-mix(in srgb, var(--background) 85%, transparent);
 }
 
 :root {

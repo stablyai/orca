@@ -3659,9 +3659,6 @@
             "legacyDragCannotRetarget": "このセッションは古いバージョンの Orca ウィンドウからドラッグされたため、選択した Codex アカウントに切り替えられません。セッション履歴パネルから再開してください。",
             "legacyDragPrepareFailed": "Orca はこの旧形式の Codex セッションを準備できませんでした。もう一度再開を試してください。"
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "新規分割"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "ペアリングされたランタイムで管理対象のブラウザタブを複製できませんでした。"
           }

@@ -3659,9 +3659,6 @@
             "legacyDragCannotRetarget": "此会话是从旧版 Orca 窗口拖入的，因此 Orca 无法将其切换到所选的 Codex 账户。请从会话历史面板恢复。",
             "legacyDragPrepareFailed": "Orca 无法准备此旧版 Codex 会话。请再次尝试恢复。"
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "新建拆分"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "配对的运行时无法复制受管理的浏览器标签页。"
           }

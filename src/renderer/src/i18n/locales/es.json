@@ -3727,9 +3727,6 @@
             "legacyDragCannotRetarget": "Esta sesión se arrastró desde una ventana de una versión anterior de Orca, por lo que Orca no puede reasignarla a la cuenta de Codex seleccionada. Reanúdala desde el panel Historial de sesiones.",
             "legacyDragPrepareFailed": "Orca no pudo preparar esta sesión antigua de Codex. Vuelve a intentar reanudarla."
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Nueva división"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "El entorno de ejecución vinculado no pudo duplicar la pestaña del navegador administrado."
           }

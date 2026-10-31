@@ -337,6 +337,9 @@ describe('a held tab in a server’s frame-drawn workspace', () => {
     const { store } = await appStoreFrameDrawn(serverSplit())
     const { staged, held } = stageHeld(HOST_GROUP)
     const finishDrag = vi.fn()
+    const moveTabIntoPane = vi.fn((): never => {
+      throw new Error('a browser tab never joins a pane')
+    })
     commitTabDragDrop({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a drop with no pointer: the commit reads only active.data, its rect and over.data.
       event: {
@@ -364,11 +367,13 @@ describe('a held tab in a server’s frame-drawn workspace', () => {
       dragGeometryRef: { current: null },
       dropUnifiedTab: store.getState().dropUnifiedTab,
       reorderUnifiedTabs: store.getState().reorderUnifiedTabs,
-      finishDrag
+      finishDrag,
+      leafJoin: { moveTabIntoPane, readLeafRects: () => [], getShownLeafTarget: () => null }
     })
     await settle()
     // Presence: the drop ran and moved the tab here.
     expect(finishDrag).toHaveBeenCalled()
+    expect(moveTabIntoPane).not.toHaveBeenCalled()
     expect(groupOf(store, held)).toBe(GROUP_2)
     expect(groupIds(store)).toEqual([HOST_GROUP, GROUP_2])
     expect(mentions(staged.workspaceId, held)).toEqual([])

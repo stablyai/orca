@@ -3951,9 +3951,6 @@
             "legacyDragCannotRetarget": "Cette session a été glissée depuis une fenêtre d’une ancienne version d’Orca. Orca ne peut donc pas la réaffecter au compte Codex sélectionné. Reprenez-la depuis le panneau Historique des sessions.",
             "legacyDragPrepareFailed": "Orca n’a pas pu préparer cette ancienne session Codex. Réessayez de la reprendre."
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Nouvelle scission"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "L’environnement d’exécution associé n’a pas pu dupliquer l’onglet du navigateur géré."
           }

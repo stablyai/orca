@@ -4109,9 +4109,6 @@
             "legacyDragCannotRetarget": "此工作階段是從舊版 Orca 視窗拖曳而來，因此 Orca 無法將其切換至所選的 Codex 帳戶。請改從工作階段歷史記錄面板恢復。",
             "legacyDragPrepareFailed": "Orca 無法準備此舊版 Codex 工作階段。請再次嘗試恢復。"
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "新增分割"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "配對的執行環境無法複製受管理的瀏覽器分頁。"
           }

@@ -4297,9 +4297,6 @@
             "legacyDragCannotRetarget": "Эта сессия перетащена из окна старой версии Orca, поэтому Orca не может привязать её к выбранной учётной записи Codex. Возобновите её на панели истории сессий.",
             "legacyDragPrepareFailed": "Orca не удалось подготовить эту устаревшую сессию Codex. Повторите попытку возобновления."
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Новое разделение"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "Сопряжённой среде выполнения не удалось дублировать вкладку управляемого браузера."
           }

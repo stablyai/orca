@@ -11,6 +11,7 @@ import type { EnrichedAgentHookEventPayload, PaneKeyAliasPersistenceListener } f
 import type { LegacyPaneKeyAliasEntry } from '../../../shared/persisted-state-types'
 import { isValidPaneKey } from './server-status-identity'
 import { AgentHookServerAuthorityEvidence } from './server-authority-evidence'
+import { transferHydratedAuthorityCommitments } from './server-authority-commitment-transfer'
 
 export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAuthorityEvidence {
   setPaneKeyAliasPersistenceListener(listener: PaneKeyAliasPersistenceListener | null): void {
@@ -207,6 +208,13 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       this.hydratedLaunchTokenHashByPaneKey.delete(previousOwnerPaneKey)
       this.hydratedLaunchTokenHashByPaneKey.set(toPaneKey, hydratedLaunchTokenHash)
     }
+    // Why: the hydrated array is immutable evidence captured at startup; the source tab close would otherwise revoke the moved pane's commitment.
+    this.hydratedAuthorityCommitments = transferHydratedAuthorityCommitments(
+      this.hydratedAuthorityCommitments,
+      this.revokedHydratedAuthorityCommitments,
+      previousOwnerPaneKey,
+      toPaneKey
+    )
     const persistedAuthority = this.persistedAuthorityCommitmentsByPaneKey.get(previousOwnerPaneKey)
     if (persistedAuthority) {
       const owner = parsePaneKey(toPaneKey)
@@ -264,13 +272,18 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
     }
     this.clearAssistantMessageRetry(previousOwnerPaneKey)
     this.clearTranscriptPoll(previousOwnerPaneKey)
-    // Detached processes keep posting the physical key; retain its mapping to the current owner.
-    this.legacyPaneKeyAliases.set(physicalPaneKey, {
-      stablePaneKey: toPaneKey,
-      ptyId: normalizedPtyId,
-      updatedAt,
-      authorityVerified: options?.authorityVerified ?? true
-    })
+    if (physicalPaneKey === toPaneKey) {
+      // Why: the pane came back to the key its process posts under, so it owns itself; a self-alias would persist.
+      this.legacyPaneKeyAliases.delete(physicalPaneKey)
+    } else {
+      // Detached processes keep posting the physical key; retain its mapping to the current owner.
+      this.legacyPaneKeyAliases.set(physicalPaneKey, {
+        stablePaneKey: toPaneKey,
+        ptyId: normalizedPtyId,
+        updatedAt,
+        authorityVerified: options?.authorityVerified ?? true
+      })
+    }
     this.boundPaneKeyAliases()
     this.closedAgentStatusPaneKeys.delete(toPaneKey)
     this.notifyPaneKeyAliasPersistenceListener()

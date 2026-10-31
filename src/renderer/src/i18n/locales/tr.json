@@ -4165,9 +4165,6 @@
             "legacyDragCannotRetarget": "Bu oturum eski sürümdeki bir Orca penceresinden sürüklendiği için Orca onu seçili Codex hesabına yönlendiremiyor. Oturum Geçmişi panelinden devam ettirin.",
             "legacyDragPrepareFailed": "Bu eski Codex oturumu Orca tarafından hazırlanamadı. Devam ettirmeyi yeniden deneyin."
           },
-          "TabGroupDropOverlay": {
-            "paneColumnLabel": "Yeni bölüm"
-          },
           "useTabGroupCreationCommands": {
             "duplicateBrowserTabFailed": "Eşleştirilmiş çalışma zamanında yönetilen tarayıcı sekmesi çoğaltılamadı."
           }
