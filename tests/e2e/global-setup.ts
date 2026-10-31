@@ -1,5 +1,6 @@
 // Build current E2E output and create an isolated fixture repo whose path is shared with workers.
 
+import { assertMacGuiLaunchAllowed } from '../../config/scripts/macos-gui-launch-preflight.mjs'
 import { execSync } from 'node:child_process'
 import { randomUUID } from 'node:crypto'
 import { existsSync, mkdirSync, mkdtempSync, realpathSync, writeFileSync } from 'node:fs'
@@ -32,6 +33,7 @@ const CLI_E2E_BUILD_TIMEOUT_MS = 120_000
 const WEB_E2E_BUILD_TIMEOUT_MS = 300_000
 
 export default function globalSetup(): void {
+  assertMacGuiLaunchAllowed()
   // Why: workers and teardown need this run's path, never another concurrent run's.
   process.env[E2E_TEST_REPO_PATH_FILE_ENV] = TEST_REPO_PATH_FILE
   const root = process.cwd()

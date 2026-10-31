@@ -22,6 +22,7 @@ Rebuild modified launch-policy code before running an app; stale build wrappers 
 
 Use the `$electron` skill and Playwright CDP for rendered Orca UI checks. Do not use computer-use for Orca UI validation.
 Screenshot presentational components without Electron: `pnpm fixtures:shot <id>` ([fixtures](docs/agents-md-refs/component-fixtures.md)).
+On macOS, fixture Chromium launches also require approved escalated execution outside the Codex sandbox, even headless.
 
 # Code Style
 

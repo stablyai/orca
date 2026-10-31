@@ -4,6 +4,7 @@ import { createServer as createNetServer } from 'node:net'
 import path from 'node:path'
 import { chromium } from 'playwright-core'
 import { createServer as createViteServer } from 'vite'
+import { assertMacGuiLaunchAllowed } from '../macos-gui-launch-preflight.mjs'
 import { createFixturePageRunner } from './fixture-page-runner.mjs'
 import {
   fixtureCacheDir,
@@ -158,6 +159,7 @@ function createFixtureApiPlugin(session) {
 }
 
 async function main() {
+  assertMacGuiLaunchAllowed()
   await mkdir(fixtureCacheDir, { recursive: true })
   const port = await findFreePort()
   const baseUrl = `http://127.0.0.1:${port}`
