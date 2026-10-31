@@ -267,7 +267,7 @@ export function AgentSessionContinuationDialog({
                     'Could not detect Agents on this workspace host.'
                   )}
                 </p>
-              ) : agents.length === 0 ? (
+              ) : destinationModel.state === 'settled' && rows.length === 0 ? (
                 <p className="text-[11px] text-muted-foreground">
                   {translate(
                     'components.agentSessionContinuation.noAgents',

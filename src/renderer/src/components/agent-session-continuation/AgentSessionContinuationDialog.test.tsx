@@ -289,3 +289,26 @@ it('retires the old pick when source and launch context change before Start', as
     })
   )
 })
+
+it('explains an empty host inventory when the enabled agent has no chat preference', async () => {
+  useAppStore.setState({
+    settings: {
+      ...useAppStore.getState().settings!,
+      defaultTuiAgent: 'grok',
+      disabledTuiAgents: getAgentCatalog()
+        .filter((agent) => agent.id !== 'grok')
+        .map((agent) => agent.id),
+      nativeChatProviders: { grok: false }
+    }
+  })
+  mocks.detection.mockReturnValue({ ...detection, detectedIds: [] })
+  render(<AgentSessionContinuationDialog open request={request} onOpenChange={vi.fn()} />, {
+    wrapper: TooltipProvider
+  })
+  await act(async () => {})
+  expect(screen.getByText('No enabled Agents were detected on this workspace host.')).toBeTruthy()
+  const start = screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' })
+  expect(start.disabled).toBe(true)
+  fireEvent.click(start)
+  expect(mocks.launch).not.toHaveBeenCalled()
+})
