@@ -47,7 +47,8 @@ ORCA orchestration worker-start --spec "<task>" --worktree current --agent codex
   in any state: a working worker reads it now; a finished or closed one gets it
   as a follow-up Task and reports with `worker_done`. The receipt says which.
   Except on a paired server: a finished worker there refuses `send`, so start
-  new work with `worker-start --on <server>`.
+  new work there with `worker-start --on <server>` (load
+  `references/placement-and-remote.md` first).
 
 Never:
 
