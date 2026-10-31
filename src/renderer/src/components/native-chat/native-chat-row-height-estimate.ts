@@ -2,6 +2,7 @@
 
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import { deriveNativeChatRowContent } from '../../../../shared/native-chat-row-content'
+import { withoutSentImagePromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import {
   NATIVE_CHAT_USER_MESSAGE_FOLDED_PX,
   nativeChatUserMessageFolds
@@ -93,7 +94,7 @@ export function nativeChatRowContentMetrics(
   if (cached?.charsPerLine === typography.charsPerLine) {
     return cached.metrics
   }
-  const content = deriveNativeChatRowContent(message.blocks)
+  const content = deriveNativeChatRowContent(withoutSentImagePromptMarkers(message))
   const metrics: NativeChatRowContentMetrics = {
     role: message.role,
     textLines: estimateNativeChatTextLines(content.markdown, typography.charsPerLine),
