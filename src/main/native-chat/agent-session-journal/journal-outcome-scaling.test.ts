@@ -11,7 +11,7 @@ import {
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
-import { restoreJournal } from './journal-open'
+import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import type { JournalRow } from './journal-row-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { JournalOutcomeSweeper, sweepJournalOutcomePage } from './journal-outcome-cleanup'
@@ -20,6 +20,8 @@ import { readJournalOutcomeGroups } from './journal-read-row'
 import { applyJournalRow, type JournalReducerState } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
 import { encodeJournalState } from './journal-state-codec'
+import type * as RowStorage from './journal-storage-row-schema'
+import type * as OutcomeFormat1 from './journal-outcome-format-1'
 import {
   projectionBase as base,
   projectionEpoch as epoch,
@@ -32,6 +34,29 @@ import {
 
 // N/10N contracts: each counts statements (prepare and exec), rows read and rows and bytes
 // written, never time, and requires the same work for a chat ten times larger.
+
+// Admission's own work: strict walks of input rows and of outcome records, counted at the calls.
+const admission = vi.hoisted(() => ({ rows: 0, records: 0 }))
+vi.mock('./journal-storage-row-schema', async (original) => {
+  const actual = await original<typeof RowStorage>()
+  return {
+    ...actual,
+    journalRowDeclaresMore: (row: unknown) => {
+      admission.rows += 1
+      return actual.journalRowDeclaresMore(row)
+    }
+  }
+})
+vi.mock('./journal-outcome-format-1', async (original) => {
+  const actual = await original<typeof OutcomeFormat1>()
+  return {
+    ...actual,
+    admitOutcomeFormat1: (value: Parameters<typeof actual.admitOutcomeFormat1>[0]) => {
+      admission.records += 1
+      return actual.admitOutcomeFormat1(value)
+    }
+  }
+})
 const N = 40
 const providerHandle = { kind: 'codex', threadId: 'thread-1' } as const
 const providerItemId = agentJournalItemKey({
@@ -373,6 +398,39 @@ it("opens an existing chat reading main's prefix rows and each tail key's newest
     expect(work.read.journal_outcomes).toBe(keys)
   }
   expect(large.keys).toBe(small.keys)
+})
+
+// Admission is linear in what is read, with a constant of one: one strict walk per input row read
+// (main parses each row once; this adds the walk), one per outcome record read or written.
+it('admits each row and record an existing chat reads or writes once, at N and 10N', async () => {
+  const measure = async (size: number) => {
+    const { database, rig } = await prefixChat(size, `admission-${size}`)
+    const watched = watch(database)
+    admission.rows = 0
+    admission.records = 0
+    restoreJournal(database.db, sessionId)
+    const open = { ...admission, read: watched.take().read }
+    admission.rows = 0
+    const page = readJournalRowsAfterCursor(database.db, sessionId, epoch, 0, 100)
+    const paged = { walks: admission.rows, rows: page.filter((row) => row.kind !== 'outcome') }
+    admission.rows = 0
+    admission.records = 0
+    await rig.writer.enqueue(revision('answer', message('z'.repeat(4_096), 'assistant'), 3))
+    const written = { ...admission, writes: watched.take().writes }
+    watched.stop()
+    return { open, paged, written, prefix: historyOf(size).length, keys: outcomeKeys(database) }
+  }
+  for (const { open, paged, written, prefix, keys } of [await measure(N), await measure(10 * N)]) {
+    // The marker is read twice (source check, last prefix page) and walked never.
+    expect(open.read.journal_rows).toBe(prefix + 2)
+    expect(open.rows).toBe(prefix)
+    expect(open.records).toBe(keys)
+    expect(paged.rows).toHaveLength(100)
+    expect(paged.walks).toBe(100)
+    // The written row's read-back, and each record the write inserts.
+    expect(written.rows).toBe(1)
+    expect(written.writes).toStrictEqual([['journal_outcomes INSERT', written.records]])
+  }
 })
 
 it('runs a sweep pass with nothing to retire without reading history at N and 10N', async () => {
