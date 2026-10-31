@@ -1,3 +1,5 @@
+import { vi } from 'vitest'
+import { JournalInputLineageOwner } from './journal-input-lineage'
 /** Instrument real index nodes without charging the test's discovery walk as production work. */
 export function journalInputIndexProbe(
   keys: readonly string[],
@@ -35,4 +37,18 @@ export function journalInputIndexProbe(
     }
   }
   return inspect
+}
+
+export function journalInputHistoryProbe() {
+  let visits = 0
+  const release = JournalInputLineageOwner.prototype.releaseHistory
+  const spy = vi
+    .spyOn(JournalInputLineageOwner.prototype, 'releaseHistory')
+    .mockImplementation(function (this: JournalInputLineageOwner, keep) {
+      release.call(this, (id) => {
+        visits++
+        return keep(id)
+      })
+    })
+  return { spy, visits: () => visits }
 }

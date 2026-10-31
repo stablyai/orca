@@ -163,19 +163,16 @@ it.each([10, 100])(
       .spyOn(pause, 'nextSendableQueuedCard')
       .mockImplementation((pauses, rows, held) => {
         const counting = source() === 'selection'
-        const counted = new Proxy(rows, {
-          get(target, key, receiver) {
-            if (key === Symbol.iterator && counting) {
-              return function* () {
-                for (const row of target) {
-                  seam().headVisits++
-                  yield row
-                }
-              }
+        const counted = rows.slice()
+        counted[Symbol.iterator] = function* () {
+          for (const row of rows) {
+            if (counting) {
+              seam().headVisits++
             }
-            return Reflect.get(target, key, receiver)
+            yield row
           }
-        })
+          return undefined
+        }
         return pick(pauses, counted, held)
       })
     const predicate = pause.queuePauseHolding

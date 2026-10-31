@@ -26,6 +26,7 @@ export type JournalInputPlace = {
 /** Own admission places and shared command witnesses are reconstructed by the journal fold. */
 export class JournalInputOrder {
   private readonly links = new JournalSubmissionLinks()
+  private reconstructing = false
   private legacyPlaces = 0
   private readonly witnesses = new Map<string, number>()
   private readonly recoveryOwed = new Set<string>()
@@ -65,36 +66,29 @@ export class JournalInputOrder {
     if (row.kind !== 'submission' || !row.handoverRecorded || row.queuedMessageId !== undefined) {
       return
     }
-    const coordinate = { epoch: row.epoch, sequence: row.seq }
-    this.cards.ensure(state)
-    const context: JournalInputContext = row.inputOrderContext ?? {
-      source: coordinate,
-      basis: 'legacy',
-      cut: this.lineage.at(row.seq)
-    }
-    const original =
-      context.basis === 'legacy' ? this.originalAcceptance?.(row.clientMessageId) : undefined
-    const place: JournalInputPlace = { coordinate, context, ...(original ? { original } : {}) }
-    const carried = row.inputOrderContext?.basis === 'legacy'
-    const exposed = carried ? this.cards.command() : undefined
-    const selected = carried
-      ? exposed && this.cards.relation(exposed, place)
-        ? exposed
-        : undefined
-      : !row.inputOrderContext
-        ? this.cards.queryCurrent(place).command
-        : this.cards.query(place).command
-    const witness = selected ? state.queue.cards.get(selected.messageId) : undefined
+    const place = this.cards.admission(state, row, this.originalAcceptance)
+    const witness = place.witness
     if (this.places.has(row.clientMessageId)) {
       this.releasePlace(state, row.clientMessageId, false)
     }
-    if (context.basis === 'legacy') {
+    if (place.context.basis === 'legacy') {
       this.legacyPlaces++
     }
     if (witness) {
       this.witnesses.set(witness.messageId, (this.witnesses.get(witness.messageId) ?? 0) + 1)
     }
     this.places.set(row.clientMessageId, { ...place, ...(witness ? { witness } : {}) })
+  }
+
+  // A streaming prefix cannot establish the last legacy consumer.
+  beginReconstruction(): void {
+    this.reconstructing = true
+  }
+  finishReconstruction(state: JournalReducerState): void {
+    this.reconstructing = false
+    if (this.legacyPlaces === 0) {
+      this.releaseHistory(state)
+    }
   }
 
   linkedVersion(): number {
@@ -184,6 +178,7 @@ export class JournalInputOrder {
     this.cards.queueChanged(state, prior, card)
     if (
       card.state === 'withdrawn' &&
+      !this.reconstructing &&
       this.legacyPlaces === 0 &&
       !this.witnesses.has(card.messageId)
     ) {
@@ -286,19 +281,31 @@ export class JournalInputOrder {
           this.witnesses.set(witnessId, references)
         } else {
           this.witnesses.delete(witnessId)
-          if (this.legacyPlaces === 0 && state.queue.cards.get(witnessId)?.state === 'withdrawn') {
+          if (
+            !this.reconstructing &&
+            this.legacyPlaces === 0 &&
+            state.queue.cards.get(witnessId)?.state === 'withdrawn'
+          ) {
             this.lineage.cards.delete(witnessId)
           }
         }
       }
-      if (place.context.basis === 'legacy' && --this.legacyPlaces === 0 && compact) {
-        this.lineage.releaseHistory(
-          (cardId) =>
-            state.queue.cards.get(cardId)?.state !== 'withdrawn' || this.witnesses.has(cardId)
-        )
-        this.cards.releaseHistory()
+      if (
+        place.context.basis === 'legacy' &&
+        --this.legacyPlaces === 0 &&
+        compact &&
+        !this.reconstructing
+      ) {
+        this.releaseHistory(state)
       }
     }
+  }
+
+  private releaseHistory(state: JournalReducerState): void {
+    this.lineage.releaseHistory(
+      (id) => state.queue.cards.get(id)?.state !== 'withdrawn' || this.witnesses.has(id)
+    )
+    this.cards.releaseHistory()
   }
 
   precedes(card: QueuedMessageRow, submission: AgentJournalSubmission): boolean {

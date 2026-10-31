@@ -1,6 +1,11 @@
+import { writeLegacyGapFixture } from './structured-agent-session-legacy-gap.test-support'
+import type { JournalReducerState } from '../agent-session-journal/journal-reducer'
 import { expect, it, vi } from 'vitest'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { loadTestJournal } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  loadTestJournal,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { selectStructuredAgentSessionInput } from './structured-agent-session-input-selection'
 import {
   createQueuedMessageTestRig,
@@ -212,3 +217,77 @@ it('retains an automatic unentered link through two production replacements and 
     await rig.dispose()
   }
 })
+
+it.each([10, 100])(
+  'preserves initial legacy terminal gaps through replacement and actual recovery N=%i',
+  async (n) => {
+    const rig = await createQueuedMessageTestRig({
+      restartable: true,
+      probeOwner: async () => ({ outcome: 'pid-absent' })
+    })
+    try {
+      const original = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      await rig.host.flushAllStreamedEvents()
+      writeLegacyGapFixture(rig.root, original, n)
+      const check = (state: JournalReducerState) => {
+        const m = state.submissions.get('legacy-M')!
+        expect.soft(state.inputOrder.forced('legacy-M')).toBe(true)
+        expect
+          .soft(['C', 'D'].map((id) => state.inputOrder.precedes(state.queue.cards.get(id)!, m)))
+          .toEqual([true, true])
+      }
+      check(loadTestJournal(rig.root, SESSION)!.state)
+      const journal = new AgentSessionJournal({
+        identity: original.identity,
+        database: openTestJournalHostDatabase(rig.root)
+      })
+      await journal.open()
+      for (let pass = 0; pass < 2; pass++) {
+        await journal.replaceEpochItems('unreconcilable_prefix', 1, [])
+        check(journal.queuedMessages.displayState())
+        check(loadTestJournal(rig.root, SESSION)!.state)
+      }
+      await journal.close()
+      rig.crashRestartHostProcess()
+      await rig.submission('legacy-M')
+      const reopened = rig.host.collaboratorsForTests().sessions.get(SESSION)!.journal
+      const saved = reopened.queuedMessages
+        .list()
+        .filter((c) => c.state === 'waiting')
+        .map((c) => c.messageId)
+      expect.soft(saved).toEqual(['C', 'D', 'legacy-M'])
+      expect(await rig.resume()).toMatchObject({ ok: true, value: { resumed: true } })
+      const delivered: string[] = []
+      for (const id of saved) {
+        if (id === 'C') {
+          await eventually(() => expect(rig.compact).toHaveBeenCalledOnce())
+          rig.finishCompact()
+          delivered.push(id)
+          continue
+        }
+        await eventually(async () => expect((await rig.handoff(id))?.handedOverAt).toBeDefined())
+        const h = await rig.handoffId(id)
+        await rig.settleAccepted(h, id)
+        delivered.push(id)
+        expect(await rig.submission(h)).toMatchObject({
+          dispatchState: 'accepted',
+          queuedMessageId: id
+        })
+      }
+      expect.soft(delivered).toEqual(['C', 'D', 'legacy-M'])
+      expect
+        .soft(
+          rig.dispatch.mock.calls.map(
+            ([input]) => reopened.submission(input.clientMessageId)?.queuedMessageId
+          )
+        )
+        .toEqual(['D', 'legacy-M'])
+      expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
+      expect(reopened.inputOrder['places'].size).toBe(0)
+      expect(reopened.inputOrder['witnesses'].size).toBe(0)
+      expect([...reopened.inputOrder.lineage.cards.values()].every((c) => !c.baseline)).toBe(true)
+    } finally {
+      await rig.dispose()
+    }
+  }
+)

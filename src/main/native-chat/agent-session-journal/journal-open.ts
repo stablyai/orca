@@ -56,6 +56,7 @@ export function startJournalRowFold(input: {
   finish: () => JournalLoad
 } {
   const state = createJournalReducerState(input.sessionId, input.epoch, input.originalAcceptance)
+  state.inputOrder.beginReconstruction()
   let expectedSequence = FIRST_JOURNAL_SEQUENCE
   let damage: JournalDamage | null = null
   let anchored = false
@@ -98,6 +99,7 @@ export function startJournalRowFold(input: {
     return true
   }
   const finish = (): JournalLoad => {
+    state.inputOrder.finishReconstruction(state)
     state.oldestSequence = FIRST_JOURNAL_SEQUENCE
     // Empty epochs contain no recoverable history; founding a fresh epoch loses nothing.
     const found =

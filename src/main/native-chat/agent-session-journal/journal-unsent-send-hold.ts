@@ -199,9 +199,9 @@ function headOfQueuePositions(
       continue
     }
     if (
-      !forcedBatch &&
       card.state === 'waiting' &&
-      ((unrun && keptIds.has(card.messageId)) || (card.queuedAt && card.queuedAt.epoch !== epoch))
+      ((unrun && keptIds.has(card.messageId)) ||
+        (!forcedBatch && card.queuedAt && card.queuedAt.epoch !== epoch))
     ) {
       earlier.push(card.messageId)
     } else {

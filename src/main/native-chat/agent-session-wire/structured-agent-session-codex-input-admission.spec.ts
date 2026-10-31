@@ -1,3 +1,4 @@
+import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import * as autoSandbox from '../../codex/codex-structured-auto-sandbox'
 import { expect, it, vi } from 'vitest'
@@ -9,7 +10,8 @@ import {
 import {
   CODEX_INPUT_FINALIZATION_ADMISSION_CASES,
   HOST_TEST_SESSION as SESSION,
-  hostTestMessage
+  hostTestMessage,
+  hostTestOperationId
 } from './structured-agent-session-host-test-data'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -446,5 +448,101 @@ it('keeps rewind outside a committed preparation until the input settles', async
   } finally {
     release.resolve()
     await rewinding
+  }
+})
+
+it('keeps earlier B before historically forced proven-unrun A through close and Resume delivery', async () => {
+  const {
+    host,
+    adapter,
+    codex,
+    config,
+    permissionSend,
+    began,
+    turns,
+    starts,
+    pick,
+    waitForInputFinalization
+  } = codexInputFinalizationFixture()
+  const { sessions, serialize } = host.collaboratorsForTests()
+  const journal = sessions.get(SESSION)!.journal
+  const w = await permissionSend('working W')
+  await began(w)
+  await serialize(SESSION, () =>
+    journal.queuedMessages.insert({
+      messageId: 'force-C',
+      body: { ...hostTestMessage('/compact'), command: { name: 'compact' } }
+    })
+  )
+  const a = await permissionSend('forced A', { personality: 'friendly' })
+  expect(journal.inputOrder.forced(a)).toBe(true)
+  await serialize(SESSION, () => journal.queuedMessages.withdraw(['force-C']))
+  await pick('auto')
+  const preparation = Promise.withResolvers<unknown>()
+  const read = vi.fn(() => preparation.promise)
+  codex.routes['config/read'] = read
+  try {
+    turns.end('completed')
+    await vi.waitFor(() => expect(read).toHaveBeenCalledOnce())
+    expect(journal.submission(a)).toMatchObject({
+      dispatchState: 'pending',
+      handedOverAt: expect.any(Number)
+    })
+    const b = await permissionSend('ordinary B', { personality: 'serious' })
+    expect(journal.inputOrder.forced(b)).toBe(false)
+    await host.close(SESSION, 'user-close')
+    await waitForInputFinalization(journal, a)
+    expect(starts()).toHaveLength(1)
+    const kept = journal.queuedMessages.list().filter((c) => c.state === 'waiting')
+    expect.soft(kept.map((c) => c.messageId)).toEqual([b, a])
+    for (const [id, personality] of [
+      [a, 'friendly'],
+      [b, 'serious']
+    ] as const) {
+      expect(kept.find((c) => c.messageId === id)?.options).toEqual(journal.submission(id)?.options)
+      expect(kept.find((c) => c.messageId === id)?.options).toMatchObject({ personality })
+      expect(journal.submission(id)).toMatchObject({
+        dispatchState: 'rejected',
+        keptAsQueuedMessageId: id
+      })
+    }
+    preparation.resolve(config)
+    codex.routes['config/read'] = () => config
+    const caller = { callerKey: 'client-1' }
+    await host.revealSession(SESSION)
+    const method = 'agentSession.queuedMessagesResume'
+    expect(
+      await host.queuedMessagesResume(caller, {
+        envelope: {
+          sessionId: SESSION,
+          clientOperationId: hostTestOperationId(),
+          expectedRuntimeFence: null,
+          payloadFingerprint: computeAgentSessionPayloadFingerprint({
+            method,
+            sessionId: SESSION,
+            fields: {}
+          })
+        }
+      })
+    ).toMatchObject({ ok: true })
+    const reopened = sessions.get(SESSION)!.journal
+    const delivered: string[] = []
+    for (const { messageId: id } of kept) {
+      await vi.waitFor(() => expect(reopened.queuedMessages.get(id)?.consumedAs).toBeTruthy())
+      const h = reopened.queuedMessages.get(id)!.consumedAs!
+      await began(h)
+      expect(reopened.submission(h)?.dispatchState).toBe('accepted')
+      delivered.push(reopened.submission(h)!.queuedMessageId!)
+      turns.end('completed')
+      await host.flushStreamedEvents(SESSION)
+    }
+    expect.soft(delivered).toEqual([b, a])
+    expect(starts()).toHaveLength(3)
+    expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
+    expect(reopened.inputOrder['places'].size).toBe(0)
+    expect(reopened.inputOrder['witnesses'].size).toBe(0)
+  } finally {
+    preparation.resolve(config)
+    await adapter.closeAll()
   }
 })

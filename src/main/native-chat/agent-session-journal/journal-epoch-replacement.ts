@@ -90,6 +90,7 @@ export function replaceJournalEpoch(input: {
   const state = createJournalReducerState(input.identity.sessionId, epoch, (id) =>
     journalInputAcceptance(input.database.db, input.identity.sessionId, id)
   )
+  state.inputOrder.beginReconstruction()
   const providerHandle = agentSessionJournalProviderHandle(input.identity)
   const previousOrigin = input.previous?.historyOrigin
   const restate =
@@ -256,6 +257,7 @@ export function replaceJournalEpoch(input: {
     rows.push(row)
   }
 
+  state.inputOrder.finishReconstruction(state)
   const { sessionId } = input.identity
   const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
   const claimsCommitted: (() => void)[] = []

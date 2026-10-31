@@ -1,4 +1,7 @@
-import { journalInputIndexProbe } from './journal-input-index-probe.test-support'
+import {
+  journalInputIndexProbe,
+  journalInputHistoryProbe
+} from './journal-input-index-probe.test-support'
 import { JournalInputDomainIndex } from './journal-input-domain-index'
 import { JournalInputPlaceIndex } from './journal-input-place-index'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
@@ -22,12 +25,19 @@ import {
   loadTestJournal,
   openTestJournalHostDatabase,
   liveTestJournalRows,
-  insertTestJournalRow
+  insertTestJournalRow,
+  writeTestLegacyTerminalGaps
 } from './journal-host-database-test-support'
 import {
   selectedStructuredSubmission,
   selectStructuredAgentSessionInput
 } from '../agent-session-wire/structured-agent-session-input-selection'
+
+const message = (text: string): AgentJournalMessageItem => ({
+  kind: 'message',
+  role: 'user',
+  blocks: [{ type: 'text', text }]
+})
 
 function knownPredecessors(owner: AgentSessionJournal | JournalReducerState, id: string): string[] {
   const state = 'queuedMessages' in owner ? owner.queuedMessages.displayState() : owner
@@ -49,11 +59,6 @@ it('preserves the forced queue place through command removal, two epoch replacem
     agent: 'claude' as const,
     providerHandle: claudeProviderHandle('thread', null)
   }
-  const message = (text: string): AgentJournalMessageItem => ({
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text }]
-  })
   const journal = await journals.open({ identity, stateDirectory: root })
   try {
     const c = await journal.queuedMessages.insert({
@@ -117,11 +122,6 @@ it.each(['resume', 'accepted'] as const)(
       agent: 'claude' as const,
       providerHandle: claudeProviderHandle('thread', null)
     }
-    const message = (text: string): AgentJournalMessageItem => ({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text }]
-    })
     let journal = await journals.open({ identity, stateDirectory: root })
     const append = (
       id: string,
@@ -337,11 +337,6 @@ it.each(['legacy', 'observed'] as const)(
       agent: 'claude' as const,
       providerHandle: claudeProviderHandle('thread', null)
     }
-    const message = (text: string): AgentJournalMessageItem => ({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text }]
-    })
     let journal = await journals.open({ identity, stateDirectory: root })
     const database = openTestJournalHostDatabase(root)
     try {
@@ -502,11 +497,6 @@ it('retries partial keeps from committed facts and carries rank moves on the fir
     agent: 'claude' as const,
     providerHandle: claudeProviderHandle('thread', null)
   }
-  const message = (text: string): AgentJournalMessageItem => ({
-    kind: 'message',
-    role: 'user',
-    blocks: [{ type: 'text', text }]
-  })
   let journal = await journals.open({ identity, stateDirectory: root })
   try {
     await journal.queuedMessages.insert({
@@ -582,11 +572,6 @@ it.each([10, 100])(
       agent: 'claude' as const,
       providerHandle: claudeProviderHandle('thread', null)
     }
-    const message = (text: string): AgentJournalMessageItem => ({
-      kind: 'message',
-      role: 'user',
-      blocks: [{ type: 'text', text }]
-    })
     let journal = await journals.open({ identity, stateDirectory: root })
     const database = openTestJournalHostDatabase(root)
     const cost = { sets: 0, queries: 0, nodes: 0, reads: 0 }
@@ -615,6 +600,7 @@ it.each([10, 100])(
         return query.apply(this, args)
       })
     const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
+    const release = journalInputHistoryProbe()
     try {
       const { epoch, sequence } = journal.cursor()
       let seq = sequence
@@ -645,6 +631,17 @@ it.each([10, 100])(
         queue(`ordinary-${i}`, { epoch, sequence: seq })
       }
       queue('D', { epoch: 'original-foreign', sequence: 1 })
+      seq = writeTestLegacyTerminalGaps(
+        database.db,
+        identity.sessionId,
+        {
+          epoch,
+          sequence: seq,
+          fence: 0,
+          providerHandle: agentSessionJournalProviderHandle(identity)
+        },
+        n
+      )
       for (const id of ids) {
         const target: JournalRow = {
           ...base(),
@@ -678,6 +675,7 @@ it.each([10, 100])(
       }
       queue('later-F', { epoch: 'original-foreign', sequence: 1 })
       journal = await journals.open({ identity, stateDirectory: root })
+      expect(release.spy).not.toHaveBeenCalled()
       const check = (state: JournalReducerState) => {
         for (const card of ['F', 'D']) {
           expect(
@@ -777,6 +775,15 @@ it.each([10, 100])(
       expect(cost.nodes).toBeLessThanOrEqual(54 * cost.sets)
       expect(cost.reads).toBeLessThanOrEqual(4 * 54 * (cost.sets + cost.queries))
       console.info('frozen-baseline-nodes', JSON.stringify({ n, ...cost }))
+      expect(release.spy).toHaveBeenCalledOnce()
+      expect(release.visits()).toBe(2 * n + 5)
+      const finished = loadTestJournal(root, identity.sessionId)!
+      expect(finished.damage).toBeNull()
+      expect(release.spy).toHaveBeenCalledTimes(2)
+      expect(release.visits()).toBe(2 * (2 * n + 5))
+      expect(
+        [...finished.state.inputOrder.lineage.cards.values()].every((card) => !card.baseline)
+      ).toBe(true)
       expect(journal.inputOrder['cards']['domains']).toBeUndefined()
       expect(journal.inputOrder['places'].size).toBe(0)
       expect(journal.inputOrder['witnesses'].size).toBe(0)
@@ -787,6 +794,7 @@ it.each([10, 100])(
       domainSets.mockRestore()
       domainQueries.mockRestore()
       indexSets.mockRestore()
+      release.spy.mockRestore()
       await journals.closeAll()
       await rm(root, { recursive: true, force: true })
     }

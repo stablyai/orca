@@ -1,3 +1,5 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import type { JournalSubmissionRow } from './journal-row-schema'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import type { JournalReducerState } from './journal-reducer'
 import type { QueuedMessageRow } from './queued-message-table'
@@ -70,6 +72,34 @@ export class JournalInputCardIndex {
       (this.cleared.has(card.messageId) || Boolean(queuePauseHolding(this.pauses, card)))
     )
   }
+  admission(
+    state: JournalReducerState,
+    row: JournalSubmissionRow,
+    originalAcceptance?: (id: string) => AgentJournalCursor | undefined
+  ): JournalInputPlace {
+    this.ensure(state)
+    const coordinate = { epoch: row.epoch, sequence: row.seq }
+    const context = row.inputOrderContext ?? {
+      source: coordinate,
+      basis: 'legacy' as const,
+      cut: this.lineage.at(row.seq)
+    }
+    const original =
+      context.basis === 'legacy' ? originalAcceptance?.(row.clientMessageId) : undefined
+    const place: JournalInputPlace = { coordinate, context, ...(original ? { original } : {}) }
+    const exposed = row.inputOrderContext?.basis === 'legacy' ? this.command() : undefined
+    const selected =
+      row.inputOrderContext?.basis === 'legacy'
+        ? exposed && this.relation(exposed, place)
+          ? exposed
+          : undefined
+        : !row.inputOrderContext
+          ? this.queryCurrent(place).command
+          : this.query(place).command
+    const witness = selected ? state.queue.cards.get(selected.messageId) : undefined
+    return { ...place, ...(witness ? { witness } : {}) }
+  }
+
   queryCurrent(place: JournalInputPlace): InputPlaceQuery {
     return queryInputContext(
       place.context,
