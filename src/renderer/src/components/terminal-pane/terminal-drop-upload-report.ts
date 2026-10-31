@@ -7,7 +7,9 @@ import {
 
 export function reportTerminalDropUploadSkipsAndFailures(
   skipped: { reason: string }[],
-  failed: { reason: string }[]
+  failed: { reason: string }[],
+  /** Names the destination workspace when the user has switched away from it. */
+  workspaceDescription?: string
 ): void {
   if (skipped.length > 0) {
     // Why: symlink rejection is policy, not an error; mixed reasons stay generic.
@@ -36,7 +38,12 @@ export function reportTerminalDropUploadSkipsAndFailures(
         'Failed to upload {{count}} files.',
         { count: failed.length, defaultValue_one: 'Failed to upload {{count}} file.' }
       ),
-      { description: describeSharedDropFailureReason(failed) }
+      {
+        description:
+          [workspaceDescription, describeSharedDropFailureReason(failed)]
+            .filter(Boolean)
+            .join(' ') || undefined
+      }
     )
   }
 }

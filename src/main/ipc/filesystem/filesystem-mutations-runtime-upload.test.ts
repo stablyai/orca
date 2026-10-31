@@ -38,8 +38,18 @@ const request = {
   expectedEnvironmentRuntimeId: 'rt-1'
 }
 
-function fakeSender(): EventEmitter {
-  return new EventEmitter()
+let nextSenderId = 0
+
+function fakeSender(): EventEmitter & {
+  id: number
+  isDestroyed: () => boolean
+  send: ReturnType<typeof vi.fn>
+} {
+  return Object.assign(new EventEmitter(), {
+    id: ++nextSenderId,
+    isDestroyed: () => false,
+    send: vi.fn()
+  })
 }
 
 function listenerCount(sender: EventEmitter): number {
@@ -145,6 +155,29 @@ describe('fs:uploadExternalFileToRuntime', () => {
     await expect(invoke(sender)).rejects.toThrow(RENDERER_GONE_MESSAGE)
     expect(observed?.aborted).toBe(true)
     expect(sweepMock).toHaveBeenCalledTimes(1)
+  })
+
+  it("does not let another renderer cancel this renderer's upload id", async () => {
+    const owner = fakeSender()
+    const other = fakeSender()
+    streamMock.mockImplementation(async ({ cancelSignal }: { cancelSignal: AbortSignal }) => {
+      await handlers.get('fs:cancelRuntimeUpload')!({ sender: other }, { uploadId: 'same-id' })
+      expect(cancelSignal.aborted).toBe(false)
+
+      await handlers.get('fs:cancelRuntimeUpload')!({ sender: owner }, { uploadId: 'same-id' })
+      expect(cancelSignal.aborted).toBe(true)
+      await handlers.get('fs:releaseRuntimeUpload')!({ sender: owner }, { uploadId: 'same-id' })
+      return { byteLength: 0 }
+    })
+
+    await expect(
+      handlers.get('fs:uploadExternalFileToRuntime')!(
+        { sender: owner },
+        { ...request, uploadId: 'same-id' }
+      )
+    ).resolves.toEqual({ byteLength: 0 })
+    owner.emit('destroyed')
+    other.emit('destroyed')
   })
 
   it('does not sweep when the stream fails while the renderer is still alive', async () => {

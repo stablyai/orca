@@ -3515,7 +3515,6 @@
                 "skippedSymlinks_other": "已跳过 {{count}} 个符号链接。",
                 "skippedItems_other": "已跳过 {{count}} 个条目。",
                 "failedUploads_other": "{{count}} 个文件上传失败。",
-                "uploadingFiles_other": "正在将 {{count}} 个文件上传到运行时…",
                 "uploadingFilesToRemote_other": "正在将 {{count}} 个文件上传到远端…"
               }
             }

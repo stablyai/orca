@@ -4040,8 +4040,6 @@
                 "skippedItems_one": "{{count}} öğe atlandı.",
                 "failedUploads_other": "{{count}} dosya yüklenemedi.",
                 "failedUploads_one": "{{count}} dosya yüklenemedi.",
-                "uploadingFiles_other": "{{count}} dosya çalışma zamanına yükleniyor…",
-                "uploadingFiles_one": "{{count}} dosya çalışma zamanına yükleniyor…",
                 "uploadingFilesToRemote_other": "{{count}} dosya uzak ortama yükleniyor…",
                 "uploadingFilesToRemote_one": "{{count}} dosya uzak ortama yükleniyor…"
               }

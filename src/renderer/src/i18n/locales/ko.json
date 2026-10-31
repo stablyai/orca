@@ -3515,7 +3515,6 @@
                 "skippedSymlinks_other": "심볼릭 링크 {{count}}개를 건너뛰었습니다.",
                 "skippedItems_other": "항목 {{count}}개를 건너뛰었습니다.",
                 "failedUploads_other": "파일 {{count}}개를 업로드하지 못했습니다.",
-                "uploadingFiles_other": "파일 {{count}}개를 런타임에 업로드 중…",
                 "uploadingFilesToRemote_other": "파일 {{count}}개를 원격으로 업로드 중…"
               }
             }

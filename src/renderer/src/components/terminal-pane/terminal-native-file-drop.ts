@@ -1,27 +1,15 @@
 import { toast } from 'sonner'
 import { extractIpcErrorMessage } from '@/lib/ipc-error'
-import type { PaneManager } from '@/lib/pane-manager/pane-manager'
-import { importExternalPathsToRuntime } from '@/runtime/runtime-file-import-client'
 import { translate } from '@/i18n/i18n'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
-import type { PtyTransport } from './pty-transport-types'
-import { recordTerminalUserInputForLeaf } from './terminal-input-activity'
+import { openWorktreeScopedToast } from '@/lib/worktree-scoped-toast'
 import { reportTerminalDropUploadSkipsAndFailures } from './terminal-drop-upload-report'
-import {
-  type captureTerminalDropTarget,
-  getCurrentTerminalDropTransport
-} from './terminal-drop-target'
-import {
-  getTerminalTargetShellForWorktreePath,
-  resolveTerminalDropTargetShell
-} from './terminal-drop-shell'
-import { isTerminalDropWindowsPathLike } from '../../../../shared/image-path-paste'
-import { writeTerminalDropPathsToCapturedTarget } from './terminal-drop-path-writer'
-import { showTerminalDropWriteFailure } from './terminal-drop-write-failure'
-import { joinRuntimeTerminalDropDir } from './terminal-drop-worktree-path'
+import { describeDropWorkspaceIfInactive } from './terminal-drop-workspace-label'
+import { pasteResolvedDropPaths, type NativeDropFlowArgs } from './terminal-drop-paste'
+import { uploadRuntimeDropPaths } from './terminal-runtime-drop-upload'
+import { resolveTerminalDropTargetShell } from './terminal-drop-shell'
 import type { captureTerminalDropTransportOwner } from './terminal-drop-transport-owner'
 import { toLocalWslDropPath } from './terminal-drop-local-wsl'
-import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 
 export async function deliverNativeTerminalFileDrop(
   args: NativeDropFlowArgs & {
@@ -101,70 +89,9 @@ export async function deliverNativeTerminalFileDrop(
     pane,
     tabId,
     targetShell,
+    worktreeId,
     worktreePath
   })
-}
-
-export type NativeDropFlowArgs = {
-  dataPaths: string[]
-  dropTarget: ReturnType<typeof captureTerminalDropTarget>
-  manager: PaneManager
-  paneTransports: Map<number, PtyTransport>
-  pane: { id: number; leafId: string }
-  tabId: string
-  worktreePath: string
-  expectedSshTargetId?: string
-  expectedSshConnectionGeneration?: number
-  expectedExecutionHostId?: 'local' | `ssh:${string}`
-  assertCurrent?: () => void
-}
-
-async function uploadRuntimeDropPaths(
-  args: NativeDropFlowArgs & {
-    runtimeEnvironmentId: string
-    worktreeId: string
-  }
-): Promise<void> {
-  const targetShell = getTerminalTargetShellForWorktreePath(args.worktreePath)
-  const destinationDir = joinRuntimeTerminalDropDir(args.worktreePath)
-  const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.uploadingFiles',
-      'Uploading {{count}} files to runtime…',
-      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to runtime…' }
-    )
-  )
-  try {
-    const { results } = await importExternalPathsToRuntime(
-      {
-        // Use the destination worktree’s owner, which may differ from the focused sidebar host.
-        target: runtimeTargetForOwnerEnvironment(args.runtimeEnvironmentId),
-        worktreeId: args.worktreeId,
-        worktreePath: args.worktreePath,
-        expectedExecutionHostId: args.expectedExecutionHostId,
-        expectedSshTargetId: args.expectedSshTargetId,
-        expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
-      },
-      args.dataPaths,
-      destinationDir,
-      { assertCurrent: args.assertCurrent, nameExtensionlessImages: true }
-    )
-    const imported = results.filter((result) => result.status === 'imported')
-    const importedPaths = imported.map((result) =>
-      isTerminalDropWindowsPathLike(args.worktreePath)
-        ? result.destPath.replace(/\//g, '\\')
-        : result.destPath
-    )
-    await pasteResolvedDropPaths({ ...args, paths: importedPaths, targetShell })
-    reportTerminalDropUploadSkipsAndFailures(
-      results.filter((result) => result.status === 'skipped'),
-      results.filter((result) => result.status === 'failed')
-    )
-  } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
-  } finally {
-    toast.dismiss(pending)
-  }
 }
 
 async function pasteLocalDropPaths(
@@ -200,15 +127,18 @@ async function uploadRemoteDropPaths(
   args: NativeDropFlowArgs & {
     connectionId: string
     targetShell: 'posix' | 'windows'
+    worktreeId: string
   }
 ): Promise<void> {
-  const pending = toast.loading(
-    translate(
-      'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote',
-      'Uploading {{count}} files to remote…',
-      { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to remote…' }
-    )
+  const message = translate(
+    'auto.components.terminal.pane.terminal.drop.handler.uploadingFilesToRemote',
+    'Uploading {{count}} files to remote…',
+    { count: args.dataPaths.length, defaultValue_one: 'Uploading {{count}} file to remote…' }
   )
+  const pending = openWorktreeScopedToast({
+    worktreeId: args.worktreeId,
+    show: (id) => (id === undefined ? toast.loading(message) : toast.loading(message, { id }))
+  })
   try {
     const { resolvedPaths, skipped, failed } = await window.api.fs.resolveDroppedPathsForAgent({
       paths: args.dataPaths,
@@ -219,39 +149,16 @@ async function uploadRemoteDropPaths(
       expectedSshConnectionGeneration: args.expectedSshConnectionGeneration
     })
     await pasteResolvedDropPaths({ ...args, paths: resolvedPaths, targetShell: args.targetShell })
-    reportTerminalDropUploadSkipsAndFailures(skipped, failed)
+    reportTerminalDropUploadSkipsAndFailures(
+      skipped,
+      failed,
+      describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
+    )
   } catch (err) {
-    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'))
+    toast.error(extractIpcErrorMessage(err, 'Failed to upload files.'), {
+      description: describeDropWorkspaceIfInactive(args.worktreeId, args.worktreePath)
+    })
   } finally {
-    toast.dismiss(pending)
-  }
-}
-
-async function pasteResolvedDropPaths(
-  args: NativeDropFlowArgs & {
-    paths: string[]
-    targetShell: 'posix' | 'windows'
-  }
-): Promise<void> {
-  args.assertCurrent?.()
-  // Upload/resolution can outlive the pane; recheck before writing to its PTY.
-  const liveTransport = getCurrentTerminalDropTransport(
-    args.manager,
-    args.paneTransports,
-    args.dropTarget
-  )
-  if (!liveTransport) {
-    return
-  }
-  const writeResult = await writeTerminalDropPathsToCapturedTarget({
-    dropTarget: args.dropTarget,
-    manager: args.manager,
-    paneTransports: args.paneTransports,
-    paths: args.paths,
-    targetShell: args.targetShell
-  })
-  showTerminalDropWriteFailure(writeResult.failureReason)
-  if (writeResult.sentAnyPath) {
-    recordTerminalUserInputForLeaf(args.tabId, args.pane.leafId)
+    pending.close()
   }
 }

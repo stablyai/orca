@@ -78,6 +78,14 @@ describe('reportTerminalDropUploadSkipsAndFailures', () => {
     ])
   })
 
+  it('names the workspace on a failure raised while the user is elsewhere', () => {
+    reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }], 'Dropped into ux-polish')
+
+    expect(toast.error).toHaveBeenCalledWith(expect.any(String), {
+      description: expect.stringMatching(/^Dropped into ux-polish /)
+    })
+  })
+
   it('keeps upload wording for failures', () => {
     reportTerminalDropUploadSkipsAndFailures([], [{ reason: 'a' }, { reason: 'b' }])
 

@@ -16280,9 +16280,6 @@
                 "failedUploads_one": "Não foi possível enviar {{count}} arquivo.",
                 "failedUploads_other": "Não foi possível enviar {{count}} arquivos.",
                 "failedUploads_many": "Não foi possível enviar {{count}} arquivos.",
-                "uploadingFiles_one": "Enviando {{count}} arquivo para o runtime…",
-                "uploadingFiles_other": "Enviando {{count}} arquivos para o runtime…",
-                "uploadingFiles_many": "Enviando {{count}} arquivos para o runtime…",
                 "uploadingFilesToRemote_one": "Enviando {{count}} arquivo para o host remoto…",
                 "uploadingFilesToRemote_other": "Enviando {{count}} arquivos para o host remoto…",
                 "uploadingFilesToRemote_many": "Enviando {{count}} arquivos para o host remoto…"

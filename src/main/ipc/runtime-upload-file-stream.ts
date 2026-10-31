@@ -5,6 +5,7 @@ import type {
   RuntimeUploadFileStreamRequest,
   StagedRuntimeUploadFileIdentity
 } from '../../shared/runtime-upload-staging-contract'
+import { RuntimeUploadCancelledError } from './runtime-upload-cancellation'
 import { formatByteCeiling, REMOTE_IMPORT_MAX_FILE_BYTES } from './runtime-import-limits'
 import {
   isRuntimeEnvironmentManuallyDisconnected,
@@ -22,6 +23,13 @@ export type RuntimeUploadFileStreamArgs = RuntimeUploadFileStreamRequest & {
   environmentId: string
   userDataPath: string
   signal?: AbortSignal
+  /**
+   * The user's cancel. Unlike `signal` it never aborts the in-flight chunk: the
+   * renderer deletes the temp path, so no straggling append may land after it.
+   */
+  cancelSignal?: AbortSignal
+  /** Called after each slice lands, so the drop UI can show how far along the file is. */
+  onProgress?: (progress: { sentBytes: number; totalBytes: number }) => void
 }
 
 /** Stream with one slice in memory rather than buffering and encoding the whole file. */
@@ -33,6 +41,8 @@ export async function streamExternalFileToRuntime(
     entryRelativePath: args.entryRelativePath,
     expected: args.expected,
     signal: args.signal,
+    cancelSignal: args.cancelSignal,
+    onProgress: args.onProgress,
     maxFileBytes: REMOTE_IMPORT_MAX_FILE_BYTES,
     limitLabel: 'per-file remote import limit',
     writeSlice: (contentBase64, offset) => sendChunk(args, contentBase64, offset > 0)
@@ -46,6 +56,9 @@ export type ExternalFileSliceStreamArgs = {
   entryRelativePath: string
   expected: StagedRuntimeUploadFileIdentity
   signal?: AbortSignal
+  /** See `RuntimeUploadFileStreamArgs.cancelSignal`. */
+  cancelSignal?: AbortSignal
+  onProgress?: (progress: { sentBytes: number; totalBytes: number }) => void
   maxFileBytes: number
   /** Names the ceiling in the refusal, e.g. "per-file remote import limit". */
   limitLabel: string
@@ -74,6 +87,7 @@ export async function streamExternalFileSlices(
   assertMatchesStagedIdentity(lstatResult, args.expected, displayPath)
 
   args.signal?.throwIfAborted()
+  throwIfCancelled(args.cancelSignal)
 
   const handle = await open(sourcePath, constants.O_RDONLY | (constants.O_NOFOLLOW ?? 0))
   try {
@@ -98,25 +112,31 @@ export async function streamExternalFileSlices(
     if (totalBytes === 0) {
       // Empty sources still need a temporary destination for commitUpload to rename.
       await args.writeSlice('', 0)
+      args.onProgress?.({ sentBytes: 0, totalBytes: 0 })
     } else {
       const buffer = Buffer.allocUnsafe(Math.min(RUNTIME_UPLOAD_SLICE_BYTES, totalBytes))
       let offset = 0
       while (offset < totalBytes) {
         args.signal?.throwIfAborted()
+        throwIfCancelled(args.cancelSignal)
         const { bytesRead } = await handle.read(buffer, 0, buffer.byteLength, offset)
         if (bytesRead === 0) {
           throw new Error(`File truncated during upload: '${displayPath}'`)
         }
         await args.writeSlice(buffer.subarray(0, bytesRead).toString('base64'), offset)
         offset += bytesRead
+        // Why: reported after the chunk is acknowledged, so the bar tracks bytes the
+        // runtime actually has rather than bytes handed to the socket.
+        args.onProgress?.({ sentBytes: offset, totalBytes })
       }
     }
-
     // Recheck before commit, including empty-file round trips; mtime catches same-size in-place edits.
     const afterReadStat = await handle.stat()
     if (afterReadStat.mtimeMs !== openedStat.mtimeMs || !isSameFile(afterReadStat, openedStat)) {
       throw new Error(`File changed during upload: '${displayPath}'`)
     }
+    // A cancel during the final write or stat would otherwise resolve and let the renderer commit.
+    throwIfCancelled(args.cancelSignal)
     return { byteLength: totalBytes }
   } finally {
     await handle.close()
@@ -181,6 +201,12 @@ async function sendChunk(
   )
   if (response.ok !== true) {
     throw new Error(response.error.message || response.error.code)
+  }
+}
+
+function throwIfCancelled(signal: AbortSignal | undefined): void {
+  if (signal?.aborted) {
+    throw new RuntimeUploadCancelledError()
   }
 }
 

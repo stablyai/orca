@@ -3986,7 +3986,6 @@
                 "skippedSymlinks_other": "已略過 {{count}} 個符號連結。",
                 "skippedItems_other": "已略過 {{count}} 個項目。",
                 "failedUploads_other": "{{count}} 個檔案上傳失敗。",
-                "uploadingFiles_other": "正在將 {{count}} 個檔案上傳至執行環境…",
                 "uploadingFilesToRemote_other": "正在將 {{count}} 個檔案上傳至遠端…"
               }
             }

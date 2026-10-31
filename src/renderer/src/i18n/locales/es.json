@@ -3579,9 +3579,6 @@
                 "failedUploads_one": "No se pudo subir {{count}} archivo.",
                 "failedUploads_other": "No se pudieron subir {{count}} archivos.",
                 "failedUploads_many": "No se pudieron subir {{count}} archivos.",
-                "uploadingFiles_one": "Subiendo {{count}} archivo al entorno de ejecución…",
-                "uploadingFiles_other": "Subiendo {{count}} archivos al entorno de ejecución…",
-                "uploadingFiles_many": "Subiendo {{count}} archivos al entorno de ejecución…",
                 "uploadingFilesToRemote_one": "Subiendo {{count}} archivo al host remoto…",
                 "uploadingFilesToRemote_other": "Subiendo {{count}} archivos al host remoto…",
                 "uploadingFilesToRemote_many": "Subiendo {{count}} archivos al host remoto…"

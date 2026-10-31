@@ -3515,7 +3515,6 @@
                 "skippedSymlinks_other": "シンボリックリンク {{count}} 件をスキップしました。",
                 "skippedItems_other": "{{count}} 件の項目をスキップしました。",
                 "failedUploads_other": "{{count}} 件のファイルをアップロードできませんでした。",
-                "uploadingFiles_other": "{{count}} 件のファイルをランタイムにアップロード中…",
                 "uploadingFilesToRemote_other": "{{count}} 件のファイルをリモートにアップロード中…"
               }
             }

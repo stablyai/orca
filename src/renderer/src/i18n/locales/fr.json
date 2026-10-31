@@ -3824,9 +3824,6 @@
                 "failedUploads_one": "Impossible de transférer {{count}} fichier.",
                 "failedUploads_other": "Impossible de transférer {{count}} fichiers.",
                 "failedUploads_many": "Impossible de transférer {{count}} fichiers.",
-                "uploadingFiles_one": "Transfert de {{count}} fichier vers l’environnement d’exécution…",
-                "uploadingFiles_other": "Transfert de {{count}} fichiers vers l’environnement d’exécution…",
-                "uploadingFiles_many": "Transfert de {{count}} fichiers vers l’environnement d’exécution…",
                 "uploadingFilesToRemote_one": "Transfert de {{count}} fichier vers l’hôte distant…",
                 "uploadingFilesToRemote_other": "Transfert de {{count}} fichiers vers l’hôte distant…",
                 "uploadingFilesToRemote_many": "Transfert de {{count}} fichiers vers l’hôte distant…"

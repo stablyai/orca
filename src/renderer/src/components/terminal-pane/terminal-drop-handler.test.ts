@@ -1,5 +1,6 @@
 import { parseExecutionHostId } from '../../../../shared/execution-host'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeImportProgressHandlers } from '@/runtime/runtime-upload-progress-tracker'
 
 const mocks = vi.hoisted(() => {
   const worktreesByRepo: Record<
@@ -23,6 +24,7 @@ const mocks = vi.hoisted(() => {
 
   return {
     toastLoading: vi.fn(() => 'toast-1'),
+    toastCustom: vi.fn((_render: unknown, _options?: Record<string, unknown>) => 'toast-1'),
     toastDismiss: vi.fn(),
     toastError: vi.fn(),
     importExternalPathsToRuntime: vi.fn(),
@@ -53,6 +55,7 @@ const mocks = vi.hoisted(() => {
 vi.mock('sonner', () => ({
   toast: {
     loading: mocks.toastLoading,
+    custom: mocks.toastCustom,
     dismiss: mocks.toastDismiss,
     error: mocks.toastError,
     message: vi.fn()
@@ -61,7 +64,8 @@ vi.mock('sonner', () => ({
 
 vi.mock('@/store', () => ({
   useAppStore: {
-    getState: () => mocks.storeState
+    getState: () => mocks.storeState,
+    subscribe: () => () => {}
   }
 }))
 
@@ -73,10 +77,18 @@ vi.mock('@/lib/new-workspace', () => ({
   CLIENT_PLATFORM: 'win32'
 }))
 
+vi.mock('@/lib/browser-uuid', () => ({
+  createBrowserUuid: () => 'session-1'
+}))
+
 vi.mock('./terminal-input-activity', () => ({
   recordTerminalUserInputForLeaf: mocks.recordTerminalUserInputForLeaf
 }))
 
+import {
+  endTransferSession,
+  getTransferSession
+} from '@/components/transfer-progress/transfer-session-state'
 import { handleTerminalFileDrop } from './terminal-drop-handler'
 import { wrapTerminalBracketedPasteText } from './terminal-bracketed-paste'
 
@@ -96,9 +108,75 @@ function createTerminalTransport(
   }
 }
 
+// Why: the drop panel is only created once rows exist, so a mock that never
+// announces a row leaves nothing for the dismissal assertions to observe.
+type ImportOptions = { progress?: RuntimeImportProgressHandlers }
+
+const ROW = { uploadId: 'u-1', name: 'logo.png', totalBytes: 10, sourcePath: '/Users/me/logo.png' }
+
+/** A successful import: the row moves all its bytes and settles before the drop finishes. */
+function startAndFinishRow(options: ImportOptions | undefined): void {
+  const progress = options?.progress
+  progress?.onStart([ROW])
+  progress?.onRowProgress(ROW.uploadId, ROW.totalBytes)
+  progress?.onRowSettled(ROW.uploadId, 'done')
+  progress?.onFinish()
+}
+
+/** An import that throws mid-drop: rows never settle, the finally still finishes. */
+function startRowThenAbort(options: ImportOptions | undefined): void {
+  options?.progress?.onStart([ROW])
+  options?.progress?.onFinish()
+}
+
+function announceRowThenResolve(value: unknown) {
+  return async (_context: unknown, _paths: unknown, _dest: unknown, options?: ImportOptions) => {
+    startAndFinishRow(options)
+    return value
+  }
+}
+
+const EXPECTED_IMPORT_OPTIONS = {
+  assertCurrent: expect.any(Function),
+  nameExtensionlessImages: true,
+  progress: {
+    onStart: expect.any(Function),
+    onRowProgress: expect.any(Function),
+    onRowSettled: expect.any(Function),
+    onFinish: expect.any(Function),
+    isCancelled: expect.any(Function)
+  }
+}
+
+/** Points the store at one SSH-backed repo whose only worktree is `wt-1`. */
+function stubSshRepo(
+  connectionId: string,
+  path: string,
+  sshState: { remotePlatform?: NodeJS.Platform; connectionGeneration?: number }
+): void {
+  mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
+  mocks.storeState.repos = [
+    { id: 'repo1', connectionId, path, executionHostId: `ssh:${connectionId}` }
+  ]
+  mocks.storeState.worktreesByRepo = {
+    repo1: [{ id: 'wt-1', repoId: 'repo1', path, hostId: `ssh:${connectionId}` }]
+  }
+  mocks.storeState.sshConnectionStates = new Map([[connectionId, sshState]])
+}
+
+function stubLocalRepo(repoPath: string, worktreePath = repoPath): void {
+  mocks.storeState.repos = [
+    { id: 'repo1', connectionId: null, path: repoPath, executionHostId: 'local' }
+  ]
+  mocks.storeState.worktreesByRepo = {
+    repo1: [{ id: 'wt-1', repoId: 'repo1', path: worktreePath, hostId: 'local' }]
+  }
+}
+
 describe('handleTerminalFileDrop', () => {
   beforeEach(() => {
     vi.clearAllMocks()
+    endTransferSession('session-1')
     mocks.storeState.activeRepoId = 'repo1'
     mocks.storeState.activeWorktreeId = 'wt-1'
     vi.stubGlobal('window', {
@@ -132,17 +210,19 @@ describe('handleTerminalFileDrop', () => {
   })
 
   it('uploads client-local drops into the active runtime before pasting paths', async () => {
-    mocks.importExternalPathsToRuntime.mockResolvedValue({
-      results: [
-        {
-          sourcePath: '/Users/me/logo.png',
-          status: 'imported',
-          destPath: '/remote/repo/.orca/drops/logo.png',
-          kind: 'file',
-          renamed: false
-        }
-      ]
-    })
+    mocks.importExternalPathsToRuntime.mockImplementation(
+      announceRowThenResolve({
+        results: [
+          {
+            sourcePath: '/Users/me/logo.png',
+            status: 'imported',
+            destPath: '/remote/repo/.orca/drops/logo.png',
+            kind: 'file',
+            renamed: false
+          }
+        ]
+      })
+    )
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
@@ -170,7 +250,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/logo.png'],
       '/remote/repo/.orca/drops',
-      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
+      EXPECTED_IMPORT_OPTIONS
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('/remote/repo/.orca/drops/logo.png'),
@@ -179,25 +259,34 @@ describe('handleTerminalFileDrop', () => {
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).toHaveBeenCalledWith('tab-1', 'leaf-1')
     expect(mocks.toastError).not.toHaveBeenCalled()
-    expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
+    expect(mocks.toastCustom).toHaveBeenCalled()
+    const session = getTransferSession('session-1')
+    expect(session?.settled).toBe(true)
+    expect(session?.rows).toEqual([expect.objectContaining({ status: 'done', sentBytes: 10 })])
+    // The panel holds briefly to show the outcome and dismisses itself; cutting
+    // that short here is what made a cancelled drop vanish with nothing to read.
+    expect(mocks.toastDismiss).not.toHaveBeenCalled()
   })
 
   it('does not paste runtime-uploaded paths when the target PTY changed', async () => {
     let ptyId = 'pty-1'
-    mocks.importExternalPathsToRuntime.mockImplementation(async () => {
-      ptyId = 'pty-2'
-      return {
-        results: [
-          {
-            sourcePath: '/Users/me/logo.png',
-            status: 'imported',
-            destPath: '/remote/repo/.orca/drops/logo.png',
-            kind: 'file',
-            renamed: false
-          }
-        ]
+    mocks.importExternalPathsToRuntime.mockImplementation(
+      async (_context: unknown, _paths: unknown, _dest: unknown, options?: ImportOptions) => {
+        ptyId = 'pty-2'
+        startAndFinishRow(options)
+        return {
+          results: [
+            {
+              sourcePath: '/Users/me/logo.png',
+              status: 'imported',
+              destPath: '/remote/repo/.orca/drops/logo.png',
+              kind: 'file',
+              renamed: false
+            }
+          ]
+        }
       }
-    })
+    )
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
@@ -218,7 +307,56 @@ describe('handleTerminalFileDrop', () => {
     expect(sendInput).not.toHaveBeenCalled()
     expect(focus).not.toHaveBeenCalled()
     expect(mocks.recordTerminalUserInputForLeaf).not.toHaveBeenCalled()
+    expect(mocks.toastDismiss).not.toHaveBeenCalled()
+  })
+
+  it('publishes the upload panel without an explicit undefined id', async () => {
+    mocks.importExternalPathsToRuntime.mockImplementation(announceRowThenResolve({ results: [] }))
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+    const manager = { getActivePane: () => pane, getPanes: () => [pane] }
+
+    await handleTerminalFileDrop({
+      manager: manager as never,
+      paneTransports: new Map([[1, createTerminalTransport(vi.fn(() => true))]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      pane,
+      paths: ['/Users/me/logo.png']
+    })
+
+    // Why: sonner spreads these options over the id it just minted, so passing
+    // `id: undefined` registers the toast under an id it never returns and every
+    // re-issue stacks another panel instead of updating the first.
+    expect(mocks.toastCustom).toHaveBeenCalledTimes(1)
+    const options = mocks.toastCustom.mock.calls[0]?.[1]
+    expect(options).toBeDefined()
+    expect(Object.keys(options ?? {})).not.toContain('id')
+  })
+
+  it('tears the upload panel down immediately when the import throws', async () => {
+    mocks.importExternalPathsToRuntime.mockImplementation(
+      async (_context: unknown, _paths: unknown, _dest: unknown, options?: ImportOptions) => {
+        startRowThenAbort(options)
+        throw new Error('runtime unreachable')
+      }
+    )
+    const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
+    const manager = { getActivePane: () => pane, getPanes: () => [pane] }
+
+    await handleTerminalFileDrop({
+      manager: manager as never,
+      paneTransports: new Map([[1, createTerminalTransport(vi.fn(() => true))]]) as never,
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      cwd: undefined,
+      pane,
+      paths: ['/Users/me/logo.png']
+    })
+
     expect(mocks.toastDismiss).toHaveBeenCalledWith('toast-1')
+    expect(mocks.toastError).toHaveBeenCalled()
+    expect(getTransferSession('session-1')).toBeUndefined()
   })
 
   it('uses Windows shell paths for forward-slash UNC runtime worktrees', async () => {
@@ -273,7 +411,7 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/logo.png'],
       '\\\\server\\share\\repo\\.orca\\drops',
-      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
+      EXPECTED_IMPORT_OPTIONS
     )
     expect(sendInput).toHaveBeenCalledWith(
       wrapTerminalBracketedPasteText('\\\\server\\share\\repo\\.orca\\drops\\logo.png'),
@@ -337,19 +475,14 @@ describe('handleTerminalFileDrop', () => {
       },
       ['/Users/me/spec.pdf'],
       '/remote/repo/.orca/drops',
-      { assertCurrent: expect.any(Function), nameExtensionlessImages: true }
+      EXPECTED_IMPORT_OPTIONS
     )
     expect(sendInput).toHaveBeenCalledWith('/remote/repo/.orca/drops/spec.pdf ', 'driving')
   })
 
   it('keeps explicit local worktree drops local while a runtime is focused', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
-    mocks.storeState.repos = [
-      { id: 'repo1', connectionId: null, path: '/remote/repo', executionHostId: 'local' }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/remote/repo', hostId: 'local' }]
-    }
+    stubLocalRepo('/remote/repo')
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
@@ -382,24 +515,7 @@ describe('handleTerminalFileDrop', () => {
         localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' }
       }
     ]
-    mocks.storeState.repos = [
-      {
-        id: 'repo1',
-        connectionId: null,
-        path: 'C:\\Users\\alice\\repo',
-        executionHostId: 'local'
-      }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: 'C:\\Users\\alice\\repo\\feature',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
+    stubLocalRepo('C:\\Users\\alice\\repo', 'C:\\Users\\alice\\repo\\feature')
     const sendInput = vi.fn(() => true)
     const focus = vi.fn()
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus } }
@@ -437,19 +553,7 @@ describe('handleTerminalFileDrop', () => {
     mocks.storeState.projects = [
       { id: 'repo1', localWindowsRuntimePreference: { kind: 'wsl', distro: 'Ubuntu' } }
     ]
-    mocks.storeState.repos = [
-      { id: 'repo1', connectionId: null, path: 'C:\\Users\\alice\\repo', executionHostId: 'local' }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: 'C:\\Users\\alice\\repo',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
+    stubLocalRepo('C:\\Users\\alice\\repo')
     const sendInput = vi.fn(() => true)
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
 
@@ -472,12 +576,7 @@ describe('handleTerminalFileDrop', () => {
 
   it('uses acknowledged PTY writes for native local drops when available', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
-    mocks.storeState.repos = [
-      { id: 'repo1', connectionId: null, path: '/repo', executionHostId: 'local' }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [{ id: 'wt-1', repoId: 'repo1', path: '/repo', hostId: 'local' }]
-    }
+    stubLocalRepo('/repo')
     const sendInput = vi.fn(() => true)
     const sendInputAccepted = vi.fn(async () => true)
     const focus = vi.fn()
@@ -510,19 +609,7 @@ describe('handleTerminalFileDrop', () => {
 
   it('pastes native file drops into the pane captured by its element', async () => {
     mocks.storeState.settings = { activeRuntimeEnvironmentId: 'focused-runtime' }
-    mocks.storeState.repos = [
-      { id: 'repo1', connectionId: null, path: '/repo', executionHostId: 'local' }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: '/repo',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
+    stubLocalRepo('/repo')
     const activeSendInput = vi.fn(() => true)
     const targetSendInput = vi.fn(() => true)
     const activeFocus = vi.fn()
@@ -659,26 +746,7 @@ describe('handleTerminalFileDrop', () => {
   })
 
   it('surfaces stale SSH owner capture failures without rejecting the native drop', async () => {
-    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.repos = [
-      {
-        id: 'repo1',
-        connectionId: 'ssh-stale',
-        path: '/remote/repo',
-        executionHostId: 'ssh:ssh-stale'
-      }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: '/remote/repo',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
-    mocks.storeState.sshConnectionStates = new Map([['ssh-stale', { remotePlatform: 'linux' }]])
+    stubSshRepo('ssh-stale', '/remote/repo', { remotePlatform: 'linux' })
     const pane = { id: 1, leafId: 'leaf-1', terminal: { focus: vi.fn() } }
 
     await expect(
@@ -700,28 +768,7 @@ describe('handleTerminalFileDrop', () => {
   })
 
   it('keeps SSH Linux path drops on POSIX shell escaping', async () => {
-    mocks.storeState.settings = { activeRuntimeEnvironmentId: null }
-    mocks.storeState.repos = [
-      {
-        id: 'repo1',
-        connectionId: 'ssh-linux',
-        path: '/remote/repo',
-        executionHostId: 'ssh:ssh-linux'
-      }
-    ]
-    mocks.storeState.worktreesByRepo = {
-      repo1: [
-        {
-          id: 'wt-1',
-          repoId: 'repo1',
-          path: '/remote/repo',
-          hostId: parseExecutionHostId(mocks.storeState.repos[0]?.executionHostId)?.id ?? 'local'
-        }
-      ]
-    }
-    mocks.storeState.sshConnectionStates = new Map([
-      ['ssh-linux', { remotePlatform: 'linux', connectionGeneration: 5 }]
-    ])
+    stubSshRepo('ssh-linux', '/remote/repo', { remotePlatform: 'linux', connectionGeneration: 5 })
     mocks.resolveDroppedPathsForAgent.mockResolvedValue({
       failed: [],
       resolvedPaths: ["/remote/repo/it's here.txt"],

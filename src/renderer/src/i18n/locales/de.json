@@ -4065,8 +4065,6 @@
                 "skippedItems_other": "{{count}} Elemente übersprungen.",
                 "failedUploads_one": "{{count}} Datei konnte nicht hochgeladen werden.",
                 "failedUploads_other": "{{count}} Dateien konnten nicht hochgeladen werden.",
-                "uploadingFiles_one": "{{count}} Datei wird in die Laufzeitumgebung hochgeladen…",
-                "uploadingFiles_other": "{{count}} Dateien werden in die Laufzeitumgebung hochgeladen…",
                 "uploadingFilesToRemote_one": "{{count}} Datei wird auf den Remote-Host hochgeladen…",
                 "uploadingFilesToRemote_other": "{{count}} Dateien werden auf den Remote-Host hochgeladen…"
               }
