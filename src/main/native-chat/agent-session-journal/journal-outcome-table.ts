@@ -100,8 +100,10 @@ export function persistJournalOutcomeRows(
     (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
   for (const row of rows) {
-    journalRowReadBack(state.sessionId, row)
-    applyJournalRow(transition.state, row, savedAt ?? row.ts)
+    // Folding what a reload reads keeps live state equal to it: an annotation the reader drops as
+    // unusable never reaches the model, so it is never refused by the strict record encoder.
+    const { stored } = journalRowReadBack(state.sessionId, row)
+    applyJournalRow(transition.state, stored, savedAt ?? row.ts)
     const changes = transition.changes(true)
     // Only this row's own transition is recorded, never a snapshot of a prefix value it left alone.
     const encoded = encodeJournalOutcomes(transition.state, changes, scalar)
