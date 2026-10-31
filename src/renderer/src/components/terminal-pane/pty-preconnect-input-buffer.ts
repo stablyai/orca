@@ -146,7 +146,7 @@ export function createPtyPreconnectInputBuffer(
         }
       }
     }
-    try {
+    flushInputs: try {
       while (buffering && pending.length > 0) {
         const input = pending.shift()
         if (!input) {
@@ -164,12 +164,12 @@ export function createPtyPreconnectInputBuffer(
           pending.unshift(input)
           pendingCodeUnits += input.data.length
           activeAcceptedInput = null
-          return
+          break flushInputs
         }
         if (!buffering || !writer.isCurrent()) {
           settle(input, false)
           clear()
-          return
+          break flushInputs
         }
         if (input.kind === 'accepted') {
           let accepted: boolean | null = null
@@ -185,7 +185,7 @@ export function createPtyPreconnectInputBuffer(
               continue
             }
             clear()
-            return
+            break flushInputs
           } finally {
             if (activeAcceptedInput === input) {
               activeAcceptedInput = null
@@ -196,7 +196,7 @@ export function createPtyPreconnectInputBuffer(
           }
           if (!buffering || accepted === null) {
             settle(input, false)
-            return
+            break flushInputs
           }
           settle(input, accepted)
           // Why not for a withdrawn write: its caller gave up on it alone, not on what was typed after it.
@@ -207,7 +207,7 @@ export function createPtyPreconnectInputBuffer(
             !writer.continuesAfterFailedWrite?.()
           ) {
             clear()
-            return
+            break flushInputs
           }
           continue
         }
@@ -225,7 +225,7 @@ export function createPtyPreconnectInputBuffer(
         }
         if (!accepted && !(input.source && !input.source.isCurrent())) {
           clear()
-          return
+          break flushInputs
         }
       }
       buffering = false
@@ -238,10 +238,9 @@ export function createPtyPreconnectInputBuffer(
       } catch (cleanupError) {
         failure = cleanupError
       }
-    } finally {
-      if (failed) {
-        throw failure
-      }
+    }
+    if (failed) {
+      throw failure
     }
   }
 

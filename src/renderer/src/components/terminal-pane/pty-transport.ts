@@ -83,16 +83,13 @@ export function createIpcPtyTransport(opts: IpcPtyTransportOptions = {}): PtyTra
     getPtyId: () => ptyId,
     getCallbacks: () => storedCallbacks,
     getSuppressAttentionEvents: () => suppressAttentionEvents,
-    markExited: () => {
-      return (
-        advancePtyLifecycle(true, () => {
-          lastExitGeneration = lifecycleGeneration
-          connected = false
-          ptyId = null
-          preconnectInputBuffer?.clear()
-        }) !== null
-      )
-    },
+    markExited: () =>
+      advancePtyLifecycle(true, () => {
+        lastExitGeneration = lifecycleGeneration
+        connected = false
+        ptyId = null
+        preconnectInputBuffer?.clear()
+      }) !== null,
     onPtyExit
   })
   const bind = (id: string): void => {
