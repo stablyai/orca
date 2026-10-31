@@ -21,6 +21,28 @@ export function shouldShowEditorPanelHeader(file: OpenFile, isCombinedDiff: bool
   return !isCombinedDiff && !isVirtualEditorFile(file)
 }
 
+export type EditorHeaderCopyMarkdownState = {
+  canShow: boolean
+  canCopy: boolean
+}
+
+export function getEditorHeaderCopyMarkdownState(params: {
+  isMarkdown: boolean
+  isDiffSurface: boolean
+  content: string | null
+  isBinary?: boolean
+  hasLoadError?: boolean
+}): EditorHeaderCopyMarkdownState {
+  if (!params.isMarkdown || params.isDiffSurface) {
+    return { canShow: false, canCopy: false }
+  }
+  // Why: empty markdown is still a real document; only block unload/binary/error.
+  if (params.isBinary || params.hasLoadError || params.content === null) {
+    return { canShow: true, canCopy: false }
+  }
+  return { canShow: true, canCopy: true }
+}
+
 export function getEditorHeaderCopyState(file: OpenFile): EditorHeaderCopyState {
   if (file.mode === 'conflict-review') {
     return {
