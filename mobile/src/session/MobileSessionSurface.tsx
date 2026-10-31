@@ -93,9 +93,8 @@ export function MobileSessionSurface({ controller }: { controller: MobileSession
   return (
     <View ref={setMobileSessionRootRef} style={styles.container}>
       <View style={styles.kavInner}>
-        {/* The status column's camera and clock take touches, so the header keeps clear of it. */}
+        <MobileSessionHeader controller={controller} details={details} />
         <View style={sideStripPadding(releasedStrip)}>
-          <MobileSessionHeader controller={controller} details={details} />
           <MobileWorkerAutoCloseStrip controller={controller} />
         </View>
         {contentRow}
