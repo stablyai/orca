@@ -105,6 +105,22 @@ export const worktreeRemove = bindDeferredRpcOperation(
   })
 )
 
+/**
+ * Renaming a row from Worktree Settings — the desktop's Display Name field on the same method.
+ *
+ * Throws on refusal rather than skipping like the pin write: the settings panel stays open on a
+ * failed save and shows the host's message, so the refusal has to reach it.
+ */
+export const worktreeDisplayNameWrite = bindDeferredRpcOperation(
+  defineRpcOperation({
+    name: 'worktree.set-display-name',
+    method: 'worktree.set',
+    acceptance: 'require-result-or-throw-message',
+    barrier: 'after-caller-barrier',
+    read: rpcResultVariant('display-name-written', hostScreenUnreadReplySchema)
+  })
+)
+
 // Navigation never waits for activation. The host list ignores its reply; session startup inspects accepted headless replies for advice and treats refusal as no advice.
 export const worktreeActivate = bindDeferredRpcOperation(
   defineRpcOperation({
