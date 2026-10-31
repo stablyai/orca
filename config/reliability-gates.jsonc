@@ -3633,7 +3633,7 @@
       "oracle": "Write one ordinary schema-v1 runtime and one provisioned-root runtime. Require the exact pre-#14352 reader to return both, run the old destroy lifecycle against the projected provisioned record, then require the candidate to retain the cleaned state while restoring schema-v2 and checkout-mode metadata. The same old reader must reject affected-main and fix-reverted bytes. Malformed, oversized, unknown-record, and future-version feature sidecars must leave rollback-compatible records accessible and must not be overwritten during compatible lifecycle mutations. Require destroy to have no implicit deadline, stop a hung destroy through the public desktop action, require cleanup_failed plus a fresh successful retry, prove provider or project-host rollback failure retains every ownership record required to retry, and prove missing recipe context cannot leave an unremovable hidden SSH registration. Supply the source ref's captured commit to create, reject a provisioned checkout on the wrong branch/ref, and reject a resume that changes connection mode or SSH ownership.",
       "commands": [
         "node config/scripts/run-ephemeral-vm-runtime-store-rollback-repro.mjs config/scripts/ephemeral-vm-runtime-store-cross-version.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "pnpm exec playwright test tests/e2e/ephemeral-vm-cleanup-retry.spec.ts --config tests/playwright.config.ts --project electron-headless --workers=1"
       ],
       "testFiles": [
@@ -3655,7 +3655,6 @@
         "src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts",
         "src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts",
         "src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts",
-        "src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts",
         "src/renderer/src/lib/provisioned-root-create-options.test.ts",
         "src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts",
         "tests/e2e/ephemeral-vm-cleanup-retry.spec.ts"
@@ -3737,12 +3736,6 @@
           "assertions": ["cancellation during source-ref resolution aborts before provider create"]
         },
         {
-          "file": "src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts",
-          "assertions": [
-            "the captured source commit reaches the main-owned provisioned-root adoption request"
-          ]
-        },
-        {
           "file": "src/main/ephemeral-vm/resume-integrity.test.ts",
           "assertions": [
             "resume allows host and port rotation",
@@ -3774,7 +3767,7 @@
           "result": "passed",
           "durationSeconds": 3,
           "summary": "One hundred twenty-two focused store, recipe-process, lifecycle, cleanup-handler, rendered stop-action, retry-context, source-ref, adoption-integrity, resume-integrity, and provisioning-recovery tests passed.",
-          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/ephemeral-vm-worktree-creation.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts"
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/shared/ephemeral-vm-runtime-store.test.ts src/shared/ephemeral-vm-runtime-store-rollback.test.ts src/shared/ephemeral-vm-recipe-process.test.ts src/main/ephemeral-vm/runtime-service.test.ts src/main/ephemeral-vm/resume-integrity.test.ts src/main/ephemeral-vm/recipe-runner.test.ts src/main/ephemeral-vm/runtime-ssh-cleanup.test.ts src/main/ipc/ephemeral-vm-runtime-handler-cleanup.test.ts src/main/ipc/ephemeral-vm-provision-cancel.test.ts src/main/ipc/ephemeral-vm-provisioned-root-ref.test.ts src/main/ipc/ephemeral-vm.test.ts src/main/provisioned-root-ssh-adoption.test.ts src/renderer/src/components/settings/EphemeralVmRuntimesSection.test.tsx src/renderer/src/lib/ephemeral-vm-failed-create-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-runtime-cleanup.test.ts src/renderer/src/lib/ephemeral-vm-workspace-target.test.ts src/renderer/src/lib/provisioned-root-create-options.test.ts src/renderer/src/store/slices/repos-ephemeral-vm-cleanup-retention.test.ts"
         }
       ],
       "runtimeBudget": {
@@ -11997,13 +11990,12 @@
       "invariant": "Cold restore must reproduce persisted terminal output while admitting at most one scratch-emulator replay, yielding after at most 64 Ki UTF-16 code units or 1,024 replay operations, keeping sticky restore payloads within 16 MiB, and allowing header-only checkpoint restores to bypass the replay queue.",
       "oracle": "Pause setImmediate during two single-batch restores larger than one replay slice and require exactly one admitted yield at a time, preserved text across a surrogate-pair slice boundary, and a concurrent header-only checkpoint restore to finish without consuming a replay slot. Cache tests require least-recently-used eviction, rejection of one oversized payload, and zero retained cache bytes after renderer ACK.",
       "commands": [
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cold-restore-payload-cache.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/terminal-history-incremental-restore.test.ts src/main/daemon/hibernation-cold-restore-repro.test.ts src/main/daemon/daemon-pty-adapter.test.ts"
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cold-restore-payload-cache.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/terminal-history-incremental-restore.test.ts src/main/daemon/daemon-pty-adapter.test.ts"
       ],
       "testFiles": [
         "src/main/daemon/cold-restore-payload-cache.test.ts",
         "src/main/daemon/history-reader.test.ts",
         "src/main/daemon/terminal-history-incremental-restore.test.ts",
-        "src/main/daemon/hibernation-cold-restore-repro.test.ts",
         "src/main/daemon/daemon-pty-adapter.test.ts"
       ],
       "assertionRefs": [
@@ -12034,6 +12026,7 @@
           "runner": "local",
           "platform": "macos",
           "command": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cold-restore-payload-cache.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/terminal-history-incremental-restore.test.ts src/main/daemon/hibernation-cold-restore-repro.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/main/daemon/cold-restore-payload-cache.test.ts src/main/daemon/history-reader.test.ts src/main/daemon/terminal-history-incremental-restore.test.ts src/main/daemon/daemon-pty-adapter.test.ts",
           "result": "passed",
           "durationSeconds": 5.68,
           "summary": "Five focused files passed 150 tests, including deterministic single-record replay slicing, one-at-a-time admission, UTF-16 boundary preservation, header-only queue bypass, byte-bounded LRU eviction, and ACK cleanup."

@@ -1,3 +1,4 @@
+import { normalizeAgentDefaultSurface } from '../../../shared/native-chat/native-chat-providers'
 import { normalizeNativeChatAppearanceSettings } from '../../../shared/native-chat/native-chat-appearance-settings'
 import { getDefaultVoiceSettings } from '../../../shared/constants'
 import { normalizePRBotAuthorOverrides } from '../../../shared/pr-bot-author-overrides'
@@ -13,7 +14,6 @@ import { normalizeNativeChatShellEnvironmentVariables } from '../../../shared/na
 import { publishedLegacyChatPermissionMode } from '../../../shared/agent-chat-permission-mode'
 import {
   expandWorkspaceDirHome,
-  savedChatUiWithTerminalDefaultView,
   stripRetiredGlobalSettings
 } from '../applying-settings/terminal-settings-migrations'
 import { readLegacySidekickFlag } from '../applying-settings/onboarding-normalization'
@@ -68,10 +68,7 @@ export function normalizeLoadedGlobalSettings(
     ...defaults.settings,
     // Legacy stored booleans cannot distinguish opt-in from the old default; retain explicit true.
     ...expandWorkspaceDirHome(stripRetiredGlobalSettings(parsed.settings)),
-    // Preserve terminal-first new tabs when retiring the old default-view switch.
-    ...(savedChatUiWithTerminalDefaultView(parsed.settings)
-      ? { experimentalNativeChat: false }
-      : {}),
+    agentDefaultSurface: normalizeAgentDefaultSurface(parsed.settings?.agentDefaultSurface),
     nativeChatAppearance: normalizeNativeChatAppearanceSettings(
       parsed.settings?.nativeChatAppearance
     ),

@@ -153,15 +153,25 @@ function TranscriptImagePreview({
     return () => releaseLocalImageSrcByKey(releaseKey)
   }, [leaseActive, releaseKey])
 
+  const previewable = Boolean(source) && (external || runtimeContext !== null)
   const showPreview =
-    leaseActive &&
-    Boolean(displaySrc) &&
-    displaySrc !== thumbnailErrorSrc &&
-    Boolean(source) &&
-    (external || runtimeContext !== null)
+    previewable && leaseActive && Boolean(displaySrc) && displaySrc !== thumbnailErrorSrc
 
-  if (!showPreview) {
+  if (!previewable) {
     return <div ref={ref}>{fallback}</div>
+  }
+  // Offscreen or loading keeps the thumbnail's square so scrolling never rewraps the row.
+  if (!showPreview) {
+    return (
+      <div
+        ref={ref}
+        className="flex size-20 shrink-0 flex-col items-center justify-center gap-1 rounded-md border border-border bg-chat-canvas px-1.5 text-xs text-chat-foreground-faint"
+        title={label}
+      >
+        <ImageIcon className="size-4 shrink-0" />
+        <span className="max-w-full truncate">{label}</span>
+      </div>
+    )
   }
   return (
     <div ref={ref} className="relative size-20 shrink-0">

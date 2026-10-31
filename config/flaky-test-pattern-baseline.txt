@@ -751,8 +751,6 @@
 3 test-no-wall-clock:config/scripts/reclaim-dev-electron-bundles.test.ts
 1 test-no-wall-clock:config/scripts/reclaim-release-test-caches.test.ts
 1 test-no-wall-clock:mobile/scripts/native-build-cache.test.ts
-1 test-no-wall-clock:mobile/src/components/MobileHostCard-truthful-status.test.tsx
-1 test-no-wall-clock:mobile/src/components/MobileHostCard.test.ts
 1 test-no-wall-clock:mobile/src/components/pr-sidebar/pr-comment-card-web-avatar.test.tsx
 1 test-no-wall-clock:mobile/src/session/mobile-structured-send-new-action.test.ts
 2 test-no-wall-clock:mobile/src/session/native-chat/composer/use-mobile-native-chat-message-send-draft-lifetime.test.ts
@@ -1011,7 +1009,6 @@
 6 test-no-wall-clock:src/main/runtime/runtime-rpc-pairing-mode-persistence.test.ts
 11 test-no-wall-clock:src/main/runtime/runtime-rpc-relay-pairing.test.ts
 2 test-no-wall-clock:src/main/runtime/runtime-rpc-websocket-bind-host.test.ts
-1 test-no-wall-clock:src/main/runtime/runtime-worktree-agent-sources.test.ts
 4 test-no-wall-clock:src/main/runtime/runtime-worktree-structured-agent-rows-liveness.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-agent-install-refresh.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-agent-launch-support.test.ts
@@ -1118,7 +1115,6 @@
 5 test-no-wall-clock:src/renderer/src/components/status-bar/inline-usage-bars.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-cursor-segment.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-provider-menu-focus.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/workspace-space-worktree-row.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx
@@ -1345,7 +1341,6 @@
 4 test-timeout-needs-reason:src/main/runtime/remote-runtime-request-connection.integration.test.ts
 1 test-timeout-needs-reason:src/main/runtime/rpc/ws-transport.test.ts
 3 test-timeout-needs-reason:src/main/runtime/runtime-rpc-device-revocation.test.ts
-1 test-timeout-needs-reason:src/main/runtime/sidebar-inputs/workspace-rows-publish-cost.test.ts
 1 test-timeout-needs-reason:src/main/runtime/terminal-close-slow-agent-exit.test.ts
 3 test-timeout-needs-reason:src/main/runtime/terminal-interactive-wait-visibility.test.ts
 1 test-timeout-needs-reason:src/main/runtime/terminal-tail-redraw-wall-time.test.ts

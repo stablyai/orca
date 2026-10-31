@@ -577,7 +577,7 @@ describe('agent shortcut delivery and deferred ownership', () => {
         [TEST_REPO.id]: [makeWorktree({ id: controller.activeWorktreeId!, repoId: TEST_REPO.id })]
       },
       detectedAgentIds: ['codex'],
-      settings: { ...store.getState().settings!, experimentalNativeChat: false }
+      settings: { ...store.getState().settings!, nativeChatProviders: {} }
     })
     mocks.state = { ...store.getState() }
   })

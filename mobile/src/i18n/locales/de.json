@@ -661,7 +661,6 @@
       "tryDifferentFilter": "Einen anderen Review-Filter ausprobieren."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "Review-Aktionen",
       "addNote": "Notiz hinzufügen",
       "cancelNote": "Notizeingabe abbrechen",
       "clearSentNotes": "Gesendete Notizen löschen",
@@ -768,11 +767,6 @@
       "moveUp": "Nach oben verschieben",
       "reorderHint": "Mit den Aktionen „Nach oben verschieben“ und „Nach unten verschieben“ lässt sich die Reihenfolge ohne Ziehen ändern"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Arbeitsbereich erstellen",
-      "pairDesktop": "Desktop koppeln",
-      "title": "Schnellaktionen"
-    },
     "hostCard": {
       "hostActions": "Aktionen für {{title}}",
       "openHost": "{{title}} öffnen",
@@ -812,9 +806,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Bereich schließen"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "Arbeitsbereich erstellen"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "HOOKS",
@@ -961,7 +952,13 @@
       "empty": "Noch keine eigenen Tastenkürzel definiert.",
       "removeShortcut": "{{label}} entfernen",
       "resetDefaults": "Auf Standard zurücksetzen",
-      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen"
+      "resetDescription": "Alle integrierten Tastenkürzel in der ursprünglichen Reihenfolge anzeigen",
+      "moreKeys": "WEITERE TASTEN",
+      "moreKeysDescription": "Diese Tasten befinden sich unter ⋯ in der Terminal-Tastenleiste. Blende Tasten ein oder aus und halte den Griff gedrückt, um sie in die gewünschte Reihenfolge zu ziehen. Tasten, die bereits in der Leiste sind, etwa Esc oder die Pfeiltasten, erscheinen nicht unter ⋯.",
+      "directionPad": "STEUERKREUZ",
+      "showDirectionPad": "Steuerkreuz anzeigen",
+      "showDirectionPadDescription": "Das Steuerkreuz in der Seitenleiste anheften. Andernfalls werden dort die einzelnen Pfeiltasten angezeigt.",
+      "showShortcut": "Tastenkürzel {{label}} anzeigen"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Ratenlimit-Zurücksetzung verwenden?",
@@ -1300,17 +1297,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Kontonutzung",
-      "sessionWindow": "5 h",
-      "systemDefault": "Systemstandard",
-      "weeklyWindow": "7 Tage"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Update-Hinweis für Orca {{version}} ausblenden",
       "title": "Orca {{version}} ist verfügbar",
-      "updateAccessibilityLabel": "Orca {{version}} ist verfügbar, zum Aktualisieren antippen",
-      "updateHint": "Zum Aktualisieren antippen"
+      "updateAccessibilityLabel": "Orca {{version}} ist verfügbar, zum Aktualisieren antippen"
     },
     "emptyState": {
       "connectedDescription": "Der Desktop erscheint hier. Alles ist Ende-zu-Ende-verschlüsselt.",
@@ -1318,26 +1308,14 @@
       "description": "Mit Orca auf dem Computer koppeln, um Agenten im Blick zu behalten, beliebige Terminals zu öffnen und die Arbeit vom Smartphone aus zu steuern.",
       "openDesktopDescription": "Einstellungen → Mobil öffnen und einen QR-Code zum Koppeln erstellen.",
       "openDesktopTitle": "Orca-Desktop-App öffnen",
-      "pairDesktop": "Desktop koppeln",
-      "scanCodeDescription": "Die Schaltfläche oben antippen, um den Scanner zu öffnen. Die Kamera auf den QR-Code auf dem Bildschirm richten.",
       "scanCodeTitle": "Code scannen",
-      "stepsHeading": "So funktioniert’s",
       "title": "Desktop verbinden"
     },
     "listFooter": {
-      "hostPickerTitle": "Aufgaben auf Host öffnen",
-      "resumeHeading": "Fortsetzen",
-      "tasksHeading": "Aufgaben"
+      "hostPickerTitle": "Aufgaben auf Host öffnen"
     },
     "listHeader": {
-      "agentTime": "Agentenzeit",
-      "agentsSpawned": "Gestartete Agenten",
-      "daysHours": "{{days}} T {{hours}} Std.",
-      "desktopsHeading": "Desktop-Computer",
-      "hoursMinutes": "{{hours}} Std. {{minutes}} Min.",
-      "minutes": "{{minutes}} Min.",
-      "prsCreated": "Erstellte PRs",
-      "title": "Willkommen zurück"
+      "desktopsHeading": "Desktop-Computer"
     },
     "screen": {
       "pairingCheckFailed": "Kopplung konnte nicht geprüft werden",
@@ -1345,11 +1323,6 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "removeHostTitle": "Host entfernen",
       "tryAgain": "Bitte erneut versuchen."
-    },
-    "tasksCard": {
-      "noSources": "Keine Aufgabenquellen verbunden",
-      "openProviderTasks": "{{provider}}-Aufgaben öffnen",
-      "title": "Aufgaben"
     }
   },
   "hooks": {
@@ -1394,16 +1367,11 @@
     },
     "hostScreenHeader": {
       "accounts": "Konten",
-      "activeFilters_one": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
-      "activeFilters_other": "Arbeitsbereichsoptionen ({{count}} Filter aktiv)",
       "backToHosts": "Zurück zu den Hosts",
-      "closeSearch": "Suche schließen",
       "floatingWorkspace": "Schwebender Arbeitsbereich",
       "hideSidebar": "Seitenleiste ausblenden",
       "reconnect": "Erneut verbinden",
-      "searchWorkspaces": "Arbeitsbereiche durchsuchen",
-      "tasks": "Aufgaben",
-      "workspaceOptions": "Arbeitsbereichsoptionen"
+      "tasks": "Aufgaben"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "„{{name}}“ ({{branch}}) löschen?",
@@ -1414,10 +1382,6 @@
       "removeHostMessage": "„{{name}}“ entfernen? Eine erneute Kopplung ist später möglich.",
       "sleep": "In Ruhezustand versetzen",
       "unpin": "Anheftung aufheben"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Arbeitsbereiche durchsuchen…",
-      "searchWorkspaces": "Arbeitsbereiche durchsuchen"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Checks: fehlgeschlagen",
@@ -1476,7 +1440,6 @@
       "backToOptions": "Zurück zu den Arbeitsbereichsoptionen",
       "cardDisplay": "Kartendarstellung",
       "cardLayout": "Kartenlayout",
-      "clearFilters": "Filter zurücksetzen",
       "exceptDefaultBranch": "Außer Standard-Branch",
       "filters": "Filter",
       "groupBy": "Gruppieren nach",
@@ -1831,7 +1794,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Tastatur ausblenden",
-      "sendKey": "{{label}} senden"
+      "sendKey": "{{label}} senden",
+      "modifierHint": "Gilt für die nächste Taste. Doppeltippen zum Beibehalten.",
+      "typeCharacter": "{{character}} eingeben",
+      "interrupt": "Terminal unterbrechen",
+      "keysModeLabel": "Tastenmodus: Eingaben gehen direkt an das Terminal. Zum Nachrichtenmodus wechseln",
+      "messageModeLabel": "Nachrichtenmodus: Schreiben, dann senden. Zum Tastenmodus wechseln",
+      "keysMode": "Tasten",
+      "messageMode": "Nachricht",
+      "moreKeys": "Weitere Tasten und Aktionen",
+      "showKeyboard": "Tastatur anzeigen"
     },
     "activeContent": {
       "createTab": "Tab erstellen",
@@ -1943,7 +1915,10 @@
     "commandDock": {
       "liveInputHint": "Eingegebener Text wird direkt an das aktive Terminal gesendet",
       "liveInputLabel": "Live-Eingabe im Terminal",
-      "sendCommand": "Befehl senden"
+      "sendCommand": "Befehl senden",
+      "messageAgentPlaceholder": "Nachricht an {{agent}}",
+      "writeCommandPlaceholder": "Befehl schreiben und dann senden",
+      "theAgent": "dem Agenten"
     },
     "contentRow": {
       "dismissCreationWarning": "Warnung zur Erstellung des Arbeitsbereichs ausblenden"
@@ -2120,11 +2095,15 @@
       "workspaceDetailsHint": "Zeigt den vollständigen Namen des Arbeitsbereichs und wo er sich befindet",
       "backToWorktrees": "Zurück zu den Worktrees",
       "moreActions": "Weitere Sitzungsaktionen",
-      "openFileExplorer": "Datei-Explorer öffnen",
       "openSourceControl": "Quellcodeverwaltung öffnen",
       "reconnectToDesktop": "Erneut mit dem Desktop verbinden",
       "showSidebar": "Seitenleiste anzeigen",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Terminal-Layout",
+      "fileExplorer": "Datei-Explorer",
+      "sourceControl": "Quellcodeverwaltung",
+      "newTab": "Neuen Tab erstellen",
+      "quickCommands": "Schnellbefehle"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Agentenverlauf",
@@ -2282,9 +2261,6 @@
       "title": "Schnellbefehle",
       "untitled": "Ohne Titel"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "Schnellbefehle"
-    },
     "routeHelpers": {
       "connected": "Verbunden",
       "connecting": "Verbindung wird hergestellt",
@@ -2324,7 +2300,8 @@
       "terminal": "Terminal",
       "terminalName": "Terminal-Name",
       "unsavedMarkdown": "Ungespeicherte Markdown-Änderungen",
-      "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen."
+      "urlPrompt": "URL eingeben oder für einen neuen Tab leer lassen.",
+      "allowAutoClose": "Automatisches Schließen erlauben"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Auf dem Host dieses Arbeitsbereichs wurde kein aktivierter KI-Agent erkannt.",
@@ -2603,6 +2580,56 @@
       "waitForStart": "Warten, bis der Agent vollständig gestartet ist.",
       "waitForTurn": "Warten, bis der Agent fertig geantwortet hat, oder ihn stoppen.",
       "waitMoment": "Einen Moment warten."
+    },
+    "workerAutoClose": {
+      "running": "Temporärer Orchestrierungs-Worker · Schließt sich 2 Minuten nach Abschluss",
+      "finished": "Temporärer Orchestrierungs-Worker abgeschlossen · Schließt sich in {{countdown}}",
+      "keepOpen": "Offen halten"
+    },
+    "terminalLayoutSheet": {
+      "title": "Terminal-Layout",
+      "oneTerminal": "Ein Terminal",
+      "selected": "Ausgewählt",
+      "auto": "Automatisch",
+      "autoHint": "An den verfügbaren Platz angepasst teilen",
+      "sideBySide": "Nebeneinander",
+      "sideBySideHint": "Zwei Spalten, auch bei geöffneter Seitenleiste",
+      "stacked": "Untereinander",
+      "stackedHint": "Zwei Zeilen in jeder Ausrichtung",
+      "selectedHint": "Ausgewählt · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Layout konnte nicht gespeichert werden",
+      "saveFailedMessage": "Dieses Layout gilt vorerst. Wähle es erneut aus, um das Speichern zu wiederholen."
+    },
+    "terminalArrowPad": {
+      "label": "Pfeiltasten",
+      "hint": "Eine Seite antippen für einen Tastendruck oder gedrückt halten und ziehen zum Wiederholen",
+      "up": "Nach oben",
+      "down": "Nach unten",
+      "left": "Nach links",
+      "right": "Nach rechts"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "{{label}} senden",
+      "paste": "Einfügen",
+      "sending": "Wird gesendet…",
+      "photo": "Foto",
+      "file": "Datei",
+      "desktopWidth": "Desktopbreite",
+      "phoneWidth": "Telefonbreite",
+      "keys": "Tasten",
+      "combos": "Kombinationen",
+      "yourKeys": "Deine Tasten",
+      "deleteKeyHint": "Gedrückt halten, um diese Taste zu löschen",
+      "addCustomKey": "Benutzerdefinierte Taste hinzufügen",
+      "addKey": "Taste hinzufügen"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, fokussiert",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, zum Fokussieren tippen",
+      "inputPane": "{{title}} · Eingabe"
     }
   },
   "settings": {
@@ -2794,7 +2821,9 @@
       "cherryPickState": "Cherry-pick",
       "mergeState": "Merge",
       "rebaseState": "Rebase",
-      "stagedCount": "{{count}} vorgemerkt"
+      "stagedCount": "{{count}} vorgemerkt",
+      "completingMerge": "Wird abgeschlossen…",
+      "completeMerge": "Merge abschließen"
     },
     "branchCompare": {
       "commits_one": "{{count}} Commit",
@@ -2958,7 +2987,8 @@
       "openNumberedPrWeb": "Pull Request #{{number}} im Web öffnen",
       "openPrWeb": "Pull Request im Web öffnen",
       "refresh": "Quellcodeverwaltung aktualisieren",
-      "title": "Quellcodeverwaltung"
+      "title": "Quellcodeverwaltung",
+      "moreActions": "Weitere Aktionen der Quellcodeverwaltung"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3233,6 +3263,13 @@
       "branchUnavailable": "Branch-Status nicht verfügbar",
       "commitFailed": "Commit fehlgeschlagen",
       "waitingForDesktop": "Warten auf den Desktop…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Aktualisiere Orca auf dem Computer, auf dem dieser Arbeitsbereich ausgeführt wird, um Merge-Konflikte auf deinem Smartphone zu lösen.",
+      "markResolved": "Als gelöst markieren",
+      "keepFile": "Datei behalten",
+      "keepDeletion": "Löschung beibehalten",
+      "completeMergeFailed": "Merge konnte nicht abgeschlossen werden"
     }
   },
   "tasks": {
@@ -3307,17 +3344,13 @@
       "recent": "Zuletzt verwendet",
       "retryHint": "Zum Wiederholen tippen.",
       "searchProjects": "Projekte suchen",
-      "sort": "Projektsortierung",
       "subtitle": "Eine Projektansicht für die Seite „Aufgaben“ auswählen.",
       "title": "GitHub Projects",
       "unsupportedLayout": "Orca unterstützt dieses Layout in GitHub Projects noch nicht.",
       "view": "Projektansicht"
     },
     "githubViewControls": {
-      "fields": "Felder: {{fields}}",
-      "openView": "Ansicht in GitHub öffnen",
-      "sort": "Sortierung: {{sort}}",
-      "source": "Quelle: {{source}}"
+      "openView": "Ansicht in GitHub öffnen"
     },
     "itemActions": {
       "changeStatus": "Status ändern",
@@ -3407,17 +3440,8 @@
     "linearList": {
       "changeStatusFrom": "Status ändern (aktuell: {{status}})"
     },
-    "linearViewControls": {
-      "displayButton": "Anzeige",
-      "groupLabel": "Gruppierung: {{group}}",
-      "orderLabel": "Sortierung: {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "Angezeigte Eigenschaften",
-      "linearGroupTitle": "Linear-Issues gruppieren",
-      "linearOrderTitle": "Linear-Issues sortieren",
-      "linearViewTitle": "Linear-Ansicht",
-      "sortTasksTitle": "Aufgaben sortieren"
+      "displayPropertiesTitle": "Angezeigte Eigenschaften"
     },
     "listSurface": {
       "connectLinearButton": "Linear verbinden",
@@ -3486,8 +3510,6 @@
       "allSites": "Alle Websites",
       "currentlyAscending": "Aktuell aufsteigend · für absteigende Sortierung tippen",
       "currentlyDescending": "Aktuell absteigend · für aufsteigende Sortierung tippen",
-      "fieldAscending": "{{field}} aufsteigend",
-      "fieldDescending": "{{field}} absteigend",
       "fields": "Felder",
       "repos_one": "{{count}} Repo",
       "repos_other": "{{count}} Repos",
@@ -3596,8 +3618,7 @@
     },
     "providerControls": {
       "myTodos": "Meine To-dos",
-      "projectMergeRequests": "Projekt-MRs",
-      "sort": "Sortierung: {{sortLabel}}"
+      "projectMergeRequests": "Projekt-MRs"
     },
     "providerItemList": {
       "intoBranch": "in {{base}}",
@@ -3625,7 +3646,6 @@
       "queryingSource": "Abfrage von {{source}}",
       "repoDescription": "Abzufragende Repositorys auswählen.",
       "repos": "Repositorys",
-      "taskSource": "Aufgabenquelle",
       "upstream": "Upstream"
     },
     "providerViewProjection": {
@@ -3637,10 +3657,7 @@
       "default": "Standard",
       "defaultSubtitle": "{{subtitle}} · Standard",
       "issues": "Issues",
-      "list": "Liste",
-      "noGrouping": "Keine Gruppierung",
       "openState": "Offen",
-      "priority": "Priorität",
       "projects": "Projekte",
       "pullRequests": "PRs",
       "teams_one": "{{count}} Team",
@@ -3652,7 +3669,6 @@
       "unassigned": "Nicht zugewiesen"
     },
     "screenChrome": {
-      "connectLinear": "Linear verbinden",
       "newGitHubIssue": "Neues GitHub-Issue",
       "newLinearIssue": "Neues Linear-Issue",
       "refreshGitHub": "GitHub-Aufgaben aktualisieren",
@@ -3899,6 +3915,15 @@
       "inProgress": "In Bearbeitung",
       "inReview": "Im Review",
       "pinned": "Angeheftet"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Steuerkreuz nach oben",
+      "left": "Steuerkreuz nach links",
+      "right": "Steuerkreuz nach rechts",
+      "down": "Steuerkreuz nach unten",
+      "hint": "Sendet eine Pfeiltaste. Gedrückt halten zum Wiederholen."
     }
   }
 }

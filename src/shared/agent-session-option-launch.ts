@@ -3,6 +3,7 @@ import {
   rewriteAgentChoiceSettings,
   readAgentChoiceSettings
 } from './agent-choice-settings'
+import { hasAgentModelOptionValues, yieldAgentChoicesToArgs } from './agent-choice-layers'
 import type { AgentType } from './agent-status-types'
 import {
   findCatalogModel,
@@ -12,8 +13,7 @@ export { getAgentSessionOptionLaunchCatalog } from './agent-session-option-catal
 import type {
   AgentSessionOptionCatalog,
   CatalogModel,
-  CatalogOption,
-  CatalogOptionApply
+  CatalogOption
 } from './agent-session-option-catalog-types'
 import type { SessionOptionValue } from './native-chat/input/native-chat-session-options'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
@@ -32,26 +32,14 @@ export type ResolvedSessionOptionLaunch = {
   appliedValues: Record<string, SessionOptionValue>
 }
 
-function isOverriddenByAgentArgs(
-  agent: AgentType,
-  apply: CatalogOptionApply,
-  tokens: readonly string[]
-): boolean {
-  const settings = apply.cli?.filter((form) => form.kind === 'settings')
-  if (settings?.length) {
-    return settings.some(
-      (form) => agentChoiceSettingsOccurrences(agent, form.names, tokens).length > 0
-    )
-  }
-  const kept = apply.removeAgentArgs?.(tokens)
-  return kept !== undefined && kept.length < tokens.length
-}
-
 export function removeOverriddenAgentSessionArgs(
   agent: AgentType,
   values: Record<string, SessionOptionValue> | null | undefined,
   tokens: readonly string[]
-): string[] {
+): readonly string[] {
+  if (!hasAgentModelOptionValues(values)) {
+    return tokens
+  }
   let result = [...tokens]
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   if (!catalog || !values) {
@@ -61,7 +49,7 @@ export function removeOverriddenAgentSessionArgs(
   if (modelId) {
     result = catalog.modelApply.removeAgentArgs?.(result) ?? result
   }
-  for (const option of launchOptionsFor(catalog, modelId).options) {
+  for (const option of launchOptionsFor(catalog, modelId, values).options) {
     const value = values[option.id]
     if (value !== undefined && option.apply.removeAgentArgs) {
       const settings = option.apply.cli?.find((form) => form.kind === 'settings')
@@ -79,7 +67,8 @@ export function removeOverriddenAgentSessionArgs(
 /** Without a model, the catalog's model-independent options still apply; nothing composes. */
 function launchOptionsFor(
   catalog: AgentSessionOptionCatalog,
-  modelId: string | null
+  modelId: string | null,
+  values: Readonly<Record<string, unknown>>
 ): { model: CatalogModel | null; options: CatalogOption[] } {
   const model = (modelId ? findCatalogModel(catalog, modelId) : null) ?? null
   const options = model?.options ?? catalog.unknownModelOptions ?? []
@@ -89,9 +78,12 @@ function launchOptionsFor(
       ...options,
       ...(catalog.unknownModelOptions ?? []).filter(
         (option) =>
-          option.kind.type === 'select' &&
-          option.kind.choices.length === 0 &&
-          !options.some((existing) => existing.id === option.id)
+          !options.some((existing) => existing.id === option.id) &&
+          ((option.kind.type === 'select' && option.kind.choices.length === 0) ||
+            (values[option.id] !== undefined &&
+              !option.apply.composedIntoModel &&
+              !!option.apply.cli?.length &&
+              !!option.apply.launchArgs))
       )
     ]
   }
@@ -136,18 +128,27 @@ function resolveModelOptionLaunch(
   includeCatalogDefaults: boolean,
   originalArgs: readonly string[]
 ): ResolvedSessionOptionLaunch {
+  if (!hasAgentModelOptionValues(values)) {
+    return { args: [], appliedValues: {} }
+  }
   const catalog = getAgentSessionOptionLaunchCatalog(agent)
   const modelId = typeof values?.model === 'string' ? values.model : null
   if (!catalog || !values) {
     return { args: [], appliedValues: {} }
   }
 
-  const { model, options: modelOptions } = launchOptionsFor(catalog, modelId)
+  const { model, options: modelOptions } = launchOptionsFor(catalog, modelId, values)
   const appliedValues: Record<string, SessionOptionValue> = {}
   const args: string[] = []
-  const modelValues = launchModelValues(model, modelOptions, values, includeCatalogDefaults)
-  const modelOverridden =
-    modelId !== null && isOverriddenByAgentArgs(agent, catalog.modelApply, trailingAgentArgs)
+  const modelValues = yieldAgentChoicesToArgs(
+    agent,
+    {
+      ...launchModelValues(model, modelOptions, values, includeCatalogDefaults),
+      ...(modelId ? { model: modelId } : {})
+    },
+    trailingAgentArgs
+  )
+  const modelOverridden = modelId !== null && modelValues.model === undefined
   const appliesModel = Boolean(modelId && catalog.modelApply.launchArgs && !modelOverridden)
 
   // Why: a repeated model flag can prevent the CLI from starting.
@@ -170,11 +171,7 @@ function resolveModelOptionLaunch(
       continue
     }
     // Why: options belong to the picked model and may be invalid for the user's model.
-    if (
-      !option.apply.launchArgs ||
-      modelOverridden ||
-      isOverriddenByAgentArgs(agent, option.apply, trailingAgentArgs)
-    ) {
+    if (!option.apply.launchArgs || modelOverridden) {
       continue
     }
     const settings = option.apply.cli?.find((form) => form.kind === 'settings')
@@ -234,6 +231,6 @@ export function composeAgentLaunchModel(
   if (!modelId || !catalog?.composeModelValue) {
     return modelId || undefined
   }
-  const { model, options } = launchOptionsFor(catalog, modelId)
+  const { model, options } = launchOptionsFor(catalog, modelId, values)
   return catalog.composeModelValue(modelId, launchModelValues(model, options, values, false))
 }

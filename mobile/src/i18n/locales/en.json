@@ -478,40 +478,24 @@
     "appUpdateCard": {
       "title": "Orca {{version}} is available",
       "updateAccessibilityLabel": "Orca {{version}} is available, tap to update",
-      "updateHint": "Tap to update",
-      "dismissAccessibilityLabel": "Dismiss Orca {{version}} update"
-    },
-    "accountUsageCards": {
-      "sectionHeading": "Account usage",
-      "systemDefault": "System default",
-      "sessionWindow": "5h",
-      "weeklyWindow": "7d"
+      "dismissAccessibilityLabel": "Dismiss Orca {{version}} update",
+      "update": "Update"
     },
     "emptyState": {
       "openDesktopTitle": "Open Orca desktop",
       "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
       "scanCodeTitle": "Scan the code",
-      "scanCodeDescription": "Tap the button above to open the scanner. Point at the QR code on your screen.",
       "connectedTitle": "You're connected",
       "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
       "title": "Connect your desktop",
       "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
-      "pairDesktop": "Pair Desktop",
-      "stepsHeading": "How it works"
+      "pairDesktopButton": "Pair desktop",
+      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
     },
     "listFooter": {
-      "resumeHeading": "Resume",
-      "tasksHeading": "Tasks",
       "hostPickerTitle": "Open Tasks On"
     },
     "listHeader": {
-      "daysHours": "{{days}}d {{hours}}h",
-      "hoursMinutes": "{{hours}}h {{minutes}}m",
-      "minutes": "{{minutes}}m",
-      "title": "Welcome back",
-      "agentsSpawned": "Agents spawned",
-      "agentTime": "Agent time",
-      "prsCreated": "PRs created",
       "desktopsHeading": "Desktops"
     },
     "screen": {
@@ -521,10 +505,18 @@
       "removeHostTitle": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
     },
-    "tasksCard": {
-      "title": "Tasks",
-      "noSources": "No task sources connected",
-      "openProviderTasks": "Open {{provider}} tasks"
+    "bottomBar": {
+      "connectFirst": "Connect a desktop to start new work.",
+      "tasks": "Tasks",
+      "newWorkspace": "New workspace"
+    },
+    "desktops": {
+      "pairDesktop": "Pair a desktop"
+    },
+    "jumpBackIn": {
+      "heading": "Jump back in",
+      "lastOpened": "Last opened",
+      "connectToOpen": "Connect {{desktop}} to open"
     }
   },
   "hooks": {
@@ -551,18 +543,13 @@
       "creatingWorkspace": "Creating workspace…"
     },
     "hostScreenHeader": {
-      "workspaceOptions": "Workspace options",
-      "activeFilters_one": "Workspace options ({{count}} filter active)",
-      "activeFilters_other": "Workspace options ({{count}} filters active)",
       "backToHosts": "Back to hosts",
       "reconnect": "Reconnect",
       "floatingWorkspace": "Floating Workspace",
       "hideSidebar": "Hide sidebar",
       "accounts": "Accounts",
       "tasks": "Tasks",
-      "closeSearch": "Close search",
-      "searchWorkspaces": "Search workspaces",
-      "newWorkspace": "New workspace"
+      "moreActions": "More actions"
     },
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
@@ -573,10 +560,6 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Search workspaces…",
-      "searchWorkspaces": "Search workspaces"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -658,7 +641,15 @@
       "backToOptions": "Back to Workspace options",
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
-      "clearFilters": "Clear filters"
+      "done": "Done",
+      "reset": "Reset"
+    },
+    "hostBottomBar": {
+      "workspaceOptions": "Workspace options",
+      "activeFilters_one": "Workspace options ({{count}} filter active)",
+      "activeFilters_other": "Workspace options ({{count}} filters active)",
+      "searchWorkspaces": "Search workspaces",
+      "newWorkspace": "New workspace"
     }
   },
   "webShell": {
@@ -932,7 +923,6 @@
       "discardTitle": "Discard File",
       "discardMessage": "Discard changes to \"{{filePath}}\"? This cannot be undone.",
       "discard": "Discard",
-      "actionsTitle": "Review Actions",
       "stageableFiles_one": "{{count}} reviewed unstaged files can be staged",
       "stageableFiles_other": "{{count}} reviewed unstaged files can be staged",
       "sendNotes": "Send Notes",
@@ -1030,11 +1020,6 @@
       "addNoteOnLine": "Add note on line {{number}}",
       "editNoteOnLine": "Edit note on line {{number}}"
     },
-    "homeQuickActions": {
-      "title": "Quick Actions",
-      "pairDesktop": "Pair Desktop",
-      "newWorkspace": "New Workspace"
-    },
     "hostCard": {
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
       "pairingInvalid": "Pairing invalid",
@@ -1093,9 +1078,6 @@
     },
     "workspaceNameInput": {
       "placeholder": "Workspace name"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "New workspace"
     },
     "newWorkspaceSetupScriptField": {
       "label": "Setup script",
@@ -1286,6 +1268,15 @@
       "title": "Something went wrong",
       "tryAgain": "Try again",
       "home": "Home"
+    },
+    "pullDownMenu": {
+      "close": "Close menu"
+    },
+    "bottomSearchBar": {
+      "closeSearch": "Close search"
+    },
+    "sheetHeader": {
+      "close": "Close"
     }
   },
   "pullRequest": {
@@ -1601,7 +1592,11 @@
       "backToSession": "Back to session",
       "title": "Files",
       "truncatedList": "{{worktreeLabel}} - Showing first 5000",
-      "emptyState": "No files found"
+      "emptyState": "No files found",
+      "filterPlaceholder": "Filter files",
+      "noMatches": "No matches",
+      "noMatchesHint": "Only folders you have opened are searched.",
+      "clearFilter": "Clear filter"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
@@ -1812,7 +1807,6 @@
       "backToWorktrees": "Back to worktrees",
       "terminalTitle": "Terminal",
       "reconnectToDesktop": "Reconnect to desktop",
-      "openFileExplorer": "Open file explorer",
       "openSourceControl": "Open source control",
       "moreActions": "More session actions",
       "terminalLayout": "Terminal layout",
@@ -1865,8 +1859,7 @@
       "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
-      "checkingCapabilities": "Checking desktop capabilities — try again in a moment",
-      "terminalLayout": "Terminal layout"
+      "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
     },
     "terminalInputActions": {
       "sendingImage": "Sending image",
@@ -1926,9 +1919,6 @@
       "chooseAgentTitle": "Choose Agent",
       "title": "Quick Commands",
       "editorDescription": "Save terminal commands or agent prompts for quick access."
-    },
-    "quickCommandsTabButton": {
-      "quickCommands": "Quick commands"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Failed to create terminal",
@@ -2129,6 +2119,9 @@
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
+    },
+    "tabCard": {
+      "editor": "Editor"
     },
     "terminalTabAgent": {
       "newBrowser": "New Browser",
@@ -3134,7 +3127,8 @@
       "title": "Source Control",
       "openNumberedPrWeb": "Open pull request #{{number}} on the web",
       "openPrWeb": "Open pull request on the web",
-      "refresh": "Refresh source control"
+      "refresh": "Refresh source control",
+      "moreActions": "More source control actions"
     },
     "modals": {
       "actionsTitle": "Source Control",
@@ -3512,13 +3506,9 @@
       "noMoreProjects": "No more projects.",
       "chooseView": "Choose Project View",
       "view": "Project View",
-      "unsupportedLayout": "Orca doesn't support this GitHub Project layout yet.",
-      "sort": "Project Sort"
+      "unsupportedLayout": "Orca doesn't support this GitHub Project layout yet."
     },
     "githubViewControls": {
-      "source": "Source: {{source}}",
-      "sort": "Sort: {{sort}}",
-      "fields": "Fields: {{fields}}",
       "openView": "Open view in GitHub"
     },
     "itemActions": {
@@ -3595,17 +3585,8 @@
     "linearList": {
       "changeStatusFrom": "Change status from {{status}}"
     },
-    "linearViewControls": {
-      "groupLabel": "Group: {{group}}",
-      "orderLabel": "Order: {{order}}",
-      "displayButton": "Display"
-    },
     "listDisplayPickers": {
-      "linearViewTitle": "Linear View",
-      "linearGroupTitle": "Group Linear Issues",
-      "linearOrderTitle": "Order Linear Issues",
-      "displayPropertiesTitle": "Display Properties",
-      "sortTasksTitle": "Sort Tasks"
+      "displayPropertiesTitle": "Display Properties"
     },
     "listSurface": {
       "updateDesktopTitle": "Update Orca desktop",
@@ -3756,7 +3737,10 @@
     "providerControls": {
       "projectMergeRequests": "Project MRs",
       "myTodos": "My Todos",
-      "sort": "Sort: {{sortLabel}}"
+      "reposLabel": "Repositories: {{repos}}",
+      "filterCount": "Filter · {{count}}",
+      "filter": "Filter",
+      "filterLabel": "Filter and display"
     },
     "providerItemList": {
       "previousPage": "Previous page",
@@ -3768,7 +3752,6 @@
       "intoBranch": "into {{base}}"
     },
     "providerPickers": {
-      "taskSource": "Task Source",
       "repos": "Repositories",
       "repoDescription": "Choose which repositories to query.",
       "allRepositories": "All repositories",
@@ -3798,8 +3781,7 @@
       "refreshJira": "Refresh Jira issues",
       "title": "Tasks",
       "newGitHubIssue": "New GitHub issue",
-      "newLinearIssue": "New Linear issue",
-      "connectLinear": "Connect Linear"
+      "newLinearIssue": "New Linear issue"
     },
     "searchControl": {
       "projectPlaceholder": "Search project view...",
@@ -3893,8 +3875,6 @@
       "allSites": "All sites",
       "allRepos": "All repos",
       "updatedSort": "Updated",
-      "fieldDescending": "{{field}} desc",
-      "fieldAscending": "{{field}} asc",
       "viewOrder": "View order",
       "selectedFields": "{{selected}}/{{total}} fields",
       "fields": "Fields",
@@ -3913,9 +3893,6 @@
       "openState": "Open",
       "allSites": "All sites",
       "all": "All",
-      "list": "List",
-      "noGrouping": "No grouping",
-      "priority": "Priority",
       "allWorkspaces": "All workspaces",
       "workspace": "Workspace",
       "allTeams": "All teams",
@@ -3962,6 +3939,30 @@
       "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
       "loadPageFailed": "Page {{page}} could not be loaded from GitHub.",
       "noMoreResults": "No more results on page {{page}}."
+    },
+    "filterSheet": {
+      "sortBy": "Sort by",
+      "issueSource": "Issue source",
+      "issueSourceRow": "Upstream or origin",
+      "view": "View",
+      "projectView": "Project view",
+      "projectItems_one": "{{count}} item",
+      "projectItems_other": "{{count}} items",
+      "chooseView": "Choose",
+      "showOnRows": "Show on rows",
+      "projectFields": "Project fields",
+      "workspace": "Workspace",
+      "linearWorkspace": "Linear workspace",
+      "layout": "Layout",
+      "groupBy": "Group by",
+      "orderBy": "Order by",
+      "displayProperties": "Display properties",
+      "title": "Filter & display",
+      "done": "Done",
+      "jqlReplacesPreset": "Your JQL search replaces the Show preset. Clear the search to pick one again."
+    },
+    "jiraViewControls": {
+      "jqlSearch": "JQL search"
     }
   },
   "terminal": {

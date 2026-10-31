@@ -12,6 +12,7 @@ const transport = vi.hoisted(() => ({
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Alert: { alert: vi.fn() },
   BackHandler: { addEventListener: () => ({ remove: () => {} }) },
   Image: 'Image',

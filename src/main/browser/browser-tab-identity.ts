@@ -19,7 +19,7 @@ export type UserAgentMetadata = {
 export type BrowserTabIdentity =
   /** Desktop client hints remain browser-owned. */
   | { kind: 'process'; userAgent: string }
-  /** Firefox auth identity omits client hints. */
+  /** Electron's own UA on Google sign-in hosts; client hints remain browser-owned. */
   | { kind: 'google-auth'; userAgent: string }
   | { kind: 'mobile'; userAgent: string; userAgentMetadata: UserAgentMetadata }
 
@@ -33,8 +33,8 @@ export function resolveBrowserTabIdentity(args: {
   mobile: boolean
   processIdentity: BrowserProcessUserAgentIdentity
 }): BrowserTabIdentity {
-  // Native mode must preserve its process identity on auth requests.
-  if (args.processIdentity.mode === 'clean' && isGoogleAuthUrl(args.url)) {
+  // Sign-in hosts outrank mobile presets: Google rejects identities claiming another browser.
+  if (isGoogleAuthUrl(args.url)) {
     return googleAuthTabIdentity()
   }
   if (args.mobile) {

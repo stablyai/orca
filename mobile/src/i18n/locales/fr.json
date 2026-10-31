@@ -697,7 +697,6 @@
       "tryDifferentFilter": "Essayez un autre filtre de revue."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "Actions de revue",
       "addNote": "Ajouter une note",
       "cancelNote": "Annuler la note",
       "clearSentNotes": "Effacer les notes envoyées",
@@ -810,11 +809,6 @@
       "moveUp": "Monter",
       "reorderHint": "Utilisez les actions « Monter » et « Descendre » pour réordonner sans faire glisser"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Nouvel espace de travail",
-      "pairDesktop": "Appairer l'ordinateur",
-      "title": "Actions rapides"
-    },
     "hostCard": {
       "hostActions": "Actions pour {{title}}",
       "openHost": "Ouvrir {{title}}",
@@ -854,9 +848,6 @@
     },
     "mountedBottomDrawer": {
       "dismissDrawer": "Fermer le panneau"
-    },
-    "newWorkspaceFab": {
-      "newWorkspace": "Nouvel espace de travail"
     },
     "newWorkspaceSetupScriptField": {
       "hooks": "HOOKS",
@@ -1003,7 +994,13 @@
       "empty": "Aucun raccourci personnalisé défini pour le moment.",
       "removeShortcut": "Supprimer {{label}}",
       "resetDefaults": "Rétablir les valeurs par défaut",
-      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial"
+      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
+      "moreKeys": "PLUS DE TOUCHES",
+      "moreKeysDescription": "Ces touches se trouvent sous ⋯ dans la rangée de touches du terminal. Activez ou désactivez les touches pour les afficher ou les masquer, puis maintenez la poignée pour les réordonner. Les touches déjà présentes dans la rangée, comme Échap ou les flèches, ne figurent pas sous ⋯.",
+      "directionPad": "PAVÉ DIRECTIONNEL",
+      "showDirectionPad": "Afficher le pavé directionnel",
+      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",
+      "showShortcut": "Afficher le raccourci {{label}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Utiliser une réinitialisation des limites de débit ?",
@@ -1343,17 +1340,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Utilisation du compte",
-      "sessionWindow": "5 h",
-      "systemDefault": "Valeur par défaut du système",
-      "weeklyWindow": "7 j"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",
-      "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour",
-      "updateHint": "Touchez pour mettre à jour"
+      "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour"
     },
     "emptyState": {
       "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
@@ -1361,26 +1351,14 @@
       "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
       "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
       "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "pairDesktop": "Appairer l'ordinateur",
-      "scanCodeDescription": "Touchez le bouton ci-dessus pour ouvrir le scanner. Visez le QR code affiché à l'écran.",
       "scanCodeTitle": "Scanner le code",
-      "stepsHeading": "Fonctionnement",
       "title": "Connectez votre ordinateur"
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur",
-      "resumeHeading": "Reprendre",
-      "tasksHeading": "Tâches"
+      "hostPickerTitle": "Ouvrir les tâches sur"
     },
     "listHeader": {
-      "agentTime": "Temps agent",
-      "agentsSpawned": "Agents lancés",
-      "daysHours": "{{days}} j {{hours}} h",
-      "desktopsHeading": "Ordinateurs",
-      "hoursMinutes": "{{hours}} h {{minutes}} min",
-      "minutes": "{{minutes}} min",
-      "prsCreated": "PRs créées",
-      "title": "Bon retour"
+      "desktopsHeading": "Ordinateurs"
     },
     "screen": {
       "pairingCheckFailed": "Impossible de vérifier l'appairage",
@@ -1388,11 +1366,6 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "removeHostTitle": "Supprimer l'hôte",
       "tryAgain": "Veuillez réessayer."
-    },
-    "tasksCard": {
-      "noSources": "Aucune source de tâches connectée",
-      "openProviderTasks": "Ouvrir les tâches de {{provider}}",
-      "title": "Tâches"
     }
   },
   "hooks": {
@@ -1437,17 +1410,11 @@
     },
     "hostScreenHeader": {
       "accounts": "Comptes",
-      "activeFilters_many": "Options des espaces de travail ({{count}} filtres actifs)",
-      "activeFilters_one": "Options des espaces de travail ({{count}} filtre actif)",
-      "activeFilters_other": "Options des espaces de travail ({{count}} filtres actifs)",
       "backToHosts": "Retour aux hôtes",
-      "closeSearch": "Fermer la recherche",
       "floatingWorkspace": "Espace de travail flottant",
       "hideSidebar": "Masquer la barre latérale",
       "reconnect": "Reconnecter",
-      "searchWorkspaces": "Rechercher des espaces de travail",
-      "tasks": "Tâches",
-      "workspaceOptions": "Options des espaces de travail"
+      "tasks": "Tâches"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
@@ -1458,10 +1425,6 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "sleep": "Mettre en veille",
       "unpin": "Désépingler"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Rechercher des espaces de travail…",
-      "searchWorkspaces": "Rechercher des espaces de travail"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Vérifications : en échec",
@@ -1520,7 +1483,6 @@
       "backToOptions": "Retour aux options des espaces de travail",
       "cardDisplay": "Affichage des cartes",
       "cardLayout": "Disposition en cartes",
-      "clearFilters": "Réinitialiser les filtres",
       "exceptDefaultBranch": "Sauf la branche par défaut",
       "filters": "Filtres",
       "groupBy": "Grouper par",
@@ -1888,7 +1850,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Masquer le clavier",
-      "sendKey": "Envoyer {{label}}"
+      "sendKey": "Envoyer {{label}}",
+      "modifierHint": "S’applique à la touche suivante. Touchez deux fois pour la maintenir active.",
+      "typeCharacter": "Saisir {{character}}",
+      "interrupt": "Interrompre le terminal",
+      "keysModeLabel": "Mode touches : la saisie va directement au terminal. Passer en mode message",
+      "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
+      "keysMode": "Touches",
+      "messageMode": "Message",
+      "moreKeys": "Plus de touches et d’actions",
+      "showKeyboard": "Afficher le clavier"
     },
     "activeContent": {
       "createTab": "Créer un onglet",
@@ -2016,7 +1987,10 @@
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
       "liveInputLabel": "Saisie en direct dans le terminal",
-      "sendCommand": "Envoyer la commande"
+      "sendCommand": "Envoyer la commande",
+      "messageAgentPlaceholder": "Message à {{agent}}",
+      "writeCommandPlaceholder": "Écrivez une commande, puis envoyez-la",
+      "theAgent": "l'agent"
     },
     "contentRow": {
       "dismissCreationWarning": "Ignorer l'avertissement de création de l'espace de travail"
@@ -2194,11 +2168,15 @@
       "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
-      "openFileExplorer": "Ouvrir l'explorateur de fichiers",
       "openSourceControl": "Ouvrir le contrôle de code source",
       "reconnectToDesktop": "Se reconnecter à l'ordinateur",
       "showSidebar": "Afficher la barre latérale",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Disposition du terminal",
+      "fileExplorer": "Explorateur de fichiers",
+      "sourceControl": "Contrôle de code source",
+      "newTab": "Nouvel onglet",
+      "quickCommands": "Commandes rapides"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
@@ -2357,9 +2335,6 @@
       "title": "Commandes rapides",
       "untitled": "Sans titre"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "Commandes rapides"
-    },
     "routeHelpers": {
       "connected": "Connecté",
       "connecting": "Connexion",
@@ -2399,7 +2374,8 @@
       "terminal": "Terminal",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
-      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet."
+      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
+      "allowAutoClose": "Autoriser la fermeture automatique"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",
@@ -2679,6 +2655,56 @@
       "waitForStart": "Attendez que l'agent ait fini de démarrer.",
       "waitForTurn": "Attendez que l'agent ait fini de répondre, ou arrêtez-le.",
       "waitMoment": "Patientez un instant."
+    },
+    "workerAutoClose": {
+      "running": "Agent d’orchestration temporaire · Se ferme 2 minutes après la fin",
+      "finished": "Agent d’orchestration temporaire terminé · Se ferme dans {{countdown}}",
+      "keepOpen": "Garder ouvert"
+    },
+    "terminalLayoutSheet": {
+      "title": "Disposition du terminal",
+      "oneTerminal": "Un terminal",
+      "selected": "Sélectionné",
+      "auto": "Automatique",
+      "autoHint": "Diviser selon l’espace disponible",
+      "sideBySide": "Côte à côte",
+      "sideBySideHint": "Deux colonnes, même lorsque la barre latérale est ouverte",
+      "stacked": "Empilés",
+      "stackedHint": "Deux rangées quelle que soit l’orientation",
+      "selectedHint": "Sélectionné · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Impossible d’enregistrer la disposition",
+      "saveFailedMessage": "Cette disposition s’applique pour le moment. Sélectionnez-la à nouveau pour réessayer de l’enregistrer."
+    },
+    "terminalArrowPad": {
+      "label": "Touches fléchées",
+      "hint": "Touchez un côté pour une pression ou maintenez et faites glisser pour répéter",
+      "up": "Haut",
+      "down": "Bas",
+      "left": "Gauche",
+      "right": "Droite"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Envoyer {{label}}",
+      "paste": "Coller",
+      "sending": "Envoi…",
+      "photo": "Photo",
+      "file": "Fichier",
+      "desktopWidth": "Largeur bureau",
+      "phoneWidth": "Largeur téléphone",
+      "keys": "Touches",
+      "combos": "Combinaisons",
+      "yourKeys": "Vos touches",
+      "deleteKeyHint": "Appuyez longuement pour supprimer cette touche",
+      "addCustomKey": "Ajouter une touche personnalisée",
+      "addKey": "Ajouter une touche"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, actif",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, touchez pour activer",
+      "inputPane": "{{title}} · Saisie"
     }
   },
   "settings": {
@@ -2876,7 +2902,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "Indexés : {{count}}"
+      "stagedCount": "Indexés : {{count}}",
+      "completingMerge": "Finalisation…",
+      "completeMerge": "Terminer la fusion"
     },
     "branchCompare": {
       "commits_many": "{{count}} commits",
@@ -3054,7 +3082,8 @@
       "openNumberedPrWeb": "Ouvrir la pull request #{{number}} sur le Web",
       "openPrWeb": "Ouvrir la pull request sur le Web",
       "refresh": "Actualiser le contrôle de code source",
-      "title": "Contrôle de code source"
+      "title": "Contrôle de code source",
+      "moreActions": "Autres actions du contrôle de code source"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3330,6 +3359,13 @@
       "branchUnavailable": "État de la branche indisponible",
       "commitFailed": "Échec du commit",
       "waitingForDesktop": "En attente de l'ordinateur…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Mettez à jour Orca sur l’ordinateur qui exécute cet espace de travail pour résoudre les conflits de fusion depuis votre téléphone.",
+      "markResolved": "Marquer comme résolu",
+      "keepFile": "Conserver le fichier",
+      "keepDeletion": "Conserver la suppression",
+      "completeMergeFailed": "Impossible de terminer la fusion"
     }
   },
   "tasks": {
@@ -3407,17 +3443,13 @@
       "recent": "Récents",
       "retryHint": "Touchez pour réessayer.",
       "searchProjects": "Rechercher des projets",
-      "sort": "Tri du projet",
       "subtitle": "Choisissez une vue de projet pour la page Tâches.",
       "title": "GitHub Projects",
       "unsupportedLayout": "Orca ne prend pas encore en charge cette disposition de projet GitHub.",
       "view": "Vue de projet"
     },
     "githubViewControls": {
-      "fields": "Champs : {{fields}}",
-      "openView": "Ouvrir la vue dans GitHub",
-      "sort": "Tri : {{sort}}",
-      "source": "Source : {{source}}"
+      "openView": "Ouvrir la vue dans GitHub"
     },
     "itemActions": {
       "changeStatus": "Changer le statut",
@@ -3508,17 +3540,8 @@
     "linearList": {
       "changeStatusFrom": "Changer le statut actuel : {{status}}"
     },
-    "linearViewControls": {
-      "displayButton": "Affichage",
-      "groupLabel": "Grouper par : {{group}}",
-      "orderLabel": "Trier par : {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriétés affichées",
-      "linearGroupTitle": "Grouper les issues Linear",
-      "linearOrderTitle": "Trier les issues Linear",
-      "linearViewTitle": "Vue Linear",
-      "sortTasksTitle": "Trier les tâches"
+      "displayPropertiesTitle": "Propriétés affichées"
     },
     "listSurface": {
       "connectLinearButton": "Connecter Linear",
@@ -3587,8 +3610,6 @@
       "allSites": "Tous les sites",
       "currentlyAscending": "Tri croissant · touchez pour passer en décroissant",
       "currentlyDescending": "Tri décroissant · touchez pour passer en croissant",
-      "fieldAscending": "{{field}} · ordre croissant",
-      "fieldDescending": "{{field}} · ordre décroissant",
       "fields": "Champs",
       "repos_many": "{{count}} dépôts",
       "repos_one": "{{count}} dépôt",
@@ -3700,8 +3721,7 @@
     },
     "providerControls": {
       "myTodos": "Mes tâches à faire",
-      "projectMergeRequests": "MR du projet",
-      "sort": "Tri : {{sortLabel}}"
+      "projectMergeRequests": "MR du projet"
     },
     "providerItemList": {
       "intoBranch": "vers {{base}}",
@@ -3729,7 +3749,6 @@
       "queryingSource": "Recherche dans {{source}}",
       "repoDescription": "Choisissez les dépôts à interroger.",
       "repos": "Dépôts",
-      "taskSource": "Source des tâches",
       "upstream": "Upstream"
     },
     "providerViewProjection": {
@@ -3741,10 +3760,7 @@
       "default": "Par défaut",
       "defaultSubtitle": "{{subtitle}} · Par défaut",
       "issues": "Tickets",
-      "list": "Liste",
-      "noGrouping": "Aucun regroupement",
       "openState": "Ouvert",
-      "priority": "Priorité",
       "projects": "Projets",
       "pullRequests": "PRs",
       "teams_many": "{{count}} équipes",
@@ -3757,7 +3773,6 @@
       "unassigned": "Non assigné"
     },
     "screenChrome": {
-      "connectLinear": "Connecter Linear",
       "newGitHubIssue": "Nouveau ticket GitHub",
       "newLinearIssue": "Nouveau ticket Linear",
       "refreshGitHub": "Actualiser le travail GitHub",
@@ -4008,6 +4023,15 @@
       "inProgress": "En cours",
       "inReview": "En revue",
       "pinned": "Épinglés"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Croix directionnelle haut",
+      "left": "Croix directionnelle gauche",
+      "right": "Croix directionnelle droite",
+      "down": "Croix directionnelle bas",
+      "hint": "Envoie une touche fléchée. Maintenez pour répéter."
     }
   }
 }

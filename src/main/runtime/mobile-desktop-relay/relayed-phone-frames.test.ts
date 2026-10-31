@@ -1,3 +1,8 @@
+import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
+import {
+  readAgentLaunchModeSettings,
+  decideAgentLaunchMode
+} from '../../agent-launch/agent-launch-mode'
 import { describe, expect, it } from 'vitest'
 import {
   encodeTerminalStreamFrame,
@@ -8,7 +13,11 @@ import {
   BrowserScreencastOpcode,
   encodeBrowserScreencastFrame
 } from '../../../shared/browser-screencast-protocol'
-import { RelayedPhoneReplies, rewriteRelayedPhoneRequest } from './relayed-phone-frames'
+import {
+  RelayedPhoneReplies,
+  rewriteRelayedPhoneRequest,
+  withRelayedLaunchChatDefault
+} from './relayed-phone-frames'
 
 const DESKTOP_TOKEN = 'a'.repeat(48)
 const HOST_TOKEN = 'b'.repeat(48)
@@ -118,3 +127,47 @@ describe('RelayedPhoneReplies', () => {
     expect(relay.takeOpenRequestIds()).toEqual(['open'])
   })
 })
+
+it.each(['chat', 'terminal'] as const)(
+  'stamps resolved %s desktop defaults and exceptions independently of host settings',
+  (agentDefaultSurface) => {
+    const desktop = {
+      agentDefaultSurface,
+      nativeChatProviders: { codex: agentDefaultSurface !== 'chat' }
+    }
+    for (const agent of ['claude', 'codex']) {
+      const frame = JSON.stringify({
+        id: agent,
+        method: 'agent.launch',
+        params: { agent, nativeChatDefault: false }
+      })
+      const stamped = JSON.parse(
+        withRelayedLaunchChatDefault(frame, 'agent.launch', (id) =>
+          nativeChatPreferenceFor(desktop, id)
+        )
+      )
+      const settings = readAgentLaunchModeSettings(
+        {
+          requireStore: () => ({
+            getSettings: () => ({
+              agentDefaultSurface: agentDefaultSurface === 'chat' ? 'terminal' : 'chat'
+            })
+          })
+        },
+        stamped.params
+      )
+      const chat = nativeChatPreferenceFor(desktop, agent)
+      expect(stamped.params.nativeChatDefault).toBe(chat)
+      expect(decideAgentLaunchMode({ placement: { agent }, settings }).mode).toBe(
+        chat ? 'structured' : 'terminal'
+      )
+      expect(
+        decideAgentLaunchMode({
+          placement: { agent },
+          settings,
+          surface: chat ? 'terminal' : 'chat'
+        }).mode
+      ).toBe(chat ? 'terminal' : 'structured')
+    }
+  }
+)
