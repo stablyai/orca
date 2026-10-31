@@ -3,6 +3,7 @@ import type { RpcResponse } from '../../transport/types'
 import { BridgeClientClosedError, BridgeReplyRefusedError } from './bridge-client-errors'
 import type { BridgeReplyMessage } from './bridge-envelope'
 import { BridgeReplyAssembler } from './bridge-reply-chunking'
+import { isBridgeNativeMethod } from './bridge-native-verbs'
 
 export type PendingRequest = {
   resolve: (response: RpcResponse) => void
@@ -23,9 +24,17 @@ export class BridgeClientRequests {
     return this.pending.has(id)
   }
 
-  open(id: string, request: PendingRequest, timeoutMs = 30_000): void {
+  open(id: string, request: PendingRequest, timeoutMs: number, method: string): void {
     request.timeout = setTimeout(
-      () => this.fail(id, markRpcDeliveryUnknown(new Error('Request timed out'))),
+      () =>
+        this.fail(
+          id,
+          markRpcDeliveryUnknown(
+            new Error(
+              isBridgeNativeMethod(method) ? 'Request timed out' : `Request timed out: ${method}`
+            )
+          )
+        ),
       timeoutMs
     )
     this.pending.set(id, request)

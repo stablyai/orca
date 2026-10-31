@@ -27,6 +27,10 @@ import type { BridgeErrorCapture } from './bridge/bridge-error-capture'
 import type { MobileWebShellSessionState } from './mobile-web-shell-session-contract'
 import type { FakeRpcClient } from './bridge-host-test-fakes'
 
+vi.mock('../../modules/orca-mobile-web-shell/src', () => ({
+  nativeBridgeInboundMessageBytes: () => undefined
+}))
+
 const doubles = vi.hoisted((): { client: FakeRpcClient | null } => ({ client: null }))
 
 // Stub Expo-dependent client lookup; the hook reads only identity.

@@ -6100,10 +6100,7 @@
           "complete": "linear.listIssues#1",
           "params": {
             "filter": "assigned",
-            "limit": 50,
-            "workspaceId": {
-              "$undefined": true
-            }
+            "limit": 50
           },
           "reply": {
             "ok": true,
@@ -6155,10 +6152,7 @@
           "complete": "linear.listIssues#1",
           "params": {
             "filter": "assigned",
-            "limit": 50,
-            "workspaceId": {
-              "$undefined": true
-            }
+            "limit": 50
           },
           "reply": {
             "ok": true,
@@ -11735,9 +11729,6 @@
           "params": {
             "page": 1,
             "perPage": 50,
-            "query": {
-              "$undefined": true
-            },
             "repo": "id:repo-1",
             "state": "opened"
           },
@@ -12308,9 +12299,6 @@
           "params": {
             "baseSha": "base-sha",
             "headSha": "head-sha",
-            "oldPath": {
-              "$undefined": true
-            },
             "path": "src/index.ts",
             "prNumber": 12,
             "repo": "id:repo-1",
@@ -12727,12 +12715,6 @@
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
-              "body": {
-                "$undefined": true
-              },
-              "removeLabels": {
-                "$undefined": true
-              },
               "title": "Renamed"
             }
           },
@@ -13642,9 +13624,6 @@
           "params": {
             "baseSha": "base-sha",
             "headSha": "head-sha",
-            "oldPath": {
-              "$undefined": true
-            },
             "path": "src/index.ts",
             "prNumber": 2,
             "prRepo": {
@@ -17924,13 +17903,7 @@
                 "unstaged:src/app.ts": {
                   "filePath": "src/app.ts",
                   "key": "unstaged:src/app.ts",
-                  "lastOpenedAt": {
-                    "$undefined": true
-                  },
                   "lastSeenDiffIdentity": "identity-1",
-                  "oldPath": {
-                    "$undefined": true
-                  },
                   "reviewDiffIdentity": "identity-1",
                   "reviewedAt": 1767225600000,
                   "scope": "unstaged"
@@ -18001,13 +17974,7 @@
                 "unstaged:src/app.ts": {
                   "filePath": "src/app.ts",
                   "key": "unstaged:src/app.ts",
-                  "lastOpenedAt": {
-                    "$undefined": true
-                  },
                   "lastSeenDiffIdentity": "identity-1",
-                  "oldPath": {
-                    "$undefined": true
-                  },
                   "reviewDiffIdentity": "identity-1",
                   "reviewedAt": 1767225600000,
                   "scope": "unstaged"
@@ -21323,9 +21290,6 @@
           "complete": "session.tabs.createTerminal#1",
           "params": {
             "worktree": "id:wt-1",
-            "afterTabId": {
-              "$undefined": true
-            },
             "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
             "activate": false,
             "select": true,
