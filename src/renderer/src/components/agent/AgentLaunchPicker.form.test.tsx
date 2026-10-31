@@ -26,7 +26,11 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { useNewTabAgentMenuRows } from '../tab-bar/use-new-tab-agent-menu-rows'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
-import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import type {
+  AgentPickerDraft,
+  AgentPickerDraftOwner,
+  AgentPickerEntry
+} from '../../../../shared/agent-launch-picker'
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: async (_target: unknown, method: string) =>
@@ -191,11 +195,11 @@ it('rebases accepted recipe receipts and retires independent form scopes with eq
 it.each([3, 30])(
   'retires unreachable catalog setups across %s committed generations without losing current/opaque drafts',
   async (generations) => {
-    let scope: object
+    let scope: AgentPickerDraftOwner
     let readScope: (() => unknown) | undefined
     let snapshots: Map<unknown, unknown> | undefined
     const originalGet = WeakMap.prototype.get
-    WeakMap.prototype.get = function (this: WeakMap<object, unknown>, key: object) {
+    WeakMap.prototype.get = function (this: WeakMap<object, unknown>, key: AgentPickerDraftOwner) {
       const result = originalGet.call(this, key)
       if (key === scope) {
         readScope = () => originalGet.call(this, scope!)
@@ -478,11 +482,11 @@ it.each([3, 30])(
       ensureDetectedAgents: async () => ['codex']
     })
     let generation = 0
-    let scope: object
+    let scope: AgentPickerDraftOwner
     let records: Map<unknown, unknown> | undefined
     let readScope: (() => unknown) | undefined
     const originalGet = WeakMap.prototype.get
-    WeakMap.prototype.get = function (this: WeakMap<object, unknown>, key: object) {
+    WeakMap.prototype.get = function (this: WeakMap<object, unknown>, key: AgentPickerDraftOwner) {
       const result = originalGet.call(this, key)
       if (key === scope && result instanceof Map) {
         readScope = () => originalGet.call(this, scope!)

@@ -4,11 +4,12 @@ import { shallow } from 'zustand/shallow'
 import {
   agentPickerDraft,
   type AgentPickerDraft,
+  type AgentPickerDraftOwner,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
+export type { AgentPickerDraftOwner } from '../../../../shared/agent-launch-picker'
 export type AgentPickerSetupIdentity = { model: string; effort?: string }
-export type AgentPickerDraftOwner = object
 type RetainedSetup = {
   target: AgentPickerEntry['draftTarget']
   agent: AgentPickerEntry['agent']

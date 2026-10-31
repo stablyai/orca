@@ -28,6 +28,7 @@ import type { TuiAgent } from './tui-agent'
 import type { CurrentActionSelection } from './source-control-action-selection'
 
 export type AgentPickerSurface = 'chat' | 'terminal'
+export type AgentPickerDraftOwner = object
 export type AgentPickerModel = AgentSessionModelOption & { isLegacy?: true; hidden?: true }
 export type AgentPickerEntry = {
   agent: TuiAgent
