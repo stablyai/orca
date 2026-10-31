@@ -481,7 +481,7 @@ describe('one pane of a terminal tab', () => {
     expect(paneGate(state, claudePane)).toBe(true)
   })
 
-  it.each(['local', 'runtime:server-1'])(
+  it.each(['local', 'runtime:server-1'] as const)(
     "still offers an exited agent's conversation on a %s pane, bound to its terminal or not",
     (host) => {
       makeState({}, host === 'local' ? {} : { executionHostId: host })

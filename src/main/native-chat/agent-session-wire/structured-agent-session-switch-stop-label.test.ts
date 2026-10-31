@@ -154,7 +154,14 @@ describe('the Codex switches QA saw fail after the stop (the marker, no abort ev
           await commitSwitchStoppedCliTurn({ journal, stopped: stopped!, fence: 1 })
         } else {
           const read = withSwitchStoppedTurn(
-            { ok: false, refusal: refuse('agent_session_identity_required', {}, 'hidden') },
+            {
+              ok: false,
+              refusal: refuse(
+                'agent_session_identity_required',
+                { reason: 'transcriptUnreadable' },
+                'hidden'
+              )
+            },
             stopped!
           )
           expect(read.ok).toBe(true)
