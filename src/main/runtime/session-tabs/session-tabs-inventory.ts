@@ -130,6 +130,10 @@ export abstract class OrcaRuntimeWithCollectMobileVisibleGraphChangedWorktrees e
     RestoreLivePairedRendererSessionOwnedMobileTerminalsMethods['restoreLivePairedRendererSessionOwnedMobileTerminals']
   >
 
+  protected abstract toMobileSessionTabsFrame(
+    ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
+  ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrame']>
+
   protected abstract toMobileSessionTabsFrames(
     ...args: Parameters<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>
   ): ReturnType<PruneMobileSessionTabGroupLayoutMethods['toMobileSessionTabsFrames']>

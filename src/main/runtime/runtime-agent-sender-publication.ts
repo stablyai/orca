@@ -12,7 +12,10 @@ export type AgentSenderScope = AgentSenderPublication & {
 type Content = Omit<AgentSenderScope, 'revision'>
 
 /** Field by field, as clients read them; key order and the revision stamp never count. */
-function sameContent(a: AgentSenderPublication, b: AgentSenderPublication): boolean {
+function sameContent(
+  a: Omit<AgentSenderPublication, 'revision'>,
+  b: Omit<AgentSenderPublication, 'revision'>
+): boolean {
   return (
     a.peerFingerprint === b.peerFingerprint &&
     JSON.stringify(a.principals) === JSON.stringify(b.principals) &&
