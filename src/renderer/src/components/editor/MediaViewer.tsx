@@ -2,7 +2,12 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { useEffect, useRef, useState } from 'react'
 import { translate } from '@/i18n/i18n'
 import { Button } from '@/components/ui/button'
-import { mediaPlaybackPositionCache, setWithLRU } from '@/lib/scroll-cache'
+import {
+  mediaPlaybackPositionCache,
+  mediaPlaybackRateCache,
+  mediaVolumePreference,
+  setWithLRU
+} from '@/lib/scroll-cache'
 
 export default function MediaViewer({
   src,
@@ -25,19 +30,38 @@ export default function MediaViewer({
     if (!media) {
       return
     }
-    const restorePosition = (): void => {
+    const restorePlayback = (): void => {
       const saved = playbackCacheKey ? mediaPlaybackPositionCache.get(playbackCacheKey) : undefined
       if (saved !== undefined && Number.isFinite(media.duration)) {
         media.currentTime = Math.min(saved, media.duration)
       }
+      // Loading a source resets playbackRate, so the saved speed applies only once metadata exists.
+      const savedRate = playbackCacheKey ? mediaPlaybackRateCache.get(playbackCacheKey) : undefined
+      if (savedRate !== undefined) {
+        media.playbackRate = savedRate
+      }
     }
-    media.addEventListener('loadedmetadata', restorePosition, { once: true })
+    let known = { ...mediaVolumePreference }
+    const rememberVolume = (): void => {
+      known = { volume: media.volume, muted: media.muted }
+      Object.assign(mediaVolumePreference, known)
+    }
+    media.volume = known.volume
+    media.muted = known.muted
+    media.addEventListener('loadedmetadata', restorePlayback, { once: true })
+    media.addEventListener('volumechange', rememberVolume)
     // Strict Mode replays cleanup while retaining the DOM element.
     media.src = src
     return () => {
-      media.removeEventListener('loadedmetadata', restorePosition)
-      // Unloaded metadata leaves currentTime at zero, which must not replace saved progress.
+      media.removeEventListener('loadedmetadata', restorePlayback)
+      media.removeEventListener('volumechange', rememberVolume)
+      // volumechange is queued, so a change made right before leaving may not have been saved yet.
+      if (media.volume !== known.volume || media.muted !== known.muted) {
+        rememberVolume()
+      }
+      // Unloaded metadata leaves currentTime and playbackRate reset, which must not replace saved values.
       if (playbackCacheKey && Number.isFinite(media.duration)) {
+        setWithLRU(mediaPlaybackRateCache, playbackCacheKey, media.playbackRate)
         if (media.ended) {
           mediaPlaybackPositionCache.delete(playbackCacheKey)
         } else {
