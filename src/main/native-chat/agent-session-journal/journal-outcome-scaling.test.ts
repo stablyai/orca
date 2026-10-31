@@ -3,11 +3,16 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { agentSessionSendBodyFingerprint } from '../../../shared/structured-agent-session-send-mutation'
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import {
+  AGENT_JOURNAL_THREAD_SCOPE,
+  type AgentJournalMessageItem
+} from '../../../shared/agent-session-journal-types'
 import type { SqliteStatement } from '../../sqlite/sqlite-statement'
 import {
   closeTestJournalHostDatabases,
+  createTrackedJournalOpener,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
@@ -23,6 +28,7 @@ import { encodeJournalState } from './journal-state-codec'
 import type * as RowStorage from './journal-storage-row-schema'
 import type * as Strict from './journal-storage-strict'
 import type * as OutcomeFormat1 from './journal-outcome-format-1'
+import type * as Transition from './journal-reducer-transition'
 import {
   projectionBase as base,
   projectionEpoch as epoch,
@@ -82,6 +88,22 @@ vi.mock('./journal-outcome-format-1', async (original) => {
     }
   }
 })
+// Every draft transition a write or a replacement folds through, to count the nodes it reaches.
+const transitions = vi.hoisted(() => {
+  const opened: { tracked: () => number }[] = []
+  return opened
+})
+vi.mock('./journal-reducer-transition', async (original) => {
+  const actual = await original<typeof Transition>()
+  return {
+    ...actual,
+    isolateJournalTransition: (...input: Parameters<typeof actual.isolateJournalTransition>) => {
+      const transition = actual.isolateJournalTransition(...input)
+      transitions.push(transition)
+      return transition
+    }
+  }
+})
 const N = 40
 const providerHandle = { kind: 'codex', threadId: 'thread-1' } as const
 const providerItemId = agentJournalItemKey({
@@ -98,6 +120,7 @@ const TRANSACTION = /^(BEGIN|COMMIT|ROLLBACK|SAVEPOINT|RELEASE)\b/
 
 let root: string
 const rigs: ReturnType<typeof projectionWriter>[] = []
+const journals = createTrackedJournalOpener()
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-scaling-'))
 })
@@ -107,6 +130,7 @@ afterEach(async () => {
     await rig.queue.drain()
   }
   vi.restoreAllMocks()
+  await journals.closeAll()
   await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
@@ -387,6 +411,82 @@ it("encodes a structured tool call's revisions without reading its input through
   }
   expect(await measure(10 * N)).toStrictEqual(await measure(N))
 })
+
+/** A chat this build wrote, holding `size` live items and `size` waiting queue cards. */
+async function liveChat(size: number, label: string) {
+  const stateDirectory = join(root, label)
+  const journal = await journals.open({
+    identity: {
+      sessionId,
+      workspaceId: 'ws-1',
+      hostId: 'host-1',
+      agent: 'codex',
+      providerHandle: codexProviderHandle('thread-1')
+    },
+    stateDirectory,
+    // A fixed clock: a timestamp that moves mid-chat would change which rows touch the activity time.
+    now: () => 10_000
+  })
+  const kept = Array.from({ length: size }, (_, ordinal) => ({
+    identity: { provider: 'codex' as const, threadId: 'thread-1', turnId: 'turn-1', ordinal },
+    body: { kind: 'status' as const, text: `Status ${ordinal}` },
+    ownerFence: 1
+  }))
+  for (const { identity, body } of kept) {
+    await journal.appendItem(identity, body, { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE })
+    await journal.queuedMessages.insert({
+      messageId: `card-${identity.ordinal}`,
+      body: message(`card ${identity.ordinal}`)
+    })
+  }
+  return { journal, kept, database: openTestJournalHostDatabase(stateDirectory) }
+}
+
+// Rewind, replacement and rollover restate the live chat in one transaction, as main does: the
+// epoch's rows are built by one fold and its records by a second through the draft. Both stay
+// linear: the statements are fixed, and rows read, rows written and draft nodes grow by the same
+// amount for each restated item and card.
+it.each(['rewind', 'replacement', 'rollover'] as const)(
+  'publishes a %s of a chat with the same work per restated item at N, 2N and 11N',
+  async (path) => {
+    const measure = async (size: number) => {
+      const { journal, kept, database } = await liveChat(size, `${path}-${size}`)
+      const watched = watch(database)
+      transitions.length = 0
+      await (path === 'rollover'
+        ? journal.rollEpoch('unreconcilable_prefix', 1)
+        : journal.replaceEpochItems(path === 'rewind' ? 'handle_forked' : 'legacy_import', 1, kept))
+      const work = watched.take()
+      watched.stop()
+      expect(journal.snapshot().items).toHaveLength(path === 'rollover' ? 0 : size)
+      expect(journal.queuedMessages.list()).toHaveLength(size)
+      const counts = new Map<string, number>([
+        ...Object.entries(work.read).map(([table, rows]): [string, number] => [
+          `read ${table}`,
+          rows
+        ]),
+        ...work.writes.map(([target, rows]): [string, number] => [`${target}`, Number(rows)]),
+        ['draft nodes', transitions.reduce((sum, transition) => sum + transition.tracked(), 0)]
+      ])
+      return { statements: work.statements, counts }
+    }
+    // A chat's first item and card start collections an empty chat lacks, so the line is taken
+    // between non-empty chats: 10N more restated items cost ten times what N more do.
+    const base = await measure(N)
+    const small = await measure(2 * N)
+    const large = await measure(11 * N)
+    expect(large.statements).toStrictEqual(small.statements)
+    expect([...large.counts.keys()]).toStrictEqual([...small.counts.keys()])
+    for (const [counted, value] of large.counts) {
+      const from = base.counts.get(counted) ?? 0
+      expect({ counted, grown: value - from }).toStrictEqual({
+        counted,
+        grown: 10 * ((small.counts.get(counted) ?? 0) - from)
+      })
+    }
+    expect(large.counts.get('draft nodes')).toBeGreaterThan(small.counts.get('draft nodes') ?? 0)
+  }
+)
 
 /** Distinct keys the chat's records hold, live, deleted and scalar alike. */
 function outcomeKeys(database: JournalHostDatabase): number {
