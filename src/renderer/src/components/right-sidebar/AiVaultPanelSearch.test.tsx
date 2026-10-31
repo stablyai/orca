@@ -41,15 +41,24 @@ function panelSearch(overrides: Partial<PanelSearch> = {}): PanelSearch {
   }
 }
 
-function renderPanel(search: PanelSearch) {
+function renderPanel(search: PanelSearch, resultCount = 0) {
   return render(
-    <AiVaultPanelSearch search={search} noAgents={false}>
+    <AiVaultPanelSearch search={search} noAgents={false} resultCount={resultCount}>
       <div>results</div>
     </AiVaultPanelSearch>
   )
 }
 
 describe('AiVaultPanelSearch', () => {
+  it('reports no matches only when tab-title matches are also absent', () => {
+    const response = searchResults()
+    const search = panelSearch({ hits: [], response: { ...response, hits: [] } })
+    const { unmount } = renderPanel(search, 0)
+    expect(screen.getByRole('status').textContent).toContain('No matching sessions')
+    unmount()
+    renderPanel(search, 1)
+    expect(screen.queryByText(/No matching sessions/)).toBeNull()
+  })
   it('says only titles are matched when the host has full-text search off', () => {
     renderPanel(panelSearch({ searching: false, titleOnly: true }))
     expect(screen.getByRole('status').textContent).toContain('only session titles are matched')

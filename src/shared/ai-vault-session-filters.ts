@@ -41,6 +41,8 @@ export type AiVaultSessionFilterState = {
   sessionProjectById?: ReadonlyMap<string, AiVaultSessionProject>
   projectLabelByKey?: ReadonlyMap<string, string>
   hideEmptySessions: boolean
+  /** Custom title of the open terminal tab running the session. */
+  terminalTabTitleFor?: (session: AiVaultSession) => string | null
 }
 
 export type AiVaultSessionGroup = {
@@ -203,11 +205,15 @@ export function matchesAiVaultQueryOperators(
 function matchesQuery(
   session: AiVaultSession,
   parsed: ParsedQuery,
-  filters: Pick<AiVaultSessionFilterState, 'sessionProjectById' | 'projectLabelByKey'>
+  filters: Pick<
+    AiVaultSessionFilterState,
+    'sessionProjectById' | 'projectLabelByKey' | 'terminalTabTitleFor'
+  >
 ): boolean {
   if (parsed.terms.length > 0) {
     const searchable = [
       session.title,
+      filters.terminalTabTitleFor?.(session),
       session.sessionId,
       session.agent,
       session.branch,
