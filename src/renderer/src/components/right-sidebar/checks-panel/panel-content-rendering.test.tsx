@@ -164,7 +164,7 @@ describe('checks panel concrete content', () => {
         isFolder: false,
         isGitHubReviewContext: true,
         isPublishingBranch: false,
-        isRemoteOperationActive: vi.fn(() => false),
+        isRemoteOperationActive: false,
         isSyncingBranch: false,
         linkedGitLabMR: null,
         linkedPR: null,
