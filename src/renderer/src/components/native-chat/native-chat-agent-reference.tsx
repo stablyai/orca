@@ -58,11 +58,15 @@ export function insertAgentReferences(
   if (!editor.isEditable) {
     return
   }
+  const nextNode = editor.state.selection.$to.nodeAfter
+  const hasRightSeparator = nextNode?.isText
+    ? /^\s/u.test(nextNode.text ?? '')
+    : nextNode?.type.name === 'hardBreak'
   editor.view.dispatch(closeHistory(editor.state.tr))
   editor.commands.insertContent(
-    references.flatMap((attrs) => [
+    references.flatMap((attrs, index) => [
       { type: NativeChatAgentReference.name, attrs },
-      { type: 'text', text: ' ' }
+      ...(index < references.length - 1 || !hasRightSeparator ? [{ type: 'text', text: ' ' }] : [])
     ])
   )
   editor.view.dispatch(closeHistory(editor.state.tr))

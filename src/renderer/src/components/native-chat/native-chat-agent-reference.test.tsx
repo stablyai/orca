@@ -10,8 +10,6 @@ import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown
 import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
 import { CrewPanelContent } from '../orchestration-crew/OrchestrationCrewPanel'
-import { NativeChatCrewPanel } from '../orchestration-crew/NativeChatCrewPanel'
-import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { TooltipProvider } from '../ui/tooltip'
 import { emptyCrew, type OrchestrationCrewRow } from '../../../../shared/orchestration-crew'
 import { openOrchestrationCrewAgent } from '@/lib/open-agent-message-sender'
@@ -29,12 +27,10 @@ import userEvent from '@testing-library/user-event'
 import { afterEach, expect, it, vi } from 'vitest'
 import type { PaneManager } from '@/lib/pane-manager/pane-manager'
 import type { PtyTransport } from '../terminal-pane/pty-transport-types'
-import type {
-  NativeChatComposerHandle,
-  NativeChatStructuredComposerTransport
-} from './native-chat-composer-types'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import type { NativeChatComposerInput } from './native-chat-composer-input'
 import { NativeChatPromptEditor } from './NativeChatPromptEditor'
+import { mountedMention } from './native-chat-agent-reference.test-fixture'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { promptText } from './native-chat-prompt-document'
 import { agentReferenceToken } from '../../../../shared/orchestration-agent-reference'
@@ -634,86 +630,10 @@ it('applies structured UTF-8 admission to the expanded final body before any sen
   expect(readNativeChatComposerDraft('size').text).toBe(raw.text)
 })
 
-type MentionInput = 'ready' | 'disabled' | 'ime' | 'none' | 'plain' | 'missing-handle'
-function mountedMention(managed = false) {
-  crewRows.push({
-    partyKey: 'worker',
-    role: 'worker',
-    label: first.label,
-    agentKind: 'codex',
-    status: 'working',
-    sendAddress: first.address,
-    ...(managed ? { task: { title: 'Inspect', state: 'dispatched' as const } } : {})
-  })
-  const input = createRef<NativeChatComposerInput>()
-  const handle = createRef<NativeChatComposerHandle>()
-  const absent = createRef<NativeChatComposerHandle>()
-  function Pane({ mode }: { mode: MentionInput }) {
-    useNativeChatComposerHandle(handle, {
-      textareaRef: input,
-      isComposing: () => mode === 'ime',
-      setDraft: () => {},
-      setCaret: () => {},
-      setActiveSuggestion: () => {},
-      attachmentScopeKey: 'menu',
-      targetKey: 'menu',
-      disabled: mode === 'disabled',
-      caret: 6,
-      resolveAttachmentOwner: () => ({ kind: 'local' }),
-      attachResolvedPaths: () => {},
-      attachCopiedFiles: () => {},
-      captureCopiedFiles: () => async () => {},
-      beginPendingImageAttachment: () => null,
-      resolvePendingImageAttachment: () => {},
-      dropPendingImageAttachment: () => {},
-      setNotice: () => {},
-      pastedTextEditor: () => input.current
-    })
-    return (
-      <TooltipProvider>
-        <div data-native-chat-root>
-          <NativeChatCrewPanel
-            target={{ kind: 'environment', environmentId: 'captured-host' }}
-            party="term_self"
-            canMention
-            composerRef={mode === 'missing-handle' ? absent : handle}
-          />
-          {mode === 'none' ? null : mode === 'plain' ? (
-            <textarea
-              aria-label="Current input"
-              defaultValue="Hello suffix"
-              ref={(node) => {
-                input.current = node
-              }}
-            />
-          ) : (
-            <NativeChatPromptEditor
-              scopeKey="menu"
-              inputRef={input}
-              initialValue="Hello suffix"
-              disabled={mode === 'disabled'}
-              placeholder="Current input"
-              onChange={() => {}}
-              onSelect={() => {}}
-            />
-          )}
-        </div>
-      </TooltipProvider>
-    )
-  }
-  const view = render(<Pane mode="ready" />)
-  return {
-    ...view,
-    input,
-    handle,
-    setMode: (mode: MentionInput) => view.rerender(<Pane mode={mode} />)
-  }
-}
-
 it('keeps direct, Mention all and real menu Mention on the current native handle, caret and captured host after dismissal', async () => {
   for (const route of ['direct', 'all', 'menu']) {
     const user = userEvent.setup()
-    const view = mountedMention(route === 'all')
+    const view = mountedMention(crewRows, first, route === 'all')
     const input = view.input.current!
     act(() => {
       input.focus()
@@ -760,10 +680,87 @@ it('keeps direct, Mention all and real menu Mention on the current native handle
   }
 })
 
+it('preserves the exact QA3773 ordinary draft around a native row Mention at caret 14', async () => {
+  const user = userEvent.setup()
+  const view = mountedMention(crewRows, first, false, 'QA3773 before  after')
+  const input = view.input.current!
+  act(() => {
+    input.focus()
+    input.setSelectionRange(14, 14)
+  })
+  await user.click(view.getByRole('button', { name: 'Show crew: 1 workers' }))
+  await user.click(view.getByRole('button', { name: new RegExp(`${first.label} No shared task`) }))
+  expect(input.value).toBe(`QA3773 before ${agentReferenceToken(first)} after`)
+  expect(readNativeChatComposerDraft('menu').document?.content?.[0]?.content).toEqual([
+    { type: 'text', text: 'QA3773 before ' },
+    { type: 'nativeChatAgentReference', attrs: { ...first, hostKey: 'captured-host' } },
+    { type: 'text', text: ' after' }
+  ])
+  expect(
+    view.container
+      .querySelector('[data-native-chat-agent-reference]')
+      ?.getAttribute('data-native-chat-agent-reference')
+  ).toBe(first.address)
+  expect(input.selectionStart).toBe(`QA3773 before ${agentReferenceToken(first)}`.length)
+  expect(input.contains?.(document.activeElement)).toBe(true)
+  expect(view.getByRole('button', { name: 'Collapse crew panel' }).isConnected).toBe(true)
+})
+
+it('uses the real replacement right edge while preserving batch separators, whitespace, hard breaks and end spacing', () => {
+  for (const boundary of [
+    { text: 'left\tafter', from: 4, to: 4, tail: [{ type: 'text', text: '\tafter' }] },
+    {
+      text: 'left\nafter',
+      from: 4,
+      to: 4,
+      tail: [{ type: 'hardBreak' }, { type: 'text', text: 'after' }]
+    },
+    { text: 'left', from: 4, to: 4, tail: [{ type: 'text', text: ' ' }] },
+    { text: 'leftXX after', from: 4, to: 6, tail: [{ type: 'text', text: ' after' }] },
+    { text: 'left XXafter', from: 4, to: 7, tail: [{ type: 'text', text: ' after' }] }
+  ]) {
+    const view = mountedMention(crewRows, first, false, boundary.text)
+    const input = view.input.current!
+    if (boundary.text === 'left\nafter') {
+      act(() =>
+        promptEditor(within(view.container).getByRole('textbox')).commands.setContent({
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'left' },
+                { type: 'hardBreak' },
+                { type: 'text', text: 'after' }
+              ]
+            }
+          ]
+        })
+      )
+    }
+    act(() => {
+      input.focus()
+      input.setSelectionRange(boundary.from, boundary.to)
+      expect(view.handle.current!.insertAgentReferences([first, second])).toBe(true)
+    })
+    expect(readNativeChatComposerDraft('menu').document?.content?.[0]?.content).toEqual([
+      { type: 'text', text: 'left' },
+      { type: 'nativeChatAgentReference', attrs: first },
+      { type: 'text', text: ' ' },
+      { type: 'nativeChatAgentReference', attrs: second },
+      ...boundary.tail
+    ])
+    expect(input.contains?.(document.activeElement)).toBe(true)
+    view.unmount()
+    clearNativeChatComposerDraftsForTests()
+    crewRows.length = 0
+  }
+})
+
 it('rechecks the actual native input at menu selection and never fabricates insertion at refusal boundaries', async () => {
   for (const mode of ['none', 'disabled', 'plain', 'ime', 'missing-handle'] as const) {
     const user = userEvent.setup()
-    const view = mountedMention()
+    const view = mountedMention(crewRows, first)
     const original = view.input.current!
     act(() => {
       original.focus()
