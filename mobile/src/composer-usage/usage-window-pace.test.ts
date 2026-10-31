@@ -24,6 +24,10 @@ describe('computeUsagePace', () => {
     })
   })
 
+  it('reports a fully used window as exhausted rather than projecting a run-out', () => {
+    expect(computeUsagePace(fiveHourWindow(100), NOW)).toEqual({ kind: 'exhausted' })
+  })
+
   it('reports how far under an even burn a slow window is', () => {
     expect(computeUsagePace(fiveHourWindow(10), NOW)).toEqual({ kind: 'under', deltaPercent: 30 })
   })

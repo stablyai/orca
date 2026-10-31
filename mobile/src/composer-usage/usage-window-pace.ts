@@ -6,6 +6,7 @@ export type UsagePaceWindow = {
 
 export type UsagePace =
   | { kind: 'unknown' }
+  | { kind: 'exhausted' }
   | { kind: 'on-pace'; deltaPercent: number }
   | { kind: 'ahead'; deltaPercent: number; runOutBeforeResetMs: number | null }
   | { kind: 'under'; deltaPercent: number }
@@ -26,6 +27,9 @@ export function computeUsagePace(window: UsagePaceWindow, now: number): UsagePac
     return { kind: 'unknown' }
   }
   const used = Math.max(0, Math.min(100, window.usedPercent))
+  if (used >= 100) {
+    return { kind: 'exhausted' }
+  }
   const expected = Math.min(100, (elapsedMs / windowMs) * 100)
   const deltaPercent = Math.round(used - expected)
   if (Math.abs(used - expected) < ON_PACE_TOLERANCE_PERCENT) {

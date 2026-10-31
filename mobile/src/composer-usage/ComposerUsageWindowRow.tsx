@@ -30,6 +30,11 @@ function paceCopy(pace: UsagePace, t: Translate): { text: string; color: string 
   switch (pace.kind) {
     case 'unknown':
       return null
+    case 'exhausted':
+      return {
+        text: t('composerUsage.pace.exhausted', 'Limit reached — out until reset'),
+        color: colors.statusRed
+      }
     case 'on-pace':
       return { text: t('composerUsage.pace.onPace', 'On pace'), color: colors.textSecondary }
     case 'under':
