@@ -114,6 +114,15 @@ describe('createStructuredAgentAccountFollow', () => {
     expect(unknown.accounts).toEqual({ account: 'b@example.com' })
   })
 
+  it('keeps a failed quiet seed out of the chat: the user switched nothing', async () => {
+    const f = follow(claudeHome('/claude/default'))
+    const cause = new Error('transcript unreadable')
+    f.carryClaude.mockRejectedValue(cause)
+    await expect(f.move(chat('claude', claudeHome('/claude/work'), true, false))).rejects.toBe(
+      cause
+    )
+  })
+
   it('stays when the conversation could not be carried', async () => {
     const f = follow(codexHome('/homes/b'))
     f.carryCodex.mockResolvedValue(false)

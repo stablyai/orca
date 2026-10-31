@@ -3,11 +3,16 @@
 
 import { randomUUID } from 'node:crypto'
 import {
+  AGENT_SESSION_ACCOUNT_SWITCH_FAILED_PRESENTATION,
+  AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION,
   agentSessionAccountSwitchBody,
   agentSessionAccountSwitchFailedBody,
   type AgentSessionAccountSwitch
 } from '../../../shared/agent-session-account-switch-row'
-import type { AgentJournalPlainStatusItem } from '../../../shared/agent-session-journal-types'
+import type {
+  AgentJournalItemBody,
+  AgentJournalPlainStatusItem
+} from '../../../shared/agent-session-journal-types'
 import {
   agentSessionAccountHomesEqual,
   type AgentSessionAccountHome
@@ -95,9 +100,14 @@ export async function followSelectedAccountBeforeStart(
       error
     })
     if (error instanceof StructuredAgentSessionAccountMoveError) {
-      await lock.commit(() =>
-        appendAccountRow(context, sessionId, agentSessionAccountSwitchFailedBody(error.accounts))
-      )
+      const body = agentSessionAccountSwitchFailedBody(error.accounts)
+      await lock.commit(async () => {
+        // A restart forgets the attempt; the chat already says so if nothing changed since.
+        const journal = context.sessions.get(sessionId)?.journal
+        if (!journal || newestAccountRowText(journal) !== body.text) {
+          await appendAccountRow(context, sessionId, body)
+        }
+      })
     }
     return
   }
@@ -124,6 +134,25 @@ export async function followSelectedAccountBeforeStart(
       await appendAccountRow(context, sessionId, agentSessionAccountSwitchBody(account))
     }
   })
+}
+
+function newestAccountRowText(journal: {
+  visitItems: (
+    visit: (itemId: string, sequence: number, body: AgentJournalItemBody) => void
+  ) => void
+}): string | undefined {
+  let newest: { sequence: number; text: string } | undefined
+  journal.visitItems((_itemId, sequence, body) => {
+    if (
+      body.kind === 'status' &&
+      (body.presentation === AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION ||
+        body.presentation === AGENT_SESSION_ACCOUNT_SWITCH_FAILED_PRESENTATION) &&
+      (!newest || sequence > newest.sequence)
+    ) {
+      newest = { sequence, text: body.text }
+    }
+  })
+  return newest?.text
 }
 
 async function appendAccountRow(

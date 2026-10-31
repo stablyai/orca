@@ -14,15 +14,16 @@ import { resolveSessionFilePath } from '../native-chat/session-file-resolver'
 import type * as SessionFileResolver from '../native-chat/session-file-resolver'
 import { carryClaudeConversationToAccountHome } from './claude-chat-account-move'
 
-const unreadable = new Set<string>()
+const unreadable = new Map<string, string>()
 vi.mock('../native-chat/session-file-resolver', async (importOriginal) => {
   const actual = await importOriginal<typeof SessionFileResolver>()
   return {
     ...actual,
     resolveSessionFilePath: vi.fn(
       async (...args: Parameters<typeof actual.resolveSessionFilePath>) => {
-        if (unreadable.has(args[2]?.claudeProjectsDir ?? '')) {
-          throw Object.assign(new Error('permission denied'), { code: 'EACCES' })
+        const code = unreadable.get(args[2]?.claudeProjectsDir ?? '')
+        if (code) {
+          throw Object.assign(new Error(`${code}: unreadable`), { code })
         }
         return actual.resolveSessionFilePath(...args)
       }
@@ -103,16 +104,29 @@ describe('carryClaudeConversationToAccountHome', () => {
     expect(readFileSync(own, 'utf8')).toBe('turn 1\nturn 2b\n')
   })
 
-  it('skips an account it cannot read instead of giving up on the others', async () => {
-    unreadable.add(join(homeA, 'projects'))
-    writeTranscript(homeC, 'from c\n')
+  it('skips another account it cannot read instead of giving up on the rest', async () => {
+    unreadable.set(join(homeC, 'projects'), 'EACCES')
+    writeTranscript(homeA, 'from a\n')
     expect(await carry()).toBe(true)
     expect(readFileSync(join(homeB, 'projects', PROJECT, `${SESSION}.jsonl`), 'utf8')).toBe(
-      'from c\n'
+      'from a\n'
     )
     expect(resolveSessionFilePath).toHaveBeenCalledWith('claude', SESSION, {
-      claudeProjectsDir: join(homeA, 'projects')
+      claudeProjectsDir: join(homeC, 'projects')
     })
+  })
+
+  it('fails when the account it ran on cannot be read, so an older copy cannot win', async () => {
+    unreadable.set(join(homeA, 'projects'), 'EACCES')
+    writeTranscript(homeC, 'older copy\n')
+    await expect(carry()).rejects.toThrow('EACCES')
+    expect(() => readFileSync(join(homeB, 'projects', PROJECT, `${SESSION}.jsonl`))).toThrow()
+  })
+
+  it('fails on an unexpected read error in any account', async () => {
+    unreadable.set(join(homeC, 'projects'), 'EIO')
+    writeTranscript(homeA)
+    await expect(carry()).rejects.toThrow('EIO')
   })
 
   it('reports a conversation no known account holds', async () => {

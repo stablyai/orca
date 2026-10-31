@@ -117,8 +117,11 @@ export function createStructuredAgentAccountFollow(
       try {
         return await moveTo(agent, record, source, { account, quiet })
       } catch (cause) {
-        // A quiet seed's saved account may not be where it ran, so it is not named.
-        const from = quiet ? undefined : accountAtHome(agent, source.path, settings)
+        // A quiet seed is no switch the user made, so its failure stays in the log.
+        if (quiet) {
+          throw cause
+        }
+        const from = accountAtHome(agent, source.path, settings)
         throw new StructuredAgentSessionAccountMoveError(
           {
             ...(account === undefined ? {} : { account }),

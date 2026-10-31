@@ -155,6 +155,24 @@ describe('a chat after the account picker changed', () => {
     expect((await rig.host.send(CALLER, restTestSend('again', fence()))).ok).toBe(true)
     await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(3))
     expect(failedRows()).toHaveLength(1)
+
+    // A restart forgets the attempt and tries again, but the chat already says so.
+    await rig.restart({ accountFollow: picker.follow })
+    expect((await rig.host.send(CALLER, restTestSend('after restart', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(rig.adapter.dispatch).toHaveBeenCalledTimes(4))
+    expect(picker.move).toHaveBeenCalledTimes(2)
+    expect(failedRows()).toHaveLength(1)
+
+    // A different account is news, so it gets its own line.
+    picker.move.mockImplementation(async () => {
+      throw new StructuredAgentSessionAccountMoveError(
+        { account: 'c@example.com', from: 'a@example.com' },
+        { cause: new Error('EBUSY') }
+      )
+    })
+    picker.picker.home = { variable: 'CODEX_HOME', path: '/homes/c' }
+    expect((await rig.host.send(CALLER, restTestSend('third', fence()))).ok).toBe(true)
+    await vi.waitFor(() => expect(failedRows()).toHaveLength(2))
   })
 })
 
