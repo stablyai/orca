@@ -39,6 +39,7 @@ vi.mock('../../worktree-root-preparation', () => ({
 }))
 
 const dirLinkType = process.platform === 'win32' ? 'junction' : 'dir'
+const icons = await vi.importActual<typeof RepoIcons>('../../repo-icon-autodetect')
 
 function createStore(repos: Repo[]): Store {
   const store = {
@@ -121,7 +122,6 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
         executionHostId: 'runtime:peer'
       }
       repos.push(foreign)
-      const icons = await vi.importActual<typeof RepoIcons>('../../repo-icon-autodetect')
       vi.mocked(detectRepoIconAndUpstream).mockImplementationOnce(icons.detectRepoIconAndUpstream)
       vi.mocked(stat).mockClear()
       vi.mocked(realpath).mockClear()
