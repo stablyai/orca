@@ -30,12 +30,26 @@ export {
 } from './task-page-github-work-item-materialization'
 
 export function patchTaskPageGitHubWorkItemPages(
+  pages: (readonly GitHubWorkItem[] | null)[],
+  itemKey: { id: string; repoId: string },
+  patch: Partial<ObservedGitHubWorkItem>,
+  shouldPatch?: (item: GitHubWorkItem) => boolean,
+  listComposition?: readonly ListComposition[]
+): (readonly GitHubWorkItem[] | null)[]
+export function patchTaskPageGitHubWorkItemPages(
+  pages: readonly (readonly GitHubWorkItem[] | null)[],
+  itemKey: { id: string; repoId: string },
+  patch: Partial<ObservedGitHubWorkItem>,
+  shouldPatch?: (item: GitHubWorkItem) => boolean,
+  listComposition?: readonly ListComposition[]
+): readonly (readonly GitHubWorkItem[] | null)[]
+export function patchTaskPageGitHubWorkItemPages(
   pages: readonly (readonly GitHubWorkItem[] | null)[],
   itemKey: { id: string; repoId: string },
   patch: Partial<ObservedGitHubWorkItem>,
   shouldPatch?: (item: GitHubWorkItem) => boolean,
   listComposition: readonly ListComposition[] = []
-): (readonly GitHubWorkItem[] | null)[] {
+): readonly (readonly GitHubWorkItem[] | null)[] {
   const projection = createTaskPageGitHubAuthorityProjection()
   let nextPages: (readonly GitHubWorkItem[] | null)[] | undefined
   pages.forEach((page, pageIndex) => {
@@ -67,7 +81,7 @@ export function patchTaskPageGitHubWorkItemPages(
       nextPages[pageIndex] = nextPage
     }
   })
-  return nextPages ?? (pages as (readonly GitHubWorkItem[] | null)[])
+  return nextPages ?? pages
 }
 
 export function applyPendingTaskPageGitHubMutationsToItems(

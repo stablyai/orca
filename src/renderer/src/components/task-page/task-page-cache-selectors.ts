@@ -122,9 +122,17 @@ export function selectTaskPageUnresolvedSourceRepos(
 }
 
 export function reconcileTaskPagePagesWithWorkItemsCache(
+  pages: (readonly GitHubWorkItem[] | null)[],
+  entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
+): (readonly GitHubWorkItem[] | null)[]
+export function reconcileTaskPagePagesWithWorkItemsCache(
   pages: TaskPageWorkItemPages,
   entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
-): (readonly GitHubWorkItem[] | null)[] {
+): TaskPageWorkItemPages
+export function reconcileTaskPagePagesWithWorkItemsCache(
+  pages: TaskPageWorkItemPages,
+  entries: readonly (CacheEntry<readonly GitHubWorkItem[]> | undefined)[]
+): TaskPageWorkItemPages {
   const cachedItems = new Map<string, GitHubWorkItem>()
   for (const entry of entries) {
     for (const item of entry?.data ?? []) {
@@ -150,7 +158,7 @@ export function reconcileTaskPagePagesWithWorkItemsCache(
     return pageChanged ? nextPage : page
   })
 
-  return changed ? nextPages : (pages as (readonly GitHubWorkItem[] | null)[])
+  return changed ? nextPages : pages
 }
 
 export function shouldReplaceTaskPageItemsAfterRefresh(
@@ -213,16 +221,24 @@ export function shouldResetTaskPagePaginationAfterLandingRefresh(
 }
 
 export function reconcileTaskPagePagesAfterLandingRefresh(
+  pages: (readonly GitHubWorkItem[] | null)[],
+  refreshedItems: readonly GitHubWorkItem[]
+): (readonly GitHubWorkItem[] | null)[]
+export function reconcileTaskPagePagesAfterLandingRefresh(
   pages: TaskPageWorkItemPages,
   refreshedItems: readonly GitHubWorkItem[]
-): (readonly GitHubWorkItem[] | null)[] {
+): TaskPageWorkItemPages
+export function reconcileTaskPagePagesAfterLandingRefresh(
+  pages: TaskPageWorkItemPages,
+  refreshedItems: readonly GitHubWorkItem[]
+): TaskPageWorkItemPages {
   const firstPage = pages[0] ?? []
   if (shouldResetTaskPagePaginationAfterLandingRefresh(firstPage, refreshedItems)) {
     return [[...refreshedItems]]
   }
   const nextFirstPage = reconcileTaskPageItemsAfterLandingRefresh(firstPage, refreshedItems)
   if (nextFirstPage === firstPage) {
-    return pages as (readonly GitHubWorkItem[] | null)[]
+    return pages
   }
   return [nextFirstPage, ...pages.slice(1)]
 }
