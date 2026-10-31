@@ -4,6 +4,7 @@ import type { AppState } from '@/store/types'
 import { getIndexedAllWorktrees } from '@/store/worktree-repo-index'
 import {
   collectAgentPaneConversations,
+  panePtyId,
   resolvePaneAgentConversation,
   resolvePaneLastAgentConversation
 } from '@/lib/ai-vault-tab-title-requests'
@@ -83,27 +84,15 @@ export function resolvePaneResumeInNewChatOffer(
   state: AppState,
   pane: { worktreeId: string; paneKey: string }
 ): PaneResumeInNewChatOffer {
-  return conversationResumeOffer(
-    state,
-    resolvePaneAgentConversation(state, pane, adoptsCliConversations)
-  )
-}
-
-export function resolvePaneSwitchToChatOffer(
-  state: AppState,
-  pane: { worktreeId: string; paneKey: string }
-): PaneResumeInNewChatOffer {
-  return conversationResumeOffer(
-    state,
-    resolvePaneLastAgentConversation(state, pane, adoptsCliConversations)
-  )
-}
-
-function conversationResumeOffer(
-  state: AppState,
-  conversation: ReturnType<typeof resolvePaneLastAgentConversation>
-): PaneResumeInNewChatOffer {
-  if (!conversation) {
+  const conversation = resolvePaneLastAgentConversation(state, pane, adoptsCliConversations)
+  // A host's pane whose agent is gone is switched through the terminal it stays bound to; one a
+  // failed switch unbound offers nothing here, and Session History opens it as a chat instead.
+  if (
+    !conversation ||
+    (conversation.executionHostId !== LOCAL_EXECUTION_HOST_ID &&
+      !state.agentStatusByPaneKey[conversation.paneKey] &&
+      !panePtyId(state, conversation.paneKey))
+  ) {
     return null
   }
   const hostScope = resolveAiVaultHostScopeDefaults(

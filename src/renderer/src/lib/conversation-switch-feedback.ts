@@ -75,10 +75,25 @@ export function conversationSwitchFailureText(
       values
     )
   }
+  // From a terminal, the retry is the Switch to Chat UI its pane (or Session History) still offers.
+  const fromTerminal = args.direction === 'chat' && args.source !== undefined
   if (reason === 'transcriptUnreadable') {
+    return fromTerminal
+      ? translate(
+          'components.tab.bar.switch.historyUnavailableFromTerminal',
+          "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then use Switch to Chat UI to try again.",
+          values
+        )
+      : translate(
+          'components.tab.bar.switch.historyUnavailable',
+          "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then try again.",
+          values
+        )
+  }
+  if (fromTerminal) {
     return translate(
-      'components.tab.bar.switch.historyUnavailable',
-      "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then try again.",
+      'components.tab.bar.switch.chatSwitchFailedFromTerminal',
+      '{{agent}} could not switch to chat. Use Switch to Chat UI to try again.',
       values
     )
   }

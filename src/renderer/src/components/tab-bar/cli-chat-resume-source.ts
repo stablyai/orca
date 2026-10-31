@@ -12,7 +12,7 @@ import {
   adoptsCliConversations,
   type CliConversationRowAgent
 } from '../../../../shared/structured-agent-cli-conversation-adoption'
-import { resolvePaneSwitchToChatOffer } from './tab-session-history-switch'
+import { resolvePaneResumeInNewChatOffer } from './tab-session-history-switch'
 
 export type CliChatResumeSource = {
   tabId: string
@@ -46,7 +46,7 @@ export function resolveCliChatResumeSource(
         tab: { worktreeId: args.tab.worktreeId, tabId: args.tab.id }
       }).find((candidate) => candidate.tabId === args.tab.id)
   const offer = conversation
-    ? resolvePaneSwitchToChatOffer(state, {
+    ? resolvePaneResumeInNewChatOffer(state, {
         worktreeId: conversation.worktreeId,
         paneKey: conversation.paneKey
       })

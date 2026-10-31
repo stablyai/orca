@@ -666,8 +666,8 @@ it.each(['preparation', 'refusal'])(
     })
     expect(mocks.toast).toHaveBeenCalledExactlyOnceWith(
       stage === 'refusal'
-        ? "Claude couldn't open this conversation's history. Check that its saved conversation is available, then try again."
-        : 'Claude could not switch to chat. Try again.'
+        ? "Claude couldn't open this conversation's history. Check that its saved conversation is available, then use Switch to Chat UI to try again."
+        : 'Claude could not switch to chat. Use Switch to Chat UI to try again.'
     )
     expect(tabs()).toEqual([])
     expect(mocks.activate).not.toHaveBeenCalled()

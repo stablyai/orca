@@ -299,7 +299,7 @@ it.each([
 
 it.each([
   ['terminal', 'Codex could not switch to a terminal. Try again.'],
-  ['chat', 'Codex could not switch to chat. Try again.']
+  ['chat', 'Codex could not switch to chat. Use Switch to Chat UI to try again.']
 ] as const)(
   'runs nothing when the host could not be asked whether it switches (to %s)',
   async (direction, text) => {

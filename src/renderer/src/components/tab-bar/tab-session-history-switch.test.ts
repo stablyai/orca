@@ -126,6 +126,33 @@ const exitedAgentRecords: Record<string, Partial<AppState>> = {
   }
 }
 
+/** server-1's runtime status: structured chats, with or without History resume. */
+const serverWithChat = (resumeHistory: boolean): AppState['runtimeStatusByEnvironmentId'] =>
+  new Map([
+    [
+      'server-1',
+      {
+        checkedAt: 1,
+        status: {
+          runtimeId: 'server-runtime',
+          rendererGraphEpoch: 0,
+          graphStatus: 'ready',
+          authoritativeWindowId: null,
+          liveTabCount: 1,
+          liveLeafCount: 1,
+          capabilities: [
+            protocol.STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
+            protocol.STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
+            protocol.STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
+            ...(resumeHistory
+              ? [protocol.STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY]
+              : [])
+          ]
+        }
+      }
+    ]
+  ])
+
 describe('resolveTabSessionHistorySubject', () => {
   it('retains the chosen pane in the direct CLI create identity without a History row', () => {
     expect(
@@ -167,30 +194,7 @@ describe('resolveTabSessionHistorySubject', () => {
         }
       }
 
-      state.runtimeStatusByEnvironmentId = new Map([
-        [
-          'server-1',
-          {
-            checkedAt: 1,
-            status: {
-              runtimeId: 'server-runtime',
-              rendererGraphEpoch: 0,
-              graphStatus: 'ready',
-              authoritativeWindowId: null,
-              liveTabCount: 1,
-              liveLeafCount: 1,
-              capabilities: [
-                protocol.STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
-                protocol.STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
-                protocol.STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY,
-                ...(supported
-                  ? [protocol.STRUCTURED_AGENT_SESSION_RESUME_HISTORY_RUNTIME_CAPABILITY]
-                  : [])
-              ]
-            }
-          }
-        ]
-      ])
+      state.runtimeStatusByEnvironmentId = serverWithChat(supported)
       const source = resolveCliChatResumeSource(state, {
         tab: { id: 'term-1', worktreeId: workspaceId }
       })
@@ -476,6 +480,38 @@ describe('one pane of a terminal tab', () => {
     expect(paneSubject(state, claudePane)).toEqual(cliSubject)
     expect(paneGate(state, claudePane)).toBe(true)
   })
+
+  it.each(['local', 'runtime:server-1'])(
+    "still offers an exited agent's conversation on a %s pane, while it is bound to its terminal",
+    (host) => {
+      makeState({}, host === 'local' ? {} : { executionHostId: host })
+      useAppStore.setState({ runtimeStatusByEnvironmentId: serverWithChat(true) })
+      const leaf = '11111111-1111-4111-8111-111111111111'
+      const pane = `term-1:${leaf}`
+      const bind = (ptyIdsByLeafId?: Record<string, string>) =>
+        useAppStore.setState({
+          terminalLayoutsByTabId: {
+            'term-1': { root: null, activeLeafId: leaf, expandedLeafId: null, ptyIdsByLeafId }
+          }
+        })
+      bind({ [leaf]: 'pty-1' })
+      const store = () => useAppStore.getState()
+      store().setAgentStatus(
+        pane,
+        { state: 'done', prompt: 'hi', agentType: 'claude' },
+        undefined,
+        undefined,
+        { tabId: 'term-1', worktreeId: WORKTREE_ID },
+        { providerSession: { key: 'session_id', id: 'claude-session-1' } }
+      )
+      store().removeAgentStatus(pane)
+      expect(store().agentStatusByPaneKey).toEqual({})
+      expect(paneGate(store(), pane)).toBe(true)
+      // A failed switch unbinds a host's pane; only Session History can switch that one now.
+      bind(undefined)
+      expect(paneGate(store(), pane)).toBe(host === 'local')
+    }
+  )
 
   it.each(Object.keys(exitedAgentRecords))(
     'offers nothing once the agent exited and only a %s record remains, as the tab menu does',

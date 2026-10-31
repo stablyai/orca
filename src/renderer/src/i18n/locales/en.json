@@ -20139,6 +20139,8 @@
           "outcomeUnknown": "Orca could not confirm the {{agent}} switch. Check the open chat and terminal before trying again.",
           "historyUnavailable": "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then try again.",
           "chatSwitchFailed": "{{agent}} could not switch to chat. Try again.",
+          "chatSwitchFailedFromTerminal": "{{agent}} could not switch to chat. Use Switch to Chat UI to try again.",
+          "historyUnavailableFromTerminal": "{{agent}} couldn't open this conversation's history. Check that its saved conversation is available, then use Switch to Chat UI to try again.",
           "terminalSwitchFailed": "{{agent}} could not switch to a terminal. Try again.",
           "writerUnconfirmed": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.",
           "sourceExitUnconfirmed": "Orca could not confirm {{agent}} stopped in this terminal. Quit {{agent}} here, then try this action again.",
