@@ -105,7 +105,6 @@ export function ThreadSurface({
           key={tab.id}
           mode="structured"
           tabId={tab.id}
-          groupId={tab.groupId}
           sessionId={tab.entityId}
           agent={tab.agentSessionAgent}
           target={target}

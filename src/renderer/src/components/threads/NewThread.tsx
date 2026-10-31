@@ -1,5 +1,6 @@
 import { useMemo, useRef, useState } from 'react'
 import { Plus } from 'lucide-react'
+import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import { useAppStore } from '@/store'
 import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { translate } from '@/i18n/i18n'
@@ -101,7 +102,12 @@ export function NewThread({
     }),
     [project, loading, draftId, chosenAgent]
   )
-  const title = project?.repo.displayName ?? ''
+  const selectedName = useAppStore(
+    (state) =>
+      state.repos.find((repo) => `${getRepoExecutionHostId(repo)}|${repo.id}` === projectKey)
+        ?.displayName
+  )
+  const title = project?.repo.displayName ?? selectedName ?? ''
   return (
     <div
       data-native-chat-root="true"
