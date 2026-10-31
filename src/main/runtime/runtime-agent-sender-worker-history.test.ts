@@ -7,6 +7,7 @@ import { OrchestrationDb } from './orchestration/db'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
 import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import { AgentSenderWorkerHistory } from './runtime-agent-sender-worker-history'
 
 const dbs: OrchestrationDb[] = []
 afterEach(() => {
@@ -186,4 +187,44 @@ it('follows each write that changes a worker, as a cold rebuild reads it', () =>
     .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
     .run(`res-${h.ids[1]}`)
   expect(step(dispatches)).not.toContain(`dispatch:${h.ids[1]}@${pane(2)}`)
+})
+
+it('keeps nothing it read inside a transaction that rolls back', () => {
+  const h = host(3)
+  h.senders.build()
+  const held = `dispatch:${h.ids[1]}@${pane(1)}`
+  h.db.db.exec('BEGIN')
+  h.db.db
+    .prepare("UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE id = ?")
+    .run(`res-${h.ids[1]}`)
+  h.senders.build()
+  h.db.db.exec('ROLLBACK')
+  expect(h.rows(h.senders.build())).toContain(held)
+  // A later write no worker read leaves it as the database has it.
+  h.db.db
+    .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
+    .run(h.unrelated.id)
+  expect(h.rows(h.senders.build())).toEqual(h.cold())
+})
+
+it('forgets the workers and the keys it read once their panes close', () => {
+  const h = host(20)
+  // Installs this connection's triggers.
+  h.senders.build()
+  const history = new AgentSenderWorkerHistory()
+  const work = { lineageReads: 0, paneReads: 0 }
+  const panes = h.ids.map((_, i) => ({
+    paneKey: pane(i),
+    worktreeId: 'w',
+    handle: handle(i),
+    processIncarnation: `pty-${i}:inc-1`
+  }))
+  history.read(h.db, panes, work)
+  const open = history.sizeForTest()
+  expect(open.entries).toBe(20)
+  history.read(h.db, panes.slice(0, 10), work)
+  expect(history.sizeForTest().entries).toBe(10)
+  expect(history.sizeForTest().dependencies).toBeLessThan(open.dependencies)
+  history.read(h.db, [], work)
+  expect(history.sizeForTest()).toEqual({ entries: 0, dependencies: 0 })
 })

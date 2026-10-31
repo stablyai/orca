@@ -104,9 +104,18 @@ export class AgentSenderWorkerHistory {
         this.reset()
         throw error
       }
-      clearAgentSenderDirtyKeys(db)
+      if (db.db.isTransaction) {
+        // A write that may yet roll back is never kept: the next build starts cold.
+        this.reset()
+      } else {
+        clearAgentSenderDirtyKeys(db)
+      }
     }
     return this.result
+  }
+
+  sizeForTest() {
+    return { entries: this.entries.size, dependencies: this.dependents.size }
   }
 
   private reset(): void {
@@ -174,6 +183,12 @@ export class AgentSenderWorkerHistory {
         if (entry.parent) {
           pending.push(entry.parent)
         }
+      }
+    }
+    // A Dispatch no live pane reaches now is read again if one ever does.
+    for (const id of this.entries.keys()) {
+      if (!seen.has(id)) {
+        this.forget(id)
       }
     }
     this.result = {
@@ -269,7 +284,11 @@ export class AgentSenderWorkerHistory {
     const entry = this.entries.get(id)
     this.entries.delete(id)
     for (const key of entry?.deps ?? []) {
-      this.dependents.get(key)?.delete(id)
+      const ids = this.dependents.get(key)
+      ids?.delete(id)
+      if (ids?.size === 0) {
+        this.dependents.delete(key)
+      }
     }
   }
 }
