@@ -32,6 +32,7 @@ export type OpenMobileFileTapOptions<T extends FileTapSessionTab> = {
   // Every reading of the tapped text; like desktop, the longest that exists opens.
   candidates: readonly ParsedFileLinkLocation[]
   pushPreviewRoute: (href: ReturnType<typeof createMobileFilePreviewHref>) => void
+  openWorkspace?: (worktreeId: string) => void
   openBrowser: (url: string) => void
   triggerOpenFeedback: () => void
   fetchSessionTabs: () => Promise<void>
@@ -85,7 +86,8 @@ function requestFileTapResolution<T extends FileTapSessionTab>(
 }
 
 function existingFileTapResolution(
-  response: RpcResponse | null
+  response: RpcResponse | null,
+  allowWorkspaceRoot: boolean
 ): RuntimeTerminalPathResolution | null {
   const accepted = response ? fileTapPathResolve.interpret(response) : null
   if (!accepted?.accepted) {
@@ -93,7 +95,14 @@ function existingFileTapResolution(
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Preserve the established response shape at this boundary.
   const resolved = accepted.value as RuntimeTerminalPathResolution
-  return resolved.exists && !resolved.isDirectory ? resolved : null
+  return resolved.exists &&
+    (!resolved.isDirectory ||
+      (allowWorkspaceRoot &&
+        resolved.relativePath === '' &&
+        typeof resolved.worktree === 'string' &&
+        resolved.worktree.trim().length > 0))
+    ? resolved
+    : null
 }
 
 function reportOpenFailure<T extends FileTapSessionTab>(
@@ -117,7 +126,8 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
       target,
       // Why: a reading the host cannot answer must not hide a sibling.
       resolved: existingFileTapResolution(
-        await requestFileTapResolution(options, target.pathText).catch(() => null)
+        await requestFileTapResolution(options, target.pathText).catch(() => null),
+        Boolean(options.openWorkspace)
       )
     })
   )
@@ -142,6 +152,12 @@ async function openMobileFileTapAsync<T extends FileTapSessionTab>(
   const resolvedWorktree = `id:${resolvedWorktreeId}`
   const resolvedWorktreeName =
     resolvedWorktreeId === options.worktreeId ? options.worktreeName : undefined
+
+  if (resolved.isDirectory) {
+    options.triggerOpenFeedback()
+    options.openWorkspace?.(resolvedWorktreeId)
+    return
+  }
 
   if (resolved.openTarget?.kind === 'absolute-file') {
     options.triggerOpenFeedback()
