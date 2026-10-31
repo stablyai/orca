@@ -278,11 +278,22 @@ describe('Find focus with editor-owned selection', () => {
         }
 
         // Observation is a separate phase: genuine held motion maps/publishes/writes nothing.
+        // Independent presses must exceed the engine's 500ms multi-click interval.
+        vi.advanceTimersByTime(501)
         fireEvent.mouseDown(text.parentElement ?? active.view.dom, {
           button: 0,
           buttons: 1,
           shiftKey: true
         })
+        const input: unknown = 'input' in active.view ? active.view.input : undefined
+        if (!input || typeof input !== 'object' || !('mouseDown' in input)) {
+          throw new Error('Expected real engine input')
+        }
+        const tracker = input.mouseDown
+        if (!tracker || typeof tracker !== 'object' || !('allowDefault' in tracker)) {
+          throw new Error('Expected real held gesture')
+        }
+        expect(tracker.allowDefault).toBe(true)
         native.setBaseAndExtent(text, 7, text, 2)
         restorations.mockClear()
         nativeWrites.forEach((write) => write.mockClear())
