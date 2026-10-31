@@ -97,7 +97,7 @@ function OutputPreview({
           )}{' '}
           {extractIpcErrorMessage(state.error, String(state.error))}
         </p>
-        <Button type="button" variant="link" size="sm" className="px-0" onClick={retry}>
+        <Button type="button" variant="outline" size="xs" className="mt-2" onClick={retry}>
           {translate('auto.components.automations.AutomationRunResults.retry', 'Retry')}
         </Button>
       </div>
@@ -144,14 +144,16 @@ export function AutomationRunOutputRow({
   return (
     <Collapsible asChild defaultOpen>
       <li>
-        <div className="flex items-center gap-2 py-1">
-          <CollapsibleTrigger variant="row" className="min-w-0 flex-1 justify-start gap-2 py-0">
-            <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
-            <Icon className="size-4 shrink-0 text-muted-foreground" />
-            <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
-              <span className="truncate text-sm font-medium text-foreground">{output.title}</span>
-              <span className="text-xs text-muted-foreground">
-                {OUTPUT_FORMAT_NAME[output.format]} · {formatBytes(output.bytes)}
+        <div className="flex items-center gap-2">
+          <CollapsibleTrigger variant="row" className="min-w-0 flex-1">
+            <span className="flex min-w-0 flex-1 items-center gap-2">
+              <ChevronRight className="size-4 shrink-0 text-muted-foreground transition-transform group-data-[state=open]:rotate-90 motion-reduce:transition-none" />
+              <Icon className="size-4 shrink-0 text-muted-foreground" />
+              <span className="flex min-w-0 flex-1 flex-wrap items-baseline gap-x-2">
+                <span className="truncate text-sm font-medium text-foreground">{output.title}</span>
+                <span className="text-xs text-muted-foreground">
+                  {OUTPUT_FORMAT_NAME[output.format]} · {formatBytes(output.bytes)}
+                </span>
               </span>
             </span>
           </CollapsibleTrigger>
