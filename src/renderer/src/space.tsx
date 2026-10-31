@@ -13,6 +13,7 @@ import {
 } from './components/workspace-space/space-window-state'
 import { RecoverableRenderErrorBoundary } from './components/error-boundaries/RecoverableRenderErrorBoundary'
 import { applyDocumentTheme } from './lib/document-theme'
+import { resolvePaintedTheme } from './lib/terminal-app-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
@@ -57,7 +58,7 @@ function SpaceWindowRoot(): React.JSX.Element {
   }, [])
 
   useEffect(() => {
-    applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
+    applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
     document.documentElement.style.setProperty(
       '--app-font-family',
       buildAppFontFamily(settings?.appFontFamily)
@@ -66,10 +67,10 @@ function SpaceWindowRoot(): React.JSX.Element {
       return
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme('system')
+    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
     media.addEventListener('change', handleChange)
     return () => media.removeEventListener('change', handleChange)
-  }, [settings?.theme, settings?.appFontFamily])
+  }, [settings])
 
   return (
     <RecoverableRenderErrorBoundary

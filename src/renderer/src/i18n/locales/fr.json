@@ -7440,9 +7440,7 @@
           "932ff1fbff": "Thème",
           "leftSidebarAppearance": {
             "title": "Apparence de la barre latérale gauche",
-            "rowDescription": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
             "default": "Par défaut",
-            "matchTerminal": "Comme le terminal",
             "tinted": "Teintée",
             "tintColor": "Teinte de la barre latérale",
             "tintColorDescription": "Couleur mélangée à la surface de la barre latérale gauche.",
@@ -9628,9 +9626,7 @@
             },
             "leftSidebarAppearance": {
               "title": "Apparence de la barre latérale gauche",
-              "description": "Accordez la barre latérale gauche à votre terminal, gardez-la par défaut ou appliquez une teinte.",
               "project": "projet",
-              "terminal": "Terminal",
               "background": "arrière-plan",
               "tint": "teinte"
             },
@@ -12895,7 +12891,8 @@
           "noMatches": "Aucune version correspondante."
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Utiliser ses couleurs de terminal"
+          "useTerminalTheme": "Utiliser ses couleurs de terminal",
+          "matchTerminal": "Comme le terminal"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {

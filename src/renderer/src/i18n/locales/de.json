@@ -7560,9 +7560,7 @@
           "932ff1fbff": "Design",
           "leftSidebarAppearance": {
             "title": "Darstellung der linken Seitenleiste",
-            "rowDescription": "Die linke Seitenleiste an das Terminal anpassen, die Standardeinstellung beibehalten oder eine Farbtönung verwenden.",
             "default": "Standard",
-            "matchTerminal": "An Terminal anpassen",
             "tinted": "Getönt",
             "tintColor": "Farbtönung der Seitenleiste",
             "tintColorDescription": "Die Farbe, die der Oberfläche der linken Seitenleiste beigemischt wird.",
@@ -9745,9 +9743,7 @@
             },
             "leftSidebarAppearance": {
               "title": "Darstellung der linken Seitenleiste",
-              "description": "Die linke Seitenleiste an das Terminal anpassen, die Standardeinstellung beibehalten oder eine Farbtönung verwenden.",
               "project": "Projekt",
-              "terminal": "Terminal",
               "background": "Hintergrund",
               "tint": "Tönung"
             },
@@ -13161,6 +13157,9 @@
           "assignedLight": "{{value0}} als helles Design festgelegt",
           "assignedDark": "{{value0}} als dunkles Design festgelegt",
           "saveFailed": "Das Design konnte nicht gespeichert werden. Versuche es erneut."
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "An Terminal anpassen"
         }
       },
       "right": {

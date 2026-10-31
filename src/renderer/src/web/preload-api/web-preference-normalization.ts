@@ -1,4 +1,8 @@
 import { normalizeAgentLaunchChoices } from '../../../../shared/agent-launch-choices'
+import {
+  hasLegacyMatchTerminalSidebar,
+  syncLegacyMatchTerminalSidebar
+} from '../../../../shared/plugin-theme-settings'
 import { isAgentChatPermissionMode } from '../../../../shared/agent-chat-permission-mode'
 import { normalizeNativeChatAppearanceSettings } from '../../../../shared/native-chat/native-chat-appearance-settings'
 import {
@@ -165,7 +169,8 @@ export function migrateStoredWebSettings(
     ...normalizeTerminalCursorStyleDefault(stored),
     ...normalizeOsc52ClipboardDefaultOn(stored),
     terminalCustomThemes: normalizeTerminalCustomThemes(stored.terminalCustomThemes),
-    ...migratePortugueseUiLanguageOnLoad(stored)
+    ...migratePortugueseUiLanguageOnLoad(stored),
+    ...(hasLegacyMatchTerminalSidebar(stored) ? syncLegacyMatchTerminalSidebar(stored, true) : {})
   }
 }
 

@@ -12,6 +12,7 @@ import {
   recordRendererCrashBreadcrumb
 } from './lib/crash-diagnostics'
 import { applyDocumentTheme } from './lib/document-theme'
+import { resolvePaintedTheme } from './lib/terminal-app-theme'
 import { buildAppFontFamily } from './lib/app-font-family'
 import { I18nProvider } from './i18n/I18nProvider'
 import { translate } from './i18n/i18n'
@@ -32,7 +33,7 @@ installRendererCrashDiagnostics('dashboard-popout')
 setReactCommitCascadeRendererSurface('dashboard-popout')
 
 function applyPopoutAppearance(settings: GlobalSettings | null): void {
-  applyDocumentTheme(settings?.theme ?? 'system', { disableTransitions: false })
+  applyDocumentTheme(resolvePaintedTheme(settings), { disableTransitions: false })
   document.documentElement.style.setProperty(
     '--app-font-family',
     buildAppFontFamily(settings?.appFontFamily)
@@ -91,7 +92,7 @@ function PopoutSettingsSync(): null {
       return
     }
     const media = window.matchMedia('(prefers-color-scheme: dark)')
-    const handleChange = (): void => applyDocumentTheme('system')
+    const handleChange = (): void => applyDocumentTheme(resolvePaintedTheme(settings))
     media.addEventListener('change', handleChange)
     return () => media.removeEventListener('change', handleChange)
   }, [settings])
