@@ -134,12 +134,7 @@ describe('a Codex turn a switch stopped before Codex recorded its end', () => {
     expect(journal.item(turnKey(STOPPED_TURN))).toBeNull()
 
     await atRest(journal, { settleAbandoned: true })
-    expect(journal.item(turnKey(STOPPED_TURN))?.body).toEqual({
-      kind: 'turn',
-      turnId: STOPPED_TURN,
-      state: 'interrupted'
-    })
-    // The stopped turn's prompt arrived and is that turn's row.
+    // The stopped turn's prompt arrived, is that turn's row, and its record names it.
     const prompt = journal
       .snapshot()
       .items.find(
@@ -150,6 +145,12 @@ describe('a Codex turn a switch stopped before Codex recorded its end', () => {
           turnScope.turnItemId === turnKey(STOPPED_TURN)
       )
     expect(prompt).toBeDefined()
+    expect(journal.item(turnKey(STOPPED_TURN))?.body).toEqual({
+      kind: 'turn',
+      turnId: STOPPED_TURN,
+      state: 'interrupted',
+      userItemId: prompt?.itemId
+    })
     const settled = journal.snapshot()
 
     // After a restart (or a retry from Session History) nothing latches and nothing repeats.

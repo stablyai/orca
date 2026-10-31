@@ -6,7 +6,10 @@ import { agentSessionSwitchDeadline } from '../../../shared/agent-session-switch
 import { agentTurnVerdict } from '../../../shared/agent-turn-outcome'
 import { agentVerdictDisplayMark } from '../../../shared/agent-main-agent-verdict'
 import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
-import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  agentJournalSubmissionKey
+} from '../../../shared/agent-session-journal-item-key'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -15,6 +18,7 @@ import { refuse } from '../../../shared/agent-session-wire'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import type { NativeChatMessage } from '../../../shared/native-chat-types'
 import { projectStructuredItemToNativeChat } from '../../../shared/structured-agent-session-projection'
+import { selectStructuredAgentSettledTurns } from '../../../shared/structured-agent-session-turn-timing'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -303,6 +307,182 @@ describe('a Stop and switch into the chat that already holds the conversation', 
       expectInOrder()
     }
   )
+})
+
+describe('Codex: a Stop and switch into the chat after Codex wrote its own abort (Windows QA 3807)', () => {
+  // Ids from the run's journal and rollout; text is the prompt's label, and A's and D's item ids
+  // weren't captured. The chat sent A (and D after the restart); the CLI ran B to the end, then C
+  // until Stop. Rows 1-6 are A, 7-11 B, 12-14 C up to the stop, 15-16 the abort Codex writes as it
+  // stops, 17-21 D. User lines carry msg_ ids and no turn id; the import reads the UserMessage items.
+  const recording = async () =>
+    lines(await readFile(join(fixtures, 'codex-qa-3807-retained-stop-third-turn.jsonl'), 'utf8'))
+  /** A nested rollout field, read without casts. */
+  const dig = (value: unknown, ...path: string[]): unknown =>
+    path.reduce<unknown>(
+      (current, key) =>
+        typeof current === 'object' && current !== null
+          ? Object.entries(current).find(([name]) => name === key)?.[1]
+          : undefined,
+      value
+    )
+  const time = (row: string) => Date.parse(String(json(row).timestamp))
+
+  /** A turn the chat sent and Codex answered, saved as the chat saves it. */
+  async function chatSentTurn(journal: AgentSessionJournal, thread: string, rows: string[]) {
+    const turnId = payload(rows[0]!, 'turn_id')
+    const items = rows.map((row) => dig(json(row), 'payload', 'item'))
+    const prompt = items.find((item) => dig(item, 'type') === 'UserMessage')
+    const reply = items.find((item) => dig(item, 'type') === 'AgentMessage')
+    const text = (item: unknown) => [
+      { type: 'text' as const, text: String(dig(item, 'content', '0', 'text')) }
+    ]
+    const clientMessageId = String(dig(prompt, 'client_id'))
+    const record = {
+      provider: 'legacy' as const,
+      agent: 'codex' as const,
+      sessionId: 'chat',
+      recordId: `turn-lifecycle:${turnId}`
+    }
+    await journal.appendPlannedLifecycleBatch({
+      settlementId: `chat:${turnId}`,
+      fence: 1,
+      plan: () => ({
+        dispatches: [],
+        mutations: [
+          {
+            kind: 'item',
+            identity: { provider: 'orca', clientMessageId },
+            body: { kind: 'message', role: 'user', blocks: text(prompt) },
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          },
+          {
+            kind: 'item',
+            identity: record,
+            body: {
+              kind: 'turn',
+              turnId,
+              state: 'completed',
+              outcome: 'success',
+              userItemId: agentJournalSubmissionKey(clientMessageId),
+              startedAt: time(rows[0]!),
+              completedAt: time(rows.at(-1)!)
+            },
+            turnScope: AGENT_JOURNAL_THREAD_SCOPE
+          },
+          {
+            kind: 'item',
+            identity: { provider: 'codex', threadId: thread, turnId, ordinal: 1 },
+            body: { kind: 'message', role: 'assistant', blocks: text(reply) },
+            turnScope: { kind: 'turn', turnItemId: agentJournalItemKey(record) }
+          }
+        ]
+      })
+    })
+  }
+
+  /** The chat's A, the CLI's B, then Stop and switch during C, through the production commit and refresh. */
+  async function stopAndSwitchDuringC(name: string) {
+    const rows = await recording()
+    const thread = payload(rows[0]!, 'id')
+    const source = { agent: 'codex' as const, sessionId: thread, filePath }
+    const journal = await open(name, 'codex', thread)
+    await chatSentTurn(journal, thread, rows.slice(1, 7))
+    await writeFile(filePath, `${rows.slice(0, 15).join('\n')}\n`)
+    const stopped = await captureSwitchStoppedCliTurn(source, true, deadline, { journal })
+    expect(stopped?.turnId).toBe(payload(rows[12]!, 'turn_id'))
+    await writeFile(filePath, `${rows.slice(0, 17).join('\n')}\n`)
+    await commitSwitchStoppedCliTurn({ journal, stopped: stopped!, fence: 1 })
+    await refresh(journal, source, stopped)
+    const imported = (row: string) =>
+      agentJournalItemKey({
+        provider: 'legacy',
+        agent: 'codex',
+        sessionId: thread,
+        recordId: String(dig(json(row), 'payload', 'item', 'id'))
+      })
+    const prompts = {
+      a: agentJournalSubmissionKey(String(dig(json(rows[4]!), 'payload', 'item', 'client_id'))),
+      b: imported(rows[9]!),
+      bReply: imported(rows[10]!),
+      c: imported(rows[14]!)
+    }
+    return { rows, thread, source, journal, stopped: stopped!, prompts }
+  }
+
+  function expectInterruptedOnCOnly(
+    journal: AgentSessionJournal,
+    stoppedTurn: string,
+    prompts: { a: string; b: string; bReply: string; c: string }
+  ) {
+    expectInterrupted(journal, stoppedTurn)
+    const shown = shownTurns(journal)
+    expect(shown.prompts.slice(0, 3)).toEqual([prompts.a, prompts.b, prompts.c])
+    expect(shown.turnOf(prompts.b)).toBe(prompts.b)
+    expect(shown.turnOf(prompts.bReply)).toBe(prompts.b)
+    // C's only row is its prompt (Codex was stopped before any reply): it opens its own turn.
+    expect(shown.turnOf(prompts.c)).toBe(prompts.c)
+    // The chat marks a turn by its prompt: only C reads Interrupted.
+    const { items } = journal.snapshot()
+    const marked = [...selectStructuredAgentSettledTurns(items, journal.submissions())].flatMap(
+      ([prompt, settled]) => (settled?.verdict === 'cancellation' ? [prompt] : [])
+    )
+    expect(marked).toEqual([prompts.c])
+  }
+
+  it('keys C to its own prompt and marks only C, before and after the restart and a later turn', async () => {
+    const { rows, thread, source, journal, stopped, prompts } =
+      await stopAndSwitchDuringC('codex-3807')
+    // The stopped turn's record names C's prompt, as do B's.
+    const records = turns(journal)
+    expect(records.find((body) => body.turnId === stopped.turnId)?.userItemId).toBe(prompts.c)
+    expect(records.find((body) => body.turnId === payload(rows[7]!, 'turn_id'))?.userItemId).toBe(
+      prompts.b
+    )
+    expectInterruptedOnCOnly(journal, stopped.turnId, prompts)
+
+    // After the restart the chat sends D; a later import and a reopen keep C where it is.
+    await chatSentTurn(journal, thread, rows.slice(17))
+    await writeFile(filePath, `${rows.join('\n')}\n`)
+    await refresh(journal, source)
+    expectInterruptedOnCOnly(journal, stopped.turnId, prompts)
+    const settled = journal.snapshot()
+    await journal.close()
+    const reopened = await open('codex-3807', 'codex', thread)
+    await refresh(reopened, source)
+    expect(reopened.snapshot()).toEqual(settled)
+    expectInterruptedOnCOnly(reopened, stopped.turnId, prompts)
+  })
+
+  it('heals a journal saved without the prompts: the next import names them', async () => {
+    const { source, journal, stopped, prompts } = await stopAndSwitchDuringC('codex-3807-saved')
+    // What the earlier build saved: B's and C's records with no prompt, C's ahead of B's rows.
+    const unanchored = journal
+      .snapshot()
+      .items.flatMap((item) =>
+        item.body.kind === 'turn' && item.body.userItemId !== prompts.a
+          ? [{ itemId: item.itemId, body: { ...item.body, userItemId: undefined } }]
+          : []
+      )
+    expect(unanchored).toHaveLength(2)
+    await journal.appendPlannedLifecycleBatch({
+      settlementId: 'earlier-build',
+      fence: 1,
+      plan: () => ({
+        dispatches: [],
+        mutations: unanchored.map(({ itemId, body }) => ({
+          kind: 'item' as const,
+          itemId,
+          body,
+          turnScope: AGENT_JOURNAL_THREAD_SCOPE
+        }))
+      })
+    })
+    expect(turns(journal).filter((body) => body.userItemId === undefined)).toHaveLength(2)
+    expect(shownTurns(journal).turnOf(prompts.c)).not.toBe(prompts.c)
+
+    await refresh(journal, source)
+    expectInterruptedOnCOnly(journal, stopped.turnId, prompts)
+  })
 })
 
 describe("each agent's own stop record, then an idle switch", () => {

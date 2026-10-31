@@ -298,11 +298,22 @@ it.each([
           check: deadline.check
         })
         const firstEnd = retained.item(canonicalTurn)
+        // The record names the stopped turn's own prompt row.
+        const prompt = retained
+          .snapshot()
+          .items.find(
+            ({ body, turnScope }) =>
+              body.kind === 'message' &&
+              body.role === 'user' &&
+              turnScope?.kind === 'turn' &&
+              turnScope.turnItemId === canonicalTurn
+          )
         expect(firstEnd?.body).toEqual({
           kind: 'turn',
           turnId: stopped!.turnId,
           state: 'interrupted',
           ...(personalStop ? { outcome: 'cancellation' } : {}),
+          userItemId: prompt?.itemId,
           completedAt: Date.parse(started.timestamp) + 1
         })
         expect(retained.snapshot().items.slice(0, nativeItems.length)).toEqual(nativeItems)

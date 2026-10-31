@@ -34,18 +34,19 @@ import {
 import {
   isSyntheticInterruptedTurn,
   isUnexplainedInterruptedTurn,
-  turnRecordReplaceable
+  turnRecordReplaceable,
+  withNamedPrompt
 } from './structured-agent-session-synthetic-turn'
 
 type CodexTurn = {
   id: string
   /** Started after the last import: its rows are imported here. */
   messages: boolean
-  /** Started before the import with no lifecycle record: only its outcome is derived here. */
+  /** Its rows are saved: only its record is derived here (its outcome, or the prompt it lacks). */
   baseline: boolean
-  /** The saved row that opened a baseline turn, so its record anchors to the real prompt. */
+  /** The turn's prompt row, so its record anchors to its own prompt wherever it sits. */
   opener?: string
-  /** A baseline turn's existing record that a later boundary may still replace or explain. */
+  /** The turn's existing record that a later boundary may still replace, explain or anchor. */
   recorded?: Extract<AgentJournalItemBody, { kind: 'turn' }>
   ended: boolean
 }
@@ -92,15 +93,9 @@ export async function catchUpStructuredSessionAtRest(input: {
     }
     items.push(item)
   }
-  // A known turn is settled unless Orca settled it or its interruption still lacks a verdict.
-  const revisited = (turnId: string) => {
-    const current = journal.item(
-      journal.canonicalItemId(agentJournalItemKey(lifecycleIdentity(threadId, turnId)))
-    )?.body
-    return isSyntheticInterruptedTurn(current) || isUnexplainedInterruptedTurn(current)
-      ? current
-      : undefined
-  }
+  const saved = (turnId: string) =>
+    journal.item(journal.canonicalItemId(agentJournalItemKey(lifecycleIdentity(threadId, turnId))))
+      ?.body
   let prompts: Map<string, string> | undefined
   let turn: CodexTurn | undefined
   let baseline: JournalReplacementItem | undefined
@@ -112,17 +107,14 @@ export async function catchUpStructuredSessionAtRest(input: {
       ownerFence: 0,
       turnScope: AGENT_JOURNAL_THREAD_SCOPE
     }
-    if (target.messages) {
-      retain({ ...item, body })
-    } else if (target.recorded) {
-      // Its record exists: the boundary replaces or explains it, keeping the record's anchor.
-      const anchor = target.recorded.userItemId
-      retain({ ...item, body: { ...body, ...(anchor ? { userItemId: anchor } : {}) } })
+    // A record names its own prompt; one already saved keeps the prompt it names.
+    const anchor = target.recorded?.userItemId ?? target.opener
+    const anchored = anchor ? { ...body, userItemId: anchor } : body
+    if (target.messages || target.recorded) {
+      retain({ ...item, body: anchored })
     } else if (target.baseline) {
       // No saved prompt row to anchor to: write nothing rather than a dangling opener.
-      baseline = target.opener
-        ? { ...item, body: { ...body, userItemId: target.opener } }
-        : undefined
+      baseline = target.opener ? { ...item, body: anchored } : undefined
     }
   }
   const close = (target: CodexTurn) => {
@@ -176,14 +168,18 @@ export async function catchUpStructuredSessionAtRest(input: {
       if (imported) {
         baseline = undefined
       }
-      const recorded = revisited(id)
-      const open = Boolean(recorded) || !view.known.has(id)
+      // A known turn is settled unless Orca settled it or its interruption still lacks a verdict;
+      // a settled record an earlier import saved without its prompt only takes the prompt.
+      const current = saved(id)
+      const revisited = isSyntheticInterruptedTurn(current) || isUnexplainedInterruptedTurn(current)
+      const unanchored = !revisited && current?.kind === 'turn' && !current.userItemId
+      const open = revisited || !view.known.has(id)
       turn = id
         ? {
             id,
             messages: !imported && open,
-            baseline: imported && open,
-            ...(imported && recorded ? { recorded } : {}),
+            baseline: (imported && open) || unanchored,
+            ...(current?.kind === 'turn' && (revisited || unanchored) ? { recorded: current } : {}),
             ended: false
           }
         : undefined
@@ -225,16 +221,20 @@ export async function catchUpStructuredSessionAtRest(input: {
     if (!message) {
       continue
     }
+    const identity = tracker.identify(line, currentLineIndex)
+    if (message.role === 'user') {
+      // The turn's last prompt, as the stop's own read names it: saved under either import's
+      // scheme, or the row this import writes.
+      prompts ??= savedCodexPrompts(journal, threadId)
+      turn.opener =
+        prompts.get(providerItemId(parsed) ?? '') ??
+        (turn.messages ? agentJournalItemKey(identity) : turn.opener)
+    }
     if (turn.baseline) {
-      const id = turn.opener || message.role !== 'user' ? null : providerItemId(parsed)
-      if (id) {
-        prompts ??= savedCodexPrompts(journal, threadId)
-        turn.opener = prompts.get(id)
-      }
       continue
     }
     retain({
-      identity: tracker.identify(line, currentLineIndex),
+      identity,
       body: legacyItemBody(message, LEGACY_IMPORT_BLOCK_LIMITS),
       ownerFence: 0,
       turnScope: {
@@ -296,18 +296,23 @@ export async function catchUpStructuredSessionAtRest(input: {
       }
       return {
         dispatches: [],
-        mutations: items
-          .filter((item) => {
-            const current = journal.item(
-              journal.canonicalItemId(agentJournalItemKey(item.identity))
-            )
-            return !current || turnRecordReplaceable(current.body, item.body)
-          })
-          .map((item) => ({
-            kind: 'item' as const,
-            ...item,
-            turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
-          }))
+        mutations: items.flatMap((item) => {
+          const current = journal.item(journal.canonicalItemId(agentJournalItemKey(item.identity)))
+          const body =
+            !current || turnRecordReplaceable(current.body, item.body)
+              ? item.body
+              : withNamedPrompt(current.body, item.body)
+          return body
+            ? [
+                {
+                  kind: 'item' as const,
+                  ...item,
+                  body,
+                  turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+                }
+              ]
+            : []
+        })
       }
     }
   })

@@ -41,3 +41,13 @@ export function turnRecordReplaceable(
         next.outcome !== undefined))
   )
 }
+
+/** A record an earlier import saved without its prompt takes the one a later read names, unchanged otherwise. */
+export function withNamedPrompt(
+  current: AgentJournalItemBody,
+  next: AgentJournalItemBody
+): TurnBody | undefined {
+  return current.kind === 'turn' && !current.userItemId && next.kind === 'turn' && next.userItemId
+    ? { ...current, userItemId: next.userItemId }
+    : undefined
+}
