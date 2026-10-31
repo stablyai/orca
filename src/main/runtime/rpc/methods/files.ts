@@ -1,3 +1,4 @@
+import type { RuntimeFileOpenPosition } from '../../../../shared/runtime-file-contracts'
 import { defineMethod, defineStreamingMethod } from '../core'
 import { runFileWatchStream } from './file-watch-stream-lifecycle'
 import { FILE_MUTATION_METHODS } from './files-mutation-methods'
@@ -75,13 +76,16 @@ export const FILE_METHODS = [
     name: 'files.open',
     permission: 'workspace',
     params: FileOpenTab,
-    handler: async (params, { runtime }) =>
-      runtime.openMobileFile(
-        params.worktree,
-        params.relativePath,
-        params.navigation,
-        ...(params.line === undefined ? [] : [{ line: params.line, column: params.column }])
-      )
+    handler: async (p, { runtime }) => {
+      const position = p.line === undefined ? undefined : { line: p.line, column: p.column }
+      // Why: send trailing args only when set, so callers without them keep the old call shape.
+      const trailing: [RuntimeFileOpenPosition?, true?] = p.preview
+        ? [position, true]
+        : position
+          ? [position]
+          : []
+      return runtime.openMobileFile(p.worktree, p.relativePath, p.navigation, ...trailing)
+    }
   }),
   defineMethod({
     name: 'files.openDiff',

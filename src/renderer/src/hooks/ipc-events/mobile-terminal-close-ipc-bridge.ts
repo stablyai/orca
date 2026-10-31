@@ -2,6 +2,8 @@ import { createRuntimeFilePositionQueue } from './runtime-file-position'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
+import { getWorkspaceFilePreviewPlan, openFileInBrowserTab } from '@/lib/file-preview'
+import { isHtmlFilePath } from '@/components/terminal-pane/local-html-file-destinations'
 import { followWorkspaceSleep } from '@/components/sidebar/workspace-sleep-follower'
 import { createProjectMovePauseFollower } from '@/components/sidebar/project-move-pause-follower'
 import { buildWorkspaceSessionPayload } from '@/lib/workspace-session'
@@ -28,15 +30,38 @@ function openRuntimeEditorTab(
 ): void {
   const store = useAppStore.getState()
   if (navigation !== undefined && !navigationTargetsHost(navigation)) {
-    const isViewed =
-      worktreeId === store.activeWorktreeId ||
-      (isFloatingWorkspaceId(worktreeId) && selectFloatingWorkspacePanelVisible(store))
-    open(store, isViewed ? 'none' : 'background')
+    open(store, isWorkspaceViewed(store, worktreeId) ? 'none' : 'background')
     return
   }
   revealWorkspaceSurface(store, worktreeId)
   open(store, 'focus')
   store.setActiveTabType('editor', worktreeId)
+}
+
+function isWorkspaceViewed(store: AppState, worktreeId: string): boolean {
+  return (
+    worktreeId === store.activeWorktreeId ||
+    (isFloatingWorkspaceId(worktreeId) && selectFloatingWorkspacePanelVisible(store))
+  )
+}
+
+/** Opens the same preview a terminal click on the HTML path does; false means open source instead. */
+function openRuntimeHtmlPreview(
+  worktreeId: string,
+  filePath: string,
+  navigation: RuntimeNavigationTarget | undefined
+): boolean {
+  const store = useAppStore.getState()
+  if (getWorkspaceFilePreviewPlan(store, worktreeId, filePath).status === 'unsupported') {
+    return false
+  }
+  const focus = navigation === undefined || navigationTargetsHost(navigation)
+  if (focus) {
+    revealWorkspaceSurface(store, worktreeId)
+  }
+  // Like editor opens, a caller-only open must not replace the tab the user is looking at.
+  const activate = focus || !isWorkspaceViewed(store, worktreeId)
+  return openFileInBrowserTab({ filePath, worktreeId, activate }).status !== 'unsupported'
 }
 
 /** Show only if the window currently draws main’s editor tab. */
@@ -82,16 +107,38 @@ export function registerMobileAndTerminalCloseIpcBridge(
   const positionFile = createRuntimeFilePositionQueue(unsubs)
   unsubs.push(
     window.api.ui.onOpenFileFromMobile(
-      ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position }) => {
+      ({
+        worktreeId,
+        filePath,
+        relativePath,
+        runtimeEnvironmentId,
+        navigation,
+        position,
+        preview
+      }) => {
+        if (
+          preview &&
+          isHtmlFilePath(filePath) &&
+          openRuntimeHtmlPreview(worktreeId, filePath, navigation)
+        ) {
+          return
+        }
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
+        const language = detectLanguage(basename)
         openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
+          // Edit tabs only offer source and rich, so Markdown's preview is its own read-only tab.
+          if (preview && language === 'markdown') {
+            const file = { filePath, relativePath, worktreeId, language, runtimeEnvironmentId }
+            store.openMarkdownPreview(file, { selection })
+            return
+          }
           // Use File Explorer’s creation path so grouped ordering and markdown bridges stay consistent.
           const fileId = store.openFile(
             {
               filePath,
               relativePath,
               worktreeId,
-              language: detectLanguage(basename),
+              language,
               runtimeEnvironmentId,
               mode: 'edit'
             },

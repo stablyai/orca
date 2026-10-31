@@ -183,14 +183,23 @@ export function registerRuntimeWindowLifecycle(
       requestSessionTabCloseFromRenderer(mainWindow, tabId, worktreeId),
     moveSessionTab: (worktreeId: string, move: RuntimeMobileSessionTabMove) =>
       send('ui:moveSessionTab', { worktreeId, ...move }),
-    openFile: (worktreeId, filePath, relativePath, runtimeEnvironmentId?, navigation?, position?) =>
+    openFile: (
+      worktreeId,
+      filePath,
+      relativePath,
+      runtimeEnvironmentId?,
+      navigation?,
+      position?,
+      preview?
+    ) =>
       send('ui:openFileFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         runtimeEnvironmentId,
         ...(navigation ? { navigation } : {}),
-        ...(position ? { position } : {})
+        ...(position ? { position } : {}),
+        ...(preview ? { preview } : {})
       }),
     revealEditorTab: (reveal) => send('ui:revealEditorTabFromRuntime', reveal),
     openDiff: (

@@ -24,7 +24,8 @@ export type RuntimeFileCommandHost = {
     relativePath: string,
     runtimeEnvironmentId?: string | null,
     navigation?: RuntimeNavigationTarget,
-    position?: RuntimeFileOpenPosition
+    position?: RuntimeFileOpenPosition,
+    preview?: boolean
   ): void | Promise<void>
   openDiff(
     worktreeId: string,

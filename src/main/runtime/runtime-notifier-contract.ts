@@ -140,7 +140,8 @@ export type RuntimeNotifier = {
     relativePath: string,
     runtimeEnvironmentId?: string | null,
     navigation?: RuntimeNavigationTarget,
-    position?: RuntimeFileOpenPosition
+    position?: RuntimeFileOpenPosition,
+    preview?: boolean
   ): void
   /** Layout-owner builds: shows a tab main already wrote for a file it opened. */
   revealEditorTab?(reveal: RuntimeEditorTabReveal): void
