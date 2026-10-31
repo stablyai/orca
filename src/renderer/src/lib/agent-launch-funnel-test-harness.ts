@@ -8,7 +8,7 @@ export type LaunchFunnelSettings = {
   agentDefaultEnv: Record<string, Record<string, string>>
   activeRuntimeEnvironmentId: string | null
   terminalWindowsShell?: string
-  experimentalNativeChat?: boolean
+  nativeChatProviders?: Record<string, boolean>
   experimentalStructuredNativeChat?: boolean
   openAgentTabsInChatByDefault?: boolean
   nativeChatSessionOptions?: Record<

@@ -11,6 +11,7 @@ import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '@/store/types'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import { useAppStore } from '@/store'
@@ -22,7 +23,7 @@ export async function exerciseNativeInventoryRetryWhileProviderSavePending(
 ): Promise<void> {
   let settings: GlobalSettings = {
     ...getDefaultSettings('/tmp'),
-    experimentalNativeChat: true,
+    agentDefaultSurface: 'chat',
     localWindowsRuntimeDefault: { kind: 'windows-host' },
     nativeChatProviders: { claude: true, codex: false },
     disabledTuiAgents: ['grok']
@@ -258,7 +259,7 @@ export async function exerciseNativeInventoryRetryWhileProviderSavePending(
 }
 
 export async function exerciseQueuedNativeProviderSave(): Promise<void> {
-  let latest: GlobalSettings = { ...getDefaultSettings('/tmp'), experimentalNativeChat: true }
+  let latest: GlobalSettings = { ...getDefaultSettings('/tmp'), agentDefaultSurface: 'chat' }
   useAppStore.setState({ settings: latest, localDetectedAgentIdsByContext: { host: [] } })
   const save = Promise.withResolvers<void>()
   const owned: Promise<unknown>[] = []
@@ -323,11 +324,17 @@ export async function exerciseQueuedNativeProviderSave(): Promise<void> {
       await vi.waitFor(() => expect(updateSettings).toHaveBeenCalledTimes(3))
       await Promise.allSettled(writes)
     })
-    expect(latest.nativeChatProviders).toEqual({ claude: false, grok: true })
-    expect(useAppStore.getState().settings?.nativeChatProviders).toEqual({
-      claude: false,
-      grok: true
-    })
+    expect(latest.nativeChatProviders).toEqual({ claude: false })
+    expect(useAppStore.getState().settings?.nativeChatProviders).toEqual({ claude: false })
+    expect(updateSettings.mock.calls).toEqual([
+      [{ nativeChatProviders: { claude: false } }],
+      [{ nativeChatProviders: { claude: false } }],
+      [{ nativeChatProviders: { claude: false } }]
+    ])
+    expect(nativeChatPreferenceFor(latest, 'claude')).toBe(false)
+    expect(nativeChatPreferenceFor(latest, 'grok')).toBe(true)
+    expect(nativeChatPreferenceFor(useAppStore.getState().settings, 'claude')).toBe(false)
+    expect(nativeChatPreferenceFor(useAppStore.getState().settings, 'grok')).toBe(true)
   } finally {
     view?.unmount()
     save.resolve()

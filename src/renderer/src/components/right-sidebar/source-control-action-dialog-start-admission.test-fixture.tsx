@@ -25,7 +25,7 @@ export async function exerciseSourceControlDialogHostIdentity(
     ...getDefaultSettings('/tmp/host-action'),
     defaultTuiAgent: 'opencode' as const,
     disabledTuiAgents: ['codex' as const],
-    experimentalNativeChat: false
+    nativeChatProviders: { claude: false, codex: false }
   }
   const recipe = {
     agentId,
@@ -89,7 +89,7 @@ export async function exerciseSourceControlDialogHostIdentity(
   )
   expect(view.result.current.surfaceRows.model).toMatchObject({
     state: 'settled',
-    rows: [{ agent: 'codex', kind: 'terminal' }]
+    rows: [{ agent: 'codex', kind: 'cli' }]
   })
   expect(view.result.current.selectedAgent).toBe('codex')
   expect(view.result.current.canStart).toBe(true)
@@ -102,6 +102,7 @@ export async function exerciseSourceControlDialogHostIdentity(
       agentArgs: '--dangerously-bypass-approvals-and-sandbox --model chosen',
       sessionOptions: { model: 'chosen' },
       agentLaunchPreferences: {
+        agentLaunchChoices: {},
         defaultTuiAgent: 'codex',
         disabledTuiAgents: ['opencode', 'claude']
       }
@@ -119,7 +120,7 @@ export async function exerciseColdFailedSourceControlDialogStart(): Promise<void
   const settings = {
     ...getDefaultSettings('/tmp'),
     defaultTuiAgent: 'blank' as const,
-    experimentalNativeChat: false
+    nativeChatProviders: { claude: false, codex: false }
   }
   useAppStore.setState({
     settings,
@@ -213,7 +214,7 @@ export async function exerciseSourceControlDialogRecoveryRefusal(
   })
   const settings = {
     ...getDefaultSettings('/tmp'),
-    experimentalNativeChat: false,
+    nativeChatProviders: { claude: false, codex: false },
     localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' }
   }
   useAppStore.getState().clearLocalDetectedAgents()

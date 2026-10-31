@@ -56,7 +56,7 @@ beforeEach(async () => {
     settings: {
       ...getDefaultSettings('/tmp'),
       defaultTuiAgent: 'claude',
-      experimentalNativeChat: true
+      agentDefaultSurface: 'chat'
     }
   })
   await useAppStore.getState().ensureDetectedAgents(worktree.id)
@@ -187,7 +187,7 @@ it.each(['failed', 'empty', 'disabled', 'retargeted'] as const)(
     resetRendererAppPlatformCacheForTests()
     const settings = {
       ...getDefaultSettings('/tmp'),
-      experimentalNativeChat: false,
+      agentDefaultSurface: 'terminal' as const,
       localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } as const,
       disabledTuiAgents: outcome === 'disabled' ? ['claude' as const] : []
     }
@@ -227,7 +227,7 @@ it.each(['failed', 'retained', 'empty', 'disabled', 'retargeted', 'missing'] as 
       useAppStore.getState().clearLocalDetectedAgents()
       const settings = {
         ...getDefaultSettings('/tmp'),
-        experimentalNativeChat: false,
+        agentDefaultSurface: 'terminal' as const,
         defaultTuiAgent: 'blank' as const,
         disabledTuiAgents: outcome === 'disabled' ? ['claude' as const] : [],
         sourceControlAi: {

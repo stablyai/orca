@@ -1,4 +1,5 @@
 import React from 'react'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { renderToStaticMarkup } from 'react-dom/server'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as StoreModule from '@/store'
@@ -59,7 +60,8 @@ vi.mock('@/components/ui/dropdown-menu', async () => {
     DropdownMenuItem: ({ children, ...props }: { children: React.ReactNode }) =>
       ReactActual.createElement('div', props, children),
     DropdownMenuShortcut: ({ children }: { children: React.ReactNode }) =>
-      ReactActual.createElement('span', { 'data-dropdown-shortcut': 'true' }, children)
+      ReactActual.createElement('span', { 'data-dropdown-shortcut': 'true' }, children),
+    DropdownMenuSeparator: () => ReactActual.createElement('hr')
   }
 })
 
@@ -106,10 +108,12 @@ const settings = {
   ...getDefaultSettings('/tmp'),
   defaultTuiAgent: 'codex' as const,
   disabledTuiAgents: [],
-  experimentalNativeChat: false
+  agentDefaultSurface: 'terminal' as const
 }
 
 beforeEach(() => {
+  // A host without chats lists every agent as a terminal.
+  setLocalRuntimeCapabilitiesForTests([])
   shortcutLabelMock.mockReset()
   shortcutLabelMock.mockReturnValue(null)
   useDetectedAgentsMock.mockClear()

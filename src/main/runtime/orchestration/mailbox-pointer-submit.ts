@@ -7,7 +7,11 @@ import {
   shouldReleaseOrchestrationPointer,
   type OrchestrationMessageWaiter
 } from './mailbox-pointer-eligibility'
-import type { OrchestrationMailboxLeaf, OrchestrationMailboxOwner } from './mailbox-owner'
+import {
+  isMailboxTerminalTakingInput,
+  type OrchestrationMailboxOwner,
+  type OrchestrationMailboxTerminal
+} from './mailbox-owner'
 import type {
   OrchestrationMailboxDeliveryFlight,
   OrchestrationMailboxPointerState
@@ -18,10 +22,7 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
   mailboxOwner: OrchestrationMailboxOwner
   state: OrchestrationMailboxPointerState
   getDb: () => OrchestrationDb | null
-  resolveSubmitTarget: (
-    leaf: OrchestrationMailboxLeaf,
-    ptyId: string
-  ) => OrchestrationMailboxPointerSubmitTarget | null
+  resolveSubmitTarget: (ptyId: string) => OrchestrationMailboxPointerSubmitTarget | null
   getMessageWaiters: (mailboxHandle: string) => ReadonlySet<TWaiter> | undefined
   isLeafPtyProvenAbsent: (ptyId: string) => Promise<boolean>
   isPtyAwaitingUserInput: (ptyId: string) => boolean
@@ -31,18 +32,15 @@ type PointerSubmitDependencies<TWaiter extends OrchestrationMessageWaiter> = {
 }
 
 export type OrchestrationMailboxPointerSubmitTarget = {
-  leaf: OrchestrationMailboxLeaf
-  terminalHandle: string
+  terminal: OrchestrationMailboxTerminal
   processIncarnation: string
 }
 
 export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationMessageWaiter>(
   deps: PointerSubmitDependencies<TWaiter>,
   input: {
-    leaf: OrchestrationMailboxLeaf
     mailboxHandle: string
     messages: readonly { id: string; type: string }[]
-    heldDeliveryId?: string
     newestSequence: number
     ptyId: string
     flight: OrchestrationMailboxDeliveryFlight
@@ -73,29 +71,20 @@ export function submitOrchestrationMailboxPointer<TWaiter extends OrchestrationM
         finalizeReservation = false
         return
       }
-      const target = deps.resolveSubmitTarget(input.leaf, input.ptyId)
-      const exactTarget =
-        target?.terminalHandle === input.expectedTarget.terminalHandle &&
+      const target = deps.resolveSubmitTarget(input.ptyId)
+      const terminal =
+        target?.terminal.handle === input.expectedTarget.terminal.handle &&
         target.processIncarnation === input.expectedTarget.processIncarnation
-          ? target
+          ? target.terminal
           : null
       const sameMailbox =
-        exactTarget &&
-        deps.mailboxOwner.resolve(exactTarget.leaf, undefined, {
-          terminalHandle: exactTarget.terminalHandle
-        }) === input.mailboxHandle
-      const queueSafe =
-        exactTarget?.leaf.lastAgentStatusObservedLive === true &&
-        (exactTarget.leaf.lastAgentStatus === 'idle' ||
-          exactTarget.leaf.lastAgentStatus === 'working')
-      if (!exactTarget?.leaf.writable || !sameMailbox) {
+        terminal && deps.mailboxOwner.resolve(terminal, input.mailboxHandle) === input.mailboxHandle
+      const queueSafe = !!terminal && isMailboxTerminalTakingInput(terminal)
+      if (!terminal || !sameMailbox) {
         clearAndRedrive = true
       } else if (
-        (exactTarget.leaf.lastAgentStatusObservedLive &&
-          exactTarget.leaf.lastAgentStatus === null) ||
-        deps.isPtyAwaitingUserInput(input.ptyId) ||
-        // As in chat: a mid-turn Enter would spend a held batch's newer mail's only nudge.
-        (input.heldDeliveryId !== undefined && exactTarget.leaf.lastAgentStatus === 'working')
+        (terminal.lastAgentStatusObservedLive && terminal.lastAgentStatus === null) ||
+        deps.isPtyAwaitingUserInput(input.ptyId)
       ) {
         // A neutral title can outlive the foreground check, and an open dialog would take the
         // Enter as its answer; no Enter has been attempted yet.

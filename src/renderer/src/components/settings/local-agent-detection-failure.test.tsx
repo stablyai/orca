@@ -12,24 +12,20 @@ import {
 import { makeDetectedResult } from '@/store/slices/worktrees-detected-listing-fixtures'
 import type { AppState } from '@/store/types'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
-import { type ComponentProps, Profiler, useState } from 'react'
+import { type ComponentProps, Profiler } from 'react'
 import * as runtime from '../../../../shared/project-execution-runtime'
 import { useLocalAgentPreflightContext } from '@/hooks/useLocalAgentPreflightContext'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { projectHostSetupProjectionFromRepos } from '../../../../shared/project-host-setup-projection'
-import type { RepoSourceControlAiOverrides } from '../../../../shared/source-control-ai-types'
-import { useRepositorySourceControlAiGlobalUx } from './repository/source-control/repository-source-control-ai-global-ux'
-import userEvent from '@testing-library/user-event'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { useAppStore } from '@/store'
 import { AgentLaunchSettingsCatalog } from './AgentLaunchSettingsCatalog'
 import { OrchestrationSkillAgentCoverage } from './OrchestrationSkillAgentCoverage'
 import { useSourceControlActionAgent } from './use-source-control-action-agent'
-import { RepositorySourceControlAiActionRows } from './repository/source-control/RepositorySourceControlAiActionRows'
-import { getDefaultSourceControlAiSettings } from '../../../../shared/source-control-ai'
 import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentStep } from '../onboarding/AgentStep'
@@ -37,6 +33,7 @@ import {
   exerciseNativeInventoryRetryWhileProviderSavePending,
   exerciseQueuedNativeProviderSave
 } from './native-agent-provider-save.test-fixture'
+import { exerciseRepositoryRecipeAfterColdRejection } from './repository/source-control/repository-source-control-recipe-failure.test-fixture'
 
 vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
 vi.mock('@/runtime/use-managed-runtime-install', () => ({
@@ -77,7 +74,7 @@ afterEach(() => {
 it('shows a native failure and retries the native host even with a global WSL default', async () => {
   let settings: GlobalSettings = {
     ...getDefaultSettings('/tmp'),
-    experimentalNativeChat: true,
+    agentDefaultSurface: 'chat',
     localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' }
   }
   const owned: Promise<unknown>[] = []
@@ -275,9 +272,9 @@ it.each([true, false])(
     const originalApi = window.api
     const native = useAppStore.getState().ensureNativeDetectedAgents()
     owned.push(native)
-    const settings = {
+    const settings: GlobalSettings = {
       ...getDefaultSettings('/tmp'),
-      experimentalNativeChat: true,
+      agentDefaultSurface: 'chat',
       nativeChatProviders: { grok: choice }
     }
     Object.assign(window, {
@@ -328,8 +325,11 @@ it.each([true, false])(
       await act(async () => {
         fireEvent.click(within(control).getByRole('radio', { name: choice ? 'CLI' : 'Chat' }))
       })
-      expect(update).toHaveBeenCalledWith({ nativeChatProviders: { grok: !choice } })
-      expect(useAppStore.getState().settings?.nativeChatProviders).toEqual({ grok: !choice })
+      expect(update).toHaveBeenCalledWith({ nativeChatProviders: choice ? { grok: false } : {} })
+      expect(useAppStore.getState().settings?.nativeChatProviders).toEqual(
+        choice ? { grok: false } : {}
+      )
+      expect(nativeChatPreferenceFor(useAppStore.getState().settings, 'grok')).toBe(!choice)
     } finally {
       view?.unmount()
       await act(async () => {
@@ -402,109 +402,7 @@ it('recovers the cold catalog through Retry and keeps retained rows editable aft
 
 it.each([false, true])(
   'repository recipe new-choice=%s and permission editing settle after cold rejection',
-  async (newChoice) => {
-    useAppStore.setState({
-      repos: [TEST_REPO],
-      settings: {
-        ...getDefaultSettings('/tmp'),
-        experimentalNativeChat: false,
-        defaultTuiAgent: 'blank'
-      }
-    })
-    let saved: RepoSourceControlAiOverrides = {
-      actionOverrides: {
-        fixChecks: {
-          agentId: newChoice ? null : 'claude',
-          ...(newChoice ? {} : { surface: 'terminal' as const }),
-          commandInputTemplate: '{basePrompt}',
-          agentArgs: '--verbose'
-        }
-      }
-    }
-    function RepositoryRecipes() {
-      const [persisted, setPersisted] = useState(saved)
-      const draft = useRepositorySourceControlAiGlobalUx({
-        repoId: TEST_REPO.id,
-        persistedRepoAi: persisted,
-        settings: getDefaultSettings('/tmp'),
-        source: getDefaultSourceControlAiSettings(),
-        updateRepo: async (_id, patch) => {
-          saved = patch.sourceControlAi ?? {}
-          setPersisted(saved)
-          return true
-        }
-      })
-      return (
-        <RepositorySourceControlAiActionRows
-          repoId={TEST_REPO.id}
-          repoAi={draft.displayRepoAi}
-          source={getDefaultSourceControlAiSettings()}
-          defaultTuiAgent="claude"
-          onActionModeChange={draft.updateActionMode}
-          onActionAgentChange={draft.updateActionAgent}
-          onActionLaunchPreferencesChange={draft.updateActionLaunchPreferences}
-          onActionTemplateChange={draft.updateActionTemplate}
-          onActionAgentArgsChange={draft.updateActionAgentArgs}
-          onAppendVariable={draft.appendVariable}
-          savingActionIds={draft.savingActionIds}
-          actionDirtyById={draft.actionDirtyById}
-          onActionDiscard={draft.discardActionRecipeText}
-          onActionSave={draft.saveActionRecipeText}
-        />
-      )
-    }
-    const view = render(
-      <TooltipProvider>
-        <RepositoryRecipes />
-      </TooltipProvider>
-    )
-    await act(async () => {})
-    const row = view.container.querySelector(
-      '[data-settings-section$="source-control-ai-fixChecks"]'
-    )
-    if (!(row instanceof HTMLElement)) {
-      throw new Error('Missing saved Checks row')
-    }
-    if (newChoice) {
-      expect(
-        within(row)
-          .getAllByRole('combobox')
-          .find((element) => element.hasAttribute('data-agent-combobox-root'))!.textContent
-      ).toContain('Use default agent')
-      await userEvent.click(
-        within(row)
-          .getAllByRole('combobox')
-          .find((element) => element.hasAttribute('data-agent-combobox-root'))!
-      )
-      const command = view
-        .getAllByRole('option')
-        .find((option) => option.textContent?.startsWith('Claude'))
-      if (!command) {
-        throw new Error('Missing cold configuration command')
-      }
-      await userEvent.click(command)
-    }
-    expect(useAppStore.getState().readLocalAgentInventory()).toEqual({ ids: null, state: 'failed' })
-    const editable = within(row).getByRole('button', { name: 'Claude permissions' })
-    expect(editable.hasAttribute('disabled')).toBe(false)
-    await userEvent.click(editable)
-    const options = await view.findAllByRole('menuitemradio', { name: /Full access/ })
-    const option = options.find((entry) => entry.getAttribute('aria-checked') === 'false')
-    if (!option) {
-      throw new Error('Missing explicit Full access choice')
-    }
-    await userEvent.click(option)
-    await act(async () => {
-      fireEvent.click(within(row).getByRole('button', { name: 'Save' }))
-    })
-    expect(saved.actionOverrides?.fixChecks).toMatchObject({
-      agentId: 'claude',
-      ...(newChoice ? {} : { surface: 'terminal' }),
-      agentArgs: '--verbose',
-      commandInputTemplate: '{basePrompt}',
-      launchPreferences: { agentId: 'claude', permissionMode: 'full-access' }
-    })
-  }
+  exerciseRepositoryRecipeAfterColdRejection
 )
 
 it('onboarding and setup checklist retain selection, continue and save after failed discovery', async () => {

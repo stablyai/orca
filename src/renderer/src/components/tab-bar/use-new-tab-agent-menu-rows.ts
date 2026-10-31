@@ -12,7 +12,6 @@ import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/protocol-version'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
 import { useLocalAgentPreflightContext } from '@/hooks/useLocalAgentPreflightContext'
@@ -106,19 +105,6 @@ export function useAgentMenuObservation(
     readLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation
   )
-  useAppStore(
-    useShallow((state) => [
-      state.settings?.defaultTuiAgent,
-      state.settings?.disabledTuiAgents,
-      state.settings?.experimentalNativeChat,
-      state.settings?.nativeChatProviders,
-      state.settings?.agentDefaultArgs,
-      state.settings?.agentPermissionDefault,
-      state.settings?.agentPermissionOverrides,
-      state.settings?.nativeChatSessionOptions,
-      state.settings?.nativeChatPermissionMode
-    ])
-  )
   // The observation owns these settings; picker consumers reuse its snapshot.
   const desktopSettings = useAppStore.getState().settings
   const workspace =
@@ -136,8 +122,23 @@ export function useAgentMenuObservation(
     open || worktreeShown,
     open
   )
-  const chatEnabled = isNativeChatEnabled(settings)
-  const plain = !chatEnabled || hostChatAnswer(input) === 'no-chats'
+  useAppStore(
+    useShallow((state) => [
+      state.settings?.defaultTuiAgent,
+      state.settings?.disabledTuiAgents,
+      state.settings?.agentDefaultSurface,
+      state.settings?.nativeChatProviders,
+      state.settings?.agentDefaultArgs,
+      state.settings?.agentPermissionDefault,
+      state.settings?.agentPermissionOverrides,
+      state.settings?.nativeChatSessionOptions,
+      settings?.agentLaunchChoices === desktopSettings?.agentLaunchChoices
+        ? state.settings?.agentLaunchChoices
+        : undefined,
+      state.settings?.nativeChatPermissionMode
+    ])
+  )
+  const plain = hostChatAnswer(input) === 'no-chats'
   const local = facts.executionHostId === LOCAL_EXECUTION_HOST_ID
   // Use published host-wide availability when supported; older hosts defer final admission to the launch request.
   const published =
@@ -263,10 +264,10 @@ export function useAgentMenuObservation(
           key: JSON.stringify([workspace, launchCwd, facts])
         }
       }
-  const { defaultTuiAgent, disabledTuiAgents } = settings ?? {}
+  const { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices } = settings ?? {}
   return {
     model,
-    preferences: { defaultTuiAgent, disabledTuiAgents },
+    preferences: { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices },
     preferencesPending,
     failedAttempt,
     detection,

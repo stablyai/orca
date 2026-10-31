@@ -83,7 +83,7 @@ it.each(['blank', 'claude'] as const)(
     const settings = {
       ...useAppStore.getState().settings!,
       defaultTuiAgent: choice,
-      experimentalNativeChat: false,
+      agentDefaultSurface: 'terminal' as const,
       localWindowsRuntimeDefault: { kind: 'wsl', distro: 'Ubuntu' } as const
     }
     const createWorktree = vi.fn(async () => ({ worktree, setup: undefined }))

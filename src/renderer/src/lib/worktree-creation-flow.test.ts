@@ -14,7 +14,7 @@ const store = {
   settings: {
     activeRuntimeEnvironmentId: null as string | null,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The fixture mutates this setting across test cases.
-    experimentalNativeChat: undefined as boolean | undefined
+    nativeChatProviders: { claude: false, codex: false } as Record<string, boolean>
   },
   activeView: 'terminal' as TestActiveView,
   activePendingCreationId: 'creation-1' as string | null,
@@ -99,7 +99,7 @@ import {
 beforeEach(() => {
   vi.clearAllMocks()
   store.settings.activeRuntimeEnvironmentId = null
-  store.settings.experimentalNativeChat = undefined
+  store.settings.nativeChatProviders = { claude: false, codex: false }
   store.activeView = 'terminal'
   store.activePendingCreationId = 'creation-1'
   store.repos = []
@@ -746,7 +746,7 @@ describe('staged background worktree creation', () => {
     ['mirrorable local Grok', 'grok', 'https://github.com/o/r/issues/12', 'terminal'],
     ['multi-line Claude', 'claude', 'note\nhttps://github.com/o/r/issues/12', 'terminal']
   ] as const)('passes %s draft mode to backend startup', async (_label, agent, draft, viewMode) => {
-    store.settings.experimentalNativeChat = true
+    store.settings.nativeChatProviders = { claude: true, codex: true }
     store.repos = [{ id: 'repo-1', connectionId: null }]
     continueBackgroundWorktreeCreation(
       'creation-1',

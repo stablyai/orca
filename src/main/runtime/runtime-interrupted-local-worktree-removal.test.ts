@@ -52,6 +52,8 @@ import {
   writeWorktreeRemovalRecords,
   type WorktreeRemovalRecord
 } from '../worktree-removal-records'
+import { queueWorkspaceDelete } from './workspaces/workspace-lifecycle-commands'
+import { WorkspaceLifecycleQueue } from './workspaces/workspace-lifecycle-queue'
 import { interruptedLocalWorktreeRemovalJob } from './runtime-interrupted-local-worktree-removal'
 
 vi.mock('node:fs/promises', async (importOriginal) => {
@@ -79,6 +81,7 @@ let repoPath = ''
 let worktreePath = ''
 let repo: Repo
 let pushTarget: GitPushTarget | undefined
+let lifecycle: WorkspaceLifecycleQueue
 
 async function git(args: string[], cwd = repoPath): Promise<string> {
   const { stdout } = await execFileAsync('git', args, { cwd })
@@ -94,6 +97,7 @@ async function isRegistered(path: string): Promise<boolean> {
 
 beforeEach(async () => {
   pushTarget = undefined
+  lifecycle = new WorkspaceLifecycleQueue()
   vi.mocked(getLocalProjectWorktreeGitOptions).mockReturnValue({})
   // realpath: macOS hands out /var/... temp paths while Git reports /private/var/....
   scratchDir = await realpath(await mkdtemp(join(tmpdir(), 'orca-interrupted-removal-')))
@@ -130,6 +134,7 @@ async function finishAfterRestart(
     branch?: string
     head?: string
     force?: boolean
+    deleteBranch?: boolean
     stopPtys?: () => Promise<void>
   } = {}
 ): Promise<{
@@ -145,7 +150,7 @@ async function finishAfterRestart(
     worktreePath,
     branch: options.branch ?? 'feature',
     head: options.head ?? (await git(['rev-parse', 'feature'])).trim(),
-    deleteBranch: true,
+    deleteBranch: options.deleteBranch ?? true,
     force: options.force ?? false,
     requestedAt: 1
   }
@@ -240,7 +245,8 @@ async function deleteViaEntry(
   entry: RemovalEntry,
   force: boolean,
   stop = async () => {},
-  teardown = vi.fn()
+  teardown = vi.fn(),
+  deleteBranch?: boolean
 ): Promise<unknown> {
   const worktreeId = `repo-1::${worktreePath}`
   const host = removalHost(false, stop, teardown)
@@ -249,6 +255,9 @@ async function deleteViaEntry(
     Object.create(OrcaRuntimeWithResolveWorktreeRemovalTarget.prototype),
     {
       store,
+      workspaceLifecycle: lifecycle,
+      listRepos: store.getRepos,
+      listTerminals: async () => ({ totalCount: 0 }),
       requireStore: () => store,
       resolveWorktreeRemovalTarget: async () => ({
         id: worktreeId,
@@ -286,10 +295,17 @@ async function deleteViaEntry(
             worktreePath,
             'local'
           )
-        : await runtime.removeManagedWorktree(`id:${worktreeId}`, {
-            force,
-            waitForBackgroundRemoval: true
-          })
+        : await queueWorkspaceDelete(
+            runtime,
+            `id:${worktreeId}`,
+            'local',
+            { force, deleteBranch },
+            (removal) =>
+              runtime.removeManagedWorktree(`id:${worktreeId}`, {
+                ...removal,
+                waitForBackgroundRemoval: true
+              })
+          )
     return await backgroundRemoval.finishAcceptedWorktreeRemoval(accepted, worktreeId)
   } finally {
     await _settlePendingWorktreeRemovalsForTests()
@@ -303,7 +319,7 @@ async function orphanAdmin(): Promise<void> {
   await writeFile(join(worktreePath, '.git'), `  gitdir: ${admin}\nignored second line\n`)
 }
 
-async function recordFailedRemoval(force: boolean): Promise<void> {
+async function recordFailedRemoval(force: boolean, deleteBranch = true): Promise<void> {
   await writeWorktreeRemovalRecords(recordsDir, () => [
     {
       worktreeId: `repo-1::${worktreePath}`,
@@ -312,7 +328,7 @@ async function recordFailedRemoval(force: boolean): Promise<void> {
       worktreePath,
       branch: 'feature',
       head: '',
-      deleteBranch: true,
+      deleteBranch,
       force,
       requestedAt: 1,
       failure: { message: 'held file', failedAt: 2 }
@@ -551,23 +567,86 @@ describe('finishing an interrupted worktree removal after a restart', () => {
     }
   )
 
-  it.each(['partial', 'detached'])(
+  it.each(['partial', 'detached', 'keep-registered', 'keep-unregistered'])(
     'finishes the accepted %s pending checkout after restart',
     async (kind) => {
-      await (kind === 'partial'
-        ? unlink(join(worktreePath, 'seed.txt'))
-        : git(['checkout', '--detach', '-q'], worktreePath))
+      const head = (await git(['rev-parse', 'feature'])).trim()
+      if (kind === 'keep-unregistered') {
+        await git(['worktree', 'remove', worktreePath])
+      }
+      const keep = kind.startsWith('keep-')
+      if (!keep) {
+        await (kind === 'partial'
+          ? unlink(join(worktreePath, 'seed.txt'))
+          : git(['checkout', '--detach', '-q'], worktreePath))
+      }
       const { outcome, purged, records } = await finishAfterRestart({
         force: kind === 'partial',
         branch: kind === 'detached' ? '' : 'feature',
-        head: (await git(['rev-parse', 'HEAD'], worktreePath)).trim()
+        head: keep ? head : (await git(['rev-parse', 'HEAD'], worktreePath)).trim(),
+        deleteBranch: keep ? false : undefined
       })
       expect(outcome).toMatchObject({ status: 'removed' })
       expect(records).toEqual([])
       expect(existsSync(worktreePath)).toBe(false)
       expect(await isRegistered(worktreePath)).toBe(false)
-      expect((await git(['branch', '--list', 'feature'])).trim() !== '').toBe(kind === 'detached')
+      expect((await git(['branch', '--list', 'feature'])).trim() !== '').toBe(
+        keep || kind === 'detached'
+      )
       expect(purged).toEqual([`repo-1::${worktreePath}`])
+      if (keep) {
+        expect((await git(['rev-parse', 'feature'])).trim()).toBe(head)
+        expect(outcome).not.toHaveProperty('preservedBranch')
+      }
+    }
+  )
+
+  it.each([false, undefined])(
+    'settles persisted failed keep through lifecycle retry, intent=%s',
+    async (intent) => {
+      const head = (await git(['rev-parse', 'feature'])).trim()
+      await git(['worktree', 'remove', worktreePath])
+      await mkdir(worktreePath)
+      await writeFile(join(worktreePath, 'leftover'), 'held')
+      await recordFailedRemoval(false, false)
+      const id = `repo-1::${worktreePath}`
+      const record = removalTable.failedWorktreeRemovals.get(id)
+      expect(record).toMatchObject({ deleteBranch: false, failure: { message: 'held file' } })
+      await expect(deleteViaEntry('runtime', false, undefined, undefined, intent)).rejects.toThrow(
+        'folder was left on disk'
+      )
+      expect(removalTable.failedWorktreeRemovals.get(id)).toBe(record)
+      expect(lifecycle.hints()).toEqual({})
+      // Removing only this fixture's leftover is the legitimate external wake for retry.
+      await removeTree(worktreePath)
+      await expect(deleteViaEntry('runtime', false, undefined, undefined, true)).rejects.toThrow(
+        'different branch choice'
+      )
+      expect(removalTable.failedWorktreeRemovals.get(id)).toBe(record)
+      expect(lifecycle.hints()).toEqual({})
+      const entered = Promise.withResolvers<void>()
+      const release = Promise.withResolvers<void>()
+      const stopPtys = async () => {
+        entered.resolve()
+        await release.promise
+      }
+      const retry = deleteViaEntry('runtime', false, stopPtys, undefined, intent)
+      try {
+        await entered.promise
+        expect(removalTable.pendingWorktreeRemovals.get(id)).toMatchObject({ deleteBranch: false })
+        expect(removalTable.failedWorktreeRemovals.has(id)).toBe(false)
+      } finally {
+        release.resolve()
+      }
+      const result = await retry
+      expect(result).not.toHaveProperty('preservedBranch')
+      expect((await git(['rev-parse', 'feature'])).trim()).toBe(head)
+      expect(await isRegistered(worktreePath)).toBe(false)
+      expect(existsSync(worktreePath)).toBe(false)
+      expect(waitForPendingWorktreeRemoval(id)).toBeUndefined()
+      expect(removalTable.failedWorktreeRemovals.has(id)).toBe(false)
+      expect(await readWorktreeRemovalRecords(recordsDir)).toEqual([])
+      expect(lifecycle.hints()).toEqual({})
     }
   )
 

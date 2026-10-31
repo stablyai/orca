@@ -88,7 +88,7 @@ it.each([
     ).toMatchObject({ ok: true })
     const { runtime, db } = h.setup(
       false,
-      partialRuntimeStore({ getSettings: () => ({ experimentalNativeChat: false }) })
+      partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
     )
     if (federated) {
       vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
@@ -376,7 +376,7 @@ it.each([
       expect(saved).not.toContain(task)
       expect(context.capturedText).not.toContain(task)
       await current.quitRestartHostProcess()
-      closeTestJournalHostDatabase(current.root)
+      await closeTestJournalHostDatabase(current.root)
       current.crashRestartHostProcess()
       const reopened = await current.host.journalSnapshot(COORD)
       expect(reopened.items.map(({ itemId }) => itemId)).toEqual(
@@ -442,7 +442,7 @@ it.each([
     )
     if (scenario === 'success') {
       await current.quitRestartHostProcess()
-      closeTestJournalHostDatabase(current.root)
+      await closeTestJournalHostDatabase(current.root)
       current.crashRestartHostProcess()
     }
     await current.host.appendAgentStart(destination, card.body, card.observedAt + 30)
@@ -463,7 +463,7 @@ it.each([10, 100])(
     const { runtime, db } = h.setup(
       false,
       partialRuntimeStore({
-        getSettings: () => ({ experimentalNativeChat: false }),
+        getSettings: () => ({ agentDefaultSurface: 'terminal' }),
         getWorkspaceSession: () => session
       })
     )

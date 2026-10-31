@@ -21,7 +21,10 @@ import { useAppStore } from '../../src/renderer/src/store'
 import { runWorktreeAgentActivationGate } from '../../src/renderer/src/lib/worktree-agent-activation-gate'
 import { readWorktreeStructuredActivationInventory } from '../../src/renderer/src/lib/worktree-agent-structured-inventory'
 import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
-import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../src/shared/agent-session-provider-handle-encoding'
 import { startsWhenPublished } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-instant-start.test-support'
@@ -144,6 +147,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.unstubAllGlobals()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabase(root)
   await rm(root, { recursive: true, force: true })
 })
 

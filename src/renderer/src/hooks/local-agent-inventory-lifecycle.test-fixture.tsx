@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, renderHook } from '@testing-library/react'
 import { expect, vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
@@ -188,7 +189,7 @@ export async function exerciseNativeAgentRecoveryAlongsideWslInventories(
   }
   const settings = {
     ...getDefaultSettings('/home/test'),
-    experimentalNativeChat: true,
+    nativeChatProviders: EVERY_AGENT_CHAT,
     localWindowsRuntimeDefault: { kind: 'windows-host' } as const
   }
   useAppStore.setState({

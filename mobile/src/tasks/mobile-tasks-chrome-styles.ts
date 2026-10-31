@@ -1,3 +1,4 @@
+import { concentricRadius } from '../theme/mobile-theme'
 import {
   StyleSheet,
   themedStyleSheet,
@@ -69,7 +70,7 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: concentricRadius(radii.control, 2),
     paddingHorizontal: spacing.sm + 2,
     paddingVertical: spacing.xs
   },
@@ -80,7 +81,7 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button
+    borderRadius: concentricRadius(radii.control, 2)
   },
   segmentCountPill: {
     minWidth: 32,
@@ -89,13 +90,13 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm
   },
   segmentRepoDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   segmentButtonText: {
     fontSize: 12,
@@ -157,7 +158,7 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
   sourceErrorRetry: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -213,7 +214,7 @@ export const mobileTasksChromeStyles = themedStyleSheet(() => ({
   repoSectionDot: {
     width: 8,
     height: 8,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   repoSectionTitle: {
     flex: 1,

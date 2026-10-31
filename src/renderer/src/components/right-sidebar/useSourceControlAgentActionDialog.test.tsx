@@ -76,21 +76,6 @@ it('starts and saves a live pick from the unified picker, keeping the agent-boun
   expect(result.current.agentArgsApply).toBe(false)
 })
 
-it('saves no surface for a pick made when the picker offers no chats', async () => {
-  const { result, onStart, onSaveAgentDefault } = renderDialog(false)
-  await waitFor(() => expect(result.current.canStart).toBe(true))
-
-  act(() => result.current.surfaceRows.onPick('codex', 'terminal'))
-  await act(() => result.current.handleStart())
-
-  expect(onStart).toHaveBeenCalledWith(
-    expect.objectContaining({ launchChoice: expect.objectContaining({ route: 'terminal-tui' }) })
-  )
-  const savedRecipe = onSaveAgentDefault.mock.calls[0]?.[2]
-  expect(savedRecipe).toMatchObject({ agentId: 'codex' })
-  expect(savedRecipe).not.toHaveProperty('surface')
-})
-
 it('leaves an untouched saved surface in the draft but omits it when saving to an older action host', async () => {
   const { result, onSaveAgentDefault } = renderDialog(true, false, {
     agentId: 'codex',

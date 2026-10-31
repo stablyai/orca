@@ -1,3 +1,4 @@
+import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
 import type { GlobalSettings } from '../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -59,7 +60,7 @@ export function hostChatCatalogUnlearned(
 }
 
 export function agentMenuChatAgents(
-  settings: Pick<GlobalSettings, 'nativeChatProviders'> | null | undefined,
+  settings: Pick<GlobalSettings, 'nativeChatProviders' | 'agentDefaultSurface'> | null | undefined,
   localCatalog: readonly string[] | undefined,
   hostCatalog: readonly string[] | undefined
 ): TuiAgent[] {
@@ -71,7 +72,7 @@ export function agentMenuChatAgents(
       ...(hostCatalog ?? []),
       ...Object.keys(settings?.nativeChatProviders ?? {})
         .filter(isTuiAgent)
-        .filter((agent) => settings?.nativeChatProviders?.[agent] === true)
+        .filter((agent) => nativeChatPreferenceFor(settings, agent))
     ])
   ].filter(isTuiAgent)
   return chatAgents

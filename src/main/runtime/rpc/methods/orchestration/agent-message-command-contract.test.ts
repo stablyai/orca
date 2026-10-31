@@ -74,7 +74,7 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
     expect(await current.host.attach(QUEUED_RIG_CALLER, attach)).toMatchObject({ ok: true })
     const { db, runtime } = h.setup(
       false,
-      partialRuntimeStore({ getSettings: () => ({ experimentalNativeChat: false }) })
+      partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
     )
     vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})

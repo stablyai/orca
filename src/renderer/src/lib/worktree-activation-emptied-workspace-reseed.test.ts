@@ -64,7 +64,7 @@ describe('activating a workspace whose last terminal was closed', () => {
     useAppStore.setState((s) => ({
       settings: s.settings && {
         ...s.settings,
-        experimentalNativeChat: true,
+        agentDefaultSurface: 'chat' as const,
         defaultTuiAgent: 'claude'
       },
       sleepingAgentSessionsByPaneKey: { 'pane-1': sleepingSession }

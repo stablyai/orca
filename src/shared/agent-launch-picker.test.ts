@@ -399,7 +399,7 @@ it('retains a raw permission spelling even when its literal value happens to nam
 
 it('keeps offered host Chat independent of preference through the actual row builder and adapter', () => {
   const coldInput: Parameters<typeof buildNewTabAgentMenuRows>[0] = {
-    settings: { experimentalNativeChat: false },
+    settings: { agentDefaultSurface: 'terminal' },
     detectedOnHost: null,
     chatAgents: [],
     hostChatAnswer: () => 'no-chats',
@@ -414,7 +414,25 @@ it('keeps offered host Chat independent of preference through the actual row bui
   expect(buildNewTabAgentMenuRows({ ...coldInput, configurationCommandCandidates: [] })).toEqual([])
   for (const scenario of [
     {
-      enabled: true,
+      defaultMode: 'chat',
+      preferred: undefined,
+      answer: 'yes',
+      program: 'available',
+      detected: ['codex'],
+      surfaces: ['chat', 'terminal'],
+      defaultSurface: 'chat'
+    },
+    {
+      defaultMode: 'terminal',
+      preferred: undefined,
+      answer: 'yes',
+      program: 'available',
+      detected: ['codex'],
+      surfaces: ['chat', 'terminal'],
+      defaultSurface: 'terminal'
+    },
+    {
+      defaultMode: 'chat',
       preferred: false,
       answer: 'yes',
       program: 'available',
@@ -423,7 +441,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: true,
       answer: 'yes',
       program: 'available',
@@ -432,16 +450,16 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'chat'
     },
     {
-      enabled: false,
+      defaultMode: 'terminal',
       preferred: false,
       answer: 'yes',
       program: 'available',
       detected: ['codex'],
-      surfaces: ['terminal'],
+      surfaces: ['chat', 'terminal'],
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: false,
       answer: 'ssh',
       program: 'available',
@@ -450,7 +468,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: false,
       answer: 'not-yet-known',
       program: 'available',
@@ -459,7 +477,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: false,
       answer: 'yes',
       program: 'installable',
@@ -468,7 +486,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: false,
       answer: 'yes',
       program: 'unknown',
@@ -477,7 +495,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: false,
       answer: 'no-chats',
       program: 'available',
@@ -486,7 +504,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: false,
       answer: 'yes',
       program: 'missing',
@@ -495,7 +513,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
       defaultSurface: 'terminal'
     },
     {
-      enabled: true,
+      defaultMode: 'chat',
       preferred: true,
       answer: 'yes',
       program: 'available',
@@ -506,8 +524,8 @@ it('keeps offered host Chat independent of preference through the actual row bui
   ] as const) {
     const rows = buildNewTabAgentMenuRows({
       settings: {
-        experimentalNativeChat: scenario.enabled,
-        nativeChatProviders: { codex: scenario.preferred }
+        agentDefaultSurface: scenario.defaultMode,
+        nativeChatProviders: scenario.preferred === undefined ? {} : { codex: scenario.preferred }
       },
       detectedOnHost: scenario.detected,
       chatAgents: ['codex'],
@@ -527,7 +545,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
   for (const answer of ['not-yet-known', 'ssh', 'wsl', 'subfolder', 'not-on-host'] as const) {
     for (const detected of [[], ['codex']] as const) {
       const rows = buildNewTabAgentMenuRows({
-        settings: { experimentalNativeChat: true },
+        settings: { agentDefaultSurface: 'chat' },
         detectedOnHost: detected,
         chatAgents: ['codex'],
         hostChatAnswer: () => answer,
@@ -545,7 +563,7 @@ it('keeps offered host Chat independent of preference through the actual row bui
   }
   expect(
     buildNewTabAgentMenuRows({
-      settings: { experimentalNativeChat: true, disabledTuiAgents: ['codex'] },
+      settings: { agentDefaultSurface: 'chat', disabledTuiAgents: ['codex'] },
       detectedOnHost: ['codex'],
       chatAgents: ['codex'],
       hostChatAnswer: () => 'yes',

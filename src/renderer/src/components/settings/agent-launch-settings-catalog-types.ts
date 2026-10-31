@@ -18,6 +18,7 @@ export type AgentLaunchSettingsCatalogProps = {
   renderPermissions: AgentPermissionsRenderer
   refreshSettings?: () => void
   autoSupported?: boolean
+  choicesSupported?: boolean
   nativeChatPermissionsSupported?: boolean
   chatOwnSupported?: boolean
   local?: {

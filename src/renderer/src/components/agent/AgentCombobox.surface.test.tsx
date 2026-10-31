@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { useState, type ReactElement } from 'react'
@@ -55,7 +56,7 @@ function renderPicker(
         selection: resolveAgentMenuSelection({
           agent: value,
           surface,
-          settings: { experimentalNativeChat: true },
+          settings: { nativeChatProviders: EVERY_AGENT_CHAT },
           inventoryReady: model.state === 'settled',
           answer:
             model.state === 'settled' &&
@@ -182,7 +183,7 @@ it('keeps a recorded host chat without its CLI on CHAT after ArrowRight and Ente
   // QA controls/phase-matrix/probe.json: external.raw.inventory + streams.health[0].result.
   const detectedOnHost: TuiAgent[] = ['codex', 'opencode', 'pi', 'omp']
   const rows = buildNewTabAgentMenuRows({
-    settings: { experimentalNativeChat: true, defaultTuiAgent: 'antigravity' },
+    settings: { nativeChatProviders: EVERY_AGENT_CHAT, defaultTuiAgent: 'antigravity' },
     detectedOnHost,
     chatAgents: ['antigravity'],
     hostChatAnswer: () => 'yes',
@@ -205,7 +206,7 @@ it('keeps a recorded host chat without its CLI on CHAT after ArrowRight and Ente
 
 it('keeps a cold configuration CLI companion selected on reopen and Enter without offering the chat terminal button', () => {
   const rows = buildNewTabAgentMenuRows({
-    settings: { experimentalNativeChat: true },
+    settings: { agentDefaultSurface: 'chat' },
     detectedOnHost: null,
     configurationCommandCandidates: ['claude'],
     chatAgents: ['claude'],
@@ -231,7 +232,7 @@ it('keeps a cold configuration CLI companion selected on reopen and Enter withou
           selection: resolveAgentMenuSelection({
             agent: 'claude',
             surface,
-            settings: { experimentalNativeChat: true },
+            settings: { agentDefaultSurface: 'chat' },
             inventoryReady: true,
             answer: 'yes',
             chatPending: false,

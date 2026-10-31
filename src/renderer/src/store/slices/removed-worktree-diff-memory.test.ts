@@ -109,11 +109,18 @@ describe('removed workspace diff memory', () => {
     expect(readCombinedDiffViewMemory(key)).toEqual({ worktreeId: removed, scrollTop: 7 })
   })
 
-  it('lets a mounted viewer re-create its entry after LRU eviction', () => {
+  it('protects a mounted viewer from LRU eviction until release', () => {
     const { key, lease } = mountDiff(kept)
-    for (let index = 0; index < 20; index += 1) {
+    const memory = readCombinedDiffViewMemory(key)
+    expect(memory).toBeDefined()
+    const oldestInactiveKey = seedDiff('repo::/workspace/other-0')
+    for (let index = 1; index < 20; index += 1) {
       seedDiff(`repo::/workspace/other-${index}`)
     }
+    expect(readCombinedDiffViewMemory(key)).toBe(memory)
+    expect(readCombinedDiffViewMemory(oldestInactiveKey)).toBeUndefined()
+    releaseCombinedDiffView(lease)
+    seedDiff('repo::/workspace/other-20')
     expect(readCombinedDiffViewMemory(key)).toBeUndefined()
     rememberCombinedDiffView(lease, { scrollTop: 9 })
     expect(readCombinedDiffViewMemory(key)).toEqual({ worktreeId: kept, scrollTop: 9 })

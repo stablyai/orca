@@ -114,7 +114,7 @@ export class RuntimeBrowserCommands {
     const close = new RuntimeBrowserTabClose(queries, host, targets)
     const profiles = new RuntimeBrowserProfiles(host, targets, catalog)
     const screencasts = new RuntimeBrowserScreencasts(host, targets, catalog)
-    const dialogs = new RuntimeBrowserDialogs(targets, screencasts)
+    const dialogs = new RuntimeBrowserDialogs(targets)
     this.browserProfileDetectBrowsers = profiles.browserProfileDetectBrowsers.bind(profiles)
     this.browserProfileImportFromBrowser = profiles.browserProfileImportFromBrowser.bind(profiles)
     this.browserProfileClearGoogleCookies = profiles.browserProfileClearGoogleCookies.bind(profiles)

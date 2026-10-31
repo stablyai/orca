@@ -65,15 +65,11 @@ function installApp(isPackaged: boolean): void {
 function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
-    | 'getNestedWorkerMaxDepth'
-    | 'getOrchestrationHeartbeatMinutes'
-    | 'getTerminalOrchestrationCliCommand'
-    | 'sendTerminalAgentPrompt'
+    'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
   > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
     {
       orchestrationSenderNames: { nameOf: () => null },
       getNestedWorkerMaxDepth: () => 2,
-      getOrchestrationHeartbeatMinutes: () => 5,
       getTerminalOrchestrationCliCommand: () => 'orca',
       sendTerminalAgentPrompt: async (handle, text) => {
         prompts.push(text)
@@ -153,7 +149,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     expect(chat).not.toContain(CHAT_WORKER_HANDLE)
     expect(chat).not.toContain('this terminal')
     expect(withoutRedispatch).not.toBe(chat)
-    expect(withoutRedispatch.split('this chat')).toHaveLength(4)
+    expect(withoutRedispatch.split('this chat')).toHaveLength(3)
     expect(
       withoutRedispatch
         .replace(SELF_LINE, '')

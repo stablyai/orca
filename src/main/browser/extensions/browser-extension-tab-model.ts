@@ -21,7 +21,7 @@ import {
   getBrowserExtensionSessionForProfile
 } from './browser-extension-session-loader'
 import { isBrowserExtensionSupportEnabled } from './browser-extension-support'
-import { whenBrowserExtensionMainWindowReady } from './browser-extension-main-window-readiness'
+import { whenBrowserMainWindowReady } from '../browser-main-window-readiness'
 import { findDiscardedBrowserTabForPage } from './browser-extension-discarded-tabs'
 import {
   getBrowserExtensionMainWindow,
@@ -296,7 +296,7 @@ export async function openBrowserExtensionTab(
 ): Promise<number> {
   const profile = getBrowserExtensionProfile(browserProfileId)
   // Why wait: extensions open tabs as they load (onInstalled), before Orca's window can take them.
-  const mainWindow = profile ? await whenBrowserExtensionMainWindowReady(MAIN_WINDOW_WAIT_MS) : null
+  const mainWindow = profile ? await whenBrowserMainWindowReady(MAIN_WINDOW_WAIT_MS) : null
   if (!mainWindow || !profile) {
     throw new BrowserExtensionApiError('Orca has no window to open a tab in')
   }

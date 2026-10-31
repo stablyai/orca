@@ -105,3 +105,9 @@ export type RuntimeRpcDispatchObservation = {
   responseTimeoutMs: number
   responseExpiresAt?: number
 }
+
+/** Select request params from the status of the socket that will send them. */
+export type RuntimeRequestSelection = {
+  paramsForStatus: (status: unknown) => unknown
+  onDispatch?: () => void
+}

@@ -76,7 +76,7 @@ export async function exerciseLocalAgentProjectGitRetarget(
       projects: [{ ...project, localWindowsRuntimePreference: preferenceA }],
       projectHostSetups: projection.setups,
       worktreesByRepo: { [repo.id]: [worktree] },
-      settings: { ...getDefaultSettings('/home/test'), experimentalNativeChat: false }
+      settings: { ...getDefaultSettings('/home/test'), agentDefaultSurface: 'terminal' }
     })
     setLocalRuntimeCapabilitiesForTests([])
     Object.assign(window, {

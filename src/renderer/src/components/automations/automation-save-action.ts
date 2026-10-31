@@ -1,3 +1,9 @@
+import { useAppStore } from '@/store'
+import {
+  automationChatSupport,
+  automationDraftSurface,
+  automationLaunchWorkspace
+} from './automation-launch-surface'
 import { toast } from 'sonner'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { isValidAutomationSchedule } from '../../../../shared/automation-schedule-parsing'
@@ -68,12 +74,26 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
       )
       return
     }
-    const extrasError = draftExtraAgentArgsNeedFreshSession(draft)
+    const resolution =
+      editingAutomationId !== null
+        ? destinationForm.editHostResolution
+        : destination.createDestination.control.resolution
+    const chatSupported = automationChatSupport(
+      useAppStore.getState(),
+      draft,
+      automationLaunchWorkspace(draft, resolution)
+    )
+    const surface = automationDraftSurface(draft, settings, chatSupported)
+    if (surface === 'chat' && chatSupported !== true) {
+      return
+    }
+    const effectiveDraft = { ...draft, surface }
+    const extrasError = draftExtraAgentArgsNeedFreshSession(effectiveDraft)
       ? translate(
           'auto.components.automations.extraAgentArgs.needsFreshSession',
           'Extra arguments require a fresh session for every run.'
         )
-      : getDraftExtraAgentArgsError(draft)
+      : getDraftExtraAgentArgsError(effectiveDraft)
     if (extrasError) {
       toast.error(extrasError)
       return
@@ -99,7 +119,7 @@ export function createAutomationSaveAction(context: AutomationSaveContext) {
           return
         }
       }
-      await saveOrcaAutomation(context, { hour, minute, now })
+      await saveOrcaAutomation(context, { hour, minute, now, surface })
     } catch (error) {
       toast.error(
         error instanceof Error

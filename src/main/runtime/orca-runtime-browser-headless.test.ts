@@ -54,6 +54,10 @@ vi.mock('../ipc/browser-tab-registration-wait', () => ({
   waitForWorktreeTabRegistration: waitForWorktreeTabRegistrationMock
 }))
 
+vi.mock('../browser/browser-main-window-readiness', () => ({
+  whenBrowserMainWindowReady: async () => null
+}))
+
 vi.mock('../browser/browser-session-registry', () => ({
   browserSessionRegistry: browserSessionRegistryMock
 }))
