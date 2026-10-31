@@ -8,6 +8,7 @@ import type { PluginAppearanceSettings } from './plugin-appearance-settings-type
 import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/plugin-file-type'
 import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
+import type { TerminalScrollSettings } from './terminal-scroll-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
 
@@ -23,4 +24,5 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   PluginAppearanceSettings &
   PluginFileTypeSuggestionSettings &
   PluginUpdatePolicySettings &
-  PluginSystemSettings
+  PluginSystemSettings &
+  TerminalScrollSettings
