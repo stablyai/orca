@@ -110,7 +110,7 @@ function setStore(hostCase: HostCase): void {
   }
 }
 
-function startLinearIssue(): Promise<boolean> {
+function startLinearIssue() {
   return launchWorkItemDirect({
     repoId: 'repo-1',
     launchSource: 'task_page',

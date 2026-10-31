@@ -37,7 +37,7 @@ it('disables setup choices until a failed inspection recovers, then accepts one 
   expect(screen.getByRole<HTMLButtonElement>('button', { name: 'Retry' }).disabled).toBe(true)
   await act(async () => retry.resolve(recovered))
   expect(screen.getByText('echo prepared')).toBeTruthy()
-  fireEvent.click(screen.getByRole('button', { name: 'Run setup', exact: true }))
+  fireEvent.click(screen.getByRole('button', { name: 'Run setup' }))
   await expect(result).resolves.toBe('run')
 })
 

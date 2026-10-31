@@ -149,8 +149,7 @@ describe('direct work item setup preparation', () => {
       expect(mocks.createWorktree).not.toHaveBeenCalled()
       fireEvent.click(
         screen.getByRole('button', {
-          name: choice === 'run' ? 'Run setup' : 'Skip setup',
-          exact: true
+          name: choice === 'run' ? 'Run setup' : 'Skip setup'
         })
       )
       pending.choose(choice)

@@ -2586,7 +2586,9 @@
         "runCommandsNow": "Run commands now",
         "skipForNow": "Skip for now",
         "skipCommands": "Skip commands",
-        "connectProject": "Connect {{name}}"
+        "connectProject": "Connect {{name}}",
+        "runSetup": "Run setup",
+        "skipSetup": "Skip setup"
       },
       "NewWorkspaceComposerModal": {
         "createWorktree": "Create worktree",
@@ -20519,7 +20521,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [Optional]",
-      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one."
+      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
+      "setupCheckFailed": "Could not check setup configuration. Try again."
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
