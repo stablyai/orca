@@ -91,6 +91,7 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   let consented = false
   let sent = false
   let disposeDeadline: (() => void) | undefined
+  let request: Awaited<ReturnType<typeof switchRequest>> | undefined
   try {
     const supported = await withinSwitchBudget(supportsInPlaceSwitch(target, args.agent, true))
     // The chat's surfaces offer the copy where the host can't switch; a click that raced the
@@ -124,7 +125,6 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
       return false
     }
     let consent = hostConsents ? false : undefined
-    let request: Awaited<ReturnType<typeof switchRequest>> | undefined
     let answer: AgentSessionSwitchResult
     for (;;) {
       // Time spent answering the consent dialog is not the switch's budget.
@@ -189,6 +189,10 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   } catch (error) {
     // Once the request left, a failure that isn't the host's answer can't say what the host did.
     const unknown = sent && !structuredLaunchFailure(error)
+    // Only an answer that may still arrive keeps this client's claim on where the chat lands.
+    if (!unknown) {
+      request?.abandonFocus?.()
+    }
     feedback(
       conversationSwitchFailureText(error, args, unknown ? 'outcomeUnknown' : undefined),
       'error'

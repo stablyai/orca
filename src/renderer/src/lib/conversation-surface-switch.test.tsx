@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     pairedRefresh: vi.fn(),
     call: vi.fn(),
     legacy: vi.fn(async () => {}),
+    abandonFocus: vi.fn(),
     refresh: vi.fn(async () => {}),
     error: vi.fn(),
     info: vi.fn(),
@@ -50,6 +51,9 @@ vi.mock('@/runtime/runtime-rpc-client', async (original) => ({
 }))
 vi.mock('@/components/tab-bar/cli-chat-resume-terminal-capture', () => ({
   captureSourceTerminal: mocks.capture
+}))
+vi.mock('./conversation-switch-focus-intent', () => ({
+  recordConversationSwitchFocus: () => mocks.abandonFocus
 }))
 vi.mock('./ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForResume: mocks.prepare
@@ -234,3 +238,60 @@ it('sends no consent field to a host that does not decide consent (its strict sc
   await expect(runConversationSwitch(subject)).resolves.toBe(true)
   expect(mocks.call.mock.calls[0]![2].execution).not.toHaveProperty('consented')
 })
+
+const fromPane = {
+  tabId: 'terminal',
+  workspaceId: 'workspace',
+  paneKey: 'terminal:leaf',
+  agent: 'codex' as const,
+  providerSessionId: 'codex-session',
+  executionHostId: 'local' as const,
+  ptyId: 'pty'
+}
+it.each([
+  ['refuses', 'refused', true],
+  ['asks for consent and the user declines', 'declined', true],
+  ['fails before the request is sent', 'unsent', true],
+  ['loses the answer after the send', 'lost', false]
+] as const)(
+  'withdraws where a split switch would land when the host %s',
+  async (_name, outcome, withdrawn) => {
+    mocks.consent.mockResolvedValue(outcome === 'declined')
+    mocks.capture.mockResolvedValue({
+      target: { kind: 'environment', environmentId: 'paired' },
+      handle: 'terminal-source',
+      incarnationId: 'incarnation',
+      presentation: { identity: { tabId: 'host-terminal' }, holders: [] }
+    })
+    mocks.call.mockImplementation(
+      async (
+        _target: unknown,
+        _method: string,
+        _params: unknown,
+        options: { beforeSend: (sentAt?: number) => void }
+      ) => {
+        if (outcome === 'unsent') {
+          throw new Error('Remote Orca runtime is not connected.')
+        }
+        options.beforeSend()
+        if (outcome === 'lost') {
+          throw new Error('Runtime request closed before agentSession.switchToChat completed')
+        }
+        return {
+          status: 'refused',
+          sessionId: 'chat',
+          refusal: {
+            code: 'agent_session_operation_invalid',
+            details: { reason: outcome === 'declined' ? 'turnActive' : 'messagesUnsettled' }
+          }
+        }
+      }
+    )
+    const confirm = vi.fn(async () => false)
+    await expect(
+      runConversationSwitch({ direction: 'chat', ...fromPane, source: fromPane, confirm })
+    ).resolves.toBe(false)
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(mocks.abandonFocus).toHaveBeenCalledTimes(withdrawn ? 1 : 0)
+  }
+)
