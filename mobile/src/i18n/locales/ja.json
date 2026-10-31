@@ -764,11 +764,6 @@
       "moveUp": "上に移動",
       "reorderHint": "「上に移動」「下に移動」の操作で、ドラッグせずに並べ替えられます。"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新規ワークスペース",
-      "pairDesktop": "デスクトップのペアリング",
-      "title": "クイック操作"
-    },
     "hostCard": {
       "hostActions": "「{{title}}」の操作",
       "openHost": "「{{title}}」を開く",
@@ -1302,17 +1297,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "アカウントの使用状況",
-      "sessionWindow": "5時間",
-      "systemDefault": "システムのデフォルト",
-      "weeklyWindow": "7日"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} の更新通知を閉じる",
       "title": "Orca {{version}} が利用可能です",
-      "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。",
-      "updateHint": "タップして更新"
+      "updateAccessibilityLabel": "Orca {{version}} が利用可能です。タップして更新してください。"
     },
     "emptyState": {
       "connectedDescription": "デスクトップがここに表示されます。すべての通信はエンドツーエンドで暗号化されます。",
@@ -1320,26 +1308,14 @@
       "description": "コンピュータ上の Orca とペアリングすると、スマートフォンから Agent の状況を確認したり、任意のターミナルを操作したりして、作業を進められます。",
       "openDesktopDescription": "「設定」→「モバイル」を開き、ペアリング用の QR コードを生成してください。",
       "openDesktopTitle": "デスクトップで Orca を開く",
-      "pairDesktop": "デスクトップのペアリング",
-      "scanCodeDescription": "上のボタンをタップしてスキャナーを開いてください。画面の QR コードにカメラを向けてください。",
       "scanCodeTitle": "コードをスキャン",
-      "stepsHeading": "使い方",
       "title": "デスクトップに接続"
     },
     "listFooter": {
-      "hostPickerTitle": "タスクを開くホスト",
-      "resumeHeading": "再開",
-      "tasksHeading": "タスク"
+      "hostPickerTitle": "タスクを開くホスト"
     },
     "listHeader": {
-      "agentTime": "Agent 時間",
-      "agentsSpawned": "Agent が生成されました",
-      "daysHours": "{{days}}日 {{hours}}時間",
-      "desktopsHeading": "デスクトップ",
-      "hoursMinutes": "{{hours}}時間 {{minutes}}分",
-      "minutes": "{{minutes}}分",
-      "prsCreated": "作成された PR",
-      "title": "おかえり"
+      "desktopsHeading": "デスクトップ"
     },
     "screen": {
       "pairingCheckFailed": "ペアリングを確認できませんでした",
@@ -1347,11 +1323,6 @@
       "removeHostMessage": "「{{name}}」を削除しますか？後で再度ペアリングできます。",
       "removeHostTitle": "ホストを削除",
       "tryAgain": "再試行してください。"
-    },
-    "tasksCard": {
-      "noSources": "タスクの連携先が接続されていません",
-      "openProviderTasks": "{{provider}} のタスクを開く",
-      "title": "タスク"
     }
   },
   "hooks": {

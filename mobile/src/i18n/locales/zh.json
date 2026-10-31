@@ -764,11 +764,6 @@
       "moveUp": "上移",
       "reorderHint": "使用“上移”和“下移”操作调整顺序，无需拖动"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新工作区",
-      "pairDesktop": "配对桌面",
-      "title": "快捷操作"
-    },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
       "openHost": "打开 {{title}}",
@@ -1302,17 +1297,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "账户使用情况",
-      "sessionWindow": "5小时",
-      "systemDefault": "系统默认",
-      "weeklyWindow": "7天"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
-      "updateAccessibilityLabel": "Orca {{version}} 已可用，点按更新",
-      "updateHint": "点按更新"
+      "updateAccessibilityLabel": "Orca {{version}} 已可用，点按更新"
     },
     "emptyState": {
       "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密。",
@@ -1320,26 +1308,14 @@
       "description": "与电脑上的 Orca 配对，即可在手机上查看智能体、进入任意终端并推进工作。",
       "openDesktopDescription": "前往“设置” → “移动端”，生成配对二维码。",
       "openDesktopTitle": "打开 Orca 桌面应用",
-      "pairDesktop": "配对桌面",
-      "scanCodeDescription": "点按上方按钮打开扫码器，然后对准屏幕上的二维码。",
       "scanCodeTitle": "扫描二维码",
-      "stepsHeading": "使用方法",
       "title": "连接桌面"
     },
     "listFooter": {
-      "hostPickerTitle": "选择打开任务的主机",
-      "resumeHeading": "继续",
-      "tasksHeading": "任务"
+      "hostPickerTitle": "选择打开任务的主机"
     },
     "listHeader": {
-      "agentTime": "智能体时间",
-      "agentsSpawned": "已启动智能体",
-      "daysHours": "{{days}} 天 {{hours}} 小时",
-      "desktopsHeading": "台式机",
-      "hoursMinutes": "{{hours}} 小时 {{minutes}} 分钟",
-      "minutes": "{{minutes}} 分钟",
-      "prsCreated": "已创建 PR",
-      "title": "欢迎回来"
+      "desktopsHeading": "台式机"
     },
     "screen": {
       "pairingCheckFailed": "无法检查配对状态",
@@ -1347,11 +1323,6 @@
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "removeHostTitle": "移除主机",
       "tryAgain": "请重试。"
-    },
-    "tasksCard": {
-      "noSources": "未连接任务来源",
-      "openProviderTasks": "打开 {{provider}} 任务",
-      "title": "任务"
     }
   },
   "hooks": {

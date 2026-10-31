@@ -764,11 +764,6 @@
       "moveUp": "위로 이동",
       "reorderHint": "드래그하지 않고 순서를 바꾸려면 '위로 이동'과 '아래로 이동' 동작을 사용하세요."
     },
-    "homeQuickActions": {
-      "newWorkspace": "새 워크스페이스",
-      "pairDesktop": "데스크탑 페어링",
-      "title": "빠른 작업"
-    },
     "hostCard": {
       "hostActions": "{{title}} 관련 작업",
       "openHost": "{{title}} 열기",
@@ -1302,17 +1297,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "계정 사용량",
-      "sessionWindow": "5시간",
-      "systemDefault": "시스템 기본값",
-      "weeklyWindow": "7일"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} 업데이트 알림 닫기",
       "title": "Orca {{version}} 업데이트 가능",
-      "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요.",
-      "updateHint": "탭하여 업데이트하세요"
+      "updateAccessibilityLabel": "Orca {{version}} 업데이트가 있습니다. 탭하여 업데이트하세요."
     },
     "emptyState": {
       "connectedDescription": "데스크톱이 여기에 표시됩니다. 모든 데이터는 종단 간 암호화로 보호됩니다.",
@@ -1320,26 +1308,14 @@
       "description": "컴퓨터의 Orca와 페어링하여 에이전트 상태를 확인하고, 원하는 터미널에 접속하고, 휴대폰으로 작업을 진행하세요.",
       "openDesktopDescription": "설정 → 모바일에서 페어링 QR 코드를 생성하세요.",
       "openDesktopTitle": "Orca 데스크톱 앱 열기",
-      "pairDesktop": "데스크탑 페어링",
-      "scanCodeDescription": "위의 버튼을 탭해 스캐너를 여세요. 데스크톱 화면의 QR 코드에 카메라를 맞추세요.",
       "scanCodeTitle": "코드 스캔",
-      "stepsHeading": "사용 방법",
       "title": "데스크톱을 연결하세요"
     },
     "listFooter": {
-      "hostPickerTitle": "작업을 열 호스트",
-      "resumeHeading": "재개",
-      "tasksHeading": "작업"
+      "hostPickerTitle": "작업을 열 호스트"
     },
     "listHeader": {
-      "agentTime": "Agent 시간",
-      "agentsSpawned": "시작된 Agents",
-      "daysHours": "{{days}}일 {{hours}}시간",
-      "desktopsHeading": "데스크탑",
-      "hoursMinutes": "{{hours}}시간 {{minutes}}분",
-      "minutes": "{{minutes}}분",
-      "prsCreated": "생성된 PR",
-      "title": "다시 오신 것을 환영합니다"
+      "desktopsHeading": "데스크탑"
     },
     "screen": {
       "pairingCheckFailed": "페어링 확인 실패",
@@ -1347,11 +1323,6 @@
       "removeHostMessage": "\"{{name}}\"을(를) 제거하시겠습니까? 나중에 다시 페어링할 수 있습니다.",
       "removeHostTitle": "호스트 제거",
       "tryAgain": "다시 시도하세요."
-    },
-    "tasksCard": {
-      "noSources": "연결된 작업 소스 없음",
-      "openProviderTasks": "{{provider}} 작업 열기",
-      "title": "작업"
     }
   },
   "hooks": {

@@ -852,11 +852,6 @@
       "moveUp": "Переместить вверх",
       "reorderHint": "Чтобы изменить порядок без перетаскивания, используйте действия «Переместить вверх» и «Переместить вниз»"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Новое рабочее пространство",
-      "pairDesktop": "Подключить компьютер",
-      "title": "Быстрые действия"
-    },
     "hostCard": {
       "hostActions": "Действия для {{title}}",
       "openHost": "Открыть {{title}}",
@@ -1392,17 +1387,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Использование учётной записи",
-      "sessionWindow": "5 ч",
-      "systemDefault": "Как в системе",
-      "weeklyWindow": "7 дн."
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Скрыть уведомление об обновлении Orca {{version}}",
       "title": "Доступна Orca {{version}}",
-      "updateAccessibilityLabel": "Доступна Orca {{version}}. Нажмите, чтобы обновить",
-      "updateHint": "Нажмите, чтобы обновить"
+      "updateAccessibilityLabel": "Доступна Orca {{version}}. Нажмите, чтобы обновить"
     },
     "emptyState": {
       "connectedDescription": "Здесь появится ваш компьютер. Все данные защищены сквозным шифрованием.",
@@ -1410,26 +1398,14 @@
       "description": "Подключитесь к Orca на компьютере, чтобы следить за агентами, открывать любой терминал и управлять работой с телефона.",
       "openDesktopDescription": "Откройте «Настройки» → «Мобильный доступ» и создайте QR-код для сопряжения.",
       "openDesktopTitle": "Откройте Orca на компьютере",
-      "pairDesktop": "Подключить компьютер",
-      "scanCodeDescription": "Нажмите кнопку выше, чтобы открыть сканер. Наведите камеру на QR-код на экране компьютера.",
       "scanCodeTitle": "Отсканируйте код",
-      "stepsHeading": "Как это работает",
       "title": "Подключите компьютер"
     },
     "listFooter": {
-      "hostPickerTitle": "Открыть задачи на сервере",
-      "resumeHeading": "Продолжить",
-      "tasksHeading": "Задачи"
+      "hostPickerTitle": "Открыть задачи на сервере"
     },
     "listHeader": {
-      "agentTime": "Время агентов",
-      "agentsSpawned": "Запущено агентов",
-      "daysHours": "{{days}} дн. {{hours}} ч",
-      "desktopsHeading": "Компьютеры",
-      "hoursMinutes": "{{hours}} ч {{minutes}} мин",
-      "minutes": "{{minutes}} мин",
-      "prsCreated": "Создано PR",
-      "title": "С возвращением"
+      "desktopsHeading": "Компьютеры"
     },
     "screen": {
       "pairingCheckFailed": "Не удалось проверить сопряжение",
@@ -1437,11 +1413,6 @@
       "removeHostMessage": "Удалить «{{name}}»? Позже его можно подключить снова.",
       "removeHostTitle": "Удалить сервер",
       "tryAgain": "Попробуйте ещё раз."
-    },
-    "tasksCard": {
-      "noSources": "Источники задач не подключены",
-      "openProviderTasks": "Открыть задачи {{provider}}",
-      "title": "Задачи"
     }
   },
   "hooks": {

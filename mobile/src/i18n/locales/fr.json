@@ -810,11 +810,6 @@
       "moveUp": "Monter",
       "reorderHint": "Utilisez les actions « Monter » et « Descendre » pour réordonner sans faire glisser"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Nouvel espace de travail",
-      "pairDesktop": "Appairer l'ordinateur",
-      "title": "Actions rapides"
-    },
     "hostCard": {
       "hostActions": "Actions pour {{title}}",
       "openHost": "Ouvrir {{title}}",
@@ -1349,17 +1344,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Utilisation du compte",
-      "sessionWindow": "5 h",
-      "systemDefault": "Valeur par défaut du système",
-      "weeklyWindow": "7 j"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Ignorer la mise à jour Orca {{version}}",
       "title": "Orca {{version}} est disponible",
-      "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour",
-      "updateHint": "Touchez pour mettre à jour"
+      "updateAccessibilityLabel": "Orca {{version}} est disponible, touchez pour mettre à jour"
     },
     "emptyState": {
       "connectedDescription": "Votre ordinateur apparaîtra ici. Tout est chiffré de bout en bout.",
@@ -1367,26 +1355,14 @@
       "description": "Appairez votre téléphone à Orca sur votre ordinateur pour suivre vos agents, accéder à n'importe quel terminal et piloter votre travail depuis votre téléphone.",
       "openDesktopDescription": "Allez dans Paramètres → Mobile et générez un QR code d'appairage.",
       "openDesktopTitle": "Ouvrir Orca sur l'ordinateur",
-      "pairDesktop": "Appairer l'ordinateur",
-      "scanCodeDescription": "Touchez le bouton ci-dessus pour ouvrir le scanner. Visez le QR code affiché à l'écran.",
       "scanCodeTitle": "Scanner le code",
-      "stepsHeading": "Fonctionnement",
       "title": "Connectez votre ordinateur"
     },
     "listFooter": {
-      "hostPickerTitle": "Ouvrir les tâches sur",
-      "resumeHeading": "Reprendre",
-      "tasksHeading": "Tâches"
+      "hostPickerTitle": "Ouvrir les tâches sur"
     },
     "listHeader": {
-      "agentTime": "Temps agent",
-      "agentsSpawned": "Agents lancés",
-      "daysHours": "{{days}} j {{hours}} h",
-      "desktopsHeading": "Ordinateurs",
-      "hoursMinutes": "{{hours}} h {{minutes}} min",
-      "minutes": "{{minutes}} min",
-      "prsCreated": "PRs créées",
-      "title": "Bon retour"
+      "desktopsHeading": "Ordinateurs"
     },
     "screen": {
       "pairingCheckFailed": "Impossible de vérifier l'appairage",
@@ -1394,11 +1370,6 @@
       "removeHostMessage": "Supprimer « {{name}} » ? Vous pourrez l'appairer à nouveau plus tard.",
       "removeHostTitle": "Supprimer l'hôte",
       "tryAgain": "Veuillez réessayer."
-    },
-    "tasksCard": {
-      "noSources": "Aucune source de tâches connectée",
-      "openProviderTasks": "Ouvrir les tâches de {{provider}}",
-      "title": "Tâches"
     }
   },
   "hooks": {

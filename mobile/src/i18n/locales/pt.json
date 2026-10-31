@@ -810,11 +810,6 @@
       "moveUp": "Mover para cima",
       "reorderHint": "Use as ações mover para cima e mover para baixo para reordenar sem arrastar"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Novo Espaço de Trabalho",
-      "pairDesktop": "Parear Desktop",
-      "title": "Ações Rápidas"
-    },
     "hostCard": {
       "hostActions": "Ações para {{title}}",
       "openHost": "Abrir {{title}}",
@@ -1349,17 +1344,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Uso da conta",
-      "sessionWindow": "5h",
-      "systemDefault": "Padrão do sistema",
-      "weeklyWindow": "7d"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",
-      "updateAccessibilityLabel": "Orca {{version}} está disponível, toque para atualizar",
-      "updateHint": "Toque para atualizar"
+      "updateAccessibilityLabel": "Orca {{version}} está disponível, toque para atualizar"
     },
     "emptyState": {
       "connectedDescription": "Seu desktop aparecerá aqui. Tudo é criptografado de ponta a ponta.",
@@ -1367,26 +1355,14 @@
       "description": "Pareie com o Orca no seu computador para acompanhar seus agentes, acessar qualquer terminal e gerenciar o trabalho pelo celular.",
       "openDesktopDescription": "Vá para Configurações → Mobile e gere um código QR de pareamento.",
       "openDesktopTitle": "Abra o Orca no desktop",
-      "pairDesktop": "Parear Desktop",
-      "scanCodeDescription": "Toque no botão acima para abrir o leitor. Aponte a câmera para o código QR na tela.",
       "scanCodeTitle": "Escaneie o código",
-      "stepsHeading": "Como funciona",
       "title": "Conecte seu desktop"
     },
     "listFooter": {
-      "hostPickerTitle": "Abrir tarefas em",
-      "resumeHeading": "Retomar",
-      "tasksHeading": "Tarefas"
+      "hostPickerTitle": "Abrir tarefas em"
     },
     "listHeader": {
-      "agentTime": "Tempo de agente",
-      "agentsSpawned": "Agentes iniciados",
-      "daysHours": "{{days}}d {{hours}}h",
-      "desktopsHeading": "Desktops",
-      "hoursMinutes": "{{hours}}h {{minutes}}min",
-      "minutes": "{{minutes}}min",
-      "prsCreated": "PRs criados",
-      "title": "Bem-vindo de volta"
+      "desktopsHeading": "Desktops"
     },
     "screen": {
       "pairingCheckFailed": "Não foi possível verificar o pareamento",
@@ -1394,11 +1370,6 @@
       "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
       "removeHostTitle": "Remover host",
       "tryAgain": "Tente novamente."
-    },
-    "tasksCard": {
-      "noSources": "Nenhuma origem de tarefas conectada",
-      "openProviderTasks": "Abrir tarefas do {{provider}}",
-      "title": "Tarefas"
     }
   },
   "hooks": {

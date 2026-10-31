@@ -478,40 +478,24 @@
     "appUpdateCard": {
       "title": "Orca {{version}} is available",
       "updateAccessibilityLabel": "Orca {{version}} is available, tap to update",
-      "updateHint": "Tap to update",
-      "dismissAccessibilityLabel": "Dismiss Orca {{version}} update"
-    },
-    "accountUsageCards": {
-      "sectionHeading": "Account usage",
-      "systemDefault": "System default",
-      "sessionWindow": "5h",
-      "weeklyWindow": "7d"
+      "dismissAccessibilityLabel": "Dismiss Orca {{version}} update",
+      "update": "Update"
     },
     "emptyState": {
       "openDesktopTitle": "Open Orca desktop",
       "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
       "scanCodeTitle": "Scan the code",
-      "scanCodeDescription": "Tap the button above to open the scanner. Point at the QR code on your screen.",
       "connectedTitle": "You're connected",
       "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
       "title": "Connect your desktop",
       "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
-      "pairDesktop": "Pair Desktop",
-      "stepsHeading": "How it works"
+      "pairDesktopButton": "Pair desktop",
+      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
     },
     "listFooter": {
-      "resumeHeading": "Resume",
-      "tasksHeading": "Tasks",
       "hostPickerTitle": "Open Tasks On"
     },
     "listHeader": {
-      "daysHours": "{{days}}d {{hours}}h",
-      "hoursMinutes": "{{hours}}h {{minutes}}m",
-      "minutes": "{{minutes}}m",
-      "title": "Welcome back",
-      "agentsSpawned": "Agents spawned",
-      "agentTime": "Agent time",
-      "prsCreated": "PRs created",
       "desktopsHeading": "Desktops"
     },
     "screen": {
@@ -521,10 +505,18 @@
       "removeHostTitle": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
     },
-    "tasksCard": {
-      "title": "Tasks",
-      "noSources": "No task sources connected",
-      "openProviderTasks": "Open {{provider}} tasks"
+    "bottomBar": {
+      "connectFirst": "Connect a desktop to start new work.",
+      "tasks": "Tasks",
+      "newWorkspace": "New workspace"
+    },
+    "desktops": {
+      "pairDesktop": "Pair a desktop"
+    },
+    "jumpBackIn": {
+      "heading": "Jump back in",
+      "lastOpened": "Last opened",
+      "connectToOpen": "Connect {{desktop}} to open"
     }
   },
   "hooks": {
@@ -1029,11 +1021,6 @@
       "contextLine": "Context line",
       "addNoteOnLine": "Add note on line {{number}}",
       "editNoteOnLine": "Edit note on line {{number}}"
-    },
-    "homeQuickActions": {
-      "title": "Quick Actions",
-      "pairDesktop": "Pair Desktop",
-      "newWorkspace": "New Workspace"
     },
     "hostCard": {
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",

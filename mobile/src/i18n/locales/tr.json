@@ -768,11 +768,6 @@
       "moveUp": "Yukarı taşı",
       "reorderHint": "Sürüklemeden yeniden sıralamak için yukarı taşı ve aşağı taşı eylemlerini kullanın"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Yeni Çalışma Alanı",
-      "pairDesktop": "Masaüstünü Eşleştir",
-      "title": "Hızlı İşlemler"
-    },
     "hostCard": {
       "hostActions": "{{title}} için işlemler",
       "openHost": "Aç: {{title}}",
@@ -1306,17 +1301,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Hesap kullanımı",
-      "sessionWindow": "5 sa",
-      "systemDefault": "Sistem varsayılanı",
-      "weeklyWindow": "7g"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Orca {{version}} güncellemesini gizle",
       "title": "Orca {{version}} sürümü mevcut",
-      "updateAccessibilityLabel": "Orca {{version}} sürümü mevcut, güncellemek için dokunun",
-      "updateHint": "Güncellemek için dokunun"
+      "updateAccessibilityLabel": "Orca {{version}} sürümü mevcut, güncellemek için dokunun"
     },
     "emptyState": {
       "connectedDescription": "Masaüstünüz burada görünecek. Her şey uçtan uca şifrelenir.",
@@ -1324,26 +1312,14 @@
       "description": "Ajanlarınızı takip etmek, istediğiniz terminale erişmek ve işlerinizi telefonunuzdan yönetmek için bilgisayarınızdaki Orca ile eşleştirin.",
       "openDesktopDescription": "Ayarlar → Mobil bölümüne gidin ve eşleştirme için bir QR kodu oluşturun.",
       "openDesktopTitle": "Orca masaüstü uygulamasını açın",
-      "pairDesktop": "Masaüstünü Eşleştir",
-      "scanCodeDescription": "Tarayıcıyı açmak için yukarıdaki düğmeye dokunun. Kamerayı ekranınızdaki QR koduna doğrultun.",
       "scanCodeTitle": "Kodu tarayın",
-      "stepsHeading": "Nasıl çalışır",
       "title": "Masaüstünüzü bağlayın"
     },
     "listFooter": {
-      "hostPickerTitle": "Görevlerin Açılacağı Sunucu",
-      "resumeHeading": "Devam et",
-      "tasksHeading": "Görevler"
+      "hostPickerTitle": "Görevlerin Açılacağı Sunucu"
     },
     "listHeader": {
-      "agentTime": "Ajan süresi",
-      "agentsSpawned": "Başlatılan ajanlar",
-      "daysHours": "{{days}} g {{hours}} sa",
-      "desktopsHeading": "Masaüstleri",
-      "hoursMinutes": "{{hours}} sa {{minutes}} dk",
-      "minutes": "{{minutes}} dk",
-      "prsCreated": "Oluşturulan PR'lar",
-      "title": "Tekrar hoş geldiniz"
+      "desktopsHeading": "Masaüstleri"
     },
     "screen": {
       "pairingCheckFailed": "Eşleştirme kontrol edilemedi",
@@ -1351,11 +1327,6 @@
       "removeHostMessage": "“{{name}}” kaldırılsın mı? Daha sonra yeniden eşleştirebilirsiniz.",
       "removeHostTitle": "Sunucuyu Kaldır",
       "tryAgain": "Lütfen tekrar deneyin."
-    },
-    "tasksCard": {
-      "noSources": "Bağlı görev kaynağı yok",
-      "openProviderTasks": "{{provider}} görevlerini aç",
-      "title": "Görevler"
     }
   },
   "hooks": {

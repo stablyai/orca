@@ -1,3 +1,6 @@
+import type { AgentWorkingMode } from '../../../src/shared/agent-status-types'
+import type { WorktreeStatus } from '../../../src/shared/worktree-status-rollup'
+
 export type HomeWorktreeSummary = {
   worktreeId: string
   repo: string
@@ -10,13 +13,22 @@ export type HomeWorktreeSummary = {
   isArchived?: boolean
   isActive?: boolean
   lastOutputAt?: number
+  sidebarStatus?: string
+  workingMode?: AgentWorkingMode
 }
+
+/** A workspace whose agents Home surfaces under "Jump back in", with the list's dot status. */
+export type HomeAttentionWorktree = Pick<
+  HomeWorktreeSummary,
+  'worktreeId' | 'repo' | 'branch' | 'displayName' | 'lastOutputAt' | 'workingMode'
+> & { dotStatus: WorktreeStatus }
 
 export type HostWorktreeInfo = {
   hostId: string
   totalWorktrees: number
   activeCount: number
   lastActiveWorktree: HomeWorktreeSummary | null
+  attention?: HomeAttentionWorktree[]
   catalogUnavailable?: boolean
   // The counts are the last proven ones, kept across a failed refresh.
   staleCounts?: boolean

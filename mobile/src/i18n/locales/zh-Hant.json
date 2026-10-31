@@ -764,11 +764,6 @@
       "moveUp": "上移",
       "reorderHint": "使用「上移」和「下移」動作即可調整順序，無須拖曳"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新工作區",
-      "pairDesktop": "配對電腦",
-      "title": "快速操作"
-    },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
       "openHost": "開啟 {{title}}",
@@ -1302,17 +1297,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "帳戶用量",
-      "sessionWindow": "5 小時",
-      "systemDefault": "系統預設",
-      "weeklyWindow": "7 天"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "關閉 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已推出",
-      "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新",
-      "updateHint": "點一下即可更新"
+      "updateAccessibilityLabel": "Orca {{version}} 已推出，點一下即可更新"
     },
     "emptyState": {
       "connectedDescription": "您的電腦會顯示在這裡。所有資料皆採端對端加密。",
@@ -1320,26 +1308,14 @@
       "description": "與電腦上的 Orca 配對，即可用手機查看代理程式狀態、開啟任何終端機，並推進工作。",
       "openDesktopDescription": "前往「設定」→「行動版」，產生配對用的 QR Code。",
       "openDesktopTitle": "開啟 Orca 桌面版",
-      "pairDesktop": "配對電腦",
-      "scanCodeDescription": "點一下上方按鈕開啟掃描器，對準電腦螢幕上的 QR Code。",
       "scanCodeTitle": "掃描 QR Code",
-      "stepsHeading": "使用方式",
       "title": "連線至您的電腦"
     },
     "listFooter": {
-      "hostPickerTitle": "選擇開啟任務的主機",
-      "resumeHeading": "繼續",
-      "tasksHeading": "任務"
+      "hostPickerTitle": "選擇開啟任務的主機"
     },
     "listHeader": {
-      "agentTime": "代理程式時間",
-      "agentsSpawned": "已啟動代理程式",
-      "daysHours": "{{days}} 天 {{hours}} 小時",
-      "desktopsHeading": "電腦",
-      "hoursMinutes": "{{hours}} 小時 {{minutes}} 分鐘",
-      "minutes": "{{minutes}} 分鐘",
-      "prsCreated": "已建立 PR",
-      "title": "歡迎回來"
+      "desktopsHeading": "電腦"
     },
     "screen": {
       "pairingCheckFailed": "無法檢查配對狀態",
@@ -1347,11 +1323,6 @@
       "removeHostMessage": "要移除「{{name}}」嗎？之後可重新配對。",
       "removeHostTitle": "移除主機",
       "tryAgain": "請再試一次。"
-    },
-    "tasksCard": {
-      "noSources": "尚未連結任務來源",
-      "openProviderTasks": "開啟 {{provider}} 任務",
-      "title": "任務"
     }
   },
   "hooks": {
