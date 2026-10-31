@@ -43,6 +43,7 @@ import {
 } from '../wsl/wsl-orcad-host-account-push'
 import { wslOrcadHostSupports } from '../wsl/wsl-orcad-host-environments'
 import { wslHostConnectOptions } from '../wsl/wsl-host-connect-request'
+import { wireWslNodeRuntimePrefetch } from '../wsl/wsl-node-runtime-prefetch'
 
 export const WSL_HOST_HANDLER_CHANNELS = [
   'wslHosts:listDistros',
@@ -194,6 +195,9 @@ function startService(args: WslHostHandlerArgs): WslHostService | null {
     return null
   }
   setWslHostService(created)
+  if (process.platform === 'win32' && !readFakeWslHostsConfig() && created.hasServerFiles()) {
+    wireWslNodeRuntimePrefetch({ store: args.store, userDataPath: args.getUserDataPath() })
+  }
   args.store.onSettingsChanged((updates, settings) => {
     if (changesWslHostAccounts(updates)) {
       for (const status of created.getStatuses()) {

@@ -46,6 +46,7 @@ import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
 } from './codex-structured-prompt-ownership'
+import { renameCodexProviderSession } from './codex-provider-session-rename'
 
 export type {
   CodexStructuredLaunch,
@@ -90,6 +91,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
 
   readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
 
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
+    input
+  ) =>
+    renameCodexProviderSession({
+      ...input,
+      session: this.sessions.get(input.record.sessionId),
+      invocation: this.deps.renameInvocation
+    })
+
   permissionModeRequiresAcquisition = (): boolean => false
 
   acquire = (input: StructuredAgentSessionAcquireInput): Promise<AgentSessionAcquisition> =>
@@ -101,9 +111,21 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
       notificationRetries: this.notificationRetries,
       deliver: (acquisition, sessionId, event, retainedBytes) =>
         this.deliver(acquisition, sessionId, event, retainedBytes),
-      handleServerRequest: (sessionId, request) => this.handleServerRequest(sessionId, request),
+      handleServerRequest: (sessionId, request) =>
+        void deliverCodexServerRequest(
+          sessionId,
+          this.sessions.get(sessionId),
+          request,
+          (session, event) => this.emit(session, event)
+        ),
       handleUnhandledFrame: (sessionId, kind, payload) =>
-        this.handleUnhandledFrame(sessionId, kind, payload),
+        void deliverCodexUnhandledFrame(
+          sessionId,
+          this.sessions.get(sessionId),
+          kind,
+          payload,
+          (session, event) => this.emit(session, event)
+        ),
       forceCloseUnexpected: (sessionId, fence, acquisitionGeneration, reason) =>
         this.teardown.forceCloseUnexpected(sessionId, fence, acquisitionGeneration, reason)
     })
@@ -163,25 +185,6 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     settleCodexRequestEndWaiters(session)
     this.deps.onEvent?.(event)
     return admission
-  }
-
-  private handleServerRequest(
-    sessionId: string,
-    request: Parameters<typeof deliverCodexServerRequest>[2]
-  ): void {
-    deliverCodexServerRequest(sessionId, this.sessions.get(sessionId), request, (session, event) =>
-      this.emit(session, event)
-    )
-  }
-
-  private handleUnhandledFrame(sessionId: string, kind: string, params: unknown): void {
-    deliverCodexUnhandledFrame(
-      sessionId,
-      this.sessions.get(sessionId),
-      kind,
-      params,
-      (session, event) => this.emit(session, event)
-    )
   }
 
   /** Test-only compatibility roster; host decisions use durable child records. */
@@ -324,8 +327,7 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (...args) =>
     this.teardown.close(...args)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
-  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = (...args) =>
-    this.teardown.close(...args)
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = this.closeSession
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)

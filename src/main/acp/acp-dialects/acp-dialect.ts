@@ -106,7 +106,11 @@ export type AcpDialect = {
     params: unknown
   ): { sessionId: string; promptId: string; stopReason: string } | undefined
   contextWindow?(models: unknown): number | undefined
-  modelEfforts?(model: ModelInfo): { efforts: AgentSessionOptionChoice[]; defaultEffort?: string }
+  modelEfforts?(model: ModelInfo): {
+    efforts: AgentSessionOptionChoice[]
+    defaultEffort?: string
+    declaredDefaultEffort?: string | null
+  }
   /** Native thinking choices remain valid across models; the agent clamps unsupported levels. */
   clampsUnlistedEffort?: true
   /** Claimed permission requests are never auto-approved. */

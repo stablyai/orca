@@ -65,7 +65,9 @@ export function installWebPreloadApi(): void {
   window.api = withFallback(createWebPreloadApi(), []) as PreloadApi
 }
 
-function createWebPreloadApi(): Partial<PreloadApi> {
+function createWebPreloadApi(): Omit<Partial<PreloadApi>, 'settings'> & {
+  settings: Partial<PreloadApi['settings']>
+} {
   return {
     ...createWebAppApi(),
     ...createWebStarNagApi(),

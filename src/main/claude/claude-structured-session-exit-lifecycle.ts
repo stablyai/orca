@@ -29,6 +29,31 @@ export type ClaudeExitLifecycle = {
   emit: (session: ClaudeSession, event: ClaudeStructuredSessionEvent) => void
 }
 
+export function requireLiveClaudeSession(
+  lifecycle: Pick<ClaudeExitLifecycle, 'sessions' | 'exits' | 'settledExitErrors'>,
+  sessionId: string
+): ClaudeSession {
+  const session = lifecycle.sessions.get(sessionId)
+  if (!session) {
+    // A child that just exited is named by its own diagnostic, not by its absence.
+    throw (
+      lifecycle.exits.get(sessionId)?.error ??
+      lifecycle.settledExitErrors.get(sessionId) ??
+      new Error(`no live claude stream-json session for ${sessionId}`)
+    )
+  }
+  return session
+}
+
+export function heldClaudeSessionSends(
+  lifecycle: Pick<ClaudeExitLifecycle, 'sessions' | 'exits' | 'settledExitErrors'>,
+  sessionId: string
+): ReadonlySet<string> | undefined {
+  const session = lifecycle.sessions.get(sessionId) ?? lifecycle.exits.get(sessionId)?.session
+  const held = session && claudeHeldSends(session)
+  return held ?? (lifecycle.settledExitErrors.has(sessionId) ? new Set() : undefined)
+}
+
 export function observeClaudeSessionExit(
   lifecycle: ClaudeExitLifecycle,
   sessionId: string,
