@@ -18,6 +18,8 @@ import type { RuntimeManagedWorktreeCreateArgs } from './runtime-managed-worktre
 import type { RemoteFetchResult, RemoteTrackingBase } from './runtime-remote-fetch-controller'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { hasLocalWorktreeBaseRef } from '../git/worktree-base-ref-probe'
+import type { LocalBaseRefDriftWarning } from '../../shared/worktree/base-ref-drift-types'
+import { getLocalBaseRefDriftWarningForWorktreeCreate } from '../git/worktree-base-drift-warning'
 import { resolveRuntimeLocalWorktreeCreateCandidate } from './runtime-local-worktree-create-candidate'
 import {
   createRuntimeLocalGitWorktree,
@@ -92,6 +94,7 @@ async function performRuntimeLocalWorktreeCreate<T>(
   const pathSettings = getWorktreePathSettings(repo, settings, getWorktreeMirrorDistro(store, repo))
   const gitExecOptions = getLocalProjectGitExecOptions(store, repo)
   const worktreeGitOptions = getLocalProjectWorktreeGitOptions(store, repo)
+  let localBaseRefDriftWarning: LocalBaseRefDriftWarning | undefined
   args.timing.recordExecutionHost(localWorktreeCreateExecutionHost(gitExecOptions))
   // Resolve ask setup before Git work; checking after add formerly orphaned refused worktrees.
   if (getEffectiveHooks(repo)?.scripts.setup) {
@@ -129,6 +132,14 @@ async function performRuntimeLocalWorktreeCreate<T>(
         return true
       }
       return hasLocalWorktreeBaseRef(repo.path, candidate, worktreeGitOptions)
+    },
+    onPersistedBaseSelected: async (candidate, defaultBaseRef) => {
+      localBaseRefDriftWarning = await getLocalBaseRefDriftWarningForWorktreeCreate(
+        repo.path,
+        candidate,
+        defaultBaseRef,
+        worktreeGitOptions
+      )
     }
   })
   const [username, baseBranch] = await Promise.all([usernamePromise, baseBranchPromise])
@@ -222,6 +233,7 @@ async function performRuntimeLocalWorktreeCreate<T>(
       worktreePath: candidate.worktreePath,
       created: git.created,
       addResult: git.addResult,
+      localBaseRefDriftWarning,
       ...(base.baseFallback ? { baseFallback: base.baseFallback } : {})
     }
   } finally {

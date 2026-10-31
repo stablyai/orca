@@ -8,6 +8,7 @@ import { resolveWorktreeAddBaseRef } from '../../shared/worktree/base-ref'
 type GitExecOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  timeout?: number
 }
 
 /** Return the probe's commit OID so callers need not resolve it again. */
