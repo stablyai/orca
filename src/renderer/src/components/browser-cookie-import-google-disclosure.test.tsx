@@ -116,6 +116,34 @@ describe('cookie-import Google disclosure footer', () => {
     expect(label?.querySelector('svg')).not.toBeNull()
     expect(label?.previousElementSibling?.tagName).toBe('HR')
   })
+
+  it('keeps clearing default cookies available after import metadata is removed', () => {
+    act(() =>
+      root.render(
+        <BrowserProfileRow
+          profile={{
+            id: 'default',
+            label: 'Default',
+            partition: 'persist:default',
+            scope: 'default',
+            source: null
+          }}
+          detectedBrowsers={DETECTED_BROWSERS}
+          importState={null}
+          isActive
+          isDefault
+          onSelect={vi.fn()}
+        />
+      )
+    )
+
+    const clearButton = container.querySelector<HTMLButtonElement>(
+      '[data-testid="clear-default-cookies-button"]'
+    )
+    expect(clearButton).not.toBeNull()
+    expect(clearButton?.disabled).toBe(false)
+    expect(clearButton?.getAttribute('aria-label')).toBe('Clear default cookies')
+  })
 })
 
 function dropdownMenuStubs(): Record<string, unknown> {
