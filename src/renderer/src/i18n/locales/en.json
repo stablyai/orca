@@ -649,7 +649,7 @@
         "inheritFont": "Same as IDE font",
         "fontPreviewLabel": "Chat font preview",
         "fontPreview": "The quick brown fox jumps over the lazy dog.",
-        "title": "Chat",
+        "title": "Chat UI",
         "textSize": "Text size",
         "textSizeDescription": "Messages, tool activity and the message box. {{increase}} / {{decrease}} in a chat change this too.",
         "codeTextSize": "Code text size",

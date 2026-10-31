@@ -40,7 +40,7 @@ export function ChatSettingsSection({
   isMounted: boolean
 }): React.JSX.Element {
   const query = useAppStore((state) => state.settingsSearchQuery)
-  const title = translate('settings.appearance.chat.title', 'Chat')
+  const title = translate('settings.appearance.chat.title', 'Chat UI')
   const appearanceTitle = translate('auto.components.settings.Settings.2b4474780a', 'Appearance')
   const showAllBehavior = matchesSettingsSearch(query, [
     { title },

@@ -601,7 +601,7 @@
         "inheritFont": "IDE yazı tipiyle aynı",
         "fontPreviewLabel": "Sohbet yazı tipi önizlemesi",
         "fontPreview": "Pijamalı hasta yağız şoföre çabucak güvendi.",
-        "title": "Sohbet",
+        "title": "Sohbet arayüzü",
         "textSize": "Metin boyutu",
         "textSizeDescription": "Mesajlar, araç etkinlikleri ve mesaj kutusu. Sohbet içindeki {{increase}} / {{decrease}} kısayolları da bu ayarı değiştirir.",
         "codeTextSize": "Kod metni boyutu",
