@@ -51,7 +51,7 @@ export function continueUnreadWorkerMail(
 // The Task only points at the mail, which the follow-up's mailbox holds however much there is.
 const FOLLOW_UP_TASK = {
   subject: 'New messages',
-  body: 'You have new orchestration messages. Run the orchestration `check` command shown above until it returns none, then continue.'
+  body: 'You have new orchestration messages. Read them with the `check` command above, then continue.'
 }
 
 async function continueUnreadMail(

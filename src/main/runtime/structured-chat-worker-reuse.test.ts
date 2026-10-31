@@ -374,7 +374,7 @@ describe('a send to a finished structured worker', () => {
     await vi.waitFor(() => expect(worker.turns).toHaveLength(2), WAIT)
     await settleTurn(identity.sessionId, 1)
 
-    expect(turnText(worker.turns[1]!)).toContain('until it returns none')
+    expect(turnText(worker.turns[1]!)).toContain('`check` command above')
     await vi.waitFor(
       () => expect(db.getUnreadMessages(`dispatch:${firstDispatchId}`)).toHaveLength(0),
       WAIT

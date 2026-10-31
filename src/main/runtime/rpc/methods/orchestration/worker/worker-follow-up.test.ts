@@ -140,7 +140,7 @@ describe('a follow-up to a finished terminal worker', () => {
 
     await vi.waitFor(() => expect(getFollowUpDispatch(h.db, dispatchId)).toBeDefined())
     const followUp = getFollowUpDispatch(h.db, dispatchId)!
-    expect(h.db.getTask(followUp.task_id)?.spec).toContain('until it returns none')
+    expect(h.db.getTask(followUp.task_id)?.spec).toContain('`check` command above')
     await vi.waitFor(() =>
       expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
     )
@@ -171,6 +171,9 @@ describe('a follow-up to a finished terminal worker', () => {
     )
     const followUp = getFollowUpDispatch(h.db, dispatchId)!
     expect(h.db.getTask(followUp.task_id)?.spec).not.toContain(large)
+    expect(
+      JSON.stringify(vi.mocked(h.runtime.sendTerminalAgentPrompt).mock.calls.at(-1))
+    ).toContain('Messages for this task are waiting')
     // Its start prompt is the wake, so no pointer types over the turn it starts.
     expect(h.db.getUndeliveredUnreadMessages(`dispatch:${followUp.id}`)).toHaveLength(0)
     expect(
