@@ -390,7 +390,7 @@ it('uses the resolved observed PR owner for omitted and explicit pending family 
   )
   const start = (
     intent: Parameters<typeof beginTaskPageGitHubWorkItemMutation>[0]['intent'],
-    override = observation
+    override?: typeof observation
   ) =>
     beginTaskPageGitHubWorkItemMutation({
       item: base,
