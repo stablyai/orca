@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { Store } from '../../persistence'
+import { getDefaultSettings } from '../../../shared/constants'
 import type { GitRepoRegistrationInfo } from '../../git/repo-detection'
 import { inspectGitRepoForRegistrationAsync } from '../../git/repo'
 import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
@@ -43,12 +44,13 @@ const icons = await vi.importActual<typeof RepoIcons>('../../repo-icon-autodetec
 
 function createStore(repos: Repo[]): Store {
   const store = {
+    getSettings: () => getDefaultSettings(tmpdir()),
     getRepos: () => repos,
     addRepo: (repo: Repo) => {
       repos.push(repo)
     }
   }
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: addLocalRepoFromPath only calls getRepos/addRepo.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: registration and its Git-refusal diagnostic use getRepos/addRepo/getSettings; root preparation is mocked.
   return store as unknown as Store
 }
 
