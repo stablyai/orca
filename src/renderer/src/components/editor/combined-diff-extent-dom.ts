@@ -1,4 +1,4 @@
-import type { Virtualizer } from '@tanstack/react-virtual'
+import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
 import { CombinedDiffExtent } from './combined-diff-extent'
 import { getCombinedDiffFocusOwner } from './combined-diff-overflow'
 import { COMBINED_DIFF_ROW_SELECTOR } from './combined-diff-viewport'
@@ -48,9 +48,24 @@ export function getCombinedDiffExtent(viewport: HTMLElement): CombinedDiffExtent
   return owner.extent
 }
 
+const identities = new WeakMap<
+  Virtualizer<HTMLDivElement, Element>,
+  {
+    sections: readonly { key: string }[]
+    source?: readonly VirtualItem[]
+    logical?: readonly VirtualItem[]
+  }
+>()
+
 export function publishCombinedDiffMeasurements(
-  instance: Virtualizer<HTMLDivElement, Element>
+  instance: Virtualizer<HTMLDivElement, Element>,
+  sections?: readonly { key: string }[]
 ): void {
+  let identity = identities.get(instance)
+  if (sections && identity?.sections !== sections) {
+    identity = { sections }
+    identities.set(instance, identity)
+  }
   instance.shouldAdjustScrollPositionOnItemSizeChange = () => false
   const viewport = instance.scrollElement
   if (!viewport) {
@@ -61,8 +76,17 @@ export function publishCombinedDiffMeasurements(
   const prefix = prefixHeight(viewport)
   instance.getTotalSize()
   const measured = instance.measurementsCache
-  const focused = row && viewport.contains(row) ? measured[Number(row.dataset.index)] : undefined
-  getCombinedDiffExtent(viewport).publish(measured, focused?.key, prefix)
+  if (identity && identity.source !== measured) {
+    identity.source = measured
+    const sections = identity.sections
+    identity.logical = measured.map((item) => ({
+      ...item,
+      key: sections[item.index]?.key ?? item.key
+    }))
+  }
+  const logical = identity?.logical ?? measured
+  const focused = row && viewport.contains(row) ? logical[Number(row.dataset.index)] : undefined
+  getCombinedDiffExtent(viewport).publish(logical, focused?.key, prefix)
 }
 
 export function scrollCombinedDiffTo(viewport: HTMLElement, target: number): boolean {
@@ -109,6 +133,6 @@ export function connectCombinedDiffExtent(
     events.forEach((event) => viewport.removeEventListener(event, input, true))
     viewport.removeEventListener('scroll', scroll)
     viewport.style.overflowAnchor = overflowAnchor
-    owners.delete(viewport)
+    owners.get(viewport)?.setMark(undefined)
   }
 }

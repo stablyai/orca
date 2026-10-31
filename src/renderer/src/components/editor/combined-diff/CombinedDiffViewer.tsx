@@ -1,3 +1,4 @@
+import { getCombinedDiffExtent } from '../combined-diff-extent-dom'
 import React, { useCallback, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
 import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
@@ -20,7 +21,6 @@ import { useCombinedDiffSectionRevalidation } from './load-sections/use-combined
 import { useCombinedDiffViewPersist } from './remember-view/use-combined-diff-view-persist'
 import { useCombinedDiffViewRestore } from './remember-view/use-combined-diff-view-restore'
 import { buildCombinedDiffViewTabSuccession } from './remember-view/combined-diff-view-tab-scope'
-import { useCombinedDiffDirectScrollInput } from './scroll-viewport/use-combined-diff-direct-scroll-input'
 import { useCombinedDiffScrollAnchors } from './scroll-viewport/use-combined-diff-scroll-anchors'
 import { useCombinedDiffScrollPersistence } from './scroll-viewport/use-combined-diff-scroll-persistence'
 import { useCombinedDiffScrollbar } from './scroll-viewport/use-combined-diff-scrollbar'
@@ -72,8 +72,6 @@ export default function CombinedDiffViewer({
   const [sections, setSections] = useState<DiffSection[]>([])
   const [sectionHeights, setSectionHeights] = useState<Record<number, number>>({})
   const [generation, setGeneration] = useState(0)
-  // Why: a browser scroll clamp must re-pin the restore without being recorded as user intent.
-  const [clampRestoreCount, setClampRestoreCount] = useState(0)
   const [programmaticScrollMarks] = useState(createProgrammaticScrollMarks)
   const scrollContainerRef = useRef<HTMLDivElement>(null)
 
@@ -127,13 +125,18 @@ export default function CombinedDiffViewer({
     setSections
   })
 
-  // Share one incremental scan across virtualizer keys, restore signals and toolbar collapse state.
+  // Share one incremental scan across virtualizer keys and toolbar collapse state.
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({
     entrySignature: entrySet.entrySignature,
     sections
   })
-  const { hasDirectScrollInput, markDirectScrollInput } = useCombinedDiffDirectScrollInput()
+  const markDirectScrollInput = useCallback(() => {
+    const container = scrollContainerRef.current
+    if (container) {
+      getCombinedDiffExtent(container).input()
+    }
+  }, [])
   const { cleanupActiveScrollbarDrag, handleScrollbarPointerDown, scrollThumb, updateScrollbar } =
     useCombinedDiffScrollbar({ markDirectScrollInput, scrollContainerRef })
   const virtualizer = useCombinedDiffVirtualizer({
@@ -148,20 +151,10 @@ export default function CombinedDiffViewer({
     sideBySide: preferences.sideBySide
   })
   const anchors = useCombinedDiffScrollAnchors({
-    clampRestoreCount,
-    generation,
-    hasDirectScrollInput,
-    latestDomScrollAnchorRef: restore.latestDomScrollAnchorRef,
-    programmaticScrollMarks,
+    restorationKey: restore.restorationKey,
     scrollAnchorRef: restore.scrollAnchorRef,
     scrollContainerRef,
     scrollOffsetRef: restore.scrollOffsetRef,
-    sectionIndexByKey,
-    sections,
-    sectionsRef: registry.sectionsRef,
-    sideBySide: preferences.sideBySide,
-    structureRevision: sectionRowKeys.structureRevision,
-    totalSize: virtualizer.getTotalSize(),
     memoryLeaseRef: restore.memoryLeaseRef,
     virtualizer
   })
@@ -170,11 +163,6 @@ export default function CombinedDiffViewer({
     (index: number) => {
       const section = registry.sectionsRef.current[index]
       const shouldLoadAfterExpand = section?.collapsed ?? false
-      const anchor = restore.scrollAnchorRef.current
-      if (section && !section.collapsed && anchor?.key === section.key) {
-        // The offset points into the body being removed; restore would land on later sections.
-        anchor.offset = 0
-      }
       setSections((prev) =>
         prev.map((s, i) => (i === index ? { ...s, collapsed: !s.collapsed } : s))
       )
@@ -182,7 +170,7 @@ export default function CombinedDiffViewer({
         registry.loadSchedulerRef.current.request(index)
       }
     },
-    [registry.loadSchedulerRef, registry.sectionsRef, restore.scrollAnchorRef]
+    [registry.loadSchedulerRef, registry.sectionsRef]
   )
 
   const treeNavigation = useCombinedDiffTreeNavigation({
@@ -234,23 +222,7 @@ export default function CombinedDiffViewer({
     sideBySide: preferences.sideBySide,
     viewStateKey
   })
-  useCombinedDiffScrollPersistence({
-    anchors,
-    entrySignature: entrySet.entrySignature,
-    hasDirectScrollInput,
-    latestDomScrollAnchorRef: restore.latestDomScrollAnchorRef,
-    memoryLeaseRef: restore.memoryLeaseRef,
-    programmaticScrollMarks,
-    scrollAnchorRef: restore.scrollAnchorRef,
-    scrollContainerRef,
-    scrollOffsetRef: restore.scrollOffsetRef,
-    sectionCount: sections.length,
-    sectionHeights,
-    sections,
-    setClampRestoreCount,
-    updateScrollbar,
-    viewStateKey
-  })
+  useCombinedDiffScrollPersistence({ anchors, scrollContainerRef, updateScrollbar })
 
   const openAlternateDiff = useCallback(() => {
     if (!file.combinedAlternate) {

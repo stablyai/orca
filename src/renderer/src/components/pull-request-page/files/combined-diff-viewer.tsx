@@ -209,7 +209,7 @@ export function PRFilesCombinedDiffViewer({
   const rangeExtractor = useCombinedDiffFocusRange(scrollContainerRef)
   const virtualizer = useVirtualizer({
     rangeExtractor,
-    onChange: publishCombinedDiffMeasurements,
+    onChange: (instance) => publishCombinedDiffMeasurements(instance, sections),
     scrollToFn: (offset, options, instance) => {
       publishCombinedDiffMeasurements(instance)
       if (instance.scrollElement) {
@@ -234,7 +234,7 @@ export function PRFilesCombinedDiffViewer({
     }
   })
 
-  useCombinedDiffExtent(scrollContainerRef, virtualizer)
+  useCombinedDiffExtent(scrollContainerRef, virtualizer, undefined, sections)
 
   useLayoutEffect(() => {
     virtualizer.measure()

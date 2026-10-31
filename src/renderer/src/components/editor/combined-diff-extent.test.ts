@@ -167,7 +167,7 @@ it('uses real virtualizer staged measurements with a lagging DOM range and no in
       return () => {}
     },
     scrollToFn: vi.fn(),
-    onChange: publishCombinedDiffMeasurements
+    onChange: (instance) => publishCombinedDiffMeasurements(instance)
   })
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false
   const unmount = virtualizer._didMount()
@@ -254,5 +254,99 @@ it('does not rescan retained file extents on ordinary scroll at N and 10N files'
       f.owner.publish(layout, undefined, prefix + 20)
       expect(f.position()).toBe(920 + prefix)
     }
+  }
+})
+
+it('imports only at context boundaries, waits for initial items, and cancels on input or navigation', () => {
+  const f = fixture([])
+  f.owner.importView({ scrollTop: 1547, anchor: { key: 'clip-a', offset: 30 } })
+  expect(f.owner.exportView().scrollTop).toBe(1547)
+  f.owner.publish(items([2190, 20000], ['clip-0', 'clip-a']))
+  expect(f.position()).toBe(2220)
+  f.owner.publish(items([2390, 20000], ['clip-0', 'clip-a']))
+  expect(f.position()).toBe(2420)
+  f.owner.importView({ scrollTop: 30000 })
+  expect(f.position()).toBe(30000)
+  f.input(100)
+  f.owner.publish(items([40000, 20000], ['clip-0', 'clip-a']))
+  expect(f.position()).toBe(100)
+  f.owner.importView({ scrollTop: 90000 })
+  f.owner.navigate(200)
+  f.owner.publish(items([100000, 20000], ['clip-0', 'clip-a']))
+  expect(f.position()).toBe(200)
+})
+
+it('keeps anchored collapse/reload and maps removal to the next surviving item', () => {
+  const f = fixture([1000, 2000, 3000], 1200)
+  const saved = f.owner.capture(1, 200)
+  if (!saved) {
+    throw new Error('Missing saved item')
+  }
+  f.owner.restore(saved)
+  f.owner.publish(items([1200, 2000, 3000]))
+  expect(f.position()).toBe(1400)
+  f.owner.publish(items([1200, 30, 3000]))
+  expect(f.position()).toBe(1230)
+  f.owner.publish(items([1200, 2200, 3000]))
+  expect(f.position()).toBe(1400)
+  f.owner.publish(items([1200, 3000], ['0', '2']))
+  expect(f.position()).toBe(1200)
+})
+
+it.each([547, 1147, 1747])(
+  'preserves a visible following item across settled growth from %i',
+  (start) => {
+    const f = fixture([start + 643, 20000], start)
+    const saved = f.owner.capture(1, 30)
+    if (!saved) {
+      throw new Error('Missing saved pane')
+    }
+    f.owner.navigate(11794)
+    f.owner.restore(saved)
+    f.owner.publish(items([start + 843, 20000]))
+    expect(f.position()).toBe(start + 200)
+    expect(f.owner.capture(1, 30)?.gap).toBe(673)
+  }
+)
+
+it('exports the active following-file anchor through the existing offset format for a new context', () => {
+  const f = fixture([2190, 20000], 1547)
+  const saved = f.owner.capture(1, 30)
+  if (!saved) {
+    throw new Error('Missing following file')
+  }
+  f.owner.restore(saved)
+  const state = f.owner.exportView()
+  expect(state.anchor).toMatchObject({ key: '1', offset: -643 })
+  const restored = fixture([])
+  restored.owner.importView(state)
+  restored.owner.publish(items([2190, 20000]))
+  expect(restored.position()).toBe(1547)
+  restored.owner.publish(items([2390, 20000]))
+  expect(restored.position()).toBe(1747)
+})
+
+it('exports scroll persistence without scanning all retained file keys at N and 10N', () => {
+  for (const count of [100, 1000]) {
+    const f = fixture(Array.from({ length: count }, () => 1000))
+    let reads = 0
+    for (let index = 0; index < count; index += 1) {
+      const item = f.owner.item(index)
+      if (!item) {
+        throw new Error('Missing retained item')
+      }
+      const key = item.key
+      Object.defineProperty(item, 'key', {
+        get: () => {
+          reads += 1
+          return key
+        }
+      })
+    }
+    for (let index = 0; index < 10; index += 1) {
+      f.input(index * 100)
+      expect(f.owner.exportView().scrollTop).toBe(index * 100)
+    }
+    expect(reads).toBeLessThanOrEqual(20)
   }
 })

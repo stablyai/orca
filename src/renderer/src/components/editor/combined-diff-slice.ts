@@ -221,10 +221,6 @@ export function installCombinedDiffSlice(
       }),
       pane.onDidChangeModel(() => {
         cancelPending()
-        const item = owner.item(index())
-        if (item) {
-          owner.invalidate(item.key)
-        }
       }),
       pane.onDidContentSizeChange(geometryChanged),
       pane.onDidChangeHiddenAreas(geometryChanged),
@@ -272,10 +268,6 @@ export function installCombinedDiffSlice(
   )
   forward()
   return () => {
-    const item = owner.item(index())
-    if (item) {
-      owner.invalidate(item.key)
-    }
     disposed = true
     cancelPending()
     cancelAnimationFrame(frame)

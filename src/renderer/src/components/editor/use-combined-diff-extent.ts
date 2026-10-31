@@ -8,7 +8,8 @@ import {
 export function useCombinedDiffExtent(
   viewport: RefObject<HTMLDivElement | null>,
   virtualizer: Virtualizer<HTMLDivElement, Element>,
-  mark?: (offset: number) => void
+  mark?: (offset: number) => void,
+  sections?: readonly { key: string }[]
 ): void {
   // Install before measurements can ask the virtualizer to compensate a size change.
   virtualizer.shouldAdjustScrollPositionOnItemSizeChange = () => false
@@ -19,6 +20,6 @@ export function useCombinedDiffExtent(
       : undefined
   }, [mark, viewport, virtualizer])
   useLayoutEffect(() => {
-    publishCombinedDiffMeasurements(virtualizer)
+    publishCombinedDiffMeasurements(virtualizer, sections)
   })
 }

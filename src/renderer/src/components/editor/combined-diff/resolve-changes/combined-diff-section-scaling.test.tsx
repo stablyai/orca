@@ -4,7 +4,6 @@ import type React from 'react'
 import { renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import type { Virtualizer } from '@tanstack/react-virtual'
-import { createProgrammaticScrollMarks } from '@/hooks/programmatic-scroll-marks'
 import type { VirtualizedScrollAnchor } from '@/hooks/useVirtualizedScrollAnchor'
 import type { DiffSection } from '../../diff-section-types'
 import { useCombinedDiffScrollAnchors } from '../scroll-viewport/use-combined-diff-scroll-anchors'
@@ -55,12 +54,9 @@ const FAKE_VIRTUALIZER = {
 } as unknown as Virtualizer<HTMLDivElement, Element>
 
 // Keep dependency identities stable, matching the viewer.
-const NO_DIRECT_SCROLL_INPUT = (): boolean => false
 const NOOP = vi.fn()
-const PROGRAMMATIC_SCROLL_MARKS = createProgrammaticScrollMarks()
 const SCROLL_CONTAINER_REF = { current: null } as React.RefObject<HTMLDivElement | null>
 const SCROLL_ANCHOR_REF = { current: null } as React.RefObject<VirtualizedScrollAnchor>
-const LATEST_DOM_SCROLL_ANCHOR_REF = { current: null } as React.RefObject<VirtualizedScrollAnchor>
 const SCROLL_OFFSET_REF = { current: 0 } as React.RefObject<number>
 
 function useCombinedDiffSectionPasses({
@@ -78,20 +74,10 @@ function useCombinedDiffSectionPasses({
   const sectionRowKeys = useCombinedDiffSectionRowKeys({ generation: 1, sections })
   const sectionIndexByKey = useCombinedDiffSectionIndexMap({ entrySignature: 'sig', sections })
   const anchors = useCombinedDiffScrollAnchors({
-    clampRestoreCount: 0,
-    generation: 1,
-    hasDirectScrollInput: NO_DIRECT_SCROLL_INPUT,
-    latestDomScrollAnchorRef: LATEST_DOM_SCROLL_ANCHOR_REF,
-    programmaticScrollMarks: PROGRAMMATIC_SCROLL_MARKS,
+    restorationKey: 'view',
     scrollAnchorRef: SCROLL_ANCHOR_REF,
     scrollContainerRef: SCROLL_CONTAINER_REF,
     scrollOffsetRef: SCROLL_OFFSET_REF,
-    sectionIndexByKey,
-    sections,
-    sectionsRef,
-    sideBySide: false,
-    structureRevision: sectionRowKeys.structureRevision,
-    totalSize: 0,
     memoryLeaseRef: { current: null },
     virtualizer: FAKE_VIRTUALIZER
   })

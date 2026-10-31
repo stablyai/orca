@@ -45,7 +45,7 @@ export function useCombinedDiffVirtualizer({
   )
   const virtualizer = useVirtualizer({
     count: sections.length,
-    onChange: publishCombinedDiffMeasurements,
+    onChange: (instance) => publishCombinedDiffMeasurements(instance, sections),
     getScrollElement: () => scrollContainerRef.current,
     estimateSize,
     // Retain visible heights while hidden rows measure zero so anchors survive reopening.
@@ -64,7 +64,7 @@ export function useCombinedDiffVirtualizer({
     getItemKey: (index) => rowKeys[index] ?? `${index}:${generation}`
   })
 
-  useCombinedDiffExtent(scrollContainerRef, virtualizer, programmaticScrollMarks.mark)
+  useCombinedDiffExtent(scrollContainerRef, virtualizer, programmaticScrollMarks.mark, sections)
 
   // Publish onscreen indices after commit so retry can read them without making render impure or depending on the virtualizer.
   const virtualItems = virtualizer.getVirtualItems()

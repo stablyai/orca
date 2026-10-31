@@ -1,4 +1,4 @@
-import { scrollCombinedDiffTo } from '@/components/editor/combined-diff-extent-dom'
+import { getCombinedDiffExtent } from '@/components/editor/combined-diff-extent-dom'
 import { useEffect, useLayoutEffect, type MutableRefObject, type RefObject } from 'react'
 import { setWithLRU } from '@/lib/scroll-cache'
 import type { DiffSection } from '@/components/editor/diff-section-types'
@@ -70,12 +70,15 @@ export function usePRFilesDiffViewPersistence(args: {
       if (args.pendingRestoreScrollTopRef.current !== null) {
         return
       }
-      writeCachedScrollPosition(container.scrollTop)
+      writeCachedScrollPosition(getCombinedDiffExtent(container).exportView().scrollTop)
     }
 
     const cacheScrollPositionOnTeardown = (): void => {
       // Why: tearing down mid-restore must persist the pending target, not the clamped intermediate.
-      writeCachedScrollPosition(args.pendingRestoreScrollTopRef.current ?? container.scrollTop)
+      writeCachedScrollPosition(
+        args.pendingRestoreScrollTopRef.current ??
+          getCombinedDiffExtent(container).exportView().scrollTop
+      )
     }
 
     container.addEventListener('scroll', cacheScrollPositionOnScroll, { passive: true })
@@ -101,8 +104,8 @@ export function usePRFilesDiffViewPersistence(args: {
       return
     }
 
-    scrollCombinedDiffTo(container, targetScrollTop)
-    setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, container.scrollTop)
+    getCombinedDiffExtent(container).importView({ scrollTop: targetScrollTop })
+    setWithLRU(prFilesDiffScrollTopCache, args.viewStateKey, targetScrollTop)
     args.pendingRestoreScrollTopRef.current = null
   }, [
     args.entriesLength,

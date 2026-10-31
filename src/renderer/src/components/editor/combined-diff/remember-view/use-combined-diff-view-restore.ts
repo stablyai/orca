@@ -29,7 +29,7 @@ import {
 
 export type CombinedDiffViewRestore = {
   invalidateViewStateCache: () => void
-  latestDomScrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
+  restorationKey: string
   memoryLeaseRef: React.RefObject<CombinedDiffViewLease | null>
   scrollAnchorRef: React.RefObject<VirtualizedScrollAnchor>
   scrollOffsetRef: React.RefObject<number>
@@ -102,7 +102,6 @@ export function useCombinedDiffViewRestore({
   })
   const scrollOffsetRef = useRef(restoreSeed.offset)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
-  const latestDomScrollAnchorRef = useRef<VirtualizedScrollAnchor>(restoreSeed.anchor)
 
   // Create the lease before viewer persist/scroll effects can write.
   const memoryLeaseRef = useRef<CombinedDiffViewLease | null>(null)
@@ -152,6 +151,11 @@ export function useCombinedDiffViewRestore({
       sourceKey,
       entrySet
     }
+    const restoringContext =
+      !initializedEntryState ||
+      initializedEntryState.viewStateKey !== viewStateKey ||
+      initializedEntryState.ownerKey !== ownerKey ||
+      initializedEntryState.sourceKey !== sourceKey
     let requiresFreshSections =
       initializedEntryState?.viewStateKey === viewStateKey &&
       (initializedEntryState.ownerKey !== ownerKey || initializedEntryState.sourceKey !== sourceKey)
@@ -183,6 +187,10 @@ export function useCombinedDiffViewRestore({
     }
     deferredLoadRequestsRef.current.clear()
     const memory = readCombinedDiffViewMemory(viewStateKey)
+    if (restoringContext) {
+      scrollOffsetRef.current = memory?.scrollTop ?? 0
+      scrollAnchorRef.current = memory?.scrollAnchor ?? null
+    }
     const cached = requiresFreshSections ? undefined : memory?.view
     const canRestoreSnapshotSectionsByKey =
       hasUncommittedEntriesSnapshot &&
@@ -219,15 +227,9 @@ export function useCombinedDiffViewRestore({
         })
       )
       loadingIndicesRef.current.clear()
-      scrollOffsetRef.current = memory?.scrollTop ?? 0
-      scrollAnchorRef.current = memory?.scrollAnchor ?? null
-      latestDomScrollAnchorRef.current = scrollAnchorRef.current
       return
     }
 
-    scrollOffsetRef.current = memory?.scrollTop ?? 0
-    scrollAnchorRef.current = memory?.scrollAnchor ?? null
-    latestDomScrollAnchorRef.current = scrollAnchorRef.current
     // Count evidence belongs to each independent pass; all mode must not treat compare success as proof uncommitted rows were counted.
     const countedPasses = collectCountedCombinedDiffPasses(entries)
     setSections(
@@ -302,7 +304,7 @@ export function useCombinedDiffViewRestore({
 
   return {
     invalidateViewStateCache,
-    latestDomScrollAnchorRef,
+    restorationKey: JSON.stringify([viewStateKey, ownerKey, sourceKey]),
     memoryLeaseRef,
     scrollAnchorRef,
     scrollOffsetRef

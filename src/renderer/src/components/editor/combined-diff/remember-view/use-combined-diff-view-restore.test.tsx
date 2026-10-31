@@ -226,3 +226,55 @@ describe('useCombinedDiffViewRestore deferral', () => {
     expect(sections.map((section) => section.loadOnDemand)).toEqual([false, false])
   })
 })
+
+it('imports saved scroll refs on a view switch, not an entry structure refresh', () => {
+  const first = claimCombinedDiffView('boundary-one', 'wt-1')
+  const second = claimCombinedDiffView('boundary-two', 'wt-1')
+  rememberCombinedDiffView(first, {
+    scrollTop: 1547,
+    scrollAnchor: { key: 'clip-0', offset: 1547 }
+  })
+  rememberCombinedDiffView(second, { scrollTop: 400, scrollAnchor: { key: 'clip-b', offset: 20 } })
+  const build = (added: number) =>
+    buildAllModeEntrySet([{ path: 'clip-0', status: 'modified', area: 'unstaged', added }], [])
+  const hook = renderHook(
+    ({ entrySet, viewStateKey }) => {
+      const registry = useCombinedDiffSectionLoadRegistry([])
+      return useCombinedDiffViewRestore({
+        entrySet,
+        viewStateKey,
+        registry,
+        file: {
+          id: 'diff',
+          worktreeId: 'wt-1',
+          filePath: '/repo',
+          relativePath: '',
+          language: 'plaintext',
+          isDirty: false,
+          mode: 'diff',
+          diffSource: 'combined-all'
+        },
+        gitStatusEntries: [],
+        setGeneration: () => {},
+        setSectionHeights: () => {},
+        setSections: () => {},
+        setSideBySide: () => {}
+      })
+    },
+    { initialProps: { entrySet: build(1), viewStateKey: 'boundary-one' } }
+  )
+  hook.result.current.scrollOffsetRef.current = 1747
+  hook.result.current.scrollAnchorRef.current = { key: 'clip-a', offset: -643 }
+  const key = hook.result.current.restorationKey
+  hook.rerender({ entrySet: build(11), viewStateKey: 'boundary-one' })
+  expect(hook.result.current.scrollOffsetRef.current).toBe(1747)
+  expect(hook.result.current.scrollAnchorRef.current).toEqual({ key: 'clip-a', offset: -643 })
+  expect(hook.result.current.restorationKey).toBe(key)
+  hook.rerender({ entrySet: build(11), viewStateKey: 'boundary-two' })
+  expect(hook.result.current.scrollOffsetRef.current).toBe(400)
+  expect(hook.result.current.restorationKey).not.toBe(key)
+  hook.unmount()
+  releaseCombinedDiffView(first)
+  releaseCombinedDiffView(second)
+  clearCombinedDiffViewMemory()
+})
