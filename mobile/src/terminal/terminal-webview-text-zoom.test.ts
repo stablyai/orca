@@ -90,7 +90,6 @@ describe('TerminalWebView text zoom', () => {
     expect(androidFontFamily.startsWith('"SF Mono", "Menlo"')).toBe(true)
     const iosFontFamily = resolveTerminalFontFamily(IOS_IPHONE_NAVIGATOR)
     expect(iosFontFamily.endsWith(', monospace')).toBe(true)
-    // iOS draws ⏴⏵⏶⏷ from system fonts; Android needs the bundled face after the shared chain.
     const tailFrom = (family: string) => family.slice(family.indexOf('"Menlo"'))
     expect(tailFrom(androidFontFamily)).toBe(`${tailFrom(iosFontFamily)}, "Orca Terminal Symbols"`)
   })

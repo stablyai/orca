@@ -37,7 +37,7 @@ function ensureDocumentStyle() {
   const prefix = `.${HOST_CLASS}`
   const engine = scopeStyleToHost(XTERM_ENGINE_CSS, prefix)
   const elements = scopeStyleToHost(TERMINAL_DOCUMENT_ELEMENT_STYLE, prefix)
-  style.textContent = `${terminalNerdFontCss(terminalNerdFontUrl)}${TERMINAL_SYMBOLS_FONT_CSS}\n${engine}\n${elements}\n${hostFrameStyle(prefix)}`
+  style.textContent = `${terminalNerdFontCss(terminalNerdFontUrl)}\n${TERMINAL_SYMBOLS_FONT_CSS}\n${engine}\n${elements}\n${hostFrameStyle(prefix)}`
   document.head.appendChild(style)
 }
 
