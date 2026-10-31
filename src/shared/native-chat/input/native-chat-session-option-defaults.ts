@@ -1,3 +1,5 @@
+import { resolveAgentChoiceLayers } from '../../agent-choice-layers'
+import { isTuiAgent } from '../../tui-agent-config'
 import type { AgentType } from '../../agent-status-types'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -117,13 +119,32 @@ export function resolveStructuredLaunchSeedOptions(
 /** A new chat's seed: the saved selection plus the permission default narrowed to the agent. */
 export function structuredLaunchSeedOptions(
   settings:
-    | (Pick<GlobalSettings, 'nativeChatSessionOptions' | 'nativeChatPermissionMode'> &
+    | (Pick<
+        GlobalSettings,
+        'nativeChatSessionOptions' | 'nativeChatPermissionMode' | 'agentLaunchChoices'
+      > &
         NewChatPermissionSettings)
     | null
     | undefined,
   agent: AgentType
 ): Record<string, string> | undefined {
-  const selection = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
+  const remembered = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
+  const choices = isTuiAgent(agent)
+    ? resolveAgentChoiceLayers({
+        agent,
+        argumentOwner: 'defaults',
+        defaults: settings?.agentLaunchChoices?.[agent],
+        remembered: {
+          model: remembered?.model,
+          options: Object.fromEntries(
+            Object.entries(remembered ?? {}).filter(([key]) => key !== 'model')
+          )
+        }
+      })
+    : undefined
+  const selection = choices
+    ? parseStructuredLaunchSeedOptions({ ...choices.options, model: choices.model })
+    : remembered
   const permissionMode = newChatPermissionModeForSettings(agent, settings)
   return permissionMode
     ? { ...selection, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }

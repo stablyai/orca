@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
@@ -7,25 +8,41 @@ import type { FederationEffect } from './federation-effects'
 import { FederationAttachStartParams } from './federation-start-schema'
 
 function fakes(created: { startupTerminal?: { handle: string } } = {}) {
+  const terminalCreation: RuntimeTerminalCreate = {
+    handle: created.startupTerminal?.handle ?? 'term_worker',
+    ptyId: 'pty-worker',
+    incarnationId: 'inc-worker',
+    isReattach: true,
+    agentSessionDisposition: 'adopted',
+    worktreeId: 'repo::remote-wt',
+    title: null
+  }
   const stages: string[] = []
   const runtime = {
-    createManagedWorktree: vi.fn(async () => ({
-      worktree: { id: 'repo::remote-wt', repoId: 'repo' },
-      setupReceipt: {
-        hookFound: true,
-        startupPolicy: 'wait-for-setup',
-        state: 'running',
-        terminalHandle: 'term_setup'
-      },
-      ...created
-    })),
+    createManagedWorktree: vi.fn(
+      async (args: { onStartupTerminalCreated?: (terminal: RuntimeTerminalCreate) => void }) => {
+        if (created.startupTerminal) {
+          args.onStartupTerminalCreated?.(terminalCreation)
+        }
+        return {
+          worktree: { id: 'repo::remote-wt', repoId: 'repo' },
+          setupReceipt: {
+            hookFound: true,
+            startupPolicy: 'wait-for-setup',
+            state: 'running',
+            terminalHandle: 'term_setup'
+          },
+          ...created
+        }
+      }
+    ),
     listTerminals: vi.fn(async () => ({
       terminals: [
         { handle: 'term_setup', title: 'setup', tabId: 'tab_s', leafId: 'leaf_s' },
         { handle: 'term_agent', title: 'claude', tabId: 'tab_a', leafId: 'leaf_a' }
       ]
     })),
-    createTerminal: vi.fn(async () => ({ handle: 'term_worker' })),
+    createTerminal: vi.fn(async () => terminalCreation),
     // Chat default on: federation still starts a terminal and never asks about a session.
     getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
     getStructuredAgentSessionCreateSupport: vi.fn(async () => ({ supported: true }))
@@ -35,7 +52,7 @@ function fakes(created: { startupTerminal?: { handle: string } } = {}) {
       stages.push(row.stage)
     })
   }
-  return { runtime, db, stages }
+  return { runtime, db, stages, terminalCreation }
 }
 
 const PARAMS = FederationAttachStartParams.parse({
@@ -78,9 +95,11 @@ describe('a federated worker through the launch executor', () => {
 
     await expect(run.done).resolves.toEqual({
       worktree: { id: 'repo::remote-wt', repoId: 'repo' },
-      terminalHandle: 'term_agent'
+      terminalHandle: 'term_agent',
+      terminalCreation: f.terminalCreation
     })
     expect(f.runtime.createManagedWorktree).toHaveBeenCalledWith({
+      onStartupTerminalCreated: expect.any(Function),
       repoSelector: 'repo',
       name: 'remote-wt',
       baseBranch: undefined,
@@ -159,7 +178,8 @@ describe('a federated worker through the launch executor', () => {
 
     await expect(run.done).resolves.toEqual({
       worktree: { id: 'folder:remote' },
-      terminalHandle: 'term_worker'
+      terminalHandle: 'term_worker',
+      terminalCreation: f.terminalCreation
     })
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:folder:remote', {
       startupAgent: 'claude',

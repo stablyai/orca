@@ -118,6 +118,10 @@ function adoptPairedHostSeed(
   state: StructuredLaunchState,
   seedOptions: StructuredLaunchState['selection']['seed']
 ): void {
+  // The support answer is a fresh seed; continuation baseline belongs to actual host create.
+  if (state.intent.params.resumeFrom) {
+    seedOptions = undefined
+  }
   const { seedPending, ...selection } = state.selection
   if (!seedPending && JSON.stringify(seedOptions) === JSON.stringify(state.intent.seedOptions)) {
     return

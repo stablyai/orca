@@ -294,6 +294,7 @@ export abstract class DaemonPtySessionSpawn extends DaemonPtySpawnResult {
     const exitedResult: PtySpawnResult = {
       id: sessionId,
       exitedBeforeSpawnReply: true,
+      ...(matchingExit.cause ? { exitCause: matchingExit.cause } : {}),
       ...(result.incarnationId ? { incarnationId: result.incarnationId } : {}),
       ...(result.agentSessionEnsure ? { agentSessionEnsure: result.agentSessionEnsure } : {}),
       ...(!result.isNew ? { isReattach: true } : {})

@@ -43,7 +43,7 @@ export function orchestrationSenderName(
   const federated = party.address.startsWith('dispatch:')
   const terminal =
     !federated && party.terminalHandle ? sources.terminal(party.terminalHandle) : null
-  const chat = party.orcaSessionId ? chatNaming(party.orcaSessionId, sources) : null
+  const chat = party.orcaSessionId ? structuredChatNaming(party.orcaSessionId, sources) : null
   const terminalName = terminal?.tab
     ? getAgentRowConversationName(
         terminal.tab,
@@ -63,9 +63,9 @@ export function orchestrationSenderName(
 }
 
 /** A chat's own name (the person's rename, else its saved name) and the label its tab falls back to. */
-function chatNaming(
+export function structuredChatNaming(
   sessionId: string,
-  sources: SenderNamingSources
+  sources: Pick<SenderNamingSources, 'records' | 'chatTab'>
 ): { ownName: string | null; fallback: string } | null {
   const record = sources.records ? lineageLiveSession(sources.records, sessionId) : null
   if (!record) {

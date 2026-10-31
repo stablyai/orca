@@ -2,6 +2,7 @@ import {
   StyleSheet,
   themedStyleSheet,
   colors,
+  radii,
   spacing,
   typography
 } from './mobile-tasks-dependencies'
@@ -60,12 +61,12 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   },
   actionGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   detailGroup: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     padding: spacing.md,
     marginBottom: spacing.md,
     gap: spacing.md
@@ -111,7 +112,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },
@@ -131,7 +132,7 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   issueTypeDot: {
     width: 7,
     height: 7,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   detailSection: {
     gap: spacing.xs

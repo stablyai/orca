@@ -86,4 +86,40 @@ describe('createIpcPtyTransport: input kind', () => {
       ['pty-1', 'startup', 'launch']
     ])
   })
+  it('observes driving attempts synchronously before rejection/ACK without recounting seeds or flush', async () => {
+    const { createIpcPtyTransport } = await import('./pty-transport')
+    const { PTY_PRECONNECT_INPUT_MAX_CODE_UNITS } = await import('./pty-preconnect-input-buffer')
+    const retained = vi.fn()
+    const observed = vi.fn(() => expect(retained).not.toHaveBeenCalled())
+    const transport = createIpcPtyTransport({
+      bufferInputUntilConnect: true,
+      preconnectInput: [{ data: 'seed', kind: 'ordinary', inputKind: 'driving' }],
+      onPreconnectInput: retained,
+      onDrivingInputAttempt: observed
+    })
+    expect(observed).not.toHaveBeenCalled()
+    expect(
+      transport.sendInput('x'.repeat(PTY_PRECONNECT_INPUT_MAX_CODE_UNITS + 1), 'driving')
+    ).toBe(false)
+    expect(observed).toHaveBeenCalledWith(null)
+    expect(retained).not.toHaveBeenCalled()
+    const accepted = transport.sendInputAccepted?.('typed', 'driving')
+    expect(observed).toHaveBeenCalledTimes(2)
+    transport.sendInputImmediate('reply')
+    transport.sendInput('launch', 'launch')
+    transport.sendInput('reply', 'query-reply')
+    await transport.connect({ url: '', callbacks: {} })
+    expect(await accepted).toBe(true)
+    expect(observed).toHaveBeenCalledTimes(2)
+    observed.mockImplementation(() => {})
+    const ack = createDeferred<boolean>()
+    vi.mocked(window.api.pty.writeAccepted).mockReturnValue(ack.promise)
+    const liveAccepted = transport.sendInputAccepted?.('live', 'driving')
+    expect(observed).toHaveBeenLastCalledWith('pty-1')
+    ack.resolve(true)
+    expect(await liveAccepted).toBe(true)
+    transport.destroy?.()
+    transport.sendInput('after disposal', 'driving')
+    expect(observed).toHaveBeenCalledTimes(3)
+  })
 })

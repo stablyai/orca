@@ -35,7 +35,7 @@ export const prConflictStyles = themedStyleSheet(() => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
@@ -58,7 +58,7 @@ export const prConflictStyles = themedStyleSheet(() => ({
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
+    borderRadius: radii.surface,
     marginTop: spacing.sm,
     padding: spacing.sm
   },
@@ -79,7 +79,7 @@ export const prConflictStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     paddingVertical: spacing.xs
   },
