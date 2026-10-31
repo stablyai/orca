@@ -474,67 +474,6 @@ describe('occurrence admission', () => {
     }
   })
 
-  it('bounds actual gateway query and provider work at N and10N queued occurrences', async () => {
-    const samples: { count: number; queries: number; providers: number }[] = []
-    for (const count of [10, 100]) {
-      const f = await setup()
-      await f.store.finish(f.first)
-      await f.store.finish(f.second)
-      let queries = 0
-      let admissions = 0
-      const store = new DurablePushStore(
-        {
-          ...f.db,
-          query: (sql, params) => {
-            queries++
-            return f.db.query(sql, params)
-          },
-          transaction: (run) =>
-            f.db.transaction((tx) =>
-              run({
-                ...tx,
-                query: (sql, params) => {
-                  queries++
-                  if (sql.startsWith('INSERT INTO push_batch_admissions')) {
-                    admissions++
-                  }
-                  return tx.query(sql, params)
-                }
-              })
-            )
-        },
-        f.clock
-      )
-      for (let i = 0; i < count; i++) {
-        await store.accept(A, f.a.registrationId, {
-          ...f.alert,
-          notificationSeq: i + 2,
-          occurrence: String(i).padStart(43, 'o')
-        })
-      }
-      const transport = vi.fn(async (_request: ApnsRequest) => ({ status: 200, body: '' }))
-      const worker = new DurablePushWorker(
-        store,
-        new PushDispatcher({ devices: f.devices, apns: provider(f.clock, transport) }),
-        { now: f.clock }
-      )
-      try {
-        // A device's ordered head allows25 deliveries per drain; each call is the production timer wake.
-        for (let wake = 0; wake < Math.ceil(count / 25); wake++) {
-          await worker.runDue()
-        }
-        samples.push({ count, queries, providers: transport.mock.calls.length })
-        expect(transport).toHaveBeenCalledTimes(count)
-        expect(admissions).toBe(count)
-        expect(await f.db.query('SELECT * FROM push_batch_admissions')).toEqual([])
-        expect(await store.pendingCount(f.a.registrationId)).toBe(0)
-      } finally {
-        await worker.stop()
-      }
-    }
-    expect(required(samples[1]).queries).toBeLessThanOrEqual(required(samples[0]).queries * 10)
-  })
-
   it('acknowledges lost declaration responses, orders versions, and rejects unproven declarations', async () => {
     const f = await setup()
     expect(await f.declare([B, A], 1)).toBe(true)

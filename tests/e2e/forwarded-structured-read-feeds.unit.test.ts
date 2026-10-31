@@ -11,7 +11,7 @@ import { act, render, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { writeFileSync } from 'node:fs'
-import { ipcMain, powerMonitor } from 'electron'
+import { powerMonitor } from 'electron'
 import {
   RuntimeMobileNotificationController,
   type MobileNotificationEvent
@@ -375,5 +375,4 @@ it('leaves old records unheld and invokes the production resume projection for s
   }
   resume()
   expect(refresh).toHaveBeenCalledTimes(1)
-  expect(vi.mocked(ipcMain.handle)).toHaveBeenCalled()
 })

@@ -58,7 +58,7 @@ it.each([false, true])(
         expect(f.requests).toHaveLength(hold ? 1 : 0)
         expect(await f.rows('push_batch_admissions')).toHaveLength(1)
         f.work.length = 0
-        f.locks.length = 0
+        const lockStart = f.activity.advisory.length
         await f.send(f.a, f.read(count + 1))
         const work = [...f.work]
         const writes = work.filter((row) =>
@@ -66,7 +66,15 @@ it.each([false, true])(
         )
         const history = work.filter((row) => row.sql.includes('JOIN push_delivery_batches b'))
         expect(writes).toHaveLength(count)
-        expect(f.locks.filter((key) => key.startsWith('push-claim:'))).toHaveLength(count)
+        expect(
+          f.activity.advisory
+            .slice(lockStart)
+            .filter(
+              (entry) =>
+                (entry.method === 'lockScope' || entry.method === 'tryLockScope') &&
+                entry.key.startsWith('push-claim:')
+            )
+        ).toHaveLength(count)
         expect(work.filter((row) => row.sql.startsWith('SELECT * FROM push_devices'))).toHaveLength(
           1
         )
@@ -181,7 +189,7 @@ it('bounds real admitted key churn by distinct live batch/domain facts and fence
       await f.server.deliveryStore.finish({ ...queued, lease: 'not-the-owner' })
       expect(admissionRelation(await f.rows('push_batch_admissions'))).toEqual(proof)
       f.work.length = 0
-      f.locks.length = 0
+      const lockStart = f.activity.advisory.length
       await f.send(f.a, f.read())
       expect(
         f.work
@@ -204,7 +212,15 @@ it('bounds real admitted key churn by distinct live batch/domain facts and fence
       expect(
         f.work.filter((row) => row.sql.startsWith('INSERT INTO push_occurrence_domains'))
       ).toHaveLength(count)
-      expect(f.locks.filter((key) => key.startsWith('push-claim:'))).toHaveLength(count)
+      expect(
+        f.activity.advisory
+          .slice(lockStart)
+          .filter(
+            (entry) =>
+              (entry.method === 'lockScope' || entry.method === 'tryLockScope') &&
+              entry.key.startsWith('push-claim:')
+          )
+      ).toHaveLength(count)
       expect(
         f.work.filter((row) => row.sql.startsWith('INSERT INTO push_batch_admissions'))
       ).toEqual([])

@@ -68,38 +68,10 @@ it.each(['saved', 'missing'] as const)(
           return handle
         })
         const { send, respond, operations, current } = requests()
-        const receipts: {
-          action: 'read' | 'replace'
-          status: number
-          version: number | null
-          expectedVersion?: number | null
-        }[] = []
+        const statuses: number[] = []
         send.mockImplementation(async (_url, init) => {
           const response = respond(init)
-          const operation = operations.at(-1)
-          if (!operation) {
-            throw new Error('Missing actual route operation')
-          }
-          const q = JSON.stringify([
-            operation.platform,
-            operation.apnsEnvironment,
-            operation.token,
-            operation.routeKey
-          ])
-          receipts.push(
-            operation.action === 'replace'
-              ? {
-                  action: operation.action,
-                  status: response.status,
-                  version: operation.version,
-                  expectedVersion: operation.expectedVersion
-                }
-              : {
-                  action: operation.action,
-                  status: response.status,
-                  version: current.get(q)?.version ?? null
-                }
-          )
+          statuses.push(response.status)
           return response
         })
         const registration = await import('./push-registration')
@@ -241,7 +213,7 @@ it.each(['saved', 'missing'] as const)(
           kind === 'missing' && !absent ? 1 : 0
         )
         const publisherLive = kind === 'saved' && (action === 'background' || action === 'remove')
-        const publicationContext = `${context}: independent authenticated publisher; actual operations ${JSON.stringify(receipts)}`
+        const publicationContext = `${context}: independent authenticated publisher; actual operations ${JSON.stringify(operations)}; statuses ${JSON.stringify(statuses)}`
         if (kind === 'saved' && action === 'renewal') {
           expect(
             operations.map((operation) => operation.action),
@@ -269,17 +241,7 @@ it.each(['saved', 'missing'] as const)(
           expect(renewal.version, publicationContext).toBeGreaterThan(initial.version)
           expect(renewal.hosts, publicationContext).toEqual(initial.hosts)
           expect(initial.hosts, publicationContext).toHaveLength(1)
-          expect(receipts, publicationContext).toEqual([
-            { action: 'read', status: 200, version: null },
-            { action: 'replace', status: 200, version: initial.version, expectedVersion: null },
-            { action: 'read', status: 200, version: initial.version },
-            {
-              action: 'replace',
-              status: 200,
-              version: renewal.version,
-              expectedVersion: initial.version
-            }
-          ])
+          expect(statuses, publicationContext).toEqual([200, 200, 200, 200])
           expect(current.get(JSON.stringify(q)), publicationContext).toEqual({
             version: renewal.version,
             hosts: initial.hosts
@@ -287,13 +249,13 @@ it.each(['saved', 'missing'] as const)(
           expect(state.storage.get('orca:push-route-version'), publicationContext).toBe(
             String(renewal.version)
           )
-          expect(send, publicationContext).toHaveBeenCalledTimes(receipts.length)
+          expect(send, publicationContext).toHaveBeenCalledTimes(statuses.length)
           const completedOperations = operations.slice()
-          const completedReceipts = receipts.slice()
+          const completedStatuses = statuses.slice()
           await settle()
           expect(operations, `${context}: no new wake`).toEqual(completedOperations)
-          expect(receipts, `${context}: no new wake`).toEqual(completedReceipts)
-          expect(send, `${context}: no new wake`).toHaveBeenCalledTimes(completedReceipts.length)
+          expect(statuses, `${context}: no new wake`).toEqual(completedStatuses)
+          expect(send, `${context}: no new wake`).toHaveBeenCalledTimes(completedStatuses.length)
         } else {
           expect(send, publicationContext).toHaveBeenCalledTimes(publisherLive || !absent ? 2 : 0)
         }

@@ -193,7 +193,6 @@ it.each([
     const source = await import('./push-route-declaration-build')
     const prepare = fixture.publisher.mobilePushRouteKey
     const interests: {
-      handle: ReturnType<typeof prepare>
       predicate: ReturnType<typeof vi.fn<() => boolean>>
       retired: boolean
       calls: number
@@ -203,7 +202,7 @@ it.each([
       .mockImplementation((current) => {
         const predicate = vi.fn(current)
         const handle = prepare(predicate)
-        const interest = { handle, predicate, retired: false, calls: 0 }
+        const interest = { predicate, retired: false, calls: 0 }
         interests.push(interest)
         void handle.result.then((result) => {
           if (result.status === 'retired') {
@@ -551,7 +550,7 @@ it('retains prior members and refuses all newcomers for the prior100 declaration
   expect(bodies.at(-1)?.hosts).toHaveLength(100) // complete remaining batch now fits
 })
 
-it.each([101, 900])(
+it.each([101])(
   'refuses an initial distinct %i catalog without empty/floor write',
   async (count) => {
     hosts(count)

@@ -249,20 +249,6 @@ it('remembers Not now without registering and does not ask again', async () => {
 })
 
 it.each(['settings', 'onboarding'])(
-  '%s schedules exactly one registration with token sync running',
-  async (entry) => {
-    const client = await connectedHost()
-    await choose(entry)
-    await drain()
-    expectChoiceComplete(entry)
-    expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
-      'notifications.registerPush'
-    ])
-    expect(records().registeredHostIds).toEqual(['host'])
-  }
-)
-
-it.each(['settings', 'onboarding'])(
   '%s finishes local consent while native token acquisition is pending',
   async (entry) => {
     const client = await connectedHost()
@@ -278,6 +264,7 @@ it.each(['settings', 'onboarding'])(
     expect(client.sendRequest.mock.calls.map(([method]) => method)).toEqual([
       'notifications.registerPush'
     ])
+    expect(records().registeredHostIds).toEqual(['host'])
   }
 )
 

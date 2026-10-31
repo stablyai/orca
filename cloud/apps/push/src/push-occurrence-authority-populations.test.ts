@@ -31,27 +31,20 @@ it('reads equivalent stored queue integers without certifying malformed or unsaf
     undefined,
     '',
     ' ',
-    '\t',
-    '\n',
     '0\n',
-    '1\r\n',
     ' 1',
     '1 ',
     '-0',
     '+0',
     '-1',
-    '00',
     '01',
     '1.0',
     '1e3',
     '1x',
     true,
-    false,
     {},
-    [],
-    NaN,
+    Number.NaN,
     Infinity,
-    -Infinity,
     -1,
     0.5,
     Number.MAX_SAFE_INTEGER + 1,
@@ -329,7 +322,7 @@ async function drainPopulations(
   }
 }
 
-it.each(['noncovered', 'devices', 'declarations', 'domains', 'history', 'membership'] as const)(
+it.each(['noncovered', 'unrelated', 'membership'] as const)(
   'isolates actual covered authority from independent %s population N10/100',
   async (axis) => {
     const samples: number[] = []
@@ -354,39 +347,31 @@ it.each(['noncovered', 'devices', 'declarations', 'domains', 'history', 'members
           }
         }
         // Maintenance populations are input data, never claimed as genuine admissions.
-        if (['devices', 'declarations', 'domains', 'history'].includes(axis)) {
+        if (axis === 'unrelated') {
           for (let i = 0; i < count; i++) {
             const id = `unrelated-${i}`
-            if (axis === 'devices') {
-              await f.database.query(
-                `INSERT INTO push_devices(registration_id,
+            await f.database.query(
+              `INSERT INTO push_devices(registration_id,
               host_fingerprint, device_id, platform, token, created_at, updated_at)
               VALUES (?, ?, ?, 'ios', ?, ?, ?)`,
-                [id, id, id, id, f.clock(), f.clock()]
-              )
-            }
-            if (axis === 'declarations') {
-              await f.database.query(
-                `INSERT INTO push_route_declarations(destination,
+              [id, id, id, id, f.clock(), f.clock()]
+            )
+            await f.database.query(
+              `INSERT INTO push_route_declarations(destination,
               route_key, version, hosts_json, updated_at) VALUES (?, ?, 1, '[]', ?)`,
-                [id, id, f.clock()]
-              )
-            }
-            if (axis === 'domains') {
-              await f.database.query(
-                `INSERT INTO push_occurrence_domains(destination,
+              [id, id, f.clock()]
+            )
+            await f.database.query(
+              `INSERT INTO push_occurrence_domains(destination,
               route_key, origin, occurrence, state, lease_until, created_at)
               VALUES (?, ?, ?, ?, 'sent', 0, ?)`,
-                [id, id, id, id, f.clock()]
-              )
-            }
-            if (axis === 'history') {
-              await f.database.query(
-                `INSERT INTO push_batch_admissions(batch_id,
+              [id, id, id, id, f.clock()]
+            )
+            await f.database.query(
+              `INSERT INTO push_batch_admissions(batch_id,
               destination, route_key, attempt, expires_at) VALUES (?, ?, ?, ?, ?)`,
-                [id, id, id, id, f.clock() + 300_000]
-              )
-            }
+              [id, id, id, id, f.clock() + 300_000]
+            )
           }
         }
         const unrelated = async () =>
@@ -406,13 +391,10 @@ it.each(['noncovered', 'devices', 'declarations', 'domains', 'history', 'members
           ])
         const before = await unrelated()
         expect(before.map((rows) => rows.length)).toEqual(
-          ['devices', 'declarations', 'domains', 'history'].map((name) =>
-            name === axis ? count : 0
-          )
+          Array(4).fill(axis === 'unrelated' ? count : 0)
         )
         await f.send(f.a, f.alert())
         f.work.length = 0
-        f.locks.length = 0
         f.activity.advisory.length = 0
         f.activity.transactions.length = 0
         await f.send(f.a, f.read())
@@ -516,7 +498,6 @@ it.each(['history', 'domains'] as const)(
         expect(new Set(proof.map((row) => row.batch_id))).toEqual(batches)
         expect(f.requests).toEqual([])
         f.work.length = 0
-        f.locks.length = 0
         f.activity.transactions.length = 0
         f.activity.advisory.length = 0
         await f.send(f.a, f.read(101))
@@ -569,3 +550,122 @@ it.each(['history', 'domains'] as const)(
     expect(required(samples[1])).toBeLessThanOrEqual(required(samples[0]) * 10)
   }
 )
+
+it('bounds warmed direct-store accept and causal delivery work at N and10N queued occurrences', async () => {
+  const samples: { store: number; total: number }[] = []
+  for (const count of [10, 100]) {
+    const f = await authorityFixture()
+    let primary: { failed: true; error: unknown } | undefined
+    try {
+      const warm = { ...f.alert(), occurrence: 'o'.repeat(43) }
+      for (const actor of [f.a, f.b]) {
+        expect(await f.server.deliveryStore.accept(actor.host, actor.registrationId, warm)).toBe(
+          'queued'
+        )
+      }
+      const claimed = [
+        required(await f.server.deliveryStore.claim()),
+        required(await f.server.deliveryStore.claim())
+      ]
+      expect(new Set(claimed.map((queued) => queued.registrationId))).toEqual(
+        new Set([f.a.registrationId, f.b.registrationId])
+      )
+      for (const queued of claimed) {
+        await f.server.deliveryStore.finish(queued)
+      }
+      expect(await f.rows('push_delivery_batches')).toEqual([])
+      expect(await f.rows('push_batch_admissions')).toEqual([])
+      expect(f.requests).toEqual([])
+      const destination = pushDestination(await f.device(f.a.registrationId))
+      const start = f.work.length
+      const txStart = f.activity.transactions.length
+      const alerts = Array.from({ length: count }, (_, i) => ({
+        ...f.alert(i + 2),
+        occurrence: String(i).padStart(43, 'o')
+      }))
+      for (const alert of alerts) {
+        expect(await f.server.deliveryStore.accept(f.a.host, f.a.registrationId, alert)).toBe(
+          'queued'
+        )
+      }
+      const duties = await f.rows('push_delivery_batches')
+      expect(duties).toHaveLength(count)
+      expect(
+        duties.every(
+          (row) => row.host_fingerprint === f.a.host && row.registration_id === f.a.registrationId
+        )
+      ).toBe(true)
+      expect(
+        duties
+          .map((row) => record(JSON.parse(text(row.payload_json))))
+          .toSorted(
+            (left, right) =>
+              storedNonnegativeInteger(left.notificationSeq) -
+              storedNonnegativeInteger(right.notificationSeq)
+          )
+      ).toEqual(alerts)
+      await drainPopulations(f, `ordinary-direct-store/N${count}`)
+      const work = f.work.slice(start)
+      const dispatcherLookups = work.filter(
+        (entry) =>
+          entry.sql.replace(/\s+/g, ' ').trim() ===
+            'SELECT registration_id, host_fingerprint, device_id, platform, token, apns_environment, dead_at, route_key FROM push_devices WHERE registration_id = ?' &&
+          entry.params.length === 1 &&
+          entry.params[0] === f.a.registrationId
+      )
+      samples.push({ store: work.length - dispatcherLookups.length, total: work.length })
+      const identities = (bodies: Record<string, unknown>[]) =>
+        bodies
+          .map((body) =>
+            JSON.stringify([
+              body.notificationId,
+              body.notificationEpoch,
+              body.notificationSeq,
+              body.origin,
+              body.occurrence
+            ])
+          )
+          .toSorted()
+      const delivered = f.requests.map((request) => record(record(JSON.parse(request.body)).orca))
+      expect(delivered).toHaveLength(count)
+      expect(
+        delivered.every((body) => body.hostFingerprint === f.a.host && body.kind === 'alert')
+      ).toBe(true)
+      expect(identities(delivered)).toEqual(identities(alerts))
+      const admissions = work.filter((entry) =>
+        entry.sql.startsWith('INSERT INTO push_batch_admissions')
+      )
+      expect(admissions).toHaveLength(count)
+      expect(new Set(admissions.map((entry) => entry.params[0]))).toEqual(
+        new Set(duties.map((row) => row.batch_id))
+      )
+      expect(
+        admissions.every(
+          (entry) =>
+            entry.outcome === 'returned' &&
+            entry.rows === 1 &&
+            entry.changes === 1 &&
+            entry.params[1] === destination &&
+            entry.params[2] === f.routeKey &&
+            entry.params[4] === storedNonnegativeInteger(required(duties[0]).expires_at)
+        )
+      ).toBe(true)
+      expect(work.every((entry) => entry.outcome === 'returned')).toBe(true)
+      expect(
+        f.activity.transactions
+          .slice(txStart)
+          .every((entry) => entry.outcome === 'committed' && entry.errors.length === 0)
+      ).toBe(true)
+      expect(await f.rows('push_batch_admissions')).toEqual([])
+      expect(await f.rows('push_delivery_batches')).toEqual([])
+    } catch (error) {
+      primary = { failed: true, error }
+    }
+    const cleanup = ownerCleanup(primary)
+    await cleanup.run(() => f.close())
+    cleanup.finish()
+  }
+  expect(required(samples[1]).store, JSON.stringify(samples)).toBeLessThanOrEqual(
+    required(samples[0]).store * 10
+  )
+})

@@ -29,7 +29,6 @@ export type AuthorityActivity = {
 export function observeAuthority(
   db: PushDatabase,
   work: AuthorityWork[],
-  locks: string[],
   activity: AuthorityActivity = { transactions: [], advisory: [] }
 ): PushDatabase {
   async function advisory<T>(method: string, key: string, run: () => Promise<T>): Promise<T> {
@@ -83,14 +82,8 @@ export function observeAuthority(
         throw error
       }
     },
-    lockScope: async (key) => {
-      locks.push(key)
-      await advisory('lockScope', key, () => db.lockScope(key))
-    },
-    tryLockScope: async (key) => {
-      locks.push(key)
-      return advisory('tryLockScope', key, () => db.tryLockScope(key))
-    },
+    lockScope: (key) => advisory('lockScope', key, () => db.lockScope(key)),
+    tryLockScope: (key) => advisory('tryLockScope', key, () => db.tryLockScope(key)),
     transaction: async (run) => {
       const entry: AuthorityActivity['transactions'][number] = {
         attempts: 0,
@@ -102,7 +95,7 @@ export function observeAuthority(
         const result = await db.transaction(async (tx) => {
           entry.attempts++
           try {
-            return await run(observeAuthority(tx, work, locks, activity))
+            return await run(observeAuthority(tx, work, activity))
           } catch (error) {
             entry.errors.push(error)
             throw error

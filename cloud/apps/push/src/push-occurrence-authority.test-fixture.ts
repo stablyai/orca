@@ -140,9 +140,8 @@ export async function authorityFixture(
 ) {
   const f = await fixture()
   const work: AuthorityWork[] = []
-  const locks: string[] = []
   const activity: AuthorityActivity = { transactions: [], advisory: [] }
-  const database = observeAuthority(options.database?.(f.db) ?? f.db, work, locks, activity)
+  const database = observeAuthority(options.database?.(f.db) ?? f.db, work, activity)
   const requests: ApnsRequest[] = []
   const server = createPushServer(testPushConfig(), database, {
     now: f.clock,
@@ -262,7 +261,6 @@ export async function authorityFixture(
       ...f,
       database,
       work,
-      locks,
       activity,
       server,
       a,
