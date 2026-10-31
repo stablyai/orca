@@ -60,13 +60,37 @@ async function continueUnreadMail(
       console.warn('[orchestration] unread mail did not become a follow-up', dispatchId, error)
       return undefined
     })
-    steerTo = outcome?.kind === 'steer' ? outcome.dispatchId : undefined
+    // Mail that arrived while it started still reaches a follow-up that started.
+    const started = outcome?.kind === 'started' && outcome.receipt.state === 'ready'
+    const startedId = started ? outcome.receipt.dispatchId : undefined
+    steerTo =
+      outcome?.kind === 'steer'
+        ? outcome.dispatchId
+        : typeof startedId === 'string'
+          ? startedId
+          : undefined
   }
   if (first && steerTo) {
-    db.routeDirectMessagePage(`dispatch:${steerTo}`, first.run_id, `dispatch:${dispatchId}`)
-    runtime.notifyMessageArrived(`dispatch:${steerTo}`, first.type)
+    moveUnreadMail(runtime, db, first.run_id, dispatchId, steerTo)
   }
   clearFollowUpMail(db, dispatchId)
+}
+
+/** Moved mail is delivered like any Dispatch mail: a wake for each type that arrived. */
+function moveUnreadMail(
+  runtime: OrcaRuntimeService,
+  db: OrchestrationDb,
+  runId: string,
+  from: string,
+  to: string
+): void {
+  let page
+  do {
+    page = db.routeUnreadDirectMessagesToDispatchMailbox(to, runId, `dispatch:${from}`)
+    for (const type of page.types) {
+      runtime.notifyMessageArrived(`dispatch:${to}`, type)
+    }
+  } while (page.hasMore)
 }
 
 /** At startup: continue what a restart interrupted between a report and its follow-up. */

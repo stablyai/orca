@@ -292,7 +292,9 @@ describe('a send to a finished structured worker', () => {
     expect(followUp).toMatchObject({
       delivery: 'follow_up',
       followUpOf: firstDispatchId,
-      worker: identity.handle,
+      effects: expect.arrayContaining([
+        expect.objectContaining({ role: 'agent', id: identity.handle })
+      ]),
       state: 'ready'
     })
     expect(turnText(worker.turns[0]!)).toContain('and the docs')
@@ -322,7 +324,7 @@ describe('a send to a finished structured worker', () => {
     expect(await sendTo(firstDispatchId, 'and the docs')).toMatchObject({
       delivery: 'follow_up',
       state: 'ready',
-      queued: true
+      turnStart: 'queued'
     })
     worker.handlers.onNotification?.('turn/completed', { turn: { id: 'turn-1' } })
     await host.flushStreamedEvents(identity.sessionId)

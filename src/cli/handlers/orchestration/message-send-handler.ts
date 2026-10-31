@@ -1,6 +1,8 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
 import { withReceiptNext } from './receipt-next-text'
+import { formatWorkerStart, type WorkerStartReceipt } from './worker-output'
+import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
 import { readInjectedAgentSessionId } from '../../../shared/agent-session-caller-env'
@@ -41,16 +43,12 @@ type OrchestrationSendResult = { next?: string } & (
       recipients: number
       warnings?: SendRecipientWarning[]
     }
-  | {
+  | (WorkerStartReceipt & {
       /** A finished worker took this message as its next Task (follow-up Dispatch). */
       delivery: 'follow_up' | 'reopened' | 'started_fresh'
       followUpOf: string
-      dispatchId: string
-      state: string
-      queued?: boolean
-      lastError?: string
       warnings?: SendRecipientWarning[]
-    }
+    })
   | {
       relay: {
         messageId: string
@@ -151,7 +149,14 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
         return withWarnings(`Sent ${value.message.id}${autoRelease}`)
       }
       if ('delivery' in value) {
-        return withWarnings(formatFollowUp(value))
+        return withWarnings(
+          `Follow-up of ${value.followUpOf} (${value.delivery})\n${formatWorkerStart({
+            ...value,
+            nextCommands: value.nextCommands?.map((command) =>
+              renderResolvedOrchestrationCommand(command)
+            )
+          })}`
+        )
       }
       if ('relay' in value) {
         if (value.relay.destination === 'worker') {
@@ -168,28 +173,4 @@ export const ORCHESTRATION_SEND_HANDLER: Record<string, CommandHandler> = {
       )
     })
   }
-}
-
-const FOLLOW_UP_LEADS = {
-  follow_up: 'Worker had finished',
-  reopened: 'Worker was closed: reopened it in its conversation',
-  started_fresh:
-    'Worker was closed and kept no conversation: started a fresh one with the earlier task and report'
-} as const
-
-function formatFollowUp(value: {
-  delivery: keyof typeof FOLLOW_UP_LEADS
-  dispatchId: string
-  state: string
-  queued?: boolean
-  lastError?: string
-}): string {
-  const line = `${FOLLOW_UP_LEADS[value.delivery]}; follow-up dispatch:${value.dispatchId}.`
-  if (value.state === 'ready') {
-    return value.queued ? `${line} It runs when the worker's current turn ends.` : line
-  }
-  const reason = value.lastError ?? 'unknown error'
-  return value.state === 'outcome_unknown'
-    ? `${line}\nIts start is not confirmed yet: ${reason}`
-    : `${line}\nIt did not start (${value.state}): ${reason}`
 }

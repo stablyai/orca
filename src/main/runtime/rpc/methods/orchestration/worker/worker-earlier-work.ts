@@ -22,28 +22,6 @@ const WorkerReport = z.looseObject({
   body: z.string().optional()
 })
 
-/** The worker-start receipt fields a follow-up's sender acts on. */
-const StartedWorker = z.looseObject({
-  runId: z.string().optional(),
-  taskId: z.string().optional(),
-  dispatchId: z.string().optional(),
-  state: z.string().optional(),
-  turnStart: z.string().optional(),
-  failedStage: z.string().optional(),
-  lastError: z.string().optional(),
-  recovery: z.string().optional(),
-  next: z.string().optional(),
-  effects: z
-    .array(
-      z.looseObject({
-        kind: z.string().optional(),
-        role: z.string().optional(),
-        id: z.string().optional()
-      })
-    )
-    .optional()
-})
-
 function parseJson(raw: string | null): unknown {
   try {
     return raw ? JSON.parse(raw) : null
@@ -85,31 +63,4 @@ export function earlierWork(db: OrchestrationDb, latest: DispatchContextRow): st
     lines.push(`Its report (${report.data.outcome ?? 'unknown'}): ${clip(text)}`)
   }
   return lines.join('\n')
-}
-
-/** Small flat fields an agent acts on; the full worker-start receipt stays behind worker-show. */
-export function followUpReceipt(
-  delivery: string,
-  followUpOf: string,
-  started: unknown
-): Record<string, unknown> {
-  const parsed = StartedWorker.safeParse(started)
-  const { effects, ...receipt } = parsed.success ? parsed.data : {}
-  const worker = effects?.find((effect) => effect.kind === 'terminal' && effect.role === 'agent')
-  const fields: Record<string, unknown> = {
-    delivery,
-    followUpOf,
-    runId: receipt.runId,
-    taskId: receipt.taskId,
-    dispatchId: receipt.dispatchId,
-    worker: worker?.id,
-    state: receipt.state,
-    // Behind the worker's own finishing turn: it runs when that turn ends.
-    queued: receipt.turnStart === 'queued' ? true : undefined,
-    failedStage: receipt.failedStage,
-    lastError: receipt.lastError,
-    recovery: receipt.recovery,
-    next: receipt.next
-  }
-  return Object.fromEntries(Object.entries(fields).filter(([, value]) => value !== undefined))
 }

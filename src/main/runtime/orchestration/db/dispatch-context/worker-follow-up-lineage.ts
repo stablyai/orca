@@ -1,5 +1,4 @@
 import {
-  agentProviderSessionsEqual,
   normalizeAgentProviderSession,
   type AgentProviderSessionMetadata
 } from '../../../../../shared/agent-session-resume'
@@ -109,13 +108,6 @@ export function recordWorkerResumeSession(
   const connectionId = isLocalHookConnectionId(session.connectionId)
     ? null
     : (session.connectionId ?? null)
-  const stored = readWorkerResumeSession(db.getWorkerTerminalResource(resourceId))
-  if (
-    stored?.captureHostId === getConnectionExecutionHostId(connectionId) &&
-    agentProviderSessionsEqual(session.agent, stored.providerSession, session.providerSession)
-  ) {
-    return
-  }
   db.db.prepare('UPDATE worker_terminal_resources SET resume_session = ? WHERE id = ?').run(
     JSON.stringify({
       agent: session.agent,

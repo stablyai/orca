@@ -13,7 +13,6 @@ import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker
 import type { RpcContext } from '../../../core'
 import { startWorker } from '../worker/workers'
 import { chooseWorkerFollowUpPlacement } from '../worker/worker-follow-up-choice'
-import { followUpReceipt } from './worker-follow-up-receipt'
 
 const ACTIVE_STATUSES: readonly string[] = ['pending', 'dispatched']
 
@@ -120,12 +119,18 @@ export async function startWorkerFollowUp(args: {
     }
     throw error
   }
-  const started = followUpReceipt(
-    freshInstead ? 'started_fresh' : placement.delivery,
-    latest.id,
-    receipt
-  )
-  if (resource && typeof started.dispatchId === 'string' && reopen && !freshInstead) {
+  const started = {
+    ...(receipt && typeof receipt === 'object' ? receipt : {}),
+    delivery: freshInstead ? 'started_fresh' : placement.delivery,
+    followUpOf: latest.id
+  }
+  if (
+    resource &&
+    'dispatchId' in started &&
+    typeof started.dispatchId === 'string' &&
+    reopen &&
+    !freshInstead
+  ) {
     carryWorkerResumeSession(db, started.dispatchId, resource)
   }
   return { kind: 'started', receipt: started }

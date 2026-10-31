@@ -8,6 +8,7 @@ import {
   readWorkerResumeSession
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { captureMovedWorkerResumeSessions } from './worker-resume-session-capture'
+import { continueAllUnreadWorkerMail } from '../messaging/settled-worker-follow-through'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 // A send to a finished terminal worker, through the same worker-start the coordinator would run.
@@ -67,6 +68,35 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(0)
   })
 
+  it('after a restart, moves unread mail to the follow-up that won and wakes it, once', async () => {
+    userDataDir = mkdtempSync(join(tmpdir(), 'orca-follow-up-moved-'))
+    h.setup({ userDataDir })
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'and the docs')
+    h.settle(taskId, dispatchId, 'succeeded')
+    const winner = h.db.createStartingWorkerDispatch({
+      creator: { kind: 'system' },
+      maxDepth: 9,
+      taskSpec: 'first',
+      taskRunId: h.activeRunId,
+      startOptions: { agent: 'codex' },
+      followUpOf: dispatchId
+    })
+
+    h.restart()
+    const arrived = vi.spyOn(h.runtime, 'notifyMessageArrived')
+
+    await vi.waitFor(() =>
+      expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
+    )
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+    expect(h.db.getUnreadMessages(`dispatch:${winner.dispatch.id}`)).toMatchObject([
+      { body: 'and the docs' }
+    ])
+    expect(arrived.mock.calls).toEqual([[`dispatch:${winner.dispatch.id}`, 'status']])
+    expect(getFollowUpDispatch(h.db, winner.dispatch.id)).toBeUndefined()
+  })
+
   it('from a follow-up that never got a worker, continues the worker before it', async () => {
     h.setup()
     const { dispatchId } = await h.startSettledWorker()
@@ -83,7 +113,9 @@ describe('a follow-up to a finished terminal worker', () => {
     await expect(send(failed.dispatch.id, 'second')).resolves.toMatchObject({
       delivery: 'follow_up',
       followUpOf: failed.dispatch.id,
-      worker: 'term_worker'
+      effects: expect.arrayContaining([
+        expect.objectContaining({ role: 'agent', id: 'term_worker' })
+      ])
     })
   })
 

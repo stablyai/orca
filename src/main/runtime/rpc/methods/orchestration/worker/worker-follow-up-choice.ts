@@ -18,7 +18,7 @@ import type { DispatchContextRow } from '../../../../orchestration/types'
 import type { WorkerTerminalResourceRow } from '../../../../orchestration/worker-terminal-ownership'
 import { getStructuredAgentSessionHost } from '../../../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { resolveStructuredWorkerIdentity } from '../../../../structured-worker-authority'
-import { earlierWork, parseStartOptions } from '../messaging/worker-follow-up-receipt'
+import { earlierWork, parseStartOptions } from './worker-earlier-work'
 import {
   reopenWorkerChat,
   reopenWorkerTerminal,
