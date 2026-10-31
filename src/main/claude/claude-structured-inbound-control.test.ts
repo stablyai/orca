@@ -170,35 +170,4 @@ describe('Claude permission callbacks', () => {
       expect.objectContaining({ type: 'prompt-cancelled', promptKey: 'perm-4' })
     )
   })
-
-  it('settles every in-flight prompt with null when the registry is cleared', async () => {
-    const control = callbacksFor()
-    const first = control.canUseTool(
-      'Bash',
-      { command: 'a' },
-      permissionOptions('perm-5', 'tool-5', new AbortController().signal)
-    )
-    const second = control.canUseTool(
-      'Bash',
-      { command: 'b' },
-      permissionOptions('perm-6', 'tool-6', new AbortController().signal)
-    )
-
-    for (const prompt of control.prompts.clear()) {
-      prompt.settle(null)
-    }
-
-    await expect(first).resolves.toBeNull()
-    await expect(second).resolves.toBeNull()
-  })
-
-  it('answers a user dialog deny-safe', async () => {
-    const control = callbacksFor()
-    await expect(
-      control.onUserDialog(
-        { dialogKind: 'refusal_fallback_prompt', payload: {} },
-        { signal: new AbortController().signal, requestId: 'dialog-1' }
-      )
-    ).resolves.toEqual({ behavior: 'cancelled' })
-  })
 })

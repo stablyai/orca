@@ -1,4 +1,4 @@
-import { EFFECTIVE_HARD_CAP_SQL } from './cell-connection-cap.js'
+import { EFFECTIVE_HARD_CAP_SQL } from '../cell-connection-cap.js'
 
 export const ASSIGNMENT_CONNECTION_HEADROOM_QUERY =
   `SELECT limits.cell_id, ${EFFECTIVE_HARD_CAP_SQL} AS effective_hard_cap, limits.unobserved_bound,
