@@ -1,4 +1,3 @@
-import { deriveCliWriterTopology } from './cli-writer-observation'
 import {
   admitLegacyAgentStatus,
   movePaneCacheState
@@ -187,15 +186,11 @@ export abstract class AgentHookServerAuthorityAliases extends AgentHookServerAut
       admitLegacyAgentStatus(
         this.state,
         'main-pane-alias-transfer',
-        deriveCliWriterTopology(
-          {
-            ...movedStatus,
-            paneKey: toPaneKey,
-            tabId: owner?.tabId
-          },
-          previousStatus,
-          this.cliWriterExecutionMatches
-        ),
+        {
+          ...movedStatus,
+          paneKey: toPaneKey,
+          tabId: owner?.tabId
+        },
         AGENT_STATUS_2A_CURRENT_PRODUCER_MODE
       )
     }

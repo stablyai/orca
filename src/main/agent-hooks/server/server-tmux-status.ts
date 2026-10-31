@@ -7,7 +7,6 @@ import {
 import { structuredStatusLegacyEvent } from './server-structured-status-row'
 import type { AgentHookSource } from '../../../shared/agent-hook-relay'
 import { AgentHookServerOpenCodeBinder } from './server-opencode-binder'
-import { tmuxCliWriterEvent } from './cli-writer-observation'
 
 export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeBinder {
   private tmuxOwner: TmuxAgentHookOwner | undefined
@@ -57,7 +56,7 @@ export abstract class AgentHookServerTmuxStatus extends AgentHookServerOpenCodeB
         this.commitStatusRowMutation(previous && structuredStatusLegacyEvent(previous), after)
         this.recordCurrentAuthorityObservation(after)
         this.notifyStatusChangeListeners()
-        this.emitEnrichedStatus(tmuxCliWriterEvent(after))
+        this.emitEnrichedStatus(after)
       },
       unavailable: (paneKey, subject) => {
         if (this.getAgentStatusDisposition(paneKey) === 'suppress') {

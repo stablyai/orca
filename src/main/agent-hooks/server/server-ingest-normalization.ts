@@ -1,4 +1,3 @@
-import { retainOpenCodeWriterTopology } from './cli-writer-observation'
 import { buildSpoolHookBody, type SpoolRecord } from '../../../shared/agent-hook-spool'
 import { checkHookOwnerPresence } from '../../../shared/agent-hook-owner-presence'
 import { normalizeHookPayload } from '../../../shared/agent-hook-listener'
@@ -65,7 +64,6 @@ export abstract class AgentHookServerIngestNormalization extends AgentHookServer
           return disposition !== 'suppress'
         }
       })
-      retainOpenCodeWriterTopology(event, source, body)
       if (
         event &&
         event.hookEventName === 'SessionStart' &&

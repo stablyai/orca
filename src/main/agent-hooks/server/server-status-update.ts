@@ -1,5 +1,4 @@
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
-import { deriveCliWriterTopology } from './cli-writer-observation'
 import { previewHookPresence } from '../../../shared/agent-hook-presence-transition'
 import {
   reconcileCodexStatusEvent,
@@ -51,7 +50,6 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     origin: AgentStatusObservationOrigin = 'hook',
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload,
-    newRun = false,
     retireBinding = false
   ): EnrichedAgentHookEventPayload | undefined {
     const rootContext = previewHookPresence(
@@ -150,16 +148,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (terminalOwnedPayload.providerSessionOnly) {
       // Identity-only replay must not fabricate status or prompt telemetry.
       onAccepted?.()
-      const enriched = deriveCliWriterTopology(
-        {
-          ...this.attachStatusTiming(terminalOwnedPayload, now),
-          observation: this.stampObservation(terminalOwnedPayload, origin, now)
-        },
-        rowBefore,
-        this.cliWriterExecutionMatches,
-        newRun,
-        incoming.agentPresence?.process
-      )
+      const enriched = {
+        ...this.attachStatusTiming(terminalOwnedPayload, now),
+        observation: this.stampObservation(terminalOwnedPayload, origin, now)
+      }
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
       if (!this.writeLegacyStatusRow(enriched)) {
@@ -256,16 +248,10 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       runningNonAgentTask === undefined
         ? unpairedPayload
         : { ...unpairedPayload, claudeRunningNonAgentTask: runningNonAgentTask }
-    const enriched = deriveCliWriterTopology(
-      {
-        ...this.attachStatusTiming(pairedPayload, now, observedAt),
-        observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
-      },
-      rowBefore,
-      this.cliWriterExecutionMatches,
-      newRun,
-      incoming.agentPresence?.process
-    )
+    const enriched = {
+      ...this.attachStatusTiming(pairedPayload, now, observedAt),
+      observation: this.stampObservation(pairedPayload, origin, observedAt ?? now)
+    }
     if (
       typeof enriched.payload.turnCompletedAt === 'number' &&
       Number.isFinite(enriched.payload.turnCompletedAt)

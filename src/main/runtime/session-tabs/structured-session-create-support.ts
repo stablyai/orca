@@ -81,7 +81,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     input: StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     if (input.resumeFrom) {
-      const { providerSessionId, cliSource } = input.resumeFrom
+      const { providerSessionId } = input.resumeFrom
       try {
         requireUnownedStructuredAgentSessionAdoption({
           host: getStructuredAgentSessionHost(),
@@ -91,11 +91,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         })
       } catch (ownerConflict) {
         // Refuse transfer from a live terminal or the chat's first send starts a second writer.
-        await this.assertStructuredAdoptionTerminalWritersExited(
-          input.agent,
-          providerSessionId,
-          cliSource
-        )
+        await this.assertStructuredAdoptionTerminalWritersExited(input.agent, providerSessionId)
         throw ownerConflict
       }
     }
@@ -192,8 +188,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     if (resumeFrom) {
       await this.assertStructuredAdoptionTerminalWritersExited(
         input.agent,
-        resumeFrom.providerSessionId,
-        resumeFrom.cliSource
+        resumeFrom.providerSessionId
       )
     }
     const workspaceCwd = resumeFrom

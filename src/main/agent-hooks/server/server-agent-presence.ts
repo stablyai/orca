@@ -1,4 +1,4 @@
-import { cliWriterTopology, type CliWriterObservation } from './cli-writer-observation'
+import type { CliWriterObservation } from './cli-writer-observation'
 import type {
   AgentStatusIpcPayload,
   ParsedAgentStatusPayload
@@ -81,8 +81,7 @@ export abstract class AgentHookServerAgentPresence extends AgentHookServerLifecy
         this.state.lastStatusByPaneKey.get(resolved) === row &&
         row.agentPresence === presence,
       presence: () =>
-        presence?.process ? probeAgentProcessPresence(presence.process) : Promise.resolve(null),
-      topology: cliWriterTopology(row)
+        presence?.process ? probeAgentProcessPresence(presence.process) : Promise.resolve(null)
     }
   }
 
