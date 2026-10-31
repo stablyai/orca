@@ -15,7 +15,7 @@ import {
   MAX_CODEX_GENERIC_TURN_BUCKETS
 } from './codex-structured-journal-translation'
 import { MAX_CODEX_WORDLESS_ROWS_PER_TURN } from './codex-structured-journal-limits'
-import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
+import type { CodexStructuredSessionEvent } from './codex-structured-session-state'
 
 const SESSION_ID = 'session-1'
 const THREAD_ID = 'thread-abc'

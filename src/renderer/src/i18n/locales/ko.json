@@ -19109,7 +19109,8 @@
         "stopped": "{{distro}}이(가) 중지되었습니다",
         "start": "시작",
         "unverifiable": "Orca가 {{distro}}이(가) 실행 중인지 확인하지 못했습니다",
-        "startToSend": "보내려면 {{distro}}을(를) 시작하세요."
+        "startToSend": "보내려면 {{distro}}을(를) 시작하세요.",
+        "startDistro": "{{distro}} 시작"
       },
       "interruptedContinue": {
         "continue": "계속",

@@ -454,7 +454,6 @@
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev-web.test.ts
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev.test.ts
 2 test-no-real-time-wait:src/main/startup/windows-install-dir-acl-recovery.test.ts
-1 test-no-real-time-wait:src/main/startup/windows-install-dir-package-acl-repair.test.ts
 2 test-no-real-time-wait:src/main/terminal-history-fish-session.node-pty.test.ts
 2 test-no-real-time-wait:src/main/terminal-history-tombstone-scan-cost.test.ts
 1 test-no-real-time-wait:src/main/updater.quit-and-install.test.ts
@@ -833,7 +832,7 @@
 1 test-no-wall-clock:src/main/fish-history-session.test.ts
 2 test-no-wall-clock:src/main/git/command-runner/git-command-resolution-windows-checkout.test.ts
 1 test-no-wall-clock:src/main/git/command-runner/git-command-timeout-behavior.test.ts
-5 test-no-wall-clock:src/main/git/gh-rate-limit-breaker.test.ts
+4 test-no-wall-clock:src/main/git/gh-rate-limit-breaker.test.ts
 1 test-no-wall-clock:src/main/git/pack-refs-lock-ownership.test.ts
 2 test-no-wall-clock:src/main/git/repo-ref-maintenance-real-git.test.ts
 2 test-no-wall-clock:src/main/git/runner-gh-account-binding.test.ts

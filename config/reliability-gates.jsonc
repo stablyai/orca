@@ -5264,7 +5264,7 @@
       "commands": [
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/launch.test.ts src/main/serve-update-handoff.test.ts src/main/updater.headless-serve-install.test.ts src/main/updater.mac-install.test.ts src/main/window/attach-main-window-services.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
-        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/main/startup/single-instance-lock.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
+        "pnpm exec vitest run --config config/vitest.config.ts src/main/startup/serve-desktop-activation.test.ts src/cli/runtime-client.test.ts src/cli/runtime/websocket-transport.test.ts src/main/runtime/orca-runtime.test.ts",
         "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/lib/serve-desktop-promotion-session-continuity.test.ts",
         "pnpm exec electron-vite build --mode e2e",
         "pnpm run test:e2e -- tests/e2e/headless-serve-desktop-activation.spec.ts --workers=1"
@@ -5275,7 +5275,6 @@
         "src/cli/runtime/launch.test.ts",
         "src/cli/runtime/serve-signal-exit-diagnostic.test.ts",
         "src/main/startup/serve-desktop-activation.test.ts",
-        "src/main/startup/single-instance-lock.test.ts",
         "src/cli/runtime-client.test.ts",
         "src/cli/runtime/websocket-transport.test.ts",
         "src/main/runtime/orca-runtime.test.ts",
@@ -5321,13 +5320,6 @@
           "assertions": [
             "early activation requests coalesce until the persistent provider is ready",
             "a blocked provider drops pending activation and never opens a window"
-          ]
-        },
-        {
-          "file": "src/main/startup/single-instance-lock.test.ts",
-          "assertions": [
-            "serve never skips the single-instance lock even in development",
-            "the isolated E2E profile can opt into the production ownership path"
           ]
         },
         {

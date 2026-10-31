@@ -19833,7 +19833,8 @@
         "stopped": "{{distro}} durduruldu",
         "start": "Başlat",
         "unverifiable": "Orca, {{distro}} öğesinin çalışıp çalışmadığını denetleyemedi",
-        "startToSend": "Göndermek için {{distro}} dağıtımını başlatın."
+        "startToSend": "Göndermek için {{distro}} dağıtımını başlatın.",
+        "startDistro": "{{distro}} dağıtımını başlat"
       },
       "interruptedContinue": {
         "continue": "Devam et",

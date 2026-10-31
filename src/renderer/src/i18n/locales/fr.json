@@ -19867,7 +19867,8 @@
         "stopped": "{{distro}} est arrêté",
         "start": "Démarrer",
         "unverifiable": "Orca n'a pas pu vérifier si {{distro}} est en cours d'exécution",
-        "startToSend": "Démarrez {{distro}} pour envoyer."
+        "startToSend": "Démarrez {{distro}} pour envoyer.",
+        "startDistro": "Démarrer {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continuer",

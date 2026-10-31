@@ -19079,7 +19079,8 @@
         "stopped": "{{distro}} 已停止",
         "start": "启动",
         "unverifiable": "Orca 无法确认 {{distro}} 是否正在运行",
-        "startToSend": "请启动 {{distro}} 后再发送。"
+        "startToSend": "请启动 {{distro}} 后再发送。",
+        "startDistro": "启动 {{distro}}"
       },
       "interruptedContinue": {
         "continue": "继续",
