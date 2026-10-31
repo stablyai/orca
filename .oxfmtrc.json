@@ -16,6 +16,7 @@
     "docs/reference/plugin-manifest.md",
     "docs/reference/plugin-catalog.md",
     "docs/reference/plugin-host-api.md",
-    "docs/reference/plugin-theme-tokens.md"
+    "docs/reference/plugin-theme-tokens.md",
+    "docs/audits/**"
   ]
 }

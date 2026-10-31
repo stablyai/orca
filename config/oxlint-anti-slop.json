@@ -22,7 +22,8 @@
     "**/out",
     "cloud/**",
     "src/shared/rpc-contract/rpc-params-catalog.generated.ts",
-    "tests/e2e/.cross-version-checkouts"
+    "tests/e2e/.cross-version-checkouts",
+    "docs/audits/**"
   ],
   "rules": {
     "anti-slop/no-array-filter-map": "off",

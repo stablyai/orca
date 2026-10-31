@@ -88,6 +88,9 @@ docs/**
 !docs/
 !docs/site/
 !docs/site/**
+# Retention audit evidence: tracked reproductions and before/after results.
+!docs/audits/
+!docs/audits/**
 !docs/assets/
 !docs/assets/**
 !docs/readme/
