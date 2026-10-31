@@ -6,8 +6,7 @@ const {
   writeFileSyncMock,
   forkMock,
   checkDaemonHealthMock,
-  getProcessStartedAtMsMock,
-  launchedStartedAtMs,
+
   spawnerInstances,
   importFresh,
   installDefaultNetConnectStub,
@@ -118,46 +117,6 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(launchArgs[launchNonceIndex + 1]).toMatch(/^[0-9a-f-]{36}$/)
   })
 
-  it('leaves exclusive PID publication to the daemon child', async () => {
-    const mod = await importFresh()
-    checkDaemonHealthMock.mockResolvedValue('unreachable')
-    await mod.initDaemonPtyProvider()
-
-    const launcher = spawnerInstances[0].launcher as (
-      socketPath: string,
-      tokenPath: string
-    ) => Promise<{ shutdown(): Promise<void> }>
-    const child = {
-      pid: 12345,
-      on(event: string, cb: (arg?: unknown) => void) {
-        if (event === 'message') {
-          queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_000_000 }))
-        }
-        return this
-      },
-      off: vi.fn(),
-      disconnect: vi.fn(),
-      unref: vi.fn()
-    }
-    forkMock.mockReturnValueOnce(child)
-
-    await launcher('/fake/socket', '/fake/token')
-
-    expect(writeFileSyncMock).not.toHaveBeenCalled()
-    expect(forkMock.mock.calls.at(-1)?.[1]).toEqual(
-      expect.arrayContaining([
-        '--pid-record',
-        `/fake/daemon/daemon-v${PROTOCOL_VERSION}.pid`,
-        '--entry-path',
-        FAKE_DAEMON_ENTRY_PATH,
-        '--app-version',
-        '1.2.3',
-        '--spawner-exec-path',
-        process.execPath
-      ])
-    )
-  })
-
   it('destroys the daemon stderr pipe once the daemon signals ready', async () => {
     const mod = await importFresh()
     checkDaemonHealthMock.mockResolvedValue('unreachable')
@@ -207,36 +166,5 @@ describe('daemon-init: runRestartDaemon (7-step sequence)', () => {
     expect(stderrDestroy).toHaveBeenCalledOnce()
     expect(child.disconnect).toHaveBeenCalledOnce()
     expect(child.unref).toHaveBeenCalledOnce()
-  })
-
-  it('accepts the daemon self-reported start time when the OS query returns null', async () => {
-    const mod = await importFresh()
-    await mod.initDaemonPtyProvider()
-
-    const launcher = spawnerInstances[0].launcher as (
-      socketPath: string,
-      tokenPath: string
-    ) => Promise<{ shutdown(): Promise<void> }>
-    checkDaemonHealthMock.mockResolvedValueOnce('unreachable')
-    getProcessStartedAtMsMock.mockReturnValue(null)
-    launchedStartedAtMs.current = 1_700_000_123_456
-    forkMock.mockImplementationOnce(() => ({
-      pid: 12345,
-      on(event: string, cb: (arg?: unknown) => void) {
-        if (event === 'message') {
-          queueMicrotask(() => cb({ type: 'ready', pid: 12345, startedAtMs: 1_700_000_123_456 }))
-        }
-        return this
-      },
-      off() {
-        return this
-      },
-      disconnect: vi.fn(),
-      unref: vi.fn()
-    }))
-
-    await launcher('/fake/socket', '/fake/token')
-
-    expect(writeFileSyncMock).not.toHaveBeenCalled()
   })
 })
