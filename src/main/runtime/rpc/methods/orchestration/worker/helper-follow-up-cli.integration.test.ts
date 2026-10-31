@@ -347,6 +347,7 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
 
   it('reads the same custody evidence for a chain of recoveries however much unrelated work is stored', async () => {
     const counts: unknown[] = []
+    const traces: ReturnType<typeof traceCallerReads>[] = []
     for (const unrelated of [40, 400]) {
       const terminal = `term_worker_${unrelated}`
       const first = await start('term_coord', terminal)
@@ -371,8 +372,8 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
       })
       const trace = traceCallerReads(h.db)
       await continues(terminal, helper, caller)
-      expect(trace.expectIndexedPlans()).toEqual(['identity'])
       counts.push(trace.counts())
+      traces.push(trace)
       trace.restore()
     }
     // One indexed read of the agent's custody, visiting its one row, at both sizes; no former-owner scan.
@@ -383,6 +384,9 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
         formerOwner: { executions: 0, visited: 0 }
       })
     )
+    for (const trace of traces) {
+      expect(trace.expectIndexedPlans()).toEqual(['identity'])
+    }
   })
 
   it('decodes each custody history once however long the follow-up chain', async () => {

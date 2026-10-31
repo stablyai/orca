@@ -32,7 +32,8 @@ export function traceCallerReads(db: OrchestrationDb, extraProbes: RegExp[] = []
   const executions: { read: CallerRead; query: string; parameters: unknown[] }[] = []
   const native = installSqlVisitCounters({
     caller_read_history: () => ++visited.history,
-    caller_read_identity: () => ++visited.identity
+    caller_read_identity: () => ++visited.identity,
+    caller_read_formerOwner: () => ++visited.formerOwner
   })
   const prepare = db.db.prepare.bind(db.db)
   const spy = vi.spyOn(db.db, 'prepare').mockImplementation((query) => {
@@ -44,13 +45,20 @@ export function traceCallerReads(db: OrchestrationDb, extraProbes: RegExp[] = []
     }
     // Counted after the leading range column, so only rows inside each range are visited.
     const statement = prepare(
-      query.replaceAll('= ? AND host_scope', `= ? AND caller_read_${read}(rowid) AND host_scope`)
+      query
+        .replaceAll('= ? AND host_scope', `= ? AND caller_read_${read}(rowid) AND host_scope`)
+        .replace(
+          'WHERE prior_owner_dispatch_ids',
+          `WHERE caller_read_${read}(rowid) AND prior_owner_dispatch_ids`
+        )
     )
-    const all = statement.all.bind(statement)
-    vi.spyOn(statement, 'all').mockImplementation((...parameters) => {
-      executions.push({ read, query, parameters })
-      return all(...parameters)
-    })
+    for (const method of ['all', 'get'] as const) {
+      const run = statement[method].bind(statement) as (...parameters: unknown[]) => unknown
+      vi.spyOn(statement, method).mockImplementation((...parameters: unknown[]) => {
+        executions.push({ read, query, parameters })
+        return run(...parameters) as never
+      })
+    }
     return statement
   })
   return {
