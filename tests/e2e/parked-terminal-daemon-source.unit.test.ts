@@ -31,9 +31,9 @@ function createStore(): MockStoreState {
       terminalMainSideEffectAuthority: false,
       notifications: { enabled: true, agentTaskComplete: true }
     },
-    setRuntimePaneTitle: vi.fn(),
+    setRuntimePaneTitle: vi.fn<(tabId: string, paneId: number, title: string) => void>(),
     clearRuntimePaneTitle: vi.fn(),
-    updateTabTitle: vi.fn(),
+    updateTabTitle: vi.fn<(tabId: string, title: string) => void>(),
     markTerminalBell: vi.fn(),
     setCacheTimerStartedAt: vi.fn(),
     observeTerminalGitHubPullRequestLink: vi.fn(),
