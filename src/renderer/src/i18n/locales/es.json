@@ -8930,7 +8930,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Color magenta ANSI",
-          "03c855d15f": "Restablecer todas las anulaciones de color",
           "63f8d9336e": "Anulaciones de color",
           "e86e09b5c7": "Anula colores individuales de la terminal.",
           "1d1920dc8a": "Oculta el cursor del mouse al escribir en la terminal.",
@@ -8997,7 +8996,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar ahora",
           "907131d741": "Reiniciando…",
-          "605a35d600": "El renderizador de la terminal aún no aplica este valor: xterm.js no tiene un ajuste de color para el texto en negrita. Se conserva el valor guardado."
+          "605a35d600": "El renderizador de la terminal aún no aplica este valor: xterm.js no tiene un ajuste de color para el texto en negrita. Se conserva el valor guardado.",
+          "color_overrides_dark_description": "Anula colores individuales del tema oscuro de la terminal.",
+          "color_overrides_light_description": "Anula colores individuales del tema claro de la terminal.",
+          "reset_dark_color_overrides": "Restablecer las anulaciones de color del tema oscuro",
+          "reset_light_color_overrides": "Restablecer las anulaciones de color del tema claro"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"

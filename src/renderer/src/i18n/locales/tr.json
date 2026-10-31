@@ -9310,7 +9310,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI eflatun rengi",
-          "03c855d15f": "Tüm renk geçersiz kılmalarını sıfırla",
           "63f8d9336e": "Renk Geçersiz Kılmaları",
           "e86e09b5c7": "Tek tek terminal renklerini geçersiz kılın.",
           "1d1920dc8a": "Terminalde yazarken fare imlecini gizleyin.",
@@ -9377,7 +9376,11 @@
           "cf37ff69f6": "Temel",
           "8abdab9f7c": "Şimdi yeniden başlat",
           "907131d741": "Yeniden başlatılıyor…",
-          "605a35d600": "Terminal render motoru tarafından henüz uygulanmıyor; xterm.js'de kalın renk yuvası yok. Kaydedilen değer korunur."
+          "605a35d600": "Terminal render motoru tarafından henüz uygulanmıyor; xterm.js'de kalın renk yuvası yok. Kaydedilen değer korunur.",
+          "color_overrides_dark_description": "Koyu terminal temasının renklerini tek tek geçersiz kılın.",
+          "color_overrides_light_description": "Açık terminal temasının renklerini tek tek geçersiz kılın.",
+          "reset_dark_color_overrides": "Koyu tema renk geçersiz kılmalarını sıfırla",
+          "reset_light_color_overrides": "Açık tema renk geçersiz kılmalarını sıfırla"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Sıfırla"

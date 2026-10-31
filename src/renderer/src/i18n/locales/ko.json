@@ -8635,7 +8635,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 마젠타색",
-          "03c855d15f": "모든 색상 재정의 재설정",
           "63f8d9336e": "색상 재정의",
           "e86e09b5c7": "개별 터미널 색상을 재정의합니다.",
           "1d1920dc8a": "terminal에 입력할 때 마우스 커서를 숨깁니다.",
@@ -8702,7 +8701,11 @@
           "cf37ff69f6": "기본",
           "8abdab9f7c": "지금 재시작",
           "907131d741": "다시 시작하는 중…",
-          "605a35d600": "아직 터미널 렌더러에는 적용되지 않습니다. xterm.js에 굵은 글씨 색상 슬롯이 없기 때문입니다. 저장된 값은 유지됩니다."
+          "605a35d600": "아직 터미널 렌더러에는 적용되지 않습니다. xterm.js에 굵은 글씨 색상 슬롯이 없기 때문입니다. 저장된 값은 유지됩니다.",
+          "color_overrides_dark_description": "다크 터미널 테마의 개별 색상을 재정의합니다.",
+          "color_overrides_light_description": "라이트 터미널 테마의 개별 색상을 재정의합니다.",
+          "reset_dark_color_overrides": "다크 테마 색상 재정의 재설정",
+          "reset_light_color_overrides": "라이트 테마 색상 재정의 재설정"
         },
         "UIZoomControl": {
           "c2c64b24d0": "재설정"

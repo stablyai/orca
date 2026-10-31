@@ -9147,7 +9147,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋紅色",
-          "03c855d15f": "重設所有顏色覆寫設定",
           "63f8d9336e": "顏色覆寫設定",
           "e86e09b5c7": "覆寫個別終端機顏色。",
           "1d1920dc8a": "在終端機中輸入時隱藏滑鼠游標。",
@@ -9214,7 +9213,11 @@
           "cf37ff69f6": "基本",
           "8abdab9f7c": "立即重新啟動",
           "907131d741": "正在重新啟動...",
-          "605a35d600": "終端機算繪器尚未套用此設定，因為 xterm.js 沒有粗體顏色欄位。已儲存的值會保留。"
+          "605a35d600": "終端機算繪器尚未套用此設定，因為 xterm.js 沒有粗體顏色欄位。已儲存的值會保留。",
+          "color_overrides_dark_description": "覆寫深色終端機主題的個別顏色。",
+          "color_overrides_light_description": "覆寫淺色終端機主題的個別顏色。",
+          "reset_dark_color_overrides": "重設深色主題顏色覆寫設定",
+          "reset_light_color_overrides": "重設淺色主題顏色覆寫設定"
         },
         "UIZoomControl": {
           "c2c64b24d0": "重設"

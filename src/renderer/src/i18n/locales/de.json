@@ -9324,7 +9324,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI-Farbe Magenta",
-          "03c855d15f": "Alle Farbanpassungen zurücksetzen",
           "63f8d9336e": "Farbanpassungen",
           "e86e09b5c7": "Einzelne Terminalfarben anpassen.",
           "1d1920dc8a": "Den Mauszeiger beim Tippen im Terminal ausblenden.",
@@ -9391,7 +9390,11 @@
           "cf37ff69f6": "Basis",
           "8abdab9f7c": "Jetzt neu starten",
           "907131d741": "Wird neu gestartet…",
-          "605a35d600": "Wird vom Terminal-Renderer noch nicht angewendet — xterm.js hat keine Farboption für fetten Text. Ein gespeicherter Wert bleibt erhalten."
+          "605a35d600": "Wird vom Terminal-Renderer noch nicht angewendet — xterm.js hat keine Farboption für fetten Text. Ein gespeicherter Wert bleibt erhalten.",
+          "color_overrides_dark_description": "Einzelne Farben des dunklen Terminal-Themes anpassen.",
+          "color_overrides_light_description": "Einzelne Farben des hellen Terminal-Themes anpassen.",
+          "reset_dark_color_overrides": "Farbanpassungen des dunklen Themes zurücksetzen",
+          "reset_light_color_overrides": "Farbanpassungen des hellen Themes zurücksetzen"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Zurücksetzen"
