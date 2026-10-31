@@ -135,7 +135,9 @@ export function getActivityThreadTaskTitle(args: {
     return historical
   }
 
-  const liveTabTitle = args.tab.title?.trim()
+  // Why: in a split tab, tab.title names the focused pane, which may be a sibling.
+  const liveTabTitle =
+    args.paneLiveTitle === undefined ? args.tab.title?.trim() : args.paneLiveTitle?.trim()
   const defaultTabTitle = args.tab.defaultTitle?.trim()
   if (liveTabTitle && liveTabTitle !== defaultTabTitle) {
     return liveTabTitle
