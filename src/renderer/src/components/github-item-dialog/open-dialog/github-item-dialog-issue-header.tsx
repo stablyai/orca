@@ -107,8 +107,7 @@ export function GitHubItemDialogIssueHeader({
                     <Button
                       type="button"
                       variant="ghost"
-                      size="icon-xs"
-                      className="size-7 shrink-0"
+                      size="icon-sm"
                       disabled={!canRefreshTask || refreshing}
                       onClick={() => void refreshTask()}
                       aria-label={translate(
@@ -116,7 +115,7 @@ export function GitHubItemDialogIssueHeader({
                         'Refresh task'
                       )}
                     >
-                      <RefreshCw className={cn('size-3.5', refreshing && 'animate-spin')} />
+                      <RefreshCw className={cn('size-4', refreshing && 'animate-spin')} />
                     </Button>
                   </span>
                 </TooltipTrigger>
