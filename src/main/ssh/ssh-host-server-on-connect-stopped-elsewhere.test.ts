@@ -11,7 +11,7 @@ import { compareAppVersions } from '../../shared/app-version'
 import {
   MANAGED_ORCAD_FENCED_DETAIL,
   MANAGED_ORCAD_NOT_ACTIVATED_DETAIL
-} from '../managed-server/lifecycle/orcad-managed-serving'
+} from '../managed-server/lifecycle/orcad-managed-serving-state'
 import { resolveHostServerOnConnect } from './ssh-host-server-on-connect'
 import { hostServerDepsStub } from './ssh-host-server-on-connect-test-deps'
 

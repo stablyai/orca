@@ -13,11 +13,13 @@ vi.mock('./orcad-managed-wake', () => ({ wakeStoppedManagedOrcad: vi.fn() }))
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import {
   ensureManagedOrcadServing,
-  MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
   resetManagedOrcadServingForTests,
-  setManagedOrcadStartListener,
   type OrcadManagedServingInput
 } from './orcad-managed-serving'
+import {
+  MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
+  setManagedOrcadStartListener
+} from './orcad-managed-serving-state'
 
 const listener = { starting: vi.fn(), settled: vi.fn() }
 let generation = 1
@@ -44,6 +46,29 @@ beforeEach(() => {
 })
 
 describe('ensureManagedOrcadServing', () => {
+  it('keeps a listener registered before the serving implementation loads', async () => {
+    vi.resetModules()
+    const state = await import('./orcad-managed-serving-state')
+    const earlyListener = { starting: vi.fn(), settled: vi.fn() }
+    state.setManagedOrcadStartListener(earlyListener)
+    const { ensureManagedOrcadServing: ensureServing } = await import('./orcad-managed-serving')
+    vi.mocked(wakeStoppedManagedOrcad).mockImplementation(async (_slot, onStarting) => {
+      onStarting?.()
+      throw new Error('The server did not become ready')
+    })
+
+    expect(await ensureServing(input(async () => false))).toEqual({
+      state: 'unverifiable',
+      detail: 'The server did not become ready'
+    })
+    expect(earlyListener.starting).toHaveBeenCalledOnce()
+    expect(earlyListener.settled).toHaveBeenCalledWith(expect.anything(), 'env-1', {
+      state: 'unverifiable',
+      detail: 'The server did not become ready'
+    })
+    state.setManagedOrcadStartListener(null)
+  })
+
   it('costs one round trip when the server answers', async () => {
     expect(await ensureManagedOrcadServing(input(async () => true))).toEqual({ state: 'serving' })
     expect(wakeStoppedManagedOrcad).not.toHaveBeenCalled()
@@ -66,6 +91,34 @@ describe('ensureManagedOrcadServing', () => {
     expect(listener.settled).toHaveBeenCalledWith(expect.anything(), 'env-1', {
       state: 'started',
       boundPort: null
+    })
+  })
+
+  it('uses a replacement listener when a pending wake settles', async () => {
+    const started = Promise.withResolvers<void>()
+    const finishWake = Promise.withResolvers<void>()
+    vi.mocked(wakeStoppedManagedOrcad).mockImplementation(async (_slot, onStarting) => {
+      onStarting?.()
+      started.resolve()
+      await finishWake.promise
+      throw new Error('The server did not become ready')
+    })
+    const replacement = { starting: vi.fn(), settled: vi.fn() }
+    const operation = ensureManagedOrcadServing(input(async () => false))
+    await started.promise
+    setManagedOrcadStartListener(replacement)
+    finishWake.resolve()
+
+    expect(await operation).toEqual({
+      state: 'unverifiable',
+      detail: 'The server did not become ready'
+    })
+    expect(listener.starting).toHaveBeenCalledOnce()
+    expect(listener.settled).not.toHaveBeenCalled()
+    expect(replacement.starting).not.toHaveBeenCalled()
+    expect(replacement.settled).toHaveBeenCalledWith(expect.anything(), 'env-1', {
+      state: 'unverifiable',
+      detail: 'The server did not become ready'
     })
   })
 

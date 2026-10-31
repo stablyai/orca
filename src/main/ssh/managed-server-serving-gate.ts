@@ -3,7 +3,7 @@ import {
   MANAGED_ORCAD_FENCED_DETAIL,
   MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
   type OrcadManagedServing
-} from '../managed-server/lifecycle/orcad-managed-serving'
+} from '../managed-server/lifecycle/orcad-managed-serving-state'
 import type { HostServerOnConnectResult } from './ssh-host-server-on-connect'
 
 type ManagedRoute = Extract<HostServerOnConnectResult, { route: 'managed' }>

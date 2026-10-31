@@ -19,7 +19,7 @@ import {
   MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
   setManagedOrcadStartListener,
   type OrcadManagedServing
-} from '../../managed-server/lifecycle/orcad-managed-serving'
+} from '../../managed-server/lifecycle/orcad-managed-serving-state'
 import {
   redeployStoppedManagedOrcad,
   updateManagedOrcadOnRestore

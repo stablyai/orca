@@ -6,12 +6,14 @@ import { managedOrcadSlot } from './orcad-managed-runtime-context'
 import { wakeStoppedManagedOrcad } from './orcad-managed-wake'
 import { resolveOrcadRemoteContext } from '../install/orcad-remote-context'
 import type { OrcadHostTransport } from '../../ssh/orcad-host-transport'
+import {
+  getManagedOrcadStartListener,
+  MANAGED_ORCAD_FENCED_DETAIL,
+  MANAGED_ORCAD_NOT_ACTIVATED_DETAIL,
+  type OrcadManagedServing
+} from './orcad-managed-serving-state'
 
-export type OrcadManagedServing =
-  | { state: 'serving' }
-  /** Forwards must follow the restarted server's bound port. */
-  | { state: 'started'; boundPort: number | null }
-  | { state: 'unverifiable'; detail: string }
+export type { OrcadManagedServing } from './orcad-managed-serving-state'
 
 export type OrcadManagedServingInput = {
   environment: KnownRuntimeEnvironment
@@ -21,11 +23,6 @@ export type OrcadManagedServingInput = {
   probe: (environment: KnownRuntimeEnvironment, timeoutMs: number) => Promise<boolean>
   answeredAt?: (environmentId: string) => number | null
 }
-
-export const MANAGED_ORCAD_FENCED_DETAIL =
-  'An update, rollback or recovery holds this host; it was not started.'
-
-export const MANAGED_ORCAD_NOT_ACTIVATED_DETAIL = 'This host has no activated Orca server to start.'
 
 const PROBE_TIMEOUT_MS = 5_000
 // Share connect/tunnel verdicts only for the same transport and port; reboots/rebinds need fresh checks.
@@ -43,18 +40,6 @@ function sameTransport(a: ServingTransport, b: ServingTransport): boolean {
     a.connection === b.connection && a.generation === b.generation && a.remotePort === b.remotePort
   )
 }
-export type ManagedOrcadStartListener = {
-  starting: (target: SshTarget) => void
-  /** Unverifiable results include the reason and log tail. */
-  settled: (target: SshTarget, environmentId: string, serving: OrcadManagedServing) => void
-}
-
-let startListener: ManagedOrcadStartListener | null = null
-
-export function setManagedOrcadStartListener(listener: ManagedOrcadStartListener | null): void {
-  startListener = listener
-}
-
 export function ensureManagedOrcadServing(
   input: OrcadManagedServingInput,
   now: () => number = Date.now
@@ -103,10 +88,10 @@ async function checkAndStart(input: OrcadManagedServingInput): Promise<OrcadMana
   let starting = false
   const serving = await wakeIfStopped(input, () => {
     starting = true
-    startListener?.starting(input.target)
+    getManagedOrcadStartListener()?.starting(input.target)
   })
   if (starting) {
-    startListener?.settled(input.target, input.environment.id, serving)
+    getManagedOrcadStartListener()?.settled(input.target, input.environment.id, serving)
   }
   return serving
 }

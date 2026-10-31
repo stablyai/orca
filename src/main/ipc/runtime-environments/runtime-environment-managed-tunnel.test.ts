@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type * as ServingModule from '../../managed-server/lifecycle/orcad-managed-serving'
-import type { ManagedOrcadStartListener } from '../../managed-server/lifecycle/orcad-managed-serving'
+import type * as ServingModule from '../../managed-server/lifecycle/orcad-managed-serving-state'
+import type { ManagedOrcadStartListener } from '../../managed-server/lifecycle/orcad-managed-serving-state'
 import type { SshTarget } from '../../../shared/ssh-types'
 
 const mocks = vi.hoisted(() => {
@@ -66,14 +66,14 @@ vi.mock('../ssh/ssh-managed-port-forward-restore', () => ({
 vi.mock('../ssh/ssh-host-launch-session-note', () => ({
   forgetLaunchSessionVerdict: mocks.forgetVerdict
 }))
-vi.mock('../../managed-server/lifecycle/orcad-managed-serving', async (importOriginal) => ({
+vi.mock('../../managed-server/lifecycle/orcad-managed-serving-state', async (importOriginal) => ({
   ...(await importOriginal<typeof ServingModule>()),
   setManagedOrcadStartListener: (listener: ManagedOrcadStartListener | null) => {
     mocks.startListener.current = listener
   }
 }))
 
-import { MANAGED_ORCAD_NOT_ACTIVATED_DETAIL } from '../../managed-server/lifecycle/orcad-managed-serving'
+import { MANAGED_ORCAD_NOT_ACTIVATED_DETAIL } from '../../managed-server/lifecycle/orcad-managed-serving-state'
 import {
   installManagedOrcadStartStatus,
   requireWslHostWithoutStart,
