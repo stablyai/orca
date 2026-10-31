@@ -85,8 +85,15 @@ function reconcile(): void {
       entries.delete(key)
     } else if (entry.watcher && entry.notice && settles(state, entry)) {
       const settle = entry.watcher
-      entries.delete(key)
-      settle(entry.notice)
+      const { notice } = entry
+      // A switch's stop keeps its leaf bound, so its notice stays for a remount while it is shown.
+      if (notice.switched) {
+        entry.watcher = undefined
+        entry.stopped = undefined
+      } else {
+        entries.delete(key)
+      }
+      settle(notice)
     }
   }
   if (entries.size === 0) {

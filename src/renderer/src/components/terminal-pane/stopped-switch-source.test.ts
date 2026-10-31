@@ -236,6 +236,40 @@ it.each([
   }
 )
 
+it('brings a settled stopped pane back stopped after it is parked, not as a new shell', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    kept.stoppedForReplace()
+    kept.modules.sources.noteStoppedSwitchSource({
+      ...kept.source,
+      switched: { agent: 'codex', screen: HELD_SCREEN }
+    })
+    await flushAsyncTicks(5)
+    expect(kept.died).toHaveBeenCalledOnce()
+    // The leaf stays bound to the stopped process, as main's binding does.
+    const layout = kept.store.getState().terminalLayoutsByTabId[kept.tab.id]
+    expect(layout?.ptyIdsByLeafId?.[kept.pane.leafId]).toBe(kept.source.ptyId)
+    // The hidden worktree's retention budget parks it; the user comes back.
+    kept.park()
+    kept.spawn.mockClear()
+    kept.pane.terminal.write.mockClear()
+    await kept.reveal()
+    expect(kept.spawn).not.toHaveBeenCalled()
+    expect(written(kept)).toContain('HELD-FRAME')
+    expect(kept.died).toHaveBeenCalledTimes(2)
+    expect(kept.died).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        reason: 'switch-stopped',
+        agent: 'codex',
+        replacesPtyId: kept.source.ptyId
+      })
+    )
+    expect(kept.automaticClose).not.toHaveBeenCalled()
+  } finally {
+    kept.dispose()
+  }
+})
+
 it.each([
   ['another process', { ptyId: 'successor-pty' }],
   ['another incarnation', { incarnationId: 'successor-incarnation' }]

@@ -93,14 +93,16 @@ export function holdClosingExit(
       if (session.disposed || session.handledExitPtyId !== ptyId) {
         return
       }
-      session.clearExitedPanePtyLayoutBinding(ptyId)
-      session.deps.clearTabPtyId(session.deps.tabId, ptyId)
       // Main keeps a `closing` stop's binding, so a Restart must name the stopped process as the
       // one it replaces; otherwise main reattaches to it and finds its session killed.
       // Only a switch's stop is named as one; a close that stopped it exits as any pane does.
       if (notice.switched) {
+        // The leaf stays bound to the stopped process, as main's does, so a pane unmounted later
+        // (a parked worktree) comes back stopped rather than as a new shell.
         showSwitchStoppedPane(session, ptyId, exitCode, notice.switched)
       } else {
+        session.clearExitedPanePtyLayoutBinding(ptyId)
+        session.deps.clearTabPtyId(session.deps.tabId, ptyId)
         session.deps.onPaneProcessDied?.({
           paneId: session.pane.id,
           exitCode,
@@ -114,8 +116,9 @@ export function holdClosingExit(
 }
 
 /**
- * A pane remounting onto a process a switch stopped (its exit was handled before it was parked)
- * has nothing to reattach: it stays stopped and takes main's settlement, as it would have mounted.
+ * A pane remounting onto a process a switch stopped (its exit was handled before it was parked,
+ * or settled while it was shown) has nothing to reattach: it stays stopped and takes main's
+ * settlement, as it would have mounted.
  */
 export function remountStoppedSwitchSource(
   session: ConnectPanePtySession,
