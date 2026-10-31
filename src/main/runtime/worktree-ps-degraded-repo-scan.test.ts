@@ -356,7 +356,8 @@ describe('worktree.ps on a degraded repo scan', () => {
 
     await runtime.getWorktreePs(10_000)
 
-    expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(1)
+    // One read projects the rows; the other learns the spellings saved worktrees already use.
+    expect(store.getAllWorktreeMeta).toHaveBeenCalledTimes(2)
   })
 
   it('lists restored worktrees while a scan is stalled and still hides agent scratch', async () => {
