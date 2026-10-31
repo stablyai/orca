@@ -41,9 +41,8 @@ export async function syncDelegatedPhoneGrants(
   if (!capabilities.includes(DELEGATED_MOBILE_DEVICES_RUNTIME_CAPABILITY)) {
     return { kind: 'update-needed', fence: host.fence }
   }
-  const response = await hosts.call(host, DELEGATED_MOBILE_DEVICE_SYNC_METHOD, {
-    phones: phones.slice(0, DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES)
-  })
+  const sent = phones.slice(0, DELEGATED_MOBILE_DEVICE_SYNC_MAX_PHONES)
+  const response = await hosts.call(host, DELEGATED_MOBILE_DEVICE_SYNC_METHOD, { phones: sent })
   if (!response.ok) {
     throw new RemoteRuntimeClientError('remote_runtime_unavailable', response.error.message)
   }
@@ -63,7 +62,8 @@ export async function syncDelegatedPhoneGrants(
         { deviceId: device.deviceId, token: device.token }
       ])
     ),
-    asked: new Set(phones.map((phone) => phone.phoneKey)),
+    // Devices cut by the cap were not asked, so a later request from one re-syncs with a fresh ranking.
+    asked: new Set(sent.map((phone) => phone.phoneKey)),
     refused: new Set()
   }
 }

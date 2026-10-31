@@ -96,7 +96,7 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
     this.mobileDesktopRelay = hosts
       ? new MobileDesktopRelay({
           hosts,
-          listPhones: () => this.listRelayedPhones(),
+          listPhones: (environmentId) => this.listRelayedDevices(environmentId),
           // Share local stream allocator so relayed ids cannot collide on phone sockets.
           allocateStreamId: allocateTerminalSubscriptionStreamId,
           nativeChatDefault: (agent) => isStructuredNativeChatDefaultFor(this.runtime, agent)
@@ -116,18 +116,24 @@ export class RuntimeRpcPairing extends RuntimeRpcNetworkExposure {
       : null
   }
 
-  private listRelayedPhones(): { phoneKey: string; name: string }[] {
+  private listRelayedDevices(environmentId: string): { phoneKey: string; name: string }[] {
     const computerName = this.runtime.readMachineName()
-    return (this.deviceRegistry?.listDevices() ?? [])
-      .filter(
-        // Phones delegated by another desktop remain that desktop's relay responsibility.
-        (device) =>
-          device.scope === 'mobile' && device.lastSeenAt > 0 && device.parentDeviceId === undefined
-      )
-      .map((device) => ({
-        phoneKey: device.deviceId,
-        name: `${device.name} via ${computerName}`.slice(0, DELEGATED_PHONE_NAME_MAX_CHARS)
-      }))
+    const devices = this.deviceRegistry?.listDevices() ?? []
+    const phones = devices.filter(
+      // Phones delegated by another desktop remain that desktop's relay responsibility.
+      (device) =>
+        device.scope === 'mobile' && device.lastSeenAt > 0 && device.parentDeviceId === undefined
+    )
+    // Listed after phones so the sync cap never drops a phone; unlisted clients lose their server device.
+    const runtimeClients = this.relayedRuntimeClients.listFor(
+      environmentId,
+      devices,
+      (deviceId) => this.mobileSocketWiring?.hasLiveConnection(deviceId) ?? false
+    )
+    return [...phones, ...runtimeClients].map((device) => ({
+      phoneKey: device.deviceId,
+      name: `${device.name} via ${computerName}`.slice(0, DELEGATED_PHONE_NAME_MAX_CHARS)
+    }))
   }
 
   getWebSocketEndpoint(): string | null {
