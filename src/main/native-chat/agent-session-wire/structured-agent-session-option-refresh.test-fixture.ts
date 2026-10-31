@@ -13,6 +13,7 @@ import type { AgentModelCatalogService } from '../agent-model-catalog/agent-mode
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-option-models'
 import {
+  hostTestCatalogReadOperation,
   hostTestRestingOptionsRecord,
   hostTestRestingOptionsJournal,
   hostTestOptionsReadStore
@@ -42,7 +43,7 @@ export function piOptionRefreshHost(sessionId = 'session-1') {
   }
   const row = { id: record.options.model, label: 'Model', isDefault: false, efforts: gap }
   let live: StructuredAgentSessionLiveOptions | null = null
-  let modelCatalog: Pick<AgentModelCatalogService, 'read'> | null = null
+  let modelCatalog: Pick<AgentModelCatalogService, 'read' | 'captureRead'> | null = null
   const requests: ReturnType<typeof deferred<AgentSessionOptionsResult>>[] = []
   const host = {
     record,
@@ -53,10 +54,10 @@ export function piOptionRefreshHost(sessionId = 'session-1') {
     set live(value: StructuredAgentSessionLiveOptions | null) {
       live = value
     },
-    get modelCatalog(): Pick<AgentModelCatalogService, 'read'> | null {
+    get modelCatalog(): Pick<AgentModelCatalogService, 'read' | 'captureRead'> | null {
       return modelCatalog
     },
-    set modelCatalog(value: Pick<AgentModelCatalogService, 'read'> | null) {
+    set modelCatalog(value: Pick<AgentModelCatalogService, 'read' | 'captureRead'> | null) {
       modelCatalog = value
     },
     hostReads: 0,
@@ -100,6 +101,7 @@ export function piOptionRefreshHost(sessionId = 'session-1') {
           agents: { definition: () => null, capabilities: () => null },
           store: hostTestOptionsReadStore(() => record),
           modelCatalog: host.modelCatalog ?? {
+            captureRead: hostTestCatalogReadOperation,
             read: async (params: { savedOnly?: boolean }) => {
               expect(params.savedOnly).toBe(true)
               host.catalogReads += 1
