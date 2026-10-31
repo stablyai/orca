@@ -104,6 +104,30 @@ describe('automation update workspace-mode precondition', () => {
     })
   })
 
+  it('saves a setup edit through the controller when the mode still holds', async () => {
+    const { store, id } = await newPerRunAutomation()
+    const controller = new RuntimeAutomationController(store, {
+      showRepo: async () => makeRepo(),
+      showManagedWorktree: async () => {
+        throw new Error('Unexpected worktree lookup.')
+      }
+    })
+
+    await controller.update(
+      id,
+      { name: 'Renamed', setupDecision: 'run' },
+      { expectedWorkspaceMode: 'new_per_run' }
+    )
+
+    await closeTestStores()
+    const reloaded = await createStore()
+    expect(reloaded.listAutomations().find((row) => row.id === id)).toMatchObject({
+      name: 'Renamed',
+      workspaceMode: 'new_per_run',
+      setupDecision: 'run'
+    })
+  })
+
   it('keeps the existing normalization for updates without the precondition', async () => {
     const { store, id } = await newPerRunAutomation()
     store.updateAutomation(id, switchToExisting)

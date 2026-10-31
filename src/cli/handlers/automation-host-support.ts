@@ -11,7 +11,7 @@ import type { RuntimeClient } from '../runtime-client'
 import { RuntimeClientError } from '../runtime-client'
 
 const SETUP_CHOICE_HOST_UPDATE_REQUIRED =
-  "This host's Orca is too old for --setup on automations. Update Orca on that host, or omit --setup to keep that host's setup default."
+  "This host's Orca is too old for --setup on automations. Update Orca on that host, or run the command without --setup."
 
 // Older runtimes silently strip these fields and would run without the requested arguments or setup choice.
 export async function assertAutomationFieldsSupported(
