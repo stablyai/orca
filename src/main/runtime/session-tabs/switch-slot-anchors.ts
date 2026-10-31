@@ -20,42 +20,73 @@ export class SwitchSlotAnchors {
 
   constructor(private readonly now: () => number = Date.now) {}
 
-  record(workspaceId: string, destinationTabId: string, anchor: SlotAnchor): void {
+  /** False when the same slot is already recorded for this destination: a retry after a lost
+   *  answer keeps the entry its first attempt left, so it can't withdraw an anchor already shown. */
+  record(workspaceId: string, destinationTabId: string, anchor: SlotAnchor): boolean {
     const entries = this.byWorkspace.get(workspaceId) ?? new Map<string, Entry>()
-    entries.set(destinationTabId, { anchor, seen: false, recordedAt: this.now() })
     this.byWorkspace.set(workspaceId, entries)
+    const existing = entries.get(destinationTabId)
+    if (existing && sameSlot(existing.anchor, anchor)) {
+      if (!existing.seen) {
+        existing.recordedAt = this.now()
+      }
+      return false
+    }
+    entries.set(destinationTabId, { anchor, seen: false, recordedAt: this.now() })
+    return true
   }
 
+  /** Withdraws an anchor whose destination no frame has shown. */
   forget(workspaceId: string, destinationTabId: string): void {
-    this.byWorkspace.get(workspaceId)?.delete(destinationTabId)
+    const entries = this.byWorkspace.get(workspaceId)
+    if (entries?.get(destinationTabId)?.seen === false) {
+      entries.delete(destinationTabId)
+    }
   }
 
+  /** One pass over the frame's rows, and a new rows array only when a row gains its anchor;
+   *  a workspace with no anchor costs nothing. */
   stamp(snapshot: RuntimeMobileSessionTabsSnapshot): RuntimeMobileSessionTabsSnapshot {
     const entries = this.byWorkspace.get(snapshot.worktree)
     if (!entries) {
       return snapshot
     }
-    const present = new Set(snapshot.tabs.map(tabBarId))
+    const present = new Set<string>()
+    let tabs: Row[] | undefined
+    snapshot.tabs.forEach((row, index) => {
+      const id = tabBarId(row)
+      const entry = entries.get(id)
+      if (!entry) {
+        return
+      }
+      present.add(id)
+      entry.seen = true
+      if (
+        (row.type === 'terminal' || row.type === 'agent-session') &&
+        !row.replaces &&
+        !row.after
+      ) {
+        tabs ??= [...snapshot.tabs]
+        tabs[index] = { ...row, ...entry.anchor }
+      }
+    })
     for (const [id, entry] of entries) {
-      if (present.has(id)) {
-        entry.seen = true
-      } else if (entry.seen || this.now() - entry.recordedAt > AGENT_SESSION_SWITCH_HOST_MS) {
+      if (
+        !present.has(id) &&
+        (entry.seen || this.now() - entry.recordedAt > AGENT_SESSION_SWITCH_HOST_MS)
+      ) {
         entries.delete(id)
       }
     }
     if (entries.size === 0) {
       this.byWorkspace.delete(snapshot.worktree)
-      return snapshot
     }
-    return {
-      ...snapshot,
-      tabs: snapshot.tabs.map((row) => {
-        if (row.type !== 'terminal' && row.type !== 'agent-session') {
-          return row
-        }
-        const entry = entries.get(tabBarId(row))
-        return entry && !row.replaces && !row.after ? { ...row, ...entry.anchor } : row
-      })
-    }
+    return tabs ? { ...snapshot, tabs } : snapshot
   }
+}
+
+function sameSlot(a: SlotAnchor, b: SlotAnchor): boolean {
+  return 'replaces' in a
+    ? 'replaces' in b && a.replaces.tabId === b.replaces.tabId
+    : 'after' in b && a.after.tabId === b.after.tabId
 }

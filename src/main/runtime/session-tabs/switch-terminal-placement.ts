@@ -41,7 +41,9 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
     const layoutTabId = chatTabId(args.chatSessionId)
     const snapshotTabId = `agent-session:${args.chatSessionId}`
     // Before the layout write: a window frame can name the terminal before main's own write does.
-    this.switchSlotAnchors.record(workspaceId, tabId, { replaces: { tabId: snapshotTabId } })
+    const recorded = this.switchSlotAnchors.record(workspaceId, tabId, {
+      replaces: { tabId: snapshotTabId }
+    })
     // Whether the chat left is the layout owner's answer, never assumed.
     let replaced: boolean
     const windowOwnsLayout = !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
@@ -85,7 +87,8 @@ export abstract class OrcaRuntimeWithSwitchTerminalPlacement extends OrcaRuntime
       }
       replaced = reply.result.closed?.includes(layoutTabId) === true
     }
-    if (!replaced) {
+    // A retry finds the chat already gone (its first attempt replaced it); that anchor stays.
+    if (!replaced && recorded) {
       this.switchSlotAnchors.forget(workspaceId, tabId)
     }
     this.publishPtyBackedMobileSessionTerminal(workspaceId, pty, {
