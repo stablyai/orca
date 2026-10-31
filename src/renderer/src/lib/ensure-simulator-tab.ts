@@ -1,3 +1,9 @@
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest,
+  navigateDesktopTab
+} from '@/lib/desktop-navigation'
 import { useAppStore } from '@/store'
 import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
@@ -120,9 +126,10 @@ export function ensureSimulatorTab(
   )
   const existing = getSimulatorTabForWorktree(worktreeId, executionHostId)
   const shouldSurface = options?.surfacePane ?? true
+  const navigation = shouldSurface ? beginDesktopNavigation(store) : null
   if (existing) {
     if (shouldSurface && store.activeWorktreeId === worktreeId) {
-      store.activateTab(existing.id)
+      navigateDesktopTab(existing.id, { request: navigation ?? undefined })
       store.focusGroup(worktreeId, existing.groupId)
       store.setActiveTabType('simulator', worktreeId)
     }
@@ -145,16 +152,25 @@ export function ensureSimulatorTab(
     !serverEnvironmentId
   const groupId = reusableRightGroupId ?? sourceGroupId
   const drawHere = (tabId?: string): string | null => {
+    const foreground = shouldSurface && !!navigation && canPresentDesktopNavigation(navigation)
     // Create directly in the split group; create-then-move can persist an intermediate state during HMR.
     const splitTab = rightSplit
       ? store.createUnifiedTabInSplit(
           worktreeId,
           'simulator',
           { sourceGroupId, splitDirection: 'right' },
-          { ...(tabId ? { id: tabId } : {}), label, activate: true, ...hostOf(executionHostId) }
+          {
+            ...(tabId ? { id: tabId } : {}),
+            label,
+            activate: foreground,
+            ...hostOf(executionHostId)
+          }
         )
       : null
     if (splitTab) {
+      if (foreground) {
+        surfaceCreatedSimulatorTab(worktreeId, splitTab.id, navigation)
+      }
       return splitTab.id
     }
     const id = tabId ?? createBrowserUuid()
@@ -162,11 +178,11 @@ export function ensureSimulatorTab(
       id,
       label,
       targetGroupId: groupId,
-      activate: reusableRightGroupId ? true : shouldSurface,
+      activate: foreground,
       ...hostOf(executionHostId)
     })
     if (reusableRightGroupId || shouldSurface) {
-      surfaceCreatedSimulatorTab(worktreeId, id)
+      surfaceCreatedSimulatorTab(worktreeId, id, navigation)
     }
     return id
   }
@@ -182,7 +198,7 @@ export function ensureSimulatorTab(
       rightSplit,
       surface: (tabId) => {
         if (shouldSurface) {
-          surfaceCreatedSimulatorTab(worktreeId, tabId)
+          surfaceCreatedSimulatorTab(worktreeId, tabId, navigation)
         }
       },
       drawHere
@@ -204,9 +220,16 @@ function hostOf(executionHostId: ExecutionHostId | undefined): {
   return executionHostId ? { executionHostId } : {}
 }
 
-function surfaceCreatedSimulatorTab(worktreeId: string, tabId: string): void {
+function surfaceCreatedSimulatorTab(
+  worktreeId: string,
+  tabId: string,
+  navigation: DesktopNavigationRequest | null
+): void {
+  if (!navigation || !canPresentDesktopNavigation(navigation)) {
+    return
+  }
   const store = useAppStore.getState()
-  store.activateTab(tabId)
+  navigateDesktopTab(tabId, { request: navigation })
   store.setActiveTabType('simulator', worktreeId)
   // Why read by id: placement falls back to the active group when the requested one is gone.
   const groupId = store.getTab(tabId)?.groupId

@@ -1,3 +1,5 @@
+import { workspaceView } from '@/lib/renderer-view'
+import { navigateDesktopTab } from '@/lib/desktop-navigation'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
@@ -23,7 +25,11 @@ export function resolveTabNumberShortcutTarget(
   state: TabNumberShortcutState,
   index: number
 ): Tab | null {
-  if (state.activeView !== 'terminal' || state.activeWorktreeId === null || index < 0) {
+  if (
+    workspaceView(state.activeView) !== 'terminal' ||
+    state.activeWorktreeId === null ||
+    index < 0
+  ) {
     return null
   }
 
@@ -60,7 +66,7 @@ export function activateTabNumberShortcut(index: number): boolean {
   const worktreeId = target.worktreeId
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   store.focusGroup(worktreeId, target.groupId)
-  store.activateTab(target.id)
+  navigateDesktopTab(target.id)
 
   if (target.contentType === 'terminal') {
     if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {

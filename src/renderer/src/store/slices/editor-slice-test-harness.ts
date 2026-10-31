@@ -17,6 +17,13 @@ export function createEditorStore(): StoreApi<AppState> {
   // oxlint-disable-next-line typescript/no-explicit-any, typescript/consistent-type-assertions -- SAFETY: a partial store; tests read only the slices it builds.
   return createStore<any>()((...args: any[]) => ({
     activeWorktreeId: 'wt-1',
+    activeView: 'terminal',
+    setActiveView: (activeView: AppState['activeView']) => args[0]({ activeView }),
+    setActiveWorktree: (activeWorktreeId: string | null, activeWorkspaceExecutionHostId?: string) =>
+      args[0]({
+        activeWorktreeId,
+        activeWorkspaceExecutionHostId: activeWorkspaceExecutionHostId ?? null
+      }),
     tabsByWorktree: {},
     ...emptyTabLayoutState(),
     browserTabsByWorktree: {},
@@ -35,6 +42,13 @@ export function createEditorTabsStore(): StoreApi<AppState> {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   return createStore<any>()((...args: any[]) => ({
     activeWorktreeId: 'wt-1',
+    activeView: 'terminal',
+    setActiveView: (activeView: AppState['activeView']) => args[0]({ activeView }),
+    setActiveWorktree: (activeWorktreeId: string | null, activeWorkspaceExecutionHostId?: string) =>
+      args[0]({
+        activeWorktreeId,
+        activeWorkspaceExecutionHostId: activeWorkspaceExecutionHostId ?? null
+      }),
     tabsByWorktree: {},
     browserTabsByWorktree: {},
     activeBrowserTabId: null,

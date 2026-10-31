@@ -1,4 +1,9 @@
-import { useThreadNavigation } from '@/components/threads/thread-navigation'
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  navigateDesktopTab,
+  type DesktopNavigationRequest
+} from './desktop-navigation'
 // Send open with the chat’s own tab ID, select only after main draws it, and use afterPendingTab before reading the returned tab from store.
 
 import type { ExecutionHostId } from '../../../shared/execution-host'
@@ -18,6 +23,7 @@ export type AgentSessionTabOpen = {
   agent: TuiAgent
   targetGroupId?: string
   afterTabId?: string
+  navigation?: DesktopNavigationRequest | null
   activate: boolean
   /** Today's draw, for a twin main may route to a paired server. */
   drawHere: () => Tab
@@ -31,7 +37,12 @@ export function openAgentSessionTabThroughLayoutOwner(
   open: AgentSessionTabOpen
 ): OpenedAgentSessionTab | null {
   const { worktreeId, sessionId } = open
-  const request = useThreadNavigation.getState().request
+  const request =
+    open.navigation === undefined
+      ? open.activate
+        ? beginDesktopNavigation()
+        : null
+      : open.navigation
   const state = useAppStore.getState()
   const tabId = structuredAgentSessionTabId(sessionId)
   const label = defaultAgentChatLabel(open.agent)
@@ -54,12 +65,12 @@ export function openAgentSessionTabThroughLayoutOwner(
     command: { type: 'openAgentSessionTab', tabId, sessionId, agent: open.agent, ...placement },
     facts: { label },
     shown: (shownId) => {
-      if (!open.activate || useThreadNavigation.getState().request !== request) {
+      if (!open.activate || !request || !canPresentDesktopNavigation(request)) {
         return
       }
       // As the window's own open: the chat is selected in its group; the focused group stays.
       const current = useAppStore.getState()
-      current.activateTab(shownId, { worktreeId })
+      navigateDesktopTab(shownId, { worktreeId, request })
       current.setActiveTabType('agent-session', worktreeId)
     },
     drawHere: () => open.drawHere().id

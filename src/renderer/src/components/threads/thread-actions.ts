@@ -1,9 +1,12 @@
-import { getStructuredLaunchStateBySessionId } from '@/lib/agent-session/launch/structured-agent-session-launch-registry'
-import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  commitDesktopNavigation,
+  type DesktopNavigationRequest
+} from '@/lib/desktop-navigation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -14,8 +17,9 @@ import { activateStructuredAgentSessionTab } from '@/lib/agent-session/structure
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
-  useThreadNavigation,
-  clearThreadSelection,
+  useThreadDraft,
+  enterThreadDraft,
+  consumeThreadDraft,
   requestThreadProjectAdd
 } from './thread-navigation'
 
@@ -24,41 +28,42 @@ export async function openNewThread(): Promise<void> {
   if (!state.settings?.experimentalThreads) {
     return
   }
-  const request = clearThreadSelection()
+  const request = beginDesktopNavigation(state, true)
   const projects = await eligibleThreadProjects(state)
-  if (useThreadNavigation.getState().request !== request) {
+  if (!canPresentDesktopNavigation(request)) {
     return
   }
   if (!projects.length) {
-    requestThreadProjectAdd()
+    requestThreadProjectAdd(request)
     useAppStore.getState().openModal('add-repo')
     return
   }
-  useAppStore.getState().setActiveView('terminal')
-  useThreadNavigation.setState({
-    selection: { kind: 'new', projectKey: projects[0].key, draftId: createBrowserUuid() }
-  })
+  commitDesktopNavigation(request, () => enterThreadDraft(projects[0].key, request))
 }
 
-export function selectThread(tab: Tab): void {
+export function selectThread(tab: Tab, request?: DesktopNavigationRequest): void {
   const state = useAppStore.getState()
   const hostId = structuredAgentSessionOwnerForTab(state, tab)
   if (!hostId) {
     return
   }
-  if (
-    !activateAndRevealWorktree(tab.worktreeId, {
-      executionHostId: hostId,
-      providesInitialSurface: true
+  const navigation = request ?? beginDesktopNavigation(state, true)
+  commitDesktopNavigation(navigation, () => {
+    if (
+      !activateAndRevealWorktree(tab.worktreeId, {
+        executionHostId: hostId,
+        providesInitialSurface: true,
+        navigation: navigation
+      })
+    ) {
+      return
+    }
+    activateStructuredAgentSessionTab({
+      worktreeId: tab.worktreeId,
+      tabId: tab.id,
+      target: structuredAgentSessionTargetForHost(hostId) ?? undefined,
+      navigation
     })
-  ) {
-    return
-  }
-  state.setActiveView('terminal')
-  activateStructuredAgentSessionTab({
-    worktreeId: tab.worktreeId,
-    tabId: tab.id,
-    target: structuredAgentSessionTargetForHost(hostId) ?? undefined
   })
 }
 
@@ -81,9 +86,9 @@ export function sendNewThread(
     prompt: text,
     promptDelivery: 'auto-submit'
   })
-  const { selection, request } = useThreadNavigation.getState()
+  const selection = useThreadDraft.getState().draft
+  const request = beginDesktopNavigation(state, true)
   let openedTabId: string | undefined
-  let openedSessionId: string | undefined
   const launch = beginStructuredAgentSessionProvisionalLaunch({
     plan,
     hooks: {},
@@ -91,22 +96,18 @@ export function sendNewThread(
     activate: false,
     onOpened: (tab) => {
       openedTabId = tab.id
-      openedSessionId = tab.entityId
+      queueMicrotask(() => {
+        if (selection) {
+          consumeThreadDraft(selection)
+        }
+      })
       afterPendingTab(tab.id, (shown) => {
-        const current = useThreadNavigation.getState().selection
-        if (
-          !shown ||
-          useThreadNavigation.getState().request !== request ||
-          selection?.kind !== 'new' ||
-          current?.kind !== 'new' ||
-          current.draftId !== selection.draftId ||
-          current.projectKey !== selection.projectKey
-        ) {
+        if (!shown || !canPresentDesktopNavigation(request) || selection?.kind !== 'new') {
           return
         }
         const visible = useAppStore.getState().getTab(shown)
         if (visible) {
-          selectThread(visible)
+          selectThread(visible, request)
         }
       })
     }
@@ -114,11 +115,7 @@ export function sendNewThread(
   return (
     launch && {
       ...launch,
-      ownsPrompt: () =>
-        !!openedTabId &&
-        (isPendingTab(openedTabId) ||
-          !!useAppStore.getState().getTab(openedTabId) ||
-          !!getStructuredLaunchStateBySessionId(openedSessionId ?? ''))
+      ownsPrompt: () => !!openedTabId
     }
   )
 }

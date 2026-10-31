@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { navigateDesktopTab } from './desktop-navigation'
 import { resolveActiveTabOwnerWorktreeId } from '@/store/slices/active-tab-owner-worktree'
 import { FOCUS_TERMINAL_PANE_EVENT, type FocusTerminalPaneDetail } from '@/constants/terminal'
 
@@ -22,6 +23,17 @@ export function activateTabAndFocusPane(
 ): void {
   const { setActiveTab, setActiveTabType, tabsByWorktree, activeWorktreeId } =
     useAppStore.getState()
+  const owner = resolveActiveTabOwnerWorktreeId(tabsByWorktree, activeWorktreeId, tabId)
+  const target = owner
+    ? useAppStore
+        .getState()
+        .unifiedTabsByWorktree[owner]?.find(
+          (tab) => tab.contentType === 'terminal' && tab.entityId === tabId
+        )
+    : undefined
+  if (target) {
+    navigateDesktopTab(target.id, { worktreeId: target.worktreeId })
+  }
   // Reveal Terminal for tab-only activation, scoped to its owner so a late reveal cannot change another workspace’s surface.
   setActiveTabType(
     'terminal',

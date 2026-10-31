@@ -1,3 +1,4 @@
+import { workspaceView } from '@/lib/renderer-view'
 import { useMemo, useRef } from 'react'
 import { parseWorkspaceKey } from '../../../shared/workspace-scope'
 import type { TerminalTab } from '../../../shared/terminal-tab-types'
@@ -69,7 +70,7 @@ export function useTerminalWorkspaceFoundation() {
     () => new Set(workspaceSurfaceIds),
     [workspaceSurfaceIds]
   )
-  const activeView = useAppStore((state) => state.activeView)
+  const activeView = useAppStore((state) => workspaceView(state.activeView))
   // Root subscriptions track mount/parking transitions; LiveTerminalTabBar alone consumes title-only updates.
   const tabsByWorktree = useAppStore((state) =>
     terminalTopologyProjectionRef.current!.project(state.tabsByWorktree)

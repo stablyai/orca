@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setThreadTestPage } from './thread-page.test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -8,10 +9,13 @@ import {
   qualifyDetectedResult
 } from '@/store/slices/worktrees-detected-listing-fixtures'
 import { makeWorktree } from '@/store/slices/store-test-helpers'
+import NonGitFolderDialog from '../sidebar/NonGitFolderDialog'
+import { makeUnifiedTab, makeTabGroup } from '@/store/slices/store-test-helpers'
+import { useDesktopThreadPage } from './use-desktop-thread-page'
 import AddRepoDialog from '../sidebar/AddRepoDialog'
 import { TooltipProvider } from '../ui/tooltip'
 import { NewThread } from './NewThread'
-import { useThreadNavigation } from './thread-navigation'
+import { activeThreadSelection } from './thread-navigation'
 import { openNewThread } from './thread-actions'
 import { useThreadProjectAddController } from './use-thread-project-add-controller'
 import { promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
@@ -46,11 +50,13 @@ const launchDraft = {
 const picker = vi.fn(async () => ['/C'])
 let addedMainCheckout = true
 function Surface() {
-  const selection = useThreadNavigation((s) => s.selection)
+  const selection = useDesktopThreadPage()
   const modal = useAppStore((s) => s.activeModal)
   const hosted = useThreadProjectAddController()
   return (
     <TooltipProvider>
+      <output data-testid="page">{selection?.kind ?? 'workbench'}</output>
+      <NonGitFolderDialog />
       {selection?.kind === 'new' ? (
         <NewThread {...selection} />
       ) : (
@@ -64,14 +70,14 @@ beforeEach(() => {
   clearNativeChatComposerDraftsForTests()
   vi.clearAllMocks()
   addedMainCheckout = true
-  useThreadNavigation.setState({
+  setThreadTestPage({
     selection: { kind: 'new', projectKey: 'local|A', draftId: 'same-draft', launchDraft },
     projectRequest: null
   })
   useAppStore.setState({
     settings: { ...useAppStore.getState().settings!, experimentalThreads: true },
     activeModal: 'none',
-    activeView: 'terminal',
+    activeView: 'thread-draft',
     activeWorktreeId: 'A::/A',
     activeWorkspaceExecutionHostId: 'local',
     repos: [repo('A')],
@@ -132,7 +138,7 @@ it.each(['complete', 'cancel', 'empty', 'ineligible', 'superseded'] as const)(
       })
     }
     if (entry === 'empty') {
-      useThreadNavigation.setState({ selection: null })
+      setThreadTestPage({ selection: null })
       useAppStore.setState({ repos: [], worktreesByRepo: {} })
     }
     render(<Surface />)
@@ -159,7 +165,7 @@ it.each(['complete', 'cancel', 'empty', 'ineligible', 'superseded'] as const)(
       )
     )
     expect(screen.getByRole('textbox', { name: /Ask for changes/ }).textContent).toBe(
-      entry === 'empty' || entry === 'superseded' ? '' : 'P in the same draft'
+      entry === 'empty' ? '' : 'P in the same draft'
     )
     await waitFor(() =>
       expect(document.activeElement).toBe(screen.getByRole('textbox', { name: /Ask for changes/ }))
@@ -167,13 +173,91 @@ it.each(['complete', 'cancel', 'empty', 'ineligible', 'superseded'] as const)(
     expect(useAppStore.getState().activeWorktreeId).toBe('A::/A')
     expect(Object.values(useAppStore.getState().unifiedTabsByWorktree).flat()).toEqual([])
     if (entry !== 'empty' && entry !== 'superseded') {
-      expect(useThreadNavigation.getState().selection).toMatchObject({
+      expect(activeThreadSelection(useAppStore.getState())).toMatchObject({
         draftId: 'same-draft',
         launchDraft
       })
     }
     if (entry === 'superseded') {
-      expect(useThreadNavigation.getState().selection).not.toMatchObject({ draftId: 'same-draft' })
+      expect(activeThreadSelection(useAppStore.getState())).toMatchObject({
+        draftId: 'same-draft',
+        launchDraft
+      })
     }
+  }
+)
+
+it.each([true, false])(
+  'folder handoff reveals a previously-added folder (thread requester=%s)',
+  async (threadRequester) => {
+    const C = { ...repo('C'), kind: 'folder' as const, executionHostId: 'local' as const }
+    const wt = { ...worktree('C'), isMainWorktree: false }
+    const tab = makeUnifiedTab({
+      id: 'existing-editor',
+      worktreeId: wt.id,
+      contentType: 'editor',
+      entityId: '/C/file',
+      groupId: 'C-group',
+      executionHostId: 'local'
+    })
+    useAppStore.setState({
+      repos: [repo('A'), C],
+      worktreesByRepo: { A: [worktree('A')], C: [wt] },
+      unifiedTabsByWorktree: { [wt.id]: [tab] },
+      openFiles: [
+        {
+          id: '/C/file',
+          worktreeId: wt.id,
+          filePath: '/C/file',
+          relativePath: 'file',
+          language: 'text',
+          isDirty: false
+        }
+      ],
+      groupsByWorktree: {
+        [wt.id]: [
+          makeTabGroup({
+            id: 'C-group',
+            worktreeId: wt.id,
+            tabOrder: [tab.id],
+            activeTabId: tab.id
+          })
+        ]
+      },
+      activeGroupIdByWorktree: { [wt.id]: 'C-group' },
+      reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 1 })),
+      refreshGitHubForWorktreeIfStale: vi.fn(),
+      revealWorktreeInSidebar: vi.fn()
+    })
+    window.api.repos.add = vi.fn(async () => ({ repo: C }))
+    window.api.projectGroups.scanNested = vi.fn(async () => ({
+      selectedPath: '/C',
+      selectedPathKind: 'non_git_folder',
+      repos: [],
+      stopped: false,
+      maxDepth: 3,
+      maxRepos: 100,
+      timeoutMs: null
+    }))
+    if (!threadRequester) {
+      setThreadTestPage({ selection: null })
+    }
+    render(<Surface />)
+    if (threadRequester) {
+      const composer = await screen.findByRole('textbox', { name: /Ask for changes/ })
+      await waitFor(() => expect(promptEditor(composer)).toBeTruthy())
+      act(() => promptEditor(composer).commands.insertContent('P in A'))
+      fireEvent.click(screen.getByRole('button', { name: 'Choose project' }))
+      fireEvent.click(screen.getByRole('option', { name: 'Add project' }))
+    } else {
+      act(() => useAppStore.getState().openModal('add-repo'))
+    }
+    await screen.findByRole('dialog')
+    fireEvent.click(screen.getByRole('button', { name: /Browse folder/ }))
+    await screen.findByRole('button', { name: 'Open as Folder' })
+    fireEvent.click(screen.getByRole('button', { name: 'Open as Folder' }))
+    await waitFor(() => expect(useAppStore.getState().activeWorktreeId).toBe(wt.id))
+    expect(useAppStore.getState().getActiveTab(wt.id)?.id).toBe(tab.id)
+    expect(screen.getByTestId('page').textContent).toBe('workbench')
   }
 )

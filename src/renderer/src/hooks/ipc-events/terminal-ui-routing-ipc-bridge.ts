@@ -1,4 +1,8 @@
-import { clearThreadSelection, useThreadNavigation } from '@/components/threads/thread-navigation'
+import {
+  beginDesktopNavigation,
+  commitDesktopNavigation,
+  navigateDesktopTab
+} from '@/lib/desktop-navigation'
 import type { SplitTerminalPaneDetail } from '@/constants/terminal'
 import { requestBackgroundTerminalWorktreeMount } from '@/components/terminal/background-terminal-worktree-mount'
 import {
@@ -133,8 +137,11 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         scrollToBottomIfOutputSinceLastView
       }) => {
         const store = useAppStore.getState()
-        revealWorkspaceSurface(store, worktreeId)
-        store.setActiveTab(tabId)
+        const request = beginDesktopNavigation(store)
+        commitDesktopNavigation(request, () => {
+          revealWorkspaceSurface(store, worktreeId)
+          store.setActiveTab(tabId)
+        })
         if (ackPaneKeyOnSuccess || flashFocusedPane || scrollToBottomIfOutputSinceLastView) {
           activateTabAndFocusPane(tabId, leafId ?? null, {
             ...(ackPaneKeyOnSuccess ? { ackPaneKeyOnSuccess } : {}),
@@ -162,15 +169,15 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
       if (
         !userInitiated &&
         tab?.contentType === 'agent-session' &&
-        store.activeWorktreeId !== worktreeId
+        (store.activeWorktreeId !== worktreeId ||
+          store.activeView === 'thread-draft' ||
+          store.activeView === 'empty-workbench')
       ) {
         return
       }
       if (!tab) {
         if (browserTarget) {
-          if (userInitiated) {
-            clearThreadSelection()
-          }
+          beginDesktopNavigation(store)
           // Why: older/mobile fallback snapshots identify browser tabs by workspace id when no unified tab wrapper exists.
           revealWorkspaceSurface(store, worktreeId)
           store.setActiveBrowserTab(browserTarget.workspaceId)
@@ -178,12 +185,10 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         }
         return
       }
-      if (!userInitiated && useThreadNavigation.getState().selection) {
-        return
-      }
+      const request = beginDesktopNavigation(store)
       revealWorkspaceSurface(store, worktreeId)
       store.focusGroup(worktreeId, tab.groupId)
-      store.activateTab(tab.id, { recordFocus: userInitiated === true })
+      navigateDesktopTab(tab.id, { worktreeId, request })
       if (tab.contentType === 'agent-session') {
         store.setActiveTabType('agent-session', worktreeId)
       } else if (browserTarget) {

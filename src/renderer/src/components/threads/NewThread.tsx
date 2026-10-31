@@ -1,5 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import { appendToNativeChatComposerDraft } from '../native-chat/native-chat-composer-draft-store'
+import {
+  appendToNativeChatComposerDraft,
+  readNativeChatComposerDraft
+} from '../native-chat/native-chat-composer-draft-store'
 import { useNativeChatComposerRevealFocus } from '../native-chat/use-native-chat-composer-reveal-focus'
 import { Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -24,7 +27,12 @@ import {
   CommandSeparator
 } from '../ui/command'
 import { useThreadProjects } from './use-thread-projects'
-import { changeThreadDraftProject, requestThreadProjectAdd } from './thread-navigation'
+import {
+  changeThreadDraftProject,
+  requestThreadProjectAdd,
+  threadDraftScopeKey,
+  useThreadDraft
+} from './thread-navigation'
 import { sendNewThread } from './thread-actions'
 import { useThreadLaunchChoices } from './use-thread-launch-choices'
 
@@ -49,7 +57,7 @@ export function NewThread({
   const chosenAgent = choices.agent
   const appearance = useNativeChatStoreAppearanceStyle()
   useNativeChatComposerRevealFocus({
-    tabId: `thread-draft:${draftId}`,
+    tabId: threadDraftScopeKey(),
     rootRef: root,
     composerRef: composer,
     isVisible: !pickerOpen && !modalOpen,
@@ -82,10 +90,12 @@ export function NewThread({
             setSending(false)
             if (
               !launch.ownsPrompt() &&
+              useThreadDraft.getState().draft?.draftId === draftId &&
+              !readNativeChatComposerDraft(threadDraftScopeKey()).text &&
               (result.kind === 'failed' ||
                 (result.kind === 'cancelled' && result.sessionId === null))
             ) {
-              appendToNativeChatComposerDraft(`thread-draft:${draftId}`, { text })
+              appendToNativeChatComposerDraft(threadDraftScopeKey(), { text })
             }
           })
           return true
@@ -192,9 +202,9 @@ export function NewThread({
         </h1>
         <NativeChatComposer
           ref={composer}
-          terminalTabId={`thread-draft:${draftId}`}
-          paneKey={`thread-draft:${draftId}:composer`}
-          draftScopeKey={`thread-draft:${draftId}`}
+          terminalTabId={threadDraftScopeKey()}
+          paneKey={`${threadDraftScopeKey()}:composer`}
+          draftScopeKey={threadDraftScopeKey()}
           targetPtyId={null}
           agent={chosenAgent}
           structuredTransport={transport}

@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import { useCallback, useRef } from 'react'
 import { useAppStore } from '@/store'
 import { track } from '@/lib/telemetry'
@@ -11,7 +12,10 @@ import { finishProjectAddWithDefaultCheckout } from './project-added-default-che
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { selectWorktreesByRepo } from '@/store/workspace-record-selectors'
 
-export type GitRepoAddOutcome = { importedProjectGroupId?: string }
+export type GitRepoAddOutcome = {
+  importedProjectGroupId?: string
+  navigation?: DesktopNavigationRequest
+}
 
 export type CompleteGitRepoAdd = (
   repoId: string,
@@ -74,7 +78,8 @@ export function useCompleteGitRepoAdd({
         source,
         executionHostId,
         closeModal,
-        setHideDefaultBranchWorkspace
+        setHideDefaultBranchWorkspace,
+        navigation: outcome?.navigation
       })
     },
     [closeModal, finishProjectAdd, setHideDefaultBranchWorkspace]

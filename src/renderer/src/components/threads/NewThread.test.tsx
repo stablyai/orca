@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { setThreadTestPage } from './thread-page.test-fixture'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
@@ -14,7 +15,7 @@ vi.mock('@/store', async () => {
       activeModal: 'none',
       repos: [],
       dictationState: 'idle',
-      settings: { defaultTuiAgent: 'claude', voice: { enabled: false } },
+      settings: { experimentalThreads: true, defaultTuiAgent: 'claude', voice: { enabled: false } },
       agentStatusByPaneKey: {},
       updateSettings: vi.fn(),
       clearNativeChatLaunchDraft: vi.fn(),
@@ -45,7 +46,7 @@ vi.mock('../native-chat/NativeChatComposerActions', () => ({
   NativeChatComposerActions: () => null
 }))
 import { NewThread } from './NewThread'
-import { useThreadNavigation } from './thread-navigation'
+import { useThreadDraft, activeThreadSelection } from './thread-navigation'
 import { useAppStore } from '@/store'
 
 const projects = ['A', 'B'].map((id) => ({
@@ -55,12 +56,12 @@ const projects = ['A', 'B'].map((id) => ({
   worktree: makeWorktree({ id: `${id}::/${id}`, repoId: id, path: `/${id}`, isMainWorktree: true })
 }))
 function Draft() {
-  const selected = useThreadNavigation((s) => s.selection)
+  const selected = useThreadDraft((s) => s.draft)
   return selected?.kind === 'new' ? <NewThread key={selected.draftId} {...selected} /> : null
 }
 beforeEach(() => {
   clearNativeChatComposerDraftsForTests()
-  useThreadNavigation.setState({
+  setThreadTestPage({
     selection: { kind: 'new', projectKey: 'local|A', draftId: 'one' }
   })
   useAppStore.setState({ activeModal: 'none' })
@@ -128,7 +129,7 @@ it.each<{ result: StructuredAgentLaunchSettlement; restore: boolean }>([
     fireEvent.click(screen.getByRole('button', { name: 'Choose project' }))
     fireEvent.click(screen.getByRole('option', { name: 'B' }))
     await act(async () => settle(result))
-    expect(useThreadNavigation.getState().selection).toMatchObject({
+    expect(activeThreadSelection(useAppStore.getState())).toMatchObject({
       projectKey: 'local|B',
       draftId: 'one'
     })
@@ -151,7 +152,7 @@ it.each(['refused', 'thrown'] as const)(
     fireEvent.keyDown(composer, { key: 'Enter' })
     await waitFor(() => expect(mocks.send).toHaveBeenCalledOnce())
     expect(composer.textContent).toBe('Keep this prompt')
-    expect(useThreadNavigation.getState().selection).toMatchObject({ projectKey: 'local|A' })
+    expect(activeThreadSelection(useAppStore.getState())).toMatchObject({ projectKey: 'local|A' })
   }
 )
 
@@ -168,7 +169,7 @@ it('cannot restore a failed older draft into a different new draft', async () =>
   fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
   await waitFor(() => expect(mocks.send).toHaveBeenCalledOnce())
   act(() =>
-    useThreadNavigation.setState({
+    setThreadTestPage({
       selection: { kind: 'new', projectKey: 'local|B', draftId: 'two' }
     })
   )

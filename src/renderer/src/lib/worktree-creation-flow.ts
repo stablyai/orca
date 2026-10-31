@@ -1,3 +1,9 @@
+import {
+  presentDesktopWorkspace,
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from './desktop-navigation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import {
@@ -21,11 +27,16 @@ import {
 
 type ContinueBackgroundWorktreeCreationOptions = {
   revealCreationSurface?: boolean
+  navigation?: DesktopNavigationRequest
 }
 
 // Contain fire-and-forget rejections or pending creation UI remains stuck without errors.
-function startWorktreeCreation(creationId: string, request: WorktreeCreationRequest): void {
-  executeWorktreeCreation(creationId, request).catch((error: unknown) => {
+function startWorktreeCreation(
+  creationId: string,
+  request: WorktreeCreationRequest,
+  navigation: DesktopNavigationRequest
+): void {
+  executeWorktreeCreation(creationId, request, navigation).catch((error: unknown) => {
     console.error('worktree create: unhandled failure', creationId, error)
     const store = useAppStore.getState()
     if (!store.pendingWorktreeCreations[creationId]) {
@@ -65,50 +76,66 @@ function seedPendingChatDraft(
 function revealPendingCreation(
   creationId: string,
   request: WorktreeCreationRequest,
-  phase: WorktreeCreationPhase
+  phase: WorktreeCreationPhase,
+  navigation: DesktopNavigationRequest
 ): void {
   const store = useAppStore.getState()
   const indeterminate = getWorktreeCreationIndeterminate(request)
-  store.beginPendingWorktreeCreation({
+  const entry = {
     creationId,
     phase,
-    status: 'creating',
+    status: 'creating' as const,
     startedAt: Date.now(),
     indeterminate,
     // Give creation its tab strip synchronously; delayed reveal flashes the prior workspace’s tabs.
     loaderVisible: true,
     request
-  })
+  }
+  if (canPresentDesktopNavigation(navigation)) {
+    store.beginPendingWorktreeCreation(entry)
+  } else {
+    store.beginPendingWorktreeCreation(entry, { activate: false })
+  }
   seedPendingChatDraft(creationId, request)
   // Creation UI renders only in terminal view; activate it before publishing the panel.
-  store.setActiveView('terminal')
-  store.setSidebarOpen(true)
+  if (canPresentDesktopNavigation(navigation)) {
+    presentDesktopWorkspace(store, navigation)
+    store.setSidebarOpen(true)
+  }
 }
 
 /** Start creation without blocking the composer; the pending panel owns preparation and errors. */
-export function runBackgroundWorktreeCreation(request: WorktreeCreationRequest): string {
+export function runBackgroundWorktreeCreation(
+  request: WorktreeCreationRequest,
+  navigation = beginDesktopNavigation()
+): string {
   const store = useAppStore.getState()
   const existingCreationId = findPendingLinkedWorkItemCreationId(
     store.pendingWorktreeCreations,
     request
   )
   if (existingCreationId) {
-    store.setActivePendingWorktreeCreation(existingCreationId)
-    store.setActiveView('terminal')
-    store.setSidebarOpen(true)
+    if (canPresentDesktopNavigation(navigation)) {
+      store.setActivePendingWorktreeCreation(existingCreationId)
+      presentDesktopWorkspace(store, navigation)
+      store.setSidebarOpen(true)
+    }
     return existingCreationId
   }
   // Plain-HTTP LAN clients lack randomUUID; createBrowserUuid uses getRandomValues fallback.
   const creationId = createBrowserUuid()
-  revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request))
-  startWorktreeCreation(creationId, request)
+  revealPendingCreation(creationId, request, getInitialWorktreeCreationPhase(request), navigation)
+  startWorktreeCreation(creationId, request, navigation)
   return creationId
 }
 
 /** Stage a pending entry before async preflight so the UI shows immediate progress. */
-export function beginBackgroundWorktreePreparation(request: WorktreeCreationRequest): string {
+export function beginBackgroundWorktreePreparation(
+  request: WorktreeCreationRequest,
+  navigation = beginDesktopNavigation()
+): string {
   const creationId = createBrowserUuid()
-  revealPendingCreation(creationId, request, 'preparing')
+  revealPendingCreation(creationId, request, 'preparing', navigation)
   return creationId
 }
 
@@ -118,6 +145,7 @@ export function continueBackgroundWorktreeCreation(
   request: WorktreeCreationRequest,
   options: ContinueBackgroundWorktreeCreationOptions = {}
 ): boolean {
+  const navigation = options.navigation ?? beginDesktopNavigation()
   const store = useAppStore.getState()
   const staged = store.pendingWorktreeCreations[creationId]
   if (!staged) {
@@ -135,18 +163,19 @@ export function continueBackgroundWorktreeCreation(
     request
   })
   // Late background preflight preserves pending rows without reselecting creation after navigation.
-  if (options.revealCreationSurface !== false) {
+  if (options.revealCreationSurface !== false && canPresentDesktopNavigation(navigation)) {
     store.setActivePendingWorktreeCreation(creationId)
-    store.setActiveView('terminal')
+    presentDesktopWorkspace(store, navigation)
     store.setSidebarOpen(true)
   }
-  startWorktreeCreation(creationId, request)
+  startWorktreeCreation(creationId, request, navigation)
   return true
 }
 
 /** Re-run a failed creation from its panel, reusing the captured request. */
 export function retryBackgroundWorktreeCreation(creationId: string): void {
   const store = useAppStore.getState()
+  const navigation = beginDesktopNavigation(store)
   const entry = store.pendingWorktreeCreations[creationId]
   if (!entry) {
     return
@@ -161,7 +190,7 @@ export function retryBackgroundWorktreeCreation(creationId: string): void {
     worktreeId: undefined
   })
   store.setActivePendingWorktreeCreation(creationId)
-  store.setActiveView('terminal')
+  presentDesktopWorkspace(store, navigation)
   store.setSidebarOpen(true)
-  startWorktreeCreation(creationId, entry.request)
+  startWorktreeCreation(creationId, entry.request, navigation)
 }

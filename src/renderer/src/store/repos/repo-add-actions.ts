@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
 import type { StateCreator } from 'zustand'
 import { toast } from 'sonner'
 import type { AppState } from '../types'
@@ -192,6 +193,7 @@ export function createRepoAddActions(
     },
 
     addNonGitFolder: async (path, options) => {
+      const navigation = options?.navigation ?? beginDesktopNavigation(get())
       try {
         const hadProjectBeforeAdd = get().repos.length > 0
         const repo = await get().addRepoPath(path, 'folder', options)
@@ -227,7 +229,8 @@ export function createRepoAddActions(
           await revealOnboardingFolderWithAgentLaunch({
             worktreeId: folderWorktree.id,
             executionHostId,
-            launch
+            launch,
+            navigation
           })
         }
         return repo

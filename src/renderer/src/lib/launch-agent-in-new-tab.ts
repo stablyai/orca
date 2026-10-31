@@ -1,4 +1,9 @@
 import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  navigateDesktopTab
+} from './desktop-navigation'
+import {
   launchNewTabPromptThroughHost,
   newTabPromptLaunchesThroughHost
 } from '@/lib/launch-agent-new-tab-host-route'
@@ -44,6 +49,13 @@ export function launchAgentInNewTabWithOutcome(
   args: LaunchAgentInNewTabArgs,
   notifyFailure = true
 ): AgentTabLaunchOutcome {
+  const navigation =
+    args.navigation === undefined
+      ? args.activate === false
+        ? null
+        : beginDesktopNavigation()
+      : args.navigation
+  args = { ...args, navigation }
   const {
     agent,
     worktreeId,
@@ -95,6 +107,7 @@ export function launchAgentInNewTabWithOutcome(
   if (plan?.route === 'structured-native-chat') {
     const structured = launchStructuredAgentFromNewTab({
       plan,
+      navigation,
       worktreeId,
       ...(args.focusIntent ? { focusIntent: args.focusIntent } : {}),
       ...(groupId ? { groupId } : {}),
@@ -143,7 +156,7 @@ export function launchAgentInNewTabWithOutcome(
   args.focusIntent?.cancel()
   const runtimeEnvironmentId = runtimeEnvironmentIdOrLocalUnlessTwin(store, worktreeId)
   if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
-    if (beforeSurfaceOpen?.({ kind: 'host-published' }) === false) {
+    if (beforeSurfaceOpen?.({ kind: 'host-published' }, navigation) === false) {
       return null
     }
     const webHostDelivery = launchAgentInWebHostTab({
@@ -175,7 +188,7 @@ export function launchAgentInNewTabWithOutcome(
     return null
   }
 
-  if (beforeSurfaceOpen?.({ kind: 'local-terminal' }) === false) {
+  if (beforeSurfaceOpen?.({ kind: 'local-terminal' }, navigation) === false) {
     return null
   }
   if (
@@ -192,7 +205,7 @@ export function launchAgentInNewTabWithOutcome(
       ...(initialCwd?.trim() ? { cwd: initialCwd } : {}),
       launchSource: launchSource ?? 'tab_bar_quick_launch',
       quickCommandLabel,
-      ...(activate === false ? { activate: false } : {}),
+      ...(!navigation || !canPresentDesktopNavigation(navigation) ? { activate: false } : {}),
       ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
       pasteContent: pasteDraftAfterLaunch,
       submit: submitPastedPrompt,
@@ -210,7 +223,7 @@ export function launchAgentInNewTabWithOutcome(
     launchAgent: agent,
     quickCommandLabel,
     ...(pendingActivationSpawn ? { pendingActivationSpawn: true } : {}),
-    ...(activate === false ? { activate: false } : {}),
+    ...(!navigation || !canPresentDesktopNavigation(navigation) ? { activate: false } : {}),
     pendingStartup: {
       command: startupPlan.launchCommand,
       ...(startupPlan.env ? { env: startupPlan.env } : {}),
@@ -230,6 +243,14 @@ export function launchAgentInNewTabWithOutcome(
       }
     }
   })
+  const unified = useAppStore
+    .getState()
+    .unifiedTabsByWorktree[worktreeId]?.find(
+      (entry) => entry.contentType === 'terminal' && entry.entityId === tab.id
+    )
+  if (unified && navigation && canPresentDesktopNavigation(navigation)) {
+    navigateDesktopTab(unified.id, { worktreeId, request: navigation })
+  }
   if (initialCwd?.trim()) {
     // Why: queue before mount so local, WSL, and SSH continuations preserve their subdirectory.
     store.queueTabInitialCwd(tab.id, initialCwd)
@@ -259,7 +280,7 @@ export function launchAgentInNewTabWithOutcome(
   }
 
   // Reveal Terminal within the launch workspace; otherwise an editor can hide it, while floating launches must leave main selection alone.
-  if (activate !== false) {
+  if (activate !== false && navigation && canPresentDesktopNavigation(navigation)) {
     store.setActiveTabType('terminal', worktreeId)
   }
 

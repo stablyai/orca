@@ -1,35 +1,26 @@
 import { useAppStore } from '@/store'
-import { createBrowserUuid } from '@/lib/browser-uuid'
+import { canPresentDesktopNavigation, commitDesktopNavigation } from '@/lib/desktop-navigation'
 import { requestNativeChatComposerFocus } from '../native-chat/use-native-chat-composer-reveal-focus'
 import type { AddRepoDialogHostedController } from '../sidebar/use-add-repo-hosted-controller'
 import { eligibleThreadProjects } from './thread-projects'
-import { useThreadNavigation } from './thread-navigation'
+import { useThreadDraft, enterThreadDraft, threadDraftScopeKey } from './thread-navigation'
 
-/** The requesting chooser receives the project; global Add Project keeps its checkout continuation. */
+/** Contextual Git completion edits the same content; folder completion remains workspace navigation. */
 export function useThreadProjectAddController(): AddRepoDialogHostedController | undefined {
   const activeModal = useAppStore((s) => s.activeModal)
-  const context = useThreadNavigation((s) => s.projectRequest)
+  const context = useThreadDraft((s) => s.projectRequest)
   if (!context) {
     return undefined
   }
-  const current = () => {
-    const state = useThreadNavigation.getState()
-    const original = context.selection
-    const selected = state.selection
-    return (
-      state.request === context.request &&
-      (original?.kind === 'new'
-        ? selected?.kind === 'new' &&
-          selected.draftId === original.draftId &&
-          selected.projectKey === original.projectKey
-        : selected === original)
-    )
-  }
+  const current = () =>
+    canPresentDesktopNavigation(context.request) &&
+    (context.draftId === null || useThreadDraft.getState().draft?.draftId === context.draftId)
   return {
+    navigation: context.request,
     open: activeModal === 'add-repo',
     onOpenChange: (open) => {
       if (!open) {
-        useThreadNavigation.setState({ projectRequest: null })
+        useThreadDraft.setState({ projectRequest: null })
         useAppStore.getState().closeModal()
       }
     },
@@ -40,27 +31,16 @@ export function useThreadProjectAddController(): AddRepoDialogHostedController |
         return
       }
       const project = projects.find((p) => p.repo.id === repoId && p.hostId === hostId)
-      if (!project) {
-        return
+      if (project) {
+        commitDesktopNavigation(context.request, () =>
+          enterThreadDraft(project.key, context.request)
+        )
       }
-      const selection = useThreadNavigation.getState().selection
-      useAppStore.getState().setActiveView('terminal')
-      useThreadNavigation.setState({
-        selection:
-          selection?.kind === 'new'
-            ? { ...selection, projectKey: project.key }
-            : { kind: 'new', projectKey: project.key, draftId: createBrowserUuid() }
-      })
     },
     onCloseAutoFocus: (event) => {
       event.preventDefault()
-      const state = useThreadNavigation.getState()
-      if (
-        state.request === context.request &&
-        state.selection?.kind === 'new' &&
-        (context.selection?.kind !== 'new' || state.selection.draftId === context.selection.draftId)
-      ) {
-        requestNativeChatComposerFocus(`thread-draft:${state.selection.draftId}`)
+      if (current() && useAppStore.getState().activeView === 'thread-draft') {
+        requestNativeChatComposerFocus(threadDraftScopeKey())
       }
     }
   }

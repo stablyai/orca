@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { findPrevLiveNonTaskStackHistoryIndex } from '../worktree-nav-history'
 import { hasFeatureInteraction } from '../../../../../shared/feature-interactions'
@@ -25,13 +26,22 @@ export function createUiTaskActions(set: UISliceSet, get: UISliceGet): Partial<U
     pendingSkillsSharedView: false,
     previousViewBeforeMobile: 'terminal',
     previousViewBeforeArtifacts: 'terminal',
-    setActiveView: (view) => set({ activeView: view }),
+    setActiveView: (view, originatingView) =>
+      set((state) =>
+        state.activeView === 'settings' &&
+        originatingView !== undefined &&
+        originatingView !== 'settings' &&
+        view !== 'settings'
+          ? { previousViewBeforeSettings: view }
+          : { activeView: view }
+      ),
     taskPageData: {},
     taskResumeState: undefined,
     taskListPosition: null,
     githubTaskDrawerWorkItem: null,
     newWorkspaceDraft: null,
     openTaskPage: (data = {}, options = {}) => {
+      beginDesktopNavigation(get())
       if (options.recordTasksInteraction !== false) {
         const wasTasksPreviouslyInteracted = hasFeatureInteraction(
           get().featureInteractions,

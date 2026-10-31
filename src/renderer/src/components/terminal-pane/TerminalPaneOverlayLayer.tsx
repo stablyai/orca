@@ -1,3 +1,4 @@
+import { navigateDesktopGroup } from '@/lib/desktop-navigation'
 import { useDesktopVisibleGroups } from '../threads/use-desktop-tab-projection'
 import { openDesktopWorkbench } from '../threads/thread-navigation'
 import { memo, useCallback, useMemo } from 'react'
@@ -75,7 +76,7 @@ const TerminalPaneOverlayLayer = memo(function TerminalPaneOverlayLayer({
     }))
   )
   const groups = useDesktopVisibleGroups(worktreeId, hostGroups, threadsEnabled && isWorktreeActive)
-  const focusGroup = useAppStore((state) => state.focusGroup)
+  const focusGroup = navigateDesktopGroup
   const consumeSuppressedPtyExit = useAppStore((state) => state.consumeSuppressedPtyExit)
 
   useNativeChatToggleShortcut(worktreeId, isWorktreeActive && ownsNativeChatToggleShortcut)

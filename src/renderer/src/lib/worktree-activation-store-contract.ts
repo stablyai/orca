@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation-request'
 import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -56,6 +57,7 @@ export type WorktreeActivationStore = Partial<WorktreeRuntimeOwnerState> & {
 }
 
 export type InitialTerminalOptions = {
+  navigation?: DesktopNavigationRequest
   /** Only the creation owner may seed a plain surface before its pending entry is cleared. */
   worktreeCreationId?: string
   activateCreatedTabs?: boolean

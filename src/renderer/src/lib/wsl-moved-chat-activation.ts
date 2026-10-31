@@ -1,4 +1,10 @@
 import { useAppStore } from '@/store'
+import {
+  presentDesktopWorkspace,
+  beginDesktopNavigation,
+  commitDesktopNavigation,
+  type DesktopNavigationRequest
+} from './desktop-navigation'
 import { findWslMovedProjectForWorkspace } from '@/store/repos/wsl-moved-projects'
 import { activateStructuredAgentSessionTab } from './agent-session/structured-agent-session-tab-activation'
 
@@ -7,19 +13,30 @@ import { activateStructuredAgentSessionTab } from './agent-session/structured-ag
  * activation it seeds no terminal and wakes no sleeping agent: those belong to the host now.
  * False when the workspace is not a moved one, so callers fall through to the normal activation.
  */
-export function activateWslMovedWorkspace(workspaceKey: string, chatTabId?: string): boolean {
+export function activateWslMovedWorkspace(
+  workspaceKey: string,
+  chatTabId?: string,
+  navigation?: DesktopNavigationRequest
+): boolean {
   const state = useAppStore.getState()
   if (!findWslMovedProjectForWorkspace(state, workspaceKey)) {
     return false
   }
-  if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
-  }
-  if (state.activeWorktreeId !== workspaceKey) {
-    state.setActiveWorktree(workspaceKey)
-  }
-  if (chatTabId) {
-    activateStructuredAgentSessionTab({ worktreeId: workspaceKey, tabId: chatTabId })
-  }
+  const request = navigation ?? beginDesktopNavigation(state)
+  commitDesktopNavigation(request, () => {
+    if (state.activeView !== 'terminal') {
+      presentDesktopWorkspace(state, request)
+    }
+    if (state.activeWorktreeId !== workspaceKey) {
+      state.setActiveWorktree(workspaceKey)
+    }
+    if (chatTabId) {
+      activateStructuredAgentSessionTab({
+        worktreeId: workspaceKey,
+        tabId: chatTabId,
+        navigation: request
+      })
+    }
+  })
   return true
 }

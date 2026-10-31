@@ -164,6 +164,7 @@ export default React.memo(function AddRepoDialog({ hosted }: AddRepoDialogProps)
   const isRuntimeEnvironmentActive = Boolean(selectedRuntimeEnvironmentId)
   const wslHostOffer = useAddRepoWslHostOffer(isOpen, hostSelection.selectedHostId)
   const { handleBrowse, resetLocalFolderFlow, handleAddLocalPath } = useAddRepoLocalFolderFlow({
+    navigation: hosted?.navigation,
     isOpen,
     droppedLocalPath: modalPaths.droppedLocalPath,
     activeRuntimeEnvironmentId: selectedRuntimeEnvironmentId,

@@ -1,3 +1,4 @@
+import { beginDesktopNavigation, type DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { track } from '@/lib/telemetry'
@@ -181,13 +182,15 @@ export async function openProjectDefaultCheckout({
   source,
   selectedPath,
   setHideDefaultBranchWorkspace,
-  executionHostId
+  executionHostId,
+  navigation = beginDesktopNavigation()
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
   selectedPath?: string
   setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
+  navigation?: DesktopNavigationRequest
 }): Promise<void> {
   let defaultCheckout = getProjectDefaultCheckout(
     getProjectWorktreesForHost(
@@ -229,11 +232,12 @@ export async function openProjectDefaultCheckout({
     const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
     if (initialCwd || executionHostId) {
       activateAndRevealWorktree(defaultCheckout.id, {
+        navigation,
         ...(initialCwd ? { initialCwd } : {}),
         ...(executionHostId ? { executionHostId } : {})
       })
     } else {
-      activateAndRevealWorktree(defaultCheckout.id)
+      activateAndRevealWorktree(defaultCheckout.id, { navigation })
     }
     return
   }
@@ -252,7 +256,8 @@ export async function finishProjectAddWithDefaultCheckout({
   selectedPath,
   closeModal,
   setHideDefaultBranchWorkspace,
-  executionHostId
+  executionHostId,
+  navigation = beginDesktopNavigation()
 }: {
   repoId: string
   source: AddRepoDefaultCheckoutHandoffSource
@@ -260,6 +265,7 @@ export async function finishProjectAddWithDefaultCheckout({
   closeModal: () => void
   setHideDefaultBranchWorkspace: (value: boolean) => void
   executionHostId?: ExecutionHostId
+  navigation?: DesktopNavigationRequest
 }): Promise<void> {
   await markOnboardingProjectAdded('addedRepo')
   closeModal()
@@ -268,6 +274,7 @@ export async function finishProjectAddWithDefaultCheckout({
     source,
     selectedPath,
     executionHostId,
-    setHideDefaultBranchWorkspace
+    setHideDefaultBranchWorkspace,
+    navigation
   })
 }

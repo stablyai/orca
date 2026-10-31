@@ -99,7 +99,7 @@ export function createOpenHistoryDiff(
         }
       })
       void openWorkspaceEditorItem(
-        get(),
+        get,
         id,
         worktreeId,
         entry.path,
@@ -190,7 +190,7 @@ export function createOpenHistoryDiff(
         }
       })
       void openWorkspaceEditorItem(
-        get(),
+        get,
         id,
         worktreeId,
         entry.path,

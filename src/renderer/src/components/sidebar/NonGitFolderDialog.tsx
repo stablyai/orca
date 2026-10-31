@@ -1,3 +1,4 @@
+import { beginDesktopNavigation, type DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import React, { useCallback } from 'react'
 import { toast } from 'sonner'
 import {
@@ -91,6 +92,9 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
         )
 
   const handleConfirm = useCallback(() => {
+    // SAFETY: this renderer-only value is supplied by the Add Project interaction, never a wire payload.
+    const navigation =
+      (modalData.navigation as DesktopNavigationRequest | undefined) ?? beginDesktopNavigation()
     if (connectionId && folderPath) {
       void (async () => {
         try {
@@ -121,7 +125,8 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
             await revealOnboardingFolderWithAgentLaunch({
               worktreeId: folderWorktree.id,
               executionHostId: ownerOptions.executionHostId,
-              launch
+              launch,
+              navigation
             })
           }
         } catch (err) {
@@ -138,12 +143,21 @@ const NonGitFolderDialog = React.memo(function NonGitFolderDialog() {
       })()
     } else if (folderPath) {
       void addNonGitFolder(folderPath, {
+        navigation,
         runtimeEnvironmentId: runtimeEnvironmentId || null,
         ...(displayName ? { displayName } : {})
       })
     }
     closeModal()
-  }, [addNonGitFolder, closeModal, displayName, folderPath, connectionId, runtimeEnvironmentId])
+  }, [
+    modalData,
+    addNonGitFolder,
+    closeModal,
+    displayName,
+    folderPath,
+    connectionId,
+    runtimeEnvironmentId
+  ])
 
   const handleOpenChange = useCallback(
     (open: boolean) => {

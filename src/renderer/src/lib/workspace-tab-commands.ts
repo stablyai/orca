@@ -2,7 +2,7 @@ import {
   desktopThreadIds,
   visibleGroupActiveTabId
 } from '@/components/threads/desktop-tab-projection'
-import { activeThreadSelection, clearThreadSelection } from '@/components/threads/thread-navigation'
+import { activeThreadSelection, discardThreadDraft } from '@/components/threads/thread-navigation'
 import type { KeybindingContext } from '../../../shared/keybindings'
 import { toVisibleTabType, type Tab } from '../../../shared/tab-types'
 import { useAppStore } from '@/store'
@@ -118,6 +118,14 @@ function resolveCloseTarget(
 /** Input adapters describe intent; targeting and tab operations live here. */
 export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boolean {
   const state = useAppStore.getState()
+  if (
+    state.settings?.experimentalThreads &&
+    state.activeView === 'empty-workbench' &&
+    !('target' in command && command.target) &&
+    !isFloatingWorkspacePanelFocused()
+  ) {
+    return false
+  }
   const thread = activeThreadSelection(state)
   if (
     thread &&
@@ -129,7 +137,7 @@ export function dispatchWorkspaceTabCommand(command: WorkspaceTabCommand): boole
       return false
     }
     if (thread.kind === 'new') {
-      clearThreadSelection()
+      discardThreadDraft()
       return true
     }
     const tab = state.getTab(thread.tabId)

@@ -1,3 +1,4 @@
+import { effectiveWorkspaceView } from '@/lib/renderer-view'
 import { textFieldClaimsActionKey } from '@/lib/file-search-shortcut-policy'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type React from 'react'
@@ -269,10 +270,10 @@ export function useWorktreeListKeyboardNavigation(args: {
         if (previewRef.current !== null) {
           commitPreview()
         }
-        const { activeView, activeWorktreeId, activeTabType, activeTabId, tabsByWorktree } =
-          useAppStore.getState()
+        const state = useAppStore.getState()
+        const { activeWorktreeId, activeTabType, activeTabId, tabsByWorktree } = state
         if (
-          activeView === 'terminal' &&
+          effectiveWorkspaceView(state) === 'terminal' &&
           activeTabType === 'terminal' &&
           activeWorktreeId &&
           activeTabId &&

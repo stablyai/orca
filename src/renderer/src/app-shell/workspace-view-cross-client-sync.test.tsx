@@ -175,6 +175,22 @@ describe('workspace view preferences: cross-client persistence (STA-5781)', () =
     expect(after.hideDefaultBranchWorkspace).toBe(before.hideDefaultBranchWorkspace)
     expect(after.hideCliCreatedWorkspaces).toBe(before.hideCliCreatedWorkspaces)
   })
+  it.each(['thread-draft', 'empty-workbench'] as const)(
+    'keeps %s local across ui.set/sync and restores the host page on startup',
+    async (activeView) => {
+      act(() => store.getState().setActiveView(activeView))
+      await flushDesktopDebounce()
+      expect(authority.get().activeView).toBe('terminal')
+      authority.set({ activeView: 'settings', sidebarWidth: 320 })
+      deliverBroadcasts()
+      expect(store.getState().activeView).toBe(activeView)
+      const restarted = createUIStore()
+      restarted
+        .getState()
+        .hydratePersistedUI({ ...authority.get(), activeView: 'terminal' }, 'startup')
+      expect(restarted.getState().activeView).toBe('terminal')
+    }
+  )
 
   it('saves a revealed remote host after an unrelated older broadcast', async () => {
     act(() => {

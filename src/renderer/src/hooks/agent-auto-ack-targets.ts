@@ -1,3 +1,4 @@
+import { effectiveWorkspaceView, type RendererView } from '@/lib/renderer-view'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { isOrcaWindowForegroundFocused } from '@/components/terminal-pane/terminal-notification-pane-visibility'
 import { isStructuredTab } from '../../../shared/structured-agent-session-tab'
@@ -17,7 +18,7 @@ export type AutoAckTabTarget = {
 }
 
 export type AutoAckTargetState = FloatingWorkspacePanelVisibilityState & {
-  activeView: string
+  activeView: RendererView
   activeWorktreeId: string | null
   layoutByWorktree?: Readonly<Record<string, TabGroupLayoutNode | undefined>>
   groupsByWorktree: Readonly<Record<string, readonly Pick<TabGroup, 'id' | 'activeTabId'>[]>>
@@ -54,7 +55,7 @@ export function resolveAutoAckTabTargets(state: AutoAckTargetState): AutoAckTabT
   const targets = selectFloatingWorkspacePanelVisible(state)
     ? resolveWorkspaceAutoAckTargets(state, FLOATING_TERMINAL_WORKTREE_ID)
     : []
-  if (state.activeView !== 'terminal' || !state.activeWorktreeId) {
+  if (effectiveWorkspaceView(state) !== 'terminal' || !state.activeWorktreeId) {
     return targets
   }
   for (const target of resolveWorkspaceAutoAckTargets(state, state.activeWorktreeId)) {
@@ -69,7 +70,7 @@ export function onScreenWorkspaceIds(state: AutoAckTargetState): string[] {
   const workspaceIds = selectFloatingWorkspacePanelVisible(state)
     ? [FLOATING_TERMINAL_WORKTREE_ID]
     : []
-  if (state.activeView === 'terminal' && state.activeWorktreeId) {
+  if (effectiveWorkspaceView(state) === 'terminal' && state.activeWorktreeId) {
     workspaceIds.push(state.activeWorktreeId)
   }
   return workspaceIds

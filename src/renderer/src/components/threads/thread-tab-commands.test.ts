@@ -1,3 +1,4 @@
+import { setThreadTestPage } from './thread-page.test-fixture'
 // @vitest-environment happy-dom
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -5,7 +6,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { makeTabGroup, makeUnifiedTab } from '@/store/slices/store-test-helpers'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
 import { publishStructuredSessionSummaries } from '../native-chat/structured-session-summary-store'
-import { clearThreadSelection, useThreadNavigation } from './thread-navigation'
+import { discardThreadDraft, activeThreadSelection } from './thread-navigation'
 
 const closeItem = vi.hoisted(() => vi.fn())
 vi.mock('@/components/tab-group/workspace-tab-close-commands', () => ({
@@ -23,7 +24,7 @@ vi.mock('@/lib/floating-workspace-terminal-actions', () => ({
 }))
 
 afterEach(() => {
-  clearThreadSelection()
+  discardThreadDraft()
   publishStructuredSessionSummaries([{ tabId: 'thread', summary: null }])
   vi.clearAllMocks()
 })
@@ -78,10 +79,10 @@ it('dismisses a new-thread screen without closing the host chat', () => {
     activeView: 'terminal',
     settings: { ...getDefaultSettings('/tmp/threads-tab-commands'), experimentalThreads: true }
   })
-  useThreadNavigation.setState({
+  setThreadTestPage({
     selection: { kind: 'new', projectKey: 'project', draftId: 'draft' }
   })
   expect(dispatchWorkspaceTabCommand({ type: 'close' })).toBe(true)
-  expect(useThreadNavigation.getState().selection).toBeNull()
+  expect(activeThreadSelection(useAppStore.getState())).toBeNull()
   expect(closeItem).not.toHaveBeenCalled()
 })

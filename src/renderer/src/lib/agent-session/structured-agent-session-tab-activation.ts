@@ -1,3 +1,10 @@
+import {
+  beginDesktopNavigation,
+  commitDesktopNavigation,
+  navigateDesktopTab,
+  type DesktopNavigationRequest
+} from '../desktop-navigation'
+import { desktopThreadIds } from '@/components/threads/desktop-tab-projection'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from '../worktree-runtime-owner'
 import { requestNativeChatComposerFocus } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import { useAppStore } from '@/store/index'
@@ -32,6 +39,7 @@ export function activateStructuredAgentSessionTab(args: {
   worktreeId: string
   tabId: string
   target?: RuntimeClientTarget
+  navigation?: DesktopNavigationRequest | null
 }): boolean {
   const state = useAppStore.getState()
   const tab = (state.unifiedTabsByWorktree[args.worktreeId] ?? []).find(
@@ -45,11 +53,18 @@ export function activateStructuredAgentSessionTab(args: {
   if (!tab) {
     return false
   }
-  state.focusGroup(args.worktreeId, tab.groupId)
-  state.activateTab(tab.id, { worktreeId: args.worktreeId })
-  state.setActiveTabType('agent-session', args.worktreeId)
-  requestNativeChatComposerFocus(tab.id)
-  activateStructuredAgentSessionTabOnOwner(args.worktreeId, tab.entityId, args.target)
+  if (args.navigation === null) {
+    return true
+  }
+  const navigation =
+    args.navigation ??
+    beginDesktopNavigation(state, desktopThreadIds(state, args.worktreeId).has(tab.id))
+  commitDesktopNavigation(navigation, () => {
+    navigateDesktopTab(tab.id, { worktreeId: args.worktreeId, request: navigation })
+    state.setActiveTabType('agent-session', args.worktreeId)
+    requestNativeChatComposerFocus(tab.id)
+    activateStructuredAgentSessionTabOnOwner(args.worktreeId, tab.entityId, args.target)
+  })
   return true
 }
 
@@ -77,6 +92,7 @@ export function activateStructuredAgentSessionById(args: {
   worktreeId: string
   sessionId: string
   target?: RuntimeClientTarget
+  navigation?: DesktopNavigationRequest | null
 }): boolean {
   const tab = findStructuredAgentSessionTab(useAppStore.getState().unifiedTabsByWorktree, {
     workspaceId: args.worktreeId,
@@ -87,7 +103,8 @@ export function activateStructuredAgentSessionById(args: {
     ? activateStructuredAgentSessionTab({
         worktreeId: args.worktreeId,
         tabId: tab.id,
-        target: args.target
+        target: args.target,
+        navigation: args.navigation
       })
     : false
 }

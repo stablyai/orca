@@ -1,3 +1,4 @@
+import { navigateDesktopGroup } from '@/lib/desktop-navigation'
 import { useDesktopVisibleGroups } from '../threads/use-desktop-tab-projection'
 import { openDesktopWorkbench } from '../threads/thread-navigation'
 import { memo, useCallback, useMemo } from 'react'
@@ -76,7 +77,7 @@ const EmulatorPaneOverlayLayer = memo(function EmulatorPaneOverlayLayer({
     }))
   )
   const groups = useDesktopVisibleGroups(worktreeId, hostGroups, threadsEnabled && isWorktreeActive)
-  const focusGroup = useAppStore((state) => state.focusGroup)
+  const focusGroup = navigateDesktopGroup
   const focusOwningGroup = useCallback(
     (groupId: string) => {
       focusGroup(worktreeId, groupId)

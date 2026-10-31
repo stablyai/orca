@@ -1,9 +1,11 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
 import type { UISlice, UISliceGet, UISliceSet } from './ui-slice-contract'
 import { rewindHistoryIndexPastView } from '../worktree-nav-history'
 
 export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<UISlice> {
   return {
     openActivityPage: () => {
+      beginDesktopNavigation(get())
       set((state) => ({
         activeView: 'activity',
         previousViewBeforeActivity:
@@ -20,6 +22,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     setPendingAutomationRunNavigation: (navigation) =>
       set({ pendingAutomationRunNavigation: navigation }),
     openAutomationsPage: () => {
+      beginDesktopNavigation(get())
       get().recordViewVisit('automations')
       set((state) => ({
         activeView: 'automations',
@@ -40,6 +43,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         void window.api.workspaceSpace.openWindow()
         return
       }
+      beginDesktopNavigation(get())
       set((state) => ({
         activeView: 'space',
         previousViewBeforeSpace:
@@ -51,6 +55,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeSpace
       })),
     openSkillsPage: () => {
+      beginDesktopNavigation(get())
       get().recordViewVisit('skills')
       set((state) => ({
         activeView: 'skills',
@@ -64,6 +69,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'skills')
       })),
     openSkillShare: (shareId) => {
+      beginDesktopNavigation(get())
       get().recordViewVisit('skills')
       set((state) => ({
         activeView: 'skills',
@@ -74,6 +80,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     },
     clearPendingSkillShare: () => set({ pendingSkillShareId: null }),
     openSkillsSharedLinks: () => {
+      beginDesktopNavigation(get())
       get().recordViewVisit('skills')
       set((state) => ({
         activeView: 'skills',
@@ -84,6 +91,7 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
     },
     clearPendingSkillsSharedView: () => set({ pendingSkillsSharedView: false }),
     openArtifactsPage: () => {
+      beginDesktopNavigation(get())
       get().recordViewVisit('artifacts')
       set((state) => ({
         activeView: 'artifacts',
@@ -96,12 +104,14 @@ export function createUiViewActions(set: UISliceSet, get: UISliceGet): Partial<U
         activeView: state.previousViewBeforeArtifacts,
         worktreeNavHistoryIndex: rewindHistoryIndexPastView(state, 'artifacts')
       })),
-    openMobilePage: () =>
+    openMobilePage: () => {
+      beginDesktopNavigation(get())
       set((state) => ({
         activeView: 'mobile',
         previousViewBeforeMobile:
           state.activeView === 'mobile' ? state.previousViewBeforeMobile : state.activeView
-      })),
+      }))
+    },
     closeMobilePage: () =>
       set((state) => ({
         activeView: state.previousViewBeforeMobile

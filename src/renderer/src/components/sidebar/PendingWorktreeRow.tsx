@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation'
 import React from 'react'
 import { AlertTriangle, Loader2, X } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -66,6 +67,7 @@ export function PendingWorktreeRow({
         // No real worktree exists yet; pending-creation activation owns the content loader.
         onClick={() => {
           const store = useAppStore.getState()
+          beginDesktopNavigation(store)
           store.setActivePendingWorktreeCreation(creationId)
           store.updatePendingWorktreeCreation(creationId, { loaderVisible: true })
           store.setActiveView('terminal')

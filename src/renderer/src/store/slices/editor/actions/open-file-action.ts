@@ -1,3 +1,7 @@
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation
+} from '@/lib/desktop-navigation-request'
 import type { EditorGet, EditorSet } from '../types/editor-set-get'
 import type { EditorSlice } from '../types/editor-slice'
 import type { OpenFile } from '../types/open-file'
@@ -24,6 +28,12 @@ export function createOpenFileAction(
     /** The view once it is drawn; null when none was. */
     onShown?: (result: EditorOpenResult | null) => void
   ): { fileId: string; result: EditorOpenResult | null } => {
+    const navigation =
+      options?.navigation === undefined
+        ? options?.selection === 'none' || options?.selection === 'background'
+          ? null
+          : beginDesktopNavigation(get())
+        : options.navigation
     const editorItemWorktreeId = file.worktreeId
     const scratch: OpenFileApplyScratch = {
       editorItemFileId: file.filePath,
@@ -44,7 +54,7 @@ export function createOpenFileAction(
       return { fileId: scratch.editorItemFileId, result: null }
     }
     const editorItemViewStateId = openWorkspaceEditorItem(
-      get(),
+      get,
       scratch.editorItemFileId,
       editorItemWorktreeId,
       file.relativePath,
@@ -52,7 +62,8 @@ export function createOpenFileAction(
       scratch.editorItemIsPreview,
       scratch.editorItemTargetGroupId,
       options?.selection,
-      options?.groupIndex
+      options?.groupIndex,
+      navigation
     )
     const settled: { ran: boolean; result: EditorOpenResult | null } = { ran: false, result: null }
     // Why after: a layout-owner build draws a new tab only with main's frame; today's is drawn already.
@@ -62,7 +73,7 @@ export function createOpenFileAction(
         onShown?.(null)
         return
       }
-      if (options?.focusEditor) {
+      if (options?.focusEditor && navigation && canPresentDesktopNavigation(navigation)) {
         set({
           pendingEditorFocusRequest: {
             fileId: scratch.editorItemFileId,
@@ -80,7 +91,9 @@ export function createOpenFileAction(
       settled.result = view
         ? { fileId: scratch.editorItemFileId, viewStateId: view.id, groupId: view.groupId }
         : null
-      onShown?.(settled.result)
+      if (!navigation || canPresentDesktopNavigation(navigation)) {
+        onShown?.(settled.result)
+      }
     })
     // A tab main has yet to draw: the view the window proposed, shown once its frame is in.
     const proposedGroupId =

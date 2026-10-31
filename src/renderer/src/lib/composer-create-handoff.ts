@@ -1,3 +1,4 @@
+import { beginDesktopNavigation, canPresentDesktopNavigation } from './desktop-navigation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
 import { translate } from '@/i18n/i18n'
@@ -45,6 +46,7 @@ export function scheduleComposerCreateHandoff({
   delayMs?: number
   deadlineMs?: number
 }): ComposerCreateHandoff {
+  const navigation = beginDesktopNavigation()
   let stagedCreationId: string | null = null
   let finished = false
   let deadline: ReturnType<typeof setTimeout> | undefined
@@ -82,7 +84,7 @@ export function scheduleComposerCreateHandoff({
     if (finished || isCancelled()) {
       return
     }
-    stagedCreationId = beginBackgroundWorktreePreparation(stagingRequest)
+    stagedCreationId = beginBackgroundWorktreePreparation(stagingRequest, navigation)
     onHandOff()
     deadline = setTimeout(
       () =>
@@ -103,7 +105,7 @@ export function scheduleComposerCreateHandoff({
       }
       finish()
       if (stagedCreationId === null) {
-        runBackgroundWorktreeCreation(request)
+        runBackgroundWorktreeCreation(request, navigation)
         return
       }
       const store = useAppStore.getState()
@@ -117,12 +119,14 @@ export function scheduleComposerCreateHandoff({
       const existingCreationId = findPendingLinkedWorkItemCreationId(others, request)
       if (existingCreationId) {
         store.removePendingWorktreeCreation(stagedCreationId)
-        store.setActivePendingWorktreeCreation(existingCreationId)
-        store.setActiveView('terminal')
-        store.setSidebarOpen(true)
+        if (canPresentDesktopNavigation(navigation)) {
+          store.setActivePendingWorktreeCreation(existingCreationId)
+          store.setActiveView('terminal')
+          store.setSidebarOpen(true)
+        }
         return
       }
-      continueBackgroundWorktreeCreation(stagedCreationId, request)
+      continueBackgroundWorktreeCreation(stagedCreationId, request, { navigation })
     },
     isHandedOff: () => stagedCreationId !== null,
     fail,

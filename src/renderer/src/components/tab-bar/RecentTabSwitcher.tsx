@@ -1,3 +1,4 @@
+import { workspaceView } from '@/lib/renderer-view'
 import { useCallback, useEffect, useRef, useState } from 'react'
 import { createPortal } from 'react-dom'
 import { FileText, GitCompare, Globe2, TerminalSquare } from 'lucide-react'
@@ -69,7 +70,7 @@ export default function RecentTabSwitcher(): React.JSX.Element | null {
         current?.targetWorktreeId ??
         (isFloatingWorkspacePanelFocused() ? FLOATING_TERMINAL_WORKTREE_ID : store.activeWorktreeId)
       const isFloating = targetWorktreeId === FLOATING_TERMINAL_WORKTREE_ID
-      if ((!isFloating && store.activeView !== 'terminal') || !targetWorktreeId) {
+      if ((!isFloating && workspaceView(store.activeView) !== 'terminal') || !targetWorktreeId) {
         return
       }
 

@@ -1,4 +1,8 @@
-import { useThreadNavigation } from '@/components/threads/thread-navigation'
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  navigateDesktopTab
+} from '@/lib/desktop-navigation-request'
 // Propose browser tab/record/page IDs to main; select only after frame draws them with window page state. Record consumers wait through afterPendingTab.
 
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
@@ -24,7 +28,12 @@ export function openBrowserTabThroughLayoutOwner(
   open: BrowserTabOpen
 ): boolean {
   const { worktreeId, browserTab, page, options } = open
-  const request = useThreadNavigation.getState().request
+  const request =
+    options?.navigation === undefined
+      ? options?.activate === false
+        ? null
+        : beginDesktopNavigation(get())
+      : options.navigation
   const state = get()
   const tabId = createBrowserUuid()
   const placement = contentTabOpenPlacement(state, worktreeId, tabId, {
@@ -51,12 +60,12 @@ export function openBrowserTabThroughLayoutOwner(
     },
     facts: { label: browserTab.title, browser: { record: browserTab, pages: [page] } },
     shown: (shownId) => {
-      const foreground = activate && useThreadNavigation.getState().request === request
+      const foreground = activate && !!request && canPresentDesktopNavigation(request)
       open.showView(foreground)
       if (!foreground) {
         return
       }
-      get().activateTab(shownId, { worktreeId })
+      navigateDesktopTab(get(), shownId, { worktreeId, request: request! })
       const groupId = get().unifiedTabsByWorktree[worktreeId]?.find(
         (t) => t.id === shownId
       )?.groupId

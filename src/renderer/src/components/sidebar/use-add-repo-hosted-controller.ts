@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import type { CompleteGitRepoAdd } from './use-complete-git-repo-add'
 import { useMemo } from 'react'
 import { useAppStore } from '@/store'
@@ -6,6 +7,7 @@ import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 /** Nest Add Project in a host surface rather than replacing the store modal. */
 export type AddRepoDialogHostedController = {
+  navigation?: DesktopNavigationRequest
   open: boolean
   onOpenChange: (open: boolean) => void
   /** Select the added Git project instead of navigating to its default checkout. */

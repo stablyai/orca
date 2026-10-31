@@ -1,5 +1,10 @@
+import {
+  beginDesktopNavigation,
+  openDesktopWorkbench,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from '@/lib/desktop-navigation-request'
 import { desktopThreadIds } from '@/components/threads/desktop-tab-projection'
-import { openDesktopWorkbench } from '@/components/threads/thread-navigation'
 // Main decides content closes; wait for its frame before cleanup and selection, preserving refused tabs and notifying close waiters.
 
 import type { Tab } from '../../../../../shared/tab-types'
@@ -28,8 +33,12 @@ export function closesThroughLayoutOwner(contentType: Tab['contentType']): boole
 function selectAfterClose(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'worktreeId' | 'groupId'>,
-  nextActiveTabId: string | null
+  nextActiveTabId: string | null,
+  navigation: DesktopNavigationRequest | null
 ): void {
+  if (!navigation || !canPresentDesktopNavigation(navigation)) {
+    return
+  }
   const state = get()
   const worktreeId = tab.worktreeId
   if ((state.unifiedTabsByWorktree[worktreeId] ?? []).some((entry) => entry.id === tab.id)) {
@@ -49,7 +58,7 @@ function selectAfterClose(
     state.activateTab(next, { worktreeId, preservePreview: true, recordFocus: false })
   }
   if (!next && worktreeId === state.activeWorktreeId) {
-    openDesktopWorkbench(get(), worktreeId)
+    openDesktopWorkbench(get(), worktreeId, navigation)
   }
   // Activation focuses the tab's group; the user's focused group stays, and shows its surface.
   if (activeGroupId) {
@@ -77,7 +86,8 @@ export type ContentTabClose = {
 export function closeContentTabThroughLayoutOwner(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'entityId' | 'worktreeId' | 'groupId' | 'contentType'>,
-  close: ContentTabClose
+  close: ContentTabClose,
+  request?: DesktopNavigationRequest | null
 ): boolean {
   // Today's close of a twin's tab closes its tab-bar entry as today too.
   if (!closesThroughLayoutOwner(tab.contentType) || closingAsToday.has(tab.id)) {
@@ -87,12 +97,21 @@ export function closeContentTabThroughLayoutOwner(
   if (isTabClosePending(tab.id)) {
     return true
   }
+  const origin = get()
+  const navigation =
+    request === undefined
+      ? origin.activeView === 'terminal' &&
+        origin.activeWorktreeId === tab.worktreeId &&
+        origin.getActiveTab(tab.worktreeId)?.id === tab.id
+        ? beginDesktopNavigation(origin)
+        : null
+      : request
   // A close of a tab still opening goes once main answered the open.
   if (isPendingTab(tab.id)) {
     afterPendingTab(tab.id, () => {
       const drawn = get().unifiedTabsByWorktree[tab.worktreeId]?.find((e) => e.id === tab.id)
       if (drawn) {
-        closeContentTabThroughLayoutOwner(get, drawn, close)
+        closeContentTabThroughLayoutOwner(get, drawn, close, navigation)
       }
     })
     return true
@@ -102,8 +121,8 @@ export function closeContentTabThroughLayoutOwner(
     // Waiters first: a closeFile's content cleanup must not undo the selection.
     settle(tab.id)
     close.closed?.()
-    if (!close.landIfEmptied?.()) {
-      selectAfterClose(get, tab, close.nextActiveTabId)
+    if (navigation && canPresentDesktopNavigation(navigation) && !close.landIfEmptied?.()) {
+      selectAfterClose(get, tab, close.nextActiveTabId, navigation)
     }
   }
   const closeAsToday = (): void => {

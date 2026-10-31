@@ -280,8 +280,9 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     launchSource: 'terminal_context_menu',
     agentSessionLaunchPlan,
     // The launcher opens the fork surface; revealing must not seed a sibling shell.
-    beforeSurfaceOpen: () =>
+    beforeSurfaceOpen: (_surface, navigation) =>
       activateAndRevealWorktree(forkWorktreeId, {
+        navigation,
         sidebarRevealBehavior: 'auto',
         providesInitialSurface: true
       }) !== false,

@@ -20,13 +20,13 @@ function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSess
 describe('activateAiVaultStructuredSession', () => {
   it('refreshes an unpublished structured tab before activating it', async () => {
     const parts = deps({
-      activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)
+      activate: vi.fn().mockReturnValueOnce(false).mockReturnValue(true)
     })
 
     await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
 
     expect(parts.refresh).toHaveBeenCalledWith('workspace-1')
-    expect(parts.activate).toHaveBeenCalledTimes(2)
+    expect(parts.activate).toHaveBeenCalledTimes(3)
     // Why: the refresh alone answered, so the host was never asked to republish anything.
     expect(parts.reveal).not.toHaveBeenCalled()
     expect(parts.unavailable).not.toHaveBeenCalled()
@@ -46,7 +46,7 @@ describe('activateAiVaultStructuredSession', () => {
     })
     // The refresh after the reveal is what carries the republished tab into the store.
     expect(parts.refresh).toHaveBeenCalledTimes(2)
-    expect(parts.activate).toHaveBeenCalledTimes(3)
+    expect(parts.activate).toHaveBeenCalledTimes(4)
     expect(parts.unavailable).not.toHaveBeenCalled()
     expect(parts.gone).not.toHaveBeenCalled()
   })
@@ -100,7 +100,7 @@ describe('activateAiVaultStructuredSession', () => {
     await expect(activateAiVaultStructuredSession(structuredSession, parts)).resolves.toBe(true)
 
     // Reveal may already have published the tab; failed confirmation must not discard it.
-    expect(parts.activate).toHaveBeenCalledTimes(3)
+    expect(parts.activate).toHaveBeenCalledTimes(4)
     expect(parts.unavailable).not.toHaveBeenCalled()
     expect(parts.gone).not.toHaveBeenCalled()
   })
@@ -178,7 +178,8 @@ describe('activateAiVaultStructuredSession', () => {
     expect(parts.activate).toHaveBeenLastCalledWith({
       worktreeId: 'workspace-1',
       sessionId: 'session-1',
-      target
+      target,
+      navigation: expect.any(Object)
     })
   })
 

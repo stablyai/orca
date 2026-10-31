@@ -1,3 +1,4 @@
+import { workspaceView } from '@/lib/renderer-view'
 import { useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { SYNC_FIT_PANES_EVENT } from '@/constants/terminal'
@@ -18,7 +19,7 @@ export type AppChromeLayout = ReturnType<typeof useAppChromeLayout>
 
 /** Derive titlebar, tab-strip ownership and surface mount decisions from store state. */
 export function useAppChromeLayout() {
-  const activeView = useAppStore((s) => s.activeView)
+  const activeView = useAppStore((s) => workspaceView(s.activeView))
   const sidebarOpen = useAppStore((s) => s.sidebarOpen)
   const rightSidebarOpen = useAppStore((s) => s.rightSidebarOpen)
   const rightSidebarTab = useAppStore((s) => s.rightSidebarTab)

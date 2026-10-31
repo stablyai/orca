@@ -40,6 +40,7 @@ const store = {
   repos: [],
   allWorktrees: vi.fn(() => []),
   tabsByWorktree: { 'wt-1': [{ id: 'tab-1' }] },
+  unifiedTabsByWorktree: {},
   openFiles: [],
   browserTabsByWorktree: {},
   tabBarOrderByWorktree: {},

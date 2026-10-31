@@ -1,4 +1,5 @@
 import { structuredAgentLabel } from './structured-agent-session-launch-label'
+import { canPresentDesktopNavigation } from './desktop-navigation'
 import { translate } from '@/i18n/i18n'
 import { readStructuredChatTabSavedName } from '@/runtime/structured-chat-tab-name'
 import {
@@ -165,6 +166,8 @@ export async function openTerminalForDeclinedChat(
     return settlement
   }
   const foreground =
+    !!args.navigation &&
+    canPresentDesktopNavigation(args.navigation) &&
     placed.activeWorktreeId === worktreeId &&
     placed.activeGroupIdByWorktree[worktreeId] === current.groupId &&
     group.activeTabId === current.id

@@ -125,7 +125,7 @@ export function createOpenConflictReview(
       }
       // Conflict files need backing editor tabs for save/close; restore review focus after opening them.
       void openWorkspaceEditorItem(
-        get(),
+        get,
         conflictFileId,
         worktreeId,
         entry.path,
@@ -191,7 +191,7 @@ export function createOpenConflictReview(
           activeTabTypeByWorktree: { ...s.activeTabTypeByWorktree, [worktreeId]: 'editor' }
         }
       })
-      void openWorkspaceEditorItem(get(), id, worktreeId, 'Conflict Review', 'conflict-review')
+      void openWorkspaceEditorItem(get, id, worktreeId, 'Conflict Review', 'conflict-review')
     }
   }
 }

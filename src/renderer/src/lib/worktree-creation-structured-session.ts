@@ -1,3 +1,4 @@
+import { beginDesktopNavigation, type DesktopNavigationRequest } from './desktop-navigation'
 import { useAppStore } from '@/store'
 import { activateAndRevealWorktree, type ActivateAndRevealResult } from '@/lib/worktree-activation'
 import { adoptAgentSessionLaunchVerdict } from '@/lib/agent-session-launch-plan'
@@ -29,6 +30,7 @@ type LaunchStructuredWorktreeSessionArgs = {
   agentLaunchRoute: AgentLaunchRoute
   worktreeId: string
   shouldActivateOnCompletion: boolean
+  navigation?: DesktopNavigationRequest | null
   activation: ActivateAndRevealResult | false
   primaryTabId: string | null
 }
@@ -73,6 +75,12 @@ function openBackgroundDeclinedTerminal(
 export async function launchStructuredWorktreeSession(
   args: LaunchStructuredWorktreeSessionArgs
 ): Promise<WorktreeCreationStructuredSessionResult> {
+  const navigation =
+    args.navigation === undefined
+      ? args.shouldActivateOnCompletion
+        ? beginDesktopNavigation()
+        : null
+      : args.navigation
   let { activation, primaryTabId } = args
   const settled = { accepted: true, cancelled: false }
   const { agent } = args.request
@@ -109,6 +117,7 @@ export async function launchStructuredWorktreeSession(
   try {
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
+      navigation,
       hooks: { signal: abandoned.signal },
       target: { worktreeId: args.worktreeId },
       activate: args.shouldActivateOnCompletion,
@@ -118,7 +127,7 @@ export async function launchStructuredWorktreeSession(
             onHostDeclined: (host) =>
               openBackgroundDeclinedTerminal(args, host, pending?.heldChatMessage)
           }),
-      beforeOpen: () => {
+      beforeOpen: (_sessionId, navigation) => {
         // Launch cancellation can beat pending-store updates during async reveal; check the signal too.
         if (abandoned.signal.aborted || isCancelled()) {
           return false
@@ -127,6 +136,7 @@ export async function launchStructuredWorktreeSession(
           try {
             activation = activateAndRevealWorktree(args.worktreeId, {
               providesInitialSurface: true,
+              navigation,
               worktreeCreationId: args.creationId
             })
           } catch (error) {

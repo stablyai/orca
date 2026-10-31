@@ -1,8 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { DesktopNavigationRequest } from './desktop-navigation'
 import type { WorktreeCreationRequest } from '@/lib/pending-worktree-creation'
 
 const flow = vi.hoisted(() => ({
-  begin: vi.fn(() => 'staged-1'),
+  begin: vi.fn(
+    (_request: WorktreeCreationRequest, _navigation?: DesktopNavigationRequest) => 'staged-1'
+  ),
   continue: vi.fn(() => true),
   run: vi.fn(() => 'run-1')
 }))
@@ -83,7 +86,7 @@ describe('scheduleComposerCreateHandoff', () => {
     handoff.start(finalRequest)
     vi.runAllTimers()
 
-    expect(flow.run).toHaveBeenCalledWith(finalRequest)
+    expect(flow.run).toHaveBeenCalledWith(finalRequest, expect.any(Object))
     expect(flow.begin).not.toHaveBeenCalled()
     expect(onHandOff).not.toHaveBeenCalled()
     expect(handoff.fail('boom')).toBe(false)
@@ -92,12 +95,14 @@ describe('scheduleComposerCreateHandoff', () => {
   it('closes the composer onto a staged row when preflight stalls, then continues it', () => {
     const { handoff, onHandOff } = handOff()
 
-    expect(flow.begin).toHaveBeenCalledWith(stagingRequest)
+    expect(flow.begin).toHaveBeenCalledWith(stagingRequest, expect.any(Object))
     expect(onHandOff).toHaveBeenCalledTimes(1)
 
     handoff.start(finalRequest)
     handoff.dispose()
-    expect(flow.continue).toHaveBeenCalledWith('staged-1', finalRequest)
+    expect(flow.continue).toHaveBeenCalledWith('staged-1', finalRequest, {
+      navigation: flow.begin.mock.calls[0][1]
+    })
     expect(toastError).not.toHaveBeenCalled()
   })
 

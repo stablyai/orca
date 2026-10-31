@@ -10,6 +10,9 @@ const mocks = vi.hoisted(() => {
     repos: unknown[]
     settings: Record<string, unknown>
     activeGroupIdByWorktree: Record<string, string>
+    getTab: (id: string) => Record<string, unknown> | null
+    setActiveView: ReturnType<typeof vi.fn>
+    setActiveWorktree: ReturnType<typeof vi.fn>
     getKnownWorktreeById: ReturnType<typeof vi.fn>
     focusGroup: ReturnType<typeof vi.fn>
     activateTab: ReturnType<typeof vi.fn>
@@ -51,6 +54,12 @@ const mocks = vi.hoisted(() => {
     repos: [],
     settings: {},
     activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+    getTab: (id) =>
+      Object.values(store.unifiedTabsByWorktree)
+        .flat()
+        .find((tab) => tab.id === id) ?? null,
+    setActiveView: vi.fn(),
+    setActiveWorktree: vi.fn(),
     getKnownWorktreeById: vi.fn(),
     focusGroup: vi.fn(),
     activateTab: vi.fn(),

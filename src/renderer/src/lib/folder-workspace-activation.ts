@@ -1,3 +1,8 @@
+import {
+  presentDesktopWorkspace,
+  beginDesktopNavigation,
+  canPresentDesktopNavigation
+} from './desktop-navigation'
 import { canInspectAgentActivationInventory } from './worktree-activation-pty-inventory'
 import { openDesktopWorkbench } from '@/components/threads/thread-navigation'
 import { translate } from '@/i18n/i18n'
@@ -20,7 +25,10 @@ import {
 } from './folder-workspace-runtime-owner'
 import { getFolderWorkspaceHostId } from '../../../shared/folder-workspace-execution-host'
 import type { WorktreeStartupPayload } from './worktree-startup-payload'
-import { ensureFolderWorkspaceInitialTerminal } from './worktree-initial-terminal-seeding'
+import {
+  ensureFolderWorkspaceInitialTerminal,
+  ensureWorktreeHasInitialTerminal
+} from './worktree-initial-terminal-seeding'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from './web-runtime-worktree-terminal-after-wake'
 import {
   activationProvidesInitialSurface,
@@ -79,8 +87,26 @@ export function activateAndRevealFolderWorkspace(
     return false
   }
 
+  const navigation =
+    opts?.navigation === undefined ? beginDesktopNavigation(state) : opts.navigation
+  if (navigation === null || !canPresentDesktopNavigation(navigation)) {
+    return {
+      primaryTabId: opts?.startup
+        ? ensureWorktreeHasInitialTerminal(
+            state,
+            folderWorkspaceKey(folderWorkspaceId),
+            opts.startup,
+            undefined,
+            undefined,
+            undefined,
+            { activateCreatedTabs: false }
+          )
+        : null
+    }
+  }
+
   if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
+    presentDesktopWorkspace(state, navigation)
   }
 
   const previousActive = readPreviousActive(state)
@@ -108,6 +134,7 @@ export function activateAndRevealFolderWorkspace(
     gateAndReseedEmptyWorkspace(workspaceKey, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
+      navigation,
       ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
     })
   }
@@ -117,7 +144,8 @@ export function activateAndRevealFolderWorkspace(
         folderWorkspace,
         opts?.startup,
         providesInitialSurface,
-        seedUserDefaultSurface
+        seedUserDefaultSurface,
+        navigation
       )
 
   if (opts?.showWorkspaceList) {
@@ -140,7 +168,7 @@ export function activateAndRevealFolderWorkspace(
   }
 
   if (opts?.navigationIntent === 'user-open') {
-    openDesktopWorkbench(useAppStore.getState(), workspaceKey)
+    openDesktopWorkbench(useAppStore.getState(), workspaceKey, navigation ?? undefined)
   }
   return { primaryTabId }
 }

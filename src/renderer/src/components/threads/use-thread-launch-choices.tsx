@@ -20,7 +20,7 @@ import type {
 } from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { ThreadProject } from './thread-projects'
 import { workspaceKindForWorktreeId } from '../../../../shared/workspace-launch-kind'
-import { useThreadNavigation } from './thread-navigation'
+import { useThreadDraft } from './thread-navigation'
 import { ThreadLaunchPicker } from './ThreadLaunchPicker'
 
 export function useThreadLaunchChoices(
@@ -29,17 +29,15 @@ export function useThreadLaunchChoices(
   draftId: string
 ) {
   const defaultAgent = useAppStore((s) => s.settings?.defaultTuiAgent)
-  const edited = useThreadNavigation((s) =>
-    s.selection?.kind === 'new' && s.selection.draftId === draftId
-      ? s.selection.launchDraft
-      : undefined
+  const edited = useThreadDraft((s) =>
+    s.draft?.kind === 'new' && s.draft.draftId === draftId ? s.draft.launchDraft : undefined
   )
   const setDraft = useCallback(
     (edit: (current: AgentPickerDraft | null) => AgentPickerDraft) => {
-      const { selection } = useThreadNavigation.getState()
+      const { draft: selection } = useThreadDraft.getState()
       if (selection?.kind === 'new' && selection.draftId === draftId) {
-        useThreadNavigation.setState({
-          selection: { ...selection, launchDraft: edit(selection.launchDraft ?? null) }
+        useThreadDraft.setState({
+          draft: { ...selection, launchDraft: edit(selection.launchDraft ?? null) }
         })
       }
     },

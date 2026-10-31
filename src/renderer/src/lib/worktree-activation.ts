@@ -1,7 +1,12 @@
+import {
+  presentDesktopWorkspace,
+  beginDesktopNavigation,
+  canPresentDesktopNavigation
+} from './desktop-navigation'
 import { activateAndRevealFolderWorkspace } from './folder-workspace-activation'
 export { activateAndRevealFolderWorkspace } from './folder-workspace-activation'
 import { canInspectAgentActivationInventory } from './worktree-activation-pty-inventory'
-import { openDesktopWorkbench, clearThreadSelection } from '@/components/threads/thread-navigation'
+import { openDesktopWorkbench } from '@/components/threads/thread-navigation'
 import { runtimeEnvironmentIdOrLocalUnlessTwin } from './worktree-runtime-owner'
 import { noteUserWorkspaceOpen } from './workspace-switch-user-act'
 import { useAppStore } from '@/store'
@@ -51,20 +56,45 @@ export function activateAndRevealWorktree(
   if (!wt) {
     return false
   }
-  if (opts?.navigationIntent === 'user-open') {
-    clearThreadSelection()
-  }
+  const navigation =
+    opts?.navigation === undefined ? beginDesktopNavigation(state) : opts.navigation
   const pendingCreationId = findPendingWorktreeCreationId(state.pendingWorktreeCreations, wt.id)
   // Why: a checkout published mid-create shows its creation progress until that creation hands off.
   if (pendingCreationId && opts?.worktreeCreationId !== pendingCreationId) {
-    state.setActivePendingWorktreeCreation(pendingCreationId)
-    state.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
-    state.setActiveView('terminal')
+    if (navigation && canPresentDesktopNavigation(navigation)) {
+      state.setActivePendingWorktreeCreation(pendingCreationId)
+      state.updatePendingWorktreeCreation(pendingCreationId, { loaderVisible: true })
+      presentDesktopWorkspace(state, navigation)
+    }
     return { primaryTabId: null }
   }
   const hasActivationWork = Boolean(
     opts?.startup || opts?.setup || opts?.defaultTabs || opts?.issueCommand
   )
+  if (navigation === null || !canPresentDesktopNavigation(navigation)) {
+    const primaryTabId = hasActivationWork
+      ? ensureWorktreeHasInitialTerminal(
+          state,
+          worktreeId,
+          opts?.startup,
+          opts?.setup,
+          opts?.issueCommand,
+          opts?.defaultTabs,
+          {
+            activateCreatedTabs: false,
+            callerProvidesSurface: activationProvidesInitialSurface(opts),
+            worktreeCreationId: opts?.worktreeCreationId,
+            executionHostId: opts?.executionHostId,
+            backendStartupTerminalSpawned: opts?.backendStartupTerminalSpawned,
+            createNewTerminalForStartup: opts?.createNewTerminalForStartup
+          }
+        )
+      : null
+    if (primaryTabId && opts?.initialCwd) {
+      state.queueTabInitialCwd(primaryTabId, opts.initialCwd)
+    }
+    return { primaryTabId }
+  }
   const providesInitialSurface = activationProvidesInitialSurface(opts)
   const seedUserDefaultSurface = activationSeedsUserDefaultSurface(opts)
   // Why: a plain reselect should still reveal the sidebar row but must not restamp focus recency or wake persistence.
@@ -76,7 +106,7 @@ export function activateAndRevealWorktree(
     state.activeView === 'terminal'
 
   if (state.activeView !== 'terminal') {
-    state.setActiveView('terminal')
+    presentDesktopWorkspace(state, navigation)
   }
   noteUserWorkspaceOpen(worktreeId, opts?.navigationIntent)
 
@@ -119,6 +149,7 @@ export function activateAndRevealWorktree(
     gateAndReseedEmptyWorkspace(worktreeId, {
       callerProvidesSurface: opts?.providesInitialSurface === true,
       seedUserDefaultSurface,
+      navigation,
       ...(opts?.executionHostId ? { executionHostId: opts.executionHostId } : {})
     })
   }
@@ -139,6 +170,7 @@ export function activateAndRevealWorktree(
             ...(opts?.createNewTerminalForStartup ? { createNewTerminalForStartup: true } : {}),
             ...(providesInitialSurface ? { callerProvidesSurface: true } : {}),
             ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {}),
+            navigation,
             reseedEmptiedWorkspace: !providesInitialSurface
           }
         )
@@ -179,7 +211,7 @@ export function activateAndRevealWorktree(
   }
 
   if (opts?.navigationIntent === 'user-open') {
-    openDesktopWorkbench(useAppStore.getState(), worktreeId)
+    openDesktopWorkbench(useAppStore.getState(), worktreeId, navigation ?? undefined)
   }
   return { primaryTabId }
 }

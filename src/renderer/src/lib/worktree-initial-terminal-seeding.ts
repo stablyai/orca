@@ -1,8 +1,11 @@
+import {
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from './desktop-navigation-request'
 import type {
   WorktreeDefaultTabsLaunch,
   WorktreeSetupLaunch
 } from '../../../shared/worktree/launch-types'
-import type { ExecutionHostId } from '../../../shared/execution-host'
 import type { FolderWorkspace } from '../../../shared/folder-workspace-types'
 import { folderWorkspaceKey } from '../../../shared/workspace-scope'
 import { shouldAutoCreateInitialTerminal } from '@/components/terminal/initial-terminal'
@@ -26,7 +29,6 @@ import {
 } from '@/lib/worktree-setup-issue-command-queue'
 import { applyDefaultTerminalTabs } from '@/lib/worktree-default-terminal-tabs'
 import { openDefaultAgentChatInEmptyWorkspace } from '@/lib/empty-workspace-default-agent-chat'
-import { isEmptyWorkspaceDefaultSurfacePending } from '@/lib/empty-workspace-default-surface-claims'
 import { findPendingWorktreeCreationId } from './pending-worktree-creation'
 
 function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'windows' | 'posix' {
@@ -36,46 +38,12 @@ function getSetupRunnerCommandPlatformForLaunch(setup: WorktreeSetupLaunch): 'wi
   )
 }
 
-export type GatedEmptyWorkspaceReseedIntent = {
-  callerProvidesSurface: boolean
-  seedUserDefaultSurface: boolean
-  executionHostId?: ExecutionHostId
-}
-
-/** Re-seed after an empty gate unless its activation owns the surface or no longer owns the host. */
-export function reseedGatedEmptyWorkspace(
-  workspaceKey: string,
-  intent: GatedEmptyWorkspaceReseedIntent
-): void {
-  const { callerProvidesSurface, seedUserDefaultSurface, executionHostId } = intent
-  const state = useAppStore.getState()
-  if (
-    callerProvidesSurface === true ||
-    isEmptyWorkspaceDefaultSurfacePending(workspaceKey) ||
-    state.activeWorktreeId !== workspaceKey ||
-    (executionHostId !== undefined && state.activeWorkspaceExecutionHostId !== executionHostId)
-  ) {
-    return
-  }
-  ensureWorktreeHasInitialTerminal(
-    state,
-    workspaceKey,
-    undefined,
-    undefined,
-    undefined,
-    undefined,
-    {
-      reseedEmptiedWorkspace: true,
-      ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
-    }
-  )
-}
-
 export function ensureFolderWorkspaceInitialTerminal(
   folderWorkspace: FolderWorkspace,
   startup?: WorktreeStartupPayload,
   providesInitialSurface?: boolean,
-  seedUserDefaultSurface?: boolean
+  seedUserDefaultSurface?: boolean,
+  navigation?: DesktopNavigationRequest
 ): string | null {
   if (providesInitialSurface === true && startup === undefined) {
     return null
@@ -91,6 +59,7 @@ export function ensureFolderWorkspaceInitialTerminal(
     undefined,
     {
       reseedEmptiedWorkspace: providesInitialSurface !== true,
+      navigation,
       ...(seedUserDefaultSurface ? { seedUserDefaultSurface: true } : {})
     }
   )
@@ -266,8 +235,15 @@ export function ensureWorktreeHasInitialTerminal(
           setup,
           issueCommand,
           defaultTabs,
-          { ...opts, seedUserDefaultSurface: false }
-        ) !== null
+          {
+            ...opts,
+            seedUserDefaultSurface: false,
+            ...(opts?.navigation && !canPresentDesktopNavigation(opts.navigation)
+              ? { activateCreatedTabs: false }
+              : {})
+          }
+        ) !== null,
+      opts.navigation
     )
     if (defaultChat) {
       return defaultChat.primaryTabId

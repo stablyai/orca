@@ -147,7 +147,10 @@ function resetStore(): void {
     activeWorktreeId: 'wt-1',
     browserTabsByWorktree: {},
     expandedPaneByTabId: {},
-    activeGroupIdByWorktree: {},
+    activeView: 'terminal',
+    activeGroupIdByWorktree: { 'wt-1': 'group-1' },
+    setActiveView: vi.fn(),
+    getTab: (id: string) => (id === unifiedTab.id ? unifiedTab : null),
     groupsByWorktree: {
       'wt-1': [
         {

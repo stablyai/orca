@@ -1,4 +1,3 @@
-import { commitDesktopTabNavigation } from '@/components/threads/thread-navigation'
 import { structuredLaunchSlotIds } from '@/lib/agent-session/launch/structured-agent-session-launch-persistence'
 import { createBrowserUuid } from '@/lib/browser-uuid'
 import { getActiveExecutionHostIdForWorktree } from '@/lib/unified-tab-host-ownership'
@@ -156,9 +155,6 @@ export function createTabsCreateActions(
           }
         }
       })
-      if (init?.activate !== false) {
-        commitDesktopTabNavigation(get(), worktreeId, created.executionHostId, init?.recordFocus)
-      }
       if (init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('terminal-tabs')
       }
@@ -254,9 +250,6 @@ export function createTabsCreateActions(
       }
       if (moved && init?.recordInteraction !== false) {
         get().recordFeatureInteraction?.('tab-splits')
-      }
-      if (created && init?.activate !== false) {
-        commitDesktopTabNavigation(get(), worktreeId, created.executionHostId, init?.recordFocus)
       }
       return created
     }

@@ -1,3 +1,4 @@
+import { navigateDesktopGroup } from '@/lib/desktop-navigation'
 import { useDesktopVisibleGroups } from '../../threads/use-desktop-tab-projection'
 import { openDesktopWorkbench } from '../../threads/thread-navigation'
 import { memo, useCallback, useEffect, useMemo } from 'react'
@@ -145,7 +146,7 @@ const BrowserPaneOverlayLayer = memo(function BrowserPaneOverlayLayer({
     }))
   )
   const groups = useDesktopVisibleGroups(worktreeId, hostGroups, threadsEnabled && isWorktreeActive)
-  const focusGroup = useAppStore((state) => state.focusGroup)
+  const focusGroup = navigateDesktopGroup
   const isFloatingWorkspace = isFloatingWorkspaceId(worktreeId)
   const knownFocusedGroupId = useMemo(
     () =>

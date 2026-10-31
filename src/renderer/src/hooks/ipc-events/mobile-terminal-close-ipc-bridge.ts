@@ -1,4 +1,10 @@
 import { createRuntimeFilePositionQueue } from './runtime-file-position'
+import {
+  beginDesktopNavigation,
+  canPresentDesktopNavigation,
+  navigateDesktopTab,
+  type DesktopNavigationRequest
+} from '@/lib/desktop-navigation'
 import { applyClosedTerminalLeafNotice } from '@/components/terminal-pane/closed-terminal-leaf-notice'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { detectLanguage } from '@/lib/language-detect'
@@ -24,25 +30,35 @@ import {
 function openRuntimeEditorTab(
   worktreeId: string,
   navigation: RuntimeNavigationTarget | undefined,
-  open: (store: AppState, selection: EditorTabSelection) => void
+  open: (
+    store: AppState,
+    selection: EditorTabSelection,
+    request: DesktopNavigationRequest | null
+  ) => void,
+  request?: DesktopNavigationRequest
 ): void {
   const store = useAppStore.getState()
   if (navigation !== undefined && !navigationTargetsHost(navigation)) {
     const isViewed =
       worktreeId === store.activeWorktreeId ||
       (isFloatingWorkspaceId(worktreeId) && selectFloatingWorkspacePanelVisible(store))
-    open(store, isViewed ? 'none' : 'background')
+    open(store, isViewed ? 'none' : 'background', null)
+    return
+  }
+  const foreground = request ?? beginDesktopNavigation(store)
+  if (!canPresentDesktopNavigation(foreground)) {
     return
   }
   revealWorkspaceSurface(store, worktreeId)
-  open(store, 'focus')
+  open(store, 'focus', foreground)
   store.setActiveTabType('editor', worktreeId)
 }
 
 /** Show only if the window currently draws main’s editor tab. */
 function showMainEditorTab(
   { worktreeId, tabId, navigation, position }: RuntimeEditorTabReveal,
-  positionFile: ReturnType<typeof createRuntimeFilePositionQueue>
+  positionFile: ReturnType<typeof createRuntimeFilePositionQueue>,
+  request?: DesktopNavigationRequest
 ): boolean {
   const tab = useAppStore
     .getState()
@@ -50,12 +66,21 @@ function showMainEditorTab(
   if (!tab) {
     return false
   }
-  openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
-    if (selection !== 'none') {
-      store.activateTab(tabId, selection === 'background' ? { recordFocus: false } : {})
-    }
-    positionFile(tab.entityId, position, selection === 'focus')
-  })
+  openRuntimeEditorTab(
+    worktreeId,
+    navigation,
+    (store, selection, foreground) => {
+      if (selection !== 'none') {
+        if (foreground) {
+          navigateDesktopTab(tabId, { worktreeId, request: foreground })
+        } else {
+          store.activateTab(tabId, { recordFocus: false })
+        }
+      }
+      positionFile(tab.entityId, position, selection === 'focus')
+    },
+    request
+  )
   return true
 }
 
@@ -84,7 +109,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
     window.api.ui.onOpenFileFromMobile(
       ({ worktreeId, filePath, relativePath, runtimeEnvironmentId, navigation, position }) => {
         const basename = relativePath.split(/[\\/]/).pop() || relativePath
-        openRuntimeEditorTab(worktreeId, navigation, (store, selection) => {
+        openRuntimeEditorTab(worktreeId, navigation, (store, selection, request) => {
           // Use File Explorer’s creation path so grouped ordering and markdown bridges stay consistent.
           const fileId = store.openFile(
             {
@@ -95,7 +120,7 @@ export function registerMobileAndTerminalCloseIpcBridge(
               runtimeEnvironmentId,
               mode: 'edit'
             },
-            { selection }
+            { selection, navigation: request }
           )
           positionFile(fileId, position, selection === 'focus')
         })
@@ -106,10 +131,17 @@ export function registerMobileAndTerminalCloseIpcBridge(
   // Show main-owned tabs after their frame draws; channel stays optional for older preloads surviving reload.
   if (window.api.ui.onRevealEditorTabFromRuntime) {
     unsubs.push(
-      window.api.ui.onRevealEditorTabFromRuntime((reveal) =>
+      window.api.ui.onRevealEditorTabFromRuntime((reveal) => {
+        const request =
+          reveal.navigation === undefined || navigationTargetsHost(reveal.navigation)
+            ? beginDesktopNavigation()
+            : undefined
         // No stream coming ('none' or ended): runs now, and an undrawn tab is left unshown.
         afterLayoutFrame(reveal.frameSeq, () => {
-          if (showMainEditorTab(reveal, positionFile)) {
+          if (request && !canPresentDesktopNavigation(request)) {
+            return
+          }
+          if (showMainEditorTab(reveal, positionFile, request)) {
             return
           }
           const store = useAppStore.getState()
@@ -123,9 +155,9 @@ export function registerMobileAndTerminalCloseIpcBridge(
             return
           }
           revealWorkspaceSurface(store, worktreeId)
-          showOnceWorkspaceDraws(reveal, () => showMainEditorTab(reveal, positionFile))
+          showOnceWorkspaceDraws(reveal, () => showMainEditorTab(reveal, positionFile, request))
         })
-      )
+      })
     )
   }
 
@@ -140,11 +172,12 @@ export function registerMobileAndTerminalCloseIpcBridge(
         navigation,
         oldPath
       }) => {
-        openRuntimeEditorTab(worktreeId, navigation, (store, selection) =>
+        openRuntimeEditorTab(worktreeId, navigation, (store, selection, request) =>
           // Why: mobile renders diffs from metadata; the editor-local Changes shortcut would send plain markdown back to mobile.
           store.openDiff(worktreeId, filePath, relativePath, detectLanguage(relativePath), staged, {
             runtimeEnvironmentId,
             selection,
+            navigation: request,
             ...(oldPath ? { oldPath } : {})
           })
         )

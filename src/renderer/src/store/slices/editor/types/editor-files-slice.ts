@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from '@/lib/desktop-navigation'
 import type { HttpLinkSourceOwner } from '@/lib/http-link-routing'
 import type { CheckRunDetailsTabPatch } from '@/components/editor/check-run-details-tab'
 import type {
@@ -35,6 +36,7 @@ import type {
 } from './restored-editor-owner'
 
 export type OpenFileOptions = {
+  navigation?: DesktopNavigationRequest | null
   preview?: boolean
   targetGroupId?: string
   recordReplacedPreview?: boolean
@@ -162,7 +164,11 @@ export type EditorFilesSlice = {
     relativePath: string,
     language: string,
     staged: boolean,
-    options?: EditorOpenTargetOptions & { selection?: EditorTabSelection; oldPath?: string }
+    options?: EditorOpenTargetOptions & {
+      selection?: EditorTabSelection
+      oldPath?: string
+      navigation?: DesktopNavigationRequest | null
+    }
   ) => void
   openBranchDiff: (
     worktreeId: string,

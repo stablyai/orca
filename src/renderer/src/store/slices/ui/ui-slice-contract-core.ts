@@ -1,3 +1,4 @@
+import type { RendererView } from '@/lib/renderer-view'
 import type {
   AgentSubjectRead,
   AgentSubjectReadIntent
@@ -13,7 +14,7 @@ import type { TuiAgent } from '../../../../../shared/tui-agent'
 import type { LaunchSource } from '../../../../../shared/telemetry-events'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
 import type { ExecutionHostId } from '../../../../../shared/execution-host'
-import type { TaskResumeState, TopLevelView } from '../../../../../shared/ui-chrome-types'
+import type { TaskResumeState } from '../../../../../shared/ui-chrome-types'
 
 export type PendingSidebarWorktreeReveal = {
   rowKey?: string
@@ -114,6 +115,8 @@ export type NewWorkspaceDraft = {
 }
 
 export type UiViewHistory =
+  | 'thread-draft'
+  | 'empty-workbench'
   | 'terminal'
   | 'settings'
   | 'tasks'
@@ -154,7 +157,7 @@ export type UISliceCore = {
   /** Session-local protection for turns explicitly marked unread. */
   manuallyUnreadTurnsByPaneKey: Record<string, number>
   clearManuallyUnreadTurns: (paneKeys: string[]) => void
-  activeView: TopLevelView
+  activeView: RendererView
   previousViewBeforeTasks: Exclude<UiViewHistory, 'tasks'>
   previousViewBeforeSettings: Exclude<UiViewHistory, 'settings'>
   previousViewBeforeActivity: Exclude<UiViewHistory, 'activity'>
@@ -163,7 +166,10 @@ export type UISliceCore = {
   previousViewBeforeSkills: Exclude<UiViewHistory, 'skills'>
   previousViewBeforeMobile: Exclude<UiViewHistory, 'mobile'>
   previousViewBeforeArtifacts: Exclude<UiViewHistory, 'artifacts'>
-  setActiveView: (view: UISliceCore['activeView']) => void
+  setActiveView: (
+    view: UISliceCore['activeView'],
+    originatingView?: UISliceCore['activeView']
+  ) => void
   taskPageData: TaskPageData
   taskResumeState: TaskResumeState | undefined
   setTaskResumeState: (updates: Partial<TaskResumeState>) => void

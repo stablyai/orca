@@ -1,3 +1,4 @@
+import type { DesktopNavigationRequest } from './desktop-navigation-request'
 import { pickTuiAgent } from '../../../shared/tui-agent-selection'
 import { newAgentLaunchesMayOpenChats } from '@/runtime/local-structured-chats'
 import { acquireAgentLaunchChoices } from './host-chat-program-acquisition'
@@ -63,7 +64,8 @@ export async function loadEmptyWorkspaceDefaultChatDetection(worktreeId: string)
 /** Open the configured default chat for an empty workspace; null or host decline seeds a shell, never an unrequested agent TUI. */
 export function openDefaultAgentChatInEmptyWorkspace(
   worktreeId: string,
-  seedShell: () => boolean
+  seedShell: () => boolean,
+  navigation?: DesktopNavigationRequest
 ): { primaryTabId: string | null } | null {
   const state = useAppStore.getState()
   const target = defaultChatDetectionTarget(state, worktreeId)
@@ -96,6 +98,7 @@ export function openDefaultAgentChatInEmptyWorkspace(
     launchSource: 'unknown',
     agentSessionLaunchPlan,
     pendingActivationSpawn: true,
+    navigation,
     onStructuredHostDeclined: () => ({ opened: seedShell() })
   })
   if (!result) {

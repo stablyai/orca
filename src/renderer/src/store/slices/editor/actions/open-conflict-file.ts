@@ -123,7 +123,7 @@ export function createOpenConflictFile(
         return
       }
       openWorkspaceEditorItem(
-        get(),
+        get,
         absolutePath,
         worktreeId,
         entry.path,

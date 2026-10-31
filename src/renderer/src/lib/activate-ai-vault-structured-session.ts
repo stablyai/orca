@@ -1,3 +1,6 @@
+import { beginDesktopNavigation } from './desktop-navigation'
+import { desktopThreadIds } from '@/components/threads/desktop-tab-projection'
+import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
 import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -62,18 +65,26 @@ export async function activateAiVaultStructuredSession(
   if (!structured) {
     return false
   }
+  const state = useAppStore.getState()
+  const navigation = beginDesktopNavigation(
+    state,
+    desktopThreadIds(state, structured.workspaceId).has(
+      structuredAgentSessionTabId(structured.sessionId)
+    )
+  )
   const feedback = deps ?? structuredSessionOpenFeedback
   await openExistingStructuredSession(structured, {
     target,
     deps,
+    navigation,
     present: (outcome) => {
       if (outcome === 'activated') {
         // A moved project's chat opens under its retained entry; the catalog does not list it.
         if (
           useAppStore.getState().activeWorktreeId !== structured.workspaceId &&
-          !activateWslMovedWorkspace(structured.workspaceId)
+          !activateWslMovedWorkspace(structured.workspaceId, undefined, navigation)
         ) {
-          activateAndRevealWorktree(structured.workspaceId)
+          activateAndRevealWorktree(structured.workspaceId, { navigation })
         }
       } else if (outcome === 'gone') {
         feedback.gone()

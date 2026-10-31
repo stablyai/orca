@@ -1,3 +1,8 @@
+import {
+  isPendingCreationSurfaceVisible,
+  isCreatedWorkspaceInView
+} from './worktree-creation-visibility'
+import { beginDesktopNavigation, canPresentDesktopNavigation } from './desktop-navigation'
 import { prepareWorktreeCreationHooks } from '@/lib/worktree-creation-hook-preparation'
 import { toast } from 'sonner'
 import { useAppStore } from '@/store'
@@ -29,26 +34,10 @@ import { showWorktreeCreationReadyToast } from '@/lib/worktree-creation-ready-to
 import { mountCreatedWorktreeStartupTabsInBackground } from '@/lib/worktree-creation-background-mount'
 import { ensureWebRuntimeWorktreeTerminalAfterWake } from '@/lib/web-runtime-worktree-terminal-after-wake'
 
-// The pending pointer can survive app-view changes; only terminal view actually displays creation UI.
-function isPendingCreationSurfaceVisible(creationId: string): boolean {
-  const state = useAppStore.getState()
-  return state.activeView === 'terminal' && state.activePendingCreationId === creationId
-}
-
-// Why: the created row is listed before completion, so a user may already have opened it.
-function isCreatedWorkspaceInView(creationId: string, worktreeId: string): boolean {
-  const state = useAppStore.getState()
-  return (
-    isPendingCreationSurfaceVisible(creationId) ||
-    (state.activeView === 'terminal' &&
-      state.activePendingCreationId === null &&
-      state.activeWorktreeId === worktreeId)
-  )
-}
-
 export async function executeWorktreeCreation(
   creationId: string,
-  request: WorktreeCreationRequest
+  request: WorktreeCreationRequest,
+  navigation = beginDesktopNavigation()
 ): Promise<void> {
   const trustedRequest = request.hookPreparation
     ? await prepareWorktreeCreationHooks(creationId, request)
@@ -165,7 +154,8 @@ export async function executeWorktreeCreation(
   const startupOpt = windowStartup.startup
 
   // Hand off only if still viewing creation/new workspace; preserve later navigation and toast instead (#9944).
-  const shouldActivateOnCompletion = isCreatedWorkspaceInView(creationId, worktree.id)
+  const shouldActivateOnCompletion =
+    canPresentDesktopNavigation(navigation) && isCreatedWorkspaceInView(creationId, worktree.id)
   const setupIsOnlySurface = preparedRequest.setupOnly === true && result.setup !== undefined
   const defaultTabs = setupIsOnlySurface ? undefined : result.defaultTabs
 
@@ -176,6 +166,7 @@ export async function executeWorktreeCreation(
     try {
       activation = activateAndRevealWorktree(worktree.id, {
         sidebarRevealBehavior: 'auto',
+        navigation,
         ...onCreationHost,
         ...(windowStartup.agent !== null ? { agent: windowStartup.agent } : {}),
         ...(result.setup ? { setup: result.setup } : {}),
@@ -288,6 +279,7 @@ export async function executeWorktreeCreation(
         agentLaunchRoute,
         worktreeId: worktree.id,
         shouldActivateOnCompletion,
+        navigation,
         activation,
         primaryTabId
       })

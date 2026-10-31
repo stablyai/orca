@@ -103,7 +103,7 @@ export function createCheckRunDetailsActions(
           return live?.mode === 'check-details' && live.checkRunDetails === next
         })
       }
-      void openWorkspaceEditorItem(get(), id, worktreeId, label, 'check-details')
+      void openWorkspaceEditorItem(get, id, worktreeId, label, 'check-details')
     },
 
     // Why: sidebar detail fetches can finish after the full-details tab is open; update the snapshot without stealing focus.

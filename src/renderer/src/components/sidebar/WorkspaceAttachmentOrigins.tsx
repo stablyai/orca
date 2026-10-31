@@ -1,3 +1,4 @@
+import { navigateDesktopTab } from '@/lib/desktop-navigation'
 import React from 'react'
 import { Terminal } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -33,7 +34,7 @@ function focusOrigin(workspace: Worktree, tab: Tab, paneKey: string | undefined)
   if (!state.setActiveWorktree(workspace.id, workspace.hostId)) {
     return
   }
-  state.activateTab(tab.id, { worktreeId: workspace.id })
+  navigateDesktopTab(tab.id, { worktreeId: workspace.id })
   const pane = paneKey ? parsePaneKey(paneKey) : null
   if (
     tab.contentType === 'terminal' &&

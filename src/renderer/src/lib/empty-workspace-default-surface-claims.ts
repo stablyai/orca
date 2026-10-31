@@ -1,4 +1,4 @@
-import type { GatedEmptyWorkspaceReseedIntent } from './worktree-initial-terminal-seeding'
+import type { GatedEmptyWorkspaceReseedIntent } from './worktree-gated-empty-reseed'
 
 // Detection/host waits own the first surface so other seeders cannot add a shell beside pending chat. Detection carries the latest activation intent; host launch waits replay nothing.
 const pendingIntentByWorkspace = new Map<string, GatedEmptyWorkspaceReseedIntent>()

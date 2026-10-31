@@ -1,47 +1,37 @@
 // @vitest-environment happy-dom
-import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import type { Tab, TabGroup } from '../../../../shared/tab-types'
-import type { AgentSessionStatusSummary } from '../../../../shared/agent-session-wire'
+import {
+  W,
+  ordinary,
+  first,
+  second,
+  repo,
+  worktree,
+  classify,
+  Desktop,
+  visibleConversation,
+  main
+} from './thread-surface.test-fixture'
 
-vi.mock('@/runtime/runtime-rpc-client', async (original) =>
-  (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeRpcClientWithLayoutApply(await original())
-)
-vi.mock('@/runtime/runtime-layout-client', async (original) =>
-  (
-    await import('@/runtime/layout-apply-test-transport.test-fixture')
-  ).runtimeLayoutClientWithTestFrames(await original())
-)
-vi.mock('../native-chat/NativeChatView', () => ({
-  default: ({ sessionId, isVisible }: { sessionId: string; isVisible: boolean }) => (
-    <div data-testid="conversation" hidden={!isVisible}>
-      {sessionId}
-    </div>
-  )
-}))
-vi.mock('./NewThread', () => ({
-  NewThread: ({ draftId }: { draftId: string }) => <div>Draft {draftId}</div>
-}))
+import { navigateDesktopTab } from '@/lib/desktop-navigation'
+
+import { setThreadTestPage } from './thread-page.test-fixture'
+import { act, fireEvent, render, screen } from '@testing-library/react'
+import { expect, it, vi } from 'vitest'
+import type { TabGroup } from '../../../../shared/tab-types'
+
 import { useAppStore } from '@/store'
-import { makeWorktree, makeUnifiedTab, makeTabGroup } from '@/store/slices/store-test-helpers'
+import { makeTabGroup } from '@/store/slices/store-test-helpers'
 import { TooltipProvider } from '../ui/tooltip'
 import { ThreadsSection } from './ThreadsSection'
-import { ThreadSurface, useThreadSurfaceActive } from './ThreadSurface'
+
 import { useDesktopVisibleGroups } from './use-desktop-tab-projection'
-import { useThreadNavigation } from './thread-navigation'
+
 import { useDesktopThreadPage } from './use-desktop-thread-page'
 import {
   isBrowserPageMountAdmitted,
   releaseBrowserPageMount
 } from '../browser-pane/host-guest/browser-page-mount-admission'
-import {
-  publishStructuredSessionSummaries,
-  useStructuredSessionSummaries
-} from '../native-chat/structured-session-summary-store'
-import StructuredAgentSessionPaneOverlayLayer from '../native-chat/StructuredAgentSessionPaneOverlayLayer'
-import { useTabGroupItemProjections } from '../tab-group/useTabGroupItemProjections'
+
 import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import { activateStructuredAgentSessionById } from '@/lib/agent-session/structured-agent-session-tab-activation'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -50,172 +40,9 @@ import { createActivityThreadActions } from '../activity/activity-thread-actions
 import { registerTerminalUiRoutingIpcBridge } from '@/hooks/ipc-events/terminal-ui-routing-ipc-bridge'
 import { handleSwitchTabAcrossAllTypes, handleSwitchRecentTab } from '@/hooks/ipc-tab-switch'
 import { dispatchWorkspaceTabCommand } from '@/lib/workspace-tab-commands'
-import {
-  drawTabsFromMain,
-  type TabsDrawnFromMain
-} from '@/store/slices/tabs-drawn-from-main.test-fixture'
+
 import { buildMobileSessionTabSnapshots } from '@/runtime/sync-runtime-graph/mobile-session-snapshots'
 import { selectThread } from './thread-actions'
-
-const W = 'repo::/main'
-const ordinary = makeUnifiedTab({
-  id: 'ordinary',
-  entityId: 'ordinary',
-  worktreeId: W,
-  groupId: 'g',
-  contentType: 'agent-session',
-  executionHostId: 'local',
-  agentSessionAgent: 'codex'
-})
-const first = { ...ordinary, id: 'first', entityId: 'first' }
-const second = { ...ordinary, id: 'second', entityId: 'second' }
-const repo = { id: 'repo', path: '/main', displayName: 'Project', addedAt: 1, badgeColor: '' }
-const worktree = makeWorktree({
-  id: W,
-  repoId: 'repo',
-  path: '/main',
-  isMainWorktree: true,
-  hostId: 'local'
-})
-function classify(tab: Tab, changes: Partial<AgentSessionStatusSummary> = {}) {
-  publishStructuredSessionSummaries([
-    {
-      tabId: tab.id,
-      tab,
-      summary: {
-        sessionId: tab.entityId,
-        workspaceId: W,
-        agent: 'codex',
-        status: 'idle',
-        latestPrompt: tab.id,
-        updatedAt: 1,
-        surface: 'thread',
-        ...changes
-      }
-    }
-  ])
-}
-function Workbench() {
-  const id = useAppStore((s) => s.activeWorktreeId) ?? W
-  const groups = useAppStore((s) => s.groupsByWorktree[id]) ?? []
-  return (
-    <>
-      {groups.map((group) => (
-        <Strip key={group.id} id={id} groupId={group.id} />
-      ))}
-      <StructuredAgentSessionPaneOverlayLayer worktreeId={id} isWorktreeActive />
-    </>
-  )
-}
-function Strip({ id, groupId }: { id: string; groupId: string }) {
-  const groups = useAppStore((s) => s.groupsByWorktree[id])
-  const unifiedTabs = useAppStore((s) => s.unifiedTabsByWorktree[id])
-  const threadsEnabled = useAppStore((s) => s.settings?.experimentalThreads === true)
-  const { groupTabs, activeTab } = useTabGroupItemProjections({
-    groupId,
-    worktreeId: id,
-    worktreeState: {
-      groups: groups ?? [],
-      unifiedTabs: unifiedTabs ?? [],
-      terminalTabs: [],
-      openFiles: [],
-      browserTabs: [],
-      expandedPaneByTabId: {},
-      terminalLayoutsByTabId: {},
-      threadsEnabled,
-      generatedTabTitlesEnabled: false,
-      mobileEmulatorEnabled: false
-    }
-  })
-  return (
-    <div data-testid={`strip-${groupId}`} data-active={activeTab?.id ?? ''}>
-      {groupTabs.map((tab) => (
-        <span key={tab.id}>{tab.id}</span>
-      ))}
-      {!activeTab ? 'Empty workbench' : null}
-    </div>
-  )
-}
-function Desktop() {
-  const thread = useThreadSurfaceActive()
-  const view = useAppStore((s) => s.activeView)
-  return (
-    <TooltipProvider>
-      {view !== 'terminal' ? <div>Settings</div> : thread ? <ThreadSurface /> : <Workbench />}
-    </TooltipProvider>
-  )
-}
-function visibleConversation() {
-  return screen
-    .queryAllByTestId('conversation')
-    .filter((node) => !node.hidden && !node.closest('[aria-hidden="true"]'))
-    .map((node) => node.textContent)
-}
-let main: TabsDrawnFromMain
-beforeEach(async () => {
-  Object.defineProperty(window, 'api', {
-    configurable: true,
-    value: {
-      runtime: {
-        call: vi.fn(async () => ({
-          id: 'test',
-          ok: true,
-          result: null,
-          _meta: { runtimeId: 'local' }
-        }))
-      },
-      ui: {
-        onSplitTerminal: vi.fn(() => () => {}),
-        onRenameTerminal: vi.fn(() => () => {}),
-        onFocusTerminal: vi.fn(() => () => {}),
-        onFocusEditorTab: vi.fn(() => () => {})
-      }
-    }
-  })
-  useThreadNavigation.setState({ selection: null })
-  useAppStore.setState({
-    settings: { ...useAppStore.getState().settings!, experimentalThreads: true },
-    activeView: 'terminal',
-    activeWorktreeId: W,
-    activeWorkspaceExecutionHostId: 'local',
-    activeRepoId: 'repo',
-    repos: [repo],
-    worktreesByRepo: { repo: [worktree] },
-    detectedWorktreesByRepo: {},
-    folderWorkspaces: [],
-    projectGroups: [],
-    unifiedTabsByWorktree: { [W]: [ordinary, first, second] },
-    groupsByWorktree: {
-      [W]: [
-        makeTabGroup({
-          id: 'g',
-          worktreeId: W,
-          activeTabId: first.id,
-          tabOrder: ['ordinary', 'first', 'second'],
-          recentTabIds: ['first', 'ordinary', 'second']
-        })
-      ]
-    },
-    activeGroupIdByWorktree: { [W]: 'g' },
-    tabsByWorktree: {},
-    activeTabType: 'agent-session',
-    setActiveTabType: vi.fn(),
-    refreshGitHubForWorktreeIfStale: vi.fn(),
-    reconcileWorktreeTabModel: vi.fn(() => ({ renderableTabCount: 3 })),
-    revealWorktreeInSidebar: vi.fn()
-  })
-  main = await drawTabsFromMain(useAppStore)
-})
-afterEach(() => {
-  cleanup()
-  main.close()
-  publishStructuredSessionSummaries(
-    [...useStructuredSessionSummaries.getState().threadTabIds].map((tabId) => ({
-      tabId,
-      summary: null
-    }))
-  )
-})
 it('renders the selected session across reload/late summary, flag transitions, Settings, title change and project removal', () => {
   render(<Desktop />)
   expect(visibleConversation()).toEqual(['first'])
@@ -320,7 +147,7 @@ it('Agents, sidebar and explicit IPC select the same page; courtesy reveal prese
   act(() => callback({ tabId: 'second', worktreeId: W, userInitiated: true }))
   expect(visibleConversation()).toEqual(['second'])
   act(() =>
-    useThreadNavigation.setState({
+    setThreadTestPage({
       selection: { kind: 'new', draftId: 'pending', projectKey: 'local|repo' }
     })
   )
@@ -486,7 +313,7 @@ it.each(['draft', 'empty'] as const)(
       }
     })
     if (kind === 'draft') {
-      useThreadNavigation.setState({
+      setThreadTestPage({
         selection: { kind: 'new', projectKey: 'local|repo', draftId: 'retained' }
       })
     } else {
@@ -518,7 +345,7 @@ it.each(['same-id', 'number', 'palette'] as const)(
   'explicit %s navigation supersedes a draft even with the flag on',
   async (entry) => {
     classify(first)
-    useThreadNavigation.setState({
+    setThreadTestPage({
       selection: { kind: 'new', projectKey: 'local|repo', draftId: 'retained' }
     })
     render(<Desktop />)
@@ -559,16 +386,16 @@ it.each(['same-id', 'number', 'palette'] as const)(
       act(() => expect(activateTabNumberShortcut(1)).toBe(true))
       expect(visibleConversation()).toEqual([first.entityId])
     } else {
-      act(() => useAppStore.getState().activateTab(first.id, { worktreeId: W }))
+      act(() => navigateDesktopTab(first.id, { worktreeId: W }))
       expect(visibleConversation()).toEqual([first.entityId])
     }
     expect(screen.queryByText('Draft retained')).toBeNull()
-    expect(useThreadNavigation.getState().selection).toBeNull()
+    expect(useAppStore.getState().activeView).toBe('terminal')
   }
 )
 
 it('plain Settings/flag roundtrip and non-user layout activation retain draft intent', () => {
-  useThreadNavigation.setState({
+  setThreadTestPage({
     selection: { kind: 'new', projectKey: 'local|repo', draftId: 'retained' }
   })
   render(<Desktop />)
@@ -578,7 +405,7 @@ it('plain Settings/flag roundtrip and non-user layout activation retain draft in
       settings: { ...useAppStore.getState().settings!, experimentalThreads: false }
     })
   )
-  act(() => useAppStore.getState().activateTab(second.id, { worktreeId: W, recordFocus: false }))
+  act(() => navigateDesktopTab(second.id, { worktreeId: W, recordFocus: false }))
   act(() =>
     useAppStore.setState({
       settings: { ...useAppStore.getState().settings!, experimentalThreads: true }
@@ -627,7 +454,7 @@ it.each([20, 200])(
         null,
         { kind: 'new' as const, projectKey: 'local|repo', draftId: 'retained' }
       ]) {
-        act(() => useThreadNavigation.setState({ selection: intent }))
+        act(() => setThreadTestPage({ selection: intent }))
         find.mockClear()
         predicates = 0
         for (const value of ['one', 'two', 'three']) {
@@ -637,7 +464,7 @@ it.each([20, 200])(
         expect(predicates).toBe(0)
       }
     }
-    act(() => useThreadNavigation.setState({ selection: null }))
+    act(() => setThreadTestPage({ selection: null }))
     act(() => classify(first))
     expect(screen.getByTestId('page-hook').textContent).toBe(first.entityId)
     predicates = 0

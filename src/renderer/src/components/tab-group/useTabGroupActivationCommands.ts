@@ -1,3 +1,4 @@
+import { navigateDesktopTab } from '@/lib/desktop-navigation'
 import { useCallback } from 'react'
 import type { Tab } from '../../../../shared/tab-types'
 import { useAppStore } from '../../store'
@@ -22,7 +23,7 @@ export function useTabGroupActivationCommands({
   worktreeState: TabGroupWorktreeSnapshot
 }) {
   const focusGroup = useAppStore((state) => state.focusGroup)
-  const activateTab = useAppStore((state) => state.activateTab)
+  const activateTab = navigateDesktopTab
   const setActiveTab = useAppStore((state) => state.setActiveTab)
   const setActiveTabType = useAppStore((state) => state.setActiveTabType)
   const setActiveFile = useAppStore((state) => state.setActiveFile)

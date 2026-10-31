@@ -1,3 +1,4 @@
+import { navigateDesktopGroup } from '@/lib/desktop-navigation'
 import { openDesktopWorkbench } from '../threads/thread-navigation'
 import { visibleGroupActiveTabId } from '../threads/desktop-tab-projection'
 import { memo, useCallback, useMemo } from 'react'
@@ -81,7 +82,7 @@ const StructuredAgentSessionPaneOverlayLayer = memo(
       }))
     )
     const threadTabIds = useThreadMembership(worktreeId, threadsEnabled && isWorktreeActive)
-    const focusGroup = useAppStore((state) => state.focusGroup)
+    const focusGroup = navigateDesktopGroup
     const focusOwningGroup = useCallback(
       (groupId: string) => {
         focusGroup(worktreeId, groupId)
