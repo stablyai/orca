@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   readAgentJournalItemBody,
   readAgentJournalMessageBody
-} from './agent-session-journal-body-admission'
+} from '../../agent-session-journal-body-admission'
 
 const RESOLUTION = { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
 const QUESTION_ENTRY = {

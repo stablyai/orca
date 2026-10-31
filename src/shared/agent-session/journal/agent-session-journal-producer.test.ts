@@ -1,5 +1,8 @@
 import { describe, expect, it } from 'vitest'
-import { agentJournalLinkageFields, isRootAgentJournalItem } from './agent-session-journal-producer'
+import {
+  agentJournalLinkageFields,
+  isRootAgentJournalItem
+} from '../../agent-session-journal-producer'
 
 describe('isRootAgentJournalItem', () => {
   it("reads a row carrying no agent id as the session's own", () => {
