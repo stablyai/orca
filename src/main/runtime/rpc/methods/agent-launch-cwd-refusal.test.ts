@@ -156,8 +156,7 @@ describe('CLI cwd refusal through production creation and durable failed receipt
     const runtime = new OrcaRuntimeService(runtimeStore)
     vi.spyOn(runtime, 'openAgentSessionRecordStore').mockResolvedValue(records)
     vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
-      ...runtime.getClientSettings(),
-      experimentalNativeChat: false
+      ...runtime.getClientSettings()
     })
     vi.mocked(listWorktrees).mockResolvedValue(MOCK_GIT_WORKTREES)
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
@@ -386,8 +385,7 @@ describe('CLI cwd refusal through production creation and durable failed receipt
     const failingHost = new OrcaRuntimeService(runtimeStore)
     vi.spyOn(failingHost, 'openAgentSessionRecordStore').mockResolvedValue(reopened)
     vi.spyOn(failingHost, 'getClientSettings').mockReturnValue({
-      ...failingHost.getClientSettings(),
-      experimentalNativeChat: false
+      ...failingHost.getClientSettings()
     })
     vi.spyOn(failingHost, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true

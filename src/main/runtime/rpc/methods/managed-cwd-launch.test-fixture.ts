@@ -117,8 +117,7 @@ export function managedCwdLaunchFixture(
   const runtime = new OrcaRuntimeService(runtimeStore)
   vi.spyOn(runtime, 'openAgentSessionRecordStore').mockResolvedValue(records)
   vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
-    ...runtime.getClientSettings(),
-    experimentalNativeChat: false
+    ...runtime.getClientSettings()
   })
   const create = vi.spyOn(runtime, 'createManagedWorktree')
   const start = vi.spyOn(runtime, 'createTerminal').mockImplementation(async () => {
