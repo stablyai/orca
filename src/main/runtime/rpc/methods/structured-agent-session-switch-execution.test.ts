@@ -24,6 +24,7 @@ import {
   LEAF_B
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
+import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../../shared/agent-session-switch-execution'
 import { DaemonRequestTimeoutError } from '../../../daemon/daemon-errors'
 import { chatTabId } from '../../agent-session/agent-session-tab-layout'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
@@ -501,11 +502,17 @@ it('re-issuing a switch whose first answer was lost adopts the terminal it start
 })
 
 /** A whole-tab terminal→chat switch whose stop keeps the pane for the replace; records main's settlements. */
-async function switchFromKeptTerminal(
-  options: {
-    afterStop?: (runtime: ReturnType<typeof setupMainOwnedWorkspace>['runtime']) => Promise<void>
-  } = {}
-) {
+async function switchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
+  const started = startSwitchFromKeptTerminal(options)
+  return { ...started, result: await started.result }
+}
+
+type KeptTerminalSwitchOptions = {
+  beforeStop?: () => Promise<void>
+  afterStop?: (runtime: ReturnType<typeof setupMainOwnedWorkspace>['runtime']) => Promise<void>
+}
+
+function startSwitchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
   const { runtime } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
   runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
@@ -531,13 +538,14 @@ async function switchFromKeptTerminal(
     write: () => true,
     kill: () => false,
     stopAndWait: async () => {
+      await options.beforeStop?.()
       await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
       await options.afterStop?.(runtime)
       return true
     },
     getForegroundProcess: async () => null
   })
-  const result = await executeStructuredSessionSwitch(
+  const result = executeStructuredSessionSwitch(
     {
       sessionId: id,
       execution: {
@@ -607,4 +615,63 @@ it('settles a replaced source naming its chat, so the window waits for that repl
   const { result, settled, stoppedSource } = await switchFromKeptTerminal()
   expect(result).toEqual({ status: 'completed', sessionId: id })
   expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, replacedBySessionId: id })
+})
+
+function holdUntilReleased() {
+  let release = (): void => {}
+  const held = new Promise<void>((resolve) => {
+    release = resolve
+  })
+  return { held, release }
+}
+
+it('settles a kept source once at the deadline while work after the stop is still running', async () => {
+  await savedTranscript()
+  const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
+  const readable = await prepare.getMockImplementation()!(
+    undefined as never,
+    undefined as never,
+    false
+  )
+  const work = holdUntilReleased()
+  prepare.mockReset()
+  prepare.mockResolvedValueOnce(readable).mockImplementation(async () => {
+    await work.held
+    return readable
+  })
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const { result, settled, stoppedSource } = startSwitchFromKeptTerminal()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).not.toHaveBeenCalled()
+    await vi.advanceTimersByTimeAsync(AGENT_SESSION_SWITCH_HOST_MS)
+    expect(await result).toMatchObject({ refusal: { details: { reason: 'operationExpired' } } })
+    expect(settled).toHaveBeenCalledExactlyOnceWith(stoppedSource)
+    work.release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toHaveBeenCalledOnce()
+  } finally {
+    work.release()
+    vi.useRealTimers()
+  }
+})
+
+it('settles a kept source at once when its stop is proven only after the deadline', async () => {
+  await savedTranscript()
+  const stop = holdUntilReleased()
+  vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
+  try {
+    const { result, settled, stoppedSource } = startSwitchFromKeptTerminal({
+      beforeStop: () => stop.held
+    })
+    await vi.advanceTimersByTimeAsync(AGENT_SESSION_SWITCH_HOST_MS)
+    expect(await result).toMatchObject({ refusal: { details: { reason: 'operationExpired' } } })
+    expect(settled).not.toHaveBeenCalled()
+    stop.release()
+    await vi.advanceTimersByTimeAsync(0)
+    expect(settled).toHaveBeenCalledExactlyOnceWith(stoppedSource)
+  } finally {
+    stop.release()
+    vi.useRealTimers()
+  }
 })
