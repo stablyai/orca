@@ -1,0 +1,65 @@
+name: Enforce issue templates
+
+on:
+  issues:
+    types:
+      - opened
+      - edited
+
+permissions:
+  contents: read
+  issues: write
+
+concurrency:
+  group: issue-template-compliance-${{ github.event.issue.number }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      # Why: `issues` events check out the default branch, so only reviewed code runs
+      # under the write-scoped token. No dependency install: the script is node-only.
+      - name: Checkout compliance script
+        uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+          sparse-checkout: .github/scripts/issue-template-compliance.mjs
+          sparse-checkout-cone-mode: false
+
+      - name: Decide whether the issue follows a template
+        id: decision
+        run: node .github/scripts/issue-template-compliance.mjs
+
+      - name: Label and comment on a non-compliant issue
+        if: steps.decision.outputs.kind == 'flag'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          LABEL: ${{ steps.decision.outputs.label }}
+          MARKER: ${{ steps.decision.outputs.marker }}
+          COMMENT: ${{ steps.decision.outputs.comment }}
+        run: |
+          set -euo pipefail
+          # Why no --force: a maintainer's recolor or reworded description must survive re-runs.
+          gh label create "$LABEL" --color d93f0b \
+            --description "Issue does not follow an issue template; awaiting author edit" \
+            || echo "Label $LABEL already exists."
+          gh issue edit "$ISSUE_URL" --add-label "$LABEL"
+          # Why: an author may edit several times; keep a single bot comment per issue.
+          # Why the variable: in an `if` pipeline a failed lookup reads as "no marker" and double-comments.
+          comments="$(gh issue view "$ISSUE_URL" --json comments --jq '.comments[].body')"
+          if grep -qF "$MARKER" <<<"$comments"; then
+            echo "Compliance comment already present; skipping."
+          else
+            gh issue comment "$ISSUE_URL" --body "$COMMENT"
+          fi
+
+      - name: Clear the label once the issue is compliant
+        if: steps.decision.outputs.kind == 'clear'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          ISSUE_URL: ${{ github.event.issue.html_url }}
+          LABEL: ${{ steps.decision.outputs.label }}
+        run: gh issue edit "$ISSUE_URL" --remove-label "$LABEL"
