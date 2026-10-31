@@ -57,13 +57,21 @@ const DEFAULT_TERMINAL_WAIT_RPC_TIMEOUT_MS = 5 * 60 * 1000
 
 const terminalFocusHandler: CommandHandler = async ({ flags, client, cwd, json }) => {
   const terminal = await getTerminalHandle(flags, cwd, client)
+  // Why first: the desktop on the CLI's machine is the one to move, even when the paired host is a
+  // desktop that would navigate its own window (#31073). That window moves only as the fallback.
+  if (client.isRemote && (await revealPairedTerminalOnLocalDesktop(client, terminal))) {
+    const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
+      terminal,
+      navigation: 'caller'
+    })
+    result.result.focus.navigated = true
+    printResult(result, json, formatTerminalFocus)
+    return
+  }
   const result = await client.call<{ focus: RuntimeTerminalFocus }>('terminal.focus', {
     terminal,
     navigation: 'host'
   })
-  if (client.isRemote && result.result.focus.navigated === false) {
-    result.result.focus.navigated = await revealPairedTerminalOnLocalDesktop(client, terminal)
-  }
   printResult(result, json, formatTerminalFocus)
 }
 
