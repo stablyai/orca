@@ -7546,9 +7546,7 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Sol Kenar Çubuğu Görünümü",
-            "rowDescription": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılanda bırakın veya bir renk tonu kullanın.",
             "default": "Varsayılan",
-            "matchTerminal": "Terminalle Eşleştir",
             "tinted": "Renk Tonlu",
             "tintColor": "Kenar Çubuğu Rengi",
             "tintColorDescription": "Sol kenar çubuğu yüzeyine karıştırılan renk.",
@@ -9731,9 +9729,7 @@
             },
             "leftSidebarAppearance": {
               "title": "Sol Kenar Çubuğu Görünümü",
-              "description": "Sol kenar çubuğunu terminalinizle eşleştirin, varsayılan bırakın veya bir renk tonu kullanın.",
               "project": "proje",
-              "terminal": "terminal",
               "background": "arka plan",
               "tint": "renk tonu"
             },
@@ -13147,6 +13143,9 @@
           "assignedLight": "{{value0}} açık temanız olarak ayarlandı",
           "assignedDark": "{{value0}} koyu temanız olarak ayarlandı",
           "saveFailed": "Tema kaydedilemedi. Yeniden deneyin."
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "Terminalle Eşleştir"
         }
       },
       "right": {

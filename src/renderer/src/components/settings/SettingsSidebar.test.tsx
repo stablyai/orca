@@ -163,15 +163,14 @@ describe('SettingsSidebar', () => {
   it('applies left sidebar appearance styles to the settings navigation', () => {
     const markup = renderSidebar('orchestration', {
       ...getDefaultSettings('/tmp'),
-      leftSidebarAppearanceMode: 'match-terminal',
-      terminalColorOverrides: {
-        background: '#101820',
-        foreground: '#f0f4f8'
-      }
+      leftSidebarAppearanceMode: 'tinted',
+      leftSidebarTintColor: '#101820',
+      leftSidebarTintOpacity: 0.2
     })
 
-    expect(markup).toContain('--worktree-sidebar:#101820')
-    expect(markup).toContain('--worktree-sidebar-foreground:#f0f4f8')
+    expect(markup).toContain(
+      '--worktree-sidebar:color-mix(in srgb, #101820 20%, var(--background))'
+    )
   })
 
   it('reserves install state labels for actionable skill states', () => {

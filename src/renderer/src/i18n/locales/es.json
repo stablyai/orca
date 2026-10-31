@@ -7214,9 +7214,7 @@
           "932ff1fbff": "Tema",
           "leftSidebarAppearance": {
             "title": "Apariencia de la barra lateral izquierda",
-            "rowDescription": "Haz que la barra lateral izquierda coincida con tu terminal, mantén el valor predeterminado o usa un tinte.",
             "default": "Predeterminado",
-            "matchTerminal": "Coincidir con el terminal",
             "tinted": "Con tinte",
             "tintColor": "Tinte de la barra lateral",
             "tintColorDescription": "El color que se mezcla en la superficie de la barra lateral izquierda.",
@@ -9356,9 +9354,7 @@
             },
             "leftSidebarAppearance": {
               "title": "Apariencia de la barra lateral izquierda",
-              "description": "Haz que la barra lateral izquierda coincida con tu terminal, conserve el valor predeterminado o use un tinte.",
               "project": "proyecto",
-              "terminal": "Terminal",
               "background": "fondo",
               "tint": "tinte"
             },
@@ -12671,7 +12667,8 @@
           "searchPlaceholder": "Buscar compilaciones…"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Usar sus colores de terminal"
+          "useTerminalTheme": "Usar sus colores de terminal",
+          "matchTerminal": "Coincidir con el terminal"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {

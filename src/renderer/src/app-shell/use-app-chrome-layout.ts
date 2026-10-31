@@ -8,7 +8,6 @@ import { shouldShowWorktreeCreationSurface } from '@/lib/worktree-creation-surfa
 import { useAppStore } from '../store'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { selectActiveTerminalChromeState } from '../store/active-terminal-chrome-selector'
-import { useSystemPrefersDark } from '../components/terminal-pane/use-system-prefers-dark'
 import {
   hasRequestedBackgroundTerminalWorktreeMount,
   subscribeBackgroundTerminalWorktreeMountRequests
@@ -51,11 +50,7 @@ export function useAppChromeLayout() {
     hasRequestedBackgroundTerminalWorktreeMount
   )
 
-  const systemPrefersDark = useSystemPrefersDark()
-  const leftSidebarStyle = useMemo(
-    () => resolveLeftSidebarStyleVariables(settings, systemPrefersDark),
-    [settings, systemPrefersDark]
-  ) as React.CSSProperties | undefined
+  const leftSidebarStyle = useMemo(() => resolveLeftSidebarStyleVariables(settings), [settings])
 
   // Floating tabs need workbench unsaved-close/quit protection even without an active workspace.
   const floatingWorkspaceHasTabs = useAppStore(

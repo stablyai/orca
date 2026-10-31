@@ -6921,9 +6921,7 @@
           "932ff1fbff": "主题",
           "leftSidebarAppearance": {
             "title": "左侧边栏外观",
-            "rowDescription": "让左侧边栏匹配终端、保持默认，或使用色调。",
             "default": "默认",
-            "matchTerminal": "匹配终端",
             "tinted": "色调",
             "tintColor": "边栏色调",
             "tintColorDescription": "混入左侧边栏表面的颜色。",
@@ -9061,9 +9059,7 @@
             },
             "leftSidebarAppearance": {
               "title": "左侧边栏外观",
-              "description": "让左侧边栏匹配终端、保持默认，或使用色调。",
               "project": "项目",
-              "terminal": "终端",
               "background": "背景",
               "tint": "着色"
             },
@@ -12416,7 +12412,8 @@
           "searchLabel": "搜索构建"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "使用其终端配色"
+          "useTerminalTheme": "使用其终端配色",
+          "matchTerminal": "匹配终端"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {

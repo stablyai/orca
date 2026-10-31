@@ -7383,9 +7383,7 @@
           "932ff1fbff": "主題",
           "leftSidebarAppearance": {
             "title": "左側邊欄外觀",
-            "rowDescription": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
             "default": "預設",
-            "matchTerminal": "與終端機一致",
             "tinted": "色調",
             "tintColor": "側邊欄色調",
             "tintColorDescription": "混入左側邊欄表面的顏色。",
@@ -9568,9 +9566,7 @@
             },
             "leftSidebarAppearance": {
               "title": "左側邊欄外觀",
-              "description": "讓左側邊欄與終端機一致、保持預設，或使用色調。",
               "project": "專案",
-              "terminal": "終端機",
               "background": "背景",
               "tint": "著色"
             },
@@ -12984,6 +12980,9 @@
           "assignedLight": "已將 {{value0}} 設為淺色主題",
           "assignedDark": "已將 {{value0}} 設為深色主題",
           "saveFailed": "無法儲存主題。請再試一次。"
+        },
+        "AppearanceThemeControl": {
+          "matchTerminal": "與終端機一致"
         }
       },
       "right": {

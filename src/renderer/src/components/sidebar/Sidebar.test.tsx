@@ -178,21 +178,18 @@ describe('Sidebar', () => {
   it('applies left sidebar appearance variables to the workspace sidebar surface', () => {
     setSidebarState({
       ...getDefaultSettings(tmpdir()),
-      leftSidebarAppearanceMode: 'match-terminal',
-      terminalColorOverrides: {
-        background: '#101820',
-        foreground: '#f0f4f8'
-      }
+      leftSidebarAppearanceMode: 'tinted',
+      leftSidebarTintColor: '#101820',
+      leftSidebarTintOpacity: 0.2
     })
 
     const markup = renderSidebar()
     const sidebarRootTag = markup.slice(0, markup.indexOf('>'))
+    const tinted = '--worktree-sidebar:color-mix(in srgb, #101820 20%, var(--background))'
 
-    expect(sidebarRootTag).toContain('--worktree-sidebar:#101820')
-    expect(sidebarRootTag).toContain('--worktree-sidebar-foreground:#f0f4f8')
-    expect(sidebarRootTag).toMatch(/[;"]color:#f0f4f8/)
+    expect(sidebarRootTag).toContain(tinted)
     expect(markup).toContain('data-testid="workspace-kanban-drawer"')
-    expect(markup.match(/--worktree-sidebar:#101820/g)).toHaveLength(2)
+    expect(markup.split(tinted)).toHaveLength(3)
   })
 
   it('passes status bar visibility into the workspace board drawer', () => {

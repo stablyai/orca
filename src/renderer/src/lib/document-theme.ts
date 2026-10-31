@@ -112,6 +112,12 @@ export type CachedPluginAppTheme = {
   tokens: Record<string, string>
 }
 
+/** What an app theme paint needs: a plugin theme, or one Orca synthesizes (Match Terminal). */
+export type AppThemePaint = Pick<PluginThemeRegistration, 'base' | 'tokens'> & {
+  id: string
+  revision: string
+}
+
 type PluginThemePaintOptions = {
   root?: PluginThemeRoot
   probe?: ColorProbe
@@ -121,8 +127,8 @@ type PluginThemePaintOptions = {
 
 const PUBLIC_TOKENS = new Set<string>(PLUGIN_APP_THEME_TOKENS)
 const appliedPluginTokens = new WeakMap<object, readonly string[]>()
-// Why: plugin themes load after discovery; repainting from this cache before first paint
-// avoids flashing the built-in theme on every launch.
+// Why: plugin themes load after discovery and Match Terminal after settings; repainting from
+// this cache before first paint avoids flashing the built-in theme on every launch.
 const PLUGIN_THEME_CACHE_KEY = 'orca.pluginAppTheme.lastApplied'
 
 function setPluginTokens(root: PluginThemeRoot, tokens: Record<string, string>): void {
@@ -185,10 +191,10 @@ function writeCache(storage: Storage | null, cached: CachedPluginAppTheme | null
   }
 }
 
-/** Overlays a plugin theme's safe tokens; tokens it no longer sets fall back to main.css. Call
+/** Overlays an app theme's safe tokens; tokens it no longer sets fall back to main.css. Call
  *  after the document's light/dark mode matches the theme's base. */
 export function applyPluginAppTheme(
-  theme: PluginThemeRegistration | null,
+  theme: AppThemePaint | null,
   options: PluginThemePaintOptions & { storage?: Storage | null } = {}
 ): void {
   const storage = options.storage === undefined ? globalThis.localStorage : options.storage

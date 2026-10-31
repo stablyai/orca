@@ -6923,9 +6923,7 @@
           "932ff1fbff": "테마",
           "leftSidebarAppearance": {
             "title": "왼쪽 사이드바 모양",
-            "rowDescription": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
             "default": "기본값",
-            "matchTerminal": "Terminal에 맞춤",
             "tinted": "색조 적용",
             "tintColor": "사이드바 색조",
             "tintColorDescription": "왼쪽 사이드바 표면에 섞을 색상입니다.",
@@ -9061,9 +9059,7 @@
             },
             "leftSidebarAppearance": {
               "title": "왼쪽 사이드바 모양",
-              "description": "왼쪽 사이드바를 terminal에 맞추거나 기본값을 유지하거나 은은한 색조를 적용합니다.",
               "project": "프로젝트",
-              "terminal": "터미널",
               "background": "배경",
               "tint": "색조"
             },
@@ -12383,7 +12379,8 @@
           "searchLabel": "빌드 검색"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "이 테마의 터미널 색상 사용"
+          "useTerminalTheme": "이 테마의 터미널 색상 사용",
+          "matchTerminal": "Terminal에 맞춤"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {

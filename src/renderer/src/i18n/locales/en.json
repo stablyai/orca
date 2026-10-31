@@ -7636,14 +7636,13 @@
           "932ff1fbff": "Theme",
           "leftSidebarAppearance": {
             "title": "Left Sidebar Appearance",
-            "rowDescription": "Make the left sidebar match your terminal, stay default, or use a tint.",
             "default": "Default",
-            "matchTerminal": "Match Terminal",
             "tinted": "Tinted",
             "tintColor": "Sidebar Tint",
             "tintColorDescription": "The color mixed into the left sidebar surface.",
             "tintOpacity": "Tint Strength",
-            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar."
+            "tintOpacityDescription": "Controls how strongly the tint is mixed into the sidebar.",
+            "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
           },
           "interfaceDefaultFont": "Default font",
           "terminalDefaultFont": "Default font",
@@ -9823,11 +9822,10 @@
             },
             "leftSidebarAppearance": {
               "title": "Left Sidebar Appearance",
-              "description": "Make the left sidebar match your terminal, stay default, or use a tint.",
               "project": "project",
-              "terminal": "terminal",
               "background": "background",
-              "tint": "tint"
+              "tint": "tint",
+              "tintDescription": "Keep the left sidebar default or tint it. To follow the terminal, pick Match Terminal as the Light or Dark theme."
             },
             "workspaceCardLayout": {
               "title": "Workspace Card Layout",
@@ -9880,7 +9878,8 @@
               "kw": {
                 "cursor": "cursor"
               }
-            }
+            },
+            "matchTerminal": "match terminal"
           }
         },
         "auto": {
@@ -13058,7 +13057,8 @@
           }
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "Use its terminal colors"
+          "useTerminalTheme": "Use its terminal colors",
+          "matchTerminal": "Match Terminal"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {

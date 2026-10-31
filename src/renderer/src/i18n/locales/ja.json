@@ -6921,9 +6921,7 @@
           "932ff1fbff": "テーマ",
           "leftSidebarAppearance": {
             "title": "左サイドバーの外観",
-            "rowDescription": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
             "default": "デフォルト",
-            "matchTerminal": "ターミナルに合わせる",
             "tinted": "色合い",
             "tintColor": "サイドバーの色合い",
             "tintColorDescription": "左サイドバーの表面に混ぜる色です。",
@@ -9098,9 +9096,7 @@
             },
             "leftSidebarAppearance": {
               "title": "左サイドバーの外観",
-              "description": "左サイドバーをターミナルに合わせるか、既定のままにするか、色合いを加えます。",
               "project": "プロジェクト",
-              "terminal": "ターミナル",
               "background": "背景",
               "tint": "色合い"
             },
@@ -12383,7 +12379,8 @@
           "noMatches": "一致するビルドはありません。"
         },
         "AppearanceThemeControl": {
-          "useTerminalTheme": "このテーマのターミナル配色を使う"
+          "useTerminalTheme": "このテーマのターミナル配色を使う",
+          "matchTerminal": "ターミナルに合わせる"
         },
         "AppearanceInterfaceSection": {
           "pluginIconTheme": {
