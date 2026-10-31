@@ -11,7 +11,7 @@ type FakeWebContents = {
   loadURL: ReturnType<typeof vi.fn>
   close: ReturnType<typeof vi.fn>
   setWindowOpenHandler: ReturnType<typeof vi.fn>
-  isDestroyed: ReturnType<typeof vi.fn>
+  isDestroyed: ReturnType<typeof vi.fn<() => boolean>>
   emit: (event: string, ...args: unknown[]) => void
 }
 
@@ -127,6 +127,7 @@ import {
   openPopupWithOriginBar,
   POPUP_ORIGIN_BAR_HEIGHT
 } from './popup-origin-bar-window'
+import { getNativePopupQuitSurface } from './native-browser-popup-windows'
 
 const { createFakeWebContents, FakeWebContentsView, FakeBaseWindow } = fakeElectron
 
@@ -194,6 +195,39 @@ describe('describePopupOrigin', () => {
 })
 
 describe('openPopupWithOriginBar', () => {
+  it('owns BaseWindow page/bar input and keeps the hold notice in its trusted origin bar', () => {
+    const popup = openPopupWithOriginBar({ webContents: fakePopupContents() }, 'about:blank')
+    const { bar } = lastViews()
+    const owner = getNativePopupQuitSurface(popup.contentWebContents)
+    expect(owner?.window).toBe(lastWindow())
+    expect(getNativePopupQuitSurface(bar.webContents)).toBe(owner)
+    owner?.notice({ phase: 'starting' })
+    expect(bar.setBounds).toHaveBeenLastCalledWith({ x: 0, y: 0, width: 800, height: 98 })
+    expect(lastViews().content.setBounds).toHaveBeenLastCalledWith({
+      x: 0,
+      y: 34,
+      width: 800,
+      height: 600
+    })
+    bar.webContents.emit('did-finish-load')
+    expect(bar.webContents.executeJavaScript).toHaveBeenCalledWith(
+      expect.stringContaining('Agents are still working. Hold ⌘Q to quit.')
+    )
+    owner?.notice({ phase: 'holding' })
+    expect(bar.webContents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining('"phase":"holding"')
+    )
+    owner?.notice({ phase: 'released' })
+    expect(bar.webContents.executeJavaScript).toHaveBeenLastCalledWith(
+      expect.stringContaining('"phase":"released"')
+    )
+    expect(bar.webContents.loadURL.mock.calls[0][0]).toContain('id%3D%22origin%22')
+    lastWindow().emit('closed')
+    expect(getNativePopupQuitSurface(popup.contentWebContents)).toBeUndefined()
+    const calls = bar.webContents.executeJavaScript.mock.calls.length
+    owner?.notice({ phase: 'holding' })
+    expect(bar.webContents.executeJavaScript).toHaveBeenCalledTimes(calls)
+  })
   it('adopts the pre-created popup contents so window.opener and the session survive', () => {
     const adopted = createFakeWebContents()
     const webPreferences = { partition: 'persist:browser' }

@@ -6,7 +6,13 @@ import {
 } from './browser-popup-native-window'
 import { MIN_POPUP_CONTENT_HEIGHT, MIN_POPUP_CONTENT_WIDTH } from './popup-window-minimum-size'
 import { describeCommittedPopupOrigin } from './popup-committed-origin'
+import {
+  attachPopupBarQuitNotice,
+  POPUP_ORIGIN_BAR_HTML,
+  POPUP_ORIGIN_BAR_HEIGHT
+} from './popup-hold-quit-notice'
 export { describePopupOrigin } from './popup-origin-description'
+export { POPUP_ORIGIN_BAR_HEIGHT } from './popup-hold-quit-notice'
 
 // Electron supplies an untyped webContents option; adopting it preserves OAuth opener/session state.
 export type PopupChildWindowOptions = Electron.BrowserWindowConstructorOptions & {
@@ -22,32 +28,8 @@ export type PopupOriginBarWindow = {
   onClosed: (listener: () => void) => void
 }
 
-export const POPUP_ORIGIN_BAR_HEIGHT = 34
-
 const DEFAULT_POPUP_CONTENT_WIDTH = 800
 const DEFAULT_POPUP_CONTENT_HEIGHT = 600
-
-// Inline main.css theme tokens because this data URL cannot import the renderer stylesheet.
-const ORIGIN_BAR_HTML = `<!doctype html><html><head><meta charset="utf-8"><style>
-  :root { color-scheme: light dark; }
-  body {
-    margin: 0; height: 100vh; box-sizing: border-box; padding: 0 10px;
-    display: flex; align-items: center; gap: 8px;
-    overflow: hidden; white-space: nowrap;
-    -webkit-user-select: none; user-select: none; cursor: default;
-    font: 12px ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-    background: #fff; color: #0a0a0a; border-bottom: 1px solid #e5e5e5;
-  }
-  #insecure { display: none; color: #e40014; font-weight: 600; }
-  body.insecure #insecure { display: inline; }
-  /* Elide from the left to retain the registrable domain; bdi preserves LTR origin text. */
-  #origin-clip { overflow: hidden; text-overflow: ellipsis; direction: rtl; }
-  #origin { unicode-bidi: isolate; direction: ltr; }
-  @media (prefers-color-scheme: dark) {
-    body { background: #0a0a0a; color: #fafafa; border-bottom-color: rgb(255 255 255 / 0.07); }
-    #insecure { color: #ff6568; }
-  }
-</style></head><body><span id="insecure">Not secure</span><span id="origin-clip"><bdi id="origin"></bdi></span></body></html>`
 
 function clampPopupContentSize(options: PopupChildWindowOptions): {
   width: number
@@ -141,9 +123,10 @@ export function openPopupWithOriginBar(
   window.contentView.addChildView(contentView)
   window.contentView.addChildView(originBarView)
 
+  let originBarHeight = POPUP_ORIGIN_BAR_HEIGHT
   const layoutViews = (): void => {
     const bounds = window.getContentBounds()
-    originBarView.setBounds({ x: 0, y: 0, width: bounds.width, height: POPUP_ORIGIN_BAR_HEIGHT })
+    originBarView.setBounds({ x: 0, y: 0, width: bounds.width, height: originBarHeight })
     contentView.setBounds({
       x: 0,
       y: POPUP_ORIGIN_BAR_HEIGHT,
@@ -166,6 +149,15 @@ export function openPopupWithOriginBar(
   ) {
     return closeUnpreparedPopup(window, contentWebContents, originBarWebContents)
   }
+  attachPopupBarQuitNotice({
+    window,
+    contents: contentWebContents,
+    bar: originBarWebContents,
+    layout: (height) => {
+      originBarHeight = height
+      layoutViews()
+    }
+  })
   const renderOrigin = (): void => {
     const { label, insecure } = describeCommittedPopupOrigin(contentWebContents)
     // Reset stale titles on navigation; only the origin bar is trusted to identify the destination.
@@ -182,7 +174,7 @@ export function openPopupWithOriginBar(
   }
   originBarWebContents.once('did-finish-load', renderOrigin)
   void originBarWebContents.loadURL(
-    `data:text/html;charset=utf-8,${encodeURIComponent(ORIGIN_BAR_HTML)}`
+    `data:text/html;charset=utf-8,${encodeURIComponent(POPUP_ORIGIN_BAR_HTML)}`
   )
 
   contentWebContents.on('did-navigate', renderOrigin)

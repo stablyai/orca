@@ -28,7 +28,7 @@ export function installGuestDevToolsCloseShortcut(args: {
 }
 
 // input-event is typed as the generic InputEvent, but key events carry key/code at runtime.
-function readKeyDown(input: Electron.InputEvent): KeybindingInput | null {
+export function readDevToolsShortcutInput(input: Electron.InputEvent): KeybindingInput | null {
   const modifiers = input.modifiers ?? []
   if (input.type !== 'rawKeyDown' || modifiers.includes('isautorepeat')) {
     return null
@@ -54,7 +54,7 @@ function installCloseShortcut(
 ): void {
   // DevTools emits input-event, not before-input-event; closing it also destroys this listener.
   devTools.on('input-event', (_event, inputEvent) => {
-    const input = readKeyDown(inputEvent)
+    const input = readDevToolsShortcutInput(inputEvent)
     if (
       !input ||
       !keybindingMatchesAction('tab.close', input, process.platform, getKeybindings())

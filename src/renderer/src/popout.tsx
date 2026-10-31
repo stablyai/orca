@@ -20,6 +20,8 @@ import type { GlobalSettings } from '../../shared/global-settings-types'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { setReactCommitCascadeRendererSurface } from './lib/react-commit-cascade-telemetry'
 import { installOsFileDropCancellationGuard } from './lib/os-file-drop-cancellation-guard'
+import { HoldQuitNotice } from './components/HoldQuitNotice'
+import { Toaster } from './components/ui/sonner'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
 
 const disposeOsFileDropGuard = installOsFileDropCancellationGuard()
@@ -121,6 +123,8 @@ getOrCreateRendererRoot(rootElement, import.meta.hot?.data).render(
     <I18nProvider>
       <PopoutSettingsSync />
       <PopoutRoot />
+      <HoldQuitNotice />
+      <Toaster toastOptions={{ className: 'font-sans text-sm' }} />
     </I18nProvider>
   </StrictMode>
 )

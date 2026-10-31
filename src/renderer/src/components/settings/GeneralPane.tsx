@@ -10,6 +10,7 @@ import {
   getGeneralCliSearchEntries,
   getGeneralEditorSearchEntries,
   getGeneralNavigationSearchEntries,
+  getHoldQuitEntries,
   getGeneralPaneSearchEntries,
   getGeneralSupportSearchEntries,
   getGeneralUpdateSearchEntries,
@@ -112,6 +113,7 @@ export function GeneralPane({
     (activeRuntimeTarget.kind === 'local' ||
       activeRuntimeTarget.environmentId === sourceDefaultsSupportedRuntimeEnvironmentId)
   const generalNavigationSearchEntries = getGeneralNavigationSearchEntries()
+  const holdQuitEntry = getHoldQuitEntries()[0]
   const tabOrderKeywords = getTabOrderControlSearchKeywords(generalNavigationSearchEntries)
   const projectRuntimeSearchEntries = wslSupportedPlatform
     ? getGeneralProjectRuntimeSearchEntries()
@@ -211,6 +213,20 @@ export function GeneralPane({
             }
           />
         </SearchableSetting>
+        {holdQuitEntry ? (
+          <SearchableSetting {...holdQuitEntry}>
+            <SettingsSwitchRow
+              label={holdQuitEntry.title}
+              description={holdQuitEntry.description}
+              checked={settings.holdQuitWhileAgentsWork === true}
+              onChange={() =>
+                updateSettings({
+                  holdQuitWhileAgentsWork: settings.holdQuitWhileAgentsWork !== true
+                })
+              }
+            />
+          </SearchableSetting>
+        ) : null}
       </section>
     ) : null,
     matchesSettingsSearch(searchQuery, getGeneralWorkspaceSearchEntries()) ? (

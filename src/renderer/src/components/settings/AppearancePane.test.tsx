@@ -485,6 +485,17 @@ describe('AppearancePane', () => {
     expect(updateSettings).toHaveBeenCalledWith({ showMenuBarIcon: false })
   })
 
+  it('leaves hold-to-quit in General rather than Appearance on macOS', async () => {
+    mocks.state.appPlatform = 'darwin'
+    mocks.state.settingsSearchQuery = 'hold'
+    const container = await renderAppearancePane(getDefaultSettings('/tmp'))
+    expect(
+      container.querySelector(
+        'button[role="switch"][aria-label="Hold ⌘Q while agents are working"]'
+      )
+    ).toBeNull()
+  })
+
   it('keeps description-only search matches visible after helper text is hidden', async () => {
     mocks.state.settingsSearchQuery = 'app window'
     const container = await renderAppearancePane(getDefaultSettings('/tmp'))

@@ -5,6 +5,7 @@ import { getDefaultSettings } from '../../../../shared/constants'
 import { GeneralPane } from './GeneralPane'
 const fake = vi.hoisted(() => ({
   query: '',
+  platform: 'linux',
   getVersion: vi.fn(async () => '1.4.100'),
   refresh: vi.fn(async () => {}),
   action: vi.fn(),
@@ -20,6 +21,7 @@ vi.mock('@/i18n/i18n', () => ({
       fallback
     )
 }))
+vi.mock('@/lib/renderer-app-platform', () => ({ getRendererAppPlatform: () => fake.platform }))
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
@@ -48,6 +50,7 @@ vi.mock('@/components/settings/DefaultWindowsProjectRuntimeSetting', () => ({
 beforeEach(() => {
   vi.clearAllMocks()
   fake.query = ''
+  fake.platform = 'linux'
   fake.updates = new Map([
     ['synthetic-host', { environmentId: 'synthetic-host', phase: 'current', name: 'Synthetic' }]
   ])
@@ -201,4 +204,42 @@ it('does not publish a version result from a genuinely unmounted section', async
   await act(async () => resolveOld?.('1.0.0'))
   expect(screen.getByText('Current version: 1.4.100')).toBeTruthy()
   expect(screen.queryByText('Current version: 1.0.0')).toBeNull()
+})
+
+it('shows hold-to-quit beside closing confirmations and keeps its local settings write in search', async () => {
+  fake.platform = 'darwin'
+  const props = {
+    settings: getDefaultSettings('/synthetic'),
+    updateSettings: vi.fn(),
+    fontSuggestions: []
+  }
+  const view = render(<GeneralPane {...props} />)
+  await act(async () => {})
+  const toggle = screen.getByRole('switch', { name: 'Hold ⌘Q while agents are working' })
+  expect(toggle.getAttribute('aria-checked')).toBe('false')
+  expect(toggle.closest('section')).toBe(
+    screen
+      .getByRole('switch', { name: 'Confirm before closing active chats or terminals' })
+      .closest('section')
+  )
+  fake.query = 'Cmd+Q'
+  view.rerender(<GeneralPane {...props} />)
+  fireEvent.click(screen.getByRole('switch', { name: 'Hold ⌘Q while agents are working' }))
+  expect(props.updateSettings).toHaveBeenCalledExactlyOnceWith({ holdQuitWhileAgentsWork: true })
+  expect(
+    screen
+      .getByRole('switch', { name: 'Hold ⌘Q while agents are working' })
+      .getAttribute('aria-checked')
+  ).toBe('false')
+  view.rerender(
+    <GeneralPane {...props} settings={{ ...props.settings, holdQuitWhileAgentsWork: true }} />
+  )
+  expect(
+    screen
+      .getByRole('switch', { name: 'Hold ⌘Q while agents are working' })
+      .getAttribute('aria-checked')
+  ).toBe('true')
+  fake.platform = 'linux'
+  view.rerender(<GeneralPane {...props} />)
+  expect(screen.queryByRole('switch', { name: 'Hold ⌘Q while agents are working' })).toBeNull()
 })

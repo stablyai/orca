@@ -17,6 +17,7 @@ import { buildAppFontFamily } from './lib/app-font-family'
 import { getOrCreateRendererRoot } from './lib/react-renderer-root'
 import { I18nProvider } from './i18n/I18nProvider'
 import { useAppStore } from './store'
+import { HoldQuitNotice } from './components/HoldQuitNotice'
 import { installBodyOverlayAttributes } from './lib/body-overlay-attributes'
 
 const disposeBodyOverlayAttributes = installBodyOverlayAttributes()
@@ -90,6 +91,7 @@ function SpaceWindowRoot(): React.JSX.Element {
           {activeModal === 'preserved-branch-review' ? <PreservedBranchBatchReviewModal /> : null}
         </ConfirmationDialogProvider>
         <Toaster closeButton toastOptions={{ className: 'font-sans text-sm' }} />
+        <HoldQuitNotice />
       </TooltipProvider>
     </RecoverableRenderErrorBoundary>
   )

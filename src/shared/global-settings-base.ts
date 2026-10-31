@@ -9,6 +9,7 @@ import type { PluginFileTypeSuggestionSettings } from './plugins/contributions/p
 import type { PluginUpdatePolicySettings } from './plugins/catalog/plugin-update-policy'
 import type { PluginSystemSettings } from './plugins/plugin-system-settings'
 import type { WorktreeDeletionPreferences } from './worktree-deletion-preferences'
+import type { HoldQuitSettings } from './mac-hold-quit'
 import type { AgentPermissionGlobalSettings } from './tui-agent-permission-choice'
 
 /** Settings groups owned by their feature modules and composed into GlobalSettings. */
@@ -19,6 +20,7 @@ export type GlobalSettingsBase = ClaudeAgentViewSettings &
   AgentPermissionGlobalSettings &
   ExternalConversationSettings &
   BrowserLinkOpeningSettings &
+  HoldQuitSettings &
   BrowserExtensionGlobalSettings &
   PluginAppearanceSettings &
   PluginFileTypeSuggestionSettings &
