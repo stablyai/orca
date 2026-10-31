@@ -53,10 +53,10 @@ vi.mock('../source-control/stacked-hosted-review-creation', () => ({
 vi.mock('../source-control/hosted-review', () => ({
   getHostedReviewForBranch: getHostedReviewForBranchMock,
   // Handlers read through this; keep asserting on the one mock.
-  readHostedReviewForBranch: async (input: unknown) => ({
+  readHostedReviewForBranch: vi.fn(async (input: unknown) => ({
     review: await getHostedReviewForBranchMock(input),
     readOutcome: 'cached'
-  })
+  }))
 }))
 
 vi.mock('./registered-worktree-roots-cache', () => ({
@@ -68,10 +68,32 @@ vi.mock('../repo-worktrees', () => ({
 }))
 
 import { registerHostedReviewHandlers } from './hosted-review'
+import { readHostedReviewForBranch } from '../source-control/hosted-review'
+import type { HostedReviewInfo } from '../../shared/hosted-review'
 import { WslDistroStoppedError } from '../wsl/wsl-unc-access-gate'
 import { WorktreeCatalogUnavailableError } from '../../shared/worktree/worktree-catalog-availability'
 
 type HandlerMap = Record<string, (_event: unknown, args: unknown) => unknown>
+
+const providerReview: HostedReviewInfo = {
+  provider: 'gitlab',
+  number: 7,
+  title: 'MR',
+  url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+  state: 'open',
+  status: 'success',
+  mergeable: 'MERGEABLE',
+  updatedAt: '2026-10-30'
+}
+// Only a caller that asks gets the outcome envelope; a definitive null keeps its outcome too.
+const READ_OUTCOME_REPLIES = [
+  { reportReadOutcome: true, review: providerReview },
+  { reportReadOutcome: true, review: null },
+  { reportReadOutcome: false, review: providerReview },
+  { reportReadOutcome: false, review: null },
+  { reportReadOutcome: undefined, review: providerReview },
+  { reportReadOutcome: undefined, review: null }
+]
 
 describe('registerHostedReviewHandlers', () => {
   const handlers: HandlerMap = {}
@@ -436,7 +458,7 @@ describe('registerHostedReviewHandlers', () => {
     expect(getHostedReviewCreationEligibilityMock).toHaveBeenCalledTimes(reads)
   })
 
-  it('carries a selected-worktree claim and explicit refresh through to the branch lookup', async () => {
+  it('carries a selected-worktree claim and explicit refresh through, and replies with the outcome only when asked', async () => {
     getHostedReviewForBranchMock.mockResolvedValueOnce(null)
     registerHostedReviewHandlers(store as never, stats as never)
 
@@ -458,6 +480,21 @@ describe('registerHostedReviewHandlers', () => {
         userRefresh: true
       })
     )
+
+    for (const { reportReadOutcome, review } of READ_OUTCOME_REPLIES) {
+      vi.mocked(readHostedReviewForBranch).mockResolvedValueOnce({
+        review,
+        readOutcome: 'provider'
+      })
+      const reply = await handlers['hostedReview:forBranch'](null, {
+        repoPath,
+        repoId: repo.id,
+        branch: 'feature/selected',
+        userRefresh: true,
+        ...(reportReadOutcome === undefined ? {} : { reportReadOutcome })
+      })
+      expect(reply).toEqual(reportReadOutcome ? { review, readOutcome: 'provider' } : review)
+    }
   })
 
   it('uses interactive git admission for an explicit card refresh', async () => {

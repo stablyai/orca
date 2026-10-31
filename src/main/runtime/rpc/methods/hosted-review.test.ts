@@ -91,7 +91,7 @@ describe('hosted review RPC methods', () => {
     })
   })
 
-  it('carries a selected-worktree claim and explicit refresh through to the runtime', async () => {
+  it('carries a selected-worktree claim, explicit refresh and outcome request through to the runtime', async () => {
     const runtime = {
       getRuntimeId: () => 'test-runtime',
       getHostedReviewForBranch: vi.fn().mockResolvedValue(null)
@@ -104,13 +104,19 @@ describe('hosted review RPC methods', () => {
         branch: 'feature/selected',
         active: true,
         force: true,
-        userRefresh: true
+        userRefresh: true,
+        reportReadOutcome: true
       })
     )
 
     // Mobile PR sidebar refresh must bypass card-list pacing to discover reviews opened elsewhere (#11532).
     expect(runtime.getHostedReviewForBranch).toHaveBeenCalledWith(
-      expect.objectContaining({ active: true, force: true, userRefresh: true })
+      expect.objectContaining({
+        active: true,
+        force: true,
+        userRefresh: true,
+        reportReadOutcome: true
+      })
     )
   })
 
