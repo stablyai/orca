@@ -12,6 +12,9 @@ import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
 import { AGENT_SESSION_GOAL_CONTROL_COPY } from '../../../shared/agent-session-goal-control-copy'
 import { refuse } from '../../../shared/agent-session-wire'
+import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
+import type { NativeChatMessage } from '../../../shared/native-chat-types'
+import { projectStructuredItemToNativeChat } from '../../../shared/structured-agent-session-projection'
 import {
   claudeProviderHandle,
   codexProviderHandle
@@ -27,6 +30,7 @@ import {
   catchUpSwitchedCliTranscript,
   commitSwitchStoppedCliTurn,
   withSwitchStoppedTurn,
+  type SwitchStoppedCliTurn,
   type SwitchTranscriptSource
 } from './structured-agent-session-switch-import'
 import {
@@ -71,19 +75,49 @@ function open(name: string, agent: AgentType, providerId: string) {
   })
 }
 
-/** The production refresh: Codex's resting import, then the shared one; nothing left writing. */
-async function refresh(journal: AgentSessionJournal, source: SwitchTranscriptSource) {
-  if (source.agent === 'codex') {
-    await catchUpStructuredSessionAtRest({
-      journal,
-      threadId: source.sessionId,
-      filePath: source.filePath,
-      fence: 1,
-      deadline,
-      settleAbandoned: true
-    })
+/** The production refresh (Codex's resting import, or the shared one), with nothing left writing. */
+async function refresh(
+  journal: AgentSessionJournal,
+  source: SwitchTranscriptSource,
+  stopped?: SwitchStoppedCliTurn
+) {
+  await (source.agent === 'codex'
+    ? catchUpStructuredSessionAtRest({
+        journal,
+        threadId: source.sessionId,
+        filePath: source.filePath,
+        fence: 1,
+        deadline,
+        stoppedTurnId: stopped?.turnId,
+        stoppedUserItemKey: stopped?.userItemKey,
+        settleAbandoned: true
+      })
+    : catchUpSwitchedCliTranscript({
+        journal,
+        source,
+        fence: 1,
+        deadline,
+        stopped,
+        settleAbandoned: true
+      }))
+}
+
+/** The prompts in saved order, and each row's turn as the chat groups it. */
+function shownTurns(journal: AgentSessionJournal) {
+  const { items } = journal.snapshot()
+  const messages = items
+    .map(projectStructuredItemToNativeChat)
+    .filter((message): message is NativeChatMessage => message !== null)
+  const { turnKeys } = nativeChatTurnMembership(messages, {
+    items,
+    submissions: journal.submissions()
+  })
+  const prompts = messages.filter((message) => message.role === 'user')
+  return {
+    prompts: prompts.map((message) => message.id),
+    turnOf: (id: string) => turnKeys[messages.findIndex((message) => message.id === id)],
+    rowsAfter: (id: string) => messages.slice(messages.findIndex((message) => message.id === id))
   }
-  await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline, settleAbandoned: true })
 }
 
 const turns = (journal: AgentSessionJournal) =>
@@ -173,10 +207,16 @@ describe('the Codex switches QA saw fail after the stop (the marker, no abort ev
         await rename(`${filePath}.hidden`, filePath)
         await refresh(journal, source)
         expectInterrupted(journal, stoppedTurn)
-        const prompt = journal
-          .snapshot()
-          .items.filter(({ body }) => body.kind === 'message' && body.role === 'user')
-        expect(prompt).toHaveLength(3)
+        // The stopped turn's prompt comes last and its rows join its own turn, not the one before.
+        const shown = shownTurns(journal)
+        expect(shown.prompts).toHaveLength(3)
+        const last = shown.prompts[2]!
+        // Either import's name for the stopped prompt: the bare provider id is the shared part.
+        const bare = (key: string) => decodeURIComponent(key).split(':').at(-1)
+        expect(bare(last)).toBe(bare(stopped!.userItemKey))
+        for (const row of shown.rowsAfter(last)) {
+          expect(shown.turnOf(row.id)).toBe(last)
+        }
         const settled = journal.snapshot()
         await journal.close()
         const reopened = await open(`${name}-${String(retained)}`, 'codex', thread)
@@ -204,6 +244,65 @@ describe('the Codex switches QA saw fail after the stop (the marker, no abort ev
     expect(turn).not.toHaveProperty('outcome')
     expect(agentTurnVerdict({ state: turn!.state, outcome: null })).toBe('interruption')
   })
+})
+
+describe('a Stop and switch into the chat that already holds the conversation', () => {
+  // Recorded on the QA Mac: the chat ran W2a; the CLI ran W2b to the end, then W2c until Stop.
+  // Rows 0-1 are W2a, 2-3 W2b, 4-6 W2c up to the stop, 7 the notice Claude writes as it stops.
+  it.each([false, true])(
+    'Claude keeps W2a, W2b, W2c in order with W2c its own turn (file hidden after the stop: %s)',
+    async (hidden) => {
+      const rows = lines(
+        await readFile(join(fixtures, 'claude-qa-final-stop-third-turn.jsonl'), 'utf8')
+      )
+      const providerId = String(json(rows[0]!).sessionId)
+      const source = { agent: 'claude' as const, sessionId: providerId, filePath }
+      const journal = await open(`claude-retained-${String(hidden)}`, 'claude', providerId)
+      await writeFile(filePath, `${rows.slice(0, 2).join('\n')}\n`)
+      await importLegacyTranscriptIntoJournal({
+        journal,
+        agent: 'claude',
+        sessionId: providerId,
+        fence: 1,
+        options: { filePath }
+      })
+      await writeFile(filePath, `${rows.slice(0, 7).join('\n')}\n`)
+      const stopped = await captureSwitchStoppedCliTurn(source, true, deadline, { journal })
+      const [w2a, w2aReply, w2b, w2bReply, w2c, , w2cReply] = rows.map(
+        (row) => `claude:${providerId}:${String(json(row).uuid)}`
+      )
+      expect(stopped?.userItemKey).toBe(w2c)
+      await writeFile(filePath, `${rows.join('\n')}\n`)
+      if (hidden) {
+        await rename(filePath, `${filePath}.hidden`)
+      }
+      await commitSwitchStoppedCliTurn({ journal, stopped: stopped!, fence: 1 })
+      const expectInOrder = () => {
+        expectInterrupted(journal, stopped!.turnId)
+        const shown = shownTurns(journal)
+        expect(shown.prompts.slice(0, 3)).toEqual([w2a, w2b, w2c])
+        // Saved in transcript order: W2c's partial reply follows its prompt, after all of W2b.
+        const order = journal.snapshot().items.map(({ itemId }) => itemId)
+        expect(
+          [w2a, w2aReply, w2b, w2bReply, w2c, w2cReply].map((id) => order.indexOf(id))
+        ).toEqual([0, 1, 2, 3, 4, 5])
+        expect(shown.turnOf(w2c)).toBe(w2c)
+        for (const reply of [w2bReply, w2cReply]) {
+          expect([undefined, w2c]).toContain(shown.turnOf(reply))
+        }
+      }
+      if (hidden) {
+        await expect(refresh(journal, source, stopped)).rejects.toThrow()
+        expectInOrder()
+        // Session History's retry once the file is back.
+        await rename(`${filePath}.hidden`, filePath)
+        await refresh(journal, source)
+      } else {
+        await refresh(journal, source, stopped)
+      }
+      expectInOrder()
+    }
+  )
 })
 
 describe("each agent's own stop record, then an idle switch", () => {

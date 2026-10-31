@@ -35,6 +35,7 @@ import {
 // Serialize durable mutations per conversation; open at rest and start a child only when work needs it.
 
 export type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
+type SwitchSource = ReturnType<typeof structuredAgentSessionSwitchSource>
 
 export class StructuredAgentSessionHost extends StructuredAgentSessionHostContexts {
   private readonly conversationCommands = new StructuredConversationCommandController(
@@ -193,20 +194,16 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
       serialize: this.serialize,
       subscribers: this.subscribers
     })
-  stopForSwitch = (
-    ...args: Parameters<ReturnType<typeof structuredAgentSessionSwitchSource>['stopForSwitch']>
-  ) => this.switchSource().stopForSwitch(...args)
-  commitSwitchStop = (
-    ...args: Parameters<ReturnType<typeof structuredAgentSessionSwitchSource>['commitSwitchStop']>
-  ) => this.switchSource().commitSwitchStop(...args)
-  refreshSwitchTranscript = (
-    ...args: Parameters<
-      ReturnType<typeof structuredAgentSessionSwitchSource>['refreshSwitchTranscript']
-    >
-  ) => this.switchSource().refreshSwitchTranscript(...args)
-  captureSwitchWork = (
-    ...args: Parameters<ReturnType<typeof structuredAgentSessionSwitchSource>['captureSwitchWork']>
-  ) => this.switchSource().captureSwitchWork(...args)
+  stopForSwitch: SwitchSource['stopForSwitch'] = (...args) =>
+    this.switchSource().stopForSwitch(...args)
+  captureSwitchStop: SwitchSource['captureSwitchStop'] = (...args) =>
+    this.switchSource().captureSwitchStop(...args)
+  commitSwitchStop: SwitchSource['commitSwitchStop'] = (...args) =>
+    this.switchSource().commitSwitchStop(...args)
+  refreshSwitchTranscript: SwitchSource['refreshSwitchTranscript'] = (...args) =>
+    this.switchSource().refreshSwitchTranscript(...args)
+  captureSwitchWork: SwitchSource['captureSwitchWork'] = (...args) =>
+    this.switchSource().captureSwitchWork(...args)
 
   supportsCreate = (location: AgentSessionExecutionLocation, agent: string): boolean =>
     providerSupport.adapterSupportsCreate(this.deps.adapter, location, agent)

@@ -9,6 +9,7 @@ import {
   agentSessionRefusalError
 } from '../../../shared/agent-session-wire-refusals'
 import {
+  captureSwitchStoppedCliTurn,
   catchUpSwitchedCliTranscript,
   commitSwitchStoppedCliTurn,
   type SwitchStoppedCliTurn,
@@ -39,6 +40,10 @@ type SwitchSourceContext = Pick<
   }
 }
 export function structuredAgentSessionSwitchSource(context: SwitchSourceContext) {
+  const resumeCursorOf = (sessionId: string) =>
+    agentSessionProviderHandleChainHead(
+      context.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
+    )?.handle.resumeCursor
   return {
     captureSwitchWork: (id: string, deadline: AgentSessionSwitchDeadline) => {
       const count = context.deps.store.admittedSendCount(id)
@@ -223,6 +228,24 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
         }
       }
     },
+    /** Read before the stop; `retainedId`: the chat that already holds the conversation. */
+    captureSwitchStop: async (
+      retainedId: string | undefined,
+      source: SwitchTranscriptSource,
+      working: boolean,
+      deadline: AgentSessionSwitchDeadline
+    ) =>
+      captureSwitchStoppedCliTurn(
+        source,
+        working,
+        deadline,
+        retainedId === undefined
+          ? undefined
+          : {
+              journal: (await context.lifetime.conversation(retainedId)).journal,
+              resumeCursor: resumeCursorOf(retainedId)
+            }
+      ),
     commitSwitchStop: async (sessionId: string, stopped: SwitchStoppedCliTurn) => {
       // The label is history: a write that fails leaves the switch to its own result.
       try {
@@ -230,7 +253,8 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
         await commitSwitchStoppedCliTurn({
           journal: session.journal,
           stopped,
-          fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
+          fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
+          resumeCursor: resumeCursorOf(sessionId)
         })
         context.subscribers.publish(sessionId, session.journal)
       } catch (error) {
@@ -270,9 +294,7 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
         : catchUpSwitchedCliTranscript({
             journal: session.journal,
             source: transcript,
-            resumeCursor: agentSessionProviderHandleChainHead(
-              context.deps.store.getRecord(sessionId)?.providerHandleChain ?? []
-            )?.handle.resumeCursor,
+            resumeCursor: resumeCursorOf(sessionId),
             fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
             deadline,
             stopped,

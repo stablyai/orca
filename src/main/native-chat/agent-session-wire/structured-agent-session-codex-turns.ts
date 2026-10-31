@@ -1,5 +1,8 @@
 import { asRecord } from '../../ai-vault/session-scanner-values'
-import { parseAgentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
+import {
+  agentJournalItemKey,
+  parseAgentJournalItemKey
+} from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
 // Codex rollout facts the resting importer reads beside its message rows.
@@ -34,11 +37,32 @@ export function savedCodexPrompts(
       body.kind === 'message' &&
       body.role === 'user'
     ) {
-      // Paginated imports prefix the rollout id; the bare provider id is the shared part.
-      prompts.set(identity.recordId.slice(identity.recordId.lastIndexOf(':') + 1), itemId)
+      prompts.set(sharedRecordId(identity.recordId), itemId)
     }
   })
   return prompts
+}
+
+/** Paginated imports prefix the rollout id; the bare provider id is the shared part. */
+function sharedRecordId(recordId: string): string {
+  return recordId.slice(recordId.lastIndexOf(':') + 1)
+}
+
+/** A prompt another import named, as the resting importer finds or writes it. */
+export function codexRestingPromptKey(
+  journal: AgentSessionJournal,
+  threadId: string,
+  key: string
+): string {
+  const identity = parseAgentJournalItemKey(key)
+  if (identity?.provider !== 'legacy') {
+    return journal.canonicalItemId(key)
+  }
+  const id = sharedRecordId(identity.recordId)
+  return (
+    savedCodexPrompts(journal, threadId).get(id) ??
+    agentJournalItemKey({ ...identity, recordId: id })
+  )
 }
 
 export function providerItemId(record: Record<string, unknown> | null): string | null {

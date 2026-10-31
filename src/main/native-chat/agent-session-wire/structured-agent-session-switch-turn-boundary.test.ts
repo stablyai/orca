@@ -24,7 +24,14 @@ afterEach(async () => {
 async function arm(remainingMs: number) {
   return armSwitchTurnBoundaryWait(
     { agent: 'codex', sessionId: 'thread', filePath },
-    { agent: 'codex', sessionId: 'thread', userItemKey: 'user', turnId: TURN, baseline: [] },
+    {
+      agent: 'codex',
+      sessionId: 'thread',
+      userItemKey: 'user',
+      turnId: TURN,
+      filePath: '',
+      baseline: { ok: true, items: [], sourceEmpty: true }
+    },
     controller.signal,
     () => remainingMs
   )
@@ -65,7 +72,14 @@ it('never throws: a vanished transcript or an aborted request returns and the st
   expect(performance.now() - started).toBeLessThan(1_500)
   const missing = await armSwitchTurnBoundaryWait(
     { agent: 'codex', sessionId: 'thread', filePath: join(root, 'missing.jsonl') },
-    { agent: 'codex', sessionId: 'thread', userItemKey: 'user', turnId: TURN, baseline: [] },
+    {
+      agent: 'codex',
+      sessionId: 'thread',
+      userItemKey: 'user',
+      turnId: TURN,
+      filePath: '',
+      baseline: { ok: true, items: [], sourceEmpty: true }
+    },
     new AbortController().signal,
     () => 60_000
   )

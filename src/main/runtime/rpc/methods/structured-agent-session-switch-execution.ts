@@ -33,7 +33,6 @@ import {
 } from './structured-agent-session-switch-terminal-stop'
 import { agentSessionLeasePossiblyWriting } from '../../../../shared/agent-session-lease-adjudication'
 import { mainAgentState } from '../../../../shared/main-agent-status'
-import { captureSwitchStoppedCliTurn } from '../../../native-chat/agent-session-wire/structured-agent-session-switch-import'
 import { worktreeIdsEqual } from '../../../../shared/worktree/id'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { isAiVaultAgent } from '../../../../shared/ai-vault-types'
@@ -174,7 +173,8 @@ async function switchToChat(
       }
     : retainedSource
   const stopped = before
-    ? await captureSwitchStoppedCliTurn(
+    ? await host.captureSwitchStop(
+        adopt ? undefined : sessionId,
         before,
         Boolean(row && mainAgentState(row) === 'working'),
         deadline
