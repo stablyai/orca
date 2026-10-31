@@ -1,3 +1,7 @@
+import { onLiveAccount } from './agent-model-catalog-running-account'
+import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
+import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { readAccountList } from './agent-model-catalog-account-list'
 import { captureAgentModelCatalogRead } from './agent-model-catalog-operation'
 import {
   createAgentModelCatalogLookup,
@@ -19,7 +23,6 @@ import {
   agentModelCatalogScopeIdentity,
   retireAgentModelCatalogRequests,
   agentModelCatalogMemoryBinding,
-  expireAgentModelCatalogBoundFailure,
   agentModelCatalogSessionPeek,
   type AgentModelCatalogBinding
 } from './agent-model-catalog-snapshot'
@@ -101,7 +104,10 @@ export function createAgentModelCatalogService(
           binding: () => bindings.get(requestKey(params))
         })
       }
-      return snapshot(params)
+      const result = snapshot(params)
+      return lifetime.signal.aborted
+        ? result
+        : readAccountList(deps, params, result, () => memoryBinding({ agent: params.agent })?.base)
     },
     recordLiveListing: live.recordLiveListing,
     async prewarm() {
@@ -113,5 +119,26 @@ export function createAgentModelCatalogService(
       retireContext()
       deps.store.clearPartialAttempts()
     }
+  }
+}
+
+/** The invocation-qualified binding may differ from a live listing's account key. */
+function expireAgentModelCatalogBoundFailure(
+  deps: AgentModelCatalogServiceDeps,
+  bindings: ReadonlyMap<string, AgentModelCatalogBinding>,
+  record: AgentSessionRecord,
+  source?: () => boolean
+): void {
+  const view = agentSessionConversationView(record)
+  const bound = bindings.get(
+    agentModelCatalogRequestKey(deps, {
+      agent: record.provider,
+      sessionId: record.sessionId,
+      inSessionWorkspace: true,
+      records: { record: view, scoped: onLiveAccount(deps, view), savedOnly: false }
+    })
+  )
+  if (bound?.current() && source?.() !== false) {
+    deps.store.expireFailure(bound.fingerprint)
   }
 }

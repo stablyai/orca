@@ -142,3 +142,23 @@ function replaceWorkspaceEmojiRange(
     cursor: start + emoji.length + (addTrailingSpace ? 1 : 0)
   }
 }
+
+/** Insert a picked emoji at the selection, padding with spaces so it never fuses with adjacent text. */
+export function insertWorkspaceEmojiAtSelection(
+  value: string,
+  start: number,
+  end: number,
+  emoji: string
+): WorkspaceEmojiReplacement {
+  const safeStart = Math.max(0, Math.min(start, value.length))
+  const safeEnd = Math.max(safeStart, Math.min(end, value.length))
+  const before = value.slice(0, safeStart)
+  const after = value.slice(safeEnd)
+  const leadingSpace = before && !/\s$/.test(before) ? ' ' : ''
+  const trailingSpace = after && /^\s/.test(after) ? '' : ' '
+  const inserted = `${leadingSpace}${emoji}${trailingSpace}`
+  return {
+    value: `${before}${inserted}${after}`,
+    cursor: before.length + inserted.length
+  }
+}

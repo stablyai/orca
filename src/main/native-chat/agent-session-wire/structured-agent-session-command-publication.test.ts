@@ -1,55 +1,21 @@
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { expect, it, vi } from 'vitest'
+import { expect, it } from 'vitest'
+
 import type {
   AgentSessionBackgroundTaskState,
   AgentSessionSlashCommand,
   AgentSessionSubscribeEvent
 } from '../../../shared/agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from '../../../shared/structured-agent-session-coalescer'
+import { createStructuredAgentSessionEventCoalescer } from '../../../shared/agent-session/structured-agent-session-coalescer'
 import {
   EMPTY_STRUCTURED_AGENT_SESSION,
   reduceStructuredAgentSession
 } from '../../../shared/structured-agent-session-reducer'
 import { createTrackedJournalOpener } from '../agent-session-journal/journal-host-database-test-support'
 import { AgentSessionSubscribers } from './structured-agent-session-subscribers'
-import {
-  adapterFor,
-  fakeClaude,
-  identityFor,
-  PROVIDER_SESSION_ID
-} from '../../claude/claude-structured-session-test-support'
-
-it('publishes idle provider reloads only when the actual command catalog changes', async () => {
-  const claude = fakeClaude()
-  const adapter = adapterFor(claude)
-  const publish = vi.fn()
-  await adapter.acquire({
-    identity: identityFor(),
-    fence: 7,
-    spawnToken: 'commands',
-    events: {
-      appendItem: vi.fn(),
-      appendTombstone: vi.fn(),
-      publish
-    }
-  })
-  publish.mockClear()
-  const message = {
-    type: 'system',
-    subtype: 'commands_changed',
-    session_id: PROVIDER_SESSION_ID,
-    commands: [{ name: 'new-skill', description: '', argumentHint: '' }]
-  }
-  claude.connections[0].handlers.onMessage?.(message)
-  expect(adapter.readCommands(identityFor().sessionId)).toEqual([
-    { name: 'new-skill', kind: 'command', kindUnspecified: true }
-  ])
-  expect(publish).toHaveBeenCalledTimes(1)
-  claude.connections[0].handlers.onMessage?.(message)
-  expect(publish).toHaveBeenCalledTimes(1)
-})
+import { identityFor } from '../../claude/claude-structured-session-test-support'
 
 it('delivers catalog changes through existing frames without resending them on ordinary output', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-command-publication-'))

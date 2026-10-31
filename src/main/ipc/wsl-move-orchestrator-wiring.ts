@@ -46,6 +46,7 @@ import { createWslMoveUndoPorts } from './wsl-move-undo-wiring'
 import { isDistroInUse } from './wsl-move-distro-in-use'
 import { answerWslMoveSleptPanes, requestSleptPanes } from './wsl-move-orchestrator-slept-panes'
 import { wslHostRemovalPending } from './wsl-move-host-connect'
+import { wslMoveAutoMovesBridgeProjects } from '../../shared/wsl-move/wsl-move-rollout-stage'
 
 export const WSL_MOVE_ORCHESTRATOR_AUTO_ENV = 'ORCA_WSL_MOVE_AUTO'
 
@@ -122,6 +123,7 @@ function createOrchestrator(
     now: () => Date.now(),
     appVersion: app.getVersion(),
     autoMoveEnabled: () => process.env[WSL_MOVE_ORCHESTRATOR_AUTO_ENV] !== '0',
+    autoMovesBridgeProjects: wslMoveAutoMovesBridgeProjects,
     prepareHost: (distro, stillWanted) => prepareHost(userDataPath, distro, stillWanted),
     isDistroInUse: (distro) => isDistroInUse(store, userDataPath, distro),
     hostRemovalPending: (distro) => wslHostRemovalPending(userDataPath, distro),

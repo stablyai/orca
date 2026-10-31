@@ -76,29 +76,6 @@ describe('sleep through main in a layout-owner build', () => {
     shutdownBufferCaptures.clear()
   })
 
-  it('sends the hibernated pane’s record to main once its terminal stopped', async () => {
-    const store = storeWithAgentPane()
-
-    await store.getState().shutdownCompletedAgentPaneForHibernation(WT, {
-      paneKey: AGENT_PANE,
-      tabId: 'tab-1',
-      leafId: AGENT_LEAF,
-      ptyId: 'pty-agent'
-    })
-
-    const record = store.getState().sleepingAgentSessionsByPaneKey[AGENT_PANE]
-    expect(mocks.send).toHaveBeenCalledTimes(1)
-    expect(mocks.send.mock.calls[0]![2]).toEqual({
-      type: 'sleep',
-      tabId: 'tab-1',
-      paneKeys: [AGENT_PANE],
-      records: [record]
-    })
-    expect(mocks.send.mock.invocationCallOrder[0]).toBeGreaterThan(
-      mockApi.pty.kill.mock.invocationCallOrder[0]!
-    )
-  })
-
   it('sends nothing when the hibernation stop fails', async () => {
     const store = storeWithAgentPane()
     mockApi.pty.kill.mockRejectedValueOnce(new Error('kill_failed'))

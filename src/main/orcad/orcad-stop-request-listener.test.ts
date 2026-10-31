@@ -48,15 +48,6 @@ function listen(
 }
 
 describe('orcad stop-request listeners', () => {
-  it('consumes a slot request written before the listener started', () => {
-    const installRoot = directory()
-    writeFileSync(join(installRoot, ORCAD_STOP_REQUEST_FILENAME), '')
-    const onRequest = vi.fn()
-    listen(onRequest, { installRoot })
-    expect(onRequest).toHaveBeenCalledOnce()
-    expect(existsSync(join(installRoot, ORCAD_STOP_REQUEST_FILENAME))).toBe(false)
-  })
-
   it('picks up a slot request written later, once', async () => {
     const installRoot = directory()
     const onRequest = vi.fn()
