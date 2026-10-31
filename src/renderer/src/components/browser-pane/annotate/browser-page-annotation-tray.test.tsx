@@ -86,6 +86,8 @@ function renderTray(currentUrl?: string): {
         worktreeId="wt-1"
         activeGroupId={undefined}
         browserAnnotationsPrompt="prompt"
+        includePageDetails={false}
+        handleIncludePageDetailsChange={vi.fn()}
         handleBrowserAnnotationsSentToAgent={vi.fn()}
         handleBrowserAnnotationsHandedOff={vi.fn()}
         handleCopyBrowserAnnotations={vi.fn()}
@@ -139,7 +141,8 @@ describe('BrowserPageAnnotationTray edit mode', () => {
     expect(handleUpdateBrowserAnnotation).toHaveBeenCalledWith(
       'annotation-1',
       'Updated comment',
-      'question'
+      'question',
+      []
     )
   })
 
@@ -208,7 +211,8 @@ describe('BrowserPageAnnotationTray collapse', () => {
     expect(handleUpdateBrowserAnnotation).toHaveBeenCalledWith(
       'annotation-1',
       'Unsaved draft',
-      'question'
+      'question',
+      []
     )
   })
 })

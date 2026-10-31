@@ -161,3 +161,37 @@ describe('hosted review lookup ownership after newer settlement', () => {
     expect(hostedReviewRequestGenerations.size).toBe(0)
   })
 })
+
+// E9: a forced scheduler poll is refused for a stopped WSL distro; an explicit Refresh must not inherit that.
+describe('an explicit Refresh while a forced poll is in flight', () => {
+  it('starts its own waking lookup instead of joining the poll', async () => {
+    const store = makeStore()
+    const poll = Promise.withResolvers<HostedReviewInfo | null>()
+    forBranch.mockReturnValueOnce(poll.promise).mockResolvedValueOnce(review(7))
+
+    const polled = store.getState().fetchHostedReviewForBranch('/repo', 'wake', { force: true })
+    const refreshed = store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', 'wake', { force: true, wakeWslDistro: true })
+    poll.reject(new Error("WSL distro 'Ubuntu' is not running. Retry, or open a terminal"))
+
+    await expect(refreshed).resolves.toMatchObject({ number: 7 })
+    await polled
+    expect(forBranch).toHaveBeenCalledTimes(2)
+    expect(forBranch.mock.calls[0][0]).not.toHaveProperty('wakeWslDistro')
+    expect(forBranch.mock.calls[1][0]).toMatchObject({ wakeWslDistro: true })
+  })
+
+  it('still lets a forced poll join an in-flight explicit Refresh', async () => {
+    const store = makeStore()
+    forBranch.mockResolvedValue(review(8))
+
+    const refreshed = store
+      .getState()
+      .fetchHostedReviewForBranch('/repo', 'join', { force: true, wakeWslDistro: true })
+    const polled = store.getState().fetchHostedReviewForBranch('/repo', 'join', { force: true })
+
+    await Promise.all([refreshed, polled])
+    expect(forBranch).toHaveBeenCalledTimes(1)
+  })
+})

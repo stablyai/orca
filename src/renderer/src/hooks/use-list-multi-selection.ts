@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import type React from 'react'
 import {
   areSelectionsEqual,
@@ -85,13 +85,25 @@ export function useListMultiSelection<T>({
     }
   }, [selectedKeys.size, getScope])
 
+  // Why read through a ref: every plain click replaces the selection, and selection-keyed callbacks would re-render every memoized row.
+  const latestSelectionRef = useRef({
+    visibleKeys,
+    selectedKeys,
+    selectionAnchorKey,
+    selectedItems
+  })
+  useLayoutEffect(() => {
+    latestSelectionRef.current = { visibleKeys, selectedKeys, selectionAnchorKey, selectedItems }
+  })
+
   const updateSelectionForGesture = useCallback(
     (event: Pick<React.MouseEvent, 'metaKey' | 'ctrlKey' | 'shiftKey'>, item: T): boolean => {
+      const latest = latestSelectionRef.current
       const intent = getSelectionIntent(event, navigator.userAgent.includes('Mac'))
       const result = updateSelection({
-        visibleIds: visibleKeys,
-        previousSelectedIds: selectedKeys,
-        previousAnchorId: selectionAnchorKey,
+        visibleIds: latest.visibleKeys,
+        previousSelectedIds: latest.selectedKeys,
+        previousAnchorId: latest.selectionAnchorKey,
         targetId: getKey(item),
         intent
       })
@@ -100,20 +112,21 @@ export function useListMultiSelection<T>({
       // Plain click navigates; modifier gestures are selection-only so a batch can build without switching away.
       return intent !== 'replace'
     },
-    [getKey, visibleKeys, selectedKeys, selectionAnchorKey]
+    [getKey]
   )
 
   const selectForContextMenu = useCallback(
     (item: T): readonly T[] => {
+      const latest = latestSelectionRef.current
       const key = getKey(item)
-      if (selectedKeys.has(key) && selectedKeys.size > 1) {
-        return selectedItems
+      if (latest.selectedKeys.has(key) && latest.selectedKeys.size > 1) {
+        return latest.selectedItems
       }
       setSelectedKeys(new Set([key]))
       setSelectionAnchorKey(key)
       return [item]
     },
-    [getKey, selectedKeys, selectedItems]
+    [getKey]
   )
 
   return {

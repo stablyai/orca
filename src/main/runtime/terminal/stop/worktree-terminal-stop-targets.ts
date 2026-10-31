@@ -30,7 +30,7 @@ export abstract class OrcaRuntimeWithStopExactTerminalsForWorktree extends OrcaR
   }> {
     // Why: exact stop hibernates one known pane; worktree sleep discovers its complete host-owned set separately.
     const graphEpoch = this.captureReadyGraphEpoch()
-    const worktree = await this.resolveWorktreeSelector(worktreeSelector)
+    const worktree = await this.resolveWorkspaceSelector(worktreeSelector)
     this.assertStableReadyGraph(graphEpoch)
     const expected = new Set(expectedPtyIds.filter((ptyId) => ptyId.length > 0))
     if (expected.size !== 1) {

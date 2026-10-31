@@ -2,6 +2,7 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { dirname, join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { parseClaudeCliVersionOutput } from './claude-hook-event-versions'
 import { claudeDiffPanelMayAutoOpen, claudeDiffPanelStorePath } from './claude-diff-panel-auto-open'
 
 let home: string
@@ -43,8 +44,16 @@ describe('claudeDiffPanelMayAutoOpen', () => {
   })
 
   it('answers false for a Claude older than the panel, or an unknown version', async () => {
+    for (const [output, expected] of [
+      ['11.17.0', false],
+      ['launcher 11.17.0\n1.0.64 (Claude Code)', false],
+      ['launcher 0.1.0\n2.1.310 (Claude Code)', true]
+    ] as const) {
+      expect(await mayAutoOpen(200, { version: parseClaudeCliVersionOutput(output) })).toBe(
+        expected
+      )
+    }
     expect(await mayAutoOpen(200, { version: '2.1.259' })).toBe(false)
-    expect(await mayAutoOpen(200, { version: null })).toBe(false)
     expect(await mayAutoOpen(200, { version: '2.1.260' })).toBe(true)
   })
 

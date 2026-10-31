@@ -383,13 +383,20 @@ describe('the Phase C budget', () => {
   itBundling(
     'is not already exceeded by the current bundle',
     async () => {
-      const { manifest, chunkCount, entryStaticBytes, imageCount, routeKeys } =
-        await readWrittenBundle()
-      expect(mobileWebAppBundleBudgetBytes(manifest)).toBeLessThanOrEqual(
+      const {
+        manifest,
+        chunkCount,
+        catalogChunkCount,
+        catalogBytes,
+        entryStaticBytes,
+        imageCount,
+        routeKeys
+      } = await readWrittenBundle()
+      expect(mobileWebAppBundleBudgetBytes(manifest) - catalogBytes).toBeLessThanOrEqual(
         MOBILE_WEB_APP_BUNDLE_MAX_TOTAL_BYTES
       )
       expect(manifest.assets.length).toBeLessThanOrEqual(
-        mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+        mobileWebAppBundleMaxAssets(routeKeys.length, imageCount, catalogChunkCount)
       )
       expect(chunkCount).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(routeKeys.length))
       // Excess unused envelope margin means stale measurement; remeasure instead of adding headroom.
@@ -422,9 +429,9 @@ describe('the Phase C budget', () => {
         key
       ).toBeGreaterThanOrEqual(measured)
     }
-    // Observed 1–14 scripts/route rules out a four-per-route bound or linear fit.
+    // Observed 1–15 scripts/route rules out a four-per-route bound or linear fit.
     expect(Math.min(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(1)
-    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(14)
+    expect(Math.max(...MOBILE_WEB_APP_BUNDLE_ROUTE_SCRIPT_SPREAD)).toBe(15)
   })
 
   it('sits exactly one margin over the swept tree and grants the worst route beyond it', () => {
@@ -447,12 +454,12 @@ describe('the Phase C budget', () => {
     const CHUNKED_ALONG_THE_ENGINE = 172
     expect(WITH_ONE_ARTIFACT).toBeLessThanOrEqual(mobileWebAppBundleMaxChunks(ROUTES))
     expect(CHUNKED_ALONG_THE_ENGINE).toBeGreaterThan(mobileWebAppBundleMaxChunks(ROUTES))
-    // Chunked engine also emitted 215 total assets, exceeding that head’s 113-asset envelope.
+    // Chunked engine also emitted 215 total assets, exceeding the current 165-asset envelope.
     expect(mobileWebAppBundleMaxAssets(ROUTES, 42)).toBeLessThan(CHUNKED_ALONG_THE_ENGINE + 42 + 1)
   })
 
   it('derives the asset ceiling so the chunk ceiling is always the one that trips first', () => {
-    // Asset ceiling must derive from chunks+images+document or a flat limit fails first and misattributes chunk growth (141 assets at 18 routes/42 images).
+    // Asset ceiling must derive from chunks+images+document or a flat limit fails first and misattributes chunk growth (174 assets at 18 routes/42 images).
     for (const routeCount of [14, 18, 24, 40]) {
       for (const imageCount of [0, 42, 120]) {
         const chunks = mobileWebAppBundleMaxChunks(routeCount)
@@ -464,23 +471,29 @@ describe('the Phase C budget', () => {
   itBundling(
     'keeps the derived ceiling under the map the phone actually holds',
     async () => {
-      const { manifest, routeKeys, imageCount } = await readWrittenBundle()
-      const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount)
+      const { manifest, routeKeys, imageCount, catalogChunkCount } = await readWrittenBundle()
+      const ceiling = mobileWebAppBundleMaxAssets(routeKeys.length, imageCount, catalogChunkCount)
       expect(manifest.assets.length).toBeLessThanOrEqual(ceiling)
       // The native side refuses a manifest past this, so the derived ceiling has to stay inside it.
       expect(ceiling).toBeLessThanOrEqual(MOBILE_WEB_BUNDLE_MAX_ASSETS)
       const shellCeiling = await readMobileWebBundleMaxAssets()
-      expect(assertAssetCeilingFitsShell(routeKeys.length, imageCount, shellCeiling)).toBe(ceiling)
+      expect(
+        assertAssetCeilingFitsShell(routeKeys.length, imageCount, shellCeiling, catalogChunkCount)
+      ).toBe(ceiling)
     },
     120_000
   )
 
   it('fails the build when the derived ceiling passes what the phone will accept', async () => {
-    // Fail build before derived assets exceed phone’s 256 limit; current 42-image envelope crosses at 25 routes, requiring remeasurement.
+    // Measured sweep crosses the phone’s 256-asset limit at 24 routes with 42 images, or 23 with 50.
     expect(await readMobileWebBundleMaxAssets()).toBe(MOBILE_WEB_BUNDLE_MAX_ASSETS)
-    expect(assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(250)
-    expect(() => assertAssetCeilingFitsShell(25, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
-      /264 .*256/
+    expect(assertAssetCeilingFitsShell(23, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(255)
+    expect(() => assertAssetCeilingFitsShell(24, 42, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /270 .*256/
+    )
+    expect(assertAssetCeilingFitsShell(22, 50, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toBe(248)
+    expect(() => assertAssetCeilingFitsShell(23, 50, MOBILE_WEB_BUNDLE_MAX_ASSETS)).toThrow(
+      /263 .*256/
     )
   })
 })

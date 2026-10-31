@@ -1,3 +1,8 @@
+import {
+  seedSavedStructuredSessionTabs,
+  type SavedStructuredStatusGroup
+} from './structured-agent-session-saved-status'
+import type { StructuredAgentSessionHostDeps } from './structured-agent-session-host-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
@@ -39,19 +44,6 @@ export type StructuredAgentSessionTab = {
   agent: AgentSessionRecord['provider']
 }
 
-export function listStructuredAgentSessionTabs(
-  sessions: ReadonlyMap<
-    string,
-    { params: { location: { workspaceId: string }; provider: AgentSessionRecord['provider'] } }
-  >
-): StructuredAgentSessionTab[] {
-  return [...sessions.entries()].map(([sessionId, session]) => ({
-    sessionId,
-    workspaceId: session.params.location.workspaceId,
-    agent: session.params.provider
-  }))
-}
-
 type TabSessions = ReadonlyMap<
   string,
   {
@@ -62,31 +54,45 @@ type TabSessions = ReadonlyMap<
 
 export function createStructuredAgentSessionTabSurface(
   host: Parameters<typeof setStructuredAgentSessionTabVisibility>[0] & {
-    deps: {
+    deps: Pick<StructuredAgentSessionHostDeps, 'recoveryCapsule' | 'now'> & {
       store: Pick<
         AgentSessionRecordStore,
-        'getVisibleSessionTabIndex' | 'getSessionTabId' | 'showSessionTabs' | 'getConversation'
+        | 'getVisibleSessionTabIndex'
+        | 'getSessionTabId'
+        | 'showSessionTabs'
+        | 'getConversation'
+        | 'listConversations'
+        | 'listVisibleSessionIds'
+        | 'isSessionTabVisible'
       >
     }
   },
   sessions: TabSessions,
-  forgetStatus: (sessionId: string) => void
+  forgetStatus: (sessionId: string) => void,
+  publishSavedStatusGroup: SavedStructuredStatusGroup,
+  recover: (ids: readonly string[]) => Promise<void>
 ) {
-  // Retain restore failures as tabs so their reads can explain why.
-  const unopened = new Set<string>()
   return {
-    listSessionTabs: (): StructuredAgentSessionTab[] => [
-      ...listStructuredAgentSessionTabs(sessions),
-      ...[...unopened].flatMap((sessionId) => {
-        const record = sessions.has(sessionId) ? null : host.deps.store.getConversation(sessionId)
+    listSessionTabs: (): StructuredAgentSessionTab[] =>
+      host.deps.store.listVisibleSessionIds().flatMap((sessionId) => {
+        const record = host.deps.store.getConversation(sessionId)
         return record
           ? [{ sessionId, workspaceId: record.location.workspaceId, agent: record.provider }]
           : []
-      })
-    ],
-    markUnopened: (sessionId: string): void => {
-      unopened.add(sessionId)
-    },
+      }),
+    isSessionTabVisible: (id: string) => host.deps.store.isSessionTabVisible(id),
+    seedSessionTabs: (ids?: readonly string[]): Promise<void> =>
+      seedSavedStructuredSessionTabs(
+        host.deps,
+        ids,
+        (visit) =>
+          publishSavedStatusGroup((publish) =>
+            visit((record, markerAt) => {
+              publish(record, markerAt)
+            })
+          ),
+        recover
+      ),
     getPersistedVisibleSessionTabIndex: () => host.deps.store.getVisibleSessionTabIndex(),
     getSessionTabId: (sessionId: string): string | null =>
       host.deps.store.getSessionTabId(sessionId),
@@ -101,7 +107,6 @@ export function createStructuredAgentSessionTabSurface(
     ): Promise<void> => {
       await setStructuredAgentSessionTabVisibility(host, sessionId, visible, tabId)
       if (!visible) {
-        unopened.delete(sessionId)
         if (!options?.deferHiddenNotice) {
           notifyTabHidden(host, sessionId)
         }

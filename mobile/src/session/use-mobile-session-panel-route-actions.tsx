@@ -8,6 +8,7 @@ import {
   panelRouteDescriptor
 } from './session-panel-host'
 import { MobileAgentIcon } from '../components/MobileAgentIcon'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
   useWorkspaceExecutionHost,
   workspaceRouteHref,
@@ -16,6 +17,7 @@ import {
 import type { MobileSessionPresentationModel } from './use-mobile-session-presentation'
 
 export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentationModel) {
+  const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
   const {
     hostId,
@@ -41,11 +43,16 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     agentSessionHistorySupported,
     clearDeliveredDiffComments,
     sendDiffNotesToNewAgent,
-    handleCreateTerminal
+    handleCreateTerminal,
+    setCreateError,
+    setShowQuickCommands,
+    quickCommandsSupported,
+    showToast
   } = scope
   const otherRuntimeAgentRow = {
-    label: 'Agents on Another Server',
-    hint: 'Pair that server directly',
+    id: 'otherServerAgents',
+    label: t('session.usePanelRouteActions.otherServerAgents', 'Agents on Another Server'),
+    hint: t('session.usePanelRouteActions.pairServerHint', 'Pair that server directly'),
     icon: Bot,
     disabled: true,
     onPress: () => {}
@@ -54,7 +61,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     createTabAgentLoadState === 'loading'
       ? [
           {
-            label: 'Detecting Agents',
+            id: 'detectingAgents',
+            label: t('session.usePanelRouteActions.detectingAgents', 'Detecting Agents'),
             icon: Bot,
             disabled: true,
             loading: true,
@@ -63,6 +71,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         ]
       : createTabAgentOptions.length > 0
         ? createTabAgentOptions.map((option) => ({
+            id: `agent:${option.agent}`,
             label: option.label,
             renderIcon: () => <MobileAgentIcon agentId={option.agent} size={16} />,
             onPress: () => {
@@ -73,7 +82,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
         : createTabAgentLoadState === 'loaded'
           ? [
               {
-                label: 'No Enabled Agents',
+                id: 'noEnabledAgents',
+                label: t('session.usePanelRouteActions.noEnabledAgents', 'No Enabled Agents'),
                 icon: Bot,
                 disabled: true,
                 onPress: () => {}
@@ -84,8 +94,15 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
             : createTabAgentLoadState === 'error'
               ? [
                   {
-                    label: 'Agent Presets Unavailable',
-                    hint: 'Check the host connection',
+                    id: 'presetsUnavailable',
+                    label: t(
+                      'session.usePanelRouteActions.presetsUnavailable',
+                      'Agent Presets Unavailable'
+                    ),
+                    hint: t(
+                      'session.usePanelRouteActions.checkHostHint',
+                      'Check the host connection'
+                    ),
                     icon: Bot,
                     disabled: true,
                     onPress: () => {}
@@ -98,7 +115,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
       : createTabAgentLoadState === 'loading'
         ? [
             {
-              label: 'Detecting Agents',
+              id: 'detectingAgents',
+              label: t('session.usePanelRouteActions.detectingAgents', 'Detecting Agents'),
               icon: Bot,
               disabled: true,
               loading: true,
@@ -107,8 +125,9 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           ]
         : createTabAgentOptions.length > 0
           ? createTabAgentOptions.map((option) => ({
+              id: `agent:${option.agent}`,
               label: option.label,
-              hint: 'New agent session',
+              hint: t('session.usePanelRouteActions.newSessionHint', 'New agent session'),
               icon: Bot,
               onPress: () => {
                 const delivery = pendingDiffNotesDelivery
@@ -127,7 +146,8 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
           : createTabAgentLoadState === 'loaded'
             ? [
                 {
-                  label: 'No Enabled Agents',
+                  id: 'noEnabledAgents',
+                  label: t('session.usePanelRouteActions.noEnabledAgents', 'No Enabled Agents'),
                   icon: Bot,
                   disabled: true,
                   onPress: () => {}
@@ -138,8 +158,12 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
               : createTabAgentLoadState === 'error'
                 ? [
                     {
-                      label: 'Agent Presets Unavailable',
-                      hint: 'Copy notes instead',
+                      id: 'presetsUnavailable',
+                      label: t(
+                        'session.usePanelRouteActions.presetsUnavailable',
+                        'Agent Presets Unavailable'
+                      ),
+                      hint: t('session.usePanelRouteActions.copyNotesHint', 'Copy notes instead'),
                       icon: Bot,
                       disabled: true,
                       onPress: () => {}
@@ -174,7 +198,7 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
   }
 
   const openAgentSessionHistory = () => {
-    const params = new URLSearchParams({ name: worktreeName || '' })
+    const params = new URLSearchParams({ name: worktreeName || '', origin: 'session' })
     router.push(
       workspaceRouteHref(
         `/h/${hostId}/agent-history/${encodeURIComponent(worktreeId)}?${params.toString()}`,
@@ -189,8 +213,29 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     repoContextLoaded: prRepoContextLoaded,
     hostedChecksSupported: prIsGithubRepo
   })
-  const showHeaderMoreButton = showAgentSessionHistoryAction || showChecksAction
   const createTabBusy = creating || creatingBrowser || creatingMarkdown
+  const handleOpenNewTab = () => {
+    setCreateError('')
+    setShowCreateTabDrawer(true)
+  }
+  const handleOpenQuickCommands = () => {
+    if (quickCommandsSupported === true) {
+      setShowQuickCommands(true)
+      return
+    }
+    showToast(
+      quickCommandsSupported === false
+        ? t(
+            'session.tabStrip.quickCommandsUpdateRequired',
+            'Desktop update required for quick commands'
+          )
+        : t(
+            'session.tabStrip.checkingCapabilities',
+            'Checking desktop capabilities — try again in a moment'
+          ),
+      1600
+    )
+  }
   return {
     createTabAgentActions,
     sendDiffNotesAgentActions,
@@ -199,8 +244,9 @@ export function useMobileSessionPanelRouteActions(scope: MobileSessionPresentati
     openAgentSessionHistory,
     showAgentSessionHistoryAction,
     showChecksAction,
-    showHeaderMoreButton,
-    createTabBusy
+    createTabBusy,
+    handleOpenNewTab,
+    handleOpenQuickCommands
   }
 }
 

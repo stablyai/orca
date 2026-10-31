@@ -18,6 +18,12 @@ function currentOpenFdCount(): number {
     .filter((line) => line.trim().length > 0).length
 }
 
+function currentKqueueFdCount(): number {
+  return execFileSync('lsof', ['-p', String(process.pid)], { encoding: 'utf8' })
+    .split('\n')
+    .filter((line) => line.includes(' KQUEUE ')).length
+}
+
 function getExistingSpawnHelper(): string {
   const helperPath = getNodePtySpawnHelperCandidates().find((candidate) => existsSync(candidate))
   expect(helperPath).toBeTruthy()
@@ -42,6 +48,19 @@ async function spawnExitingPty(index: number): Promise<void> {
 const describeOnDarwin = process.platform === 'darwin' ? describe : describe.skip
 
 describeOnDarwin('node-pty macOS spawn fd handling', () => {
+  // Forty serial real shell launches need a 15-second budget.
+  it('releases the child-exit kqueue fd across repeated pty churn', async () => {
+    const before = currentKqueueFdCount()
+
+    for (let i = 0; i < 40; i++) {
+      await spawnExitingPty(i)
+    }
+
+    const after = currentKqueueFdCount()
+
+    expect(after - before).toBe(0)
+  }, 15000)
+
   it('does not leak revoked slave tty fds across exited pty spawns', async () => {
     const before = currentRevokedFdCount()
 

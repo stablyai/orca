@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 // Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
@@ -81,7 +82,7 @@ async function create(
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     // Fixtures pass capability admission so they exercise the pre-commit refusal boundary.
-    getClientSettings: () => ({ experimentalNativeChat: true }),
+    getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),
@@ -176,16 +177,6 @@ describe('a create refused before it commits', () => {
     const refusal = refusalOf(response)
     expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
     expect(refusal?.message).toContain('could not open the session store')
-  })
-
-  it('answers a missing host as a definitive envelope rather than a thrown code', async () => {
-    setStructuredAgentSessionHost(null)
-
-    const response = await create()
-
-    const refusal = refusalOf(response)
-    expect(refusal?.code).toBe('structured_agent_session_unsupported')
-    expect(isDefinitiveAgentSessionCreateRefusal(refusal?.code)).toBe(true)
   })
 
   it('still refuses a fingerprint conflict with its own code, not a pre-commit one', async () => {

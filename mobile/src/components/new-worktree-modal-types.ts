@@ -8,8 +8,6 @@ export type MobileWorkspaceRepo = Pick<SharedRepo, 'id' | 'displayName' | 'path'
   Partial<
     Pick<
       SharedRepo,
-      | 'addedAt'
-      | 'projectHostSetupMethod'
       | 'badgeColor'
       | 'connectionId'
       | 'executionHostId'

@@ -18,7 +18,8 @@ import { GripVertical } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { QueuedMessageReorder } from './use-structured-agent-session-queued-reorder'
 
 export type QueuedMessageDragPresentation = {
@@ -146,6 +147,7 @@ const SortableQueuedMessage = memo(function SortableQueuedMessage({
   pending: boolean
   insertion: QueuedMessageDragPresentation['insertion']
 }): ReactNode {
+  useUiLanguageRevision()
   const sortable = useSortable({
     id: card.messageId,
     disabled: card.hold === 'sending' || pending

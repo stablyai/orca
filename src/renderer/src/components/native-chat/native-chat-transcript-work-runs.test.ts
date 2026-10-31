@@ -11,7 +11,7 @@ import {
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
-} from '../../../../shared/native-chat-work-run'
+} from '../../../../shared/native-chat/native-chat-work-run'
 
 function text(id: string, body: string, role: NativeChatMessage['role'] = 'assistant') {
   return {

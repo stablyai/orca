@@ -1,6 +1,7 @@
 import type { RuntimeClientEvent } from '../../../shared/runtime-client-events'
 import { getDefaultWorkspaceSession } from '../../../shared/constants'
 import { describe, expect, it, vi } from 'vitest'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../../shared/setup-agent-sequencing'
 import {
   OrcaRuntimeService,
   SETUP_AGENT_SEQUENCE_STARTUP_COMMAND_ENV,
@@ -68,6 +69,7 @@ describe('OrcaRuntimeService', () => {
     runtime.attachWindow(1)
     // Delivery waits for composer readiness and pastes; its behaviour is covered with the delivery itself.
     const deliver = vi.spyOn(runtime, 'deliverStartupFollowup').mockResolvedValue(true)
+    const createTerminal = vi.spyOn(runtime, 'createTerminal')
 
     computeWorktreePathMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
     ensurePathWithinWorkspaceMock.mockReturnValue('/tmp/workspaces/runtime-cli-aider-startup')
@@ -95,9 +97,24 @@ describe('OrcaRuntimeService', () => {
         worktreeId: result.worktree.id
       })
     )
-    await vi.waitFor(() => {
-      expect(deliver).toHaveBeenCalledWith(expect.any(String), { agent: 'aider', prompt: 'fix it' })
+    const creation = createTerminal.mock.settledResults[0]
+    if (creation?.type !== 'fulfilled') {
+      throw new Error('Startup terminal creation did not complete')
+    }
+    const terminal = creation.value
+    expect(terminal).toMatchObject({
+      ptyId: 'pty-cli-aider-startup',
+      worktreeId: result.worktree.id,
+      launchAgent: 'aider'
     })
+    await vi.waitFor(() => {
+      expect(deliver).toHaveBeenCalledWith(
+        terminal.handle,
+        { agent: 'aider', prompt: 'fix it' },
+        { terminalCreation: terminal }
+      )
+    })
+    expect(deliver.mock.calls[0][2]?.terminalCreation).toBe(terminal)
     expect(write).not.toHaveBeenCalledWith('pty-cli-aider-startup', 'fix it\r', 'launch')
   })
 
@@ -334,10 +351,13 @@ describe('OrcaRuntimeService', () => {
       2,
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-startup-setup-split',
-        command: expect.stringContaining('bash /tmp/repo/.git/orca/setup-runner.sh'),
+        command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
         env: expect.objectContaining({
           ORCA_ROOT_PATH: '/tmp/repo',
-          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split'
+          ORCA_WORKTREE_PATH: '/tmp/workspaces/runtime-startup-setup-split',
+          [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+            'bash /tmp/repo/.git/orca/setup-runner.sh'
+          )
         }),
         worktreeId: result.worktree.id
       })
@@ -348,16 +368,17 @@ describe('OrcaRuntimeService', () => {
     }
     const startupCommand = startup.command
     const startupScript = startup.env[SETUP_AGENT_SEQUENCE_STARTUP_SCRIPT_ENV]!
-    const setupCommand = (spawn.mock.calls[1]![0] as { command: string }).command
+    const setupScript = spawnedPtyEnv(spawn.mock.calls[1]![0])[
+      SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV
+    ]
     const nonceMatch = startupScript.match(/if \[ "\$seen" = ([0-9a-f-]+) \]/)
     expect(nonceMatch?.[1]).toBeTruthy()
     const markerPath = `/tmp/repo/.git/orca/setup-runner.sh.${nonceMatch![1]}.done`
     expect(startupCommand.length).toBeLessThan(256)
     expect(startupScript).toContain('--dangerously-bypass-approvals-and-sandbox')
-    expect(setupCommand).toContain('printf')
-    expect(setupCommand).toContain(`${nonceMatch![1]} "$status"`)
+    expect(setupScript).toContain(`${nonceMatch![1]} "$status"`)
     expect(startupScript).toContain(markerPath)
-    expect(setupCommand).toContain(markerPath)
+    expect(setupScript).toContain(markerPath)
     const mainEnv = spawnedPtyEnv(spawn.mock.calls[0]![0])
     const setupEnv = spawnedPtyEnv(spawn.mock.calls[1]![0])
     expect(result.setup).toBeUndefined()
@@ -473,7 +494,12 @@ describe('OrcaRuntimeService', () => {
       expect.any(String),
       expect.objectContaining({
         runnerScriptPath: 'C:\\tmp\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining('bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh')
+        command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`,
+        envVars: expect.objectContaining({
+          [SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]: expect.stringContaining(
+            'bash /mnt/c/tmp/repo/.git/orca/setup-runner.sh'
+          )
+        })
       }),
       undefined,
       undefined
@@ -483,8 +509,6 @@ describe('OrcaRuntimeService', () => {
     expect(
       events.filter((event) => event.type === 'activateWorktree' && event.setup !== undefined)
     ).toEqual([])
-    const activationSetup = activateWorktree.mock.calls[0]?.[2] as { command?: string } | undefined
-    expect(activationSetup?.command).toContain('printf')
   })
 
   it('lets explicit startup draft agents override the desktop default', async () => {
@@ -554,7 +578,8 @@ describe('OrcaRuntimeService', () => {
     expect(spawn).toHaveBeenCalledWith(
       expect.objectContaining({
         cwd: '/tmp/workspaces/runtime-explicit-draft',
-        command: "codex '--dangerously-bypass-approvals-and-sandbox'",
+        command:
+          "codex '-c' 'disable_paste_burst=true' '--dangerously-bypass-approvals-and-sandbox'",
         worktreeId: result.worktree.id,
         telemetry: { agent_kind: 'codex', launch_source: 'cli', request_kind: 'new' }
       })

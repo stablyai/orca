@@ -33,6 +33,9 @@ export type NativeChatOptionPickerRequest = {
   consume: () => void
 }
 
+/** How one send goes: `alternate` does the other thing than the follow-up setting. */
+export type NativeChatComposerSendIntent = Pick<StructuredAgentSessionSendRequest, 'alternate'>
+
 export type NativeChatStructuredComposerTransport = {
   capturePresentation: CaptureStructuredAgentSessionPresentation
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -53,6 +56,7 @@ export type NativeChatStructuredComposerTransport = {
   sessionCommands?: readonly AgentSessionSlashCommand[]
   /** Request command refresh; updated choices arrive through sessionCommands. */
   refreshCommands?: () => void
+  setCommandsMenuOpen?: (open: boolean) => void
   /** False when the agent takes no image input, as its host registered it. */
   acceptsImages?: boolean
   /** The session's context usage; null until the journal can state it. */
@@ -83,6 +87,8 @@ export type NativeChatOptimisticSendOutcome = {
 export type NativeChatComposerProps = {
   /** Tab hosting the agent; used to resolve the live ptyId + runtime settings. */
   terminalTabId: string
+  /** Input-only edit session: every submit saves, Escape cancels, and send-only actions are absent. */
+  editSession?: { save: () => void; cancel: () => void; canSave: boolean }
   /** Stable split-leaf identity; unlike a PTY id, this survives reconnects. */
   paneKey: string
   /** Unsent-draft owner; defaults to paneKey, while structured chats share conversation scope. */
@@ -124,8 +130,12 @@ export type NativeChatComposerProps = {
   launchSeed?: NativeChatLaunchSeed
   /** Structured journal transport; absent keeps the existing PTY path unchanged. */
   structuredTransport?: NativeChatStructuredComposerTransport
-  /** Empty-composer Cmd/Ctrl+Enter steers the newest queued draft; false falls through to ordinary send. */
-  steerQueued?: () => boolean
+  /** The chat's worktree is still being created, so there is no session or file tree yet:
+   *  text and dictation only, with no command/skill/@-file pickers, `/resume`, attachments or
+   *  file-backed pastes. The pending transport reports no session options or context usage. */
+  workspacePending?: true
+  /** Cmd/Ctrl+Shift+Enter steers the head queued card; false when it can't. */
+  steerHead?: () => boolean
   /** The chat's own notices, shown in the composer's notice card above its input. */
   notices?: readonly NativeChatComposerNotice[]
   /** The conversation Up/Down recalls prompts from. */
@@ -142,8 +152,10 @@ export type NativeChatLaunchSeed = {
 }
 
 export type NativeChatComposerHandle = {
+  isComposing?: () => boolean
   focus: () => boolean
   insertTypedText: (text: string) => boolean
+  insertPastedText?: (text: string) => boolean
   /** Whether the input is there and enabled, so text given to it lands. */
   acceptsText: () => boolean
   /** Append deduplicated text after a blank line and place the caret at its end. */

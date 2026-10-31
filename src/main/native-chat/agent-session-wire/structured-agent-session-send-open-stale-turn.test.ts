@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 
 import { cp, rm } from 'node:fs/promises'
@@ -20,7 +21,10 @@ import {
   HOST_TEST_THREAD as THREAD,
   hostTestMessage
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
 
@@ -31,6 +35,7 @@ function eventually(assertion: () => unknown): Promise<unknown> {
 const relaunchedRoots: string[] = []
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )
@@ -143,7 +148,7 @@ it('settles it when a read reaches the chat before the startup reconcile, then r
   await host.history({ sessionId: SESSION, direction: 'tail' })
   expect(await turnStates(host)).toEqual(['unverifiable'])
   await host.reconcileRestartLeases()
-  await host.restoreReadableSessions([SESSION])
+  await openTestChats(host, [SESSION])
 
   expect(await turnStates(host)).toEqual(['interrupted'])
   await host.flushAllStreamedEvents()

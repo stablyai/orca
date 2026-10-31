@@ -138,7 +138,8 @@ describe('RuntimeRepositorySettingsController under a WSL move', () => {
       forgetTerminalTopology: vi.fn(),
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
-      notifyReposChanged
+      notifyReposChanged,
+      notifyWorktreesChanged: vi.fn()
     })
 
     await expect(controller.update('repo-1', { displayName: 'renamed' })).rejects.toBeInstanceOf(

@@ -12,6 +12,7 @@ function lintSources(sources) {
     rules: {
       'app-store-performance/require-selector': 'warn',
       'app-store-performance/no-identity-selector': 'warn',
+      'app-store-performance/no-whole-hot-map-selector': 'warn',
       'app-store-performance/no-fresh-selector-result': 'warn',
       'app-store-performance/no-nested-fresh-under-shallow': 'warn'
     }
@@ -19,6 +20,117 @@ function lintSources(sources) {
 }
 
 const sources = {
+  // The subscription and post-render memo from the typing-lag regression.
+  historicalHotMap: `
+      import { useAppStore } from '@/store'
+export function useStructuredAgentSessionHostCapabilityState(
+  target: RuntimeClientTarget | null,
+  capability: RuntimeCapability
+): StructuredAgentSessionHostCapabilityState {
+  const environmentId = target?.kind === 'environment' ? target.environmentId : null
+  const statuses = useAppStore((state) => state.runtimeStatusByEnvironmentId)
+  const remote = useMemo((): StructuredAgentSessionHostCapabilityState => {
+    if (environmentId === null) {
+      return 'unknown'
+    }
+    const entry = statuses.get(environmentId)
+    const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+    return status
+      ? status.capabilities?.includes(capability)
+        ? 'supported'
+        : 'unsupported'
+      : 'unknown'
+  }, [statuses, environmentId, capability])
+  const local = useSyncExternalStore(
+    subscribeLocalRuntimeCapabilityObservation,
+    () => localCapabilityState(capability),
+    () => 'unknown' as const
+  )
+  useEffect(() => {
+    if (target?.kind === 'local') {
+      void ensureLocalRuntimeCapabilities()
+    }
+  }, [target?.kind])
+  return !target ? 'unknown' : environmentId === null ? local : remote
+}
+    `,
+  hotMapReturns: `
+      import { useAppStore as useStore } from '@/store'
+      import { useRuntimeStore } from '@/store/runtime'
+      import { useShallow } from 'zustand/react/shallow'
+      const Direct = () => useStore(s => s.runtimeStatusByEnvironmentId)
+      const Block = () => useStore(state => { return state.runtimeStatusByEnvironmentId })
+      const Alias = () => useStore(state => { const statuses = state.runtimeStatusByEnvironmentId; return statuses })
+      const StateAlias = () => useStore(state => { const snapshot = state; return snapshot.runtimeStatusByEnvironmentId })
+      const Destructure = () => useStore(state => { const { runtimeStatusByEnvironmentId: statuses } = state; return statuses })
+      const Parameter = () => useStore(({ runtimeStatusByEnvironmentId: statuses }) => statuses)
+      const Named = () => useStore(selectStatuses)
+      function selectStatuses(state) { return state.runtimeStatusByEnvironmentId }
+      const Sibling = () => useRuntimeStore(s => s.runtimeStatusByEnvironmentId)
+      const ShallowMap = () => useStore(useShallow(s => s.runtimeStatusByEnvironmentId))
+    `,
+  focusedHotMapReads: `
+      import { useAppStore } from '@/store'
+      import { useShallow } from 'zustand/react/shallow'
+      const Primitive = () => useAppStore(s => s.runtimeStatusByEnvironmentId.get(hostId)?.status !== null)
+      const NonHot = () => useAppStore(s => s.someOtherMap)
+      const Action = () => useAppStore(s => s.action)
+      const onClick = () => useAppStore.getState().runtimeStatusByEnvironmentId
+      const Shallow = () => useAppStore(useShallow(s => ({ online: Boolean(s.runtimeStatusByEnvironmentId.get(hostId)?.status) })))
+      const OtherObject = () => useAppStore(s => other.runtimeStatusByEnvironmentId)
+      const Shadow = () => useAppStore(s => { const statuses = other.runtimeStatusByEnvironmentId; return statuses })
+      function ShadowedHook(useAppStore) { return useAppStore(s => s.runtimeStatusByEnvironmentId) }
+      const ShadowedParameter = () => useAppStore(s => { { const s = other; return s.runtimeStatusByEnvironmentId } })
+    `,
+  fixedHostCapability: `
+      import { useAppStore } from '@/store'
+export function useStructuredAgentSessionOwnPermissionState(
+  target: RuntimeClientTarget | null
+): StructuredAgentSessionHostCapabilityState {
+  const capability = AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY
+  const environmentId = target?.kind === 'environment' ? target.environmentId : null
+  // Select the verdict, not the map: unrelated host flips must not rerender every chat.
+  const remote = useAppStore((state): StructuredAgentSessionHostCapabilityState => {
+    if (environmentId === null) {
+      return 'unknown'
+    }
+    const entry = state.runtimeStatusByEnvironmentId.get(environmentId)
+    const status = isRuntimeHostContactRevoked(entry) ? null : lastVerifiedRuntimeStatus(entry)
+    return status
+      ? status.capabilities?.includes(capability)
+        ? 'supported'
+        : 'unsupported'
+      : 'unknown'
+  })
+  const local = useSyncExternalStore(
+    subscribeLocalRuntimeCapabilityObservation,
+    () => localCapabilityState(capability),
+    () => 'unknown' as const
+  )
+  useEffect(() => {
+    if (target?.kind === 'local') {
+      void ensureLocalRuntimeCapabilities()
+    }
+  }, [target?.kind])
+  return !target ? 'unknown' : environmentId === null ? local : remote
+}
+
+    `,
+  parkingProjection: `
+      import { useAppStore } from '@/store'
+export function selectPairedRuntimeParkingEnvironmentIdsFromState(state: {
+  runtimeStatusByEnvironmentId: PairedRuntimeParkingCapabilityStatuses
+}): ReadonlySet<string> {
+  return selectPairedRuntimeParkingEnvironmentIds(state.runtimeStatusByEnvironmentId)
+}
+
+      const Parking = () => useAppStore(selectPairedRuntimeParkingEnvironmentIdsFromState)
+    `,
+  globalHotMapConsumer: `
+      import { useAppStore } from '@/store'
+      // oxlint-disable-next-line app-store-performance/no-whole-hot-map-selector -- Fleet picker needs every host's current status.
+      const Fleet = () => useAppStore(s => s.runtimeStatusByEnvironmentId)
+    `,
   escapedImport: String.raw`
       import { use\u0041ppStore as useStore } from '@/store'
       export const WholeStore = () => useStore()
@@ -121,6 +233,36 @@ beforeAll(() => {
 })
 
 describe('app store performance Oxlint plugin', () => {
+  it.each([
+    ['historicalHotMap', 1],
+    ['hotMapReturns', 9]
+  ])('reports whole hot-map results in %s', (name, count) => {
+    expect(diagnosticsBySource.get(sources[name]).map((diagnostic) => diagnostic.code)).toEqual(
+      Array(count).fill('app-store-performance(no-whole-hot-map-selector)')
+    )
+  })
+
+  it.each([
+    'focusedHotMapReads',
+    'fixedHostCapability',
+    'parkingProjection',
+    'globalHotMapConsumer'
+  ])('allows stable projections and justified global consumers in %s', (name) => {
+    expect(diagnosticsBySource.get(sources[name])).toEqual([])
+  })
+
+  it('does not flag test files', () => {
+    expect(
+      runOxlintPluginOnSources({
+        pluginName: 'app-store-performance',
+        pluginPath,
+        sources: [sources.historicalHotMap],
+        extension: 'test.tsx',
+        rules: { 'app-store-performance/no-whole-hot-map-selector': 'warn' }
+      })
+    ).toEqual([[]])
+  })
+
   it('resolves an escaped store import through the text prefilter', () => {
     expect(
       diagnosticsBySource.get(sources.escapedImport).map((diagnostic) => diagnostic.code)

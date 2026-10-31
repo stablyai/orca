@@ -51,11 +51,16 @@ export function useNativeChatTurnStatus({
     )
   }, [activeTurnKey, isWorking, validTurnKeys, workingStartedAt])
 
-  return selectNativeChatTurnStatuses(timingByTurn, {
-    activeTurnKey,
-    isWorking,
-    workingStartedAt,
-    thinking,
-    settledByTurn: settledTurns ?? undefined
-  })
+  // Stable identity keeps status-only renders from rebuilding transcript slots.
+  return useMemo(
+    () =>
+      selectNativeChatTurnStatuses(timingByTurn, {
+        activeTurnKey,
+        isWorking,
+        workingStartedAt,
+        thinking,
+        settledByTurn: settledTurns ?? undefined
+      }),
+    [timingByTurn, activeTurnKey, isWorking, workingStartedAt, thinking, settledTurns]
+  )
 }

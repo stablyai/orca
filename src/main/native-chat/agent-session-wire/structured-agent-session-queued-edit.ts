@@ -1,4 +1,4 @@
-// Save compares body fingerprints without changing card identity/order/sender; edit leases block automatic delivery.
+// Save compares body fingerprints without changing card identity/order; edit leases block automatic delivery.
 
 import type {
   AgentSessionMutationEnvelope,

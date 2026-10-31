@@ -10,10 +10,8 @@ import type {
 import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
-import {
-  isJournalStopOrResumeRow,
-  type JournalRow
-} from '../agent-session-journal/journal-row-schema'
+import type { JournalReadRow } from '../agent-session-journal/journal-read-row'
+import { isJournalStopOrResumeRow } from '../agent-session-journal/journal-row-schema'
 
 export type JournalBatchProjection =
   | { ok: true; batch: AgentSessionJournalBatch }
@@ -21,22 +19,34 @@ export type JournalBatchProjection =
   | { ok: false; reset: 'journal_gap' }
 
 export function projectJournalBatch(input: {
-  rows: readonly JournalRow[]
+  rows: readonly JournalReadRow[]
   snapshot: AgentJournalSnapshot
   afterSequence: number
   canonicalItemId?: (itemId: string) => string
 }): JournalBatchProjection {
-  const gap = findSequenceGap(
-    input.rows.map((row) => row.seq),
-    input.afterSequence + 1
-  )
-  if (gap) {
+  if (
+    input.rows.every((row) => row.kind !== 'outcome') &&
+    findSequenceGap(
+      input.rows.map((row) => row.seq),
+      input.afterSequence + 1
+    )
+  ) {
     return { ok: false, reset: 'journal_gap' }
   }
   const aliases = submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
   const touchedClientMessageIds = new Set<string>()
   for (const row of input.rows) {
+    if (row.kind === 'outcome') {
+      for (const itemId of row.itemIds) {
+        touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases.get(itemId) ?? itemId)
+      }
+      for (const clientMessageId of row.submissionIds) {
+        touchedClientMessageIds.add(clientMessageId)
+        touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
+      }
+      continue
+    }
     if (row.kind === 'lifecycle-batch') {
       for (const mutation of row.mutations) {
         touchedItemIds.add(

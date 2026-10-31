@@ -183,11 +183,7 @@ describe('bulk git helpers', () => {
         ':(literal)docs',
         ':(literal)scratch'
       ],
-      {
-        cwd: '/repo',
-        // Keep the WSL login banner out of the first buffered NUL record.
-        captureWslLoginShellOutput: true
-      }
+      { cwd: '/repo' }
     )
     // A tracked descendant keeps directory pathspecs on the restore path.
     expect(gitExecFileAsyncMock).toHaveBeenNthCalledWith(

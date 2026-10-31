@@ -76,6 +76,40 @@ beforeEach(() => {
 afterEach(() => cleanup())
 
 describe('native Antigravity Accounts', () => {
+  it.each([
+    { owner, target, ownerPlatform: 'win32', windows: true },
+    {
+      owner: { kind: 'environment', environmentId: 'remote' } as const,
+      target,
+      ownerPlatform: 'linux',
+      windows: false
+    },
+    { owner, target, ownerPlatform: 'darwin', windows: false },
+    { owner, target: { runtime: 'wsl' } as const, ownerPlatform: 'win32', windows: false }
+  ])('describes the owning host launch promise (%#)', async ({ windows, ...props }) => {
+    vi.mocked(callAntigravityAccounts).mockResolvedValue(changedState)
+    render(<AntigravityAccountsSection {...props} label="This host" />)
+    await screen.findByText('second@example.invalid')
+    if (windows) {
+      expect(
+        screen.getByText(
+          'The host default account changed. Select a saved account to apply it again.'
+        )
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/Select applies and verifies the host default agy credential/)
+      ).toHaveTextContent('Command choices and later account changes are handled by agy.')
+      expect(screen.queryByText(/before launching agy/)).toBeNull()
+    } else {
+      expect(
+        screen.getByText(/Select a saved account again before launching agy/)
+      ).toBeInTheDocument()
+      expect(
+        screen.getByText(/Selection applies to new agy sessions on this host/)
+      ).toBeInTheDocument()
+    }
+  })
+
   it('saves a signed-in account with unknown identity and displays the confirmed account', async () => {
     const save = Promise.withResolvers<AntigravityAccountState>()
     vi.mocked(callAntigravityAccounts)

@@ -154,3 +154,85 @@ describe('Pi host awaited open', () => {
     )
   })
 })
+
+it('keeps native idle reports off current and action progress and rejects pre-control state', async () => {
+  const h = await setup()
+  await vi.waitFor(() => expect(h.adapter.readCommands(sessionId)).toBeDefined())
+  const held = Promise.withResolvers<unknown>()
+  const entered = vi.fn()
+  h.connection.requestOverride = (command) => {
+    if (command === 'get_state') {
+      entered()
+      return held.promise
+    }
+    return undefined
+  }
+  try {
+    const send = (id: string) =>
+      h.adapter.dispatch({
+        sessionId,
+        fence: 7,
+        clientMessageId: id,
+        executionOptions: {},
+        body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: id }] }
+      })
+    await send('first')
+    h.connection.handlers.onRecord?.({ type: 'agent_start' })
+    h.connection.handlers.onRecord?.({ type: 'agent_settled' })
+    await vi.waitFor(() => expect(entered).toHaveBeenCalledOnce())
+    expect((await h.adapter.readOptions({ sessionId, fence: 7 })).current.model).toBe(
+      'anthropic/model-1'
+    )
+    await h.adapter.setOption({ sessionId, fence: 7, key: 'model', value: 'anthropic/model-2' })
+    expect((await h.adapter.cancelTurn({ sessionId, fence: 7 })).cancelled).toBe(true)
+    held.resolve({ ...state, thinkingLevel: 'high' })
+    await Promise.resolve()
+    await Promise.resolve()
+    expect((await h.adapter.readOptions({ sessionId, fence: 7 })).current.model).toBe(
+      'anthropic/model-2'
+    )
+    h.connection.requestOverride = (command) =>
+      command === 'get_state'
+        ? Promise.resolve({
+            ...state,
+            model: { provider: 'anthropic', id: 'native-3' },
+            thinkingLevel: 'low'
+          })
+        : undefined
+    await send('later')
+    h.connection.handlers.onRecord?.({ type: 'agent_start' })
+    h.connection.handlers.onRecord?.({ type: 'agent_settled' })
+    await vi.waitFor(async () =>
+      expect((await h.adapter.readOptions({ sessionId, fence: 7 })).current).toMatchObject({
+        model: 'anthropic/native-3',
+        effort: 'low'
+      })
+    )
+    await send('during-control')
+    h.connection.handlers.onRecord?.({ type: 'agent_start' })
+    const control = Promise.withResolvers<unknown>()
+    h.connection.requestOverride = (command) =>
+      command === 'set_model'
+        ? control.promise
+        : command === 'get_state'
+          ? Promise.resolve(state)
+          : undefined
+    const writing = h.adapter.setOption({
+      sessionId,
+      fence: 7,
+      key: 'model',
+      value: 'anthropic/model-4'
+    })
+    h.connection.handlers.onRecord?.({ type: 'agent_settled' })
+    await vi.waitFor(async () =>
+      expect((await h.adapter.readOptions({ sessionId, fence: 7 })).current.model).toBeUndefined()
+    )
+    control.resolve({})
+    await writing
+    const after = await h.adapter.readOptions({ sessionId, fence: 7 })
+    expect(after.current.model).toBe('anthropic/model-4')
+    expect(after.current.confirmed).not.toContain('model')
+  } finally {
+    held.resolve(state)
+  }
+})

@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const hubStyles = StyleSheet.create({
+export const hubStyles = themedStyleSheet(() => ({
   segments: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -58,7 +59,7 @@ export const hubStyles = StyleSheet.create({
   statePill: {
     paddingHorizontal: spacing.sm,
     paddingVertical: 1,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     borderWidth: StyleSheet.hairlineWidth
   },
   statePillText: {
@@ -108,4 +109,4 @@ export const hubStyles = StyleSheet.create({
   tabBodyHidden: {
     display: 'none'
   }
-})
+}))

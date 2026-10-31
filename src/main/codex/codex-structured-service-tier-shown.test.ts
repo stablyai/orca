@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../shared/agent-session-option-catalog-claude-codex'
 import type { AgentSessionModelOption } from '../../shared/agent-session-wire'
 import {
+  applyStructuredAgentSessionModelCatalog,
   applyStructuredAgentSessionOptions,
   commitStructuredAgentSessionOption,
   createStructuredAgentSessionOptionState,
@@ -14,6 +15,7 @@ import { CodexBackgroundTaskTracker } from './codex-background-task-tracker'
 import { createCodexDispatchEchoes } from './codex-structured-dispatch-echo'
 import { createCodexTurnOpenWaits } from './codex-structured-turn-open-wait'
 import type { CodexSession } from './codex-structured-session-state'
+import { resolvedCodexMessageOptions } from './codex-structured-message-options'
 import { startCodexTurn } from './codex-structured-turn-start'
 import { readLiveCodexSessionOptions } from './codex-structured-session-options'
 
@@ -26,7 +28,8 @@ const MODELS: AgentSessionModelOption[] = [
 async function hostRuns(
   saved: Record<string, string>,
   ageMs = 0,
-  child?: { tiers?: readonly string[]; reported?: string }
+  child?: { tiers?: readonly string[]; reported?: string },
+  observeProjection?: (projected: Readonly<Record<string, string>> | undefined) => void
 ) {
   let now = 1
   const store = new AgentModelCatalogStore({ now: () => now })
@@ -74,6 +77,10 @@ async function hostRuns(
     prompts: new CodexAcquisitionWindow().prompts,
     options: new Map(Object.entries(saved)),
     reportedOptions: child?.reported ? { serviceTier: child.reported, serviceTierKnown: true } : {},
+    appliedTurnOptions: {
+      ...(saved.model ? { model: saved.model } : {}),
+      ...(child?.reported ? { serviceTier: child.reported } : {})
+    },
     catalogAccess: { store, fingerprint: 'codex-account', accountHomePath: '/account' },
     dispatchEchoes: createCodexDispatchEchoes(),
     turnOpenWaits: createCodexTurnOpenWaits(),
@@ -84,8 +91,9 @@ async function hostRuns(
     : undefined
   if (child) {
     offline = true
-    store.recordFailure('codex-account', 'offline', 'codex')
+    await store.refresh('codex-account', 'codex', () => Promise.reject(new Error('offline')))
   }
+  observeProjection?.(await resolvedCodexMessageOptions(session, saved))
   await startCodexTurn(session, {
     clientMessageId: 'message-1',
     body: { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'go' }] }
@@ -102,7 +110,12 @@ async function hostRuns(
 /** Older hosts omit the defaulted marker. */
 function answered(saved: Record<string, string>, marksDefaults: boolean) {
   return applyStructuredAgentSessionOptions(
-    createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+    applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      { origin: 'probe', models: MODELS, fetchedAt: 1 },
+      { newLaunch: false, coherentCatalog: true }
+    ),
     CODEX_SESSION_OPTION_CATALOG,
     { models: MODELS, current: { ...saved, ...(marksDefaults ? { defaulted: [] } : {}) } }
   )
@@ -127,7 +140,7 @@ describe("a Codex chat's speed, shown and sent", () => {
     ] as const) {
       await expect(hostRuns({ model: 'm2', serviceTier: tier }, 120_000, child)).resolves.toEqual({
         firstTurn: runs,
-        shown: runs,
+        shown: 'reported' in child ? child.reported : undefined,
         afterLiveRead: tier
       })
     }
@@ -138,10 +151,14 @@ describe("a Codex chat's speed, shown and sent", () => {
       [{ model: 'm2', serviceTier: 'flex' }, 'default', 'flex', 'default'],
       [{ model: 'm1', serviceTier: 'priority' }, 'priority', 'priority', 'priority']
     ] as const) {
-      expect(shownTier(answered(saved, true))).toBe(shown)
       expect(shownTier(answered(saved, false))).toBe(olderShown)
       for (const ageMs of [0, 2 * 60_000]) {
-        await expect(hostRuns(saved, ageMs)).resolves.toEqual({
+        await expect(
+          hostRuns(saved, ageMs, undefined, (projected) => {
+            expect(projected).toBeDefined()
+            expect(shownTier(answered({ ...saved, ...projected }, true))).toBe(shown)
+          })
+        ).resolves.toEqual({
           firstTurn: runs,
           afterLiveRead: saved.serviceTier
         })

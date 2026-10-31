@@ -8,6 +8,7 @@ import {
   LogicalClientCutoverError,
   type MobileConnectionPath
 } from './stable-logical-rpc-client'
+import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
 class FakeSession implements RpcClient {
   readonly sendRequest =
@@ -167,6 +168,23 @@ describe('stable logical RPC client', () => {
       undefined
     )
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
+  })
+
+  it('reports requests the suspended session never sent as suspended, and written ones as ambiguous', async () => {
+    const session = new FakeSession('connected')
+    const unsent = deferred<RpcResponse>()
+    const written = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValueOnce(unsent.promise).mockReturnValueOnce(written.promise)
+    const client = createStableLogicalRpcClient(session, 'relay')
+    const waiting = client.sendRequest('speech.dictation.chunk').catch((error: unknown) => error)
+    const inFlight = client.sendRequest('speech.dictation.chunk').catch((error: unknown) => error)
+
+    client.suspendActiveSession()
+    unsent.reject(new Error('relay session closed'))
+    written.reject(markRpcDeliveryUnknown(new Error('Client closed')))
+
+    expect(await waiting).toBeInstanceOf(LogicalClientSuspendedError)
+    expect(isRpcDeliveryUnknown(await inFlight)).toBe(true)
   })
 
   it('preserves delivery ambiguity without replaying a mutation after relay replacement', async () => {

@@ -4,8 +4,8 @@ import {
   retireRuntimeBrowserClientPage
 } from './browser-client-page-close'
 import { BrowserError } from '../../browser/browser-error'
-import { randomUUID } from 'node:crypto'
-import { ipcMain } from 'electron'
+import { browserManager } from '../../browser/browser-manager'
+import { closeBrowserTabInRenderer } from './browser-tab-renderer-close'
 import type { RuntimeBrowserCommandHost } from './browser-command-contracts'
 import type { RuntimeBrowserCommandTargets } from './browser-command-targets'
 
@@ -23,7 +23,7 @@ export class RuntimeBrowserTabClose {
       | 'retireRuntimeOwnedBrowserSessionTab'
       | 'notifyHeadlessBrowserSessionTabsChanged'
       | 'getAgentBrowserBridge'
-      | 'resolveWorktreeSelector'
+      | 'resolveWorkspaceSelector'
       | 'getAvailableAuthoritativeWindow'
       | 'getOffscreenBrowserBackend'
       | 'getAuthoritativeWindow'
@@ -43,40 +43,40 @@ export class RuntimeBrowserTabClose {
     if (clientPage) {
       return retireRuntimeBrowserClientPage(this.host, clientPage)
     }
-    const namedPageId =
-      typeof params.page === 'string' && params.page.length > 0 ? params.page : null
-    const explicitPage = namedPageId !== null
+    const pageParam = typeof params.page === 'string' && params.page.length > 0 ? params.page : null
     const bridge = this.host.getAgentBrowserBridge()
     if (!bridge) {
       // Even without a live browser session, a retained row may still need retirement.
       if (
-        namedPageId &&
+        pageParam &&
         params.worktree &&
         this.targets.retireGhostBrowserSessionRow(
-          (await this.host.resolveWorktreeSelector(params.worktree)).id,
-          namedPageId
+          (await this.host.resolveWorkspaceSelector(params.worktree)).id,
+          pageParam
         )
       ) {
         return { closed: true }
       }
       throw new BrowserError('browser_no_tab', 'No browser session is active')
     }
-    const worktreeId = explicitPage
-      ? params.worktree
-        ? (await this.host.resolveWorktreeSelector(params.worktree)).id
-        : undefined
-      : await this.targets.resolveBrowserWorktreeId(params.worktree)
+    // An index names a listed row, which then closes exactly like `--page`.
+    const indexed =
+      pageParam === null && params.index !== undefined
+        ? await this.listedTabAt(params.index, params.worktree)
+        : null
+    const namedPageId = pageParam ?? indexed?.browserPageId ?? null
+    const explicitPage = namedPageId !== null
+    const worktreeId = indexed
+      ? (indexed.worktreeId ?? undefined)
+      : explicitPage
+        ? params.worktree
+          ? (await this.host.resolveWorkspaceSelector(params.worktree)).id
+          : undefined
+        : await this.targets.resolveBrowserWorktreeId(params.worktree)
 
     let tabId: string | null = null
     if (namedPageId !== null) {
       tabId = namedPageId
-    } else if (params.index !== undefined) {
-      const tabs = bridge.getRegisteredTabs(worktreeId)
-      const entries = [...tabs.entries()]
-      if (params.index < 0 || params.index >= entries.length) {
-        throw new Error(`Tab index ${params.index} out of range (0-${entries.length - 1})`)
-      }
-      tabId = entries[params.index][0]
     } else {
       // Unmounted tabs need renderer fallback when the bridge has not registered them.
       const tabs = bridge.getRegisteredTabs(worktreeId)
@@ -85,6 +85,16 @@ export class RuntimeBrowserTabClose {
       if (activeEntry) {
         tabId = activeEntry[0]
       }
+    }
+
+    // Popups are windows, not renderer tabs; close them as the page's own window.close() would.
+    const popupPageId = tabId ?? bridge.getActivePageId(worktreeId)
+    if (
+      popupPageId &&
+      bridge.getRegisteredTabs(worktreeId).has(popupPageId) &&
+      (await browserManager.closePopupPage(popupPageId))
+    ) {
+      return { closed: true }
     }
 
     const authoritativeWindow = this.host.getAvailableAuthoritativeWindow()
@@ -126,37 +136,20 @@ export class RuntimeBrowserTabClose {
     }
 
     const win = authoritativeWindow ?? this.host.getAuthoritativeWindow()
-    const requestId = randomUUID()
-    await new Promise<void>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        ipcMain.removeListener('browser:tabCloseReply', handler)
-        reject(new Error('Tab close timed out'))
-      }, 10_000)
-
-      const handler = (
-        _event: Electron.IpcMainEvent,
-        reply: { requestId: string; error?: string; code?: 'browser_tab_not_found' }
-      ): void => {
-        if (reply.requestId !== requestId) {
-          return
-        }
-        clearTimeout(timer)
-        ipcMain.removeListener('browser:tabCloseReply', handler)
-        if (reply.error) {
-          reject(
-            reply.code === 'browser_tab_not_found'
-              ? new BrowserError('browser_tab_not_found', reply.error)
-              : new Error(reply.error)
-          )
-        } else {
-          resolve()
-        }
-      }
-      ipcMain.on('browser:tabCloseReply', handler)
-      // Scope renderer close to its owning worktree, not the globally active one.
-      win.webContents.send('browser:requestTabClose', { requestId, tabId, worktreeId })
-    })
+    await closeBrowserTabInRenderer(win, tabId, worktreeId)
 
     return { closed: true }
+  }
+
+  // Why the listing: indexes must match `tab list`, which includes restored tabs not yet loaded.
+  private async listedTabAt(index: number, worktree: string | undefined) {
+    const tabs = (await this.queries.browserTabList({ worktree })).tabs
+    if (!Number.isInteger(index) || index < 0 || index >= tabs.length) {
+      throw new BrowserError(
+        'browser_tab_not_found',
+        `Tab index ${index} out of range (0-${tabs.length - 1})`
+      )
+    }
+    return tabs[index]
   }
 }

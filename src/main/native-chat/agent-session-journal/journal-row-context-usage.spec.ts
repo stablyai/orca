@@ -59,7 +59,7 @@ export function registerJournalRowContextUsageTests(): void {
 
   let root: string
   let clock = 1_000
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
 
   const open = () =>
     journals.open({
@@ -123,10 +123,10 @@ export function registerJournalRowContextUsageTests(): void {
       try {
         const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
         const future = JSON.parse(rowJson)
-        future.body.contextUsage = { used: { kind: 'measured-later', tokens: 'many' } }
+        future.body.contextUsage = { used: { kind: 'unknown', capturedAt: 'later' } }
         updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
       } finally {
-        opened.close()
+        await opened.close()
       }
 
       const reopened = await open()

@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { readAgentSessionFailureFact } from '../../shared/agent-session-failure'
-import { withNativeChatCutTurnNotices } from '../../shared/native-chat-cut-turn-notice'
+import { withNativeChatCutTurnNotices } from '../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { closeProviderTimelineRigs } from '../native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import {
   CALLER,

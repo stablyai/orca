@@ -282,7 +282,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async () => root,
     resolveLaunchArgs: () => [],
     resolveClaudeAuthPolicy: () => ({ account: 'managed' }),
-    resolveCodexCommand: () => 'codex',
+    resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
     resolveEnvironment: async () => ({ PATH: process.env.PATH }),
     ...scriptedCodexTransport(openConnection)
   })
@@ -518,6 +518,8 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
       expect(verdictOf((await settled()).submissions, sent)).toBe('accepted')
     )
     expect((await settled()).owesWork).toBe(false)
+    // Delivered once: the turn's end neither steers it again nor starts a turn with it.
+    expect([steers, answers]).toEqual([1, 1])
   })
 
   it('is settled when a Stop ends that turn, on a Codex that names a steered start falsely', async () => {
@@ -542,7 +544,7 @@ describe("a queued card's Send-now while a Codex turn runs", () => {
 })
 
 describe('a second send made after Codex answered the first, before it opened that turn', () => {
-  it('waits for the opener before steering the later send, which Stop then withdraws', async () => {
+  it('waits for the native turn to open before steering, keeps echo acceptance separate, and withdraws on Stop', async () => {
     const opening = await send('look around')
     await vi.waitFor(() => expect(answers).toBe(1))
     const followUp = await send('and check the tests')
@@ -556,10 +558,14 @@ describe('a second send made after Codex answered the first, before it opened th
       'running'
     )
     await vi.waitFor(() => expect(loop.isRunning(SESSION)).toBe(false))
-    expect(steers).toBe(0)
+    expect(steers).toBe(1)
     expect(verdictOf((await settled()).submissions, followUp)).toBe('pending')
+    expect(verdictOf((await settled()).submissions, opening)).toBe('pending')
     turns.echo(opening)
-    await vi.waitFor(() => expect(steers).toBe(1))
+    await vi.waitFor(async () =>
+      expect(verdictOf((await settled()).submissions, opening)).toBe('accepted')
+    )
+    expect(steers).toBe(1)
     expect(answers).toBe(1)
 
     await stop()

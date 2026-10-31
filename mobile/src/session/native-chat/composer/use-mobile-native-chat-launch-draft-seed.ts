@@ -1,11 +1,30 @@
 import { useCallback, useEffect, type SetStateAction } from 'react'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import {
+  launchDraftResolvedByTranscript,
+  nativeChatLaunchDraftTurnBaseline,
+  type NativeChatLaunchDraftTurnBaseline
+} from '../../../../../src/shared/native-chat-launch-draft-resolution'
 import { normalizedUserText } from './mobile-native-chat-draft-reconcile'
 import { mobileNativeChatLaunchDraftSeeds } from './mobile-native-chat-draft-store'
+import { mobileNativeChatDraftDestination } from './mobile-native-chat-draft-inputs'
 
 export type MobileNativeChatLaunchDraftSeed = {
   text: string
   createdAt: number | null
+  baseline?: NativeChatLaunchDraftTurnBaseline
+}
+
+function launchDraftResolved(
+  createdAt: number | null,
+  messages: readonly NativeChatMessage[],
+  baseline?: NativeChatLaunchDraftTurnBaseline
+): boolean {
+  // Old hosts send no creation time, so any user turn retires the draft.
+  if (createdAt === null) {
+    return messages.some((message) => normalizedUserText(message) !== null)
+  }
+  return launchDraftResolvedByTranscript({ createdAt }, messages, baseline)
 }
 
 export function useMobileNativeChatLaunchDraftSeed(args: {
@@ -44,13 +63,16 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     if (transcriptLoading) {
       return
     }
-    if (messages.some((message) => normalizedUserText(message) !== null)) {
+    const createdAt = launchDraftCreatedAt ?? null
+    mobileNativeChatDraftDestination(draftKey)
+    if (launchDraftResolved(createdAt, messages)) {
       mobileNativeChatLaunchDraftSeeds.set(draftKey, null)
       return
     }
     mobileNativeChatLaunchDraftSeeds.set(draftKey, {
       text: launchDraft,
-      createdAt: launchDraftCreatedAt ?? null
+      createdAt,
+      baseline: nativeChatLaunchDraftTurnBaseline(messages)
     })
     setDraftText(draftKey, (current) => (current === '' ? launchDraft : current))
   }, [
@@ -73,8 +95,7 @@ export function useMobileNativeChatLaunchDraftSeed(args: {
     if (!seeded) {
       return
     }
-    const hasUserTurn = messages.some((message) => normalizedUserText(message) !== null)
-    if (!hasUserTurn && launchDraft?.trim()) {
+    if (!launchDraftResolved(seeded.createdAt, messages, seeded.baseline) && launchDraft?.trim()) {
       return
     }
     mobileNativeChatLaunchDraftSeeds.set(draftKey, null)

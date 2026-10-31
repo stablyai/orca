@@ -32,7 +32,7 @@ const LARGE_TEXT = 'x'.repeat(250 * 1024)
 
 let root: string
 let journal: AgentSessionJournal
-const journals = createTrackedJournalOpener()
+const journals = createTrackedJournalOpener({ legacyInputs: true })
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-wire-admission-'))
@@ -181,7 +181,7 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     }
     opened.db.exec('COMMIT')
   } finally {
-    opened.close()
+    await opened.close()
   }
   return journals.open({
     identity: {

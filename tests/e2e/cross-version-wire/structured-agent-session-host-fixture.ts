@@ -89,6 +89,11 @@ export function structuredHostStub(
     changeThreadGoal: vi.fn(async () => ({ ok: true, replayed: false })),
     handoffStatus: vi.fn(async () => ({ owner: 'native' })),
     readOptions: vi.fn(async () => ({ models: [], current: { model: 'gpt-live' } })),
+    continuationContext: vi.fn(async () => ({
+      status: 'current',
+      capturedText: 'Saved context',
+      transcriptPath: '/handoff/chat.txt'
+    })),
     modelCatalog: vi.fn(() => ({ origin: 'unknown' as const })),
     readCommands: vi.fn(() => ({ commands: [{ name: 'clear', kind: 'command' as const }] })),
     history: vi.fn(() => ({ ok: true, page: { items: [] } })),
@@ -119,9 +124,10 @@ export function installableHost(
 ): StructuredAgentSessionHost {
   const host = {
     ...hostCalls,
+    readModelCatalog: hostCalls.modelCatalog,
     // The catalog read checks the session's record for a floating chat's own folder; none here.
     deps: {
-      modelCatalog: { read: hostCalls.modelCatalog },
+      modelCatalog: { read: hostCalls.modelCatalog, demand: vi.fn(async () => {}) },
       store: { getRecord: () => null, getConversation: () => null, getOperationRow: () => null }
     },
     restartResume: {

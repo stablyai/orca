@@ -185,7 +185,7 @@ export function convertEmptyNestedOrderedItemToContinuation(editor: Editor): boo
     return false
   }
 
-  if (list.childCount !== 1) {
+  if (list.childCount !== 1 || $from.node(context.listItemDepth).childCount !== 1) {
     return false
   }
 

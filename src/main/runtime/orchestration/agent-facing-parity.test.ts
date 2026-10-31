@@ -1,6 +1,4 @@
-/** Chat and terminal agents must receive equivalent preambles, pointers and guides, apart from address and chat wording. */
-import { readdirSync, readFileSync } from 'node:fs'
-import { join } from 'node:path'
+/** Chat and terminal agents must receive equivalent preambles and pointers, apart from address and chat wording. */
 import { afterAll, afterEach, describe, expect, it, vi } from 'vitest'
 import {
   getAppEnvironment,
@@ -20,11 +18,9 @@ import { OrchestrationDb } from './db'
 import { formatMessagePointer } from './formatter'
 import { OrchestrationStructuredMailboxPointerDelivery } from './structured-mailbox-pointer-delivery'
 import {
-  buildDispatchPreamble,
   CHAT_REDISPATCH_PARAGRAPH as CHAT_REDISPATCH,
   TERMINAL_REDISPATCH_PARAGRAPH as TERMINAL_REDISPATCH
 } from './preamble'
-import { ORCA_SESSION_ID_AS_ADDRESS } from '../../../shared/orca-session-id-wording-test-fixture'
 
 const sent = vi.hoisted((): { preambles: string[] } => ({ preambles: [] }))
 vi.mock('../rpc/methods/orchestration-structured-worker-session', () => ({
@@ -69,15 +65,11 @@ function installApp(isPackaged: boolean): void {
 function runtime(prompts: string[]): OrcaRuntimeService {
   const fake: Pick<
     OrcaRuntimeService,
-    | 'getNestedWorkerMaxDepth'
-    | 'getOrchestrationHeartbeatMinutes'
-    | 'getTerminalOrchestrationCliCommand'
-    | 'sendTerminalAgentPrompt'
+    'getNestedWorkerMaxDepth' | 'getTerminalOrchestrationCliCommand' | 'sendTerminalAgentPrompt'
   > & { orchestrationSenderNames: Pick<OrcaRuntimeService['orchestrationSenderNames'], 'nameOf'> } =
     {
       orchestrationSenderNames: { nameOf: () => null },
       getNestedWorkerMaxDepth: () => 2,
-      getOrchestrationHeartbeatMinutes: () => 5,
       getTerminalOrchestrationCliCommand: () => 'orca',
       sendTerminalAgentPrompt: async (handle, text) => {
         prompts.push(text)
@@ -157,7 +149,7 @@ describe('a chat agent and a terminal agent see the same text but for how each i
     expect(chat).not.toContain(CHAT_WORKER_HANDLE)
     expect(chat).not.toContain('this terminal')
     expect(withoutRedispatch).not.toBe(chat)
-    expect(withoutRedispatch.split('this chat')).toHaveLength(4)
+    expect(withoutRedispatch.split('this chat')).toHaveLength(3)
     expect(
       withoutRedispatch
         .replace(SELF_LINE, '')
@@ -190,51 +182,4 @@ describe('a chat agent and a terminal agent see the same text but for how each i
       }
     }
   )
-})
-
-describe('agent-read text about an Orca session ID', () => {
-  const guideDir = join(process.cwd(), 'skill-guides')
-  const guide = [
-    join(guideDir, 'orchestration.md'),
-    ...readdirSync(join(guideDir, 'orchestration', 'references')).map((name) =>
-      join(guideDir, 'orchestration', 'references', name)
-    )
-  ]
-  // Refusals an agent reads: the string literals of the files that word them.
-  const refusalSources = [
-    'orchestration/orchestration-party.ts',
-    'rpc/orchestration-session-caller.ts',
-    'rpc/methods/orchestration/messaging/session-recipient.ts',
-    'rpc/methods/orchestration/caller-show.ts'
-  ].flatMap(
-    (file) =>
-      readFileSync(join(process.cwd(), 'src', 'main', 'runtime', file), 'utf8').match(
-        /'(?:[^'\\\n]|\\.)*'|`(?:[^`\\]|\\.)*`/g
-      ) ?? []
-  )
-
-  it.each([
-    ['the guide and its references', () => guide.map((file) => readFileSync(file, 'utf8'))],
-    [
-      'the preamble, for every pairing of kinds',
-      () =>
-        [CHAT_ADDRESS, 'term_coord'].flatMap((coordinatorHandle) =>
-          [CHAT_ADDRESS, TERMINAL_HANDLE].map((workerHandle) =>
-            buildDispatchPreamble({
-              taskId: 'task_1',
-              dispatchId: 'ctx_1',
-              taskSpec: 'do it',
-              coordinatorHandle,
-              workerHandle,
-              heartbeatIntervalMinutes: 5
-            })
-          )
-        )
-    ],
-    ['the refusals that name a session', () => refusalSources]
-  ])('never calls it an address in %s', (_where, texts) => {
-    for (const text of texts()) {
-      expect(text).not.toMatch(ORCA_SESSION_ID_AS_ADDRESS)
-    }
-  })
 })

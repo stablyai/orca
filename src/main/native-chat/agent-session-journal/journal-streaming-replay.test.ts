@@ -58,7 +58,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
-  opened.close()
+  await opened.close()
   await rm(root, { recursive: true, force: true })
 })
 

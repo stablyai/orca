@@ -11,6 +11,8 @@ import { runSleepWorktrees } from './sleep-worktree-flow'
 import { collectTwinHostsAlsoSlept } from './sleep-twin-confirmation'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import { resolveWorktreeDisplayName } from '@/lib/worktree-default-display-name'
+import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { getWorktreeRowLocalPathOpenOwner } from '@/lib/worktree-row-open-in-owner'
 import { VIRTUALIZED_SCROLL_ANCHOR_RECORD_EVENT } from '@/hooks/useVirtualizedScrollAnchor'
 import {
   planWorkspaceStatusAssignment,
@@ -44,7 +46,12 @@ export function useWorktreeContextMenuCommands(args: {
   statusesForWorktree: (worktree: Worktree) => readonly WorkspaceStatusDefinition[]
 }) {
   const handleCopyPath = useCallback(() => {
-    window.api.ui.writeClipboardText(args.worktree.path)
+    const owner = getWorktreeRowLocalPathOpenOwner(
+      args.getState(),
+      args.worktree,
+      args.repo?.connectionId
+    )
+    window.api.ui.writeClipboardText(formatClipboardFilePath(args.worktree.path, owner))
   }, [args])
   const handleCopyName = useCallback(() => {
     window.api.ui.writeClipboardText(resolveWorktreeDisplayName(args.worktree))

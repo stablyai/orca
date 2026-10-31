@@ -48,7 +48,8 @@ export function ConversationKnowledgeNoteDetail({
             <li key={entry.id}>
               <Button
                 className="w-full justify-start text-left"
-                variant="dense"
+                variant="ghost"
+                size="sm"
                 onClick={() => entry.item && onSelectItem(entry.item)}
               >
                 <span className="line-clamp-2">{entry.label}</span>

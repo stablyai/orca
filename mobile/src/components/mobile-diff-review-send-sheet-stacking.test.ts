@@ -23,7 +23,6 @@ vi.mock('lucide-react-native', () => ({
   Check: 'Check',
   Copy: 'Copy',
   Edit3: 'Edit3',
-  FileText: 'FileText',
   Plus: 'Plus',
   Send: 'Send',
   Trash2: 'Trash2',
@@ -220,22 +219,6 @@ afterEach(() => {
 })
 
 describe('review screen sheets never stack', () => {
-  it('Send Unsent Notes shows Send Notes only after Review Actions has closed', async () => {
-    await mountScreen()
-    act(() => controller.openSheet({ kind: 'actions' }))
-    expect(shownSheets()).toEqual(['Review Actions'])
-
-    press(drawer('Review Actions'), 'Send Unsent Notes')
-    expect(shownSheets()).toEqual([])
-
-    await answer('session.tabs.list', TABS_REPLY)
-    expect(shownSheets()).toEqual([])
-
-    finishClosing('Review Actions')
-    expect(shownSheets()).toEqual(['Send Notes'])
-    expect(textOf(drawer('Send Notes'))).toContain('codex (termin)')
-  })
-
   it('Review Complete → Send shows Send Notes only after Review Complete has closed', async () => {
     await mountScreen()
     await completeReview()
@@ -260,34 +243,36 @@ describe('review screen sheets never stack', () => {
 
   it('Review Complete arriving while another sheet is open waits for that sheet to close', async () => {
     await mountScreen()
+    const target = controller.currentItem!
     const marking = startMarkReviewed()
-    // The user opens Review Actions while the save is still in flight.
-    act(() => controller.openSheet({ kind: 'actions' }))
+    // The user opens Discard while the save is still in flight.
+    act(() => controller.openSheet({ kind: 'discard', target }))
     await answer('worktree.set', SAVE_REPLY)
     await act(() => marking)
-    expect(shownSheets()).toEqual(['Review Actions'])
+    expect(shownSheets()).toEqual(['Discard File'])
 
-    act(() => drawer('Review Actions').props.onClose())
+    act(() => drawer('Discard File').props.onClose())
     expect(shownSheets()).toEqual([])
 
-    finishClosing('Review Actions')
+    finishClosing('Discard File')
     expect(shownSheets()).toEqual(['Review Complete'])
   })
 
   it('a sheet replaced before it was ever shown is never mounted', async () => {
     await mountScreen()
+    const target = controller.currentItem!
     act(() => {
       controller.openSheet({ kind: 'completion' })
-      controller.openSheet({ kind: 'actions' })
+      controller.openSheet({ kind: 'discard', target })
     })
-    expect(shownSheets()).toEqual(['Review Actions'])
+    expect(shownSheets()).toEqual(['Discard File'])
 
     act(() => {
       controller.openSheet({ kind: 'completion' })
       controller.closeSheet('completion')
     })
     expect(shownSheets()).toEqual([])
-    finishClosing('Review Actions')
+    finishClosing('Discard File')
     expect(mountedDrawers()).toEqual([])
   })
 
@@ -301,8 +286,8 @@ describe('review screen sheets never stack', () => {
     finishClosing('Send Notes')
     expect(mountedDrawers()).toEqual([])
 
-    act(() => controller.openSheet({ kind: 'actions' }))
-    expect(shownSheets()).toEqual(['Review Actions'])
+    act(() => controller.openSheet({ kind: 'discard', target: controller.currentItem! }))
+    expect(shownSheets()).toEqual(['Discard File'])
   })
 
   it('Discard keeps its file through the close and discards the file it showed', async () => {

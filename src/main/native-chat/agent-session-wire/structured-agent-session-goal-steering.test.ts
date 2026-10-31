@@ -2,6 +2,13 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
+import type { CodexAppServerConnection } from '../../codex/app-server/codex-app-server-connection-types'
+import {
+  readCodexAppliedInputOptions,
+  resolvedCodexMessageOptions
+} from '../../codex/codex-structured-message-options'
+import { optionSession } from '../../codex/codex-structured-option-session.test-fixture'
+import { dispatchCodexTurn } from '../../codex/codex-structured-turn-start'
 import {
   createQueuedMessageTestRig,
   eventually,
@@ -15,13 +22,43 @@ import {
 } from './structured-agent-session-host-test-data'
 
 let rig: QueuedMessageTestRig
+let native: ReturnType<typeof optionSession>
+const nativeRequest = vi.fn<CodexAppServerConnection['request']>()
+
+async function createGoalRig(reports = true): Promise<QueuedMessageTestRig> {
+  nativeRequest
+    .mockReset()
+    .mockImplementation(async (method, params) =>
+      method === 'turn/steer' ? { turnId: params?.expectedTurnId } : {}
+    )
+  native = optionSession(nativeRequest)
+  native.threadId = THREAD
+  const opened: Record<string, string> = reports ? { model: 'gpt-ran', effort: 'high' } : {}
+  native.reportedOptions = opened
+  native.appliedTurnOptions = opened
+  const created = await createQueuedMessageTestRig({
+    restartable: true,
+    ...(reports ? { reportsModel: 'gpt-ran', reportsEffort: 'high' } : {})
+  })
+  created.host.deps.adapter.readAppliedInputOptions = (input) =>
+    input.sessionId === SESSION ? readCodexAppliedInputOptions(native, input) : null
+  created.host.deps.adapter.holdsLiveProviderProcess = (sessionId, generation) =>
+    sessionId === SESSION &&
+    generation === native.acquisitionGeneration &&
+    !native.ended &&
+    !native.connection.closed
+  created.dispatch.mockImplementation(async (input) =>
+    dispatchCodexTurn(
+      native,
+      { ...input, turnOptions: await resolvedCodexMessageOptions(native, input.executionOptions) },
+      undefined
+    )
+  )
+  return created
+}
 
 beforeEach(async () => {
-  rig = await createQueuedMessageTestRig({
-    restartable: true,
-    reportsModel: 'gpt-ran',
-    reportsEffort: 'high'
-  })
+  rig = await createGoalRig()
 })
 
 afterEach(() => rig.dispose())
@@ -42,6 +79,7 @@ async function startGoalTurn(
       change
     })
   ).toMatchObject({ ok: true })
+  native.activeTurnIds = new Set(['goal-turn'])
   rig.providerEvents().appendItem(
     { provider: 'codex', threadId: THREAD, turnId: 'goal-turn', ordinal: 99 },
     {
@@ -70,6 +108,11 @@ it.each<{ label: string; choices: Readonly<Record<string, string>> }>([
     rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.newestTurn()
   ).toMatchObject({ turnId: 'goal-turn', state: 'running' })
   expect(rig.cancelTurn).not.toHaveBeenCalled()
+  expect(nativeRequest).toHaveBeenLastCalledWith(
+    'turn/steer',
+    expect.objectContaining({ expectedTurnId: 'goal-turn' }),
+    expect.anything()
+  )
 })
 
 it.each([
@@ -82,6 +125,7 @@ it.each([
   await rig.host.collaboratorsForTests().conversationDelivery.loop.wake(SESSION)
   expect(rig.dispatch).toHaveBeenCalledOnce()
   expect((await rig.submission(steering.id))?.handedOverAt).toBeUndefined()
+  native.activeTurnIds = new Set()
   rig
     .providerEvents()
     .appendItem(
@@ -96,7 +140,7 @@ it.each([
 
 it('steers inherited choices without inventing an unreported model', async () => {
   await rig.dispose()
-  rig = await createQueuedMessageTestRig({ restartable: true })
+  rig = await createGoalRig(false)
   await startGoalTurn()
   const steering = rig.send('Keep going with the current choices')
   expect(await steering.result).toMatchObject({ ok: true })
@@ -107,7 +151,7 @@ it('steers inherited choices without inventing an unreported model', async () =>
 
 it('does not assume an explicit choice matches when the child has not reported it', async () => {
   await rig.dispose()
-  rig = await createQueuedMessageTestRig({ restartable: true })
+  rig = await createGoalRig(false)
   await startGoalTurn()
   const steering = rig.send('Use a specific model', undefined, {
     carried: { model: 'gpt-ran' }

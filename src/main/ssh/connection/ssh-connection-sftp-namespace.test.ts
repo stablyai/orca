@@ -10,12 +10,15 @@ import type * as SystemSshFileBinaryTransfer from '../system-transport/system-ss
 import type * as SystemSshFileTransfer from '../system-transport/system-ssh-file-transfer'
 import type * as SshGConfigResolution from '../config/ssh-g-config-resolution'
 
-vi.mock('ssh2', () => ({
-  BaseAgent: class {},
-  Client: class {},
-  createAgent: vi.fn(),
-  utils: { parseKey: vi.fn() }
-}))
+vi.mock('../ssh2-module-load', () => {
+  const ssh2 = {
+    BaseAgent: class {},
+    Client: class {},
+    createAgent: vi.fn(),
+    utils: { parseKey: vi.fn() }
+  }
+  return { loadSsh2: () => ssh2 }
+})
 
 vi.mock('../system-transport/system-ssh-args', async (importOriginal) => ({
   ...(await importOriginal<typeof SystemSshArgs>()),

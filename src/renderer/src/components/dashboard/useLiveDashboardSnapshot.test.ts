@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
@@ -193,7 +194,7 @@ it('publishes real chat options to main and popout, retaining card candidates an
   transport.call.mockResolvedValue({ agents: [{ agent: 'grok', capabilities: {} }] })
   transport.subscribe.mockResolvedValue({ unsubscribe })
   setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
-  seed({ ...getDefaultSettings('/tmp'), experimentalNativeChat: true })
+  seed({ ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT })
   useAppStore.setState({
     detectedAgentIds: [],
     worktreesByRepo: { 'repo-1': [worktree(), { ...worktree(), id: 'wt-2' }] }
@@ -226,11 +227,7 @@ it('publishes real chat options to main and popout, retaining card candidates an
   expect(view.result.current.launchableAgentsByWorktreeId?.['wt-2']).toEqual(['grok'])
   const lastPublished = () => publishSnapshot.mock.calls.at(-1)?.[0].launchableAgentsByWorktreeId
   await vi.waitFor(() => expect(lastPublished()?.['wt-1']).toEqual(['claude', 'grok']))
-  for (const route of [
-    { endpointProjects: [] },
-    { endpointProjectHostSetups: [] },
-    { activeWorkspaceExecutionHostId: 'local' as const }
-  ]) {
+  for (const route of [{ projects: [] }, { activeWorkspaceExecutionHostId: 'local' as const }]) {
     const [live, published] = [view.result.current, publishSnapshot.mock.calls.length]
     act(() => useAppStore.setState(route))
     expect(view.result.current).not.toBe(live)

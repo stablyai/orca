@@ -3,6 +3,7 @@ import type { Components } from 'react-markdown'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
 import CodeBlockCopyButton from './CodeBlockCopyButton'
 import MermaidBlock from './MermaidBlock'
+import { useMermaidDiagramExpand } from './use-mermaid-diagram-expand'
 import {
   getMarkdownDocLinkAnchor,
   parseMarkdownDocLinkHref,
@@ -24,6 +25,7 @@ import { useLocalImageSrc } from './useLocalImageSrc'
 import { documentResourceAccess } from '@/lib/local-file-access'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
 import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
+import { translate } from '@/i18n/i18n'
 
 export function useMarkdownPreviewComponents({
   foundation,
@@ -62,6 +64,7 @@ export function useMarkdownPreviewComponents({
   const { scrollToAnchor } = viewport
   const { getMarkdownCommentsForRange, handleAnnotatedMarkdownBlockClick } = reviewActions
   const { renderAnnotationControls, wrapAnnotatedBlock } = annotationRenderers
+  const expandMermaidDiagram = useMermaidDiagramExpand()
 
   return useMemo(() => {
     // Why: preview images come from document text, so main limits them to the document's roots.
@@ -88,7 +91,15 @@ export function useMarkdownPreviewComponents({
           const resolution = resolveMarkdownDocLink(docLinkTarget, markdownDocumentIndex)
           const resolvedDocument = resolution.status === 'resolved' ? resolution.document : null
           const title =
-            resolution.status === 'ambiguous' ? 'Document link is ambiguous' : 'Document not found'
+            resolution.status === 'ambiguous'
+              ? translate(
+                  'auto.components.editor.MarkdownPreview.docLinkAmbiguous',
+                  'Document link is ambiguous'
+                )
+              : translate(
+                  'auto.components.editor.MarkdownPreview.docLinkNotFound',
+                  'Document not found'
+                )
 
           const handleDocLinkClick = (event: React.MouseEvent<HTMLAnchorElement>): void => {
             event.preventDefault()
@@ -161,7 +172,12 @@ export function useMarkdownPreviewComponents({
       code: ({ className, children, ...props }) => {
         if (/language-mermaid/.test(className || '')) {
           return (
-            <MermaidBlock content={String(children).trimEnd()} isDark={isDark} htmlLabels={false} />
+            <MermaidBlock
+              content={String(children).trimEnd()}
+              isDark={isDark}
+              htmlLabels={false}
+              onExpand={expandMermaidDiagram}
+            />
           )
         }
         return (
@@ -285,6 +301,7 @@ export function useMarkdownPreviewComponents({
   }, [
     filePath,
     activateMarkdownLink,
+    expandMermaidDiagram,
     isDark,
     isMac,
     imageRuntimeContext,

@@ -78,7 +78,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-22.04, windows-latest]
-    runs-on: ${{ fromJSON('{"ubuntu-22.04":"blacksmith-4vcpu-ubuntu-2204"}')[matrix.os] || matrix.os }}
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v6
         with:
@@ -94,14 +94,12 @@ jobs:
           config/scripts/macos-computer-helper-owner-loss-group-recovery.test.mjs
           config/scripts/macos-computer-helper-owner-loss-processes.test.mjs
           config/scripts/computer-use-smoke.test.mjs
-          src/main/computer/computer-provider-lifecycle.test.ts
           src/main/computer/sidecar-client.test.ts
           src/main/computer/macos-native-provider-client.test.ts
           src/main/computer/macos-native-provider-socket.test.ts
           src/main/computer/macos-computer-use-permissions.test.ts
           src/main/computer/macos-computer-use-permission-status.test.ts
           src/main/providers/windows-shell-preflight-runtime.windows.test.ts
-          src/main/computer/desktop-script-provider-client.test.ts
           src/main/computer/desktop-script-provider-cache.test.ts
           src/main/computer/desktop-script-provider-actions.test.ts
           src/main/computer/desktop-script-provider-cache-lifecycle.test.ts
@@ -136,7 +134,7 @@ jobs:
         run: node config/scripts/windows-daemon-workspace-close-repro.mjs
   linux:
     if: github.event_name != 'pull_request'
-    runs-on: blacksmith-4vcpu-ubuntu-2204
+    runs-on: ubuntu-22.04
     env:
       ORCA_COMPUTER_E2E: '1'
       ACCESSIBILITY_ENABLED: '1'

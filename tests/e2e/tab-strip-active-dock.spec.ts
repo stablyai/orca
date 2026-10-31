@@ -74,170 +74,98 @@ test.describe('Tab strip active-tab dock', () => {
     await ensureTerminalVisible(orcaPage)
   })
 
-  test('fits titles without resizing neighbors when tabs open and close in spare space', async ({
+  for (const edge of ['start', 'end'] as const) {
+    test(`keeps inactive tabs clickable in a strip too narrow for the ${edge} dock`, async ({
+      orcaPage
+    }) => {
+      const worktreeId = await waitForActiveWorktree(orcaPage)
+      for (let i = 0; i < 3; i++) {
+        await createBackgroundTerminalTab(orcaPage, worktreeId)
+      }
+      const ids = await readStripSlotIds(orcaPage)
+      const activeTabId = (edge === 'start' ? ids.at(0) : ids.at(-1))!
+      const inactiveTabId = (edge === 'start' ? ids.at(-1) : ids.at(0))!
+      const activeTab = orcaPage.locator(
+        `${slotSelector(activeTabId)} [data-testid="sortable-tab"]`
+      )
+      const inactiveTab = orcaPage.locator(
+        `${slotSelector(inactiveTabId)} [data-testid="sortable-tab"]`
+      )
+      await activeTab.click()
+
+      const strip = orcaPage.locator(STRIP).first()
+      await strip.evaluate((el) => {
+        el.style.maxWidth = '100px'
+      })
+      await expect(strip).toHaveAttribute('data-active-tab-dock-disabled', '')
+      await strip.evaluate((el, side) => {
+        el.scrollLeft = side === 'start' ? el.scrollWidth : 0
+      }, edge)
+      await expect.poll(() => isSlotInView(orcaPage, inactiveTabId)).toBe(true)
+      await inactiveTab.click()
+      await expect(inactiveTab).toHaveAttribute('data-active', 'true')
+      await activeTab.locator('[data-tab-close-button]').click()
+      await expect(activeTab).toHaveCount(0)
+
+      await strip.evaluate((el) => {
+        el.style.maxWidth = '200px'
+      })
+      await expect(strip).not.toHaveAttribute('data-active-tab-dock-disabled')
+      await strip.evaluate((el, side) => {
+        el.scrollLeft = side === 'start' ? 0 : el.scrollWidth
+      }, edge)
+      await expect(strip).toHaveAttribute(
+        'data-active-tab-docked',
+        edge === 'start' ? 'end' : 'start'
+      )
+      expect(await isSlotInView(orcaPage, inactiveTabId)).toBe(true)
+    })
+  }
+
+  test('keeps inactive tabs clickable after cancelling a drag that scrolled a narrow strip', async ({
     orcaPage
   }) => {
     const worktreeId = await waitForActiveWorktree(orcaPage)
-    const tabIds = await orcaPage.evaluate((worktreeId) => {
-      const state = window.__store!.getState()
-      const short = state.createTab(worktreeId, undefined, undefined, { activate: false })
-      const long = state.createTab(worktreeId, undefined, undefined, { activate: false })
-      state.setTabCustomTitle(short.id, 'Terminal 1')
-      state.setTabCustomTitle(
-        long.id,
-        'Measure the effect of the new tab layout on conversation navigation'
-      )
-      return { short: short.id, long: long.id }
-    }, worktreeId)
-    const short = orcaPage.locator(slotSelector(tabIds.short))
-    const long = orcaPage.locator(slotSelector(tabIds.long))
-    const width = (tab: typeof short): Promise<number> =>
-      tab.evaluate((element) => element.getBoundingClientRect().width)
-
-    await expect(short).toContainText('Terminal 1')
-    await expect(long).toContainText(
-      'Measure the effect of the new tab layout on conversation navigation'
-    )
-    expect(await width(short)).toBeLessThan(140)
-    expect(await width(long)).toBeGreaterThan(384)
-    const label = long.locator('span.truncate')
-    expect(await label.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
-    const geometry = (): Promise<number[][]> =>
-      orcaPage.evaluate(
-        (ids) =>
-          ids.map((id) => {
-            const slot = document.querySelector(`[data-tab-strip-slot="${id}"]`)!
-            const tab = slot.getBoundingClientRect()
-            const close = slot.querySelector('[data-tab-close-button]')!.getBoundingClientRect()
-            return [tab.x, close.x]
-          }),
-        [tabIds.short, tabIds.long]
-      )
-    const before = await geometry()
-    const added = await orcaPage.evaluate((worktreeId) => {
-      const state = window.__store!.getState()
-      const tab = state.createTab(worktreeId, undefined, undefined, { activate: false })
-      state.setTabCustomTitle(tab.id, 'Go')
-      return tab.id
-    }, worktreeId)
-    await expect(orcaPage.locator(slotSelector(added))).toContainText('Go')
-    for (let frame = 0; frame < 4; frame++) {
-      await nextFrames(orcaPage, 1)
-      expect(await geometry()).toEqual(before)
+    for (let i = 0; i < 3; i++) {
+      await createBackgroundTerminalTab(orcaPage, worktreeId)
     }
-    await long.locator('[data-testid="sortable-tab"]').click()
-    await expect(long.locator('[data-active="true"]')).toHaveCount(1)
-    expect(await geometry()).toEqual(before)
-    await orcaPage.locator(`${slotSelector(added)} [data-tab-close-button]`).click()
-    await expect(orcaPage.locator(slotSelector(added))).toHaveCount(0)
-    for (let frame = 0; frame < 4; frame++) {
-      await nextFrames(orcaPage, 1)
-      expect(await geometry()).toEqual(before)
-    }
+    const ids = await readStripSlotIds(orcaPage)
+    const activeSlot = orcaPage.locator(slotSelector(ids[0]))
+    const activeTab = activeSlot.locator('[data-testid="sortable-tab"]')
+    const inactiveTab = orcaPage.locator(`${slotSelector(ids[1])} [data-testid="sortable-tab"]`)
+    await activeTab.click()
 
-    await orcaPage.evaluate(
-      ({ id }) => {
-        window.__store!.getState().setTabCustomTitle(id, 'Chat')
-      },
-      { id: tabIds.long }
-    )
-    await expect(long).toContainText('Chat')
-    await expect.poll(() => width(long)).toBeLessThanOrEqual(100)
-
-    await orcaPage.evaluate(
-      ({ id }) => {
-        window
-          .__store!.getState()
-          .setTabCustomTitle(id, 'A very long conversation title '.repeat(20))
-      },
-      { id: tabIds.long }
-    )
-    await expect(long).toContainText('A very long conversation title')
-    await expect.poll(() => width(long)).toBeGreaterThan(384)
     const strip = orcaPage.locator(STRIP).first()
-    expect(await strip.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true)
-    const stripBox = await strip.boundingBox()
-    const buttonBox = await orcaPage
-      .getByRole('button', { name: 'New tab', exact: true })
-      .first()
-      .boundingBox()
-    expect(stripBox).not.toBeNull()
-    expect(buttonBox).not.toBeNull()
-    expect(buttonBox!.x - stripBox!.x - stripBox!.width).toBeGreaterThanOrEqual(0)
-    expect(buttonBox!.x - stripBox!.x - stripBox!.width).toBeLessThanOrEqual(12)
-  })
+    await strip.evaluate((el) => {
+      el.style.maxWidth = '100px'
+    })
+    await expect(strip).toHaveAttribute('data-active-tab-dock-disabled', '')
+    await strip.evaluate((el) => {
+      el.scrollLeft = 0
+    })
+    await expect.poll(() => isSlotInView(orcaPage, ids[0])).toBe(true)
 
-  test('keeps tab and close-button positions stable through agent detection and activity changes', async ({
-    orcaPage
-  }) => {
-    const worktreeId = await waitForActiveWorktree(orcaPage)
-    const ids = await orcaPage.evaluate((worktreeId) => {
-      const store = window.__store!
-      const agent = store
-        .getState()
-        .createTab(worktreeId, undefined, undefined, { activate: false })
-      const next = store.getState().createTab(worktreeId, undefined, undefined, { activate: false })
-      store.getState().setTabCustomTitle(agent.id, 'Agent conversation')
-      store.getState().setTabCustomTitle(next.id, 'Neighbor')
-      return [agent.id, next.id]
-    }, worktreeId)
-    const agent = orcaPage.locator(slotSelector(ids[0]))
-    await expect(agent.locator('[data-shell-icon]')).toBeVisible()
-    await expect(orcaPage.locator(slotSelector(ids[1]))).toContainText('Neighbor')
-    const geometry = (): Promise<number[][]> =>
-      orcaPage.evaluate(
-        (ids) =>
-          ids.map((id) => {
-            const slot = document.querySelector(`[data-tab-strip-slot="${id}"]`)!
-            const tab = slot.getBoundingClientRect()
-            const close = slot.querySelector('[data-tab-close-button]')!.getBoundingClientRect()
-            return [tab.x, tab.width, close.x]
-          }),
-        ids
-      )
-    const before = await geometry()
+    const box = (await activeTab.boundingBox())!
+    const y = box.y + box.height / 2
+    await orcaPage.mouse.move(box.x + 20, y)
+    await orcaPage.mouse.down()
+    await orcaPage.mouse.move(box.x + 34, y)
+    await orcaPage.mouse.move(box.x + 38, y)
+    await expect(strip.locator('[data-active-tab-dock]')).toHaveCount(0)
 
-    for (const stage of ['working', 'unread', 'idle'] as const) {
-      await orcaPage.evaluate(
-        ({ tabId, worktreeId, stage }) => {
-          const store = window.__store!
-          const paneKey = `${tabId}:00000000-0000-4000-8000-000000000001`
-          store.setState((state) => {
-            const agentStatusByPaneKey = { ...state.agentStatusByPaneKey }
-            const unreadTerminalTabs = { ...state.unreadTerminalTabs }
-            delete agentStatusByPaneKey[paneKey]
-            delete unreadTerminalTabs[tabId]
-            if (stage === 'working') {
-              agentStatusByPaneKey[paneKey] = {
-                paneKey,
-                worktreeId,
-                agentType: 'codex',
-                state: 'working',
-                prompt: '',
-                updatedAt: Date.now(),
-                stateStartedAt: Date.now(),
-                stateHistory: []
-              }
-            } else if (stage === 'unread') {
-              unreadTerminalTabs[tabId] = true
-            }
-            return { agentStatusByPaneKey, unreadTerminalTabs }
-          })
-        },
-        { tabId: ids[0], worktreeId, stage }
-      )
-      await expect(agent.locator('[data-testid="tab-agent-activity-indicator"]')).toHaveCount(
-        stage === 'working' ? 1 : 0
-      )
-      await expect(agent.locator('[data-testid="tab-activity-bell"]')).toHaveCount(
-        stage === 'unread' ? 1 : 0
-      )
-      await expect(agent.locator('[data-agent-icon="codex"]')).toHaveCount(
-        stage === 'working' ? 1 : 0
-      )
-      await expect(agent).toContainText('Agent conversation')
-      await expect.poll(geometry).toEqual(before)
-    }
+    // Hidden-window drag overlays can intercept native wheel input before it reaches the strip.
+    await strip.evaluate((el) => {
+      el.dispatchEvent(new WheelEvent('wheel', { deltaY: 72, cancelable: true }))
+    })
+    await expect.poll(() => strip.evaluate((el) => el.scrollLeft)).toBe(72)
+    await nextFrames(orcaPage, 2)
+    await orcaPage.evaluate(() => window.dispatchEvent(new Event('blur')))
+    await orcaPage.mouse.up()
+
+    await expect(activeSlot).toHaveAttribute('data-active-tab-dock', '')
+    await expect(strip).toHaveAttribute('data-active-tab-dock-disabled', '')
+    await inactiveTab.click()
+    await expect(inactiveTab).toHaveAttribute('data-active', 'true')
   })
 
   test('docks an offscreen active tab and reveals an arriving tab beside it without flicker', async ({

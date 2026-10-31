@@ -8,8 +8,8 @@ import {
   applyAppend,
   createNativeChatMerger,
   replaceList
-} from '../../../../shared/native-chat-merge'
-import { mergeNativeChatLiveSession, nativeChatHookAwaitsInput } from './native-chat-live-status'
+} from '../../../../shared/native-chat/native-chat-merge'
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
 import {
   hasMoreNativeChatHistory,
   NATIVE_CHAT_INITIAL_LIMIT,
@@ -316,11 +316,6 @@ export function useNativeChatLiveSession(
     })
     return {
       ...session,
-      hookAwaitingInput: nativeChatHookAwaitsInput(
-        hookState,
-        hookStateStartedAt,
-        transcriptLifecycle
-      ),
       hasMore,
       loadingEarlier,
       olderHistoryGeneration,

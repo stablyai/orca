@@ -1,17 +1,10 @@
 import { isStructuredAgentId } from '../../../../src/shared/agent-session-provider-handle'
 import type { AgentStatusEntry } from '../../../../src/shared/agent-status-types'
-import { isRuntimeOwnedSshTargetId } from '../../../../src/shared/execution-host'
 import {
-  isNativeChatSupportedAgent,
-  nativeChatRequiresLocalTranscript
-} from '../../../../src/shared/native-chat-agent-support'
-
-// Grok/omp lack hook transcript paths, so gate on serving-host readability when Model-A SSH keeps files remote.
-export function isMobileNativeChatTranscriptReadable(
-  connectionId: string | null | undefined
-): boolean {
-  return connectionId === null || isRuntimeOwnedSshTargetId(connectionId)
-}
+  isNativeChatAgentAvailable,
+  nativeChatAvailabilityAgent
+} from '../../../../src/shared/native-chat-availability'
+import { isNativeChatTranscriptLocalReadable } from '../../../../src/shared/native-chat/transcript/native-chat-transcript-readability'
 
 export type MobileNativeChatResolution = {
   agent: string
@@ -20,6 +13,8 @@ export type MobileNativeChatResolution = {
   transcriptPath: string | null
   // Remembered identity alone permits reads only; typing could otherwise reach a bare shell.
   agentConfirmed: boolean
+  // The running agent reported this session, so a missing transcript means no prompt yet.
+  sessionLive: boolean
 }
 
 export type MobileNativeChatIdentity = {
@@ -50,7 +45,13 @@ export function resolveMobileNativeChat(
   if (tab.type === 'agent-session') {
     // Structured tabs use journals, so no per-agent transcript layout is needed.
     return tab.sessionId && isStructuredAgentId(tab.agent)
-      ? { agent: tab.agent, sessionId: tab.sessionId, transcriptPath: null, agentConfirmed: true }
+      ? {
+          agent: tab.agent,
+          sessionId: tab.sessionId,
+          transcriptPath: null,
+          agentConfirmed: true,
+          sessionLive: true
+        }
       : null
   }
   if (tab.type !== 'terminal') {
@@ -58,16 +59,14 @@ export function resolveMobileNativeChat(
   }
   const liveAgent = tab.agentStatus?.agentType ?? null
   const remembered = tab.nativeChatIdentity ?? null
-  const agent = liveAgent
-    ? isNativeChatSupportedAgent(liveAgent)
-      ? liveAgent
-      : null
-    : // The remembered agent is the latest resolution, so it outranks an older launch hint.
-      (remembered?.agent ?? tab.launchAgent ?? null)
-  if (!agent || !isNativeChatSupportedAgent(agent)) {
-    return null
-  }
-  if (nativeChatRequiresLocalTranscript(agent) && !nativeChatTranscriptIsLocalReadable) {
+  // No title slot: the phone's tab title is a display title (custom/generated), not pane evidence.
+  const evidenceAgent = nativeChatAvailabilityAgent({
+    detectedAgent: liveAgent,
+    launchAgent: tab.launchAgent
+  })
+  // Frames can omit live status, so the remembered agent fills in only after desktop's evidence.
+  const agent = evidenceAgent ?? remembered?.agent ?? null
+  if (!agent || !isNativeChatAgentAvailable(agent, nativeChatTranscriptIsLocalReadable)) {
     return null
   }
   const liveSession = tab.agentStatus?.providerSession
@@ -79,7 +78,8 @@ export function resolveMobileNativeChat(
     transcriptPath: liveSession
       ? (liveSession.transcriptPath ?? null)
       : (rememberedSession?.transcriptPath ?? null),
-    agentConfirmed: liveAgent ? true : tab.launchAgent === agent
+    agentConfirmed: evidenceAgent !== null,
+    sessionLive: liveSession?.id != null
   }
 }
 
@@ -154,6 +154,6 @@ export function isMobileFolderNativeChatReadable(value: unknown, worktreeId: str
   const connectionId = 'connectionId' in workspace ? workspace.connectionId : null
   return (
     connectionId === null ||
-    (typeof connectionId === 'string' && isMobileNativeChatTranscriptReadable(connectionId))
+    (typeof connectionId === 'string' && isNativeChatTranscriptLocalReadable(connectionId))
   )
 }

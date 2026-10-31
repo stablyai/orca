@@ -1,7 +1,8 @@
 import type { MobileQuickCommandLaunch } from '../terminal/quick-commands'
-import type { RpcFailure, RpcSuccess } from '../transport/types'
+import type { RpcSuccess } from '../transport/types'
 import { sessionTabCreateTerminal } from './mobile-session-write-operations'
 import { triggerSuccess, triggerError } from '../platform/haptics'
+import { terminalCreateCopy } from './mobile-session-terminal-create-copy'
 import { buildTerminalSendParams } from '../terminal/terminal-send-request'
 import { terminalRecordsEqual } from './mobile-terminal-records'
 import type { MobileNewTabAgentOption } from './mobile-new-tab-agent-options'
@@ -83,11 +84,11 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       !client ||
       (sourceFork && (!hostSupportsMobileChatFork(hostCapabilities) || !isCurrent()))
     ) {
-      reportFork(`Open the ${agentName} chat on a connected, updated host and try again.`)
+      reportFork(terminalCreateCopy.forkUnavailable(agentName))
       return sourceOutcome('unavailable')
     }
     if (creatingTerminalRef.current) {
-      reportFork(`Another terminal is opening. Wait, then retry the ${agentName} chat.`)
+      reportFork(terminalCreateCopy.forkBusy(agentName))
       return sourceOutcome('busy')
     }
     // Use a compact idempotency key so reconnect retries resolve the same terminal within schema length limits.
@@ -104,7 +105,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
       if (!isCurrent()) {
         return
       }
-      const reason = hostReason.trim() || options?.errorToast || 'Failed to create terminal'
+      const reason = hostReason.trim() || options?.errorToast || terminalCreateCopy.createFailed()
       setCreateError(reason)
       // Only empty sessions show inline errors; existing tabs need toast feedback.
       triggerError()
@@ -224,7 +225,7 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
           const existing = prev.find((terminal) => terminal.handle === createdHandle)
           const createdTerminal: Terminal = {
             handle: createdHandle,
-            title: created.title || existing?.title || 'Terminal',
+            title: created.title || existing?.title || terminalCreateCopy.terminalTitle(),
             terminalTheme: created.terminalTheme ?? existing?.terminalTheme,
             isActive: true
           }
@@ -253,24 +254,23 @@ export function useMobileSessionTerminalCreateActions(scope: MobileSessionAttach
             )
             .then((sendResponse) => {
               if (!sendResponse.ok) {
-                throw new Error(
-                  (sendResponse as RpcFailure).error.message || 'Failed to send notes'
-                )
+                throw new Error(sendResponse.error.message || terminalCreateCopy.sendNotesFailed())
               }
               const result = (sendResponse as RpcSuccess).result as {
                 send?: { accepted?: boolean }
               }
               if (result.send?.accepted === false) {
-                throw new Error('Terminal input is locked by another client.')
+                throw new Error(terminalCreateCopy.inputLocked())
               }
               triggerSuccess()
-              showToast(options.successToast ?? 'Notes sent')
+              showToast(options.successToast ?? terminalCreateCopy.notesSent())
               options.onPromptSent?.()
             })
             .catch((err) => {
               triggerError()
               showToast(
-                options.errorToast ?? (err instanceof Error ? err.message : "Couldn't send notes"),
+                options.errorToast ??
+                  (err instanceof Error ? err.message : terminalCreateCopy.sendNotesError()),
                 1800
               )
             })

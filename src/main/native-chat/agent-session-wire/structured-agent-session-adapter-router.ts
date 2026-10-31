@@ -12,6 +12,7 @@ import type {
 import {
   acquireSessionRoute,
   releaseSessionRoute,
+  stopSessionRoute,
   type SessionRoute
 } from './structured-agent-session-acquisition-route'
 
@@ -77,6 +78,28 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     this.capabilityOwner(input.record.sessionId, input.record.provider)?.adapter.forkForRewind?.(
       input
     ) ?? Promise.resolve({ ok: false, reason: 'unsupported' })
+
+  /** Routed by the record's agent so a chat at rest still reaches its adapter. */
+  nameProviderConversation: NonNullable<StructuredAgentSessionAdapter['nameProviderConversation']> =
+    (input) =>
+      this.capabilityOwner(
+        input.record.sessionId,
+        input.record.provider
+      )?.adapter.nameProviderConversation?.(input)
+
+  stopProviderNaming = (): void => {
+    for (const adapter of this.adapters()) {
+      adapter.stopProviderNaming?.()
+    }
+  }
+
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
+    input
+  ) =>
+    this.capabilityOwner(
+      input.record.sessionId,
+      input.record.provider
+    )?.adapter.renameProviderSession?.(input) ?? Promise.resolve()
 
   recoverRewind: NonNullable<StructuredAgentSessionAdapter['recoverRewind']> = (input) =>
     this.owner(input.sessionId).recoverRewind?.(input) ??
@@ -148,9 +171,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   atRestCommands: StructuredAgentSessionAtRestCommands = {
     read: (record) =>
       this.agents.registration(record.provider)?.adapter.atRestCommands?.read(record),
-    settled: async (record, budgetMs) => {
+    snapshot: (record) =>
+      this.agents.registration(record.provider)?.adapter.atRestCommands?.snapshot?.(record) ?? {
+        commandsPending: false
+      },
+    settled: async (record, budgetMs, independent) => {
       const source = this.agents.registration(record.provider)?.adapter.atRestCommands
-      return source?.settled ? source.settled(record, budgetMs) : source?.read(record)
+      return source?.settled ? source.settled(record, budgetMs, independent) : source?.read(record)
     },
     onChange: (listener) => {
       const stops = this.adapters().flatMap((adapter) =>
@@ -166,11 +193,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
   setOption: StructuredAgentSessionAdapter['setOption'] = (input) =>
     this.owner(input.sessionId).setOption(input)
 
+  canSetOptionWhileIdle: StructuredAgentSessionAdapter['canSetOptionWhileIdle'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.canSetOptionWhileIdle?.(input) === true
+  readAppliedInputOptions: StructuredAgentSessionAdapter['readAppliedInputOptions'] = (input) =>
+    this.liveOwnerOrNull(input.sessionId)?.readAppliedInputOptions?.(input) ?? null
+
   projectOptions: StructuredAgentSessionAdapter['projectOptions'] = (sessionId, options) =>
     this.liveOwnerOrNull(sessionId)?.projectOptions?.(sessionId, options)
-
-  prepareReadOptions = (input: { sessionId: string; fence: number }) =>
-    this.liveOwnerOrNull(input.sessionId)?.prepareReadOptions?.(input)
 
   readOptions = (input: { sessionId: string; fence: number }) => {
     const reader = this.owner(input.sessionId).readOptions
@@ -180,8 +209,13 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return reader(input)
   }
 
-  readOptionRestoreFailures = (sessionId: string): readonly string[] =>
-    this.owner(sessionId).readOptionRestoreFailures?.(sessionId) ?? []
+  generateText: NonNullable<StructuredAgentSessionAdapter['generateText']> = (input) => {
+    const { adapter } = this.requireAgent(input)
+    if (!adapter.generateText) {
+      return Promise.reject(new Error(`${input.agent} cannot run an independent text task`))
+    }
+    return adapter.generateText(input)
+  }
 
   copyConversation: NonNullable<StructuredAgentSessionAdapter['copyConversation']> = (input) => {
     const { adapter } = this.requireAgent(input.identity)
@@ -218,25 +252,16 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
       // Missing routes prove no stop; claiming success would incorrectly release a durable lease.
       return false
     }
-    if (route.state === 'stopped') {
-      return true
-    }
     if (route.state === 'acquiring') {
       return this.releaseAcquisition({ sessionId })
     }
-    const { adapter } = route.registration
-    const stopped = await stop(adapter)
-    if (stopped === true) {
-      route.state = 'stopped'
-      return true
-    }
-    return false
+    return stopSessionRoute(route, () => stop(route.registration.adapter))
   }
 
   hasOwnedAcquisition = (sessionId: string): boolean => {
     const route = this.routes.get(sessionId)
     return (
-      (route?.state === 'stopped' && !!route.acquisition) ||
+      ((route?.state === 'stopped' || route?.state === 'kill-delivered') && !!route.acquisition) ||
       route?.registration.adapter.hasOwnedAcquisition?.(sessionId) === true
     )
   }
@@ -245,7 +270,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     sessionId: string
   ): StructuredAgentSessionAcquisitionReceipt | undefined => {
     const route = this.routes.get(sessionId)
-    return route?.state === 'stopped' ? route.acquisition : undefined
+    return route?.state === 'stopped' || route?.state === 'kill-delivered'
+      ? route.acquisition
+      : undefined
   }
 
   async closeAll(): Promise<void> {
@@ -304,7 +331,9 @@ export class StructuredAgentSessionAdapterRouter implements StructuredAgentSessi
     return route?.state === 'live' ? route.registration.adapter : null
   }
 
-  private requireAgent(identity: AgentSessionJournalIdentity): StructuredAgentRegistration {
+  private requireAgent(
+    identity: Pick<AgentSessionJournalIdentity, 'agent'>
+  ): StructuredAgentRegistration {
     const registration = this.agents.registration(identity.agent)
     if (!registration) {
       throw new Error(`structured sessions do not support ${identity.agent}`)

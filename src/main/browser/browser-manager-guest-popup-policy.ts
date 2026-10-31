@@ -48,6 +48,11 @@ export abstract class BrowserManagerGuestPopupPolicy extends BrowserManagerNavig
           })
           return { action: 'deny' }
         }
+        // A new tab's download would miss the agent's `download` claim, so save the link here.
+        if (this.isAwaitingDownloadFrom(guest.id, ownerContext.rootGuestWebContentsId)) {
+          guest.downloadURL(newTabUrl)
+          return { action: 'deny' }
+        }
         if (
           this.openLinkInOrcaTab(
             ownerContext.browserTabId,

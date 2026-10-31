@@ -1,16 +1,21 @@
 import { translate } from '@/i18n/i18n'
-import { basename } from '@/lib/path'
 import type { NativeChatImageRefBlock } from '../../../../shared/native-chat-types'
-import { isNativeChatPastedImagePath } from './native-chat-image-paste'
+import {
+  nativeChatImageLabel as sharedNativeChatImageLabel,
+  type NativeChatImageLabelCopy
+} from '../../../../shared/native-chat-image-label'
 
-/** What a chat image is called where it is not drawn: its alt text, else its file's name. */
+export function nativeChatImageLabelCopy(): NativeChatImageLabelCopy {
+  return {
+    pastedImage: translate('components.native-chat.composer.pastedImageLabel', 'Pasted image'),
+    imageCount: (count) =>
+      translate('components.native-chat.queuedMessages.imageCount', '{{count}} images', {
+        count,
+        defaultValue_one: '{{count}} image'
+      })
+  }
+}
+
 export function nativeChatImageLabel(block: NativeChatImageRefBlock): string {
-  return (
-    block.alt?.trim() ||
-    (block.path && isNativeChatPastedImagePath(block.path)
-      ? translate('components.native-chat.composer.pastedImageLabel', 'Pasted image')
-      : block.path
-        ? basename(block.path)
-        : 'Image')
-  )
+  return sharedNativeChatImageLabel(block, nativeChatImageLabelCopy())
 }

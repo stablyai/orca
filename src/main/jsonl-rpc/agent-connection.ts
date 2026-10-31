@@ -9,6 +9,10 @@ import {
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import type { ProviderProcessCloseResult } from '../provider-process/provider-process-close'
 import {
+  withProviderSpawnAbsence,
+  type ProviderSpawnAbsence
+} from '../provider-process/provider-executable-missing'
+import {
   JsonlRpcPeer,
   JsonlRpcStreamClosedError,
   type JsonlRpcPeerHandlers,
@@ -80,13 +84,16 @@ export class JsonlRpcAgentConnection {
     managed.child.stderr.on('error', this.onError)
     managed.onExit((exit) => {
       clearTimeout(this.streamExitTimer)
-      const error = withProviderDiagnostic(
-        new Error(
-          exit.processless
-            ? 'Agent process could not start'
-            : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
+      const error = withProviderSpawnAbsence(
+        withProviderDiagnostic(
+          new Error(
+            exit.processless
+              ? 'Agent process could not start'
+              : `Agent process exited (code ${exit.code ?? 'none'}, signal ${exit.signal ?? 'none'})`
+          ),
+          providerDiagnostic(managed.stderrTail(), 'person')
         ),
-        providerDiagnostic(managed.stderrTail(), 'person')
+        managed.spawnAbsence
       )
       this.peer.finishOnInputEnd(error)
       const stdout = managed.child.stdout
@@ -139,6 +146,10 @@ export class JsonlRpcAgentConnection {
   }
   get processless(): boolean {
     return this.managed.processless
+  }
+  /** What a spawn ENOENT proved absent: the agent's CLI or its launch folder. */
+  get spawnAbsence(): ProviderSpawnAbsence | null {
+    return this.managed.spawnAbsence
   }
   get lastCloseResult(): ManagedProviderProcess['lastCloseResult'] {
     return this.managed.lastCloseResult

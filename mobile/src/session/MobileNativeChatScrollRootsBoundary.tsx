@@ -1,6 +1,6 @@
 import { Component } from 'react'
 import { Platform } from 'react-native'
-import type { MobileNativeChatRowKeys } from './mobile-native-chat-row-keys'
+import type { MobileNativeChatRowKeys } from './native-chat/transcript/mobile-native-chat-row-keys'
 import type { MobileNativeChatScrollRoots } from './mobile-native-chat-scroll-roots'
 
 type Props = {

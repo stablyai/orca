@@ -13,7 +13,10 @@ import {
 } from '../../../../shared/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type {
+  NativeChatComposerSendIntent,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatAttachImagesAgainReason } from './native-chat-image-reattach'
 import { nativeChatNoticeFromError } from './native-chat-composer-notice'
@@ -21,6 +24,7 @@ import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
 import { translate } from '@/i18n/i18n'
 import {
   readNativeChatComposerDraft,
+  subscribeToNativeChatComposerDraftAppend,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
 import { nativeChatComposerDraftLeftAfterSend } from './native-chat-composer-draft-comparison'
@@ -54,7 +58,8 @@ function isNativeChatStructuredHostCommand(
 
 export type NativeChatStructuredComposerSend = (
   text: string,
-  attachments?: readonly NativeChatComposerImageAttachment[]
+  attachments?: readonly NativeChatComposerImageAttachment[],
+  intent?: NativeChatComposerSendIntent
 ) => Promise<void>
 
 /** Clear submitted composer content only after structured transport acceptance. */
@@ -69,7 +74,7 @@ export function useNativeChatStructuredComposerSend({
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
-    async (text, attachments = imageAttachments): Promise<void> => {
+    async (text, attachments = imageAttachments, intent): Promise<void> => {
       // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
@@ -107,11 +112,21 @@ export function useNativeChatStructuredComposerSend({
       }
       const isCurrent = structuredTransport.capturePresentation()
       const submitted = readNativeChatComposerDraft(draftScopeKey)
+      let completeAddition = false
+      const stopObservingAppend = subscribeToNativeChatComposerDraftAppend(
+        draftScopeKey,
+        (addition) => {
+          if (typeof addition !== 'function' && addition.document !== undefined) {
+            completeAddition = true
+          }
+        }
+      )
       await dispatchNativeChatStructuredComposerText(
         structuredTransport,
         text,
         attachments,
-        promptSkillRefs(submitted.document)
+        promptSkillRefs(submitted.document),
+        intent
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
           if (!hostCommand || isCurrent()) {
@@ -133,12 +148,21 @@ export function useNativeChatStructuredComposerSend({
           if (!left) {
             return
           }
-          if (hostCommand && !isCurrent()) {
+          if (completeAddition) {
             updateNativeChatComposerDraft(
               draftScopeKey,
-              { text: left.text, document: undefined, images: left.images },
+              { ...left, document: left.document },
               'immediate'
             )
+          }
+          if (hostCommand && !isCurrent()) {
+            if (!completeAddition) {
+              updateNativeChatComposerDraft(
+                draftScopeKey,
+                { text: left.text, document: undefined, images: left.images },
+                'immediate'
+              )
+            }
             return
           }
           updateNativeChatComposerDraft(draftScopeKey, { images: left.images }, 'immediate')
@@ -167,6 +191,7 @@ export function useNativeChatStructuredComposerSend({
           )
           structuredTransport.onError(notice.text, { errorText: notice.errorText })
         })
+        .finally(stopObservingAppend)
     },
     [
       agent,

@@ -1,3 +1,4 @@
+import type * as PromptCardModule from './use-native-chat-interactive-prompt-card'
 // @vitest-environment happy-dom
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -43,9 +44,20 @@ vi.mock('./use-native-chat-interactive-send', () => ({
   })
 }))
 // A pending question, so the pane mounts its card with the send it hands it.
-vi.mock('./use-native-chat-interactive-prompt-card', () => ({
-  useNativeChatInteractivePromptCard: () => ({ kind: 'question', prompt })
-}))
+vi.mock('./use-native-chat-interactive-prompt-card', async (importOriginal) => {
+  const original = await importOriginal<typeof PromptCardModule>()
+  const { useNativeChatPromptCardPresentation } =
+    await import('./use-native-chat-prompt-card-presentation')
+  return {
+    useNativeChatTerminalPromptCard: (
+      args: Parameters<typeof original.useNativeChatTerminalPromptCard>[0]
+    ) => {
+      const card = { kind: 'question' as const, prompt }
+      const presentation = useNativeChatPromptCardPresentation({ ...args, card })
+      return { promptCard: card, presentation, actionKey: presentation.occurrenceKey ?? 'prompt' }
+    }
+  }
+})
 vi.mock('./NativeChatInteractiveCard', async (importOriginal) => {
   const original = await importOriginal<typeof InteractiveCardModule>()
   return {

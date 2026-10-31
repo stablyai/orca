@@ -2,6 +2,10 @@
 
 import type { AgentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import {
+  structuredAgentSessionPaneKey,
+  structuredAgentSessionTabId
+} from '../../../shared/structured-agent-session-projection'
 import { structuredWorkerHostScope } from '../structured-worker-identity'
 
 export type AgentSessionRecordReader = {
@@ -56,6 +60,7 @@ export function resolveLineageRunningSession(
   sessionId: string
 ): LineageRunningSession {
   const lineage = [sessionId]
+  const visited = new Set(lineage)
   if (!store) {
     return {
       kind: 'unverifiable',
@@ -86,13 +91,14 @@ export function resolveLineageRunningSession(
         ? { kind: 'here', ...running }
         : { kind: 'other-host', ...running }
     }
-    if (lineage.includes(next)) {
+    if (visited.has(next)) {
       return {
         kind: 'unverifiable',
         reason: `The /clear lineage of structured session ${sessionId} loops back on itself.`,
         lineage
       }
     }
+    visited.add(next)
     lineage.push(next)
     current = next
   }
@@ -105,4 +111,46 @@ export function lineageLiveSession(
 ): AgentSessionConversationView | null {
   const running = resolveLineageRunningSession(store, sessionId)
   return running.kind === 'unverifiable' ? null : running.record
+}
+
+/** Canonical host status keys; this build-local resolver shares successful suffixes and failed verdicts. */
+export function createCanonicalSessionPaneResolver(
+  store: AgentSessionRecordReader | null
+): (sessionId: string) => string {
+  const resolved = new Map<string, string | null>()
+  return (sessionId) => {
+    let current = sessionId
+    const path = new Set<string>()
+    let destination: string | null = null
+    for (;;) {
+      if (resolved.has(current)) {
+        destination = resolved.get(current) ?? null
+        break
+      }
+      if (path.has(current)) {
+        break
+      }
+      path.add(current)
+      let record: AgentSessionConversationView | null
+      try {
+        record = store?.getRecord(current) ?? null
+      } catch {
+        record = null
+      }
+      if (!record) {
+        break
+      }
+      const next = clearedInto(record)
+      if (!next) {
+        destination = current
+        break
+      }
+      current = next
+    }
+    for (const member of path) {
+      resolved.set(member, destination)
+    }
+    const id = destination ?? sessionId
+    return structuredAgentSessionPaneKey(structuredAgentSessionTabId(id), id)
+  }
 }

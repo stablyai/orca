@@ -1,5 +1,5 @@
 import type { CommandSpec } from '../args'
-import { GLOBAL_FLAGS } from '../args'
+import { LOCAL_COMMAND_FLAGS } from '../args'
 
 export const SERVE_COMMAND_SPECS: CommandSpec[] = [
   {
@@ -8,7 +8,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     usage:
       'orca serve [--port <port>] [--pairing-address <host>] [--mobile-pairing] [--no-pairing] [--grant-desktop-control] [--project-root <path>] [--recipe-json] [--supervise] [--force] [--reclaim-stale-lock [--data-root <dir>] [--yes]] [--json]',
     allowedFlags: [
-      ...GLOBAL_FLAGS,
+      ...LOCAL_COMMAND_FLAGS,
       'port',
       'pairing-address',
       'mobile-pairing',
@@ -50,7 +50,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve', 'restore', 'resume'],
     summary: 'Resume automatic terminal restores that this host paused',
     usage: 'orca serve restore resume [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS],
     notes: [
       'After its terminal host stops unexpectedly, or while it is overloaded, Orca keeps restored agent sessions asleep instead of starting them all at once. Each one resumes when you open it.',
       'This clears that pause so automatic restores start again, within the normal limits. It talks to the Orca running on this machine and never starts a server.',
@@ -63,7 +63,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     summary: 'Run orca serve as a per-user background service that restarts itself',
     usage:
       'orca serve service install [--port <port>] [--pairing-address <host>] [--command <path>] [--dry-run] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'port', 'pairing-address', 'command', 'dry-run'],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS, 'port', 'pairing-address', 'command', 'dry-run'],
     notes: [
       'macOS writes a LaunchAgent; Linux writes a systemd user unit. Both run `orca serve --supervise --no-pairing` for this profile, so the server restarts with growing delays and gives up after repeated failures instead of looping.',
       'The service never prints a pairing link to its log. Pair clients from the desktop app, or with `orca serve` in a terminal while the service is stopped.',
@@ -78,7 +78,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve', 'service', 'status'],
     summary: "Show whether this profile's orca serve service is running",
     usage: 'orca serve service status [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS],
     notes: [
       'Reports live, exited, or unverifiable (when the service manager cannot be asked), plus why the supervisor gave up if it did.'
     ],
@@ -88,7 +88,7 @@ export const SERVE_COMMAND_SPECS: CommandSpec[] = [
     path: ['serve', 'service', 'uninstall'],
     summary: "Stop and remove this profile's orca serve service",
     usage: 'orca serve service uninstall [--json]',
-    allowedFlags: [...GLOBAL_FLAGS],
+    allowedFlags: [...LOCAL_COMMAND_FLAGS],
     notes: [
       'Stops the service and removes its unit file. The terminal daemon and its sessions keep running.'
     ],

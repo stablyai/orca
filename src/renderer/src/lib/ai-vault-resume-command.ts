@@ -1,14 +1,15 @@
-import type { ProjectCatalogReadState } from '@/store/project-host-setup-selector'
 import {
   assertAntigravityReferenceTarget,
   buildAntigravityReferenceStartup
 } from './ai-vault-antigravity-reference-startup'
 import { isAntigravityReferenceSession } from '../../../shared/antigravity-session-origin'
 import { normalizeAiVaultResumeFilePath } from '../../../shared/ai-vault-resume-path'
-import type { AppState } from '@/store/types'
 import type { AiVaultSessionDragPayload } from '@/lib/ai-vault-session-drag'
 import { resolveAiVaultResumeStartupShell } from '@/lib/ai-vault-resume-shell'
-import { getAiVaultResumePlatform } from '@/lib/ai-vault-resume-platform'
+import {
+  getAiVaultResumePlatform,
+  type AiVaultResumePlatformState
+} from '@/lib/ai-vault-resume-platform'
 import {
   buildAiVaultLocalResumeStartup,
   getAiVaultAgentProviderSession,
@@ -28,17 +29,7 @@ export type {
 export { getAiVaultAgentProviderSession }
 
 export type AiVaultResumeWorktreeArgs = {
-  state: Pick<
-    AppState,
-    | 'activeRepoId'
-    | 'activeWorktreeId'
-    | 'folderWorkspaces'
-    | 'projectGroups'
-    | 'repos'
-    | 'settings'
-    | 'worktreesByRepo'
-  > &
-    ProjectCatalogReadState
+  state: AiVaultResumePlatformState
   worktreeId?: string | null
   session: AiVaultResumeCommandSession
   commandOverride?: string | null

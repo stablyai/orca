@@ -1,7 +1,6 @@
 import { useMemo, useState } from 'react'
 import {
   getExecutionHostLabel,
-  getRepoExecutionHostId,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
@@ -20,7 +19,6 @@ import { SearchableSetting } from '../../SearchableSetting'
 import { SettingsBadge } from '../../SettingsFormControls'
 import { matchesSettingsSearch } from '../../settings-search'
 import type { SettingsSearchEntry } from '../../settings-search'
-import { getProjectIdentityKey } from '../../../../../../shared/project-host-setup-projection'
 import { translate } from '@/i18n/i18n'
 import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
@@ -36,6 +34,8 @@ import {
 type RepositoryHostSetupsSectionProps = {
   repo: Repo
   selectedProjectSetupId?: string
+  settingsSelectionKey?: string
+  settingsEntryRepoIds?: ReadonlySet<string>
   forceVisible: boolean
   searchQuery: string
   searchEntries: SettingsSearchEntry[]
@@ -62,6 +62,8 @@ function setupsByOwnedExecutionHost(
 export function RepositoryHostSetupsSection({
   repo,
   selectedProjectSetupId,
+  settingsSelectionKey,
+  settingsEntryRepoIds,
   forceVisible,
   searchQuery,
   searchEntries
@@ -109,7 +111,7 @@ export function RepositoryHostSetupsSection({
     getProjectHostSetupProjectionFromState(state)
   )
   const repoProjectHostSetup = projectHostSetupProjection.setups.find(
-    (setup) => setup.repoId === repo.id && setup.hostId === getRepoExecutionHostId(repo)
+    (setup) => setup.repoId === repo.id
   )
   const selectedProjectHostSetup =
     projectHostSetupProjection.setups.find(
@@ -123,8 +125,12 @@ export function RepositoryHostSetupsSection({
         (setup) => setup.projectId === selectedProjectHostSetup.projectId
       )
     : []
+  // Exclude sibling checkout setups, but retain project-level not-set-up placeholders for each entry.
   const projectHostSetups = setupsByOwnedExecutionHost(
-    allProjectHostSetups,
+    allProjectHostSetups.filter(
+      (setup) =>
+        !settingsEntryRepoIds || !setup.repoId.trim() || settingsEntryRepoIds.has(setup.repoId)
+    ),
     selectedProjectHostSetup?.id ?? ''
   )
   const openableProjectHostSetups = projectHostSetups.filter((setup) => setup.repoId.trim())
@@ -133,17 +139,14 @@ export function RepositoryHostSetupsSection({
     selectedProjectHostSetup?.id ?? ''
   )
   const setupHostOptions = buildSetupHostOptions({
-    outclaimed:
-      repoProjectHostSetup?.projectId === `repo:${repo.id}` &&
-      getProjectIdentityKey(repo) !== `repo:${repo.id}`,
     projectHostSetups: allProjectHostSetups,
     hostOptions
   })
   const hostOptionById = new Map(hostOptions.map((option) => [option.id, option]))
   const [deletingSetupId, setDeletingSetupId] = useState<string | null>(null)
-  const selectionKey = selectedProjectHostSetup?.projectId
-  // Why: the single project pane switches host in place — set the ephemeral
-  // per-entry selection instead of navigating to a separate repo section.
+  // Split clones share project IDs but need independent selections.
+  const selectionKey = settingsSelectionKey ?? selectedProjectHostSetup?.projectId
+  // Switch hosts within the project pane through ephemeral per-entry selection.
   const selectHost = (hostId: ExecutionHostId) => {
     if (selectionKey) {
       setSettingsProjectHostSelection(selectionKey, hostId)

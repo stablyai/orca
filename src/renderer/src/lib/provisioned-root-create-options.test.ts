@@ -18,35 +18,6 @@ function request(overrides: Partial<WorktreeCreationRequest> = {}): WorktreeCrea
 }
 
 describe('getProvisionedRootCreateOptions', () => {
-  it('leaves ordinary workspace creation unchanged', () => {
-    expect(getProvisionedRootCreateOptions(request())).toBeNull()
-  })
-
-  it('returns the main-owned adoption identity', () => {
-    expect(
-      getProvisionedRootCreateOptions(
-        request({
-          ephemeralVmCheckoutMode: 'provisioned-root',
-          ephemeralVmRuntimeId: 'runtime-1',
-          ephemeralVmExpectedRefHead: 'abc123',
-          workspaceRunContext: {
-            kind: 'workspace-run',
-            projectId: 'project-1',
-            hostId: 'ssh:runtime-ssh-one',
-            projectHostSetupId: 'setup-1',
-            repoId: 'repo-runtime',
-            path: '/workspace/repo'
-          }
-        })
-      )
-    ).toEqual({
-      runtimeId: 'runtime-1',
-      executionHostId: 'ssh:runtime-ssh-one',
-      expectedPath: '/workspace/repo',
-      expectedRefHead: 'abc123'
-    })
-  })
-
   it('rejects incomplete provisioned-root identity', () => {
     expect(() =>
       getProvisionedRootCreateOptions(

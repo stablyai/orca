@@ -261,9 +261,10 @@ function ConceptMapNode({
       className="absolute flex flex-col items-center justify-center whitespace-normal text-center"
       data-current={isSelected || undefined}
       onClick={() => onSelectConcept(entry.concept)}
+      size="sm"
       style={{ height: nodeSize, left: x - nodeSize / 2, top: y - nodeSize / 2, width: nodeSize }}
       type="button"
-      variant="concept"
+      variant="secondary"
     >
       <span className="line-clamp-2 max-w-full text-xs font-medium">{entry.concept.label}</span>
       <span className="mt-1 text-[10px] font-normal text-muted-foreground">

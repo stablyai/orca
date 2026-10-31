@@ -135,7 +135,10 @@ describe('NativeChatStructuredSession task strip on the goal tab', () => {
     expect(goalTab.classList).toContain('group/goal')
 
     const stripRules = dockRules(strip, STRIP_DOCK_RULE)
-    const goalRules = dockRules(goalTab, GOAL_DOCK_RULE)
+    // Its other rules join a tab strip stacked on another tab strip.
+    const goalRules = dockRules(goalTab, GOAL_DOCK_RULE).filter(
+      (rule) => rule.attribute === 'data-native-chat-background-tasks'
+    )
     for (const { attribute } of stripRules) {
       expect(goalTab.hasAttribute(attribute)).toBe(true)
     }

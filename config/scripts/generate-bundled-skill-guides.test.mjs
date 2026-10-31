@@ -32,10 +32,9 @@ const GUIDE_REFERENCES = {
     'low-level-topology.md',
     'messaging-and-gates.md',
     'placement-and-remote.md',
-    'recovery-and-cleanup.md',
-    'worker-contract.md'
+    'recovery-and-cleanup.md'
   ],
-  'orca-cli': ['automations.md', 'browser.md', 'publishing.md'],
+  'orca-cli': ['artifacts.md', 'automations.md', 'browser.md', 'plugins.md', 'skill-sharing.md'],
   'orca-per-workspace-env': [
     'docker-ssh.md',
     'failure-modes.md',
@@ -191,7 +190,6 @@ describe('bundled skill guide generator', () => {
       expect(guide.aliases).toEqual(GUIDE_ALIASES[guide.name])
       const references = GUIDE_REFERENCES[guide.name]
       if (!references) {
-        expect(guide.fullMarkdown).toBe(source)
         expect(guide.references).toEqual([])
         continue
       }
@@ -210,21 +208,6 @@ describe('bundled skill guide generator', () => {
                 'references',
                 `${reference.name}.md`
               ),
-              'utf8'
-            )
-          )
-        )
-      }
-      expect(guide.fullMarkdown).not.toBe(guide.markdown)
-      expect(guide.fullMarkdown.length).toBeGreaterThan(guide.markdown.length)
-      expect(guide.fullMarkdown.startsWith(source.trimEnd())).toBe(true)
-      for (const reference of references) {
-        const marker = `<!-- bundled-reference: references/${reference} -->`
-        expect(guide.fullMarkdown.split(marker)).toHaveLength(2)
-        expect(guide.fullMarkdown).toContain(
-          normalizeMarkdown(
-            await readFile(
-              path.join(projectDir, 'skill-guides', guide.name, 'references', reference),
               'utf8'
             )
           )
@@ -335,8 +318,10 @@ describe('bundled skill guide generator', () => {
     expect([...blocks.keys()]).toEqual(['resolver', 'no-guessing'])
     for (const name of STUB_TOPICS) {
       const projection = await readFile(path.join(projectDir, 'skills', name, 'SKILL.md'), 'utf8')
+      const stub = await readFile(path.join(projectDir, 'skill-stubs', `${name}.md`), 'utf8')
       for (const [id, block] of blocks) {
-        expect(projection.split(block.text), `${name}/${id}`).toHaveLength(2)
+        const omitted = stub.includes(`<!-- shared-omit: ${id} -->`)
+        expect(projection.split(block.text), `${name}/${id}`).toHaveLength(omitted ? 1 : 2)
       }
     }
   })
@@ -349,9 +334,13 @@ describe('bundled skill guide generator', () => {
     expect(() => render(markers)).not.toThrow()
     expect(() => render(`${markers}\n\n<!-- shared: nope -->`)).toThrow('Unknown shared stub block')
     expect(() => render(markers.replace('<!-- shared: resolver -->\n\n', ''))).toThrow(
-      'must insert <!-- shared: resolver --> exactly once; found 0'
+      'must insert or omit <!-- shared: resolver --> exactly once; found 0'
     )
     expect(() => render(`${markers}\n\n<!-- shared: resolver -->`)).toThrow('found 2')
+    expect(
+      render(markers.replace('<!-- shared: resolver -->', '<!-- shared-omit: resolver -->'))
+    ).not.toContain(blocks.get('resolver').text)
+    expect(() => render(`${markers}\n\n<!-- shared-omit: resolver -->`)).toThrow('found 2')
     expect(() => render(`${markers}\n\n${blocks.get('resolver').text}`)).toThrow(
       're-inlines shared block "resolver"'
     )

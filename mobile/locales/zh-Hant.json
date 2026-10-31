@@ -1,0 +1,8 @@
+{
+  "ios": {
+    "NSCameraUsageDescription": "允許 Orca 使用相機掃描 QR 碼。",
+    "NSLocalNetworkUsageDescription": "Orca 會透過區域網路連線至桌面版應用程式。",
+    "NSMicrophoneUsageDescription": "允許 Orca 使用麥克風進行語音聽寫，並將語音傳送至已配對的電腦轉錄為文字。",
+    "NSPhotoLibraryUsageDescription": "允許 Orca 將圖庫中的照片附加至已配對電腦上的終端機工作階段。"
+  }
+}

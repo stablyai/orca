@@ -17,6 +17,25 @@ export function serverHostHealth(host: MobileRelayHost): ExecutionHostHealth {
   return host.relay === 'update-needed' ? 'blocked' : host.health
 }
 
+// Why: a phone never starts or connects the desktop's own WSL host, so the badge says where to.
+export function serverHostHealthLabel(host: MobileRelayHost): string | undefined {
+  if (host.stoppedOnDesktop) {
+    return 'Start on computer'
+  }
+  return host.unavailableOnDesktop ? 'Open on computer' : undefined
+}
+
+export function serverHostHealthLabels(
+  hosts: readonly MobileRelayHost[]
+): ReadonlyMap<ExecutionHostId, string> {
+  return new Map(
+    hosts.flatMap((host) => {
+      const label = serverHostHealthLabel(host)
+      return label ? [[host.hostId, label] as const] : []
+    })
+  )
+}
+
 export function withServerHosts<Value>(
   desktop: ReadonlyMap<ExecutionHostId, Value>,
   hosts: readonly MobileRelayHost[],
@@ -88,9 +107,24 @@ export function applyServerWorkspaces(
   previous: ServerWorkspaces,
   fetched: FetchedServerWorkspaces
 ): ServerWorkspaces {
+  let previousByHost: Map<ExecutionHostId | undefined, Worktree[]> | undefined
+  const previousRows = (hostId: ExecutionHostId): readonly Worktree[] => {
+    if (previousByHost === undefined) {
+      previousByHost = new Map()
+      for (const row of previous.worktrees) {
+        const host = row.hostId
+        const rows = previousByHost.get(host)
+        if (rows) {
+          rows.push(row)
+        } else {
+          previousByHost.set(host, [row])
+        }
+      }
+    }
+    return previousByHost.get(hostId) ?? []
+  }
   const worktrees = fetched.hosts.flatMap(
-    (host, index) =>
-      fetched.rows[index] ?? previous.worktrees.filter((row) => row.hostId === host.hostId)
+    (host, index) => fetched.rows[index] ?? previousRows(host.hostId)
   )
   // Keep hosts identity when only rows change; screens key their per-server clients on it.
   const hosts =

@@ -8,7 +8,7 @@ import {
   compareAgentJournalPositions
 } from './agent-session-journal-position'
 import type { AgentSessionHistoryPage, AgentSessionSubagentRosterEntry } from './agent-session-wire'
-import { namedSubagents } from './native-chat-subagent-items'
+import { namedSubagents } from './native-chat/transcript/native-chat-subagent-items'
 import type { NativeChatSubagentEntry } from './native-chat-types'
 
 /** One subagent as the first roster row naming it records it. */

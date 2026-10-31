@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { createCodexJournalTranslator } from '../../codex/codex-structured-journal-translation'
 import { codexStreamingJournalItem } from '../../codex/codex-structured-item-translation'
 import { createClaudeJournalTranslator } from '../../claude/claude-structured-journal-translation'
@@ -43,7 +44,7 @@ beforeEach(async () => {
 afterEach(async () => {
   vi.restoreAllMocks()
   await rig.dispose()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
 })
 
 async function restartAfterCrash(): Promise<void> {
@@ -54,7 +55,7 @@ async function restartAfterCrash(): Promise<void> {
   await runtimeState.stopLeaseRenewal()
   runtimeState.currentEventSink(SESSION)?.close()
   await sessions.get(SESSION)?.journal.close()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   rig.clock.now = RESTARTED_AT
   rig.store = await openTestAgentSessionRecordStore(rig.root)
   rig.host = new StructuredAgentSessionHost({
@@ -89,7 +90,7 @@ async function beginTurn() {
 
 async function expectInterruptedOutput(completedAt = LAST_CHUNK_AT): Promise<void> {
   await restartAfterCrash()
-  await rig.host.restoreReadableSessions()
+  await openTestChats(rig.host)
   const snapshot = await rig.host.journalSnapshot(SESSION)
   const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
   expect(turn).toMatchObject({ state: 'interrupted', completedAt })
@@ -167,7 +168,7 @@ describe('provider output survives host restart', () => {
       rig.host.collaboratorsForTests().sessions.get(SESSION)?.journal.lastProviderActivityAt(1)
     ).toBe(LAST_CHUNK_AT)
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
     expect(turn).toMatchObject({ state: 'interrupted', completedAt: LAST_CHUNK_AT })
@@ -192,7 +193,7 @@ describe('provider output survives host restart', () => {
     }
     expect(rig.store.getRecord(SESSION)?.lease.lastRenewedAt).toBe(HOST_TEST_NOW)
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
     expect(turn).toMatchObject({ state: 'interrupted', completedAt: LAST_CHUNK_AT })
@@ -322,7 +323,7 @@ describe('provider output survives host restart', () => {
     )
     await rig.host.flushStreamedEvents(SESSION)
     await restartAfterCrash()
-    await rig.host.restoreReadableSessions()
+    await openTestChats(rig.host)
     const snapshot = await rig.host.journalSnapshot(SESSION)
     const turn = snapshot.items.map((item) => readAgentJournalTurn(item.body)).find(Boolean)
     expect(turn).toMatchObject({ state: 'interrupted', completedAt: LAST_CHUNK_AT })

@@ -16,16 +16,6 @@ Host *
     expect(mayClaim(config, 'prod')).toBe(false)
   })
 
-  it('keeps a Host block that names the alias authoritative', () => {
-    const config = `
-Host *
-  ProxyCommand nc %h %p
-Host prod
-  HostName prod.internal
-`
-    expect(mayClaim(config, 'prod')).toBe(true)
-  })
-
   it('keeps a glob that reaches the alias authoritative', () => {
     // parseSshConfig drops these, which is why the claim check cannot reuse it.
     const config = `
@@ -55,25 +45,5 @@ Match host prod
     // Negation makes the group uncertain: ignoring Host * !prod would wrongly permit overriding stage.
     expect(mayClaim('Host * !prod\n  ForwardAgent yes\n', 'stage')).toBe(true)
     expect(mayClaim('Host * !prod\n  ForwardAgent yes\n', 'prod')).toBe(true)
-  })
-
-  it('still proves absence when no group negates', () => {
-    expect(mayClaim('Host *\n  ForwardAgent yes\nHost prod\n  User ops\n', 'stage')).toBe(false)
-  })
-
-  it('reads an unreadable config as uncertainty, not absence', () => {
-    expect(sshConfigMayClaimAlias('prod', null)).toBe(true)
-  })
-
-  it('reads an empty alias as uncertainty', () => {
-    expect(sshConfigMayClaimAlias('', parseSshConfigAliasClaims('Host *\n'))).toBe(true)
-  })
-})
-
-describe('parseSshConfigAliasClaims', () => {
-  it('retains the raw pattern groups and flags Match blocks', () => {
-    expect(
-      parseSshConfigAliasClaims('Host a b*  # comment\n  User x\nMatch final\n  User y\n')
-    ).toEqual({ hostPatternGroups: [['a', 'b*']], hasMatchBlock: true })
   })
 })

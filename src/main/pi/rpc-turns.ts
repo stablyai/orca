@@ -12,7 +12,7 @@ import { PiRpcMessages, piRpcSkippedEventNotice } from './rpc-messages'
 import { PiRpcPromptDelivery, piRpcFailureFact } from './rpc-prompt-delivery'
 import { PiRpcIdleCheck } from './rpc-idle-check'
 import { piRpcRetryActivity } from './rpc-retry-activity'
-import { piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
+import { type PiRpcState, piRpcMessageSchema, piRpcSkippedEvent } from './rpc-protocol'
 
 export type PiRpcTurnDeps = {
   lane: JsonlRpcTimelineLane
@@ -29,6 +29,7 @@ export type PiRpcTurnDeps = {
   turnEnded?: () => void
   failed: (error: Error) => void
   diagnostic?: (error: unknown) => void
+  prepareStateObservation?: () => (state: PiRpcState) => void
 }
 
 /** Prompt replies can be idless and arrive after dialogs; they have no elapsed-time deadline. */
@@ -51,6 +52,7 @@ export class PiRpcTurns {
     this.messages = new PiRpcMessages(deps.generation, this.context)
     this.idleCheck = new PiRpcIdleCheck({
       request: () => deps.request('get_state'),
+      prepareObservation: deps.prepareStateObservation,
       current: (revision) =>
         !this.ended && this.settling && !this.compacting && revision === this.revision,
       settled: (state) => {
@@ -70,8 +72,7 @@ export class PiRpcTurns {
       },
       commandOnly: () => {
         this.awaitingRunTrigger = false
-        this.settling = true
-        this.probe()
+        this.commandCompleted()
       },
       rejectedAfterAcceptance: (error) => {
         this.failure = error
@@ -165,8 +166,7 @@ export class PiRpcTurns {
         // This can precede automatic retry or detached compaction.
         break
       case 'agent_settled':
-        this.settling = true
-        this.probe()
+        this.commandCompleted()
         return
       case 'compaction_start':
       case 'auto_compaction_start':

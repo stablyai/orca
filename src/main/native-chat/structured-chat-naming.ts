@@ -1,3 +1,4 @@
+import { chatNamingFailure } from '../../shared/chat-naming-failure-copy'
 import { createStructuredChatNamingWork, type NamingRequest } from './structured-chat-naming-work'
 import type { StructuredAgentSessionStatusObserverOptions } from './agent-session-wire/structured-agent-session-status-observation'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
@@ -26,7 +27,7 @@ import {
 /** null means unavailable/canceled: no failure to display or retry. */
 export type StructuredChatNameGeneration =
   | { name: string }
-  | { error: string; failureOutput?: AgentGenerationFailureOutput }
+  | { error: string; errorCode?: string; failureOutput?: AgentGenerationFailureOutput }
   | null
 
 export type StructuredChatNamingDeps = {
@@ -132,7 +133,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     const failedAt = Math.max(now(), (failures.get(record.sessionId)?.failure.failedAt ?? 0) + 1)
     failures.set(record.sessionId, {
       context: contextId(record),
-      failure: { message, failedAt, forName }
+      failure: { message, failedAt, forName, messageCode: failure.errorCode }
     })
     failureOutputs.delete(record.sessionId)
     if (failure.failureOutput) {
@@ -165,10 +166,10 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         if ('name' in result && result.name) {
           return result.name
         }
-        failure = 'error' in result ? result : { error: 'The chat-name agent returned no name.' }
+        failure = 'error' in result ? result : chatNamingFailure('noName')
       } catch (error) {
         warn(record.sessionId, error)
-        failure = { error: 'Orca could not run the chat-name agent.' }
+        failure = chatNamingFailure('agentNotRun')
       }
       if (!stillCurrent()) {
         return null
@@ -189,11 +190,10 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
   }
 
   async function setName(store: NamingStore, record: AgentSessionRecord, name: string) {
-    const expected = record.conversationName ?? null
     const named = await store.compareAndSetConversationName(
       record.sessionId,
       name,
-      expected,
+      record.conversationName ?? null,
       contextId(record)
     )
     if (named) {
@@ -299,7 +299,7 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
     },
     // Not a job: a pending generation must not swallow the user's rename. The record's 'user'
     // source is what makes that generation's later write refuse.
-    setUserName: async (sessionId, name, write) => {
+    setUserName: async (sessionId, name, write, onApplied) => {
       const store = deps.getStore()
       if (!store?.getRecord(sessionId)) {
         return null
@@ -309,6 +309,9 @@ export function createStructuredChatNamingHandler(deps: StructuredChatNamingDeps
         forget(sessionId)
       }
       refresh(record.location.workspaceId, sessionId)
+      if (applied) {
+        onApplied?.(record)
+      }
       return { name: record.conversationName ?? null, applied }
     }
   }

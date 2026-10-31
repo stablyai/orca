@@ -35,9 +35,14 @@ describe('OMP terminal command catalog', () => {
       sessionSlashCommandSuggestions('omp', [
         { name: 'model', kind: 'command', description: 'Host model selector' },
         { name: 'custom', kind: 'command' },
+        { name: 'skill:', kind: 'command' },
         { name: 'plan', kind: 'skill' }
       ])
-    ).toEqual([{ name: 'model', description: 'Host model selector' }, { name: 'custom' }])
+    ).toEqual([
+      { name: 'model', description: 'Host model selector' },
+      { name: 'custom' },
+      { name: 'skill:' }
+    ])
     expect(sessionSlashCommandSuggestions('omp', [])).toEqual([])
   })
 })

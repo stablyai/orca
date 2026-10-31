@@ -141,7 +141,7 @@ export function sessionSlashCommandSuggestions(
     getAgentSlashCommands(agent).map((command) => [command.name, command.description])
   )
   return reported
-    .filter((entry) => entry.kind === 'command')
+    .filter((entry) => !isSessionSkill(entry, agent))
     .map((entry) => {
       const description = entry.description ?? described.get(entry.name)
       return {
@@ -155,11 +155,19 @@ export function sessionSlashCommandSuggestions(
 
 export type NativeChatSessionSkill = Pick<AgentSessionSlashCommand, 'name' | 'description' | 'path'>
 
+function isSessionSkill(entry: AgentSessionSlashCommand, agent?: AgentType): boolean {
+  return (
+    entry.kind === 'skill' ||
+    (agent === 'omp' && entry.name.startsWith('skill:') && entry.name.length > 'skill:'.length)
+  )
+}
+
 export function sessionReportedSkills(
-  reported: readonly AgentSessionSlashCommand[]
+  reported: readonly AgentSessionSlashCommand[],
+  agent?: AgentType
 ): readonly NativeChatSessionSkill[] {
   return reported.flatMap((entry) =>
-    entry.kind === 'skill'
+    isSessionSkill(entry, agent)
       ? [
           {
             name: entry.name,

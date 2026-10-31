@@ -34,10 +34,14 @@ const WSL_WORKTREE = `\\\\wsl$\\${WSL_DISTRO}\\home\\emilio\\projects\\orca`
 
 /** Windows-side length of the line `wsl.exe` is spawned with, wrapper included. */
 function finishedCommandLineLength(args: readonly string[], wslDistro?: string): number {
-  const resolved = resolveGitCommandWithoutProbe([...args], {
-    cwd: wslDistro ? WSL_WORKTREE : '/home/emilio/projects/orca',
-    ...(wslDistro ? { wslDistro } : {})
-  })
+  const resolved = resolveGitCommandWithoutProbe(
+    [...args],
+    {
+      cwd: wslDistro ? WSL_WORKTREE : '/home/emilio/projects/orca',
+      ...(wslDistro ? { wslDistro } : {})
+    },
+    true
+  )
   return commandLineLength([resolved.binary, ...resolved.args])
 }
 

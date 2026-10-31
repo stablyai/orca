@@ -65,6 +65,8 @@ export type AgentSessionFailureWordsContext = {
   retryControl?: boolean
   /** A direct create has no submitted message to send again. */
   messageSubmitted?: boolean
+  /** The chat runs on this WSL distro's host; desktop-only, since the host can't name itself so. */
+  wslDistro?: string
   /** How this reader says a usage limit's reset; without it the words name no time. */
   usageLimitReset?: AgentSessionUsageLimitResetWords
 }
@@ -166,6 +168,11 @@ const FAILURE_SENTENCES = {
   agentCommandNotRunnable: namingAgent('agentCommandNotRunnable'),
   runtimeNotInstalled: namingAgent('runtimeNotInstalled'),
   fullAccessAsRoot: namingAgent('fullAccessAsRoot'),
+  launchPreparationFailed: (context, _fact, _surface, say) =>
+    joinSentences([
+      say('launchPreparationFailed', agent(say, context)),
+      ...startRetry(say, context)
+    ]),
   conversationOpenInTerminal: namingAgent('conversationOpenInTerminal'),
   conversationOpenElsewhere: (_context, _fact, _surface, say) => say('conversationOpenElsewhere'),
   managedAccountUnsupported: (context, _fact, _surface, say) =>
@@ -187,6 +194,9 @@ const FAILURE_SENTENCES = {
       agent(say, context)
     ),
   restartFailed: couldNot('couldNotRestart'),
+  claudeEffortInvalid: (_context, _fact, _surface, say) => say('claudeEffortInvalid'),
+  modelUnavailable: (context, fact, _surface, say) =>
+    say('modelUnavailable', { ...agent(say, context), detail: fact.detail?.text ?? 'this model' }),
   providerRejected: (context, fact, _surface, say) =>
     quotingPersonDetail(
       say,

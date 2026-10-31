@@ -13,34 +13,46 @@ export type StructuredChatSleptAtSlice = {
   setStructuredChatSleptAt: (paneKey: string, sleptAt: number | null | undefined) => void
 }
 
-export function isStructuredChatSlept(
-  sleptAtByPaneKey: StructuredChatSleptAtByPaneKey,
-  tab: { id: string; entityId: string }
-): boolean {
-  return typeof sleptAtByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)] === 'number'
+const EMPTY_SLEPT_CHATS: StructuredChatSleptAtByPaneKey = Object.freeze({})
+
+function createStructuredChatPresenceSelector(
+  matches: (sleptAt: number | null | undefined) => boolean
+) {
+  const byTabs = new WeakMap<readonly Tab[], WeakMap<StructuredChatSleptAtByPaneKey, boolean>>()
+  return (
+    tabs: readonly Tab[] | undefined,
+    sleptAtByPaneKey: StructuredChatSleptAtByPaneKey = EMPTY_SLEPT_CHATS
+  ): boolean => {
+    if (!tabs?.length) {
+      return false
+    }
+    let bySleptAt = byTabs.get(tabs)
+    const cached = bySleptAt?.get(sleptAtByPaneKey)
+    if (cached !== undefined) {
+      return cached
+    }
+    const result = tabs.some(
+      (tab) =>
+        isStructuredTab(tab) &&
+        matches(sleptAtByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)])
+    )
+    // Store selectors run on every write; immutable snapshots reuse scans without retaining closed tabs.
+    bySleptAt ??= new WeakMap()
+    bySleptAt.set(sleptAtByPaneKey, result)
+    byTabs.set(tabs, bySleptAt)
+    return result
+  }
 }
 
 /** Missing is unknown; null keeps the chat awake for display, without proving execution. */
-export function hasUnknownStructuredChat(
-  tabs: readonly Tab[] | undefined,
-  sleptAtByPaneKey: StructuredChatSleptAtByPaneKey = {}
-): boolean {
-  return (tabs ?? []).some(
-    (tab) =>
-      isStructuredTab(tab) &&
-      sleptAtByPaneKey[structuredAgentSessionPaneKey(tab.id, tab.entityId)] === undefined
-  )
-}
+export const hasUnknownStructuredChat = createStructuredChatPresenceSelector(
+  (sleptAt) => sleptAt === undefined
+)
 
 /** Any chat not explicitly slept, unknown included, so the dot agrees with the sleeping-workspace check. */
-export function hasAwakeStructuredChat(
-  tabs: readonly Tab[] | undefined,
-  sleptAtByPaneKey: StructuredChatSleptAtByPaneKey = {}
-): boolean {
-  return (tabs ?? []).some(
-    (tab) => isStructuredTab(tab) && !isStructuredChatSlept(sleptAtByPaneKey, tab)
-  )
-}
+export const hasAwakeStructuredChat = createStructuredChatPresenceSelector(
+  (sleptAt) => typeof sleptAt !== 'number'
+)
 
 export const createStructuredChatSleptAtSlice: StateCreator<
   AppState,

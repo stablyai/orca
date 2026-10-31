@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import {
+  AGENT_LAUNCH_CHOICES_CAPABILITY,
   AGENT_LAUNCH_AUTO_PERMISSIONS_CAPABILITY,
   AGENT_LAUNCH_NATIVE_CHAT_PERMISSIONS_CAPABILITY
 } from '../../../../shared/agent-launch-runtime-capability'
@@ -147,4 +148,21 @@ it('sends the explicit native synchronization marker only after capability verif
     mode: 'manual',
     syncNativeChat: true
   })
+})
+
+it('requires a positive choices capability before sending the new discriminant', async () => {
+  rpc.supports.mockImplementation(
+    async (_host, capability) => capability !== AGENT_LAUNCH_CHOICES_CAPABILITY
+  )
+  await expect(
+    mutateHostAgentLaunchSettings(
+      { environmentId: 'old-permission-host' },
+      {
+        type: 'launch-choices',
+        agent: 'claude',
+        patch: { model: 'opus' }
+      }
+    )
+  ).rejects.toThrow('choices_unsupported')
+  expect(rpc.call).not.toHaveBeenCalled()
 })

@@ -4,26 +4,30 @@ import type {
   AiVaultSession
 } from '../../shared/ai-vault-types'
 import type { ExecutionHostId } from '../../shared/execution-host'
+import type { AiVaultScanIssueText } from '../../shared/ai-vault-scan-issue-copy'
 import { sessionSortTime } from './session-scanner-accumulator'
 import {
   requestedAiVaultSessionDepth,
   truncateAiVaultListResult
 } from '../../shared/ai-vault-session-depth'
 
-export function aiVaultScanIssueResult(args: {
+export function aiVaultScanIssueResult({
+  executionHostId,
+  path,
+  ...text
+}: {
   executionHostId?: ExecutionHostId
   path: string
-  message: string
-}): AiVaultListResult {
+} & AiVaultScanIssueText): AiVaultListResult {
   return {
     sessions: [],
     issues: [
       {
-        ...(args.executionHostId ? { executionHostId: args.executionHostId } : {}),
+        ...(executionHostId ? { executionHostId } : {}),
         agent: 'codex',
         kind: 'host',
-        path: args.path,
-        message: args.message
+        path,
+        ...text
       }
     ],
     scannedAt: new Date().toISOString()

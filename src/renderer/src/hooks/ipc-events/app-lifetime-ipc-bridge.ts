@@ -9,13 +9,18 @@ import { resetAgentHookCompletionNotificationCoordinators } from '../agent-hook-
 import { useAppStore } from '../../store'
 import { registerAgentStatusIpcBridge } from './agent-status-ipc-bridge'
 import { registerBackgroundWorktreeRemovalBridge } from './background-worktree-removal-bridge'
-import { registerBrowserRequestIpcBridge } from './browser-request-ipc-bridge'
+import {
+  registerBrowserRequestIpcBridge,
+  signalBrowserTabRequestsReadyAfterRestore
+} from './browser-request-ipc-bridge'
+import { registerBrowserTabActivateIpcBridge } from './browser-tab-activate-ipc-bridge'
 import { registerBrowserStateIpcBridge } from './browser-state-ipc-bridge'
 import { registerContentCreationIpcBridge } from './content-creation-ipc-bridge'
 import { registerDirectSshStateIpcBridge } from './direct-ssh-state-ipc-bridge'
 import { registerMobileAndTerminalCloseIpcBridge } from './mobile-terminal-close-ipc-bridge'
 import { registerMobileDriverIpcBridge } from './mobile-driver-ipc-bridge'
 import { registerOrcaProfileAuthIpcBridge } from './orca-profile-auth-ipc-bridge'
+import { registerPreflightWslRetryIpcBridge } from './preflight-wsl-retry-ipc-bridge'
 import { registerOsMarkdownFileOpenBridge } from './os-markdown-file-open-bridge'
 import { registerProjectCatalogIpcBridge } from './project-catalog-ipc-bridge'
 import { registerRateLimitIpcBridge } from './rate-limit-ipc-bridge'
@@ -90,6 +95,7 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerSettingsAndSidebarIpcBridge(unsubs)
   registerQuitAndStopAllSessionsIpcBridge(unsubs)
   registerOrcaProfileAuthIpcBridge(unsubs)
+  registerPreflightWslRetryIpcBridge(unsubs)
   registerWorkspaceShortcutIpcBridge(unsubs)
   registerOsMarkdownFileOpenBridge(unsubs)
   registerWslAccountNoticeIpcBridge(unsubs)
@@ -126,6 +132,8 @@ export function installAppLifetimeIpcEvents(): () => void {
   registerBrowserStateIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerContentCreationIpcBridge(unsubs, isRuntimeEnvironmentActive)
   registerBrowserRequestIpcBridge(unsubs)
+  signalBrowserTabRequestsReadyAfterRestore(unsubs)
+  registerBrowserTabActivateIpcBridge(unsubs)
   registerTabLifecycleIpcBridge(unsubs)
   registerRateLimitIpcBridge(unsubs)
   const stopDirectSshStateBridge = registerDirectSshStateIpcBridge(unsubs)

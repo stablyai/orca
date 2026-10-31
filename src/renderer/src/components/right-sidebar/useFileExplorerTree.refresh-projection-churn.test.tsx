@@ -159,6 +159,7 @@ describe('file explorer directory refresh churn', () => {
   it('does not stack a second read on an expanded dir the loading set already owns', () => {
     const loadDir = vi.fn().mockResolvedValue(true)
     const params = {
+      workspaceKey: null,
       visibleFilesWorktreePath: WORKTREE_PATH,
       expanded: new Set([SRC_DIR]),
       dirCache: {},
@@ -184,8 +185,8 @@ describe('file explorer directory refresh churn', () => {
       loadingDirPaths: new Set<string>()
     })
     expect(loadDir).toHaveBeenCalledTimes(1)
-    // An expand is a user act, so its read may start a stopped WSL distro.
-    expect(loadDir).toHaveBeenCalledWith(SRC_DIR, 0, { wakeWslDistro: true })
+    // Expanded since mount, not by the user now: the deferred read must not start WSL (E9).
+    expect(loadDir).toHaveBeenCalledWith(SRC_DIR, 0, {})
   })
 
   it('renders the folder spinner from the loading dir set', () => {

@@ -44,7 +44,7 @@ beforeEach(async () => {
 afterEach(async () => {
   writes.failing = false
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
@@ -56,7 +56,7 @@ async function seedChat(options: { newer?: boolean } = {}) {
   if (options.newer) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   return { path: journalDatabasePath(root), sessionId: record.sessionId }
 }
 

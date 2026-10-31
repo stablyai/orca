@@ -56,7 +56,9 @@ const SETTINGS_NAV_TARGETS = [
 const SETTINGS_NAV_INTENTS = [
   'add-quick-command',
   'add-remote-orca-server',
-  'add-ssh-host'
+  'add-ssh-host',
+  // Closes Settings when the target pane is already showing.
+  'toggle'
 ] as const
 
 const SETTINGS_NAV_TARGET_SET: ReadonlySet<string> = new Set(SETTINGS_NAV_TARGETS)

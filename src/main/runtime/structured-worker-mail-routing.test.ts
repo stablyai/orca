@@ -120,7 +120,7 @@ describe('implicit sender resolution refuses to guess', () => {
     return {
       graphStatus: 'ready',
       assertGraphReady: () => {},
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       tabs: new Map(),
       leaves: new Map(
         leafIds.map((leafId) => [leafId, { tabId: 'tab_1', leafId, worktreeId: 'wt_1' }])
@@ -148,7 +148,7 @@ describe('implicit sender resolution refuses to guess', () => {
     // Keep a focused terminal in the starting graph so only the pre-ready identity guard can refuse this request.
     const preReady = {
       graphStatus: 'starting',
-      resolveWorktreeSelector: async () => ({ id: 'wt_1' }),
+      resolveWorkspaceSelector: async () => ({ id: 'wt_1' }),
       getMobileSessionTabsForWorktree: () => ({
         tabs: [{ type: 'terminal', isActive: true, status: 'ready', terminal: 'term_focused' }]
       }),

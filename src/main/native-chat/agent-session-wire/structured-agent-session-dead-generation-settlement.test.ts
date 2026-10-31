@@ -15,7 +15,10 @@ import {
   captureUnfinishedStructuredAgentSessionWork,
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-unfinished-work'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { MAX_JOURNAL_LIFECYCLE_BATCH_BYTES } from '../agent-session-journal/journal-row-schema'
 
@@ -44,6 +47,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await journal.close()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

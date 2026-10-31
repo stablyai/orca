@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { mergeNativeChatMessages } from '../../../src/shared/native-chat-merge'
+import { mergeNativeChatMessages } from '../../../src/shared/native-chat/native-chat-merge'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
 
 function msg(id: string, overrides: Partial<NativeChatMessage> = {}): NativeChatMessage {

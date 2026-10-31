@@ -101,7 +101,7 @@ describe('classifyConnection Tailscale hint', () => {
 
     for (const state of ['connecting', 'handshaking', 'reconnecting', 'disconnected'] as const) {
       const verdict = classifyConnection({ ...incident, state })
-      expect(verdict).toEqual({ kind: 'normal', label: 'Connecting via Relay…' })
+      expect(verdict).toEqual({ kind: 'normal', label: 'Connecting via Relay…', dialing: true })
       expect(verdictDisplayLabel(verdict)).not.toContain('Tailscale')
     }
   })
@@ -163,12 +163,12 @@ describe('classifyConnection while dialing (issue #10119)', () => {
 
   it('still shows Connecting… before any failures', () => {
     const verdict = classifyConnection({ ...base, state: 'connecting', reconnectAttempts: 0 })
-    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…' })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…', dialing: true })
   })
 
   it('still shows Connecting… below the warning gate', () => {
     const verdict = classifyConnection({ ...base, state: 'handshaking', reconnectAttempts: 2 })
-    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…' })
+    expect(verdict).toEqual({ kind: 'normal', label: 'Connecting…', dialing: true })
   })
 })
 

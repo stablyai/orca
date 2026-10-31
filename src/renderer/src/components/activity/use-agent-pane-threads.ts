@@ -1,3 +1,4 @@
+import { selectVisibleAgentOrchestration } from '@/runtime/visible-agent-orchestration'
 import { useDeferredValue, useMemo, useRef } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -111,7 +112,7 @@ export function useAgentPaneThreads(args: {
   const storeData = useAppStore(
     useShallow((s) => ({
       agentStatusByPaneKey: s.agentStatusByPaneKey,
-      runtimeAgentOrchestrationByPaneKey: s.runtimeAgentOrchestrationByPaneKey,
+      runtimeAgentOrchestrationByPaneKey: selectVisibleAgentOrchestration(s),
       migrationUnsupportedByPtyId: s.migrationUnsupportedByPtyId,
       retainedAgentsByPaneKey: s.retainedAgentsByPaneKey,
       tabsByWorktree: s.tabsByWorktree,

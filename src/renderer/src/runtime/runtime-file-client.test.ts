@@ -1,21 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import {
-  deleteRuntimePath,
-  readRuntimeDirectory,
-  renameRuntimePath,
-  writeRuntimeFile
-} from './runtime-file-mutation-client'
-import { getRuntimeFileReadScope } from './runtime-file-routing'
+import { readRuntimeDirectory } from './runtime-file-mutation-client'
 import { readRuntimeFileContent, readRuntimeFilePreview } from './runtime-file-read-client'
-import type { RuntimeReadableFileContent } from './runtime-file-client-types'
-import { statUserOpenedPath } from '@/lib/user-opened-local-path'
 import {
-  fsReadDir,
   fsReadFile,
-  fsStat,
-  fsWriteFile,
-  fsRename,
-  fsDeletePath,
+  fsGrantRuntimeFilePreview,
   runtimeEnvironmentCall,
   installRuntimeFileClientEnvironment
 } from './runtime-file-client-test-harness'
@@ -23,91 +11,6 @@ import {
 installRuntimeFileClientEnvironment()
 
 describe('runtime file client', () => {
-  it('sends the confirmed permanent-delete option only to the local filesystem', async () => {
-    await deleteRuntimePath(
-      { target: { kind: 'local' }, worktreeId: 'wt-1', worktreePath: '/repo' },
-      '/repo/file.txt',
-      false,
-      { permanent: true }
-    )
-    expect(fsDeletePath).toHaveBeenCalledWith({
-      targetPath: '/repo/file.txt',
-      connectionId: undefined,
-      expectedExecutionHostId: 'local',
-      recursive: false,
-      permanent: true
-    })
-
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { ok: true },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    await deleteRuntimePath(
-      {
-        target: { kind: 'environment', environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        worktreePath: '/remote/repo'
-      },
-      '/remote/repo/file.txt',
-      false,
-      { permanent: true }
-    )
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.delete',
-      params: {
-        worktree: 'id:wt-1',
-        relativePath: 'file.txt',
-        recursive: false,
-        expectedExecutionHostId: 'local'
-      },
-      timeoutMs: 15_000
-    })
-    expect(fsDeletePath).toHaveBeenCalledTimes(1)
-  })
-
-  it('uses local filesystem reads when no remote runtime is active', async () => {
-    const localResult: RuntimeReadableFileContent = { content: 'hello', isBinary: false }
-    fsReadFile.mockResolvedValue(localResult)
-
-    await expect(
-      readRuntimeFileContent({
-        target: { kind: 'local' as const },
-        filePath: '/repo/readme.md',
-        relativePath: 'readme.md',
-        worktreeId: 'wt-1',
-        connectionId: 'ssh-1'
-      })
-    ).resolves.toBe(localResult)
-
-    expect(fsReadFile).toHaveBeenCalledWith({ filePath: '/repo/readme.md', connectionId: 'ssh-1' })
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('reads an external SSH file only from its owning target', async () => {
-    const sshResult: RuntimeReadableFileContent = { content: 'remote', isBinary: false }
-    fsReadFile.mockResolvedValue(sshResult)
-
-    await expect(
-      readRuntimeFileContent({
-        target: { kind: 'local' as const },
-        filePath: '/tmp/external.md',
-        relativePath: '/tmp/external.md',
-        worktreeId: 'wt-1',
-        connectionId: 'ssh-1',
-        expectedExternalSshTargetId: 'ssh-1'
-      })
-    ).resolves.toBe(sshResult)
-
-    expect(fsReadFile).toHaveBeenCalledWith({
-      filePath: '/tmp/external.md',
-      connectionId: 'ssh-1',
-      includeLocalLogMetadata: undefined
-    })
-  })
-
   it('rejects an external SSH file read after the target changes', async () => {
     await expect(
       readRuntimeFileContent({
@@ -136,98 +39,6 @@ describe('runtime file client', () => {
     ).rejects.toThrow('External SSH files are not available after the workspace host changes.')
 
     expect(fsReadFile).not.toHaveBeenCalled()
-    expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
-  })
-
-  it('binds direct SSH mutations to the captured target and generation', async () => {
-    const context = {
-      target: { kind: 'local' as const },
-      worktreeId: 'wt-1',
-      worktreePath: '/repo',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1' as const,
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    }
-
-    await writeRuntimeFile(context, '/repo/a.ts', 'a')
-    await renameRuntimePath(context, '/repo/a.ts', '/repo/b.ts')
-    await deleteRuntimePath(context, '/repo/b.ts')
-
-    expect(fsWriteFile).toHaveBeenCalledWith({
-      filePath: '/repo/a.ts',
-      content: 'a',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
-    expect(fsRename).toHaveBeenCalledWith({
-      oldPath: '/repo/a.ts',
-      newPath: '/repo/b.ts',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
-    expect(fsDeletePath).toHaveBeenCalledWith({
-      targetPath: '/repo/b.ts',
-      connectionId: 'ssh-1',
-      expectedExecutionHostId: 'ssh:ssh-1',
-      recursive: undefined,
-      expectedSshTargetId: 'ssh-1',
-      expectedSshConnectionGeneration: 5
-    })
-  })
-
-  it('routes worktree-relative text reads through the selected runtime environment', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: {
-        worktree: 'id:wt-1',
-        relativePath: 'src/index.ts',
-        content: 'export {}\n',
-        truncated: false,
-        byteLength: 10
-      },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await expect(
-      readRuntimeFileContent({
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        filePath: '/remote/repo/src/index.ts',
-        relativePath: 'src/index.ts',
-        worktreeId: 'wt-1'
-      })
-    ).resolves.toEqual({ content: 'export {}\n', isBinary: false })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.read',
-      params: { worktree: 'id:wt-1', relativePath: 'src/index.ts' },
-      timeoutMs: 15_000
-    })
-    expect(fsReadFile).not.toHaveBeenCalled()
-  })
-
-  it('keeps external absolute-path files on the local filesystem path', async () => {
-    const localResult: RuntimeReadableFileContent = { content: 'scratch', isBinary: false }
-    fsReadFile.mockResolvedValue(localResult)
-
-    await expect(
-      readRuntimeFileContent({
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        filePath: '/Users/me/scratch.md',
-        relativePath: '/Users/me/scratch.md'
-      })
-    ).resolves.toBe(localResult)
-
-    expect(fsReadFile).toHaveBeenCalledWith({
-      filePath: '/Users/me/scratch.md',
-      connectionId: undefined
-    })
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
   })
 
@@ -358,6 +169,56 @@ describe('runtime file client', () => {
     })
   })
 
+  it('shows a binary the host refused as binary, fetching no preview when it has none', async () => {
+    runtimeEnvironmentCall.mockImplementation(() =>
+      Promise.resolve({
+        id: 'rpc-read',
+        ok: false,
+        error: { code: 'runtime_error', message: 'binary_file' },
+        _meta: { runtimeId: 'remote-runtime' }
+      })
+    )
+
+    await expect(
+      readRuntimeFileContent({
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
+        filePath: '/remote/repo/libfoo.so',
+        relativePath: 'libfoo.so',
+        worktreeId: 'wt-1',
+        pageOversizedBinary: true
+      })
+    ).resolves.toEqual({ content: '', isBinary: true })
+    expect(runtimeEnvironmentCall).toHaveBeenCalledTimes(1)
+  })
+
+  it('shows an unlisted binary an older host sent as text as binary, fetching nothing more', async () => {
+    runtimeEnvironmentCall.mockImplementation((args: { method: string }) =>
+      Promise.resolve(
+        args.method === 'files.read'
+          ? {
+              id: 'rpc-read',
+              ok: true,
+              result: { content: '\u007fELF\u0002\u0000\u0001', truncated: true, byteLength: 7 },
+              _meta: { runtimeId: 'remote-runtime' }
+            }
+          : { id: 'rpc-other', ok: false, error: { code: 'runtime_error', message: 'unexpected' } }
+      )
+    )
+
+    await expect(
+      readRuntimeFileContent({
+        target: { kind: 'environment' as const, environmentId: 'env-1' },
+        filePath: '/remote/repo/libfoo.so',
+        relativePath: 'libfoo.so',
+        worktreeId: 'wt-1'
+      })
+    ).resolves.toEqual({ content: '', isBinary: true })
+    // Nothing more is fetched: not paged in chunks though truncated, and no preview to show.
+    for (const method of ['files.readChunk', 'files.readPreview']) {
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(expect.objectContaining({ method }))
+    }
+  })
+
   it('does not fall back to files.readPreview for non-binary remote read errors', async () => {
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
       if (args.method === 'files.read') {
@@ -385,38 +246,6 @@ describe('runtime file client', () => {
     )
   })
 
-  it('propagates a files.readPreview failure during the binary fallback', async () => {
-    runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
-      if (args.method === 'files.read') {
-        return Promise.resolve({
-          id: 'rpc-read',
-          ok: false,
-          error: { code: 'runtime_error', message: 'binary_file' },
-          _meta: { runtimeId: 'remote-runtime' }
-        })
-      }
-      return Promise.resolve({
-        id: 'rpc-preview',
-        ok: false,
-        error: { code: 'runtime_error', message: 'file_too_large' },
-        _meta: { runtimeId: 'remote-runtime' }
-      })
-    })
-
-    await expect(
-      readRuntimeFileContent({
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        filePath: '/remote/repo/huge.pdf',
-        relativePath: 'huge.pdf',
-        worktreeId: 'wt-1'
-      })
-    ).rejects.toThrow('file_too_large')
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
-      expect.objectContaining({ method: 'files.readPreview' })
-    )
-  })
-
   it('does not fall back when a non-RPC error merely shares the binary_file message', async () => {
     // Only typed RuntimeRpcCallError(binary_file) authorizes preview fallback; matching transport-error text must propagate.
     runtimeEnvironmentCall.mockImplementation((args: { method: string }) => {
@@ -438,187 +267,6 @@ describe('runtime file client', () => {
     expect(runtimeEnvironmentCall).not.toHaveBeenCalledWith(
       expect.objectContaining({ method: 'files.readPreview' })
     )
-  })
-
-  it('uses the owner runtime id as the dedupe scope', () => {
-    expect(getRuntimeFileReadScope({ kind: 'environment', environmentId: 'env-1' }, 'ssh-1')).toBe(
-      'runtime:env-1'
-    )
-    expect(getRuntimeFileReadScope({ kind: 'local' }, 'ssh-1')).toBe('ssh-1')
-  })
-
-  it('routes directory reads through the selected runtime environment', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: [{ name: 'src', isDirectory: true }],
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await expect(
-      readRuntimeDirectory(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-1' },
-          worktreeId: 'wt-1',
-          worktreePath: '/remote/repo'
-        },
-        '/remote/repo/src'
-      )
-    ).resolves.toEqual([{ name: 'src', isDirectory: true }])
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.readDir',
-      params: { worktree: 'id:wt-1', relativePath: 'src' },
-      timeoutMs: 15_000
-    })
-  })
-
-  it('routes Windows drive paths case-insensitively through the selected runtime', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: [],
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await readRuntimeDirectory(
-      {
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        worktreePath: 'C:\\Repo'
-      },
-      'c:\\repo\\Src'
-    )
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.readDir',
-      params: { worktree: 'id:wt-1', relativePath: 'Src' },
-      timeoutMs: 15_000
-    })
-  })
-
-  it('sends the WSL wake flag of a user act to the local read only, never to a remote host', async () => {
-    fsReadDir.mockResolvedValue([])
-    await readRuntimeDirectory(
-      { target: { kind: 'local' as const }, worktreeId: 'wt-1', worktreePath: 'C:\\Repo' },
-      'C:\\Repo',
-      { followSymlinks: true, wakeWslDistro: true }
-    )
-    expect(fsReadDir).toHaveBeenCalledWith({
-      dirPath: 'C:\\Repo',
-      connectionId: undefined,
-      followSymlinks: true,
-      wakeWslDistro: true
-    })
-
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: [],
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-    await readRuntimeDirectory(
-      {
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        worktreePath: '/repo'
-      },
-      '/repo/src',
-      { wakeWslDistro: true }
-    )
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.readDir',
-      params: { worktree: 'id:wt-1', relativePath: 'src' },
-      timeoutMs: 15_000
-    })
-  })
-
-  it('sends the WSL wake flag of a user act with a local file read, never over SSH', async () => {
-    fsReadFile.mockResolvedValue({ content: 'x', isBinary: false })
-    await readRuntimeFileContent({
-      target: { kind: 'local' as const },
-      filePath: 'C:\\Repo\\a.ts',
-      wakeWslDistro: true
-    })
-    expect(fsReadFile).toHaveBeenLastCalledWith(expect.objectContaining({ wakeWslDistro: true }))
-    await readRuntimeFileContent({
-      target: { kind: 'local' as const },
-      filePath: '/remote/a.ts',
-      connectionId: 'ssh-1',
-      wakeWslDistro: true
-    })
-    expect(fsReadFile).toHaveBeenLastCalledWith(
-      expect.not.objectContaining({ wakeWslDistro: true })
-    )
-  })
-
-  it('stats a user-opened path as a user act that may start a stopped WSL distro', async () => {
-    fsStat.mockResolvedValue({ size: 1, isDirectory: false, mtime: 0 })
-    await statUserOpenedPath(
-      { target: { kind: 'local' as const }, worktreeId: 'wt-1', worktreePath: 'C:\\Repo' },
-      'C:\\Repo\\a.ts'
-    )
-    expect(fsStat).toHaveBeenLastCalledWith(expect.objectContaining({ wakeWslDistro: true }))
-  })
-
-  it('routes forward-slash UNC paths through the selected runtime', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: [],
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await readRuntimeDirectory(
-      {
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        worktreePath: '//Server/Share/Repo'
-      },
-      '//server/share/repo/src'
-    )
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.readDir',
-      params: { worktree: 'id:wt-1', relativePath: 'src' },
-      timeoutMs: 15_000
-    })
-  })
-
-  it('routes preview reads through the selected runtime environment', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: { content: 'base64', isBinary: true, isImage: true, mimeType: 'image/png' },
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await expect(
-      readRuntimeFilePreview(
-        {
-          target: { kind: 'environment' as const, environmentId: 'env-1' },
-          worktreeId: 'wt-1',
-          worktreePath: '/remote/repo'
-        },
-        '/remote/repo/images/logo.png'
-      )
-    ).resolves.toEqual({
-      content: 'base64',
-      isBinary: true,
-      isImage: true,
-      mimeType: 'image/png'
-    })
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.readPreview',
-      params: { worktree: 'id:wt-1', relativePath: 'images/logo.png' },
-      timeoutMs: 15_000
-    })
   })
 
   it('rejects an external SSH image preview after the target changes', async () => {
@@ -683,31 +331,6 @@ describe('runtime file client', () => {
     expect(fsReadFile).not.toHaveBeenCalled()
   })
 
-  it('routes root directory reads with an empty relative path', async () => {
-    runtimeEnvironmentCall.mockResolvedValue({
-      id: 'rpc-1',
-      ok: true,
-      result: [],
-      _meta: { runtimeId: 'remote-runtime' }
-    })
-
-    await readRuntimeDirectory(
-      {
-        target: { kind: 'environment' as const, environmentId: 'env-1' },
-        worktreeId: 'wt-1',
-        worktreePath: '/remote/repo'
-      },
-      '/remote/repo'
-    )
-
-    expect(runtimeEnvironmentCall).toHaveBeenCalledWith({
-      selector: 'env-1',
-      method: 'files.readDir',
-      params: { worktree: 'id:wt-1', relativePath: '' },
-      timeoutMs: 15_000
-    })
-  })
-
   it('does not fall back to client-local directory reads for remote-owned paths outside the worktree', async () => {
     await expect(
       readRuntimeDirectory(
@@ -722,5 +345,131 @@ describe('runtime file client', () => {
     ).rejects.toThrow('outside the owning runtime worktree')
 
     expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+  })
+
+  describe('remote audio and video', () => {
+    const env = { kind: 'environment' as const, environmentId: 'env-1' }
+    const media = {
+      content: '',
+      isBinary: true as const,
+      mimeType: 'video/mp4',
+      mediaUrl: 'orca-media://file/t'
+    }
+    const binaryRefusal = {
+      id: 'rpc-1',
+      ok: false,
+      error: { code: 'runtime_error', message: 'binary_file' },
+      _meta: { runtimeId: 'remote-runtime' }
+    }
+
+    it('streams a remote video to its viewer instead of reading it over files.read', async () => {
+      fsGrantRuntimeFilePreview.mockResolvedValue(media)
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/out/clip.mp4',
+          relativePath: 'out/clip.mp4',
+          worktreeId: 'wt-1',
+          pageOversizedBinary: true
+        })
+      ).resolves.toEqual(media)
+
+      expect(fsGrantRuntimeFilePreview).toHaveBeenCalledWith({
+        environmentId: 'env-1',
+        worktree: 'id:wt-1',
+        relativePath: 'out/clip.mp4',
+        expectedEnvironmentPairingRevision: undefined
+      })
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    })
+
+    it('mints nothing for a baseline read that discards binary content', async () => {
+      runtimeEnvironmentCall.mockResolvedValue(binaryRefusal)
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/out/clip.mp4',
+          relativePath: 'out/clip.mp4',
+          worktreeId: 'wt-1'
+        })
+      ).resolves.toEqual({ content: '', isBinary: true })
+      expect(fsGrantRuntimeFilePreview).not.toHaveBeenCalled()
+    })
+
+    it('keeps the binary placeholder where the client cannot stream (paired web client)', async () => {
+      runtimeEnvironmentCall.mockResolvedValue(binaryRefusal)
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/out/clip.mp4',
+          relativePath: 'out/clip.mp4',
+          worktreeId: 'wt-1',
+          pageOversizedBinary: true
+        })
+      ).resolves.toEqual({ content: '', isBinary: true })
+      expect(fsGrantRuntimeFilePreview).toHaveBeenCalledOnce()
+    })
+
+    it('streams a remote PDF or image to its viewer the same way', async () => {
+      fsGrantRuntimeFilePreview.mockResolvedValue({
+        ...media,
+        mimeType: 'application/pdf',
+        isImage: true
+      })
+
+      await expect(
+        readRuntimeFileContent({
+          target: env,
+          filePath: '/remote/repo/docs/spec.pdf',
+          relativePath: 'docs/spec.pdf',
+          worktreeId: 'wt-1',
+          pageOversizedBinary: true
+        })
+      ).resolves.toMatchObject({ isImage: true, mediaUrl: 'orca-media://file/t' })
+      expect(runtimeEnvironmentCall).not.toHaveBeenCalled()
+    })
+
+    it('asks a local read for a URL only when a viewer renders the bytes', async () => {
+      fsReadFile.mockResolvedValue({ content: '', isBinary: true })
+      const local = { kind: 'local' as const }
+      await readRuntimeFileContent({
+        target: local,
+        filePath: '/repo/a.png',
+        relativePath: 'a.png',
+        worktreeId: 'wt-1'
+      })
+      await readRuntimeFileContent({
+        target: local,
+        filePath: '/repo/a.png',
+        relativePath: 'a.png',
+        worktreeId: 'wt-1',
+        pageOversizedBinary: true
+      })
+      expect(fsReadFile).toHaveBeenNthCalledWith(
+        1,
+        expect.not.objectContaining({ rangePreview: true })
+      )
+      expect(fsReadFile).toHaveBeenNthCalledWith(2, expect.objectContaining({ rangePreview: true }))
+    })
+
+    it('streams a chat scratch video from its own address', async () => {
+      fsGrantRuntimeFilePreview.mockResolvedValue(media)
+      const root = `/state/chat-scratch/${'a'.repeat(32)}`
+
+      await readRuntimeFileContent({
+        target: env,
+        filePath: `${root}/demo.mp4`,
+        relativePath: `${root}/demo.mp4`,
+        worktreeId: 'wt-1',
+        pageOversizedBinary: true
+      })
+
+      expect(fsGrantRuntimeFilePreview).toHaveBeenCalledWith(
+        expect.objectContaining({ worktree: `path:${root}`, relativePath: 'demo.mp4' })
+      )
+    })
   })
 })

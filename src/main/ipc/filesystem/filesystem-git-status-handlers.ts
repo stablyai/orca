@@ -34,6 +34,7 @@ import {
 import { getWorktreeSharedLinkPaths } from '../../git/worktree-shared-directories'
 import { applyGitStatusUpstreamRefWatchRequest } from '../git-status-upstream-ref-watch-request'
 import type { FilesystemHandlerContext } from './filesystem-handler-context'
+import { readWorktreeGitUnlessWslStopped } from './wsl-gated-worktree-git-read'
 import { requireReachableGitRoute } from '../../providers/execution-host-provider-dispatch'
 import { getConnectionExecutionHostId } from '../../../shared/execution-host'
 import {
@@ -135,16 +136,17 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       }
     ): Promise<GitStatusResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+      // Re-read on every status change: a background poll (E9).
+      return readWorktreeGitUnlessWslStopped(
         store,
         args.worktreePath,
-        worktreePath
+        false,
+        (worktreePath, gitOptions) =>
+          getSubmoduleStatus(worktreePath, args.submodulePath, {
+            ...gitOptions,
+            ...(args.area === 'staged' ? { staged: true } : {})
+          })
       )
-      return getSubmoduleStatus(worktreePath, args.submodulePath, {
-        ...gitOptions,
-        ...(args.area === 'staged' ? { staged: true } : {})
-      })
     }
   )
 
@@ -155,28 +157,26 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
       args: { worktreePath: string; paths: string[]; connectionId?: string }
     ): Promise<string[]> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const paths = args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p))
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+      return readWorktreeGitUnlessWslStopped(
         store,
         args.worktreePath,
-        worktreePath
+        false,
+        (worktreePath, gitOptions) =>
+          checkIgnoredPaths(
+            worktreePath,
+            args.paths.map((p) => validateGitRelativeFilePath(worktreePath, p)),
+            gitOptions
+          )
       )
-      return checkIgnoredPaths(worktreePath, paths, gitOptions)
     }
   )
 
   ipcMain.handle(
     'git:findHugeFoldersToIgnore',
-    async (_event, args: { worktreePath: string }): Promise<string[]> => {
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
-        store,
-        args.worktreePath,
-        worktreePath
+    async (_event, args: { worktreePath: string }): Promise<string[]> =>
+      readWorktreeGitUnlessWslStopped(store, args.worktreePath, false, (worktreePath, gitOptions) =>
+        findKnownHugeFolderPathsToIgnore(worktreePath, gitOptions)
       )
-      return findKnownHugeFolderPathsToIgnore(worktreePath, gitOptions)
-    }
   )
 
   ipcMain.handle(
@@ -191,17 +191,21 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
     'git:history',
     async (
       _event,
-      args: { worktreePath: string; connectionId?: string } & GitHistoryOptions
+      args: {
+        worktreePath: string
+        connectionId?: string
+        /** Refresh: a user act that may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
+      } & GitHistoryOptions
     ): Promise<GitHistoryResult> => {
       const options: GitHistoryOptions = { limit: args.limit, baseRef: args.baseRef }
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+      return readWorktreeGitUnlessWslStopped(
         store,
         args.worktreePath,
-        worktreePath
+        args.wakeWslDistro,
+        (worktreePath, gitOptions) => getHistory(worktreePath, { ...options, ...gitOptions })
       )
-      return getHistory(worktreePath, { ...options, ...gitOptions })
     }
   )
 
@@ -279,21 +283,32 @@ export function registerFilesystemGitStatusHandlers(context: FilesystemHandlerCo
         filePath: string
         staged: boolean
         compareAgainstHead?: boolean
+        oldPath?: string
         connectionId?: string
+        /** Showing the diff tab or its Retry: a user act that may start a stopped WSL distro. */
+        wakeWslDistro?: boolean
       }
     ): Promise<GitDiffResult> => {
       requireReachableGitRoute(getConnectionExecutionHostId(args.connectionId))
-      const worktreePath = await resolveRegisteredWorktreePath(args.worktreePath, store)
-      const filePath = validateGitRelativeFilePath(worktreePath, args.filePath)
-      const gitOptions = getLocalGitOptionsForRegisteredWorktree(
+      return readWorktreeGitUnlessWslStopped(
         store,
         args.worktreePath,
-        worktreePath
+        args.wakeWslDistro,
+        (worktreePath, gitOptions) =>
+          getDiff(
+            worktreePath,
+            validateGitRelativeFilePath(worktreePath, args.filePath),
+            args.staged,
+            args.compareAgainstHead,
+            {
+              ...gitOptions,
+              admissionTier: 'interactive',
+              ...(args.oldPath
+                ? { oldPath: validateGitRelativeFilePath(worktreePath, args.oldPath) }
+                : {})
+            }
+          )
       )
-      return getDiff(worktreePath, filePath, args.staged, args.compareAgainstHead, {
-        ...gitOptions,
-        admissionTier: 'interactive'
-      })
     }
   )
 }

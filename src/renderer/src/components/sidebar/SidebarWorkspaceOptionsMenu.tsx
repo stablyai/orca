@@ -8,6 +8,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { translate } from '@/i18n/i18n'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { OptionsFilterCountBadge } from './options-filter-count-badge'
 import {
   useWorkspaceOptionsFilterBadge,
@@ -23,8 +24,9 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
   preserveWorkspaceBoardOpen = false,
   onMenuOpenChange
 }: SidebarWorkspaceOptionsMenuProps) {
+  useUiLanguageRevision()
   const [open, setOpen] = useState(false)
-  const { hasAnyFilter, activeFilterCount, activeFilterLabel } = useWorkspaceOptionsFilterBadge()
+  const { hasAnyFilter, activeFilterCount } = useWorkspaceOptionsFilterBadge()
 
   const handleOpenChange = useCallback(
     (next: boolean) => {
@@ -47,9 +49,12 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
               aria-label={
                 hasAnyFilter
                   ? translate(
-                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
-                      'Workspace options ({{value0}} active)',
-                      { value0: activeFilterLabel }
+                      'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsActiveFilters',
+                      'Workspace options ({{count}} filters active)',
+                      {
+                        count: activeFilterCount,
+                        defaultValue_one: 'Workspace options ({{count}} filter active)'
+                      }
                     )
                   : translate(
                       'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',
@@ -66,9 +71,12 @@ const SidebarWorkspaceOptionsMenu = React.memo(function SidebarWorkspaceOptionsM
         <TooltipContent side="bottom" sideOffset={6}>
           {hasAnyFilter
             ? translate(
-                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.bc96dbd041',
-                'Workspace options ({{value0}})',
-                { value0: activeFilterLabel }
+                'auto.components.sidebar.SidebarWorkspaceOptionsMenu.optionsFilterCount',
+                'Workspace options ({{count}} filters)',
+                {
+                  count: activeFilterCount,
+                  defaultValue_one: 'Workspace options ({{count}} filter)'
+                }
               )
             : translate(
                 'auto.components.sidebar.SidebarWorkspaceOptionsMenu.9919ae1082',

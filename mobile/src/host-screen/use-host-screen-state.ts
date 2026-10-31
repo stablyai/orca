@@ -43,7 +43,6 @@ export function useHostScreenState(hostId: string | undefined) {
   const [actionError, setActionError] = useState('')
   const [lastKnownWorktrees, setLastKnownWorktrees] = useState<Worktree[]>(initialCache ?? [])
   const [search, setSearch] = useState('')
-  const [showSearch, setShowSearch] = useState(false)
   const [view, setView] = useState<MobileViewState>(INITIAL_MOBILE_VIEW)
   const viewRef = useRef(view)
   const [servedProjectSections, setServedProjectSections] = useState<ServedProjectSections | null>(
@@ -127,14 +126,12 @@ export function useHostScreenState(hostId: string | undefined) {
     setServerWorkspaces,
     setShowWorkspaceOptions,
     setShowPinnedInGroups,
-    setShowSearch,
     setSleptIds,
     setWorktrees,
     setWorktreesLoaded,
     showNewWorktree,
     showWorkspaceOptions,
     showPinnedInGroups,
-    showSearch,
     setView,
     view,
     viewRef,

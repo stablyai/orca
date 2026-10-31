@@ -12,6 +12,7 @@ import {
 
 import { successResponse } from './errors'
 import { ALL_RPC_METHODS } from './methods'
+import { withoutMethodsThisHostDoesNotServe } from './methods/session-terminal-scrollback'
 import { emulatorProbe, emulatorProbeError } from '../../emulator/emulator-probe'
 import type { OrcaRuntimeService } from '../orca-runtime'
 import { isDurableMutation } from '../../../shared/orchestration-rpc-contract'
@@ -32,6 +33,7 @@ import { recordRuntimeFeatureInteraction } from './runtime-feature-interaction'
 import type { RpcCallerScope } from './rpc-caller-scope'
 import { runWithActiveRpcCaller } from './rpc-active-caller'
 import { admitRpcRequest } from './rpc-request-admission-prologue'
+import { resolveOrcadFeatureRequirement, rpcMethodFeatureWait } from './orcad-feature-readiness'
 
 export type DispatcherOptions = {
   runtime: OrcaRuntimeService
@@ -57,7 +59,7 @@ export class RpcDispatcher {
   constructor({ runtime, methods = ALL_RPC_METHODS, callerScope }: DispatcherOptions) {
     this.runtime = runtime
     this.pinnedCallerScope = callerScope
-    this.registry = buildRegistry(methods)
+    this.registry = buildRegistry(withoutMethodsThisHostDoesNotServe(methods))
     this.orchestrationMutations = getOrchestrationMutationExecutor(runtime)
     this.legacyOrchestration = new OrchestrationLegacyCompatibility(runtime)
   }
@@ -82,6 +84,13 @@ export class RpcDispatcher {
       emulatorProbe(`rpc ${request.method}`, request.params)
     }
     try {
+      const featureWait = rpcMethodFeatureWait(
+        resolveOrcadFeatureRequirement(admission.method.requires, admission.params),
+        [options?.signal, options?.connectionSignal]
+      )
+      if (featureWait) {
+        await featureWait
+      }
       return successResponse(request.id, meta, await this.invokeUnary(admission, options))
     } catch (error) {
       if (probeEmulator) {
@@ -112,6 +121,18 @@ export class RpcDispatcher {
       return
     }
     const { method, request, params, caller } = admission
+    const featureWait = rpcMethodFeatureWait(
+      resolveOrcadFeatureRequirement(method.requires, params),
+      [options?.signal, options?.connectionSignal]
+    )
+    if (featureWait) {
+      try {
+        await featureWait
+      } catch (error) {
+        reply(JSON.stringify(mapDispatcherError(request, meta, error)))
+        return
+      }
+    }
 
     if (!isStreamingMethod(method)) {
       try {
@@ -132,7 +153,7 @@ export class RpcDispatcher {
     try {
       const result = await method.handler(
         params,
-        rpcContextFromTransport(this.runtime, request, options, caller),
+        rpcContextFromTransport(this.runtime, request, options, caller, params),
         emit
       )
       recordRuntimeFeatureInteraction(
@@ -171,7 +192,7 @@ export class RpcDispatcher {
     options: RpcDispatchStreamingOptions | undefined
   ): Promise<unknown> {
     const { runtime, orchestrationMutations, legacyOrchestration } = this
-    const context = rpcContextFromTransport(runtime, request, options, caller)
+    const context = rpcContextFromTransport(runtime, request, options, caller, params)
     // Runtime test fakes may omit client-hosted browser routing.
     const clientHostedBrowser = await (runtime.routeClientHostedBrowserRpc?.(
       request.method,

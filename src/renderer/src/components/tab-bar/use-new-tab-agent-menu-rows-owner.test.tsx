@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -56,7 +57,7 @@ it('settles ownerless continuation and plus inventory without borrowing agents, 
     setLocalRuntimeCapabilitiesForTests(worktreeId.startsWith('folder:') ? null : [CHAT, CLIENT])
     useAppStore.setState({
       ...initial,
-      settings: { ...getDefaultSettings('/home/me'), experimentalNativeChat: true },
+      settings: { ...getDefaultSettings('/home/me'), nativeChatProviders: EVERY_AGENT_CHAT },
       activeWorktreeId: worktreeId,
       activeWorkspaceExecutionHostId: null,
       folderWorkspaces: [],

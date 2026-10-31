@@ -3,7 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   adapter,
@@ -30,6 +33,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )
@@ -90,85 +94,6 @@ async function relaunch(): Promise<StructuredAgentSessionHost> {
   replaceHostTestState({ store, host })
   return host
 }
-
-const NEWER_APPROVAL: AgentJournalItemBody = JSON.parse(
-  JSON.stringify({
-    kind: 'approval',
-    title: 'Review proposed change',
-    detail: null,
-    subject: { kind: 'diff', path: 'a.ts', text: 'not a plan' },
-    options: [{ id: 'allow', label: 'Approve' }],
-    resolution: { state: 'pending', selectedOptionId: null, resolvedBy: null, resolvedAt: null }
-  })
-)
-
-it("settles a newer Orca's pending approval as it was, and the chat takes its next message", async () => {
-  await attach()
-  emit(7, NEWER_APPROVAL)
-  const host = await relaunch()
-
-  expect(await send(host, 'after the newer approval')).toMatchObject({ ok: true })
-  await vi.waitFor(() => expect(hostTestState().dispatch).toHaveBeenCalled())
-
-  const approval = (await historyBodies(host)).find((body) => body.kind === 'approval')
-  expect(approval).toMatchObject({
-    subject: { kind: 'diff', path: 'a.ts', text: 'not a plan' },
-    resolution: { state: 'cancelled' }
-  })
-  await host.flushAllStreamedEvents()
-})
-
-// A newer background approval can block queues forever; a direct send starts the turn that cancels it.
-it("takes a send past a newer Orca's live approval, and the next turn's card cancel settles it", async () => {
-  // Model providers whose card Cancel requires the live turn’s Stop path.
-  const dismissPrompt = vi.fn(async ({ commit }: { commit: () => Promise<void> }) => commit())
-  Object.assign(hostTestState().host.deps.adapter, {
-    routePromptCancel: () => ({ kind: 'stop' }),
-    dismissPrompt
-  })
-  await attach()
-  emit(7, NEWER_APPROVAL)
-  const { host } = hostTestState()
-  await host.flushStreamedEvents(SESSION)
-
-  const body = hostTestMessage('queued behind it')
-  const queuedFields = { body, delivery: 'queue-if-active' as const }
-  expect(
-    await host.send(CALLER, {
-      envelope: envelope('agentSession.send', queuedFields),
-      ...queuedFields
-    })
-  ).toMatchObject({ ok: true, value: { queued: { state: 'waiting' } } })
-  expect(hostTestState().dispatch).not.toHaveBeenCalled()
-
-  const sent = await send(host, 'carry on')
-  expect(sent).toMatchObject({ ok: true, value: { submission: expect.any(Object) } })
-  await vi.waitFor(() => expect(hostTestState().dispatch).toHaveBeenCalledOnce())
-  providerEvents().appendItem(
-    { provider: 'codex', threadId: THREAD, turnId: 'turn-2', ordinal: 8 },
-    { kind: 'turn', turnId: 'turn-2', state: 'running', startedAt: NOW },
-    { turnScope: AGENT_JOURNAL_THREAD_SCOPE }
-  )
-  await host.flushStreamedEvents(SESSION)
-
-  const card = (await host.journalSnapshot(SESSION)).items.find(
-    (item) => item.body.kind === 'approval'
-  )!
-  const fields = {
-    turnId: 'turn-2',
-    prompt: { itemId: card.itemId, expectedRevision: card.revision }
-  }
-  expect(
-    await host.cancel(CALLER, { envelope: envelope('agentSession.cancel', fields), ...fields })
-  ).toMatchObject({ ok: true })
-  expect(dismissPrompt).toHaveBeenCalledWith(expect.objectContaining({ answer: true }))
-  expect(hostTestState().cancelTurn).not.toHaveBeenCalled()
-  expect((await historyBodies(host)).find((entry) => entry.kind === 'approval')).toMatchObject({
-    subject: { kind: 'diff' },
-    resolution: { state: 'cancelled' }
-  })
-  await host.flushAllStreamedEvents()
-})
 
 it('ends a turn whose provider output would not read back as failed, and the next send works', async () => {
   const closeSession = vi.fn(async () => true)

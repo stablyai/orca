@@ -12,7 +12,9 @@ import Animated, {
   Extrapolation
 } from 'react-native-reanimated'
 import { useBackClaim } from '../navigation/use-back-claim'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 // Reuse BottomDrawer’s anchor-independent mount-before-commit gate.
 import { resolveBottomDrawerMounted } from './bottom-drawer-mount-state'
 import { resolveRightDrawerPanelWidth } from './right-drawer-panel-width'
@@ -72,6 +74,7 @@ function MountedRightDrawer({
   zIndex = 1000,
   widthPx
 }: MountedRightDrawerProps) {
+  useMobileColorScheme()
   const translateX = useSharedValue(0)
   const progress = useSharedValue(0)
   const { width: screenWidth } = useSafeAreaFrame()
@@ -194,7 +197,7 @@ function MountedRightDrawer({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000
@@ -214,8 +217,8 @@ const styles = StyleSheet.create({
   drawer: {
     height: '100%',
     backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderBottomLeftRadius: 16,
+    borderTopLeftRadius: radii.surface,
+    borderBottomLeftRadius: radii.surface,
     paddingHorizontal: spacing.md,
     borderLeftWidth: StyleSheet.hairlineWidth,
     borderLeftColor: colors.borderSubtle,
@@ -229,4 +232,4 @@ const styles = StyleSheet.create({
       android: { elevation: 8 }
     })
   }
-})
+}))

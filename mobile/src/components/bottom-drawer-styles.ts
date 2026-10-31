@@ -1,7 +1,8 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const bottomDrawerStyles = StyleSheet.create({
+export const bottomDrawerStyles = themedStyleSheet(() => ({
   overlay: {
     ...StyleSheet.absoluteFillObject,
     zIndex: 1000
@@ -11,7 +12,7 @@ export const bottomDrawerStyles = StyleSheet.create({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)'
+    backgroundColor: 'rgba(0,0,0,0.55)'
   },
   backdropPressable: {
     ...StyleSheet.absoluteFillObject
@@ -23,10 +24,11 @@ export const bottomDrawerStyles = StyleSheet.create({
   anchorWide: {
     alignItems: 'center'
   },
+  // A sheet floats over the screen like a dialog, so it takes the floating radius.
   drawer: {
-    backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: colors.sheetSurface,
+    borderTopLeftRadius: radii.floating,
+    borderTopRightRadius: radii.floating,
     paddingHorizontal: spacing.md,
     ...Platform.select({
       ios: {
@@ -46,10 +48,10 @@ export const bottomDrawerStyles = StyleSheet.create({
   handle: {
     alignSelf: 'center',
     width: 36,
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: radii.pill,
     backgroundColor: colors.textMuted,
-    opacity: 0.4
+    opacity: 0.5
   },
   handleHitArea: {
     alignItems: 'center',
@@ -73,6 +75,6 @@ export const bottomDrawerStyles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 500,
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.sheetSurface
   }
-})
+}))

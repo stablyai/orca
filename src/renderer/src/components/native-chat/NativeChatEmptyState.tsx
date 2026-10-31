@@ -1,7 +1,7 @@
 import { MessageSquare, TriangleAlert } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
 import { formatAgentTypeLabel } from '@/lib/agent-status'
-import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../shared/native-chat-empty-state'
+import { NATIVE_CHAT_EMPTY_STATE_COPY } from '../../../../shared/native-chat/native-chat-empty-state'
 import type { NativeChatSession } from '../../../../shared/native-chat-types'
 
 export function NativeChatEmptyState({

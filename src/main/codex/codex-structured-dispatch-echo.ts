@@ -59,6 +59,13 @@ export type CodexDispatchEchoes = {
   ) => { clientMessageId: string; via: AgentJournalTurnJoin }[]
   /** Submission origin retained while the send remains armed. */
   requestOrigin: (clientMessageId: string) => CodexDispatchRequestOrigin | null
+  /** A turn/start reply named the turn this send opened, recorded at reply receipt. */
+  repliedTurn: (clientMessageId: string, threadId: string, turnId: string) => void
+  /** Earliest armed send whose turn/start reply named this turn; hook-refused prompts never echo. */
+  turnOpener: (
+    threadId: string,
+    turnId: string
+  ) => { clientMessageId: string; requestOrigin: CodexDispatchRequestOrigin } | null
   latestSequence: () => number
   clear: () => void
   readonly size: number
@@ -71,6 +78,7 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
       requestedAt: number | null
       sequence: number
       turn?: { threadId: string; turnId: string; via: AgentJournalTurnJoin }
+      openedTurn?: { threadId: string; turnId: string }
       answeredAt?: number
       turnEnded?: true
     }
@@ -222,6 +230,25 @@ export function createCodexDispatchEchoes(onHeldChange?: () => void): CodexDispa
       return origin?.requestedAt === null || origin === undefined
         ? null
         : { requestedAt: origin.requestedAt, sequence: origin.sequence }
+    },
+    repliedTurn: (clientMessageId, threadId, turnId) => {
+      const entry = armed.get(clientMessageId)
+      if (entry) {
+        entry.openedTurn = { threadId, turnId }
+      }
+    },
+    turnOpener: (threadId, turnId) => {
+      // Sends are armed in sequence order, so the first match is the earliest.
+      for (const [clientMessageId, { openedTurn, requestedAt, sequence }] of armed) {
+        if (
+          openedTurn?.threadId === threadId &&
+          openedTurn.turnId === turnId &&
+          requestedAt !== null
+        ) {
+          return { clientMessageId, requestOrigin: { requestedAt, sequence } }
+        }
+      }
+      return null
     },
     latestSequence: () => nextSequence - 1,
     clear: () => {

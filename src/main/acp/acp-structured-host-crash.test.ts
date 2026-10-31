@@ -71,7 +71,10 @@ function expectOneTurnScopedCutShortRow(settled: Awaited<ReturnType<typeof settl
   expect(row?.turnScope).toEqual({ kind: 'turn', turnItemId: turn?.itemId })
   expect(
     readAgentSessionFailureFact(row?.body.kind === 'status' ? row.body.failure : undefined)
-  ).toEqual({ kind: 'providerExited', detail: { text: LAST_WORDS, audience: 'person' } })
+  ).toEqual({
+    kind: 'providerExited',
+    detail: { text: `(code 0)\n${LAST_WORDS}`, audience: 'log' }
+  })
   expect(rows.find((item) => item.body.kind === 'tool-call')?.body).toMatchObject({
     state: 'failed',
     endedAs: 'interrupted'

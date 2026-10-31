@@ -85,7 +85,7 @@ function handle(method, params) {
     }
     return { browserPageId: params.page, url: params.url, title: 'Fake page' }
   }
-  return { browserPageId: params.page ?? undefined, method }
+  return control().results?.[method] ?? { browserPageId: params.page ?? undefined, method }
 }
 
 const endpoint =

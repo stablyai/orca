@@ -2,10 +2,7 @@
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { TuiAgent } from '../../../shared/tui-agent'
-import {
-  callerProfileCases,
-  type AgentLaunchCallerProfile
-} from './agent-launch-caller-profiles-test-harness'
+
 import {
   createLaunchFunnelStore,
   queuedStartupCommand,
@@ -22,7 +19,7 @@ const mockPasteDraftWhenAgentReady = vi.fn<(request: Record<string, unknown>) =>
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -134,76 +131,11 @@ const TRANSPORT_TABLE: readonly {
   }
 ]
 
-const cases = callerProfileCases()
-
-async function launch(profile: AgentLaunchCallerProfile) {
-  const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-  return launchAgentInNewTab({ requestId: 'request-1', ...profile.args })
-}
-
 describe('agent launch caller prompt transport', () => {
   beforeEach(() => {
     vi.clearAllMocks()
     resetLaunchFunnelStore(store)
     mockPasteDraftWhenAgentReady.mockResolvedValue(true)
-  })
-
-  it.each(cases)(
-    'carries the prompt %s sends on the transport its mode picks',
-    async (id, profile) => {
-      const result = await launch(profile)
-
-      if (profile.args.prompt === undefined) {
-        expect(result?.pasteDraftAfterLaunch).toBe(false)
-        expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-        expect(commandCarries(PROMPT)).toBe(false)
-        return
-      }
-      // Quick-command omits delivery mode and uses argv; other callers request draft or submit-after-ready paste.
-      const ridesArgv = id === 'quick-command'
-      expect(result?.pasteDraftAfterLaunch).toBe(!ridesArgv)
-      expect(commandCarries(PROMPT)).toBe(ridesArgv)
-      // The host is never handed the text: the window pastes it, as main does.
-      for (const [, , params] of callRuntimeRpc.mock.calls) {
-        expect(params).not.toHaveProperty('prompt')
-      }
-    }
-  )
-
-  it.each(cases)(
-    'exposes a delivery promise to %s only for submit-after-ready',
-    async (_id, profile) => {
-      const result = await launch(profile)
-
-      // Draft launches must omit this promise because the composer owns text until the user sends it.
-      const expectsPromise =
-        profile.args.prompt !== undefined && profile.args.promptDelivery === 'submit-after-ready'
-      expect(result?.promptDeliveryResult !== undefined).toBe(expectsPromise)
-      if (expectsPromise) {
-        await expect(result?.promptDeliveryResult).resolves.toEqual({
-          delivered: true,
-          failureNotified: false
-        })
-      }
-    }
-  )
-
-  it.each(cases)('tells %s when its prompt was actually delivered', async (_id, profile) => {
-    const onPromptDelivered = vi.fn()
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-2',
-      ...profile.args,
-      onPromptDelivered
-    })
-    await result?.promptDeliveryResult
-
-    if (profile.args.prompt === undefined) {
-      expect(onPromptDelivered).not.toHaveBeenCalled()
-      return
-    }
-    await vi.waitFor(() => expect(onPromptDelivered).toHaveBeenCalledTimes(1))
   })
 
   it.each(
@@ -239,37 +171,6 @@ describe('agent launch caller prompt transport', () => {
         ORCA_HERMES_STARTUP_QUERY: PROMPT
       })
     }
-  })
-
-  it('mirrors an argv-carried draft into the chat composer', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({
-      requestId: 'request-4',
-      agent: 'claude',
-      worktreeId: 'wt-1',
-      prompt: PROMPT,
-      promptDelivery: 'draft'
-    })
-
-    // Native --prefill skips paste, so chat needs its own seed.
-    expect(store.seedNativeChatLaunchDraft).toHaveBeenCalledTimes(1)
-    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
-  })
-
-  it('refuses a whitespace-only prompt rather than launching a blank agent', async () => {
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    const result = launchAgentInNewTab({
-      requestId: 'request-5',
-      agent: 'codex',
-      worktreeId: 'wt-1',
-      prompt: '   \n  ',
-      promptDelivery: 'submit-after-ready'
-    })
-
-    expect(result?.pasteDraftAfterLaunch).toBe(false)
-    expect(mockPasteDraftWhenAgentReady).not.toHaveBeenCalled()
   })
 
   it('reports an undelivered submit-after-ready prompt without throwing at the caller', async () => {

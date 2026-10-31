@@ -5,7 +5,7 @@ import {
   claudeStoppedRequestEndWait,
   settleClaudeTurnEndWaiters
 } from './claude-request-end-wait'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 type InFlight = { translator: { currentTurnId: string | null }; dispatchWaiters: unknown[] }
 

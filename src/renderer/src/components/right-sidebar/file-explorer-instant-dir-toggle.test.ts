@@ -87,7 +87,8 @@ function renderRow(node: TreeNode, toggleDir: (worktreeId: string, dirPath: stri
       refreshDir: vi.fn().mockResolvedValue(undefined),
       handleClick,
       toggleDir,
-      scrollToIndex: vi.fn()
+      scrollToIndex: vi.fn(),
+      pathOwner: 'local'
     })
     return createElement(
       'button',

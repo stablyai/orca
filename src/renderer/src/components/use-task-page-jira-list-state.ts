@@ -1,5 +1,5 @@
-import { useTaskPageJiraQuickFilters } from './use-task-page-jira-quick-filters'
-import type { JiraStatusCatalogItem } from './task-page-jira-status-catalog'
+import { useTaskPageJiraQuickFilters } from './task-page/jira/use-task-page-jira-quick-filters'
+import type { JiraStatusCatalogItem } from './task-page/jira/task-page-jira-status-catalog'
 import { useTaskPageJiraSavedFilters } from './use-task-page-jira-saved-filters'
 import { useTaskPageJiraFavouriteFilters } from './use-task-page-jira-favourite-filters'
 import type { JiraFavouriteFilter } from '../../../shared/jira/jira-favourite-filters'
@@ -11,8 +11,8 @@ import type {
   JiraProjectStatusOrder,
   JiraPriority
 } from '../../../shared/jira/jira-types'
-import type { TaskPageJiraLoadError } from '@/components/task-page-jira-load-state'
-import type { TaskPageJiraJqlRejection } from '@/components/task-page-jira-search'
+import type { TaskPageJiraLoadError } from '@/components/task-page/jira/task-page-jira-load-state'
+import type { TaskPageJiraJqlRejection } from '@/components/task-page/jira/task-page-jira-search'
 import type { JiraPresetId } from '@/components/task-page/task-page-localized-options'
 import type {
   JiraIssueSortColumn,

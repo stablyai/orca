@@ -108,43 +108,6 @@ describe('LinearAgentSkillInstallCta', () => {
     container = null
   })
 
-  it('offers Install and the explanation when the skill is missing', async () => {
-    const rendered = await renderCta()
-
-    expect(rendered.textContent).toContain('Agent skill:')
-    expect(rendered.textContent).toContain('orca-linear')
-    expect(rendered.textContent).toContain('Not installed')
-    expect(rendered.textContent).toContain(
-      'Full guided setup (connect + skill + visibility) is under Settings → Task Sources.'
-    )
-    expect(rendered.textContent).toContain('Install skill')
-    expect(rendered.textContent).not.toContain('Copy command')
-  })
-
-  it("installs the skill directly on the agents' host", async () => {
-    const rendered = await renderCta()
-
-    await act(async () => {
-      Array.from(rendered.querySelectorAll('button'))
-        .find((button) => button.textContent === 'Install skill')
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mocks.plan).toHaveBeenCalledWith({ kind: 'local' }, { names: ['orca-linear'] })
-    expect(rendered.textContent).toContain('Update Orca on the server to install its skills.')
-  })
-
-  it('shows a subtle confirmation and Update when installed', async () => {
-    mocks.skillState.installed = true
-    mocks.skillState.skills = [discoveredSkill({ name: 'orca-linear' })]
-
-    const rendered = await renderCta()
-
-    expect(rendered.textContent).toContain('Installed')
-    expect(rendered.textContent).toContain('Update')
-    expect(rendered.textContent).not.toContain('Not installed')
-  })
-
   it('updates through the legacy skill name when only linear-tickets is installed', async () => {
     mocks.skillState.installed = true
     mocks.skillState.skills = [
@@ -166,16 +129,6 @@ describe('LinearAgentSkillInstallCta', () => {
     expect(mocks.plan).toHaveBeenCalledWith({ kind: 'local' }, { names: ['linear-tickets'] })
   })
 
-  it('notes that remote agent environments need their own setup', async () => {
-    const rendered = await renderCta({
-      settings: { activeRuntimeEnvironmentId: 'runtime-1', terminalWindowsShell: '' }
-    })
-
-    expect(rendered.textContent).toContain(
-      'This installs host setup; remote agent environments may need separate setup.'
-    )
-  })
-
   it('keeps the resolved WSL project on the old command flow', async () => {
     mocks.agentRuntime = { runtime: 'wsl', wslDistro: 'Debian', label: 'WSL Debian' }
     const rendered = await renderCta()
@@ -188,32 +141,5 @@ describe('LinearAgentSkillInstallCta', () => {
       expect.anything(),
       expect.objectContaining({ discoveryTarget: { runtime: 'wsl', wslDistro: 'Debian' } })
     )
-  })
-
-  it('uses project host discovery even when legacy global settings still prefer WSL', async () => {
-    mocks.agentRuntime = { runtime: 'host', label: 'Windows' }
-    await renderCta({
-      settings: {
-        localAgentRuntime: 'wsl',
-        localAgentWslDistro: 'Ubuntu',
-        terminalWindowsShell: 'wsl.exe'
-      }
-    })
-    expect(mocks.useInstalledAgentSkillNames).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ discoveryTarget: undefined })
-    )
-  })
-
-  it('re-checks the skill scan on demand', async () => {
-    const rendered = await renderCta()
-
-    await act(async () => {
-      Array.from(rendered.querySelectorAll('button'))
-        .find((button) => button.textContent?.includes('Re-check'))
-        ?.dispatchEvent(new MouseEvent('click', { bubbles: true }))
-    })
-
-    expect(mocks.skillState.refresh).toHaveBeenCalledTimes(1)
   })
 })

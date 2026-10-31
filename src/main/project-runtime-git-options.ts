@@ -5,6 +5,7 @@ import {
   type ProjectRuntimeResolutionStore
 } from './local-project-runtime-resolution'
 import type { ProjectExecutionRuntimeResolution } from '../shared/project-execution-runtime'
+import { wslHostsGateOpen } from './wsl/wsl-host-gate'
 
 export {
   resolveLocalProjectRuntimeForRepo,
@@ -47,7 +48,7 @@ function getLocalProjectGitExecOptionsForRuntime(
       `Project runtime requires repair before git execution: ${projectRuntime.repair.reason}`
     )
   }
-  if (projectRuntime.runtime.kind === 'wsl') {
+  if (projectRuntime.runtime.kind === 'wsl' && projectRuntime.runtime.git !== 'windows-host') {
     return { cwd: repo.path, wslDistro: projectRuntime.runtime.distro }
   }
   return { cwd: repo.path }
@@ -87,6 +88,14 @@ export function getWorktreeCreatePrefetchGitOptions(
   return getLocalProjectWorktreeGitOptionsForRuntime(repo, projectRuntime)
 }
 
+/** Base-ref and remote-identity reads follow the runtime only with WSL hosts on; before, host Git. */
+export function getProjectRuntimeReadGitOptions(
+  store: ProjectRuntimeResolutionStore,
+  repo: Repo
+): LocalProjectWorktreeGitOptions {
+  return wslHostsGateOpen() ? getWorktreeCreatePrefetchGitOptions(store, repo) : {}
+}
+
 export function getLocalProjectWorktreeGitOptionsForRuntime(
   repo: Repo,
   projectRuntime: ProjectExecutionRuntimeResolution | undefined
@@ -110,5 +119,8 @@ export function getWorktreeMirrorDistroForRuntime(
   if (!projectRuntime || projectRuntime.status !== 'resolved') {
     return undefined
   }
-  return projectRuntime.runtime.kind === 'wsl' ? projectRuntime.runtime.distro : undefined
+  // Windows Git can't use a worktree WSL Git would create inside the distro.
+  return projectRuntime.runtime.kind === 'wsl' && projectRuntime.runtime.git !== 'windows-host'
+    ? projectRuntime.runtime.distro
+    : undefined
 }

@@ -6,7 +6,7 @@ import { dispatchClaudeTurn } from './claude-structured-dispatch'
 import { resolveClaudeReplayTurn } from './claude-replay-turn-resolution'
 import { ClaudeDispatchContentError, readClaudeImage } from './claude-structured-dispatch-content'
 import { claudeUnwrittenUserMessageError } from './claude-agent-sdk-user-message-queue'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 import {
   childExited,
   sessionFor,

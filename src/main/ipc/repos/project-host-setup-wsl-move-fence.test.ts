@@ -183,7 +183,8 @@ describe('repo settings on another host under a WSL move', () => {
       forgetTerminalTopology: vi.fn(),
       invalidateResolvedWorktrees: vi.fn(),
       invalidateWorktreeScan: vi.fn(),
-      notifyReposChanged: vi.fn()
+      notifyReposChanged: vi.fn(),
+      notifyWorktreesChanged: vi.fn()
     })
 
     await expect(controller.setBaseRef('repo-1', 'origin/dev')).resolves.toBe(onHost)

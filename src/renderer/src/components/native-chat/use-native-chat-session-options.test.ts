@@ -1,12 +1,29 @@
 // @vitest-environment happy-dom
 
-import { renderHook, waitFor } from '@testing-library/react'
+import { act, renderHook, waitFor } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { CatalogModel } from '../../../../shared/agent-session-option-catalog'
-import type { NativeChatSessionOptionDispatchCommand } from './native-chat-session-option-command-dispatch'
-import { clearNativeChatModelEnrichmentForTests } from './native-chat-session-option-enrichment'
+import type { NativeChatSessionOptionDispatchCommand } from '../../../../shared/native-chat-session-option-dispatch'
+import {
+  clearNativeChatModelEnrichmentForTests,
+  ensureNativeChatModelEnrichment
+} from './native-chat-session-option-enrichment'
+import {
+  applyNativeChatSessionOptionSettingsMutation,
+  resolveNativeChatSessionOptionDefaults
+} from '../../../../shared/native-chat/input/native-chat-session-option-defaults'
+import { resolveAgentSessionOptionLaunch } from '../../../../shared/agent-session-option-launch'
+import type {
+  NativeChatSessionOptionSettingsMutation,
+  PersistedNativeChatSessionOptions
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 
 const discoverModels = vi.fn<() => Promise<readonly CatalogModel[] | null>>()
+const settingsRpc = vi.fn()
+
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: (...args: unknown[]) => settingsRpc(...args)
+}))
 
 vi.mock('./native-chat-session-option-discovery', () => ({
   resolveNativeChatModelDiscoveryContext: () => ({ hostKey: 'host', runtime: null }),
@@ -58,9 +75,92 @@ describe('useNativeChatSessionOptions model reporting', () => {
   beforeEach(() => {
     clearNativeChatModelEnrichmentForTests()
     discoverModels.mockReset()
+    settingsRpc.mockReset()
+    settingsRpc.mockResolvedValue(undefined)
     storeState.agentStatusByPaneKey = {}
     Object.defineProperty(window, 'api', { configurable: true, value: undefined })
   })
+
+  it.each([
+    ['grok', true],
+    ['grok', false],
+    ['omp', true],
+    ['omp', false]
+  ] as const)(
+    '%s discovery cached=%s retains defaults until an explicit local pick',
+    async (agent, cached) => {
+      let persisted: PersistedNativeChatSessionOptions = { [agent]: { model: 'retired' } }
+      settingsRpc.mockImplementation(
+        async (
+          target: unknown,
+          method: string,
+          mutation: NativeChatSessionOptionSettingsMutation
+        ) => {
+          expect(target).toEqual({ kind: 'local' })
+          expect(method).toBe('settings.mutateNativeChatSessionOptions')
+          persisted = applyNativeChatSessionOptionSettingsMutation(persisted, mutation) ?? persisted
+        }
+      )
+      const models =
+        agent === 'grok' ? [{ id: 'grok-4.7', label: 'Grok', options: [] }] : OMP_DISCOVERED
+      let finishDiscovery: (models: readonly CatalogModel[]) => void = () => {}
+      discoverModels.mockReturnValue(
+        new Promise((resolve) => {
+          finishDiscovery = resolve
+        })
+      )
+      if (cached) {
+        ensureNativeChatModelEnrichment({
+          agent,
+          hostKey: 'host',
+          discover: () => discoverModels()
+        })
+        finishDiscovery(models)
+        await act(async () => {})
+      }
+      const paneKey = `defaults-${agent}-${cached}`
+      storeState.agentStatusByPaneKey[paneKey] = {
+        model: 'retired',
+        modelSwitchCommand: 'orca-model'
+      }
+      const { result } = renderHook(() =>
+        useNativeChatSessionOptions({
+          agent,
+          paneKey,
+          terminalTabId: paneKey,
+          targetPtyId: paneKey,
+          dispatchCommand: async () => undefined
+        })
+      )
+      if (!cached) {
+        await act(async () => finishDiscovery(models))
+      }
+      await waitFor(() =>
+        expect(
+          modelDescriptor(result.current.snapshot).choices.some(
+            (choice) => choice.value === models[0]!.id
+          )
+        ).toBe(true)
+      )
+      expect(settingsRpc).not.toHaveBeenCalled()
+      expect(
+        resolveAgentSessionOptionLaunch(
+          agent,
+          resolveNativeChatSessionOptionDefaults(persisted, agent)
+        ).args
+      ).toContain('retired')
+      await act(async () => {
+        await result.current.surface!.setOption('model', models[0]!.id)
+      })
+      expect(settingsRpc).toHaveBeenCalledOnce()
+      expect(
+        resolveAgentSessionOptionLaunch(
+          agent,
+          resolveNativeChatSessionOptionDefaults(persisted, agent)
+        ).args
+      ).toContain(models[0]!.id)
+    }
+  )
 
   it.each([null, 'gpt-5.6-terra'])(
     'tracks an unlisted Codex report after %s without inventing effort choices',
@@ -95,7 +195,8 @@ describe('useNativeChatSessionOptions model reporting', () => {
       })
       expect(modelDescriptor(result.current.snapshot).choices).toContainEqual({
         value: 'gpt-6.1-sol',
-        label: 'gpt-6.1-sol'
+        label: 'GPT 6.1 Sol',
+        description: 'gpt-6.1-sol'
       })
       const snapshot = result.current.snapshot
       storeState.agentStatusByPaneKey[paneKey] = {}

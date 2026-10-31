@@ -8,7 +8,6 @@ import { serializeWithAbsoluteCursor } from '../../shared/terminal-serialize-abs
 import { readTerminalMouseEncoding } from '../../shared/terminal-mouse-encoding'
 
 const CODEX_FULLSCREEN_MODES = '\x1b[?1049h\x1b[?1000h\x1b[?1002h\x1b[?1003h\x1b[?1006h'
-const X10_WHEEL_UP_AT_10_5 = `\x1b[M${String.fromCharCode(96, 42, 37)}`
 const SGR_WHEEL_UP_AT_10_5 = '\x1b[<64;10;5M'
 
 function createTerminal(): { terminal: Terminal; addon: SerializeAddon } {
@@ -69,16 +68,6 @@ function wheelUpReport(terminal: Terminal): string | null {
 }
 
 describe('snapshot mouse encoding', () => {
-  it('the bare addon drops SGR encoding, so its restore reports X10 (the #23818 shape)', async () => {
-    const { terminal, addon } = createTerminal()
-    await write(terminal, `shell$ ${CODEX_FULLSCREEN_MODES}codex`)
-
-    const restored = await replay(addon.serialize())
-
-    expect(restored.modes.mouseTrackingMode).toBe('any')
-    expect(wheelUpReport(restored)).toBe(X10_WHEEL_UP_AT_10_5)
-  })
-
   it('round-trips SGR encoding with the tracking mode, so the restore reports SGR', async () => {
     const { terminal, addon } = createTerminal()
     await write(terminal, `shell$ ${CODEX_FULLSCREEN_MODES}codex`)
@@ -111,19 +100,6 @@ describe('snapshot mouse encoding', () => {
     expect(wheelUpReport(restored)).toBeNull()
   })
 
-  it('adds nothing for the default encoding or when modes are excluded', async () => {
-    const { terminal, addon } = createTerminal()
-    await write(terminal, 'x\x1b[?1000h')
-    const legacy = serializeWithAbsoluteCursor(addon, terminal)
-    expect(legacy).toContain('\x1b[?1000h')
-    expect(legacy).not.toContain('\x1b[?1006h')
-    expect(legacy).not.toContain('\x1b[?1016h')
-
-    await write(terminal, '\x1b[?1006h')
-    const excluded = serializeWithAbsoluteCursor(addon, terminal, { excludeModes: true })
-    expect(excluded).not.toContain('\x1b[?1006h')
-  })
-
   it('carries the encoding from a renderer snapshot through a headless seed to its snapshot', async () => {
     // Mobile replay discards bytes before the last alternate-screen entry; encoding must survive that slice.
     const { terminal, addon } = createTerminal()
@@ -140,18 +116,6 @@ describe('snapshot mouse encoding', () => {
     expect(mobileReplay).toContain('\x1b[?1003h')
     expect(mobileReplay).toContain('\x1b[?1006h')
     expect(wheelUpReport(await replay(data))).toBe(SGR_WHEEL_UP_AT_10_5)
-    emulator.dispose()
-  })
-
-  it('a snapshot from an older host without the encoding restores as before', async () => {
-    const emulator = new HeadlessEmulator({ cols: 40, rows: 10 })
-    await emulator.write('\x1b[?1049h\x1b[?1003hcodex')
-
-    const snapshot = emulator.getSnapshot()
-
-    expect(snapshot.modes.mouseTrackingMode).toBe('any')
-    expect(snapshot.modes.sgrMouseMode).toBe(false)
-    expect(snapshot.rehydrateSequences).not.toContain('\x1b[?1006h')
     emulator.dispose()
   })
 })

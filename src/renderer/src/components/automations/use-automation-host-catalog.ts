@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
 import { useAppStore } from '@/store'
+import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import { getHostDisplayLabelOverrides } from '../../../../shared/host-setting-overrides'
 import { getLocalExecutionHostLabel } from '../../../../shared/execution-host'
 import type { AutomationHostFilter } from '../../../../shared/automation-host-filter'
@@ -142,6 +143,7 @@ export function useAutomationHostCatalog(
       ]),
     [options.referencedStableKeys, selectedStableKey]
   )
+  const languageRevision = useUiLanguageRevision()
   const queryCatalog = useMemo(
     () =>
       buildAutomationHostCatalog(
@@ -152,8 +154,8 @@ export function useAutomationHostCatalog(
           referencedStableKeys
         })
       ),
-    // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal: orphan counts only exist in committed answers, so the catalog re-reads them when the cache moves.
-    [cacheVersion, desktopLabel, orphanCount, referencedStableKeys, sourceState]
+    // oxlint-disable-next-line react-hooks/exhaustive-deps -- cacheVersion is the cache's change signal: orphan counts only exist in committed answers, so the catalog re-reads them when the cache moves. Ordering collates in the UI language.
+    [cacheVersion, desktopLabel, orphanCount, referencedStableKeys, sourceState, languageRevision]
   )
 
   // Apply by complete generation/scheduler signature, not catalog identity; label/health changes must not cancel work.

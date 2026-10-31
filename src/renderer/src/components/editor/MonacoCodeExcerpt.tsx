@@ -3,7 +3,7 @@ import { monaco } from '@/lib/monaco-setup'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
 import { useAppStore } from '@/store'
 import { cn } from '@/lib/utils'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 let pythonLanguageRegistrationPromise: Promise<void> | null = null
 
@@ -31,17 +31,18 @@ async function ensureColorizationLanguage(language: string): Promise<void> {
 
 /** Monaco token HTML per line; loads lazy tokenizers (e.g. Python) before colorizing. */
 export function useMonacoColorizedLines(lines: string[], language: string): string[] {
-  const isDark = useDocumentDarkTheme()
+  const monacoTheme = useMonacoTheme()
   const code = useMemo(() => lines.join('\n'), [lines])
+  const lineCount = lines.length
   const [htmlLines, setHtmlLines] = useState<string[]>(() => lines.map(() => ''))
 
   useEffect(() => {
-    monaco.editor.setTheme(isDark ? 'vs-dark' : 'vs')
-  }, [isDark])
+    monaco.editor.setTheme(monacoTheme)
+  }, [monacoTheme])
 
   // Why: colorize emits theme-specific token classes, so a theme switch must re-colorize.
   useEffect(() => {
-    if (lines.length === 0) {
+    if (lineCount === 0) {
       setHtmlLines([])
       return
     }
@@ -50,19 +51,22 @@ export function useMonacoColorizedLines(lines: string[], language: string): stri
     // Wait for lazy tokenizers before colorizing; colorizeModelLine would emit default tokens while contributions load.
     void ensureColorizationLanguage(language)
       .catch(() => undefined)
-      .then(() => monaco.editor.colorize(code, language, { tabSize: 2 }))
-      .then((html) => {
+      .then(async () => {
         if (cancelled) {
           return
         }
-        const nextLines = html.split('<br/>').slice(0, lines.length)
+        const html = await monaco.editor.colorize(code, language, { tabSize: 2 })
+        if (cancelled) {
+          return
+        }
+        const nextLines = html.split('<br/>').slice(0, lineCount)
         setHtmlLines(nextLines)
       })
 
     return () => {
       cancelled = true
     }
-  }, [code, language, lines, isDark])
+  }, [code, language, lineCount, monacoTheme])
 
   return htmlLines
 }

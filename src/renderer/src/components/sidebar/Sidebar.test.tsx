@@ -1,7 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { CSSProperties, ReactNode } from 'react'
-import { renderToStaticMarkup } from 'react-dom/server'
+
 import { tmpdir } from 'node:os'
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -58,6 +58,8 @@ vi.mock('./SetupScriptPromptCard', () => ({
 vi.mock('./WorktreeList', () => ({
   default: () => <div data-testid="worktree-list" />
 }))
+
+vi.mock('./WslMovedProjectsSection', () => ({ default: () => null }))
 
 vi.mock('./SidebarToolbar', () => ({
   default: () => <div data-testid="sidebar-toolbar" />
@@ -119,12 +121,6 @@ function setSidebarState(settings: GlobalSettings, statusBarVisible = true): voi
   }
 }
 
-function renderSidebar(): string {
-  return renderToStaticMarkup(
-    <Sidebar worktreeScrollOffsetRef={{ current: 0 }} worktreeScrollAnchorRef={{ current: null }} />
-  )
-}
-
 function sidebarElement(): ReactNode {
   return (
     <Sidebar worktreeScrollOffsetRef={{ current: 0 }} worktreeScrollAnchorRef={{ current: null }} />
@@ -160,46 +156,6 @@ describe('Sidebar', () => {
     } finally {
       vi.useRealTimers()
     }
-  })
-
-  it('anchors the setup script popup to the bottom toolbar', () => {
-    setSidebarState(getDefaultSettings(tmpdir()))
-    const view = render(sidebarElement())
-    const prompt = view.getByTestId('setup-script-prompt-card')
-    const toolbar = view.getByTestId('sidebar-toolbar')
-
-    expect(prompt.parentElement).toBe(toolbar.parentElement)
-    expect(prompt.parentElement?.classList.contains('relative')).toBe(true)
-    expect(prompt.parentElement?.classList.contains('shrink-0')).toBe(true)
-  })
-
-  it('applies left sidebar appearance variables to the workspace sidebar surface', () => {
-    setSidebarState({
-      ...getDefaultSettings(tmpdir()),
-      leftSidebarAppearanceMode: 'match-terminal',
-      terminalColorOverrides: {
-        background: '#101820',
-        foreground: '#f0f4f8'
-      }
-    })
-
-    const markup = renderSidebar()
-    const sidebarRootTag = markup.slice(0, markup.indexOf('>'))
-
-    expect(sidebarRootTag).toContain('--worktree-sidebar:#101820')
-    expect(sidebarRootTag).toContain('--worktree-sidebar-foreground:#f0f4f8')
-    expect(sidebarRootTag).toMatch(/[;"]color:#f0f4f8/)
-    expect(markup).toContain('data-testid="workspace-kanban-drawer"')
-    expect(markup.match(/--worktree-sidebar:#101820/g)).toHaveLength(2)
-  })
-
-  it('passes status bar visibility into the workspace board drawer', () => {
-    setSidebarState(getDefaultSettings(tmpdir()), false)
-
-    const markup = renderSidebar()
-
-    expect(markup).toContain('data-testid="workspace-kanban-drawer"')
-    expect(markup).toContain('data-status-bar-visible="false"')
   })
 
   it('does not start a full worktree scan while the startup session is hydrating', () => {

@@ -3,6 +3,7 @@
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
+  AgentJournalSubmission,
   AgentJournalCursor,
   AgentJournalRenderItem
 } from '../../../../shared/agent-session-journal-types'
@@ -19,8 +20,19 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSession: mocks.subscribe
 }))
 
+import { useAppStore } from '@/store'
 import { useStructuredAgentSessionRead } from './use-structured-agent-session-read'
-import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
+import {
+  getStructuredAgentSessionReadOwner,
+  findStructuredAgentSessionReadOwner,
+  retireStructuredAgentSessionReadOwner,
+  resetStructuredAgentSessionReadOwnersForTests
+} from './structured-agent-session-read-owner'
+
+import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/structured-agent-session-send-evidence'
+
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../../shared/structured-agent-session-coalescer'
+import type { StructuredAgentSessionAdmission } from './structured-agent-session-read-owner-contract'
 
 const LOCAL_TARGET = { kind: 'local' } as const
 
@@ -86,6 +98,48 @@ describe('useStructuredAgentSessionRead history window', () => {
     vi.clearAllMocks()
     resetStructuredAgentSessionReadOwnersForTests()
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
+  })
+
+  it('keeps a row removed when its upsert and removal arrive within one streaming window', async () => {
+    mocks.call.mockResolvedValueOnce({ ok: true, page: page('tail', [], false) })
+    const { result, unmount } = renderHook(() =>
+      useStructuredAgentSessionRead({ sessionId: 'session-a', target: LOCAL_TARGET })
+    )
+    await waitFor(() => expect(result.current.state.status).toBe('ready'))
+    const emit: (event: AgentSessionSubscribeEvent) => void = mocks.subscribe.mock.calls[0][2]
+    act(() =>
+      emit({ type: 'snapshot', sessionId: 'session-a', page: page('tail', [], false), fence: 1 })
+    )
+    vi.useFakeTimers()
+    try {
+      const batch = {
+        cursor: { epoch: 'epoch-a', sequence: 501 },
+        items: [message('answer', 501, 'assistant')],
+        removedItemIds: [],
+        submissions: []
+      }
+      act(() => emit({ type: 'batch', sessionId: 'session-a', batch }))
+      act(() =>
+        emit({
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: {
+            ...batch,
+            cursor: { epoch: 'epoch-a', sequence: 502 },
+            items: [],
+            removedItemIds: ['answer']
+          }
+        })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      })
+      expect(result.current.state.items).toEqual([])
+      expect(result.current.state.cursor?.sequence).toBe(502)
+    } finally {
+      unmount()
+      vi.useRealTimers()
+    }
   })
 
   it('restores a realistic 21-turn window across the wire-safe bridge-sized read', async () => {
@@ -337,6 +391,15 @@ describe('useStructuredAgentSessionRead history window', () => {
       cursor: view.result.current.first.state.cursor
     })
     expect(unsubscribe).toHaveBeenCalledTimes(2)
+    const owner = getStructuredAgentSessionReadOwner('session-switch-a', LOCAL_TARGET)
+    act(() => owner.resync?.())
+    await waitFor(() => expect(mocks.subscribe).toHaveBeenCalledTimes(4))
+    expect(unsubscribe).toHaveBeenCalledTimes(3)
+    expect(mocks.call).toHaveBeenCalledTimes(2)
+    view.unmount()
+    owner.resync?.()
+    expect(mocks.subscribe).toHaveBeenCalledTimes(4)
+    expect(unsubscribe).toHaveBeenCalledTimes(4)
   })
 })
 
@@ -530,4 +593,121 @@ describe('useStructuredAgentSessionRead stream failures', () => {
     expect(result.current.state.error).toBe('journal read failed')
     expect(result.current.state.epoch).toBeNull()
   })
+  it('retains the action-only owner continuously across replacement and retirement', async () => {
+    const owner = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    const a = Promise.withResolvers<void>()
+    const first = vi.fn<(attempt: StructuredAgentSessionAdmission) => Promise<void>>(
+      () => a.promise
+    )
+    const pending = owner.admit('A', () => true, first)
+    const next = vi.fn<(attempt: StructuredAgentSessionAdmission) => Promise<void>>(
+      () => new Promise<void>(() => {})
+    )
+    const successor = owner.admit('B', () => true, next)
+    await pending
+    expect(first.mock.calls[0][0].signal.aborted).toBe(true)
+    expect(getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBe(owner)
+    expect(owner.admit('B', () => true, next)).toBe(successor)
+    a.resolve()
+    await Promise.resolve()
+    expect(next.mock.calls[0][0].current()).toBe(true)
+    retireStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+    await successor
+    expect(next.mock.calls[0][0].current()).toBe(false)
+    expect(findStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBeUndefined()
+  })
+  it.each([100, 1000])(
+    'reconciles %i rows only on relevant evidence, not activity frames',
+    async (n) => {
+      vi.useFakeTimers()
+      const owner = getStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)
+      let visits = 0
+      const submissions: AgentJournalSubmission[] = Array.from({ length: n }, (_, i) => ({
+        get reason() {
+          visits += 1
+          return null
+        },
+        clientMessageId: `old-${i}`,
+        fence: 1,
+        payloadFingerprint: 'send',
+        dispatchState: 'accepted',
+        providerItemId: null,
+        submittedAt: i,
+        resolvedAt: i
+      }))
+      const receipt = owner.trackSend('receipt')
+      receipt.issue()
+      owner.publishCreated({ ...page('tail', [], false), submissions })
+      receipt.settle(false)
+      expect(findStructuredAgentSessionReadOwner('session-a', LOCAL_TARGET)).toBe(owner)
+      const stop = owner.activate({
+        getState: useAppStore.getState,
+        subscribeRetryNow: () => () => {}
+      })
+      const send = owner.trackSend('unknown')
+      send.issue()
+      send.settle(true)
+      const emit: (event: AgentSessionSubscribeEvent) => void = mocks.subscribe.mock.calls[0][2]
+      const batch = {
+        cursor: { epoch: 'epoch-a', sequence: 501 },
+        items: [],
+        removedItemIds: [],
+        submissions: []
+      }
+      expect(visits).toBeGreaterThanOrEqual(n)
+      visits = 0
+      for (let i = 0; i < 10; i += 1) {
+        emit({
+          type: 'batch',
+          sessionId: 'session-a',
+          batch,
+          activity: { turnId: 't', text: `progress-${i}` }
+        })
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      }
+      expect(visits).toBe(0)
+      expect(owner.getSnapshot().state.activity?.text).toBe('progress-9')
+      const busy = (): boolean => {
+        let result = false
+        void owner.admit(
+          'check',
+          () => true,
+          (attempt) => {
+            result = attempt.busy()
+          }
+        )
+        return result
+      }
+      const row = {
+        ...submissions[0],
+        clientMessageId: 'handoff',
+        queuedMessageId: 'unknown',
+        submittedAt: n,
+        resolvedAt: n
+      }
+      for (const reason of [STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING, null]) {
+        emit({
+          type: 'batch',
+          sessionId: 'session-a',
+          batch: { ...batch, submissions: [{ ...row, reason }] }
+        })
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+        expect(busy()).toBe(reason !== null)
+        await Promise.resolve()
+      }
+      owner.trackSend('handoff').issue()
+      expect(busy()).toBe(false)
+      await Promise.resolve()
+      visits = 0
+      emit({ type: 'batch', sessionId: 'session-a', batch })
+      await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      expect(visits).toBe(0)
+      stop()
+      owner.dispose()
+      emit({ type: 'batch', sessionId: 'session-a', batch })
+      await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      expect(visits).toBe(0)
+      vi.useRealTimers()
+    }
+  )
 })

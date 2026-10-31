@@ -15,6 +15,7 @@ import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 import { openToolRunMembers } from './native-chat-tool-run-members-test-support'
 
 import {
+  MAX_NATIVE_CHAT_DISCLOSURES,
   NativeChatDisclosureContext,
   useNativeChatDisclosures
 } from './native-chat-disclosure-store'
@@ -316,22 +317,35 @@ import { i18n } from '@/i18n/i18n'
     return box
   }
 
-  /** A live run inside the transcript's disclosure store, which is what remembers its box. */
+  /** A run inside the transcript's disclosure store, which is what remembers its box. */
   function Transcript({
     mounted = true,
-    count = 3
+    count = 3,
+    settled = false
   }: {
     mounted?: boolean
     count?: number
+    settled?: boolean
   }): React.JSX.Element {
     const disclosures = useNativeChatDisclosures()
     return (
       <NativeChatDisclosureContext.Provider value={disclosures}>
+        {settled ? (
+          <button
+            onClick={() => {
+              for (let index = 0; index < MAX_NATIVE_CHAT_DISCLOSURES; index++) {
+                disclosures.write(`line:pressure:${index}`, true)
+              }
+            }}
+          >
+            Expire other disclosures
+          </button>
+        ) : null}
         {mounted ? (
           <NativeChatToolRun
             blocks={calls(count)}
-            expandSignal
-            activeTurnIsWorking
+            expandSignal={!settled}
+            activeTurnIsWorking={!settled}
             disclosureId="message-1"
           />
         ) : null}
@@ -343,6 +357,7 @@ import { i18n } from '@/i18n/i18n'
     afterEach(() => {
       cleanup()
       vi.restoreAllMocks()
+      vi.unstubAllGlobals()
     })
     it('keeps a live run on its newest call until the reader scrolls away', () => {
       const contentHeight = { current: 600 }
@@ -398,6 +413,52 @@ import { i18n } from '@/i18n/i18n'
       fireEvent.click(header)
 
       expect(membersBox(container).scrollTop).toBe(900)
+    })
+
+    it('opens fresh after a mounted expired run records more scroll and is recycled', () => {
+      let resizeMembers: (() => void) | undefined
+      vi.stubGlobal(
+        'ResizeObserver',
+        class implements ResizeObserver {
+          constructor(private readonly callback: ResizeObserverCallback) {}
+          observe(target: Element): void {
+            if (target.hasAttribute('data-native-chat-tool-run-members')) {
+              resizeMembers = () => this.callback([], this)
+            }
+          }
+          unobserve(): void {}
+          disconnect(): void {}
+        }
+      )
+      layOut({ current: 900 })
+      const { container, rerender } = render(<Transcript settled />)
+      const header = container.querySelector<HTMLElement>('[data-native-chat-tool-run-state]')!
+      fireEvent.click(header)
+      const box = membersBox(container)
+      box.scrollTop = 120
+      fireEvent.scroll(box)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Expire other disclosures' }))
+      box.scrollTop = 140
+      if (!resizeMembers) {
+        throw new Error('members resize observer did not attach')
+      }
+      act(resizeMembers)
+      box.scrollTop = 160
+      fireEvent.scroll(box)
+      expect(header).toHaveAttribute('aria-expanded', 'true')
+      expect(membersBox(container)).toBe(box)
+      expect(box.scrollTop).toBe(160)
+
+      rerender(<Transcript settled mounted={false} />)
+      rerender(<Transcript settled />)
+      const returnedHeader = container.querySelector<HTMLElement>(
+        '[data-native-chat-tool-run-state]'
+      )!
+      expect(returnedHeader).toHaveAttribute('aria-expanded', 'false')
+      expect(container.querySelector('[data-native-chat-tool-run-members]')).toBeNull()
+      fireEvent.click(returnedHeader)
+      expect(membersBox(container).scrollTop).toBe(0)
     })
 
     it('opens a settled run at its first call', () => {

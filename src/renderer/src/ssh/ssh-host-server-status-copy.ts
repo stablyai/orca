@@ -239,7 +239,12 @@ function linkedProjectsLine(
         ? translate(
             'auto.components.settings.sshHostServer.linkedProjects',
             'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automations there were not moved, and worktrees it created there show as external worktrees.',
-            { paths, count }
+            {
+              paths,
+              count,
+              defaultValue_one:
+                'This host’s Orca server already had {{paths}}, so this desktop now uses the server’s copy. This desktop’s tabs and {{count}} automation there were not moved, and worktrees it created there show as external worktrees.'
+            }
           )
         : translate(
             'auto.components.settings.sshHostServer.linkedProjectsNoAutomations',
@@ -262,7 +267,11 @@ function unservedLine(
           ? translate(
               'auto.components.settings.sshHostServer.olderTerminals',
               '{{count}} terminals started by an older version of Orca are still running on this host, and they don’t stop on their own. Close them in that version of Orca or end them on the host, then reconnect.',
-              { count: status.terminals }
+              {
+                count: status.terminals,
+                defaultValue_one:
+                  '{{count}} terminal started by an older version of Orca is still running on this host, and it doesn’t stop on its own. Close it in that version of Orca or end it on the host, then reconnect.'
+              }
             )
           : translate(
               'auto.components.settings.sshHostServer.olderTerminalsUncounted',

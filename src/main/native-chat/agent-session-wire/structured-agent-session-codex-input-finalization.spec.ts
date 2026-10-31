@@ -18,6 +18,7 @@ import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal
 import * as lifetime from './structured-agent-session-host-lifetime'
 import { claimStructuredAgentSessionAgent } from './structured-agent-session-agent-start'
 import { openStructuredAgentSessionConversationJournal } from './structured-agent-session-conversation-open'
+import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 
 export function registerCodexInputFinalization(current: typeof codexInputFinalizationFixture) {
   it.each([
@@ -34,7 +35,6 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
       host,
       adapter,
       codex,
-      config,
       permissionSend,
       pick,
       stop,
@@ -51,14 +51,23 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     const journal = sessions.get(SESSION)!.journal
     const persisted = vi.spyOn(journal, 'resolveDispatch')
     if (failure === 'lost-steer') {
-      await began(await permissionSend('running'))
+      await began(await permissionSend('running', { personality: 'friendly' }))
     }
-    const paused = Promise.withResolvers<unknown>()
-    codex.routes['config/read'] = () => paused.promise
-    const id = await permissionSend('preserve me', { personality: 'friendly' })
-    await vi.waitFor(() =>
-      expect(codex.connections[0]?.calls.some((r) => r.method === 'config/read')).toBe(true)
+    const paused = Promise.withResolvers<void>()
+    const preparing = Promise.withResolvers<void>()
+    const dispatch = adapter.dispatch.bind(adapter)
+    vi.spyOn(adapter, 'dispatch').mockImplementation((input) =>
+      dispatch({
+        ...input,
+        beforeDispatch: async () => {
+          await input.beforeDispatch?.()
+          preparing.resolve()
+          await waitForPromiseWithSignal(paused.promise, input.signal)
+        }
+      })
     )
+    const id = await permissionSend('preserve me', { personality: 'friendly' })
+    await preparing.promise
     await pick('auto')
     if (failure === 'refusal') {
       codex.routes['thread/start'] = codex.routes['thread/resume'] = () => {
@@ -78,7 +87,7 @@ export function registerCodexInputFinalization(current: typeof codexInputFinaliz
     if (failure === 'post-write-stop') {
       codex.routes['turn/start'] = () => lost.promise
     }
-    paused.resolve(config)
+    paused.resolve()
     if (failure === 'post-write-stop') {
       await vi.waitFor(() => expect(starts()).toHaveLength(1))
       const session = host.collaboratorsForTests().sessions.get(SESSION)!

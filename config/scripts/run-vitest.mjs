@@ -3,6 +3,7 @@ import { resolve } from 'node:path'
 import { runProcess, runProcessSync, spawnProcess } from '@orca/process-host'
 import { hasNoChangedFiles } from './vitest-changed-precheck.mjs'
 import { RUN_ARGS_ENV } from './vitest-run-filters.mjs'
+import { localModuleCacheEnv } from './vitest-local-module-cache.mjs'
 import { createRunTempDirectory } from './vitest-run-temp-directory.mjs'
 import { createVitestZodBundle } from './vitest-zod-bundle.mjs'
 import {
@@ -66,6 +67,7 @@ async function runVitest() {
   let runTemp
   try {
     const zodBundle = createVitestZodBundle(root)
+    const moduleCacheEnv = await localModuleCacheEnv(root)
     runTemp = createRunTempDirectory()
     return await waitForVitest({
       program: pinnedBun ?? 'bun',
@@ -74,6 +76,7 @@ async function runVitest() {
       env: {
         ...process.env,
         ...runTemp?.env,
+        ...moduleCacheEnv,
         ORCA_BACKGROUND_LAUNCH: '1',
         ORCA_TEST_NODE_EXECUTABLE: process.execPath,
         ORCA_TEST_NODE_VERSION: process.versions.node,

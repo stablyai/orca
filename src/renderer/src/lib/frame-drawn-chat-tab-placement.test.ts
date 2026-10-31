@@ -33,10 +33,7 @@ vi.mock('./desktop-created-server-tabs', () => ({
 }))
 
 import type { StructuredAgentSessionCreateParams } from '../../../shared/structured-agent-session-create'
-import {
-  holdFrameDrawnProvisionalChatTab,
-  withFrameDrawnChatTabPlacement
-} from './frame-drawn-chat-tab-placement'
+import { withFrameDrawnChatTabPlacement } from './frame-drawn-chat-tab-placement'
 
 const TAB = 'structured-agent-session-claude_1'
 const params: StructuredAgentSessionCreateParams = {
@@ -104,26 +101,5 @@ describe('a chat opened in a frame-drawn server workspace (L270)', () => {
       ...params,
       tabPlacement: { groupId: 'g-2' }
     })
-  })
-
-  it.each([false, null])(
-    "sends no place when the host's cached capability reads %s",
-    (supported) => {
-      mocks.supported = supported
-      expect(withFrameDrawnChatTabPlacement(intent)).toBe(intent.params)
-    }
-  )
-
-  it('sends no place, and holds nothing, outside a frame-drawn workspace', () => {
-    mocks.frameDrawn = false
-    expect(withFrameDrawnChatTabPlacement(intent)).toBe(intent.params)
-    holdFrameDrawnProvisionalChatTab(intent.target, 'wt', TAB)
-    holdFrameDrawnProvisionalChatTab({ kind: 'local' }, 'wt', TAB)
-    expect(mocks.noted).toEqual([])
-  })
-
-  it('holds the provisional tab for its server until the server lists it', () => {
-    holdFrameDrawnProvisionalChatTab(intent.target, 'wt', TAB)
-    expect(mocks.noted).toEqual([['env-1', 'wt', TAB]])
   })
 })

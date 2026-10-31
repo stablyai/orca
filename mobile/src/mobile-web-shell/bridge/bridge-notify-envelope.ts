@@ -1,8 +1,14 @@
 import { z } from 'zod'
 import { BridgeErrorCaptureSchema } from './bridge-error-capture'
 import { BRIDGE_HAPTICS_NOTIFY_FIELDS } from './bridge-haptics-notify'
+import { BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS } from './bridge-liveness-probe-notify'
 import { BRIDGE_BACK_CLAIM_NOTIFY } from './bridge-page-back'
+import { BRIDGE_PAGE_LOCATION } from './bridge-page-location'
 import { BRIDGE_PAGE_PAINTED } from './bridge-page-painted'
+import {
+  BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY,
+  BridgeTerminalToolbarSchema
+} from './bridge-terminal-key'
 import { BRIDGE_CLEARABLE_ROUTE_PARAMS, BRIDGE_ROUTE_PARAM_CLEAR } from './bridge-route-update'
 import {
   isPageStorageKey,
@@ -38,7 +44,9 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     v: versionSchema,
     type: z.literal('notify'),
     name: z.literal('navigate'),
-    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
+    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN),
+    // Older shells strip this key and push, which is what every navigate did before it existed.
+    replace: z.literal(true).optional()
   }),
   // Back carries no target; only the native stack knows what screen it will reveal.
   z.object({
@@ -76,6 +84,7 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     error: BridgeErrorCaptureSchema
   }),
   z.object({ v: versionSchema, ...BRIDGE_HAPTICS_NOTIFY_FIELDS }),
+  z.object({ v: versionSchema, ...BRIDGE_LIVENESS_PROBE_NOTIFY_FIELDS }),
   // Allow only the shell-provided one-shot param; its holder ignores a clear naming an older value (ruling 34).
   z.object({
     v: versionSchema,
@@ -96,6 +105,23 @@ export const BridgeNotifySchema = z.discriminatedUnion('name', [
     type: z.literal('notify'),
     name: z.literal(BRIDGE_BACK_CLAIM_NOTIFY),
     claimed: z.boolean()
+  }),
+  // Pages from desktops released with #34484 navigate inside their own document and report where, so a fold can reopen it natively.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_PAGE_LOCATION),
+    href: z.string().min(1).max(BRIDGE_MAX_ROUTE_HREF_CHARS).regex(BRIDGE_ROUTE_HREF_PATTERN)
+  }),
+  // Behind the `terminalKeyRail` grant, which is what keeps it off a shell that has no rail. Whole
+  // state rather than a toggle, for the reason the Back claim is.
+  z.object({
+    v: versionSchema,
+    type: z.literal('notify'),
+    name: z.literal(BRIDGE_TERMINAL_KEY_RAIL_CLAIM_NOTIFY),
+    claimed: z.boolean(),
+    inputOwner: z.string().min(1).max(128).optional(),
+    toolbar: BridgeTerminalToolbarSchema.optional()
   })
 ])
 

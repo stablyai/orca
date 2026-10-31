@@ -1,6 +1,9 @@
+import type { TerminalLimitStatus, TerminalLimitUpdate } from '../../shared/terminal-limit-policy'
+import type { TerminalViewAttributes } from '../../shared/terminal-view-attributes'
 import type { PtySpawnOutcome } from '../ipc/pty/spawn-outcome'
 import type { RuntimePaneCreateClaim } from '../ipc/pty/pane/spawn-reservation'
 import type { PaneSpawnOperation } from '../ipc/pty/pane/pane-spawn-operation'
+import type { TerminalWorkspaceLaunchScope } from './runtime-legacy-worker-terminal-recovery-types'
 import type { AgentLaunchRuntime } from '../../shared/agent-launch-runtime'
 import type {
   AutomaticWorkResumeOutcome,
@@ -65,6 +68,7 @@ export type RuntimePtyController = {
     materialized?: true
   } | null>
   spawn?(opts: {
+    resolvedWorkspace?: TerminalWorkspaceLaunchScope
     cols: number
     rows: number
     cwd?: string
@@ -87,6 +91,8 @@ export type RuntimePtyController = {
     sessionId?: string
     /** Windows shell to spawn AS this PTY, instead of the host default. */
     shellOverride?: string
+    /** The user's own act (a CLI command, a paired client's create, a launch); without it a stopped WSL distro holds the start. */
+    wslUserAct?: true
     /** The agent launch's runtime fact; when present the PTY shell comes only from it. */
     launchRuntime?: AgentLaunchRuntime
     isNewSession?: boolean
@@ -97,6 +103,10 @@ export type RuntimePtyController = {
     placement?: TerminalPanePlacement
     terminalKittyKeyboardProtocol?: boolean
     terminalColorQueryReplies?: { foreground?: string; background?: string }
+    /** A paired launcher's theme: its PTY answers OSC 10/11 with it over the host-wide theme. */
+    launcherColorQueryReplies?: { foreground?: string; background?: string }
+    /** That launcher's palette and cursor, so its PTY's OSC 4/12 agree with its OSC 10/11. */
+    launcherViewAttributes?: TerminalViewAttributes
     agentSessionEnsure?: {
       claim: AgentSessionExecutionClaim
       surface: AgentSessionSurfaceBinding
@@ -128,6 +138,7 @@ export type RuntimePtyController = {
     }
   >
   /** The local terminal owner's automatic-restore state; null when it has no fork gate. */
+  terminalLimit?(update?: TerminalLimitUpdate): Promise<TerminalLimitStatus | null>
   getAutomaticWorkStatus?(): Promise<AutomaticWorkStatus | null>
   resumeAutomaticWork?(): Promise<AutomaticWorkResumeOutcome>
   write(ptyId: string, data: string, inputKind: TerminalInputKind): boolean
@@ -160,6 +171,7 @@ export type RuntimePtyController = {
   resize?(ptyId: string, cols: number, rows: number): boolean
   // Exact-id mobile polls must not enumerate every local/SSH PTY.
   hasPty?(ptyId: string): boolean | null
+  getPtyAvailability?(ptyId: string): boolean | null
   /** Omitting the host lists every registered host. */
   listProcesses?(
     hostId?: ExecutionHostId,

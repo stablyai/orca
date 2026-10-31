@@ -130,7 +130,7 @@ describe('one router decision for every Claude launch', () => {
       expect(terminal).toMatchObject(shell)
       expect(terminal.CLAUDE_CONFIG_DIR).toBe(home)
       const chat = await resolveClaudeStructuredInvocation({
-        resolveCommand: () => 'claude',
+        resolveCommand: () => ({ command: 'claude', prefixArgs: [] }),
         resolveInheritedEnv: async () => ({ PATH: '/usr/bin', ...shell }),
         resolveAuthPolicy: () => claudeStructuredAuthPolicyForSettings(f.settings)
       })

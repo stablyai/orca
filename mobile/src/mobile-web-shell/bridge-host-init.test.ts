@@ -227,6 +227,20 @@ describe('init and state', () => {
     expect(bridge.frames().filter((frame) => frame.type === 'error')).toEqual([])
   })
 
+  it('tells the screen whether the page asked to replace it', () => {
+    const opened: [string, boolean][] = []
+    const bridge = harness({ onNavigate: (href, replace) => opened.push([href, replace]) })
+    bridge.host.receive(clientFrame({ type: 'ready' }))
+    bridge.host.receive(clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-a/tasks' }))
+    bridge.host.receive(
+      clientFrame({ type: 'notify', name: 'navigate', href: '/h/host-a/tasks', replace: true })
+    )
+    expect(opened).toEqual([
+      ['/h/host-a/tasks', false],
+      ['/h/host-a/tasks', true]
+    ])
+  })
+
   it('refuses a navigate frame that is not a path this app could open', () => {
     const bridge = harness()
     bridge.host.receive(clientFrame({ type: 'ready' }))

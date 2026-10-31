@@ -125,13 +125,19 @@ export function createComputerUsePermissionsApi(): NonNullable<
         'computer.permissions',
         args ?? {},
         15_000
-      ).catch(() => ({
-        platform: getBrowserPlatform(),
-        helperAppPath: null,
-        openedSettings: false,
-        launchedHelper: false,
-        nextStep: 'Computer-use permissions are managed on the Orca server.'
-      })),
+      ).catch((error: unknown) => {
+        // Only a host without this method falls back; real failures (e.g. a cancelled Open) must surface.
+        if (!(error instanceof Error && 'code' in error && error.code === 'method_not_found')) {
+          throw error
+        }
+        return {
+          platform: getBrowserPlatform(),
+          helperAppPath: null,
+          openedSettings: false,
+          launchedHelper: false,
+          nextStep: 'Computer-use permissions are managed on the Orca server.'
+        }
+      }),
     reset: () =>
       Promise.resolve({
         platform: getBrowserPlatform(),

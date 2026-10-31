@@ -25,7 +25,16 @@ export class AgentModelCatalogFailures {
     return this.failures.get(fingerprint) ?? null
   }
 
-  /** Expired unavailability stays readable during reprobe; expired plain failures disappear. */
+  /** Inside its TTL. An expired reason stays readable until the next probe replaces it, so a read
+   *  can still serve it while the probe that re-derives it runs; an expired plain failure dies. */
+  detail(fingerprint: string): string | null {
+    return this.isActive(fingerprint) ? (this.get(fingerprint)?.detail ?? null) : null
+  }
+
+  unavailableDue(fingerprint: string): boolean {
+    return this.get(fingerprint)?.unavailable !== undefined && !this.isActive(fingerprint)
+  }
+
   isActive(fingerprint: string): boolean {
     const failure = this.failures.get(fingerprint)
     if (!failure) {
@@ -72,14 +81,6 @@ export class AgentModelCatalogFailures {
     if (origin === 'probe' && unavailable) {
       this.probeFailed(fingerprint, agent, new AgentModelCatalogUnavailableError(unavailable))
     }
-  }
-
-  /** Chat listing failures cannot replace a probe's sign-in/CLI verdict. */
-  chatFailed(fingerprint: string, detail: string, agent?: string): void {
-    if (this.failures.get(fingerprint)?.unavailable) {
-      return
-    }
-    this.failures.set(fingerprint, { ...(agent ? { agent } : {}), detail, failedAt: this.now() })
   }
 
   /** Failed probes replace prior verdicts without inventing unavailability reasons. */

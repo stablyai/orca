@@ -3,13 +3,12 @@ import { AiVaultSearchRequestSchema } from '../../shared/ai-vault-search-contrac
 import { fakeSearchService } from '../../shared/ai-vault-search-test-fixture'
 import {
   installSessionSearchScopeCatalogSource,
-  resetSessionSearchScopeCatalogForTests,
-  type SessionSearchScopeCatalog
+  resetSessionSearchScopeCatalogForTests
 } from './session-search-scope-catalog'
 import { searchSessionService, setSessionSearchService } from './session-search-service-registry'
 
-const CATALOG: SessionSearchScopeCatalog = {
-  repos: [{ id: 'repo-1', path: '/work/app', displayName: 'app', badgeColor: '', addedAt: 0 }],
+const CATALOG = {
+  repos: [{ id: 'repo-1', path: '/work/app' }],
   projects: [],
   projectHostSetups: [],
   worktreeMeta: { 'repo-1::/work/app': {} },

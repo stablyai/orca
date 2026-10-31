@@ -1,3 +1,4 @@
+import { translate } from '@/i18n/i18n'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
 import type { useAppStore } from '@/store'
 import { assertRuntimeEnvironmentCapability, callRuntimeRpc } from '@/runtime/runtime-rpc-client'
@@ -218,7 +219,15 @@ export async function refreshWorkspacePortScanAfterStop(
       firstScan = await scanWorkspacePortsForTarget(args.runtimeTarget)
     } catch (error) {
       const message = error instanceof Error ? error.message : String(error)
-      return { ok: false, reason: message || 'Workspace port scan failed.' }
+      return {
+        ok: false,
+        reason:
+          message ||
+          translate(
+            'auto.components.right.sidebar.PortsPanel.740aca88ab',
+            'Workspace port scan failed.'
+          )
+      }
     }
     publishScan(firstScan)
 

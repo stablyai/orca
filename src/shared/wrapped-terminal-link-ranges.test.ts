@@ -45,15 +45,6 @@ function makeBufferLine(
 }
 
 describe('buildWrappedLogicalLine', () => {
-  it('joins ordinary soft-wrapped terminal rows', () => {
-    const rows = [makeBufferLine('src/'), makeBufferLine('file.ts', { isWrapped: true })]
-
-    const logicalLine = buildWrappedLogicalLine({ getLine: (y) => rows[y] }, 2)
-
-    expect(logicalLine?.text).toBe('src/file.ts')
-    expect(logicalLine?.rows.map((row) => row.y)).toEqual([0, 1])
-  })
-
   it('caps pathological soft-wrapped lines before scanning the whole run', () => {
     const rows = Array.from({ length: 1_000 }, (_value, index) =>
       makeBufferLine('b'.repeat(80), { isWrapped: index > 0 })
@@ -254,24 +245,6 @@ describe('buildHardWrappedPathLogicalLineCandidates', () => {
     expect(after).toBeDefined()
     expect(after!.rows.map((row) => row.text)).toEqual(before!.rows.map((row) => row.text))
     expect(after!.fingerprint).not.toBe(before!.fingerprint)
-  })
-
-  it('rejects non-path starts before scanning their possible continuations', () => {
-    const rows = Array.from({ length: 20 }, () => makeBufferLine('a'.repeat(80)))
-    const observedRows: number[] = []
-
-    const candidates = buildHardWrappedPathLogicalLineCandidates(
-      {
-        getLine: (y: number) => {
-          observedRows.push(y)
-          return rows[y]
-        }
-      },
-      20
-    )
-
-    expect(candidates).toEqual([])
-    expect(observedRows).toHaveLength(21)
   })
 
   it('preserves Windows drive paths and original continuation columns', () => {

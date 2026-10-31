@@ -15,10 +15,36 @@ import {
   nativeChatFanoutWorkspace as workspace,
   terminalTabFixture
 } from './native-chat-workspace-test-fixtures'
-import { getDefaultSettings } from '../../../../shared/constants'
+import { FLOATING_TERMINAL_WORKTREE_ID, getDefaultSettings } from '../../../../shared/constants'
+import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
+import type * as StructuredClient from '@/runtime/structured-agent-session-client'
+import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { AgentSessionStatusEvent } from '../../../../shared/agent-session-wire'
+import type { AgentSessionContinuationRequest } from '@/lib/agent-session-continuation'
+import { useNativeChatHandOff, type NativeChatHandOff } from './use-native-chat-hand-off'
+import {
+  getStructuredAgentSessionStatusFeed,
+  resetStructuredAgentSessionStatusFeedsForTests
+} from '@/runtime/structured-agent-session-status-feed'
 
 const rpc = vi.hoisted(() => vi.fn())
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: rpc }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: rpc,
+  runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
+}))
+const handOffTransport = vi.hoisted(() => ({ subscribe: vi.fn() }))
+vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof StructuredClient>()),
+  subscribeStructuredAgentSessionStatus: handOffTransport.subscribe,
+  supportsStructuredAgentSessionContinuationContext: vi.fn(async () => false)
+}))
+vi.mock('@/components/agent-session-continuation/AgentSessionContinuationDialog', () => ({
+  AgentSessionContinuationDialog: ({
+    request
+  }: {
+    request: AgentSessionContinuationRequest | null
+  }) => <output>{request?.source.sourceTitle}</output>
+}))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatSkillDiscovery: vi.fn() }))
 
 import {
@@ -112,7 +138,7 @@ function corpus(scale: number, dense = false) {
     worktreesByRepo: {},
     detectedWorktreesByRepo: {},
     projectGroups: [],
-    endpointProjects: [],
+    projects: [],
     runtimeEnvironments: [],
     runtimeEnvironmentCatalogHydrated: true,
     removedRuntimeEnvironmentIds: new Set(),
@@ -201,6 +227,8 @@ afterEach(() => {
   cleanup()
   useAppStore.setState(initialState, true)
   resetNativeChatSkillDiscoveryCacheForTests()
+  resetStructuredAgentSessionStatusFeedsForTests()
+  handOffTransport.subscribe.mockReset()
   rpc.mockReset()
 })
 
@@ -232,6 +260,15 @@ function measureImageSubscriptions(scale: number) {
   expect(data.work).toEqual(emptyWork())
   expect(renders - baseline).toBe(0)
 
+  // Rank patches and host timestamp refreshes replace owner inputs without moving any chat.
+  act(() =>
+    useAppStore.setState({
+      worktreesByRepo: { unrelated: [] },
+      runtimeEnvironments: [...useAppStore.getState().runtimeEnvironments]
+    })
+  )
+  expect(renders - baseline).toBe(0)
+
   const destination = data.moveLastChat()
   expect(contexts.get(`chat-${data.mounted - 1}`)).toMatchObject({
     worktreeId: destination,
@@ -250,6 +287,139 @@ function measureImageSubscriptions(scale: number) {
 }
 
 describe('native chat store subscription performance', () => {
+  it('keeps hand-off tab scans and unrelated renders at zero at N and 10N while titles stay live', async () => {
+    for (const scale of [1, 10]) {
+      const data = corpus(scale, true)
+      const emits = new Map<string, (event: AgentSessionStatusEvent) => void>()
+      handOffTransport.subscribe.mockImplementation(
+        async (target: RuntimeClientTarget, emit: (event: AgentSessionStatusEvent) => void) => {
+          emits.set(target.kind === 'local' ? 'local' : target.environmentId, emit)
+          return { unsubscribe: vi.fn() }
+        }
+      )
+      const controls = new Map<string, NativeChatHandOff>()
+      const renders = new Map<string, number>()
+      function Probe({ chatId, index }: { chatId: string; index: number }) {
+        const handOff = useNativeChatHandOff({
+          pane: {
+            tabId: chatId,
+            sessionId: `session-${index}`,
+            groupId: 'group',
+            agent: 'codex',
+            target: { kind: 'local' },
+            isVisible: true
+          },
+          directory: {
+            worktreeId: workspace(0),
+            worktreePath: '/repo/0',
+            runtimeEnvironmentId: null
+          },
+          epoch: 'epoch',
+          messages: [
+            {
+              id: 'message',
+              role: 'user',
+              blocks: [{ type: 'text', text: 'Saved context' }],
+              timestamp: 1,
+              source: 'transcript'
+            }
+          ],
+          focusComposer: () => undefined
+        })
+        controls.set(chatId, handOff)
+        renders.set(chatId, (renders.get(chatId) ?? 0) + 1)
+        return handOff.dialog
+      }
+      const view = render(
+        data.chatIds.map((chatId, index) => <Probe key={chatId} chatId={chatId} index={index} />)
+      )
+      const otherFeed = getStructuredAgentSessionStatusFeed({
+        kind: 'environment',
+        environmentId: 'other'
+      })
+      let stopOther: () => void = () => undefined
+      await act(async () => {
+        stopOther = otherFeed.activate()
+      })
+      const baseline = new Map(renders)
+      const publishName = (host: string, sessionId: string, conversationName: string) => {
+        const emit = emits.get(host)
+        if (!emit) {
+          throw new Error(`Missing ${host} status transport`)
+        }
+        act(() =>
+          emit({
+            type: 'snapshot',
+            sessions: [],
+            conversationNames: [{ sessionId, conversationName }]
+          })
+        )
+      }
+      const operations: Work[] = []
+      for (let tick = 0; tick < 3; tick++) {
+        data.reset()
+        act(() => useAppStore.setState({ lastTerminalInputAtByPaneKey: { other: tick } }))
+        operations.push({ ...data.work })
+        expect(renders).toEqual(baseline)
+        data.reset()
+        publishName('other', 'session-0', `Other host ${tick}`)
+        operations.push({ ...data.work })
+        expect(renders).toEqual(baseline)
+        data.reset()
+        publishName('local', 'unmounted-session', `Unrelated name ${tick}`)
+        operations.push({ ...data.work })
+        expect(renders).toEqual(baseline)
+      }
+      for (const work of operations) {
+        expect(work.unifiedRows).toBe(0)
+        expect(work.terminalRows).toBe(0)
+        expect(work.unifiedMapEnumerations).toBe(0)
+      }
+      const current = useAppStore.getState()
+      const rows = current.unifiedTabsByWorktree[workspace(0)]
+      const renamed = countRow(
+        { ...rows[0], customLabel: null, label: 'Live label' },
+        () => data.work.unifiedRows++
+      )
+      data.reset()
+      act(() =>
+        useAppStore.setState({
+          unifiedTabsByWorktree: {
+            ...current.unifiedTabsByWorktree,
+            [workspace(0)]: [renamed, ...rows.slice(1)]
+          }
+        })
+      )
+      expect(data.work.unifiedRows).toBeLessThanOrEqual(data.mounted)
+      expect(renders.get('chat-0')).toBe(baseline.get('chat-0')! + 1)
+      for (const chatId of data.chatIds.slice(1)) {
+        expect(renders.get(chatId)).toBe(baseline.get(chatId))
+      }
+      const openTitle = async (title: string) => {
+        await act(async () => controls.get('chat-0')!.open())
+        expect(view.container.textContent).toBe(title)
+        act(() => controls.get('chat-0')!.reset())
+      }
+      await openTitle('Live label')
+      const beforeName = new Map(renders)
+      data.reset()
+      publishName('local', 'session-0', 'Live saved name')
+      expect(data.work.unifiedRows).toBe(0)
+      expect(renders.get('chat-0')).toBe(beforeName.get('chat-0')! + 1)
+      for (const chatId of data.chatIds.slice(1)) {
+        expect(renders.get(chatId)).toBe(beforeName.get(chatId))
+      }
+      await openTitle('Live saved name')
+      console.info(
+        'native-chat-handoff-subscription-work',
+        JSON.stringify({ mounted: data.mounted, operations })
+      )
+      view.unmount()
+      stopOther()
+      resetStructuredAgentSessionStatusFeedsForTests()
+    }
+  })
+
   it('does no tab work for closed pickers at N and 10N, then discovers the latest owner on activation', async () => {
     rpc.mockResolvedValue({ skills: [], sources: [], scannedAt: 1 })
     for (const scale of [1, 10]) {
@@ -339,6 +509,64 @@ describe('native chat store subscription performance', () => {
       }
     }
     console.info('native-chat-subscription-work', JSON.stringify(results))
+  })
+
+  it('resolves only the pinned chat per write when the bridge publishes every floating pin at N and 10N', () => {
+    const results: { mounted: number; rowReads: number; bound: number }[] = []
+    for (const scale of [1, 10]) {
+      const mounted = 57 * scale
+      const work = { rows: 0 }
+      const chatIds = Array.from({ length: mounted }, (_, index) => `floating-chat-${index}`)
+      const rows = chatIds.map((chatId, index) =>
+        countRow(
+          agentSessionTabFixture(chatId, FLOATING_TERMINAL_WORKTREE_ID, {
+            entityId: `session-${index}`
+          }),
+          () => work.rows++
+        )
+      )
+      useAppStore.setState({
+        ...useAppStore.getInitialState(),
+        settings: getDefaultSettings('/test-home'),
+        floatingWorkspacePath: '/floating-setting',
+        runtimeEnvironmentCatalogHydrated: true,
+        tabsByWorktree: {},
+        unifiedTabsByWorktree: { [FLOATING_TERMINAL_WORKTREE_ID]: rows },
+        structuredSessionLaunchDirectoryByTabId: {}
+      })
+      const paths = new Map<string, (string | null | undefined)[]>()
+      let renders = 0
+      function Probe({ chatId }: { chatId: string }) {
+        paths.set(chatId, [
+          useNativeChatImageRuntimeContext(chatId)?.worktreePath,
+          useNativeChatFileLinkContext(chatId)?.worktreePath
+        ])
+        renders += 1
+        return null
+      }
+      const view = render(chatIds.map((chatId) => <Probe key={chatId} chatId={chatId} />))
+      expect([...paths.values()].every(([image, link]) => !image && !link)).toBe(true)
+      const baseline = renders
+      work.rows = 0
+      // One status snapshot publishes each pin as its own store write before React renders.
+      act(() => {
+        const { setStructuredSessionLaunchDirectory } = useAppStore.getState()
+        chatIds.forEach((chatId, index) =>
+          setStructuredSessionLaunchDirectory(chatId, `session-${index}`, `/pinned/${index}`)
+        )
+      })
+      chatIds.forEach((chatId, index) =>
+        expect(paths.get(chatId)).toEqual([`/pinned/${index}`, `/pinned/${index}`])
+      )
+      expect(renders - baseline).toBe(mounted)
+      // Each write may scan the floating list up to its own chat three times (image resolves the
+      // directory twice, file links once); a shared-map dependency rescans every chat per write: N³.
+      const bound = (3 * mounted * (mounted + 1)) / 2
+      expect(work.rows).toBeLessThanOrEqual(bound)
+      results.push({ mounted, rowReads: work.rows, bound })
+      view.unmount()
+    }
+    console.info('native-chat-floating-pin-work', JSON.stringify(results))
   })
 
   it('bounds dense ordinary-workspace image work on mount and own-list rename/replace at N and 10N', () => {

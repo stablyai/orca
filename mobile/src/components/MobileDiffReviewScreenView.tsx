@@ -8,11 +8,13 @@ import { MobileDiffReviewDrawers } from './MobileDiffReviewDrawers'
 import { MobileDiffReviewFileSummary } from './MobileDiffReviewFileSummary'
 import { MobileDiffReviewFooter } from './MobileDiffReviewFooter'
 import { MobileDiffReviewHeader } from './MobileDiffReviewHeader'
+import { useMobileDiffReviewOverflowActions } from './use-mobile-diff-review-overflow-actions'
 import { MobilePRSidebar } from './MobilePRSidebar'
 import { RightDrawer } from './RightDrawer'
 import { mobilePrSidebarStyles, PR_SIDEBAR_DOCK_WIDTH } from './pr-sidebar/mobile-pr-sidebar-styles'
 import { canDockPrSidebar, resolvePresentationMode } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 type Props = {
   controller: ReturnType<typeof useMobileDiffReviewController>
@@ -20,9 +22,11 @@ type Props = {
 }
 
 export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
+  useMobileColorScheme()
   const { isWideLayout } = useResponsiveLayout()
   const insets = useSafeAreaInsets()
   const [contentRowWidth, setContentRowWidth] = useState(0)
+  const overflowActions = useMobileDiffReviewOverflowActions(controller)
   const canDockSidebar = canDockPrSidebar({
     isWideLayout,
     availableWidth: contentRowWidth,
@@ -50,6 +54,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
   return (
     <SafeAreaView style={styles.safeArea} edges={['top']}>
       <MobileDiffReviewHeader
+        actions={overflowActions}
         filter={controller.filter}
         isWideLayout={isWideLayout}
         prSidebarIsGithubRepo={controller.prSidebarIsGithubRepo}
@@ -57,9 +62,7 @@ export function MobileDiffReviewScreenView({ controller, onBack }: Props) {
         queueLength={controller.queue.length}
         reviewedCount={controller.reviewedCount}
         unsentCount={controller.unsentComments.length}
-        worktreeLabel={controller.worktreeLabel}
         onBack={onBack}
-        onOpenActions={() => controller.openSheet({ kind: 'actions' })}
         onOpenPRSidebar={controller.openPRSidebar}
         onSelectFilter={controller.selectFilter}
       />

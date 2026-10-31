@@ -95,6 +95,8 @@ export async function launchHeadlessPairedRuntimeHost(
     /** Bind a stable loopback port so `restartServeProcess` can reclaim it. */
     pinnedServePort?: boolean
     userDataParent?: string
+    /** No browser of its own, as the WSL distro's server: its browser tabs live only on clients. */
+    withoutBrowser?: boolean
   } = {}
 ): Promise<HeadlessPairedRuntimeHost> {
   const userDataDir = mkdtempSync(
@@ -118,7 +120,8 @@ export async function launchHeadlessPairedRuntimeHost(
       launchEnv: {
         NODE_ENV: 'development',
         ORCA_E2E_ENFORCE_SINGLE_INSTANCE_LOCK: '1',
-        ORCA_E2E_HEADLESS: '1'
+        ORCA_E2E_HEADLESS: '1',
+        ...(options.withoutBrowser ? { ORCA_E2E_HEADLESS_SERVE_WITHOUT_BROWSER: '1' } : {})
       },
       extraEnv: options.extraEnv ?? {},
       userDataDir

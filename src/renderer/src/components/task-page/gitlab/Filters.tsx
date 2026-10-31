@@ -36,7 +36,12 @@ export function TaskPageGitLabFilters({
         <div className="flex items-center gap-1 text-xs">
           {(['issues', 'mrs', 'todos'] as const).map((view) => {
             const active = gitlabView === view
-            const label = view === 'issues' ? 'Issues' : view === 'mrs' ? 'MRs' : 'My Todos'
+            const label =
+              view === 'issues'
+                ? translate('auto.components.TaskPage.gitlabViewIssues', 'Issues')
+                : view === 'mrs'
+                  ? translate('auto.components.TaskPage.gitlabViewMrs', 'MRs')
+                  : translate('auto.components.TaskPage.gitlabViewTodos', 'My Todos')
             return (
               <button
                 key={view}

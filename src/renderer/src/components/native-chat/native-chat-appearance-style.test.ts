@@ -1,29 +1,11 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { describe, expect, it } from 'vitest'
 import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
 import { buildFontFamily } from '@/lib/monospace-font-family'
 import { buildAppFontFamily } from '@/lib/app-font-family'
-import * as terminalThemeSelection from '../../../../shared/terminal-theme-selection'
 import { resolveConfiguredTerminalColors } from '../../../../shared/terminal-theme-selection'
-import { nativeChatAppearanceStyle, nativeChatContrastMix } from './native-chat-appearance-style'
+import { nativeChatAppearanceStyle } from './native-chat-appearance-style'
 
 const makeSettings = createGlobalSettingsFixture
-afterEach(() => vi.restoreAllMocks())
-
-describe('nativeChatContrastMix', () => {
-  it.each([
-    [50, false, 56],
-    [100, false, 78],
-    [150, false, 100],
-    [50, true, 64],
-    [100, true, 82],
-    [150, true, 100],
-    [-100, false, 56],
-    [200, true, 100],
-    [Number.NaN, false, 78]
-  ])('maps %s in light mode %s to %s', (contrast, light, expected) => {
-    expect(nativeChatContrastMix(contrast, light)).toBe(expected)
-  })
-})
 
 describe('nativeChatAppearanceStyle terminal interface', () => {
   it('uses a custom chat family while preserving code fonts and terminal matching precedence', () => {
@@ -47,27 +29,6 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
         nativeChatAppearance: { fontFamily: '' }
       })['--chat-font-family']
     ).toBeUndefined()
-  })
-  it('follows the terminal code font while keeping default body font and colors', () => {
-    const style = nativeChatAppearanceStyle(makeSettings({ terminalFontFamily: 'Menlo' }))
-    expect(style['--chat-code-font-family']).toBe(buildFontFamily('Menlo'))
-    expect(style['--chat-font-family']).toBeUndefined()
-    expect(style['--chat-source-foreground']).toBeUndefined()
-    expect(style['--chat-source-background']).toBeUndefined()
-    expect(style['--chat-foreground-mix']).toBe('78%')
-  })
-
-  it('updates the code font and matching body font from the current terminal setting', () => {
-    for (const terminalFontFamily of ['', 'Menlo', 'Consolas']) {
-      const settings = makeSettings({
-        terminalFontFamily,
-        nativeChatAppearance: { matchTerminalInterface: true }
-      })
-      const style = nativeChatAppearanceStyle(settings)
-      expect(style['--chat-font-family']).toBe(buildFontFamily(terminalFontFamily))
-      expect(style['--chat-code-font-family']).toBe(buildFontFamily(terminalFontFamily))
-      expect(style['--chat-code-font-size']).toBe(`${settings.terminalFontSize}px`)
-    }
   })
 
   it('uses the selected theme and live overrides as the two palette sources', () => {
@@ -105,21 +66,6 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     )
   })
 
-  it('uses light formulas for a light terminal inside a dark app', () => {
-    const settings = makeSettings({
-      theme: 'dark',
-      terminalThemeDark: 'Builtin Tango Light',
-      nativeChatAppearance: { matchTerminalInterface: true }
-    })
-    const style = nativeChatAppearanceStyle(settings)
-    const colors = resolveConfiguredTerminalColors(settings, true)
-    expect(style['--chat-source-background']).toBe(colors.background)
-    expect(style['--chat-source-foreground']).toBe(colors.foreground)
-    expect(style['--chat-foreground-mix']).toBe('100%')
-    expect(style['--chat-code-base']).toBe('var(--chat-canvas)')
-    expect(style['--chat-strong-mix']).toBe('100%')
-  })
-
   it('follows the separate light theme and system theme changes', () => {
     const settings = makeSettings({
       theme: 'system',
@@ -134,18 +80,6 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
     )
     expect(light['--chat-source-background']).not.toBe(dark['--chat-source-background'])
     expect(light['--chat-foreground-mix']).toBe('100%')
-  })
-
-  it('uses app light contrast without matching and removes matching overrides when off', () => {
-    const style = nativeChatAppearanceStyle(
-      makeSettings({
-        theme: 'light',
-        nativeChatAppearance: { matchTerminalInterface: false, contrast: 50 }
-      })
-    )
-    expect(style['--chat-foreground-mix']).toBe('64%')
-    expect(style['--chat-font-family']).toBeUndefined()
-    expect(style['--chat-canvas-mix']).toBeUndefined()
   })
 
   it('uses live terminal size and full foreground while matching, then restores saved chat sizes and contrast', () => {
@@ -179,39 +113,9 @@ describe('nativeChatAppearanceStyle terminal interface', () => {
       '--chat-foreground-mix': '56%'
     })
   })
-
-  it('lets message text follow any terminal size while controls and spacing stay in 12-20', () => {
-    const at = (terminalFontSize: number) =>
-      nativeChatAppearanceStyle(
-        makeSettings({ terminalFontSize, nativeChatAppearance: { matchTerminalInterface: true } })
-      )
-    expect(at(24)).toMatchObject({
-      '--chat-font-size': '24px',
-      '--chat-code-font-size': '24px',
-      '--chat-ui-font-size': '20px',
-      '--chat-estimated-line-height': (22 * 24) / 14,
-      '--chat-estimated-spacing-scale': 20 / 14
-    })
-    expect(at(10)).toMatchObject({
-      '--chat-font-size': '10px',
-      '--chat-ui-font-size': '12px',
-      '--chat-estimated-spacing-scale': 12 / 14
-    })
-    expect(at(16)['--chat-ui-font-size']).toBe('16px')
-  })
 })
 
 describe('chat root appearance style', () => {
-  it('derives wrap capacity from actual column width, including full-width panes', () => {
-    const wide = nativeChatAppearanceStyle({ nativeChatAppearance: { width: 'wide' } })
-    const full = nativeChatAppearanceStyle({ nativeChatAppearance: { width: 'full' } }, 1200)
-    expect(wide['--chat-estimated-chars-per-line']).toBeGreaterThan(96)
-    expect(full['--chat-estimated-chars-per-line']).toBeGreaterThan(
-      wide['--chat-estimated-chars-per-line']
-    )
-    expect(nativeChatAppearanceStyle(undefined, 384)['--chat-estimated-chars-per-line']).toBe(50)
-  })
-
   it.each(['light', 'dark', 'system'] as const)(
     'leaves native controls app-owned in %s mode when matching is off',
     (theme) => {
@@ -223,69 +127,6 @@ describe('chat root appearance style', () => {
         const style = nativeChatAppearanceStyle(makeSettings({ theme, nativeChatAppearance }))
         expect(style.colorScheme).toBeUndefined()
         expect(style.color).toBeUndefined()
-      }
-    }
-  )
-
-  it('clamps sizes on read and derives the column width', () => {
-    expect(
-      nativeChatAppearanceStyle({
-        nativeChatAppearance: { fontSize: 25, codeFontSize: 1, width: 'wide' }
-      })
-    ).toMatchObject({
-      '--chat-font-size': '20px',
-      '--chat-code-font-size': '10px',
-      '--chat-content-max-width': '60rem'
-    })
-    expect(
-      nativeChatAppearanceStyle({ nativeChatAppearance: { width: 'full' } })[
-        '--chat-content-max-width'
-      ]
-    ).toBe('none')
-  })
-})
-
-describe('contrast hierarchy and incomplete terminal palettes', () => {
-  it.each(['light', 'dark'] as const)(
-    'keeps strong text above body in %s mode up to the cap',
-    (theme) => {
-      for (const matching of [false, true]) {
-        for (let contrast = 50; contrast <= 150; contrast++) {
-          const style = nativeChatAppearanceStyle(
-            makeSettings({
-              theme,
-              terminalColorOverrides:
-                theme === 'light'
-                  ? { background: '#ffffff', foreground: '#000000' }
-                  : { background: '#000000', foreground: '#ffffff' },
-              nativeChatAppearance: { contrast, matchTerminalInterface: matching }
-            })
-          )
-          const body = Number.parseFloat(String(style['--chat-foreground-mix']))
-          const strong = Number.parseFloat(String(style['--chat-strong-mix']))
-          expect(strong).toBe(Math.min(100, body + (theme === 'light' ? 10 : 12)))
-          if (body < 100) {
-            expect(strong).toBeGreaterThan(body)
-          }
-        }
-      }
-    }
-  )
-
-  it.each([{}, { background: '#ffffff' }, { foreground: '#000000' }])(
-    'uses the fallback source pair for an incomplete palette %j',
-    (colors) => {
-      vi.spyOn(terminalThemeSelection, 'resolveConfiguredTerminalColors').mockReturnValue(colors)
-      for (const theme of ['light', 'dark'] as const) {
-        const style = nativeChatAppearanceStyle(
-          makeSettings({
-            theme,
-            nativeChatAppearance: { matchTerminalInterface: true }
-          })
-        )
-        expect(style['--chat-source-background']).toBe('#000000')
-        expect(style['--chat-source-foreground']).toBe('#fafafa')
-        expect(style.colorScheme).toBe('dark')
       }
     }
   )

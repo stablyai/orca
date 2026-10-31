@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 // Adapter-reachable contract must remain free of host and Node-only process dependencies.
 
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
@@ -30,6 +31,7 @@ export type StructuredAgentSessionStartupAttempt = {
   /** Saved launch intent, never catalog guesses. */
   readonly options?: Readonly<Record<string, string>>
   readonly permissionMode?: AgentChatPermissionChoice
+  readonly accountRecipe?: ClaudeAccountRecipe
   /** Provider events may begin before spawn returns. */
   readonly events?: StructuredAgentSessionEventSink
   /** Attempt-scoped background evidence; adapters use registration reporting when absent. */

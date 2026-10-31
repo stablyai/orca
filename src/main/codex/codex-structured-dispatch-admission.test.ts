@@ -216,10 +216,10 @@ describe('codex dispatch admission', () => {
 
     const turns = recorded.bodies.filter((body) => body.kind === 'turn')
     expect(turns).toMatchObject([
-      { turnId: 'turn-later', state: 'running', startedAt: 1_700_000_000_500 },
       {
         turnId: 'turn-later',
         state: 'running',
+        startedAt: 1_700_000_000_500,
         requestedAt: 1_700_000_000_400
       },
       {
@@ -293,7 +293,7 @@ describe('codex dispatch admission', () => {
       recorded.bodies
         .filter((body) => body.kind === 'turn' && body.state === 'running')
         .map((body) => (body.kind === 'turn' ? body.requestedAt : undefined))
-    ).toEqual([undefined, 1_700_000_000_200, 1_700_000_000_600])
+    ).toEqual([1_700_000_000_600])
     expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual([
       'client-queued',
       'client-mid-turn',
@@ -333,6 +333,40 @@ describe('codex dispatch admission', () => {
       userItemId: agentJournalSubmissionKey('client-late-echo')
     })
     expect(settlements.map(({ clientMessageId }) => clientMessageId)).toEqual(['client-late-echo'])
+  })
+
+  it('names a hook-refused send as its turn opener when its turn ends in the reply chunk', async () => {
+    const codex = fakeCodexAppServer()
+    const recorded = lifecycleRecorder()
+    const adapter = await acquiredCodexAdapter({ codex, settlements: [], sink: recorded.sink })
+    const connection = codex.connections[0]!
+    const request = connection.request
+    // One stdout chunk: the reply, then the whole refused turn, before the reply's continuation.
+    connection.request = async (method, params, options) => {
+      if (method !== 'turn/start') {
+        return request(method, params, options)
+      }
+      const reply = { turn: { id: 'turn-1', status: 'inProgress' } }
+      options?.onReply?.(reply)
+      startTurn(connection, 'turn-1')
+      connection.handlers.onNotification?.('turn/completed', {
+        threadId: CODEX_TEST_THREAD_ID,
+        turn: { id: 'turn-1', status: 'completed' }
+      })
+      return reply
+    }
+
+    expect(await send(adapter, 'client-refused', 1_700_000_000_100)).toMatchObject({
+      state: 'admitted'
+    })
+    expect(recorded.bodies.filter((body) => body.kind === 'turn')).toMatchObject([
+      { state: 'running', userItemId: agentJournalSubmissionKey('client-refused') },
+      {
+        state: 'completed',
+        requestedAt: 1_700_000_000_100,
+        userItemId: agentJournalSubmissionKey('client-refused')
+      }
+    ])
   })
 
   it('refuses overflow without discarding an older accepted send', async () => {

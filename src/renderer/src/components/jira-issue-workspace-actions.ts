@@ -11,7 +11,13 @@ import { applyJiraIssueKeyCasing } from '../../../shared/workspace-name'
 import type { WorkspaceSeedNameOptions } from '../../../shared/workspace-name'
 import { getJiraIssueKeyCasingSeedOptions } from '@/lib/jira-issue-key-casing'
 import { buildJiraIssuePrompt } from './jira-prompt-templates'
+import {
+  issueCopiedMessage,
+  issueCopyFailedMessage,
+  type IssueCopyTarget
+} from './issue-copy-target-messages'
 import type { JiraIssueWorkspaceAction } from './jira-issue-workspace-content'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 export function useJiraIssueWorkspaceActions({
   displayed,
@@ -77,21 +83,16 @@ export function buildJiraBranchName(
   )
 }
 
-export async function copyJiraTextToClipboard(text: string, label: string): Promise<boolean> {
+export async function copyJiraTextToClipboard(
+  text: string,
+  target: IssueCopyTarget
+): Promise<boolean> {
   try {
     await window.api.ui.writeClipboardText(text)
-    toast.success(
-      translate('auto.components.JiraIssueWorkspace.2ff69a3545', '{{value0}} copied', {
-        value0: label
-      })
-    )
+    toast.success(issueCopiedMessage(target))
     return true
   } catch {
-    toast.error(
-      translate('auto.components.JiraIssueWorkspace.6c41a9bcea', 'Failed to copy {{value0}}', {
-        value0: label.toLowerCase()
-      })
-    )
+    toast.error(issueCopyFailedMessage(target))
     return false
   }
 }
@@ -101,17 +102,17 @@ export function getJiraIssueWorkspaceActions(issue: JiraIssue): JiraIssueWorkspa
     {
       label: translate('auto.components.JiraIssueWorkspace.69da9a208c', 'Open in Jira'),
       icon: ExternalLink,
-      action: () => window.api.shell.openUrl(issue.url)
+      action: () => openAppHttpLink(issue.url)
     },
     {
       label: translate('auto.components.JiraIssueWorkspace.779bb91ee0', 'Copy URL'),
       icon: Clipboard,
-      action: () => void copyJiraTextToClipboard(issue.url, 'URL')
+      action: () => void copyJiraTextToClipboard(issue.url, 'url')
     },
     {
       label: translate('auto.components.JiraIssueWorkspace.38839801e8', 'Copy key'),
       icon: Clipboard,
-      action: () => void copyJiraTextToClipboard(issue.key, 'Key')
+      action: () => void copyJiraTextToClipboard(issue.key, 'key')
     },
     {
       label: translate(
@@ -122,13 +123,13 @@ export function getJiraIssueWorkspaceActions(issue: JiraIssue): JiraIssueWorkspa
       action: () =>
         void copyJiraTextToClipboard(
           buildJiraBranchName(issue, getJiraIssueKeyCasingSeedOptions()),
-          'Branch name'
+          'branchName'
         )
     },
     {
       label: translate('auto.components.JiraIssueWorkspace.0cc62bd690', 'Copy prompt'),
       icon: Clipboard,
-      action: () => void copyJiraTextToClipboard(buildJiraIssuePrompt(issue), 'Prompt')
+      action: () => void copyJiraTextToClipboard(buildJiraIssuePrompt(issue), 'prompt')
     }
   ]
 }

@@ -62,7 +62,7 @@ function renderOptions() {
         ...(providerRunning ? { providerRunning } : {}),
         unloadedTurnRevisions: undefined,
         mutate,
-        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' }, heldOptions: {} }
+        launch: { kind: 'new', seedOptions: { model: 'gpt-5.5' } }
       }),
     { initialProps: NO_TURN }
   )

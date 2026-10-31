@@ -1,4 +1,3 @@
-import { selectCanonicalProjects } from '../../src/renderer/src/store/project-host-setup-selector'
 import { randomUUID } from 'node:crypto'
 import { execFileSync } from 'node:child_process'
 import { rmSync, writeFileSync } from 'node:fs'
@@ -115,19 +114,7 @@ async function createWindowsDefaultShellTerminalTab(
 }
 
 async function configureActiveProjectWslRuntime(page: Page): Promise<string | null> {
-  const catalog = await page.evaluate(() => {
-    const state = window.__store?.getState()
-    if (!state) {
-      throw new Error('Store unavailable')
-    }
-    return {
-      repos: state.repos,
-      endpointProjects: state.endpointProjects,
-      endpointProjectHostSetups: state.endpointProjectHostSetups
-    }
-  })
-  const projects = selectCanonicalProjects(catalog)
-  return page.evaluate(async (projects) => {
+  return page.evaluate(async () => {
     const store = window.__store
     if (!store) {
       throw new Error('Store unavailable')
@@ -144,7 +131,7 @@ async function configureActiveProjectWslRuntime(page: Page): Promise<string | nu
     const activeWorktree = Object.values(state.worktreesByRepo)
       .flat()
       .find((worktree) => worktree.id === worktreeId)
-    const activeProject = projects.find((project) =>
+    const activeProject = state.projects.find((project) =>
       activeWorktree ? project.sourceRepoIds.includes(activeWorktree.repoId) : false
     )
     if (!activeProject) {
@@ -161,7 +148,7 @@ async function configureActiveProjectWslRuntime(page: Page): Promise<string | nu
       'local'
     )
     return wslDistro
-  }, projects)
+  })
 }
 
 async function createWindowsProjectRuntimeTerminalTab(

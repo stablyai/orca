@@ -34,7 +34,7 @@ beforeAll(async () => {
   ;({ buildNativeChatVisualDocument, NATIVE_CHAT_VISUAL_PONG_TYPE: pongType } =
     await import('../../../src/shared/native-chat/native-chat-visual-shell'))
   ;({ buildMobileNativeChatVisualHostDocument } =
-    await import('../../../mobile/src/session/mobile-native-chat-visual-host-document'))
+    await import('../../../mobile/src/session/native-chat/visual/mobile-native-chat-visual-host-document'))
   const header = await readShellCsp()
   const sealed = buildNativeChatVisualDocument({ html: VISUAL, channel: 'sealed', theme: THEME })
   shellServer = createServer((_request, response) => {

@@ -1,4 +1,4 @@
-import { registerMarkdownTokenizerStart } from './markdown-tokenizer-start'
+import { registerMarkdownLookbehindTokenizerStart } from './markdown-tokenizer-start'
 import { guardMarkdownDirectiveTokenizer } from './markdown-directive-tokenizer'
 import { decodeHtmlEntities, type AnyExtension, type Editor } from '@tiptap/core'
 import { Details, DetailsContent, DetailsSummary } from '@tiptap/extension-details'
@@ -18,14 +18,16 @@ import {
   type ToggleHeadingVariant
 } from './details-markdown-html'
 
-const RICH_MARKDOWN_PLACEHOLDER = 'Write markdown… Type / for blocks.'
-const TOGGLE_TEXT_PLACEHOLDER = 'text'
 const TOGGLE_HEADING_PLACEHOLDERS: Record<ToggleHeadingVariant, readonly [string, string]> = {
   'heading-1': ['auto.components.editor.rich.markdown.slash.commands.e66e7f04c6', 'Heading 1'],
   'heading-2': ['auto.components.editor.rich.markdown.slash.commands.c209a116b7', 'Heading 2'],
   'heading-3': ['auto.components.editor.rich.markdown.slash.commands.30566ee962', 'Heading 3'],
   'heading-4': ['auto.components.editor.rich.markdown.slash.commands.5f9a0ed7c4', 'Heading 4'],
   'heading-5': ['auto.components.editor.rich.markdown.slash.commands.8440fa4acf', 'Heading 5']
+}
+
+function toggleTextPlaceholder(): string {
+  return translate('auto.components.editor.RichMarkdownEditor.togglePlaceholder', 'text')
 }
 
 function toggleHeadingPlaceholder(variant: ToggleHeadingVariant): string {
@@ -41,16 +43,19 @@ export function getRichMarkdownPlaceholder({
   Extract<PlaceholderOptions['placeholder'], (...args: never[]) => string>
 >[0]): string {
   if (node.type.name !== 'detailsSummary') {
-    return RICH_MARKDOWN_PLACEHOLDER
+    return translate(
+      'auto.components.editor.RichMarkdownEditor.placeholder',
+      'Write markdown… Type / for blocks.'
+    )
   }
 
   const parent = editor.state.doc.resolve(pos).parent
   if (parent.type.name !== 'details') {
-    return TOGGLE_TEXT_PLACEHOLDER
+    return toggleTextPlaceholder()
   }
 
   const variant = parseToggleHeadingVariant(parent.attrs.variant)
-  return variant ? toggleHeadingPlaceholder(variant) : TOGGLE_TEXT_PLACEHOLDER
+  return variant ? toggleHeadingPlaceholder(variant) : toggleTextPlaceholder()
 }
 
 export function moveDetailsSummarySelectionToContent(editor: Editor): boolean {
@@ -227,7 +232,12 @@ const OrcaDetails = Details.extend({
   markdownTokenizer: {
     name: 'details',
     level: 'block',
-    start: registerMarkdownTokenizerStart('<', (source) => source.search(/<details\b/i)),
+    // HTML blocks open only at a line start; marked passes source.slice(1), so offset 0 never qualifies.
+    start: registerMarkdownLookbehindTokenizerStart(
+      '<',
+      (source) => source.search(/(?<=[\n\r] {0,3})<details\b/i),
+      4
+    ),
     tokenize(src, _tokens, lexer) {
       const detailsBlock = matchDetailsHtmlBlock(src, 0)
       if (!detailsBlock || !isEditableDetailsHtmlBlock(detailsBlock)) {

@@ -9,14 +9,15 @@ import type { GitAdmissionTier } from '../../../git/command-runner/git-exec-opti
 import type { HostedReviewExecutionOptions } from '../../../source-control/hosted-review-git-options'
 import { mapPRState } from '../../mappers'
 import type { MergedPRCommitMembership } from '../../merged-pr-commit-membership'
-import { githubRepoIdentityKey } from '../../../../shared/github/repository-identity-key'
 import {
   normalizePRMergeable,
   normalizeReviewDecision,
   isAutoMergeEnabled
 } from './../map/work-item-field-coercion'
 import { requireReachableGitRoute } from '../../../providers/execution-host-provider-dispatch'
+import { ownerRepoFromPullRequestUrl, sameOwnerRepo } from '../github-exec-scope'
 import { getConnectionExecutionHostId } from '../../../../shared/execution-host'
+import { githubRepositoryWebHost } from '../../github-repository-host'
 export type PullRequestLookupData = {
   number: number
   title: string
@@ -37,6 +38,7 @@ export type PullRequestLookupData = {
   headRefName?: string
   baseRefOid?: string
   headRefOid?: string
+  isCrossRepository?: boolean
   headRepositoryOwner?: { login?: string } | null
   headRepository?: { name?: string } | null
   headDefaultBranchName?: string
@@ -78,10 +80,10 @@ export type RestPullRequest = {
 }
 
 export const PR_LOOKUP_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,reviewDecision,mergeStateStatus,autoMergeRequest,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export const PR_BRANCH_LIST_JSON_FIELDS =
-  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository'
+  'number,title,state,url,statusCheckRollup,updatedAt,isDraft,mergeable,baseRefName,headRefName,baseRefOid,headRefOid,headRepositoryOwner,headRepository,isCrossRepository'
 
 export type GitHubPRBranchLookupOptions = HostedReviewExecutionOptions & {
   acceptMergedFallbackPR?: boolean
@@ -162,10 +164,44 @@ export function pullRequestMatchesHeadRepository(
   expectedHeadRepo: OwnerRepo | null
 ): boolean {
   const actualHeadRepo = pullRequestHeadRepository(data, prRepo)
-  return (
-    !actualHeadRepo ||
-    !expectedHeadRepo ||
-    githubRepoIdentityKey(actualHeadRepo) === githubRepoIdentityKey(expectedHeadRepo)
+  // A renamed repository still answers at its old remote URL; its own PRs report the new name.
+  if (sameOwnerRepo(expectedHeadRepo, prRepo) && isSameRepositoryPullRequest(data, prRepo)) {
+    return true
+  }
+  const owner = data.headRepositoryOwner?.login?.trim().toLowerCase()
+  const baseRepo = ownerRepoFromPullRequestUrl(data.url)
+  const isCrossRepository =
+    data.isCrossRepository ??
+    (actualHeadRepo && baseRepo
+      ? !sameOwnerRepo(actualHeadRepo, baseRepo)
+      : owner && baseRepo && owner !== baseRepo.owner.toLowerCase()
+        ? true
+        : undefined)
+  if (!expectedHeadRepo) {
+    return isCrossRepository !== true
+  }
+  const actualHostRepo = prRepo ?? baseRepo
+  if (
+    (actualHostRepo &&
+      githubRepositoryWebHost(actualHostRepo).toLowerCase() !==
+        githubRepositoryWebHost(expectedHeadRepo).toLowerCase()) ||
+    (owner && owner !== expectedHeadRepo.owner.toLowerCase())
+  ) {
+    return false
+  }
+  return actualHeadRepo
+    ? sameOwnerRepo(actualHeadRepo, expectedHeadRepo)
+    : isCrossRepository !== true || Boolean(owner)
+}
+
+// Canonical PR URLs name the current base repository even when remote URLs are stale.
+export function isSameRepositoryPullRequest(
+  data: PullRequestLookupData,
+  prRepo: OwnerRepo | null
+): boolean {
+  return sameOwnerRepo(
+    pullRequestHeadRepository(data, prRepo),
+    ownerRepoFromPullRequestUrl(data.url)
   )
 }
 

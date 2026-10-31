@@ -1,11 +1,10 @@
 import { ipcRenderer } from 'electron'
+import type { PluginFrameEntry } from '../../shared/plugins/frames/plugin-frame-bridge'
+import type { PluginHostCallOutcome } from '../../shared/plugins/frames/plugin-protocol'
+import type { PluginConsentRequest } from '../../shared/plugins/approval/plugin-consent-request'
+import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import type {
-  PluginPanelActionOutcome,
-  PluginPanelEntry
-} from '../../shared/plugins/plugin-panel-bridge'
-import type { PluginConsentRequest } from '../../shared/plugins/plugin-consent-request'
-import type { PluginChangeEvent } from '../../shared/plugins/plugin-change-event'
-import type {
+  PluginAutoUpdateEvent,
   PluginHostInstallResult,
   PluginHostInstallSource,
   PluginHostListEntry,
@@ -16,6 +15,12 @@ import type {
 export const pluginsApi = {
   list: (): Promise<PluginHostListEntry[]> => ipcRenderer.invoke('plugins:list'),
   listLanguagePacks: () => ipcRenderer.invoke('plugins:listLanguagePacks'),
+  listThemes: () => ipcRenderer.invoke('plugins:listThemes'),
+  listTerminalThemes: () => ipcRenderer.invoke('plugins:listTerminalThemes'),
+  listIconThemes: () => ipcRenderer.invoke('plugins:listIconThemes'),
+  loadIconTheme: (id) => ipcRenderer.invoke('plugins:loadIconTheme', id),
+  listSyntaxes: () => ipcRenderer.invoke('plugins:listSyntaxes'),
+  loadSyntax: (id) => ipcRenderer.invoke('plugins:loadSyntax', id),
   consent: (args: PluginConsentRequest): Promise<PluginHostListEntry[]> =>
     ipcRenderer.invoke('plugins:consent', args),
   setEnabled: (args: { pluginKey: string; enabled: boolean }): Promise<PluginHostListEntry[]> =>
@@ -23,14 +28,21 @@ export const pluginsApi = {
   readPanelEntry: (args: {
     pluginKey: string
     panelId: string
-  }): Promise<PluginPanelEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
+  }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readPanelEntry', args),
+  readCustomEditorEntry: (args: {
+    pluginKey: string
+    editorId: string
+  }): Promise<PluginFrameEntry | null> => ipcRenderer.invoke('plugins:readCustomEditorEntry', args),
+  readNewFileTemplate: (args: { pluginKey: string; newFileId: string }): Promise<string | null> =>
+    ipcRenderer.invoke('plugins:readNewFileTemplate', args),
   invokeCommand: (args: { pluginKey: string; commandId: string; args?: unknown }) =>
     ipcRenderer.invoke('plugins:invokeCommand', args),
   panelAction: (args: {
     sessionToken: string
     action: string
     params?: unknown
-  }): Promise<PluginPanelActionOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
+  }): Promise<PluginHostCallOutcome> => ipcRenderer.invoke('plugins:panelAction', args),
+  resolveGitSource: (args) => ipcRenderer.invoke('plugins:resolveGitSource', args),
   install: (source: PluginHostInstallSource): Promise<PluginHostInstallResult> =>
     ipcRenderer.invoke('plugins:install', source),
   listMarketplaces: () => ipcRenderer.invoke('plugins:listMarketplaces'),
@@ -38,12 +50,16 @@ export const pluginsApi = {
   removeMarketplace: (args) => ipcRenderer.invoke('plugins:removeMarketplace', args),
   refreshMarketplaces: (args = {}) => ipcRenderer.invoke('plugins:refreshMarketplaces', args),
   listMarketplacePlugins: () => ipcRenderer.invoke('plugins:listMarketplacePlugins'),
+  suggestForFileType: (fileType, purpose) =>
+    ipcRenderer.invoke('plugins:suggestForFileType', fileType, purpose),
   previewMarketplacePlugin: (args) => ipcRenderer.invoke('plugins:previewMarketplacePlugin', args),
   installMarketplacePlugin: (preview) =>
     ipcRenderer.invoke('plugins:installMarketplacePlugin', preview),
   previewMarketplaceUpdate: (args) => ipcRenderer.invoke('plugins:previewMarketplaceUpdate', args),
   rollbackMarketplacePlugin: (args) =>
     ipcRenderer.invoke('plugins:rollbackMarketplacePlugin', args),
+  getRollbackVersion: (args) => ipcRenderer.invoke('plugins:getRollbackVersion', args),
+  getInstalledManifest: (args) => ipcRenderer.invoke('plugins:getInstalledManifest', args),
   remove: (args: { pluginKey: string }): Promise<PluginHostListEntry[]> =>
     ipcRenderer.invoke('plugins:remove', args),
   getLogs: (args: { pluginKey: string }): Promise<PluginHostLogLine[]> =>
@@ -55,6 +71,24 @@ export const pluginsApi = {
     ipcRenderer.on('plugins:changed', listener)
     return () => {
       ipcRenderer.removeListener('plugins:changed', listener)
+    }
+  },
+  getAutoUpdateState: () => ipcRenderer.invoke('plugins:getAutoUpdateState'),
+  takeUpdateReviewNotices: () => ipcRenderer.invoke('plugins:takeUpdateReviewNotices'),
+  getInstallCounts: () => ipcRenderer.invoke('plugins:getInstallCounts'),
+  onInstallCountsChanged: (callback): (() => void) => {
+    const listener = (): void => callback()
+    ipcRenderer.on('plugins:installCountsChanged', listener)
+    return () => {
+      ipcRenderer.removeListener('plugins:installCountsChanged', listener)
+    }
+  },
+  onAutoUpdateChanged: (callback): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, change: PluginAutoUpdateEvent): void =>
+      callback(change)
+    ipcRenderer.on('plugins:autoUpdateChanged', listener)
+    return () => {
+      ipcRenderer.removeListener('plugins:autoUpdateChanged', listener)
     }
   }
 } satisfies PreloadApi['plugins']

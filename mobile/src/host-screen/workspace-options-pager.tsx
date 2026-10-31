@@ -1,5 +1,5 @@
 import { useCallback, useState, type ReactNode } from 'react'
-import { StyleSheet, View } from 'react-native'
+import { View } from 'react-native'
 import Animated, {
   runOnJS,
   useAnimatedStyle,
@@ -9,6 +9,8 @@ import Animated, {
 } from 'react-native-reanimated'
 import { useReducedMotionEnabled } from '../platform/use-reduced-motion'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
 const PAGE_SLIDE_MS = 200
 
@@ -52,6 +54,7 @@ export function OptionPager(props: {
   main: ReactNode
   page: ReactNode | null
 }) {
+  useMobileColorScheme()
   const [width, setWidth] = useState(0)
   const [mainHeight, setMainHeight] = useState<number | null>(null)
   const { slide } = props.pager
@@ -80,8 +83,8 @@ export function OptionPager(props: {
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   pager: { overflow: 'hidden' },
   underlay: { position: 'absolute', top: 0, left: 0, right: 0 },
-  page: { flexGrow: 1, backgroundColor: colors.bgBase }
-})
+  page: { flexGrow: 1, backgroundColor: colors.sheetSurface }
+}))

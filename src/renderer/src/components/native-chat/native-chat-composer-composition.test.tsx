@@ -4,14 +4,13 @@ import { changePrompt, promptValue } from './native-chat-prompt-editor.test-supp
 
 import { createRef } from 'react'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-vi.mock('@/i18n/i18n', () => ({
+import type * as NativeI18n from '@/i18n/i18n'
+
+vi.mock('@/i18n/i18n', async (original) => ({
+  ...(await original<typeof NativeI18n>()),
   translate: (_key: string, fallback: string) => fallback
-}))
-
-vi.mock('./NativeChatComposerActions', () => ({
-  NativeChatComposerActions: () => <div data-testid="composer-actions" />
 }))
 
 vi.mock('./NativeChatAutocompleteMenus', () => ({
@@ -24,6 +23,35 @@ import {
   type NativeChatComposerFieldProps
 } from './NativeChatComposerField'
 import { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
+import { TooltipProvider } from '@/components/ui/tooltip'
+import { useNativeChatDraft } from './use-native-chat-draft'
+import { useNativeChatDraftEvents } from './use-native-chat-draft-events'
+import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import {
+  createNativeChatQueuedEditDraft,
+  handBackNativeChatQueuedEdit,
+  discardNativeChatQueuedEdit
+} from './native-chat-queued-edit-draft'
+import {
+  readNativeChatComposerDraft,
+  updateNativeChatComposerDraft,
+  clearNativeChatComposerDraftsForTests,
+  hydrateNativeChatComposerDrafts,
+  nativeChatComposerDraftWritesSettled
+} from './native-chat-composer-draft-store'
+import { appendNativeChatDraftCache } from './native-chat-draft-cache'
+import { settleNativeChatPastedText } from './native-chat-composer-pasted-text-references'
+import {
+  nativeChatPastedTextOperations,
+  nativeChatPastedTextToken
+} from './native-chat-pasted-text-reference'
+import {
+  createMemoryNativeChatComposerDraftStorage,
+  setNativeChatComposerDraftStorageForTests
+} from './native-chat-composer-draft-storage'
+import { promptSkillRefs } from './native-chat-prompt-document'
+import { dispatchStructuredAgentSessionComposerCommand } from '../../../../shared/structured-agent-session-composer'
 
 afterEach(() => cleanup())
 
@@ -31,7 +59,11 @@ type TestFieldProps = Omit<NativeChatComposerFieldProps, 'imeEnterGesture'>
 
 function TestField(props: TestFieldProps): React.JSX.Element {
   const imeEnterGesture = useImeEnterGestureOwnership()
-  return <NativeChatComposerField {...props} imeEnterGesture={imeEnterGesture} />
+  return (
+    <TooltipProvider>
+      <NativeChatComposerField {...props} imeEnterGesture={imeEnterGesture} />
+    </TooltipProvider>
+  )
 }
 
 function fieldProps(overrides: Partial<TestFieldProps> = {}): TestFieldProps {
@@ -83,6 +115,54 @@ describe('native chat composer drop ownership', () => {
     const view = render(<TestField {...fieldProps({ draftScopeKey: 'agent-session:session-9' })} />)
     expect(view.container.querySelector('[data-composer-scope-key]')).toBeNull()
     expect(view.container.querySelector('.ProseMirror')).not.toBeNull()
+  })
+})
+
+describe('queued edit placeholder ownership', () => {
+  it('names the edit while locally locked, keeping Cancel available and bottom copy unchanged', () => {
+    const cancel = vi.fn()
+    const props = fieldProps({
+      draftScopeKey: 'queued-edit:image-only',
+      editSession: { cancel },
+      imageAttachments: [
+        { id: 'retained-image', path: '/image.png', previewUrl: 'data:image/png;base64,AA==' }
+      ],
+      disabled: true,
+      canSend: false,
+      sendButtonDisabled: true,
+      attachDisabled: true,
+      dictationDisabled: true
+    })
+    const view = render(<TestField {...props} />)
+
+    expect(
+      screen.getByRole('textbox', { name: 'Edit message' }).getAttribute('contenteditable')
+    ).toBe('false')
+    expect(view.container.querySelector('[data-placeholder="Edit message"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true)
+    const cancelButton = screen.getByRole('button', { name: 'Cancel' })
+    expect(cancelButton.hasAttribute('disabled')).toBe(false)
+
+    view.rerender(<TestField {...props} disabled={false} canSend sendButtonDisabled={false} />)
+    expect(
+      screen.getByRole('textbox', { name: 'Edit message' }).getAttribute('contenteditable')
+    ).toBe('true')
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(false)
+    view.rerender(<TestField {...props} />)
+    expect(
+      screen.getByRole('textbox', { name: 'Edit message' }).getAttribute('contenteditable')
+    ).toBe('false')
+    expect(view.container.querySelector('[data-placeholder="Edit message"]')).not.toBeNull()
+    expect(screen.getByRole('button', { name: 'Save' }).hasAttribute('disabled')).toBe(true)
+    expect(cancelButton.hasAttribute('disabled')).toBe(false)
+    fireEvent.click(cancelButton)
+    expect(cancel).toHaveBeenCalledOnce()
+
+    view.rerender(
+      <TestField {...props} editSession={undefined} draftScopeKey="agent-session:bottom" />
+    )
+    expect(screen.getByRole('textbox', { name: 'Input is held by another device.' })).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Cancel' })).toBeNull()
   })
 })
 
@@ -316,5 +396,240 @@ describe('native chat composer composition ownership', () => {
     expect(onImeSettled).toHaveBeenCalledWith(
       expect.objectContaining({ value: promptValue(input) })
     )
+  })
+})
+
+it('keeps an actual composing return through command acceptance, composition settlement and the next real Send', async () => {
+  clearNativeChatComposerDraftsForTests()
+  setNativeChatComposerDraftStorageForTests(createMemoryNativeChatComposerDraftStorage())
+  await hydrateNativeChatComposerDrafts()
+  const scope = 'agent-session:composition-return'
+  updateNativeChatComposerDraft(scope, { text: '/goal ship it' }, 'immediate')
+  const reply = Promise.withResolvers<boolean>()
+  const transport: NativeChatStructuredComposerTransport = {
+    capturePresentation: () => () => true,
+    send: vi.fn(() => true),
+    threadGoal: { setObjective: () => reply.promise },
+    dispatchCommand: (text) =>
+      dispatchStructuredAgentSessionComposerCommand(text, {
+        agent: 'codex',
+        snapshot: [],
+        invokeAction: async () => true,
+        setOption: async () => true,
+        setThreadGoalObjective: () => reply.promise
+      }),
+    optionsSurface: {
+      getSnapshot: () => [],
+      setOption: vi.fn(),
+      invokeAction: vi.fn(),
+      subscribe: () => () => {}
+    },
+    optionSnapshot: [],
+    onError: vi.fn(),
+    runtime: 'local',
+    sessionId: 'composition-return',
+    runtimeEnvironmentId: null
+  }
+  let send: ReturnType<typeof useNativeChatStructuredComposerSend> | undefined
+  const input = createRef<NativeChatComposerFieldProps['textareaRef']['current']>()
+  function JoinedField() {
+    const ime = useImeEnterGestureOwnership()
+    const draft = useNativeChatDraft(scope, ime.isComposing)
+    send = useNativeChatStructuredComposerSend({
+      agent: 'codex',
+      draftScopeKey: scope,
+      imageAttachments: [],
+      structuredTransport: transport,
+      isComposing: ime.isComposing,
+      setDraft: draft.setDraft,
+      setCaret: vi.fn(),
+      clearSkillOrigin: vi.fn()
+    })
+    const events = useNativeChatDraftEvents({
+      ...draft,
+      setCaret: vi.fn(),
+      setActiveSuggestion: vi.fn(),
+      handleDraftOrCaretChange: vi.fn(),
+      flushPendingAttachments: vi.fn()
+    })
+    return (
+      <TooltipProvider>
+        <NativeChatComposerField
+          {...fieldProps()}
+          textareaRef={input}
+          draftScopeKey={scope}
+          draft={draft.draft}
+          imeEnterGesture={ime}
+          {...events}
+        />
+      </TooltipProvider>
+    )
+  }
+  const view = render(<JoinedField />)
+  let pending: Promise<void> | undefined
+  act(() => {
+    pending = send!('/goal ship it', [])
+  })
+  const field = screen.getByRole('textbox')
+  fireEvent.compositionStart(field)
+  changePrompt(field, '/goal ship it가')
+  const edit = createNativeChatQueuedEditDraft(
+    {
+      kind: 'message',
+      role: 'user',
+      blocks: [{ type: 'text', text: '$review' }],
+      skills: [{ name: 'review', path: '/ime/SKILL.md' }]
+    },
+    scope
+  )
+  act(() => {
+    const draft = readNativeChatComposerDraft(edit.scopeKey)
+    updateNativeChatComposerDraft(
+      edit.scopeKey,
+      {
+        text: '$review changed',
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                ...(draft.document?.content?.[0].content ?? []),
+                { type: 'text', text: ' changed' }
+              ]
+            }
+          ]
+        }
+      },
+      'immediate'
+    )
+    handBackNativeChatQueuedEdit(edit)
+    discardNativeChatQueuedEdit(edit)
+  })
+  expect(promptValue(field)).toBe('/goal ship it가')
+  await act(async () => {
+    reply.resolve(true)
+    await pending
+  })
+  expect(promptValue(field)).toBe('/goal ship it가')
+  fireEvent.compositionEnd(field, { data: '가' })
+  expect(promptValue(field)).toBe('가\n\n$review changed')
+  const left = readNativeChatComposerDraft(scope)
+  expect(left.text).toBe('가\n\n$review changed')
+  expect(promptSkillRefs(left.document)).toEqual([{ name: 'review', path: '/ime/SKILL.md' }])
+  await act(async () => send!(left.text, []))
+  expect(transport.send).toHaveBeenCalledExactlyOnceWith(left.text, [], {
+    skills: [{ name: 'review', path: '/ime/SKILL.md' }]
+  })
+  view.unmount()
+  clearNativeChatComposerDraftsForTests()
+})
+
+describe('an open IME composition stays in the draft every consumer reads (#35836)', () => {
+  const scope = 'agent-session:open-composition'
+  let storage: ReturnType<typeof createMemoryNativeChatComposerDraftStorage>
+
+  beforeEach(async () => {
+    clearNativeChatComposerDraftsForTests()
+    storage = createMemoryNativeChatComposerDraftStorage()
+    setNativeChatComposerDraftStorageForTests(storage)
+    await hydrateNativeChatComposerDrafts()
+  })
+  afterEach(() => {
+    cleanup()
+    clearNativeChatComposerDraftsForTests()
+    nativeChatPastedTextOperations.clear()
+  })
+
+  // The pane's Send reads its React draft, as this field's Send does.
+  function LiveField({ onSend = vi.fn() }: { onSend?: (text: string) => void }) {
+    const ime = useImeEnterGestureOwnership()
+    const draft = useNativeChatDraft(scope, ime.isComposing)
+    const events = useNativeChatDraftEvents({
+      ...draft,
+      setCaret: vi.fn(),
+      setActiveSuggestion: vi.fn(),
+      handleDraftOrCaretChange: vi.fn(),
+      flushPendingAttachments: vi.fn()
+    })
+    return (
+      <TooltipProvider>
+        <NativeChatComposerField
+          {...fieldProps()}
+          draftScopeKey={scope}
+          draft={draft.draft}
+          imeEnterGesture={ime}
+          sendButtonDisabled={draft.draft.trim() === ''}
+          onSend={() => onSend(draft.draft)}
+          {...events}
+        />
+      </TooltipProvider>
+    )
+  }
+
+  it('sends the composing text from a Send press that keeps focus', () => {
+    const onSend = vi.fn()
+    render(<LiveField onSend={onSend} />)
+    const field = textarea()
+    fireEvent.compositionStart(field)
+    changePrompt(field, 'nihao')
+
+    const sendButton = screen.getByRole('button', { name: 'Send' })
+    expect(sendButton.hasAttribute('disabled')).toBe(false)
+    fireEvent.mouseDown(sendButton)
+    fireEvent.click(sendButton)
+    expect(onSend).toHaveBeenCalledExactlyOnceWith('nihao')
+  })
+
+  it('keeps a message returned mid-composition when the composer unmounts', () => {
+    const view = render(<LiveField />)
+    const field = textarea()
+    fireEvent.compositionStart(field)
+    changePrompt(field, '가')
+    act(() => {
+      appendNativeChatDraftCache(scope, 'returned message')
+    })
+
+    view.unmount()
+    expect(readNativeChatComposerDraft(scope).text).toBe('가\n\nreturned message')
+  })
+
+  it('saves edits made after a composition that blur ended without compositionend', () => {
+    render(<LiveField />)
+    const field = textarea()
+    fireEvent.compositionStart(field)
+    changePrompt(field, '각')
+    fireEvent.blur(field)
+    changePrompt(field, '각a')
+
+    expect(readNativeChatComposerDraft(scope).text).toBe('각a')
+  })
+
+  it('keeps a pasted-text path that finished saving mid-composition', () => {
+    const id = '00000000-0000-4000-8000-000000000035'
+    const token = nativeChatPastedTextToken(id)
+    nativeChatPastedTextOperations.set(id, { scopeKey: scope, text: 'pasted' })
+    updateNativeChatComposerDraft(scope, { text: token }, 'immediate')
+    render(<LiveField />)
+    const field = textarea()
+    fireEvent.compositionStart(field)
+    changePrompt(field, `${token} ni`)
+    act(() => {
+      settleNativeChatPastedText(id, '/tmp/pasted.txt')
+    })
+    endComposition(field, 'ni')
+
+    expect(readNativeChatComposerDraft(scope).pastedTextFiles).toEqual({ [id]: '/tmp/pasted.txt' })
+  })
+
+  it('saves the composing text when the window hides mid-composition', async () => {
+    render(<LiveField />)
+    const field = textarea()
+    fireEvent.compositionStart(field)
+    changePrompt(field, 'nihao')
+
+    window.dispatchEvent(new Event('pagehide'))
+    await nativeChatComposerDraftWritesSettled()
+    expect(storage.drafts.get(scope)?.text).toBe('nihao')
   })
 })

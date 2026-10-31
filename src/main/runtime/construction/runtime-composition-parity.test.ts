@@ -46,6 +46,11 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     reason: 'Offscreen WebContents need Electron.'
   },
   {
+    wiring: 'ctor:getSetupTerminalTitle',
+    missingOn: 'orcad',
+    reason: 'orcad has no UI language and serves clients in any locale, so Setup tabs stay English.'
+  },
+  {
     wiring: 'ctor:prepareClaudeAuth',
     missingOn: 'orcad',
     reason: 'orcad passes it to registerHeadlessPtyRuntime instead, and only off WSL.'
@@ -93,6 +98,12 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
       'Sleep reaches paired servers and suspends VMs from the desktop only; orcad refuses those parts.'
   },
   {
+    wiring: 'ctor:headlessTerminalScrollbackRows',
+    missingOn: 'electron',
+    reason:
+      "Desktop reveals hidden panes from its model at desktop depth; renderer-less orcad needs only the daemon's live window."
+  },
+  {
     wiring: 'rpc-option:exposeNetworkByDefault',
     missingOn: 'orcad',
     reason: 'orcad pins its bind host instead, so exposure never widens itself.'
@@ -106,11 +117,6 @@ const DECLARED_HOST_DIFFERENCES: readonly DeclaredDifference[] = [
     wiring: 'rpc.setOnUnpairedDeviceAuthFailure',
     missingOn: 'orcad',
     reason: 'It notifies a desktop window.'
-  },
-  {
-    wiring: 'rpc-option:pinnedBindHost',
-    missingOn: 'electron',
-    reason: 'The desktop binds loopback until a device pairs (STA-2370).'
   },
   {
     wiring: 'host:setMainHttpClient',
@@ -180,6 +186,7 @@ const ROOT_SOURCES: Record<Root, readonly string[]> = {
 const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
   electron: [
     'src/main/startup/main-process-preflight.ts',
+    'src/main/startup/agent-hooks-uninstall-preflight.ts',
     'src/main/host/electron-browser-commands.ts'
   ],
   orcad: [
@@ -192,10 +199,6 @@ const HOST_PORT_SOURCES: Record<Root, readonly string[]> = {
 const NOT_HOST_PORTS = new Set(['setTimeout', 'setInterval', 'setImmediate'])
 
 const SPREAD_SOURCES: Record<string, { file: string; anchor: string }> = {
-  'orcadAiVaultSessionSources(': {
-    file: 'src/main/orcad/orcad-session-search.ts',
-    anchor: 'return {'
-  },
   'agentHookRuntimeDeps(': {
     file: 'src/main/agent-hooks/agent-hook-runtime-deps.ts',
     anchor: 'return {'

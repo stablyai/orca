@@ -13,6 +13,9 @@ import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
 import type { Tab } from '../../../../shared/tab-types'
 import type { AppState } from '@/store/types'
 import { countActivityUnread } from '../activity/useActivityUnreadCount'
+import { savedStatusContracts } from '../../../../shared/agent-session-saved-status.test-fixture'
+import { resolveAttention } from '../../../../shared/sidebar-list/smart-attention'
+import { agentVerdictStatusLine } from '@/lib/agent-verdict-status-line'
 
 type TestStore = {
   getState: () => AppState
@@ -124,6 +127,27 @@ describe("the structured row's state clock", () => {
     cleanup()
     resetStructuredAgentSessionStatusFeedsForTests()
   })
+
+  it.each(savedStatusContracts)(
+    'projects saved $outcome through desktop status and Smart Sort on the original turn clock',
+    async ({ summary: savedSummary, outcome, attentionClass: cls, text }) => {
+      const emit = await connect()
+      emit({ type: 'snapshot', sessions: [savedSummary] })
+      expect(row()).toMatchObject({
+        state: 'done',
+        stateStartedAt: SETTLED,
+        interrupted: outcome === 'cancellation',
+        mainAgent: { state: 'done', outcome, stateStartedAt: SETTLED }
+      })
+      expect(agentVerdictStatusLine(row())).toBe(text)
+      expect(
+        resolveAttention([{ kind: 'hook', entry: row(), hasLivePty: false }], SETTLED + 1)
+      ).toEqual({
+        cls,
+        attentionTimestamp: cls === 2 ? SETTLED : 0
+      })
+    }
+  )
 
   it('keeps a settled parent read while its subagent writes, until its own next turn ends', async () => {
     const emit = await connect()

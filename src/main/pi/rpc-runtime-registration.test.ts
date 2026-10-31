@@ -70,6 +70,7 @@ describe('Pi launch support before session creation', () => {
         cwd: '/host/workspace',
         env: { PATH: root, HOME: '/host/home' },
         args: ['--version'],
+        terminationBarrier: true,
         timeoutMs: 5_000,
         maxOutputBytes: 4_096,
         killOnOutputLimit: true

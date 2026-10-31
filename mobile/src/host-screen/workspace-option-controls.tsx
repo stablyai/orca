@@ -1,35 +1,34 @@
 import { useState, type ComponentType } from 'react'
-import { Text, View } from 'react-native'
+import { View } from 'react-native'
 import { MobileSearchField } from '../components/MobileSearchField'
 import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
-import {
-  WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES,
-  WORKSPACE_CARD_DISPLAY_CHOICES,
-  WORKSPACE_CARD_LAYOUT_CHOICES,
-  WORKSPACE_CARD_PROPERTY_CHOICES,
-  WORKSPACE_GROUP_BY_CHOICES,
-  WORKSPACE_PROJECT_ORDER_CHOICES,
-  WORKSPACE_SORT_BY_CHOICES,
-  getWorkspaceCardDisplayChoiceLabel,
-  getWorkspaceCardPropertiesValue,
-  type WorkspaceViewChoice,
-  type WorkspaceViewOptionKey
+import * as viewOptions from '../../../src/shared/workspace-view/workspace-view-options'
+import type {
+  WorkspaceViewChoice,
+  WorkspaceViewOptionKey
 } from '../../../src/shared/workspace-view/workspace-view-options'
-import {
-  getCheckedHostRows,
-  toggleAllVisibleHosts,
-  toggleVisibleHostRow
-} from '../../../src/shared/workspace-view/workspace-host-visibility'
+import * as hostVisibility from '../../../src/shared/workspace-view/workspace-host-visibility'
 import type { ExecutionHostId } from '../../../src/shared/execution-host'
 import type { WorktreeCardProperty } from '../../../src/shared/ui-chrome-types'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hostScreenStyles as styles } from './host-screen-styles'
-import {
-  phoneCardPropertyChoices,
-  withoutPhoneHiddenProperties
-} from './phone-card-property-choices'
+import { withoutPhoneHiddenProperties } from './phone-card-property-choices'
 import type { HostScreenController } from './use-host-screen-controller'
-import { CheckRow, ChoiceRows, OptionRowList, SwitchRow } from './workspace-option-rows'
+import {
+  groupByChoices,
+  sortByChoices,
+  projectOrderChoices,
+  cardLayoutChoices,
+  activityLayoutChoices,
+  cardPropertyChoices,
+  cardDisplayChoices
+} from './workspace-option-controls-copy'
+import { ListGroup } from '../components/list/ListGroup'
+import { SectionHeader } from '../components/list/SectionHeader'
+import { CheckRow, ChoiceRows, SwitchRow } from './workspace-option-rows'
 import { choiceLabel, summarizeChecklist } from './workspace-option-values'
+import type { Translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
 export type WorkspaceOptionHost = { id: ExecutionHostId; label: string }
 
@@ -44,84 +43,91 @@ export type WorkspaceOptionControl =
   | { kind: 'inline'; framed: boolean; Row: ComponentType<WorkspaceOptionProps> }
   | {
       kind: 'page'
-      value: (props: WorkspaceOptionProps) => string
+      value: (props: WorkspaceOptionProps, t: Translate) => string
       Page: ComponentType<WorkspaceOptionProps>
     }
 
-const CARD_PROPERTY_CHOICES = phoneCardPropertyChoices(WORKSPACE_CARD_PROPERTY_CHOICES)
-
-// Infer project-group availability from folder rows: hosts list folder workspaces only under a group.
-function cardDisplayChoices(
-  controller: HostScreenController
-): WorkspaceViewChoice<WorktreeCardProperty>[] {
-  const hasProjectGroups = controller.state.worktrees.some(
-    (row) => row.workspaceKind === 'folder-workspace'
-  )
-  return phoneCardPropertyChoices(WORKSPACE_CARD_DISPLAY_CHOICES).map((choice) => ({
-    id: choice.id,
-    label: getWorkspaceCardDisplayChoiceLabel(choice, hasProjectGroups)
-  }))
+function checklistValue(
+  checkedLabels: readonly string[],
+  total: number,
+  allLabel: string,
+  t: Translate
+): string {
+  const count = checkedLabels.length
+  const summary = summarizeChecklist(checkedLabels, total, allLabel)
+  return count === 0 && count < total
+    ? t('hostScreen.workspaceOptionControls.none', 'None')
+    : count > 1 && count < total
+      ? t('hostScreen.workspaceOptionControls.selectedCount', '{{count}} of {{total}}', {
+          count,
+          total
+        })
+      : summary
 }
 
-function hostsValue({ controller, hosts }: WorkspaceOptionProps): string {
+function hostsValue({ controller, hosts }: WorkspaceOptionProps, t: Translate): string {
   const visible = controller.state.view.filters.visibleHostIds
-  const checked = visible ? getCheckedHostRows(hosts, visible) : hosts
-  return summarizeChecklist(
+  const checked = visible ? hostVisibility.getCheckedHostRows(hosts, visible) : hosts
+  return checklistValue(
     checked.map((host) => host.label),
     hosts.length,
-    'All hosts'
+    t('hostScreen.workspaceOptionControls.allHosts', 'All hosts'),
+    t
   )
 }
 
 function HostsPage({ controller, hosts }: WorkspaceOptionProps) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const { settings, state } = controller
   const visible = state.view.filters.visibleHostIds
-  const checked = new Set(visible ? getCheckedHostRows(hosts, visible).map((host) => host.id) : [])
+  const checked = new Set(
+    visible ? hostVisibility.getCheckedHostRows(hosts, visible).map((host) => host.id) : []
+  )
   const write = (next: ExecutionHostId[] | null | undefined) => {
     if (next !== undefined) {
       settings.setFilter('visibleHostIds', next)
     }
   }
   return (
-    <View style={styles.filterGroup}>
-      <OptionRowList>
-        {[
+    <ListGroup style={styles.optionGroup}>
+      <CheckRow
+        key="all"
+        label={t('hostScreen.workspaceOptionControls.allHosts', 'All hosts')}
+        checked={!visible}
+        onPress={() => write(hostVisibility.toggleAllVisibleHosts(hosts, visible))}
+      />
+      {hosts.map((host) => {
+        const next = hostVisibility.toggleVisibleHostRow(hosts, visible, host)
+        return (
           <CheckRow
-            key="all"
-            label="All hosts"
-            checked={!visible}
-            onPress={() => write(toggleAllVisibleHosts(hosts, visible))}
-          />,
-          ...hosts.map((host) => {
-            const next = toggleVisibleHostRow(hosts, visible, host)
-            return (
-              <CheckRow
-                key={host.id}
-                label={host.label}
-                checked={checked.has(host.id)}
-                disabled={next === undefined}
-                onPress={() => write(next)}
-              />
-            )
-          })
-        ]}
-      </OptionRowList>
-    </View>
+            key={host.id}
+            label={host.label}
+            checked={checked.has(host.id)}
+            disabled={next === undefined}
+            onPress={() => write(next)}
+          />
+        )
+      })}
+    </ListGroup>
   )
 }
 
-function projectsValue({ controller }: WorkspaceOptionProps): string {
+function projectsValue({ controller }: WorkspaceOptionProps, t: Translate): string {
   const repos = controller.sectionsResult.uniqueRepos
   const selected = controller.state.view.filters.filterRepoIds
   const checked = selected.length === 0 ? repos : repos.filter((repo) => selected.includes(repo.id))
-  return summarizeChecklist(
+  return checklistValue(
     checked.map((repo) => repo.name),
     repos.length,
-    'All projects'
+    t('hostScreen.workspaceOptionControls.allProjects', 'All projects'),
+    t
   )
 }
 
 function ProjectsPage({ controller }: WorkspaceOptionProps) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const { settings, state } = controller
   const [query, setQuery] = useState('')
   const needle = query.trim().toLowerCase()
@@ -130,55 +136,60 @@ function ProjectsPage({ controller }: WorkspaceOptionProps) {
     (repo) => !needle || repo.name.toLowerCase().includes(needle)
   )
   return (
-    <View style={styles.filterGroup}>
+    <>
       <View style={styles.optionSearch}>
         <MobileSearchField
           value={query}
           onChangeText={setQuery}
-          placeholder="Search projects…"
-          accessibilityLabel="Search projects"
+          placeholder={t(
+            'hostScreen.workspaceOptionControls.searchProjectsPlaceholder',
+            'Search projects…'
+          )}
+          accessibilityLabel={t(
+            'hostScreen.workspaceOptionControls.searchProjects',
+            'Search projects'
+          )}
         />
       </View>
-      <OptionRowList>
-        {[
+      <ListGroup style={styles.optionGroup}>
+        <CheckRow
+          key="all"
+          label={t('hostScreen.workspaceOptionControls.allProjects', 'All projects')}
+          checked={selected.length === 0}
+          onPress={() => settings.setFilter('filterRepoIds', [])}
+        />
+        {repos.map((repo) => (
           <CheckRow
-            key="all"
-            label="All projects"
-            checked={selected.length === 0}
-            onPress={() => settings.setFilter('filterRepoIds', [])}
-          />,
-          ...repos.map((repo) => (
-            <CheckRow
-              key={repo.key}
-              label={repo.name}
-              checked={selected.includes(repo.id)}
-              onPress={() => settings.toggleRepoFilter(repo.id)}
-              leading={<View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />}
-            />
-          ))
-        ]}
-      </OptionRowList>
-    </View>
+            key={repo.key}
+            label={repo.name}
+            checked={selected.includes(repo.id)}
+            onPress={() => settings.toggleRepoFilter(repo.id)}
+            leading={<View style={[styles.filterRepoDot, { backgroundColor: repo.color }]} />}
+          />
+        ))}
+      </ListGroup>
+    </>
   )
 }
 
 function choicePage<Id extends string>(
-  choices: readonly WorkspaceViewChoice<Id>[],
+  choices: (t: Translate) => readonly WorkspaceViewChoice<Id>[],
   selected: (controller: HostScreenController) => Id,
   onSelect: (controller: HostScreenController) => (id: Id) => void
 ): Extract<WorkspaceOptionControl, { kind: 'page' }> {
   return {
     kind: 'page',
-    value: ({ controller }) => choiceLabel(choices, selected(controller)),
-    Page: ({ controller }) => (
-      <View style={styles.filterGroup}>
+    value: ({ controller }, t) => choiceLabel(choices(t), selected(controller)),
+    Page: function ChoicePage({ controller }) {
+      const t = useMobileTranslation()
+      return (
         <ChoiceRows
-          choices={choices}
+          choices={choices(t)}
           selected={selected(controller)}
           onSelect={onSelect(controller)}
         />
-      </View>
-    )
+      )
+    }
   }
 }
 
@@ -186,61 +197,77 @@ function CardPropertyRows(props: {
   controller: HostScreenController
   choices: readonly WorkspaceViewChoice<WorktreeCardProperty>[]
 }) {
+  useMobileColorScheme()
   const { settings, state } = props.controller
   return (
-    <View style={styles.filterGroup}>
-      <OptionRowList>
-        {props.choices.map((choice) => (
-          <CheckRow
-            key={choice.id}
-            label={choice.label}
-            checked={state.view.worktreeCardProperties.includes(choice.id)}
-            onPress={() => settings.toggleCardProperty(choice.id)}
-          />
-        ))}
-      </OptionRowList>
-    </View>
+    <ListGroup style={styles.optionGroup}>
+      {props.choices.map((choice) => (
+        <CheckRow
+          key={choice.id}
+          label={choice.label}
+          checked={state.view.worktreeCardProperties.includes(choice.id)}
+          onPress={() => settings.toggleCardProperty(choice.id)}
+        />
+      ))}
+    </ListGroup>
   )
 }
 
-function showPropertiesValue({ controller }: WorkspaceOptionProps): string {
-  const value = getWorkspaceCardPropertiesValue(
+function showPropertiesValue({ controller }: WorkspaceOptionProps, t: Translate): string {
+  const value = viewOptions.getWorkspaceCardPropertiesValue(
     withoutPhoneHiddenProperties(controller.state.view.worktreeCardProperties),
     controller.state.view.compactWorktreeCards
   )
-  return value === 'hover' ? 'Hover' : value === null ? '' : String(value)
+  return value === 'hover'
+    ? t('hostScreen.workspaceOptionControls.hover', 'Hover')
+    : value === null
+      ? ''
+      : String(value)
 }
 
 function propertiesPage(
   choices: (
-    controller: HostScreenController
+    controller: HostScreenController,
+    t: Translate
   ) => readonly WorkspaceViewChoice<WorktreeCardProperty>[],
-  options: { value: (props: WorkspaceOptionProps) => string; withAgentLayout: boolean }
+  options: {
+    value: (props: WorkspaceOptionProps, t: Translate) => string
+    withAgentLayout: boolean
+  }
 ): Extract<WorkspaceOptionControl, { kind: 'page' }> {
   const { withAgentLayout } = options
   return {
     kind: 'page',
     value: options.value,
-    Page: ({ controller }) => (
-      <>
-        <CardPropertyRows controller={controller} choices={choices(controller)} />
-        {withAgentLayout && (
-          <>
-            <Text style={styles.filterSectionLabel}>Agent activity layout</Text>
-            <MobileSegmentedControl
-              segments={WORKSPACE_AGENT_ACTIVITY_LAYOUT_CHOICES.map(({ id, label }) => ({
-                value: id,
-                label
-              }))}
-              selected={controller.state.view.agentActivityDisplayMode}
-              onSelect={controller.settings.setAgentActivityDisplayMode}
-              fill
-              style={styles.optionSegmented}
-            />
-          </>
-        )}
-      </>
-    )
+    Page: function PropertiesPage({ controller }) {
+      const t = useMobileTranslation()
+      return (
+        <>
+          <CardPropertyRows controller={controller} choices={choices(controller, t)} />
+          {withAgentLayout && (
+            <>
+              <SectionHeader
+                title={t(
+                  'hostScreen.workspaceOptionControls.agentActivityLayout',
+                  'Agent activity layout'
+                )}
+              />
+              <MobileSegmentedControl
+                segments={activityLayoutChoices(t).map(({ id, label }) => ({
+                  value: id,
+                  label
+                }))}
+                selected={controller.state.view.agentActivityDisplayMode}
+                onSelect={controller.settings.setAgentActivityDisplayMode}
+                fill
+                onSheet
+                style={styles.optionSegmented}
+              />
+            </>
+          )}
+        </>
+      )
+    }
   }
 }
 
@@ -273,32 +300,36 @@ export const WORKSPACE_OPTION_CONTROLS: Record<WorkspaceViewOptionKey, Workspace
   groupBy: {
     kind: 'inline',
     framed: false,
-    Row: ({ controller }) => (
-      <MobileSegmentedControl
-        segments={WORKSPACE_GROUP_BY_CHOICES.map(({ id, label }) => ({ value: id, label }))}
-        selected={controller.state.view.groupBy}
-        onSelect={controller.settings.handleGroupChange}
-        fill
-        style={styles.optionSegmented}
-      />
-    )
+    Row: function GroupByRow({ controller }) {
+      const t = useMobileTranslation()
+      return (
+        <MobileSegmentedControl
+          segments={groupByChoices(t).map(({ id, label }) => ({ value: id, label }))}
+          selected={controller.state.view.groupBy}
+          onSelect={controller.settings.handleGroupChange}
+          fill
+          onSheet
+          style={styles.optionSegmented}
+        />
+      )
+    }
   },
   sortBy: choicePage(
-    WORKSPACE_SORT_BY_CHOICES,
+    sortByChoices,
     (controller) => controller.state.view.sortBy,
     (controller) => controller.settings.handleSortChange
   ),
   projectOrderBy: choicePage(
-    WORKSPACE_PROJECT_ORDER_CHOICES,
+    projectOrderChoices,
     (controller) => controller.projectOrderBy,
     (controller) => controller.settings.setProjectOrderBy
   ),
   cardLayout: choicePage(
-    WORKSPACE_CARD_LAYOUT_CHOICES,
+    cardLayoutChoices,
     (controller) => (controller.state.view.compactWorktreeCards ? 'compact' : 'detailed'),
     (controller) => controller.settings.setCardLayout
   ),
-  cardProperties: propertiesPage(() => CARD_PROPERTY_CHOICES, {
+  cardProperties: propertiesPage((_controller, t) => cardPropertyChoices(t), {
     value: showPropertiesValue,
     withAgentLayout: true
   }),

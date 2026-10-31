@@ -3,7 +3,7 @@ import type { AgentJournalItemBody } from '../../shared/agent-session-journal-ty
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
 import { DISPATCH_REJECTED_CANCELLED } from '../../shared/structured-agent-session-dispatch-rejection'
-import type { ClaudeStructuredSessionAdapterDeps } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionAdapterDeps } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   USER_MESSAGE,
@@ -190,15 +190,6 @@ describe('Stop with a follow-up Claude queued behind the running turn', () => {
       settlements: WITHDRAWN
     })
     expect(bySessionStart).toEqual(byInit)
-  })
-
-  it('settles the swept follow-up without proof it never reached Claude', async () => {
-    const { settlements } = await stopWithQueuedFollowUp(
-      claudeCli({ initProof: 'init', capabilities: CAPABILITIES }),
-      () => {}
-    )
-    expect(settlements[0]).toMatchObject({ state: 'rejected' })
-    expect(JSON.stringify(settlements[0])).not.toContain('neverReachedAgent')
   })
 
   it('keeps what a turn advertised when a later frame names nothing', async () => {

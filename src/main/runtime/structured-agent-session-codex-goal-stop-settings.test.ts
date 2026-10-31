@@ -607,6 +607,7 @@ it('orders Stop behind active-Set handler effects and closes the old child befor
   const host = await openChat(child)
   const first = goal(host, { kind: 'set', objective: 'Earlier goal' })
   await eventually(() => expect(activations).toBe(1))
+  child.closeEvidence = { root: 'live', tree: 'unverifiable', killDelivered: true }
   const stopping = stop(host)
   reply.resolve({ goal: { status: 'active' } })
   expect(await first).toMatchObject({ ok: true })

@@ -15,8 +15,8 @@ import { getSystemPrefersDark } from '@/lib/terminal-theme'
 import { resolveTerminalColorSchemeMode } from '../../../../../shared/terminal-color-scheme-protocol'
 import { discardTerminalOutput } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 import { terminalRendersInlineImages } from '@/lib/pane-manager/pane-inline-images'
+import { CONPTY_DA1_RESPONSE } from '../../../../../shared/conpty-device-attributes'
 import {
-  CONPTY_DA1_RESPONSE,
   createTerminalPixelSizeQueryResponder,
   installTerminalCapabilityReplyHandlers
 } from '../terminal-capability-replies'

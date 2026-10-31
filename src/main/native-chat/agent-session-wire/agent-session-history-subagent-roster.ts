@@ -6,7 +6,7 @@ import {
 } from '../../../shared/agent-session-journal-producer'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionSubagentRosterEntry } from '../../../shared/agent-session-wire'
-import { namedSubagents } from '../../../shared/native-chat-subagent-items'
+import { namedSubagents } from '../../../shared/native-chat/transcript/native-chat-subagent-items'
 import type { NativeChatSubagentEntry } from '../../../shared/native-chat-types'
 
 const MAX_ENTRIES = 64

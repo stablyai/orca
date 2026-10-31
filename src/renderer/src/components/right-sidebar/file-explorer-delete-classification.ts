@@ -51,3 +51,40 @@ export function confirmRemoteDelete(
     confirmVariant: 'destructive'
   })
 }
+
+export function fileDeleteFailedMessage(
+  name: string,
+  isRemote: boolean,
+  isWindows: boolean
+): string {
+  if (isRemote) {
+    return translate(
+      'auto.components.right.sidebar.useFileDeletion.deleteFailed',
+      "Failed to delete '{{name}}'.",
+      { name }
+    )
+  }
+  return isWindows
+    ? translate(
+        'auto.components.right.sidebar.useFileDeletion.recycleBinFailed',
+        "Failed to move '{{name}}' to the Recycle Bin.",
+        { name }
+      )
+    : translate(
+        'auto.components.right.sidebar.useFileDeletion.trashFailed',
+        "Failed to move '{{name}}' to the Trash.",
+        { name }
+      )
+}
+
+export function mixedBatchDeleteDescription(isWindows: boolean): string {
+  return isWindows
+    ? translate(
+        'auto.components.right.sidebar.useFileDeletion.mixedRecycleBin',
+        'Remote items are permanently deleted and cannot be undone. Local items move to the Recycle Bin.'
+      )
+    : translate(
+        'auto.components.right.sidebar.useFileDeletion.mixedTrash',
+        'Remote items are permanently deleted and cannot be undone. Local items move to the Trash.'
+      )
+}

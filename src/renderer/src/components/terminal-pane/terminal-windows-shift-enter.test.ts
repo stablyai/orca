@@ -5,6 +5,37 @@ import {
 } from './terminal-windows-shift-enter'
 
 describe('resolveWindowsShiftEnterEncoding', () => {
+  it('does not select a keyboard mode from a task mentioning another agent', () => {
+    const state = { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} }
+    expect(
+      resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', '⠋ fix the droid launcher')
+    ).toBe('alt-enter')
+    expect(resolveWindowsShiftEnterEncodingForPane(state, 'tab:pane', '⠋ Droid')).toBe('csi-u')
+  })
+
+  it.each([
+    ['. | Droid', 'alt-enter'],
+    ['tmux | Droid', 'csi-u']
+  ] as const)('uses the actual marker boundary for Windows input in %j', (title, encoding) => {
+    expect(
+      resolveWindowsShiftEnterEncodingForPane(
+        { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} },
+        'tab:pane',
+        title
+      )
+    ).toBe(encoding)
+  })
+
+  it('does not expose a keyboard mode inside a wrapped task barrier', () => {
+    expect(
+      resolveWindowsShiftEnterEncodingForPane(
+        { paneForegroundAgentByPaneKey: {}, agentLaunchConfigByPaneKey: {} },
+        'tab:pane',
+        'tmux | ⠋ fix | a | b | c | d | e | f | g | Droid'
+      )
+    ).toBe('alt-enter')
+  })
+
   it.each(['dsb', 'codex'] as const)(
     'keeps pending %s input encoding when a stale title names another agent',
     (agent) => {

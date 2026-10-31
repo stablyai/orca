@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 /** Execute terminalOnly on the receiving host with federation's agent-first worktree/background-terminal factories. The dispatch brief is delivered later. */
 
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
@@ -7,6 +8,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { WORKER_START_VOCABULARY } from '../../orchestration-worker-start-mode'
 import type { WorkerSetupReceipt } from '../worker/worker-topology'
+import { resolveWorkerWorktreeName } from '../worker/worker-worktree-creation'
 import {
   appendFederationSetupEffect,
   appendFederationTerminalEffects,
@@ -29,7 +31,11 @@ export async function launchFederatedWorkerAgent(args: {
   /** The created worktree's setup receipt, as soon as it exists, so a later failure reports it. */
   onSetup: (setup: WorkerSetupReceipt) => void
   onStage: (stage: 'worktree_create' | 'terminal_create') => void
-}): Promise<{ worktree: { id: string }; terminalHandle: string }> {
+}): Promise<{
+  worktree: { id: string }
+  terminalHandle: string
+  terminalCreation?: RuntimeTerminalCreate
+}> {
   const { runtime, db, params, effects } = args
   if (!args.agent) {
     // Validation refuses a fresh launch with no agent; this only narrows the type.
@@ -39,6 +45,7 @@ export async function launchFederatedWorkerAgent(args: {
   }
   const agent = args.agent
   let created: { id: string } | undefined
+  let terminalCreation: RuntimeTerminalCreate | undefined
   const launched = await executeAgentLaunch({
     runtime,
     intent: {
@@ -59,10 +66,10 @@ export async function launchFederatedWorkerAgent(args: {
         if (startupAgent === undefined) {
           throw new Error(TERMINAL_ONLY_MESSAGE)
         }
-        const { repo, name } = params
-        if (!repo || !name) {
+        const { repo } = params
+        if (!repo) {
           // Validation refuses this before the attachment exists; this only narrows the types.
-          throw new Error('A remote new-top-level worktree requires --name and an explicit --repo.')
+          throw new Error('A remote new-top-level worktree requires an explicit --repo.')
         }
         db.recordRemoteAttachmentStage({
           dispatchId: params.dispatchId,
@@ -70,8 +77,11 @@ export async function launchFederatedWorkerAgent(args: {
         })
         const setupDecision = params.setup ?? 'run'
         const result = await runtime.createManagedWorktree({
+          onStartupTerminalCreated: (terminal) => {
+            terminalCreation = terminal
+          },
           repoSelector: repo,
-          name,
+          ...(await resolveWorkerWorktreeName(runtime, repo, params.name)),
           baseBranch: params.baseBranch,
           displayName: params.displayName,
           displayNameKind: params.displayNameKind,
@@ -91,7 +101,12 @@ export async function launchFederatedWorkerAgent(args: {
         })
         created = result.worktree
         const terminalHandle = result.startupTerminal?.handle
-        effects.push({ kind: 'worktree', action: 'created_top_level', id: result.worktree.id })
+        effects.push({
+          kind: 'worktree',
+          action: 'created_top_level',
+          id: result.worktree.id,
+          name: result.worktree.displayName
+        })
         const setup: WorkerSetupReceipt = {
           requested: setupDecision,
           effective: setupDecision,
@@ -132,7 +147,8 @@ export async function launchFederatedWorkerAgent(args: {
           presentation: 'background'
         })
         effects.push({ kind: 'terminal', role: 'agent', action: 'created', id: terminal.handle })
-        return { handle: terminal.handle }
+        terminalCreation = terminal
+        return { handle: terminal.handle, terminalCreation: terminal }
       }
     }
   })
@@ -140,5 +156,5 @@ export async function launchFederatedWorkerAgent(args: {
   if (!worktree) {
     throw new Error('Federated worker topology did not resolve.')
   }
-  return { worktree, terminalHandle: launched.outcome.handle }
+  return { worktree, terminalHandle: launched.outcome.handle, terminalCreation }
 }

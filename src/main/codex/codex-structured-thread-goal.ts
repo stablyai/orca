@@ -78,12 +78,29 @@ export async function changeCodexThreadGoalWithSettings(
     (input.change.kind === 'status' && input.change.status === 'active')
   try {
     if (startsWork) {
+      const requested = resolvedCodexGoalSettings(session, input.executionOptions)
+      const previousApplied = session.appliedTurnOptions
       const installed = await session.appliedSettings?.install(
         session.connection,
         session.threadId,
-        resolvedCodexGoalSettings(session, input.executionOptions),
+        requested,
         timeoutMs,
-        input.signal
+        input.signal,
+        () => {
+          session.appliedTurnOptions = { ...session.appliedTurnOptions, ...requested }
+        },
+        () => {
+          session.appliedTurnOptions = previousApplied
+        },
+        () => {
+          const known = { ...previousApplied }
+          for (const key of ['model', 'effort'] as const) {
+            if (requested[key] !== undefined && requested[key] !== known[key]) {
+              delete known[key]
+            }
+          }
+          session.appliedTurnOptions = known
+        }
       )
       if (installed && !installed.ok) {
         return installed

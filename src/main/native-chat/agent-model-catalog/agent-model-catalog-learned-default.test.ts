@@ -3,7 +3,7 @@ import { agentSessionConversationView } from '../../../shared/agent-session-conv
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   AgentSessionAccountHome,
   AgentSessionRecord
@@ -61,7 +61,12 @@ function record(agent: string, workspacePath: string): AgentSessionRecord {
   })
 }
 
-async function afterNoPickChat(agent: string, workspacePath: string, picked = false) {
+async function afterNoPickChat(
+  agent: string,
+  workspacePath: string,
+  picked = false,
+  inspectWorkspace = workspaceMayOverrideDefaultModel
+) {
   const chat = record(agent, workspacePath)
   const store = new AgentModelCatalogStore()
   store.recordSuccess(
@@ -89,7 +94,7 @@ async function afterNoPickChat(agent: string, workspacePath: string, picked = fa
     resolveAccountHome: async () => HOMES[agent]!,
     recordWorkspacePath: async (row) => row.launchDirectory ?? null,
     agentReadsProjectModelConfig,
-    workspaceMayOverrideDefaultModel
+    workspaceMayOverrideDefaultModel: inspectWorkspace
   })
   const options = new AcpStructuredOptions()
   options.adoptSession(
@@ -130,14 +135,37 @@ describe('a default learned from a chat with no pick', () => {
     '%s: the next new chat in that workspace names the model the first one ran',
     async (agent) => {
       const clean = workspace('clean')
-      const catalog = await afterNoPickChat(agent, clean)
-      const answer = await catalog.read({ agent, workspacePath: clean })
-      expect(named(answer)).toBe('github-copilot/claude-fable-5')
+      const learningStarted = Promise.withResolvers<void>()
+      const releaseLearning = Promise.withResolvers<void>()
+      let firstInspection = true
+      const catalog = await afterNoPickChat(agent, clean, false, async (input) => {
+        if (firstInspection) {
+          firstInspection = false
+          learningStarted.resolve()
+          await releaseLearning.promise
+        }
+        return workspaceMayOverrideDefaultModel(input)
+      })
+      await learningStarted.promise
+      try {
+        const pending = await catalog.read({ agent, workspacePath: clean, waitForListing: true })
+        expect(named(pending)).toBeNull()
+      } finally {
+        releaseLearning.resolve()
+      }
+      await vi.waitFor(() => {
+        expect(named(catalog.snapshot({ agent, workspacePath: clean }))).toBe(
+          'github-copilot/claude-fable-5'
+        )
+      })
+      const answer = catalog.snapshot({ agent, workspacePath: clean })
       // Project config can override this default; do not promote it to every workspace.
       expect(answer).not.toHaveProperty('defaultHoldsInEveryWorkspace')
-      expect(named(await catalog.read({ agent, workspacePath: workspace('other') }))).toBe(
-        'github-copilot/claude-fable-5'
-      )
+      expect(
+        named(
+          await catalog.read({ agent, workspacePath: workspace('other'), waitForListing: true })
+        )
+      ).toBe('github-copilot/claude-fable-5')
     }
   )
 

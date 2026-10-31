@@ -55,7 +55,7 @@ afterEach(async () => {
   await host?.flushAllStreamedEvents()
   host = null
   if (root) {
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   }
   root = null

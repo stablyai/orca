@@ -1,4 +1,4 @@
-import type { TaskPageJiraSummaryGenerationModel } from '../use-task-page-jira-summary-generation'
+import type { TaskPageJiraSummaryGenerationModel } from './jira/use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {

@@ -220,7 +220,8 @@ export function useChecksPanelCheckAndReviewActions(model: ChecksPanelCheckAndRe
             refreshedPR.prRepo,
             {
               force: true,
-              repoId: repo.id
+              repoId: repo.id,
+              wakeWslDistro: true
             }
           )
             .then(

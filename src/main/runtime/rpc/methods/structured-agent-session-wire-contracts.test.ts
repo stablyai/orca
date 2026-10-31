@@ -1,3 +1,4 @@
+import { AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import '../unused-default-rpc-methods.test-fixture'
 import { readFileSync } from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -225,7 +226,7 @@ describe('options without a selected model across client versions', () => {
   }
 
   it.each(['runtime', 'mobile'] as const)(
-    'refuses the captured model-less report for an older %s client',
+    'labels the captured model-less report for an older %s client',
     async (clientKind) => {
       hostCalls.readOptions.mockResolvedValue(missingModelReport())
       const reply = await call(
@@ -237,10 +238,12 @@ describe('options without a selected model across client versions', () => {
         }
       )
       expect(reply).toMatchObject({
-        ok: false,
-        error: { message: 'structured_agent_session_unsupported' }
+        ok: true,
+        result: {
+          current: { model: '' },
+          models: [{ id: '', label: 'Model not reported', isDefault: false, efforts: [] }]
+        }
       })
-      expect(reply).not.toHaveProperty('result')
       expect(hostCalls.readOptions).toHaveBeenCalledTimes(1)
     }
   )
@@ -307,7 +310,8 @@ describe('options without a selected model across client versions', () => {
     expect(
       await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
     ).toMatchObject({
-      ok: false
+      ok: true,
+      result: { current: { model: '' } }
     })
     const report = { models: [], current: { model: 'later-model', effort: 'off' } }
     hostCalls.readOptions.mockResolvedValueOnce(report)
@@ -575,3 +579,36 @@ describe('agentSession.subscribeTurnCompletions', () => {
     expect(subscribed().map((sub) => sub.includePrompts)).toEqual([true])
   })
 })
+
+it.each([false, true])(
+  'negotiates command demand per request and subscriber: capable=%s',
+  async (capable) => {
+    const client = {
+      ...STRUCTURED_CLIENT,
+      clientCapabilities: [
+        ...STRUCTURED_CLIENT.clientCapabilities,
+        ...(capable ? [AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY] : [])
+      ]
+    }
+    hostCalls.readCommands = vi.fn(async () => ({ commands: [] }))
+    expect(await call('agentSession.commands', { sessionId: SESSION }, client)).toMatchObject({
+      ok: true
+    })
+    expect(hostCalls.readCommands).toHaveBeenCalledWith(SESSION, capable)
+    let subscription: AgentSessionSubscribeInput | undefined
+    hostCalls.subscribe.mockImplementation((input: AgentSessionSubscribeInput) => {
+      subscription = input
+      input.emit({ type: 'end' })
+      return () => {}
+    })
+    await call('agentSession.subscribe', { sessionId: SESSION }, client)
+    expect(subscription?.commandsOnRequest).toBe(capable)
+    expect(DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES).toContain(
+      AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY
+    )
+    expect(RUNTIME_CAPABILITIES).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+    expect(
+      parseRuntimeClientCapabilities([...DESKTOP_RENDERER_RUNTIME_CLIENT_CAPABILITIES])
+    ).toContain(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY)
+  }
+)

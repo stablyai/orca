@@ -1,6 +1,8 @@
 import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { RotateCw } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { PrSidebarState } from '../session/mobile-pr-sidebar-state'
 import type { PrSidebarLoadOptions } from '../session/use-mobile-pr-sidebar-controller'
 import type { ConnectionState } from '../transport/types'
@@ -64,6 +66,7 @@ export function MobilePRSidebar({
   showOpenOnWeb = true,
   workspaceLabel
 }: Props) {
+  useMobileColorScheme()
   const launchWorkspaceLabel = workspaceLabel || gitBranch
   const branch = prSidebarRenderBranch(state)
   const prNumber = state.kind === 'ready' ? state.data.pr.number : 0
@@ -177,16 +180,23 @@ function PrSidebarContent({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   if (branch === 'loading') {
     return (
       <View style={styles.stateArea}>
         <ActivityIndicator color={colors.textSecondary} />
-        <Text style={styles.stateText}>Loading pull request…</Text>
+        <Text style={styles.stateText}>
+          {t('components.prSidebar.loading', 'Loading pull request…')}
+        </Text>
       </View>
     )
   }
   if (branch === 'error') {
-    const message = state.kind === 'error' ? state.message : 'Something went wrong.'
+    const message =
+      state.kind === 'error'
+        ? state.message
+        : t('components.prSidebar.loadFailed', 'Something went wrong.')
     return (
       <View style={styles.stateArea}>
         <Text style={styles.stateText}>{message}</Text>
@@ -194,10 +204,10 @@ function PrSidebarContent({
           style={styles.retryButton}
           onPress={onRetry}
           accessibilityRole="button"
-          accessibilityLabel="Retry loading pull request"
+          accessibilityLabel={t('components.prSidebar.retryLoading', 'Retry loading pull request')}
         >
           <RotateCw size={14} color={colors.textPrimary} strokeWidth={2.2} />
-          <Text style={styles.retryText}>Retry</Text>
+          <Text style={styles.retryText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       </View>
     )
@@ -208,7 +218,10 @@ function PrSidebarContent({
       actions.blocked ??
       (state.kind === 'blocked'
         ? state.message
-        : 'Not permitted — your GitHub account is not connected.')
+        : t(
+            'components.prSidebar.notPermitted',
+            'Not permitted — your GitHub account is not connected.'
+          ))
     return (
       <View style={styles.stateArea}>
         <Text style={styles.blockedText}>{message}</Text>
@@ -271,6 +284,7 @@ function PrSidebarSections({
   showOpenOnWeb: boolean
   botAuthorOverrides: ReadonlySet<string>
 }) {
+  useMobileColorScheme()
   const pr = data.pr
   // Build pure triage prompts lazily at launch so each uses current PR data.
   const checksTriage = {

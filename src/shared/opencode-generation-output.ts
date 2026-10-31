@@ -1,4 +1,5 @@
 import { z } from 'zod'
+import { textGenerationFailure } from './text-generation-failure-copy'
 
 const eventSchema = z.object({
   type: z.string(),
@@ -12,9 +13,12 @@ const eventSchema = z.object({
     .optional()
 })
 
-export function parseOpenCodeGenerationOutput(
-  stdout: string
-): { ok: true; text: string } | { ok: false; error: string } {
+/** `errorCode` marks Orca's own parse failures; an uncoded `error` is the agent's text. */
+export type GenerationOutputParse =
+  | { ok: true; text: string }
+  | { ok: false; error: string; errorCode?: string }
+
+export function parseOpenCodeGenerationOutput(stdout: string): GenerationOutputParse {
   const parts = new Map<string, string>()
   let anonymousPart = 0
   for (const line of stdout.split(/\r?\n/)) {
@@ -25,11 +29,11 @@ export function parseOpenCodeGenerationOutput(
     try {
       value = JSON.parse(line)
     } catch {
-      return { ok: false, error: 'OpenCode returned invalid JSON events.' }
+      return { ok: false, ...textGenerationFailure('openCodeInvalidEvents') }
     }
     const parsed = eventSchema.safeParse(value)
     if (!parsed.success) {
-      return { ok: false, error: 'OpenCode returned invalid JSON events.' }
+      return { ok: false, ...textGenerationFailure('openCodeInvalidEvents') }
     }
     const event = parsed.data
     if (event.type === 'step_start') {

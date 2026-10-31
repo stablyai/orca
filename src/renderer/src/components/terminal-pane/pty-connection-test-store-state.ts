@@ -6,6 +6,7 @@ import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-ag
 import type { AppState } from '@/store/types'
 
 export type StoreState = {
+  unifiedTabsByWorktree: AppState['unifiedTabsByWorktree']
   activeWorktreeId: string | null
   tabsByWorktree: Record<
     string,
@@ -55,8 +56,7 @@ export type StoreState = {
     displayName?: string
     executionHostId?: string | null
   }[]
-  endpointProjectHostSetups: AppState['endpointProjectHostSetups']
-  endpointProjects: {
+  projects: {
     id: string
     localWindowsRuntimePreference?:
       | { kind: 'inherit-global' }

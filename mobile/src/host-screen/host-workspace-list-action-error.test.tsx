@@ -12,7 +12,7 @@ vi.mock('react-native', () => ({
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
-  SectionList: 'SectionList',
+  Animated: { SectionList: 'SectionList' },
   StyleSheet: { create: (styles: unknown) => styles },
   Text: 'Text',
   View: 'View'
@@ -26,11 +26,6 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('../components/AuthFailedBanner', () => ({ AuthFailedBanner: 'AuthFailedBanner' }))
 vi.mock('../components/HostDiagnosticsLink', () => ({ HostDiagnosticsLink: 'HostDiagnosticsLink' }))
 vi.mock('../components/MobileRepoIcon', () => ({ MobileRepoIcon: 'MobileRepoIcon' }))
-vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
-vi.mock('../components/NewWorkspaceFab', () => ({
-  NewWorkspaceFab: 'NewWorkspaceFab',
-  FAB_SIZE: 56
-}))
 vi.mock('../components/WorktreeListRow', () => ({ WorktreeListRow: 'WorktreeListRow' }))
 vi.mock('../worktree/host-workspace-list-states', () => ({
   HostWorkspaceListStates: 'HostWorkspaceListStates'
@@ -89,12 +84,11 @@ function listWith(fields: { actionError: string; setActionError: (value: string)
       collapsedGroups: new Set(),
       view: { ...INITIAL_MOBILE_VIEW, groupBy: 'none' },
       search: '',
-      showSearch: false,
       worktreesLoaded: true
     }
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: every child below the banner is mocked to a host string here, so what the list reads off the controller is exactly the fields named above.
-  return { controller } as unknown as Parameters<typeof HostWorkspaceList>[0]
+  return { controller, bottomBarHeight: 0 } as unknown as Parameters<typeof HostWorkspaceList>[0]
 }
 
 function render(fields: {

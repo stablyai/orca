@@ -23,9 +23,6 @@ describe('wrapped terminal HTTP link provider', () => {
     const openUrl = vi.fn()
     vi.stubGlobal('window', { api: { shell: { openUrl } } })
     registerHttpLinkStoreAccessor(() => ({
-      repos: [],
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()
@@ -134,9 +131,6 @@ describe('wrapped terminal HTTP link provider', () => {
     const openUrl = vi.fn()
     vi.stubGlobal('window', { api: { shell: { openUrl } } })
     registerHttpLinkStoreAccessor(() => ({
-      repos: [],
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()
@@ -205,9 +199,6 @@ describe('wrapped terminal HTTP link provider', () => {
     const openUrl = vi.fn()
     vi.stubGlobal('window', { api: { shell: { openUrl } } })
     registerHttpLinkStoreAccessor(() => ({
-      repos: [],
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       settings: { openLinksInApp: false },
       setActiveWorktree: vi.fn(),
       createBrowserTab: vi.fn()
@@ -428,6 +419,56 @@ describe('wrapped terminal HTTP link provider', () => {
             start: { x: row === 1 ? 8 : 2, y: row },
             end: { x: row < 3 ? 39 : url.length - 70 + 1, y: row }
           }
+        })
+      }
+    } finally {
+      terminal.dispose()
+    }
+  })
+
+  it.each([
+    [
+      'the last',
+      [
+        '│ 1  │ doc  │ https://example.com/a/very/lon │',
+        '│    │      │ g/path/that/keeps/going/and/go │',
+        '│    │      │ ing                            │',
+        '│ 2  │ api  │ https://example.com/docs/refer │',
+        '│    │      │ ence/terminal-links?v=2#anchor │'
+      ]
+    ],
+    [
+      'a middle',
+      [
+        '│ 1  │ https://example.com/a/very/lon │ done │',
+        '│    │ g/path/that/keeps/going/and/go │      │',
+        '│    │ ing                            │      │',
+        '│ 2  │ https://example.com/docs/refer │ todo │',
+        '│    │ ence/terminal-links?v=2#anchor │      │'
+      ]
+    ],
+    [
+      'the first',
+      [
+        '│ https://example.com/a/very/lon │ done │',
+        '│ g/path/that/keeps/going/and/go │      │',
+        '│ ing                            │      │',
+        '│ https://example.com/docs/refer │ todo │',
+        '│ ence/terminal-links?v=2#anchor │      │'
+      ]
+    ]
+  ])('links a URL wrapped inside %s table column on every row of its cell', async (_, rows) => {
+    const urls = [
+      'https://example.com/a/very/long/path/that/keeps/going/and/going',
+      'https://example.com/docs/reference/terminal-links?v=2#anchor'
+    ]
+    const x = rows[0]!.indexOf('https') + 1
+    const { terminal, linksAt } = await terminalWithRows(rows, 60)
+    try {
+      for (const [index] of rows.entries()) {
+        expect((await linksAt(index + 1))?.[0]).toMatchObject({
+          text: urls[index < 3 ? 0 : 1],
+          range: { start: { x, y: index + 1 } }
         })
       }
     } finally {

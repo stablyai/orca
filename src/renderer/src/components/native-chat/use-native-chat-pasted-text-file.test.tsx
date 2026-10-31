@@ -18,7 +18,7 @@ import {
   nativeChatPastedTextOperations,
   nativeChatPastedTextToken
 } from './native-chat-pasted-text-reference'
-import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat-image-transcript-markers'
+import { imageReferencesToPromptMarkers } from '../../../../shared/native-chat/transcript/native-chat-image-transcript-markers'
 import { structuredAgentSessionSendBody } from '../../../../shared/structured-agent-session-send-mutation'
 import { structuredAgentSessionBlocksTooLarge } from '../../../../shared/rpc-contract/structured-agent-session-message-params'
 
@@ -27,11 +27,10 @@ const notice = vi.fn()
 let paste: (text: string) => boolean
 const SCOPE = 'agent-session:sizing'
 const ID = '00000000-0000-4000-8000-000000000000'
-function Composer({ text, goal = false }: { text: string; goal?: boolean }) {
+function Composer({ text }: { text: string }) {
   const input = useRef<NativeChatComposerInput>(null)
   paste = useNativeChatPastedTextFile({
     scopeKey: SCOPE,
-    pastesInline: () => goal,
     scopeEditor: () => input.current,
     resolveAttachmentOwner: () => ({
       kind: 'runtime-session',
@@ -64,7 +63,6 @@ it.each([
   { draft: 'a'.repeat(200 * 1024), text: '"'.repeat(30 * 1024) },
   { draft: 'z'.repeat(240 * 1024), text: 'q'.repeat(50 * 1024), replace: 200 * 1024 },
   { draft: '', text: 'é'.repeat(16 * 1024 + 1) },
-  { draft: '', text: 'g'.repeat(270 * 1024), goal: true },
   { draft: '', text: "$& $$ $` $'".repeat(4000) },
   { draft: '', text: 'c'.repeat(20 * 1024), image: 'p'.repeat(240 * 1024) },
   {
@@ -74,7 +72,7 @@ it.each([
   }
 ])(
   'matches the actual JSON/UTF-8 send body, including selection and path bytes',
-  ({ draft, text, replace = 0, image = '', path = '', goal = false }) => {
+  ({ draft, text, replace = 0, image = '', path = '' }) => {
     useAppStore.setState({ runtimeStatusByEnvironmentId: new Map() })
     vi.stubGlobal('api', { ui: { savePastedTextAsFile: save } })
     updateNativeChatComposerDraft(
@@ -86,7 +84,7 @@ it.each([
       },
       'immediate'
     )
-    const view = render(<Composer text={draft} goal={goal} />)
+    const view = render(<Composer text={draft} />)
     const editor = promptEditor(view.getByRole('textbox'))
     act(() => {
       if (replace) {
@@ -107,8 +105,8 @@ it.each([
     const tooLarge = structuredAgentSessionBlocksTooLarge(body.blocks)
     expect(tooLarge).toBe(Buffer.byteLength(JSON.stringify(body.blocks), 'utf8') > 256 * 1024)
     act(() => void paste(text))
-    expect(promptValue(view.getByRole('textbox'))).toBe(tooLarge && !goal ? input : candidate)
+    expect(promptValue(view.getByRole('textbox'))).toBe(tooLarge ? input : candidate)
     expect(save).not.toHaveBeenCalled()
-    expect(notice).toHaveBeenCalledTimes(tooLarge && !goal ? 1 : 0)
+    expect(notice).toHaveBeenCalledTimes(tooLarge ? 1 : 0)
   }
 )

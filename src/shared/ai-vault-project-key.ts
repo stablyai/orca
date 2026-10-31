@@ -9,9 +9,3 @@ export function toAiVaultProjectKey(
   }
   return repoId ? `repo:${repoId}` : null
 }
-
-export function isAiVaultProjectKey(value: unknown): value is string {
-  return (
-    typeof value === 'string' && value.length <= 1024 && /^(?:project|repo):[\s\S]+$/.test(value)
-  )
-}

@@ -7,7 +7,7 @@ import type {
 import type { ClaudeChildToolQueries } from './claude-child-tool-queries'
 import type { ClaudeContextReportPart, ClaudeContextReportTarget } from './claude-context-facts'
 import type { ClaudeJournalPrompts } from './claude-structured-journal-prompts'
-import type { ClaudeStructuredSessionEvent } from './claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import type { ClaudeCommandStart } from './claude-command-turn'
 
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
@@ -22,6 +22,7 @@ export type ClaudeJournalTranslatorDeps = {
   fallbackIdPrefix?: string
   onBackgroundTaskJournalFailure?: (error: Error) => void
   account?: () => AgentSessionAccountKind | undefined
+  model?: () => string | undefined
   goalBackgroundWork?: () => ClaudeGoalBackgroundWork
 }
 

@@ -11,6 +11,7 @@ import type { AgentSessionWriteFailure } from '../../../../shared/agent-session-
 import { dispatchWasWithdrawn } from '../../../../shared/structured-agent-session-dispatch-rejection'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { agentSessionWriteNoticeText } from './agent-session-write-notice-text'
+import { getStructuredAgentSessionReadOwner } from './structured-agent-session-read-owner'
 import { nativeChatRewindReasonCopy } from './native-chat-rewind-copy'
 import { handBackStructuredAgentSessionMessage } from './structured-agent-session-message-hand-back'
 import {
@@ -26,6 +27,7 @@ export const STRUCTURED_AGENT_SESSION_SEND_BUDGET_MS = 30_000
 export type StructuredAgentSessionSendOutcome = 'recorded' | 'returned' | 'unconfirmed' | 'dropped'
 
 type SendRuntime = {
+  activity: ReturnType<ReturnType<typeof getStructuredAgentSessionReadOwner>['trackSend']>
   target: RuntimeClientTarget
   abort: AbortController
   deadline: ReturnType<typeof setTimeout>
@@ -41,6 +43,7 @@ export function finish(
 ): void {
   const runtime = runtimes.get(entry.clientMessageId)
   if (runtime) {
+    runtime.activity.settle(outcome === 'unconfirmed')
     clearTimeout(runtime.deadline)
     runtimes.delete(entry.clientMessageId)
     runtime.resolve(outcome)
@@ -144,6 +147,7 @@ export function beginSend(
   const { clientMessageId, sessionId } = entry
   const outcome = new Promise<StructuredAgentSessionSendOutcome>((resolve) => {
     runtimes.set(clientMessageId, {
+      activity: getStructuredAgentSessionReadOwner(sessionId, target).trackSend(clientMessageId),
       target,
       abort: new AbortController(),
       deadline: setTimeout(() => onDeadline(sessionId, clientMessageId), budgetMs),

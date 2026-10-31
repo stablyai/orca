@@ -3,7 +3,7 @@ import {
   clearNativeChatSessionOptionCacheForTests,
   seedNativeChatAppliedSessionOptions
 } from './native-chat-session-option-cache'
-import { createNativeChatPtySessionOptions } from './native-chat-pty-session-options'
+import { createNativeChatPtySessionOptions } from '../../../../shared/native-chat-pty-session-options'
 import {
   resolveNativeChatSessionOptionDefaults,
   updateNativeChatSessionOptionDefaults
@@ -50,6 +50,7 @@ describe('native chat launch-default adoption', () => {
       scopeKey: 'pty-1',
       initialModels: HOST_CLAUDE_MODELS,
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'applied' }),
       persistSelection: defaults.persistSelection
     })!
@@ -68,6 +69,7 @@ describe('native chat launch-default adoption', () => {
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'applied' }),
       persistSelection: defaults.persistSelection
     })!
@@ -85,6 +87,7 @@ describe('native chat launch-default adoption', () => {
       scopeKey: 'pty-1',
       initialModels: HOST_CLAUDE_MODELS,
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn().mockResolvedValue({ outcome: 'applied' }),
       persistSelection: defaults.persistSelection
     })!
@@ -104,6 +107,7 @@ describe('native chat launch-default adoption', () => {
       scopeKey: 'pty-1',
       initialModels: HOST_CLAUDE_MODELS,
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn(),
       persistSelection: defaults.persistSelection
     })!
@@ -123,6 +127,7 @@ describe('native chat launch-default adoption', () => {
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
+      modelLabel: 'Model',
       dispatchCommand: vi.fn(),
       persistSelection: defaults.persistSelection
     })!

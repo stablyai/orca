@@ -19,6 +19,7 @@ export type CapturedNativeChatDrop = ((paths: string[]) => Promise<void>) & {
 }
 
 export type NativeChatPaneDropClaim = {
+  focusScopeKey?: string
   destinationKey: string
   captureExternalDrop: () => CapturedNativeChatDrop
   /** A guarded composer refuses the drop, so the pane must not invite one. */
@@ -82,7 +83,7 @@ function overNestedOwner(event: NativeChatPaneDragEvent): boolean {
 
 /** Preserve workspace-file provenance; OS drops use the nearest native owner. */
 export function makeNativeChatPaneFileDropHandlers(host: {
-  getClaim: () => NativeChatPaneDropClaim | null
+  getClaim: (event: NativeChatPaneDragEvent) => NativeChatPaneDropClaim | null
   setDragActive: (active: boolean) => void
 }): {
   onDragEnterCapture: (event: React.DragEvent<HTMLDivElement>) => void
@@ -106,7 +107,7 @@ export function makeNativeChatPaneFileDropHandlers(host: {
     hoveredOwner = owner
     hover = next
     const kind = nativeChatPaneDragKind(event.dataTransfer)
-    const claim = host.getClaim()
+    const claim = host.getClaim(event)
     hover?.(kind === 'os' || (kind === 'workspace' && claim !== null && !claim.disabled))
   }
   const showsDropTarget = (event: NativeChatPaneDragEvent): boolean => {
@@ -114,7 +115,7 @@ export function makeNativeChatPaneFileDropHandlers(host: {
     if (kind === null || overNestedOwner(event)) {
       return false
     }
-    const claim = host.getClaim()
+    const claim = host.getClaim(event)
     return claim !== null && !claim.disabled
   }
 
@@ -133,7 +134,7 @@ export function makeNativeChatPaneFileDropHandlers(host: {
         host.setDragActive(false)
       }
       if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
-        host.getClaim()?.onDragOverCapture(event)
+        host.getClaim(event)?.onDragOverCapture(event)
       }
     },
     onDragLeaveCapture(event) {
@@ -151,7 +152,7 @@ export function makeNativeChatPaneFileDropHandlers(host: {
       if (nativeChatPaneDragKind(event.dataTransfer) === 'workspace') {
         const owner = nestedOwner(event)
         host
-          .getClaim()
+          .getClaim(event)
           ?.onDropCapture(event, owner ? nestedWorkspaceDropSinks.get(owner)?.sink : undefined)
       }
     }

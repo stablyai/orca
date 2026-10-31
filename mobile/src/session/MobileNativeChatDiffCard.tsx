@@ -2,27 +2,29 @@ import { useMemo } from 'react'
 import { Pressable, Text, View } from 'react-native'
 import { MobileNativeChatOwnedScrollView } from './MobileNativeChatOwnedScrollView'
 import { ChevronRight, FileMinus2, FilePen, FilePlus2 } from 'lucide-react-native'
+import { nativeChatEditFilePatchText } from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
 import {
-  NATIVE_CHAT_DIFF_CARD_COPY,
-  nativeChatEditFilePatchText
-} from '../../../src/shared/native-chat/tools/native-chat-edit-cards'
-import {
+  nativeChatEditFileBaseName,
+  nativeChatEditGutterChars,
   unifiedLineNumber,
   type NativeChatEditFile,
   type NativeChatEditLine
 } from '../../../src/shared/native-chat/tools/native-chat-edit-model'
-import { NATIVE_CHAT_TOOL_ROW_VERB_COPY } from '../../../src/shared/native-chat/tools/native-chat-tool-line-label'
+import { nativeChatToolRowVerbCopy } from './native-chat/transcript/native-chat-tool-row-verb-copy'
+import { nativeChatDiffCardCopy } from './native-chat-diff-card-copy'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileSourceCopyButton } from '../components/MobileSourceCopyButton'
 import { colors } from '../theme/mobile-theme'
-import { useMobileNativeChatOpenedDetail } from './mobile-native-chat-opened-detail'
-import { useMobileNativeChatDisclosure } from './mobile-native-chat-disclosure-store'
-import { toolStyles as styles, toolType } from './mobile-native-chat-tool-styles'
-
-function baseName(path: string): string {
-  return path.split(/[\\/]/).at(-1) || path
-}
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileNativeChatOpenedDetail } from './native-chat/visual/mobile-native-chat-opened-detail'
+import { useMobileNativeChatDisclosure } from './native-chat/transcript/mobile-native-chat-disclosure-store'
+import {
+  toolStyles as styles,
+  toolType
+} from './native-chat/transcript/mobile-native-chat-tool-styles'
 
 function VerbIcon({ kind, size }: { kind: NativeChatEditFile['changeKind']; size: number }) {
+  useMobileColorScheme()
   const Icon = kind === 'added' ? FilePlus2 : kind === 'deleted' ? FileMinus2 : FilePen
   return <Icon size={size} color={colors.textMuted} strokeWidth={2} />
 }
@@ -36,9 +38,11 @@ function DiffRow({
   gutterChars: number
   type: ReturnType<typeof toolType>['code']
 }): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   if (line.kind === 'gap') {
     return (
-      <Text style={[styles.diffGap, type]} accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.diffGap}>
+      <Text style={[styles.diffGap, type]} accessibilityLabel={nativeChatDiffCardCopy(t).diffGap}>
         ⋯
       </Text>
     )
@@ -93,13 +97,10 @@ function DiffCardRows({
   disclosureKey?: string
   rootIdentity?: string
 }) {
+  useMobileColorScheme()
   const onLayout = useMobileNativeChatOpenedDetail()
   const type = toolType(fontScale).code
-  // Leave unresolved gutters blank; snippet-relative numbers would imply real file positions.
-  const widest = file.lineNumbersKnown
-    ? file.lines.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
-    : 0
-  const gutterChars = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
+  const gutterChars = nativeChatEditGutterChars(file)
   const seen = new Map<string, number>()
   return (
     <MobileNativeChatOwnedScrollView
@@ -140,6 +141,10 @@ export function MobileNativeChatDiffCard({
   rootIdentity?: string
   onOpenFile?: (path: string) => void
 }): React.JSX.Element {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
+  const copy = nativeChatDiffCardCopy(t)
+  const verbs = nativeChatToolRowVerbCopy(t)
   const [expanded, setExpanded] = useMobileNativeChatDisclosure(disclosureKey, false)
   const hasBody = file.lines.length > 0
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
@@ -159,9 +164,7 @@ export function MobileNativeChatDiffCard({
           <View style={[styles.iconSlot, { width: iconSize }]}>
             <VerbIcon kind={file.changeKind} size={iconSize} />
           </View>
-          <Text style={[styles.lineWord, type.row]}>
-            {NATIVE_CHAT_TOOL_ROW_VERB_COPY[file.changeKind]}
-          </Text>
+          <Text style={[styles.lineWord, type.row]}>{verbs[file.changeKind]}</Text>
           {file.oldPath ? (
             <>
               <Text
@@ -169,7 +172,7 @@ export function MobileNativeChatDiffCard({
                 numberOfLines={1}
                 accessibilityLabel={file.oldPath}
               >
-                {baseName(file.oldPath)}
+                {nativeChatEditFileBaseName(file.oldPath)}
               </Text>
               <Text style={[styles.lineWord, type.row]}>→</Text>
             </>
@@ -181,7 +184,7 @@ export function MobileNativeChatDiffCard({
             suppressHighlighting={!openFile}
             accessibilityRole={openFile ? 'link' : undefined}
           >
-            {baseName(file.path)}
+            {nativeChatEditFileBaseName(file.path)}
           </Text>
           <Text style={[styles.lineMeta, type.meta]}>
             {file.added > 0 ? <Text style={styles.countAdded}>{`+${file.added}`}</Text> : null}
@@ -191,9 +194,7 @@ export function MobileNativeChatDiffCard({
             ) : null}
           </Text>
           {file.truncated ? (
-            <Text style={[styles.lineMeta, type.meta]}>
-              {NATIVE_CHAT_DIFF_CARD_COPY.diffTruncated}
-            </Text>
+            <Text style={[styles.lineMeta, type.meta]}>{copy.diffTruncated}</Text>
           ) : null}
           {hasBody ? (
             <View style={expanded ? styles.caretOpen : undefined}>
@@ -201,10 +202,7 @@ export function MobileNativeChatDiffCard({
             </View>
           ) : null}
         </Pressable>
-        <MobileSourceCopyButton
-          text={copyText}
-          accessibilityLabel={NATIVE_CHAT_DIFF_CARD_COPY.copyDiff}
-        />
+        <MobileSourceCopyButton text={copyText} accessibilityLabel={copy.copyDiff} />
       </View>
       {hasBody && expanded ? (
         <DiffCardRows

@@ -29,7 +29,11 @@ import {
   MAX_JOURNAL_LIFECYCLE_BATCH_BYTES,
   MAX_JOURNAL_LIFECYCLE_BATCH_MUTATIONS
 } from './journal-row-schema'
-import { boundInlineText, JOURNAL_DISPATCH_REASON_LIMITS } from './journal-payload-bounds'
+import {
+  boundInlineText,
+  boundRunningToolOutput,
+  JOURNAL_DISPATCH_REASON_LIMITS
+} from './journal-payload-bounds'
 import { assertSubmissionIdUnused } from './journal-write-guards'
 import { turnEndAfterStop } from './journal-stop-turn-end'
 import { nextJournalItemRevision } from './journal-item-revision'
@@ -249,7 +253,7 @@ export function buildJournalItemRow(
   const resolved = input.state.aliases.get(itemId) ?? itemId
   // Recreated items must outrank tombstones or the reducer will discard them.
   const revision = nextJournalItemRevision(input.state, itemId, input.revisions)
-  const body = turnEndAfterStop(input.state, resolved, input.body)
+  const body = boundRunningToolOutput(turnEndAfterStop(input.state, resolved, input.body))
   return {
     kind: 'item',
     ...journalItemEchoFields(input),

@@ -1,7 +1,14 @@
+import { resolveAgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { ClaudeProfileRouter } from '../../claude-accounts/claude-profile-router'
+import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -84,10 +91,18 @@ describe('model catalog prewarm', () => {
     await prewarmed
 
     expect(codex).toHaveBeenCalledTimes(1)
-    expect(codex).toHaveBeenCalledWith(HOME('CODEX_HOME', '/homes/a'), {
-      workspacePath: expect.any(String),
-      signal: expect.any(AbortSignal)
-    })
+    expect(codex).toHaveBeenCalledWith(
+      HOME('CODEX_HOME', '/homes/a'),
+      expect.objectContaining({
+        workspacePath: expect.any(String),
+        signal: expect.any(AbortSignal),
+        operation: expect.objectContaining({
+          current: expect.any(Function),
+          deadline: expect.any(Number),
+          signal: expect.any(AbortSignal)
+        })
+      })
+    )
     expect(grok).toHaveBeenCalledTimes(1)
     expect((await service.read({ agent: 'codex' })).origin).toBe('probe')
     expect((await service.read({ agent: 'grok' })).origin).toBe('probe')
@@ -129,8 +144,14 @@ describe('model catalog prewarm', () => {
     service.recordLiveListing('chat-b', { models: listing('newer').models })
     lookups[1]!.resolve('/work/b')
     lookups[0]!.resolve('/work/b')
-    const read = await service.read({ agent: 'opencode2', sessionId: 'chat-b' })
-    expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['newer'])
+    await vi.waitFor(async () => {
+      const read = await service.read({
+        agent: 'opencode2',
+        sessionId: 'chat-b',
+        waitForListing: true
+      })
+      expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['newer'])
+    })
   })
 
   it('keeps one catalog per folder for an agent whose project config changes its models', async () => {
@@ -211,20 +232,34 @@ describe('model catalog prewarm', () => {
 
     const prewarmed = service.prewarm()
     const opened = await service.read({ agent: 'opencode2', workspacePath: '/work/project' })
+    expect(opened).toEqual({ origin: 'unknown' })
+    expect(probe).not.toHaveBeenCalled()
     const waited = service.read({
       agent: 'opencode2',
       workspacePath: '/work/project',
       waitForListing: true
     })
+    await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
+    expect(await service.read({ agent: 'opencode2', workspacePath: '/work/project' })).toEqual({
+      origin: 'unknown',
+      listingInProgress: true
+    })
     versionChecked.resolve()
     await prewarmed
-    expect(opened).toEqual({ origin: 'unknown', listingInProgress: true })
     expect((await waited).origin).toBe('probe')
     expect(probe).toHaveBeenCalledTimes(1)
-    expect(probe).toHaveBeenCalledWith(HOME('OPENCODE_HOME', '/homes/a'), {
-      signal: expect.any(AbortSignal),
-      workspacePath: '/work/project'
-    })
+    expect(probe).toHaveBeenCalledWith(
+      HOME('OPENCODE_HOME', '/homes/a'),
+      expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        workspacePath: '/work/project',
+        operation: expect.objectContaining({
+          current: expect.any(Function),
+          deadline: expect.any(Number),
+          signal: expect.any(AbortSignal)
+        })
+      })
+    )
   })
 
   it('lists the new account after a switch and leaves the old account’s catalog alone', async () => {
@@ -292,8 +327,11 @@ describe('model catalog prewarm', () => {
 
   it('lists only agents used here: a saved catalog or a chat of it', async () => {
     const store = new AgentModelCatalogStore()
+    const piListed = deferred<AgentModelCatalogSuccess>()
     const probeFor = (agent: string) =>
-      vi.fn(async (_home: AgentSessionAccountHome) => listing(`${agent}-model`))
+      vi.fn(async (_home: AgentSessionAccountHome) =>
+        agent === 'pi' ? piListed.promise : listing(`${agent}-model`)
+      )
     const probes = { codex: probeFor('codex'), claude: probeFor('claude'), pi: probeFor('pi') }
     store.recordSuccess('claude-other-account', 'claude', listing('opus'), 'discovery')
     const service = createAgentModelCatalogService({
@@ -310,11 +348,18 @@ describe('model catalog prewarm', () => {
     expect(probes.codex).toHaveBeenCalledTimes(1)
     expect(probes.claude).toHaveBeenCalledTimes(1)
     expect(probes.pi).not.toHaveBeenCalled()
+    expect(await service.read({ agent: 'pi' })).toEqual({ origin: 'unknown' })
+    expect(probes.pi).not.toHaveBeenCalled()
+    // Its first chat still lists it on demand.
+    const demand = service.demand({ agent: 'pi' })
+    await vi.waitFor(() => expect(probes.pi).toHaveBeenCalledTimes(1))
     expect(await service.read({ agent: 'pi' })).toEqual({
       origin: 'unknown',
       listingInProgress: true
     })
-    expect(probes.pi).toHaveBeenCalledTimes(1)
+    piListed.resolve(listing('pi-model'))
+    await demand
+    expect(await service.read({ agent: 'pi' })).toMatchObject({ models: [{ id: 'pi-model' }] })
   })
 
   it('on stop, starts no queued agent, stops the running listings and lists nothing more', async () => {
@@ -417,11 +462,6 @@ describe('one account, one catalog key', () => {
       resolveAccountHome: async () => HOME('GROK_HOME', managedHome)
     })
     service.recordLiveListing('session-1', { models: listing('gpt-live').models })
-    const incoming = { models: [...listing('gpt-live').models, ...listing('gpt-new').models] }
-    const retained = (launchOnlyModelId: string) =>
-      service.retainedLiveModelIds('session-1', { ...incoming, launchOnlyModelId })
-    expect(await retained('gpt-live')).toEqual(['gpt-live', 'gpt-new'])
-    expect(await retained('gpt-new')).toEqual(['gpt-live'])
     const adapterAccess = agentModelCatalogSessionAccess(
       store,
       { agent: 'grok', accountHomeVariable: 'GROK_HOME' },
@@ -429,7 +469,270 @@ describe('one account, one catalog key', () => {
     )
     expect(adapterAccess?.fingerprint).toBe(agentModelCatalogFingerprintForRecord(launched))
 
-    const read = await service.read({ agent: 'grok' })
+    // …is what the next new chat reads for the same home: no cold start for this account.
+    const read = await service.read({ agent: 'grok', waitForListing: true })
     expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['gpt-live'])
   })
+
+  it('a chat that moved accounts lists under the account it runs on, never its first one', async () => {
+    const store = new AgentModelCatalogStore()
+    const founded = record('/accounts/a')
+    let live: AgentSessionAccountHome | undefined = HOME('GROK_HOME', '/accounts/b')
+    const launchAccountHome = vi.fn(async (): Promise<AgentSessionAccountHome | null> =>
+      HOME('GROK_HOME', '/accounts/c')
+    )
+    const service = createAgentModelCatalogService({
+      store,
+      getConversation: () => agentSessionConversationView(founded),
+      getRecord: () => founded,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => HOME('GROK_HOME', '/accounts/c'),
+      liveAccountHome: () => live
+    })
+    service.recordLiveListing('session-1', { models: listing('on-b').models })
+    const keyOf = (path: string) => agentModelCatalogFingerprintForRecord(record(path))
+    expect(store.get(keyOf('/accounts/a'))).toBeNull()
+    expect(store.get(keyOf('/accounts/b'))?.models.map((model) => model.id)).toEqual(['on-b'])
+    const ids = async () => {
+      const params = { agent: 'grok', sessionId: 'session-1', savedOnly: true }
+      const operation = service.captureRead(params)
+      const records = await resolveAgentModelCatalogReadRecords(
+        {
+          getConversation: () => agentSessionConversationView(founded),
+          getRecord: () => founded,
+          drivesRecord: () => true,
+          liveAccountHome: () => live,
+          launchAccountHome
+        },
+        params
+      )
+      const read = await service.read({ ...params, records, operation })
+      return read.origin === 'unknown' ? null : read.models.map((model) => model.id)
+    }
+    expect(await ids()).toEqual(['on-b'])
+    expect(launchAccountHome).not.toHaveBeenCalled()
+    // At rest, the chat reads the account its next start launches under.
+    live = undefined
+    expect(await ids()).toBeNull()
+    store.recordSuccess(keyOf('/accounts/a'), 'grok', listing('on-a'), 'discovery')
+    launchAccountHome.mockResolvedValueOnce(null)
+    expect(await ids()).toEqual(['on-a'])
+  })
+
+  it('does not read A while selected B is missing, and recovers on the next read', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'chat-account-switch-catalog-'))
+    const router = new ClaudeProfileRouter({
+      dataRoot: root,
+      userHome: join(root, 'personal'),
+      env: {},
+      getSettings: () => ({
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: 'b',
+        activeClaudeManagedAccountIdsByRuntime: undefined,
+        agentStatusHooksEnabled: false,
+        disabledTuiAgents: []
+      })
+    })
+    installClaudeProfileRouter(router)
+    try {
+      const founded = {
+        ...record('/accounts/a'),
+        provider: 'claude',
+        accountHome: HOME('CLAUDE_CONFIG_DIR', '/accounts/a')
+      }
+      const store = new AgentModelCatalogStore()
+      const keyA = agentModelCatalogFingerprintForRecord(founded)
+      store.recordSuccess(keyA, 'claude', listing('only-a'), 'discovery')
+      const savedA = structuredClone(store.get(keyA))
+      const readEntry = vi.spyOn(store, 'get')
+      const readFailure = vi.spyOn(store, 'failure')
+      const probe = vi.fn(async () => listing('only-b'))
+      const recordWorkspacePath = vi.fn(async () => root)
+      const resolveAccountHome = vi.fn(async () => founded.accountHome)
+      const service = createAgentModelCatalogService({
+        store,
+        getConversation: () => agentSessionConversationView(founded),
+        getRecord: () => founded,
+        drivesRecord: () => true,
+        resolveAccountHome,
+        recordWorkspacePath,
+        probes: { claude: probe }
+      })
+      const launchAccountHome = async (record: AgentSessionRecord) =>
+        HOME(
+          'CLAUDE_CONFIG_DIR',
+          resolveStructuredClaudeAccountHomePath({
+            launchEnv: {},
+            wslDistro: record.location.wslDistro,
+            getClaudeConfigDirectory: () => router.systemDefaultHome()
+          })
+        )
+      const read = { agent: 'claude', sessionId: 'session-1', inSessionWorkspace: true as const }
+      const scopedRead = async (params: Parameters<typeof service.read>[0]) => {
+        const operation = service.captureRead(params)
+        const records = await resolveAgentModelCatalogReadRecords(
+          {
+            getConversation: () => agentSessionConversationView(founded),
+            getRecord: () => founded,
+            drivesRecord: () => true,
+            launchAccountHome
+          },
+          params
+        )
+        return service.read({ ...params, records, operation })
+      }
+      expect(router.systemDefaultLogin()).toBeNull()
+      for (const savedOnly of [true, false]) {
+        expect(await scopedRead({ ...read, savedOnly })).toEqual({ origin: 'unknown' })
+      }
+      expect(recordWorkspacePath).not.toHaveBeenCalled()
+      expect(resolveAccountHome).not.toHaveBeenCalled()
+      expect(probe).not.toHaveBeenCalled()
+      expect(readEntry).not.toHaveBeenCalled()
+      expect(readFailure).not.toHaveBeenCalled()
+      mkdirSync(router.accountHome('b'), { recursive: true })
+      expect(await scopedRead({ ...read, waitForListing: true })).toMatchObject({
+        origin: 'probe',
+        models: [{ id: 'only-b' }]
+      })
+      expect(probe).toHaveBeenCalledExactlyOnceWith(
+        HOME('CLAUDE_CONFIG_DIR', router.accountHome('b')),
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+          workspacePath: root,
+          operation: expect.objectContaining({
+            current: expect.any(Function),
+            deadline: expect.any(Number),
+            signal: expect.any(AbortSignal)
+          })
+        })
+      )
+      expect(store.get(keyA)).toEqual(savedA)
+      expect(founded.accountHome).toEqual(HOME('CLAUDE_CONFIG_DIR', '/accounts/a'))
+    } finally {
+      installClaudeProfileRouter(undefined)
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+})
+
+it('keeps old producers from publishing rows, defaults or failure expiry after retirement and stop', async () => {
+  const store = new AgentModelCatalogStore()
+  const record = agentSessionRecordFixture({
+    sessionId: 'source-chat',
+    provider: 'opencode2',
+    accountHome: HOME('OPENCODE_HOME', '/account'),
+    location: {
+      executionHostId: 'local',
+      wslDistro: null,
+      workspaceId: 'folder',
+      workspaceKind: 'folder'
+    }
+  })
+  const folder = deferred<string | null>()
+  const defaults = deferred<boolean>()
+  const lookup = vi.fn(async () => folder.promise)
+  const defaultLookup = vi.fn(async () => defaults.promise)
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: () => {
+      const held = record
+      return held ? agentSessionConversationView(held) : undefined
+    },
+    getRecord: () => record,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => record.accountHome,
+    recordWorkspacePath: lookup,
+    workspaceMayOverrideDefaultModel: defaultLookup,
+    listsInChatFolder: new Set(['opencode2'])
+  })
+  const oldSource = service.captureSource(record)
+  service.recordLiveListing(
+    record.sessionId,
+    { ...listing('old'), configuredDefault: { modelId: 'old' } },
+    oldSource
+  )
+  service.providerStarted(record, oldSource)
+  await vi.waitFor(() => expect(lookup).toHaveBeenCalled())
+  store.expireAgent(record.provider)
+  const key = agentModelCatalogFingerprintForRecord(record, '/project')
+  const current = store.recordSuccess(key, record.provider, listing('current'), 'discovery')
+  await store.refresh(key, record.provider, () => Promise.reject(new Error('current failure')))
+  const save = vi.fn()
+  await store.attachPersistence({ load: async () => [], save, flush: async () => {} })
+  folder.resolve('/project')
+  await vi.waitFor(() => expect(lookup).toHaveBeenCalledTimes(2))
+  // Receipt after retirement cannot grant the old child a new launch identity.
+  service.recordLiveListing(record.sessionId, listing('late-receipt'), oldSource)
+  await Promise.resolve()
+  expect(store.get(key)).toBe(current)
+  expect(store.failureDetail(key)).toBe('current failure')
+  expect(save).not.toHaveBeenCalled()
+  const source = service.captureSource(record)
+  service.recordLiveListing(
+    record.sessionId,
+    { ...listing('valid'), configuredDefault: { modelId: 'valid' } },
+    source
+  )
+  await vi.waitFor(() => expect(defaultLookup).toHaveBeenCalledTimes(1))
+  const beforeStop = store.get(key)
+  save.mockClear()
+  service.stop()
+  defaults.resolve(false)
+  await Promise.resolve()
+  await Promise.resolve()
+  expect(store.get(key)).toBe(beforeStop)
+  expect(store.get(key)?.configured).toBeNull()
+  expect(save).not.toHaveBeenCalled()
+})
+
+it('withholds a known retired Pi invocation until current discovery succeeds', async () => {
+  const store = new AgentModelCatalogStore()
+  const record = agentSessionRecordFixture({
+    sessionId: 'pi-chat',
+    provider: 'pi',
+    accountHome: HOME('PI_CODING_AGENT_DIR', '/pi')
+  })
+  const key = agentModelCatalogFingerprintForRecord(record)
+  store.recordSuccess(key, record.provider, listing('command-a'), 'discovery')
+  const listingPending = deferred<AgentModelCatalogSuccess>()
+  const probe = vi.fn(() => listingPending.promise)
+  const service = createAgentModelCatalogService({
+    store,
+    getConversation: () => {
+      const held = record
+      return held ? agentSessionConversationView(held) : undefined
+    },
+    getRecord: () => record,
+    drivesRecord: () => true,
+    resolveAccountHome: async () => record.accountHome,
+    probes: { pi: probe }
+  })
+  const old = service.captureSource(record)
+  store.expireAgent('pi')
+  const demand = service.demand({ agent: 'pi', sessionId: record.sessionId })
+  await vi.waitFor(() => expect(probe).toHaveBeenCalledTimes(1))
+  expect(service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })).toEqual({
+    origin: 'unknown'
+  })
+  service.recordLiveListing(record.sessionId, listing('old-child'), old)
+  expect(service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })).toEqual({
+    origin: 'unknown'
+  })
+  service.recordLiveListing(
+    record.sessionId,
+    listing('current-child'),
+    service.captureSource(record)
+  )
+  expect(service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })).toEqual({
+    origin: 'unknown'
+  })
+  listingPending.resolve(listing('current-discovery'))
+  await demand
+  const recovered = service.snapshot({ agent: 'pi', sessionId: record.sessionId, savedOnly: true })
+  expect(recovered.origin).toBe('probe')
+  expect(recovered.origin !== 'unknown' && recovered.models.map((model) => model.id)).toEqual([
+    'current-discovery'
+  ])
+  service.stop()
 })

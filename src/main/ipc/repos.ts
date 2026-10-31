@@ -21,6 +21,7 @@ export function registerRepoHandlers(
 ): void {
   // macOS window recreation re-registers these handlers.
   ipcMain.removeHandler('repos:list')
+  ipcMain.removeHandler('repos:listWslMoved')
   ipcMain.removeHandler('repos:add')
   ipcMain.removeHandler('repos:removeForHost')
   ipcMain.removeHandler('repos:reorder')

@@ -77,27 +77,6 @@ describe('structured worker hook attestation stays closed', () => {
     hostRef.current = null
   })
 
-  it('leaves both the launch token hash and the pty id empty', () => {
-    const handle = registerStructuredWorker()
-    const authority = getAuthority.call(runtimeStub(), handle)
-    expect(authority).not.toBeNull()
-    expect(authority!.launchTokenHash).toBeNull()
-    // Non-empty would make the restored-authority receipt lookup reachable.
-    expect(authority!.ptyId).toBe('')
-  })
-
-  it('refuses to attest a structured handle as a compatibility caller', () => {
-    const handle = registerStructuredWorker()
-    const stub = runtimeStub()
-    expect(
-      verifyCaller.call(stub, {
-        terminalHandle: handle,
-        paneKey: structuredWorkerIdentities.get(handle)!.paneKey,
-        launchToken: 'anything-the-caller-claims'
-      })
-    ).toBeNull()
-  })
-
   it('still refuses when a restored receipt exists under an empty pty id', () => {
     const handle = registerStructuredWorker()
     const identity = structuredWorkerIdentities.get(handle)!

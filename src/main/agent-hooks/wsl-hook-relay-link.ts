@@ -10,6 +10,8 @@ export type WslRelayLinkOptions = {
   child: ChildProcessWithoutNullStreams
   distro: string
   ingest: (envelope: Record<string, unknown>, connectionId: string) => void
+  /** Runs before the link's first envelope: each link talks to a freshly started guest. */
+  beginSession?: (connectionId: string) => void
   receiveClaudeAgentView?: (body: unknown) => unknown
   bindInterruptReconciliation?: (
     mux: SshChannelMultiplexer,
@@ -25,6 +27,7 @@ export function wireWslRelayLink(options: WslRelayLinkOptions): void {
   const { mux, child, distro, ingest, warn, onDead } = options
   const connectionId = wslHookRelayConnectionId(distro)
   let dead = false
+  options.beginSession?.(connectionId)
   mux.onRequest(CLAUDE_AGENT_VIEW_RELAY_METHOD, ({ body }) =>
     dead ? {} : (options.receiveClaudeAgentView?.(body) ?? {})
   )

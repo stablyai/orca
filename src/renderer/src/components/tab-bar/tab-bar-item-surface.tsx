@@ -1,5 +1,5 @@
 import React from 'react'
-import { canToggleNativeChat } from '../native-chat/native-chat-availability'
+import { canToggleNativeChat } from '../../../../shared/native-chat-availability'
 import { resolveNativeChatTabAgentEvidence } from './native-chat-tab-agent-evidence'
 import type { DropIndicator } from './drop-indicator'
 import {

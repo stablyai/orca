@@ -82,7 +82,6 @@ export async function enrichAiVaultSession(input: {
         cwd: input.session.cwd ?? process.cwd(),
         env: environment.env
       },
-      emptyResultName: 'knowledge summary',
       operation: 'knowledge-enrichment',
       spawnAgent: spawnSourceControlAgent
     })

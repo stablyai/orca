@@ -24,32 +24,20 @@ function formatCount(value: number): string {
 
 function fileCountLabel(count: number): string {
   const value0 = formatCount(count)
-  return count === 1
-    ? translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount_one',
-        '{{value0}} file',
-        { value0 }
-      )
-    : translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount_other',
-        '{{value0}} files',
-        { value0 }
-      )
+  return translate(
+    'auto.components.right.sidebar.AiVaultScanProgressStrip.fileCount',
+    '{{value0}} files',
+    { value0, count, defaultValue_one: '{{value0}} file' }
+  )
 }
 
 function databaseCountLabel(count: number): string {
   const value0 = formatCount(count)
-  return count === 1
-    ? translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount_one',
-        '{{value0}} database',
-        { value0 }
-      )
-    : translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount_other',
-        '{{value0}} databases',
-        { value0 }
-      )
+  return translate(
+    'auto.components.right.sidebar.AiVaultScanProgressStrip.databaseCount',
+    '{{value0}} databases',
+    { value0, count, defaultValue_one: '{{value0}} database' }
+  )
 }
 
 function stripSentence(progress: AiVaultScanProgress): string {
@@ -135,9 +123,15 @@ function AgentRow({
   const label = agentLabel(agent.agent)
   const checked = hasWork
     ? translate(
-        'auto.components.right.sidebar.AiVaultScanProgressStrip.agentChecked',
+        'auto.components.right.sidebar.AiVaultScanProgressStrip.agentCheckedCount',
         '{{agent}}: {{settled}} of {{total}} history candidates checked',
-        { agent: label, settled: formatCount(settled), total: formatCount(read.total) }
+        {
+          agent: label,
+          settled: formatCount(settled),
+          total: formatCount(read.total),
+          count: read.total,
+          defaultValue_one: '{{agent}}: {{settled}} of {{total}} history candidate checked'
+        }
       )
     : undefined
   return (

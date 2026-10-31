@@ -1,8 +1,11 @@
+import { asyncQuestionSourceScope } from '../../../../../src/shared/native-chat/input/native-chat-ask'
 import { createElement } from 'react'
 import TestRenderer, { type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry } from '../../../../../src/shared/agent-status-types'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
+import { useMobileAsyncQuestionHides } from './use-mobile-native-chat-prompt-dismiss'
+import { mobileNativeChatPromptDismissals } from './mobile-native-chat-prompt-dismissals'
 import { useMobileNativeChatPrompts } from './use-mobile-native-chat-prompts'
 
 const renderers: ReactTestRenderer[] = []
@@ -31,6 +34,8 @@ function promptsFor(
   let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
   function Probe(): null {
     captured = useMobileNativeChatPrompts({
+      asyncSourceScope: 'host/session/epoch',
+      hiddenAsyncIds: new Set(),
       enabled: true,
       status: status as AgentStatusEntry | null,
       messages,
@@ -145,27 +150,148 @@ describe('useMobileNativeChatPrompts in a structured chat', () => {
         timestamp: null,
         source: 'transcript'
       }
+      const notice: NativeChatMessage = {
+        id: 'mail',
+        role: 'user',
+        blocks: [{ type: 'text', text: 'You have 1 orchestration message.' }],
+        timestamp: 2,
+        source: 'transcript',
+        from: {
+          kind: 'agent',
+          senders: [
+            {
+              party: { address: 'term_a', terminalHandle: 'term_a', orcaSessionId: null },
+              name: 'Coder'
+            }
+          ],
+          orchestration: {
+            message: 'mail-notice',
+            mailbox: 'term_b',
+            dispatchId: null,
+            messages: [{ messageId: 'mail-1', runId: 'run-1', from: 'term_a' }]
+          }
+        }
+      }
+      let messages = [message]
       let captured: ReturnType<typeof useMobileNativeChatPrompts> | undefined
       function Probe(): null {
         captured = useMobileNativeChatPrompts({
+          asyncSourceScope: 'host/session/epoch',
+          hiddenAsyncIds: new Set(),
           enabled: true,
           structured: { permission: null, question: null, sendWithOutcome },
           status: null,
-          messages: [message],
+          messages,
           transcriptLoading: false
         })
         return null
       }
+      let renderer: ReactTestRenderer
       TestRenderer.act(() => {
-        renderers.push(TestRenderer.create(createElement(Probe)))
+        renderer = TestRenderer.create(createElement(Probe))
+        renderers.push(renderer)
       })
+      const initialAsk = captured?.ask
+      expect(initialAsk?.questions[0]?.question).toBe('Which color?')
+      messages = [message, notice]
+      TestRenderer.act(() => renderer.update(createElement(Probe)))
 
       const ask = captured?.ask
-      expect(ask?.questions[0]?.question).toBe('Which color?')
+      expect(ask).toEqual(initialAsk)
+      expect(ask?.questions[0]?.options.map((option) => option.label)).toEqual(['Red', 'Blue'])
       await expect(ask && captured?.structuredAnswer?.(ask, [{ indices: [1] }])).resolves.toBe(
         accepted
       )
       expect(sendWithOutcome).toHaveBeenCalledWith('> Which color?\n\nBlue')
+      messages = [
+        ...messages,
+        {
+          id: 'human-answer',
+          role: 'user',
+          blocks: [{ type: 'text', text: 'Blue' }],
+          timestamp: 3,
+          source: 'transcript'
+        }
+      ]
+      TestRenderer.act(() => renderer.update(createElement(Probe)))
+      expect(captured?.ask).toBeNull()
     }
   )
+})
+
+describe('addressed phone hide subscriptions', () => {
+  it('keeps unrelated scopes still and reuses scanner output at N/10N', () => {
+    for (const count of [8, 80]) {
+      mobileNativeChatPromptDismissals.clearForTests()
+      let scans = 0
+      const messages: NativeChatMessage[] = [
+        {
+          ...askMessages[0]!,
+          get blocks(): NativeChatMessage['blocks'] {
+            scans += 1
+            return [
+              {
+                type: 'tool-call',
+                name: 'request_user_input_async',
+                input: { questions: [{ title: 'Q1?' }] }
+              }
+            ]
+          }
+        }
+      ]
+      const renders = Array<number>(count).fill(0)
+      const actions: (() => void)[] = []
+      function Probe({ index }: { index: number }): null {
+        renders[index] = (renders[index] ?? 0) + 1
+        const sourceKey = asyncQuestionSourceScope({
+          kind: 'journal',
+          agent: 'codex',
+          sessionId: `session-${Math.floor(index / 2)}`,
+          epoch: 'epoch'
+        })
+        const hides = useMobileAsyncQuestionHides(
+          `host-${index % 2}/pane-${Math.floor(index / 2)}`,
+          sourceKey,
+          'view'
+        )
+        const prompts = useMobileNativeChatPrompts({
+          enabled: true,
+          status: null,
+          messages,
+          transcriptLoading: false,
+          asyncSourceScope: sourceKey,
+          hiddenAsyncIds: hides.hidden
+        })
+        actions[index] = hides.capture(prompts.ask?.occurrenceIds ?? [])
+        return null
+      }
+      let renderer: ReactTestRenderer
+      TestRenderer.act(() => {
+        renderer = TestRenderer.create(
+          createElement(
+            'Probes',
+            null,
+            Array.from({ length: count }, (_, index) => createElement(Probe, { key: index, index }))
+          )
+        )
+        renderers.push(renderer)
+      })
+      const initialScans = scans
+      expect(initialScans).toBeGreaterThanOrEqual(count)
+      expect(initialScans).toBeLessThanOrEqual(2 * count)
+      renders.fill(0)
+      TestRenderer.act(() => actions[0]!())
+      expect(renders).toEqual([1, ...Array<number>(count - 1).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      TestRenderer.act(() => actions[1]!())
+      expect(renders).toEqual([0, 1, ...Array<number>(count - 2).fill(0)])
+      expect(scans).toBe(initialScans)
+      renders.fill(0)
+      TestRenderer.act(() => actions[0]!())
+      expect(renders.every((value) => value === 0)).toBe(true)
+      TestRenderer.act(() => renderer.unmount())
+      renderers.pop()
+    }
+  })
 })

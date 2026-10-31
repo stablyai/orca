@@ -1,6 +1,10 @@
-import { StyleSheet, Switch, Text, View } from 'react-native'
+import { Text, View } from 'react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationDeliveryPreferences } from './notification-delivery-preferences'
+import { MobileSwitch } from '../components/MobileSwitch'
 
 type Props = {
   value: NotificationDeliveryPreferences
@@ -9,6 +13,8 @@ type Props = {
 }
 
 export function NotificationDeliverySection({ value, disabled, onChange }: Props) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const row = (key: keyof NotificationDeliveryPreferences, label: string, hint?: string) => {
     return (
       <View key={key} style={[styles.row, disabled && styles.disabled]}>
@@ -16,14 +22,12 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
           <Text style={styles.label}>{label}</Text>
           {hint && <Text style={styles.hint}>{hint}</Text>}
         </View>
-        <Switch
+        <MobileSwitch
           accessibilityLabel={label}
           testID={`notification-${key}`}
           value={value[key]}
           disabled={disabled}
           onValueChange={(enabled) => onChange({ ...value, [key]: enabled })}
-          trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-          thumbColor={colors.textPrimary}
         />
       </View>
     )
@@ -33,28 +37,42 @@ export function NotificationDeliverySection({ value, disabled, onChange }: Props
       <View style={styles.section}>
         {row(
           'onlyWhenDesktopAway',
-          'Only when away from desktop',
-          'After 3 minutes without keyboard or mouse activity, or when locked.'
+          t(
+            'notifications.notificationDeliverySection.onlyWhenAway',
+            'Only when away from desktop'
+          ),
+          t(
+            'notifications.notificationDeliverySection.onlyWhenAwayHint',
+            'After 3 minutes without keyboard or mouse activity, or when locked.'
+          )
         )}
-        {row('sound', 'Notification sound')}
+        {row('sound', t('notifications.notificationDeliverySection.sound', 'Notification sound'))}
         {row(
           'suppressWhileViewing',
-          'Suppress while focused',
-          'Skip alerts for the workspace open on this phone.'
+          t(
+            'notifications.notificationDeliverySection.suppressWhileFocused',
+            'Suppress while focused'
+          ),
+          t(
+            'notifications.notificationDeliverySection.suppressWhileFocusedHint',
+            'Skip alerts for the workspace open on this phone.'
+          )
         )}
       </View>
       <Text style={styles.footer}>
-        Alert types follow each paired desktop’s notification settings. Notifications pause after 7
-        days without using this app; open it and reconnect to resume.
+        {t(
+          'notifications.notificationDeliverySection.footer',
+          'Alert types follow each paired desktop’s notification settings. Notifications pause after 7 days without using this app; open it and reconnect to resume.'
+        )}
       </Text>
     </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     marginTop: spacing.md
   },
@@ -69,4 +87,4 @@ const styles = StyleSheet.create({
     marginTop: spacing.md,
     paddingHorizontal: spacing.sm
   }
-})
+}))

@@ -1,7 +1,3 @@
-import {
-  getProjectHostSetupProjectionFromState,
-  type ProjectCatalogReadState
-} from '@/store/project-host-setup-selector'
 import type { AppState } from '@/store/types'
 import { getLocalProjectExecutionRuntimeContext } from '@/lib/local-preflight-context'
 import { getFolderWorkspaceCandidateRepos } from './folder-workspace-connection'
@@ -23,11 +19,11 @@ type AiVaultResumeShellState = Pick<
   | 'activeRepoId'
   | 'activeWorktreeId'
   | 'folderWorkspaces'
+  | 'projects'
   | 'repos'
   | 'settings'
   | 'worktreesByRepo'
-> &
-  ProjectCatalogReadState
+>
 
 export function resolveAiVaultResumeStartupShell(args: {
   state: AiVaultResumeShellState
@@ -83,8 +79,12 @@ export function getAiVaultResumeWorkspacePath(
 
 export function getAiVaultResumeWorkspaceWslDistro(
   state: Pick<AppState, 'folderWorkspaces' | 'repos' | 'worktreesByRepo'> &
-    Partial<Pick<AppState, 'activeRepoId' | 'activeWorktreeId' | 'settings' | 'projectGroups'>> &
-    ProjectCatalogReadState,
+    Partial<
+      Pick<
+        AppState,
+        'activeRepoId' | 'activeWorktreeId' | 'projects' | 'settings' | 'projectGroups'
+      >
+    >,
   workspaceId: string | null | undefined
 ): string | null | undefined {
   const workspacePath = getAiVaultResumeWorkspacePath(state, workspaceId)
@@ -92,7 +92,7 @@ export function getAiVaultResumeWorkspaceWslDistro(
   const runtimeState = {
     activeRepoId: state.activeRepoId ?? null,
     activeWorktreeId: state.activeWorktreeId ?? null,
-    projectHostSetupProjection: getProjectHostSetupProjectionFromState(state),
+    projects: state.projects ?? [],
     settings: state.settings ?? null,
     folderWorkspaces: selectFolderWorkspaces(state),
     projectGroups: state.projectGroups ?? [],

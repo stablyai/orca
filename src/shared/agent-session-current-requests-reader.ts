@@ -1,6 +1,9 @@
 import { AGENT_SESSION_CURRENT_REQUESTS_CLIENT_CAPABILITY } from './agent-session-current-requests-capability'
 import type { AgentJournalRenderItem } from './agent-session-journal-types'
 import { isAdmissibleAgentJournalRenderItem } from './agent-session-journal-schemas'
+import { readAgentSessionErrorRefusal } from './agent-session-write-failure'
+import { isFinalAgentSessionReadRefusal } from './structured-agent-session-read-refusal'
+import { createReconnectScheduler } from './structured-agent-session-reconnect'
 import type {
   AgentSessionCurrentRequestsMarker,
   AgentSessionCurrentRequestsPiece,
@@ -12,12 +15,22 @@ export function createAgentSessionCurrentRequestsReader(args: {
   read: (request: AgentSessionCurrentRequestsRead) => Promise<AgentSessionCurrentRequestsPiece>
   complete: (marker: AgentSessionCurrentRequestsMarker, items: AgentJournalRenderItem[]) => void
   replaceMarker: (marker: AgentSessionCurrentRequestsMarker) => void
-  error: (error: unknown, marker: AgentSessionCurrentRequestsMarker) => void
+  /** Only failures that will not be retried are reported. */
+  error: (error: unknown) => void
 }) {
   let generation = 0
   let desired: AgentSessionCurrentRequestsMarker | undefined
   let running = false
   let attempted: string | undefined
+  let failedVersion: string | undefined
+  // A read that failed in transit re-reads the same version with the stream's reconnect backoff.
+  const retry = createReconnectScheduler({
+    shouldStop: () => desired === undefined || desired.version !== failedVersion,
+    reconnect: () => {
+      attempted = undefined
+      void pump()
+    }
+  })
   async function pump(): Promise<void> {
     if (running || !desired || attempted === desired.version) {
       return
@@ -29,13 +42,16 @@ export function createAgentSessionCurrentRequestsReader(args: {
     let cursor = 0
     const chunks: string[] = []
     const current = () => generation === ownedGeneration && desired?.version === marker.version
+    let reading = false
     try {
       while (current()) {
+        reading = true
         const piece = await args.read({
           sessionId: marker.sessionId,
           version: marker.version,
           cursor
         })
+        reading = false
         if (!current()) {
           return
         }
@@ -76,6 +92,7 @@ export function createAgentSessionCurrentRequestsReader(args: {
           ) {
             throw new Error('Invalid current requests')
           }
+          retry.reset()
           args.complete(marker, value)
           return
         }
@@ -85,8 +102,15 @@ export function createAgentSessionCurrentRequestsReader(args: {
         cursor = piece.nextCursor
       }
     } catch (error) {
-      if (current()) {
-        args.error(error, marker)
+      // Answers that break the contract fail the same way again; only transport and host failures retry.
+      if (!current()) {
+        return
+      }
+      if (reading && !isFinalAgentSessionReadRefusal(readAgentSessionErrorRefusal(error))) {
+        failedVersion = marker.version
+        retry.schedule()
+      } else {
+        args.error(error)
       }
     } finally {
       running = false
@@ -115,6 +139,8 @@ export function createAgentSessionCurrentRequestsReader(args: {
       generation += 1
       desired = undefined
       attempted = undefined
+      retry.dispose()
+      retry.reset()
     }
   }
 }

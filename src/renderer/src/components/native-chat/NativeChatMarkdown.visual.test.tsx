@@ -104,7 +104,12 @@ describe('NativeChatMarkdown visuals', () => {
   it('keeps a mounted visual frame while the rest of the reply streams in', async () => {
     const { container, rerender } = render(
       withOwner(
-        <NativeChatMarkdown content={`Intro\n\n${LINE}\n\nMore`} visualMessageId="m1" streaming />
+        <NativeChatMarkdown
+          content={`Intro\n\n${LINE}\n\n\`\`\`text\nsettled\n\`\`\`\n\nMore`}
+          visualMessageId="m1"
+          growing
+          streaming
+        />
       )
     )
     await waitFor(() => expect(container.querySelector('iframe')).not.toBeNull())
@@ -112,8 +117,19 @@ describe('NativeChatMarkdown visuals', () => {
     rerender(
       withOwner(
         <NativeChatMarkdown
-          content={`Intro\n\n${LINE}\n\nMore text arriving now`}
+          content={`Intro\n\n${LINE}\n\n\`\`\`text\nsettled\n\`\`\`\n\nMore text arriving now`}
           visualMessageId="m1"
+          growing
+          streaming
+        />
+      )
+    )
+    rerender(
+      withOwner(
+        <NativeChatMarkdown
+          content={`Intro\n\n${LINE}\n\n\`\`\`text\nsettled\n\`\`\`\n\nMore text arriving now\n\n::orca-visual{file="../invalid.html"}\n\nend`}
+          visualMessageId="m1"
+          growing
           streaming
         />
       )

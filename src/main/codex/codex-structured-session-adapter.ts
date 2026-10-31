@@ -15,10 +15,12 @@ import { supportsCodexStructuredLocation } from './codex-structured-location-sup
 import { CodexStructuredSessionTeardown } from './codex-structured-session-teardown'
 import {
   applyCodexStructuredSessionOption,
-  prepareLiveCodexSessionOptions,
   readLiveCodexSessionOptions
 } from './codex-structured-session-options'
-import { prepareCodexMessageDispatch } from './codex-structured-message-options'
+import {
+  prepareCodexMessageDispatch,
+  readCodexAppliedInputOptions
+} from './codex-structured-message-options'
 import {
   CodexAcquisitionRegistry,
   requireLiveCodexSession,
@@ -44,6 +46,7 @@ import {
   answerCodexStructuredPrompt,
   cancelCodexStructuredTurn
 } from './codex-structured-prompt-ownership'
+import { renameCodexProviderSession } from './codex-provider-session-rename'
 
 export type {
   CodexStructuredLaunch,
@@ -87,6 +90,15 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
     this.sessions.get(sessionId)?.skillReport?.read()
 
   readonly atRestCommands: CodexStructuredSessionAdapterDeps['atRestCommands']
+
+  renameProviderSession: NonNullable<StructuredAgentSessionAdapter['renameProviderSession']> = (
+    input
+  ) =>
+    renameCodexProviderSession({
+      ...input,
+      session: this.sessions.get(input.record.sessionId),
+      invocation: this.deps.renameInvocation
+    })
 
   permissionModeRequiresAcquisition = (): boolean => false
 
@@ -308,17 +320,17 @@ export class CodexStructuredSessionAdapter implements StructuredAgentSessionAdap
   readOptions = (input: { sessionId: string; fence: number }) =>
     readLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
+  readAppliedInputOptions: NonNullable<StructuredAgentSessionAdapter['readAppliedInputOptions']> = (
+    input
+  ) => readCodexAppliedInputOptions(this.sessions.get(input.sessionId), input)
+
   projectOptions = (sessionId: string, options: Readonly<Record<string, string>>) =>
     projectCodexSessionOptions(this.sessions.get(sessionId), options)
-
-  prepareReadOptions = (input: { sessionId: string; fence: number }) =>
-    prepareLiveCodexSessionOptions(this.session(input.sessionId), this.deps.requestTimeoutMs)
 
   closeSession: NonNullable<StructuredAgentSessionAdapter['closeSession']> = (...args) =>
     this.teardown.close(...args)
   forceCloseSession = (sessionId: string): Promise<boolean> => this.teardown.forceClose(sessionId)
-  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = (...args) =>
-    this.teardown.close(...args)
+  disposeSession: NonNullable<StructuredAgentSessionAdapter['disposeSession']> = this.closeSession
   closeAll = (): Promise<void> => this.teardown.closeAll()
   releaseAcquisition = (input: { sessionId: string }): Promise<boolean> =>
     this.teardown.close(input.sessionId)

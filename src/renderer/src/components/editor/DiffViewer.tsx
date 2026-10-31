@@ -29,7 +29,12 @@ import { buildDiffEditorHideUnchangedOptions } from './diff-editor-hide-unchange
 import { useDiffEditorRegistration } from './diff-navigation-context'
 import { preserveDiffViewStateAcrossModelSwaps } from './diff-model-swap-view-state'
 import { monacoFindOptions } from './monaco-find-options'
-import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { usePluginSyntaxLanguage } from './use-plugin-syntax-language'
+import {
+  PLUGIN_SYNTAX_EDITOR_OPTIONS,
+  applyModelLanguage
+} from '@/lib/monaco-languages/plugin-syntax-editor-options'
+import { useMonacoTheme } from '@/hooks/use-monaco-theme'
 
 export default function DiffViewer({
   modelKey,
@@ -37,7 +42,7 @@ export default function DiffViewer({
   modifiedModelKey,
   originalContent,
   modifiedContent,
-  language,
+  language: coreLanguage,
   filePath,
   relativePath,
   sideBySide,
@@ -53,10 +58,11 @@ export default function DiffViewer({
   largeDiffSaveContentAvailable
 }: DiffViewerProps): React.JSX.Element {
   const settings = useAppStore((s) => s.settings)
-  const isDark = useDocumentDarkTheme()
+  const monacoTheme = useMonacoTheme()
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
+  const language = usePluginSyntaxLanguage(filePath, coreLanguage)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
   const scrollToDiffCommentId = useAppStore((s) => s.scrollToDiffCommentId)
   const setScrollToDiffCommentId = useAppStore((s) => s.setScrollToDiffCommentId)
@@ -82,6 +88,10 @@ export default function DiffViewer({
     diffWordWrapRef.current = diffWordWrap
   }, [diffWordWrap])
   const [modifiedEditor, setModifiedEditor] = useState<editor.ICodeEditor | null>(null)
+  useEffect(() => {
+    const models = diffEditorRef.current?.getModel()
+    applyModelLanguage([models?.original, models?.modified], language)
+  }, [modifiedEditor, language])
 
   const renderLimit = useMemo(
     () => largeDiffRenderLimit ?? getLargeDiffRenderLimit({ originalContent, modifiedContent }),
@@ -330,7 +340,7 @@ export default function DiffViewer({
             language={language}
             original={originalContent}
             modified={modifiedContent}
-            theme={isDark ? 'vs-dark' : 'vs'}
+            theme={monacoTheme}
             onMount={handleMount}
             // Tab-owned models preserve modified undo across Changes-mode HEAD rotations.
             originalModelPath={currentDiffModelPaths.originalModelPath}
@@ -344,6 +354,7 @@ export default function DiffViewer({
               renderSideBySide: sideBySide,
               minimap: { enabled: false },
               scrollBeyondLastLine: false,
+              ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
               fontSize: diffEditorFontSize,
               fontFamily: resolveEditorFontFamily(settings),
               lineNumbers: 'on',

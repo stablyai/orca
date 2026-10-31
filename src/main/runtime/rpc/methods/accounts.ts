@@ -1,4 +1,5 @@
 import { defineMethod, defineStreamingMethod, type RpcContext } from '../core'
+import type { OrcadFeature } from '../orcad-feature-readiness'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { HostAccountSignInFlows } from '../../host-account-sign-in-flows'
 import type { OrcaRuntimeService } from '../../orca-runtime'
@@ -46,7 +47,7 @@ function signInOwner({ caller }: Pick<RpcContext, 'caller'>): string {
   return rpcCallerOperationKey(caller)
 }
 
-export const ACCOUNT_METHODS = [
+const ACCOUNT_METHOD_DEFINITIONS = [
   // Only the owning desktop pushes this host's account launch environment, including WSL.
   defineMethod({
     name: 'accounts.setHostLaunchEnv',
@@ -235,29 +236,43 @@ export const ACCOUNT_METHODS = [
     name: 'accounts.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
-      await new Promise<void>((resolve) => {
-        const unsubscribe = runtime.onAccountsChanged((snapshot) => {
-          emit({ type: 'snapshot', snapshot })
-        })
-
-        // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
-        const seq = ++accountsSubscriptionSeq
-        const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
-        runtime.registerSubscriptionCleanup(
-          subscriptionId,
-          () => {
-            unsubscribe()
-            emit({ type: 'end' })
-            resolve()
-          },
-          connectionId
-        )
-
-        // Publish a snapshot immediately, then refresh stale data; reconnect must not force repeated provider fetches.
-        emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsSnapshot() })
-        void runtime.refreshAccountsForMobileSubscriber()
+    handler: async (_params, { runtime, connectionId, signal }, emit) => {
+      if (signal?.aborted) {
+        return
+      }
+      const stopped = Promise.withResolvers<void>()
+      const unsubscribe = runtime.onAccountsChanged((snapshot) => {
+        emit({ type: 'snapshot', snapshot })
       })
+
+      // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
+      const seq = ++accountsSubscriptionSeq
+      const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
+      const release = (): void => runtime.cleanupSubscription(subscriptionId)
+      runtime.registerSubscriptionCleanup(
+        subscriptionId,
+        () => {
+          signal?.removeEventListener('abort', release)
+          unsubscribe()
+          stopped.resolve()
+        },
+        connectionId
+      )
+
+      try {
+        if (signal?.aborted) {
+          release()
+        } else {
+          signal?.addEventListener('abort', release, { once: true })
+          // Publish a snapshot immediately, then refresh stale data; reconnect must not force repeated provider fetches.
+          emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsStreamSnapshot() })
+          void runtime.refreshAccountsForMobileSubscriber()
+        }
+        await stopped.promise
+        emit({ type: 'end' })
+      } finally {
+        release()
+      }
     }
   }),
   defineMethod({
@@ -270,3 +285,15 @@ export const ACCOUNT_METHODS = [
     }
   })
 ]
+
+// The desktop's launch-env push and unsubscribes never touch the account services.
+const ACCOUNT_SERVICE_FREE_METHODS: ReadonlySet<string> = new Set([
+  'accounts.setHostLaunchEnv',
+  'accounts.unsubscribe'
+])
+
+export const ACCOUNT_METHODS = ACCOUNT_METHOD_DEFINITIONS.map((method) =>
+  ACCOUNT_SERVICE_FREE_METHODS.has(method.name)
+    ? method
+    : { ...method, requires: ['accounts'] satisfies OrcadFeature[] }
+)

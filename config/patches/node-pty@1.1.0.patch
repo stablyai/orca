@@ -1,5 +1,5 @@
 diff --git a/binding.gyp b/binding.gyp
-index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc835f1479ab 100644
+index 5f63978b07ab50aaf7523219a2170ec737a6b5db..b4110a7c781d505ae581436cec68a10bf600734a 100644
 --- a/binding.gyp
 +++ b/binding.gyp
 @@ -1,13 +1,18 @@
@@ -8,7 +8,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
      'dependencies': [
 -      "<!(node -p \"require('node-addon-api').targets\"):node_addon_api_except",
 +      "<!(node -p \"require.resolve('node-addon-api/node_addon_api.gyp')\"):node_addon_api_except",
-     ],
++    ],
 +    # Orca: GCC 9 (Ubuntu 20.04 floor) accepts C++20 as gnu++2a, but rejects
 +    # the newer gnu++20 spelling emitted by Node 24's gyp flags.
 +    'cflags_cc!': [
@@ -16,7 +16,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
 +    ],
 +    'cflags_cc': [
 +      '-std=gnu++2a'
-+    ],
+     ],
      'conditions': [
        ['OS=="win"', {
 -        'msvs_configuration_attributes': {
@@ -25,7 +25,7 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
          'msvs_settings': {
              'VCCLCompilerTool': {
                'AdditionalOptions': [
-@@ -42,32 +39,6 @@
+@@ -42,32 +47,6 @@
              '-lshlwapi'
            ],
          },
@@ -58,10 +58,15 @@ index 5f63978b07ab50aaf7523219a2170ec737a6b5db..bbd9e06136e8922f40b5779e35d4fc83
        ]
      }, { # OS!="win"
        'targets': [
-@@ -88,6 +85,16 @@
+@@ -88,6 +67,21 @@
                'libraries!': [
                  '-lutil'
                ]
++            }],
++            # Orca: libproc reads complete on the pool; one landing while a
++            # worker_thread's env tears down must not abort the process.
++            ['OS=="mac"', {
++              'defines': ['NODE_API_SWALLOW_UNTHROWABLE_EXCEPTIONS']
 +            }],
 +            # Orca: pair with the .symver pins in pty.cc. Force the real
 +            # libutil.so.1/libpthread.so.0 into DT_NEEDED (gcc's default
@@ -297,10 +302,10 @@ index 181ccabbbe9c4948a9725fb1db907a68e9de01fc..67f31facf85562b67adbfbd04ce28ddd
  process.send!({ consoleProcessList });
  process.exit(0);
 diff --git a/src/unix/pty.cc b/src/unix/pty.cc
-index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e7baac249 100644
+index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..381d59e11bf158d269335c8231b407fc9c93ca19 100644
 --- a/src/unix/pty.cc
 +++ b/src/unix/pty.cc
-@@ -23,7 +23,9 @@
+@@ -23,8 +23,11 @@
  #include <errno.h>
  #include <string.h>
  #include <stdlib.h>
@@ -308,9 +313,11 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  #include <unistd.h>
 +#include <string>
  #include <thread>
++#include <vector>
  
  #include <sys/types.h>
-@@ -47,6 +49,39 @@
+ #include <sys/stat.h>
+@@ -47,6 +50,39 @@
  #include <termios.h>
  #endif
  
@@ -350,7 +357,25 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  /* Some platforms name VWERASE and VDISCARD differently */
  #if !defined(VWERASE) && defined(VWERSE)
  #define VWERASE	VWERSE
-@@ -228,6 +263,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
+@@ -67,6 +103,9 @@
+ #include <sys/event.h>
+ #include <sys/sysctl.h>
+ #include <termios.h>
++#include <vis.h>
++#include <xlocale.h>
++#include <algorithm>
+ #endif
+ 
+ /* NSIG - macro for highest signal + 1, should be defined */
+@@ -169,6 +208,7 @@ void SetupExitCallback(Napi::Env env, Napi::Function cb, pid_t pid) {
+         }
+       }
+     }
++    close(kq);
+ #else
+     while (true) {
+       errno = 0;
+@@ -228,6 +268,9 @@ Napi::Value PtyGetProc(const Napi::CallbackInfo& info);
  static int
  pty_nonblock(int);
  
@@ -360,7 +385,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  #if defined(__APPLE__)
  static char *
  pty_getproc(int);
-@@ -237,13 +275,23 @@ pty_getproc(int, char *);
+@@ -237,13 +280,23 @@ pty_getproc(int, char *);
  #endif
  
  #if defined(__APPLE__) || defined(__OpenBSD__)
@@ -385,7 +410,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  #endif
  
  struct DelBuf {
-@@ -345,8 +393,8 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -345,8 +398,8 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
    term->c_cc[VSTATUS] = 20;
    #endif
  
@@ -396,7 +421,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  
    // helperPath
    std::string helper_path = info[9].As<Napi::String>();
-@@ -367,14 +415,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -367,14 +420,18 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
      argv[i + 3] = strdup(arg.c_str());
    }
  
@@ -419,7 +444,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  #else
    int argc = argv_.Length();
    int argl = argc + 2;
-@@ -445,6 +497,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
+@@ -445,6 +502,9 @@ Napi::Value PtyFork(const Napi::CallbackInfo& info) {
        if (pty_nonblock(master) == -1) {
          throw Napi::Error::New(napiEnv, "Could not set master fd to nonblocking.");
        }
@@ -429,7 +454,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
    }
  #endif
  
-@@ -586,6 +641,23 @@ pty_nonblock(int fd) {
+@@ -586,6 +646,23 @@ pty_nonblock(int fd) {
    return fcntl(fd, F_SETFL, flags | O_NONBLOCK);
  }
  
@@ -453,7 +478,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  /**
   * pty_getproc
   * Taken from tmux.
-@@ -684,15 +756,73 @@ pty_getproc(int fd, char *tty) {
+@@ -684,15 +761,73 @@ pty_getproc(int fd, char *tty) {
  #endif
  
  #if defined(__APPLE__)
@@ -529,7 +554,7 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
  
    for (; count < 3; count++) {
      low_fds[count] = posix_openpt(O_RDWR);
-@@ -706,80 +836,118 @@ pty_posix_spawn(char** argv, char** env,
+@@ -706,84 +841,499 @@ pty_posix_spawn(char** argv, char** env,
                POSIX_SPAWN_SETSID;
    *master = posix_openpt(O_RDWR);
    if (*master == -1) {
@@ -672,6 +697,399 @@ index 7b4b9e1f990fbf95b51528bb56dc9717f5b87532..5e67653b45061e9a9cad4b2d461d563e
    }
  }
  #endif
+ 
++#if defined(__APPLE__)
++/**
++ * Orca: in-process libproc/sysctl process table
++ *
++ * /bin/ps is setuid root, so every exec triggers an uncached syspolicyd
++ * assessment; pollers read the table here instead (#31783). Commands are
++ * rendered exactly as adv_cmds ps does (getproclline + strvis).
++ */
++
++// adv_cmds ps/print.c getproclline() with show_args and without -E.
++static bool
++orca_read_process_args(pid_t pid, std::vector<char>& buf, std::string* out) {
++  int mib[3] = { CTL_KERN, KERN_PROCARGS2, pid };
++  size_t size = buf.size();
++  if (size < sizeof(int) || sysctl(mib, 3, buf.data(), &size, NULL, 0) != 0 ||
++      size < sizeof(int) || size > buf.size()) {
++    return false;
++  }
++  char* procargs = buf.data();
++  char* end = procargs + size;
++  int nargs;
++  memcpy(&nargs, procargs, sizeof(nargs));
++  char* cp = procargs + sizeof(nargs);
++  while (cp < end && *cp != '\0') cp++;
++  if (cp == end) return false;
++  while (cp < end && *cp == '\0') cp++;
++  if (cp == end) return false;
++  char* sp = cp;
++  char* np = NULL;
++  for (int c = 0; c < nargs && cp < end; cp++) {
++    if (*cp == '\0') {
++      c++;
++      if (np != NULL) *np = ' ';
++      np = cp;
++    }
++  }
++  if (np == NULL || np == sp) return false;
++  out->assign(sp, strnlen(sp, end - sp));
++  return true;
++}
++
++// ps vis-encodes the whole command (print.c get_command_and_or_args).
++static bool
++orca_vis_command(const std::string& raw, std::string* out) {
++  // ps sizes strvis output at 4x; strnvis encodes the same but fails instead of overflowing.
++  if (raw.size() > (SIZE_MAX - 1) / 4) return false;
++  std::vector<char> encoded(raw.size() * 4 + 1);
++  int length = strnvis(encoded.data(), encoded.size(), raw.c_str(), VIS_TAB | VIS_NL | VIS_NOSLASH);
++  if (length < 0 || (size_t)length >= encoded.size()) return false;
++  out->assign(encoded.data(), length);
++  return true;
++}
++
++static bool
++orca_read_kinfo(int what, int flag, std::vector<struct kinfo_proc>* procs) {
++  int mib[4] = { CTL_KERN, KERN_PROC, what, flag };
++  u_int mib_length = what == KERN_PROC_ALL ? 3 : 4;
++  for (int attempt = 0; attempt < 8; attempt++) {
++    size_t size = 0;
++    if (sysctl(mib, mib_length, NULL, &size, NULL, 0) != 0) return false;
++    size += size / 8 + sizeof(struct kinfo_proc) * 16;
++    procs->resize(size / sizeof(struct kinfo_proc));
++    if (sysctl(mib, mib_length, procs->data(), &size, NULL, 0) == 0) {
++      procs->resize(size / sizeof(struct kinfo_proc));
++      return true;
++    }
++    if (errno != ENOMEM) return false;
++  }
++  return false;
++}
++
++static bool
++orca_read_kinfo_pid(pid_t pid, struct kinfo_proc* proc) {
++  int mib[4] = { CTL_KERN, KERN_PROC, KERN_PROC_PID, pid };
++  size_t size = sizeof(*proc);
++  return sysctl(mib, 4, proc, &size, NULL, 0) == 0 && size == sizeof(*proc) &&
++         proc->kp_proc.p_pid == pid;
++}
++
++static bool
++orca_is_char_device(const char* path, dev_t* dev) {
++  struct stat sb;
++  if (stat(path, &sb) != 0 || !S_ISCHR(sb.st_mode)) return false;
++  *dev = sb.st_rdev;
++  return true;
++}
++
++// adv_cmds ps/ps.c addelem_tty(): "/dev/ttys001", "ttys001", "s001" and "co" all name a terminal.
++static bool
++orca_resolve_tty(const std::string& elem, dev_t* dev) {
++  if (elem.empty()) return false;
++  std::string path;
++  if (elem[0] == '/') {
++    path = elem;
++  } else if (elem == "co") {
++    path = _PATH_CONSOLE;
++  } else {
++    path = std::string(_PATH_DEV) + elem;
++    bool literal = path.compare(0, strlen(_PATH_TTY), _PATH_TTY) == 0 || path == _PATH_CONSOLE;
++    if (!literal && orca_is_char_device((std::string(_PATH_TTY) + elem).c_str(), dev)) {
++      return true;
++    }
++  }
++  return access(path.c_str(), F_OK) == 0 && orca_is_char_device(path.c_str(), dev);
++}
++
++struct orca_process_row {
++  struct kinfo_proc proc;
++  std::string command;
++  // argv was unreadable (another user's, exiting or mid-exec): setuid ps may print more.
++  bool command_incomplete;
++};
++
++struct orca_process_query {
++  bool include_command;
++  bool select_pids;
++  std::vector<pid_t> pids;
++  bool select_tty;
++  std::string tty;
++  std::string ctype;
++};
++
++static std::string
++orca_comm_command(const struct kinfo_proc& proc) {
++  return "(" + std::string(proc.kp_proc.p_comm, strnlen(proc.kp_proc.p_comm, sizeof(proc.kp_proc.p_comm))) + ")";
++}
++
++// Unreadable argv prints "(comm)" as ps does when KERN_PROCARGS2 fails; no path lookup, so a dead mount cannot hang it.
++static void
++orca_fill_command(const struct kinfo_proc& proc, std::vector<char>& args_buf, orca_process_row* row) {
++  std::string raw;
++  if (proc.kp_proc.p_stat == SZOMB) {
++    raw = "<defunct>";
++  } else if (!orca_read_process_args(proc.kp_proc.p_pid, args_buf, &raw)) {
++    row->command = orca_comm_command(proc);
++    row->command_incomplete = true;
++    return;
++  }
++  if (!orca_vis_command(raw, &row->command)) {
++    row->command = orca_comm_command(proc);
++    row->command_incomplete = true;
++  }
++}
++
++// Runs on a worker thread: argv for ~2,000 processes costs ~17ms of syscalls.
++// Returns 0 on success, 1 when the -t terminal does not exist, -1 on failure.
++static int
++orca_gather_process_table(const orca_process_query& query, std::vector<orca_process_row>* rows) {
++  std::vector<struct kinfo_proc> procs;
++  if (query.select_pids) {
++    for (pid_t pid : query.pids) {
++      struct kinfo_proc proc;
++      if (orca_read_kinfo_pid(pid, &proc)) {
++        procs.push_back(proc);
++      }
++    }
++  } else if (query.select_tty) {
++    dev_t dev;
++    if (!orca_resolve_tty(query.tty, &dev)) return 1;
++    if (!orca_read_kinfo(KERN_PROC_TTY, (int)dev, &procs)) return -1;
++  } else if (!orca_read_kinfo(KERN_PROC_ALL, 0, &procs)) {
++    return -1;
++  }
++  std::vector<char> args_buf;
++  locale_t ctype = (locale_t)0;
++  locale_t previous = (locale_t)0;
++  if (query.include_command) {
++    int argmax = 0;
++    size_t argmax_size = sizeof(argmax);
++    int mib[2] = { CTL_KERN, KERN_ARGMAX };
++    if (sysctl(mib, 2, &argmax, &argmax_size, NULL, 0) != 0 || argmax <= 0) {
++      argmax = 1024 * 1024;
++    }
++    args_buf.resize(argmax);
++    // ps runs setlocale(LC_ALL, ""), so strvis escapes per the caller's LC_CTYPE; scope it to this thread.
++    ctype = newlocale(LC_CTYPE_MASK, query.ctype.c_str(), (locale_t)0);
++    if (ctype == (locale_t)0) ctype = newlocale(LC_CTYPE_MASK, "C", (locale_t)0);
++    if (ctype == (locale_t)0) return -1;
++    previous = uselocale(ctype);
++    if (previous == (locale_t)0) {
++      freelocale(ctype);
++      return -1;
++    }
++  }
++  rows->reserve(procs.size());
++  for (const struct kinfo_proc& proc : procs) {
++    if (proc.kp_proc.p_pid <= 0) continue;
++    orca_process_row row = { proc, "", false };
++    if (query.include_command) {
++      orca_fill_command(proc, args_buf, &row);
++    }
++    rows->push_back(std::move(row));
++  }
++  if (query.include_command) {
++    uselocale(previous);
++    freelocale(ctype);
++  }
++  return 0;
++}
++
++static Napi::Array
++orca_process_rows_to_js(Napi::Env env, bool include_command, const std::vector<orca_process_row>& rows) {
++  Napi::Array result = Napi::Array::New(env, rows.size());
++  uint32_t index = 0;
++  for (const orca_process_row& entry : rows) {
++    const struct kinfo_proc& proc = entry.proc;
++    Napi::Object row = Napi::Object::New(env);
++    row.Set("pid", Napi::Number::New(env, proc.kp_proc.p_pid));
++    row.Set("ppid", Napi::Number::New(env, proc.kp_eproc.e_ppid));
++    row.Set("pgid", Napi::Number::New(env, proc.kp_eproc.e_pgid));
++    row.Set("tpgid", Napi::Number::New(env, proc.kp_eproc.e_tpgid));
++    row.Set("tdev", Napi::Number::New(env, proc.kp_eproc.e_tdev));
++    row.Set("status", Napi::Number::New(env, proc.kp_proc.p_stat));
++    row.Set("flags", Napi::Number::New(env, proc.kp_proc.p_flag));
++    row.Set("nice", Napi::Number::New(env, proc.kp_proc.p_nice));
++    row.Set("uid", Napi::Number::New(env, proc.kp_eproc.e_ucred.cr_uid));
++    row.Set("sessionLeader", Napi::Boolean::New(env, (proc.kp_eproc.e_flag & EPROC_SLEADER) != 0));
++    row.Set("startSec", Napi::Number::New(env, (double)proc.kp_proc.p_starttime.tv_sec));
++    row.Set("startUsec", Napi::Number::New(env, (double)proc.kp_proc.p_starttime.tv_usec));
++    row.Set("comm", Napi::String::New(env, proc.kp_proc.p_comm, strnlen(proc.kp_proc.p_comm, sizeof(proc.kp_proc.p_comm))));
++    if (include_command) {
++      row.Set("command", Napi::String::New(env, entry.command));
++      row.Set("commandIncomplete", Napi::Boolean::New(env, entry.command_incomplete));
++    }
++    result.Set(index++, row);
++  }
++  return result;
++}
++
++// readProcessTable({ command, pids?, tty?, ctype? }) -> rows | null: pids and tty are exclusive selections, as Orca issues them.
++static orca_process_query
++orca_read_process_query(const Napi::CallbackInfo& info) {
++  Napi::Env env(info.Env());
++  if (info.Length() < 1 || !info[0].IsObject()) {
++    throw Napi::TypeError::New(env, "Usage: readProcessTable({ command, pids, tty, ctype })");
++  }
++  Napi::Object options = info[0].As<Napi::Object>();
++  orca_process_query query = { false, false, {}, false, "", "C" };
++  query.include_command = options.Get("command").ToBoolean().Value();
++  Napi::Value pids = options.Get("pids");
++  if (pids.IsArray()) {
++    Napi::Array list = pids.As<Napi::Array>();
++    for (uint32_t i = 0; i < list.Length(); i++) {
++      Napi::Value pid = list.Get(i);
++      double value = pid.IsNumber() ? pid.As<Napi::Number>().DoubleValue() : 0;
++      if (!(value >= 1 && value <= INT32_MAX) || value != (double)(int32_t)value) {
++        throw Napi::TypeError::New(env, "readProcessTable: pids must be positive integers");
++      }
++      pid_t candidate = (pid_t)value;
++      if (std::find(query.pids.begin(), query.pids.end(), candidate) == query.pids.end()) {
++        query.pids.push_back(candidate);
++      }
++    }
++    query.select_pids = true;
++  }
++  Napi::Value tty = options.Get("tty");
++  if (tty.IsString()) {
++    if (query.select_pids) {
++      throw Napi::TypeError::New(env, "readProcessTable: pids and tty are exclusive");
++    }
++    query.tty = tty.As<Napi::String>().Utf8Value();
++    query.select_tty = true;
++  }
++  Napi::Value ctype = options.Get("ctype");
++  if (ctype.IsString()) {
++    query.ctype = ctype.As<Napi::String>().Utf8Value();
++  }
++  return query;
++}
++
++class OrcaProcessTableWorker : public Napi::AsyncWorker {
++ public:
++  OrcaProcessTableWorker(Napi::Env env, orca_process_query query)
++      : Napi::AsyncWorker(env),
++        deferred_(Napi::Promise::Deferred::New(env)),
++        query_(std::move(query)),
++        status_(-1) {}
++
++  Napi::Promise Promise() { return deferred_.Promise(); }
++
++  void Execute() override {
++    status_ = orca_gather_process_table(query_, &rows_);
++    if (status_ < 0) {
++      SetError("orca: process table sysctl failed");
++    }
++  }
++
++  void OnOK() override {
++    Napi::Env env = Env();
++    // ps exits 1 without output when -t names no terminal.
++    deferred_.Resolve(status_ == 1 ? env.Null()
++                                   : Napi::Value(orca_process_rows_to_js(env, query_.include_command, rows_)));
++  }
++
++  void OnError(const Napi::Error& error) override {
++    deferred_.Reject(error.Value());
++  }
++
++ private:
++  Napi::Promise::Deferred deferred_;
++  orca_process_query query_;
++  int status_;
++  std::vector<orca_process_row> rows_;
++};
++
++Napi::Value OrcaProcessTableAsync(const Napi::CallbackInfo& info) {
++  OrcaProcessTableWorker* worker = new OrcaProcessTableWorker(info.Env(), orca_read_process_query(info));
++  Napi::Promise promise = worker->Promise();
++  worker->Queue();
++  return promise;
++}
++
++// PROC_PIDVNODEPATHINFO stats the cwd vnode and proc_pidpath may ask the filesystem for a path, so either can block
++// on a dead network mount: both run on a worker thread and JS bounds how many may be outstanding.
++class OrcaProcessPathWorker : public Napi::AsyncWorker {
++ public:
++  OrcaProcessPathWorker(Napi::Env env, pid_t pid, bool cwd)
++      : Napi::AsyncWorker(env), deferred_(Napi::Promise::Deferred::New(env)), pid_(pid), cwd_(cwd), found_(false) {}
++
++  Napi::Promise Promise() { return deferred_.Promise(); }
++
++  void Execute() override {
++    if (cwd_) {
++      struct proc_vnodepathinfo vnode;
++      int size = proc_pidinfo(pid_, PROC_PIDVNODEPATHINFO, 0, &vnode, sizeof(vnode));
++      if (size == (int)sizeof(vnode) && vnode.pvi_cdir.vip_path[0] != '\0') {
++        path_.assign(vnode.pvi_cdir.vip_path, strnlen(vnode.pvi_cdir.vip_path, sizeof(vnode.pvi_cdir.vip_path)));
++        found_ = true;
++      }
++      return;
++    }
++    char path[PROC_PIDPATHINFO_MAXSIZE];
++    int length = proc_pidpath(pid_, path, sizeof(path));
++    if (length > 0 && (size_t)length < sizeof(path)) {
++      path_.assign(path, length);
++      found_ = true;
++    }
++  }
++
++  void OnOK() override {
++    Napi::Env env = Env();
++    deferred_.Resolve(found_ ? Napi::Value(Napi::String::New(env, path_)) : env.Null());
++  }
++
++  void OnError(const Napi::Error& error) override {
++    deferred_.Reject(error.Value());
++  }
++
++ private:
++  Napi::Promise::Deferred deferred_;
++  pid_t pid_;
++  bool cwd_;
++  bool found_;
++  std::string path_;
++};
++
++static Napi::Value
++orca_queue_path_worker(const Napi::CallbackInfo& info, bool cwd) {
++  Napi::Env env(info.Env());
++  if (info.Length() < 1 || !info[0].IsNumber()) {
++    throw Napi::TypeError::New(env, cwd ? "Usage: readProcessCwd(pid)" : "Usage: readProcessPath(pid)");
++  }
++  OrcaProcessPathWorker* worker = new OrcaProcessPathWorker(env, info[0].As<Napi::Number>().Int32Value(), cwd);
++  Napi::Promise promise = worker->Promise();
++  worker->Queue();
++  return promise;
++}
++
++Napi::Value OrcaReadProcessCwd(const Napi::CallbackInfo& info) {
++  return orca_queue_path_worker(info, true);
++}
++
++Napi::Value OrcaReadProcessPath(const Napi::CallbackInfo& info) {
++  return orca_queue_path_worker(info, false);
++}
++#endif
++
+ /**
+  * Init
+  */
+@@ -793,6 +1343,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+   exports.Set("open",    Napi::Function::New(env, PtyOpen));
+   exports.Set("resize",  Napi::Function::New(env, PtyResize));
+   exports.Set("process", Napi::Function::New(env, PtyGetProc));
++#if defined(__APPLE__)
++  exports.Set("readProcessTable", Napi::Function::New(env, OrcaProcessTableAsync));
++  exports.Set("readProcessCwd", Napi::Function::New(env, OrcaReadProcessCwd));
++  exports.Set("readProcessPath", Napi::Function::New(env, OrcaReadProcessPath));
++#endif
+   return exports;
+ }
+ 
 diff --git a/src/unixTerminal.ts b/src/unixTerminal.ts
 index 98733dc0cd752b554bd94e45904ca341ad141bba..3dd5ad9b3124dbd5ba7f76679b26650dad503ec6 100644
 --- a/src/unixTerminal.ts
@@ -1039,7 +1457,7 @@ index 7b286d3d64..5239ba4e40 100644
      HANDLE hLibrary = LoadConptyDll(info, useConptyDll);
      bool fLoadedDll = hLibrary != nullptr;
      if (fLoadedDll)
-@@ -544,29 +677,229 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
+@@ -544,29 +677,239 @@ static Napi::Value PtyKill(const Napi::CallbackInfo& info) {
    int id = info[0].As<Napi::Number>().Int32Value();
    const bool useConptyDll = info[1].As<Napi::Boolean>().Value();
  
@@ -1232,7 +1650,7 @@ index 7b286d3d64..5239ba4e40 100644
 + * The handle is deliberately never closed: it must outlive every caller, and
 + * process teardown is what releases it.
 + */
-+static Napi::Value PtyAssignCurrentProcessToJob(const Napi::CallbackInfo& info) {
++static Napi::Value AssignCurrentProcessToJob(const Napi::CallbackInfo& info, bool allowBreakaway) {
 +  Napi::Env env(info.Env());
 +  Napi::HandleScope scope(env);
 +
@@ -1242,9 +1660,10 @@ index 7b286d3d64..5239ba4e40 100644
 +  // thread with its own N-API env shares these statics, so "only JS calls it"
 +  // is not a guarantee.
 +  static HANDLE hHostJob = nullptr;
++  static bool hostJobAllowsBreakaway = true;
 +  std::lock_guard<std::mutex> guard(ptyJobMutex);
 +  if (hHostJob != nullptr) {
-+    return Napi::Boolean::New(env, true);
++    return Napi::Boolean::New(env, allowBreakaway || !hostJobAllowsBreakaway);
 +  }
 +
 +  HANDLE job = CreateJobObjectW(nullptr, nullptr);
@@ -1252,18 +1671,27 @@ index 7b286d3d64..5239ba4e40 100644
 +    return Napi::Boolean::New(env, false);
 +  }
 +  JOBOBJECT_EXTENDED_LIMIT_INFORMATION limits{};
-+  // BREAKAWAY_OK for the same reason as the per-pty job: without it a child
-+  // asking for CREATE_BREAKAWAY_FROM_JOB is refused outright.
++  // Terminal hosts permit breakaway; native messaging supervisors retain
++  // ownership of every helper, including those requesting breakaway.
 +  limits.BasicLimitInformation.LimitFlags =
-+      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | JOB_OBJECT_LIMIT_BREAKAWAY_OK;
++      JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE | (allowBreakaway ? JOB_OBJECT_LIMIT_BREAKAWAY_OK : 0);
 +  if (!SetInformationJobObject(job, JobObjectExtendedLimitInformation, &limits, sizeof(limits)) ||
 +      !AssignProcessToJobObject(job, GetCurrentProcess())) {
-+    // An outer job that forbids nesting refuses this; the caller degrades.
++    // Incompatible outer jobs refuse ownership; strict callers fail closed.
 +    CloseHandle(job);
 +    return Napi::Boolean::New(env, false);
 +  }
 +  hHostJob = job;
++  hostJobAllowsBreakaway = allowBreakaway;
 +  return Napi::Boolean::New(env, true);
++}
++
++static Napi::Value PtyAssignCurrentProcessToJob(const Napi::CallbackInfo& info) {
++  return AssignCurrentProcessToJob(info, true);
++}
++
++static Napi::Value PtyAssignCurrentProcessToStrictJob(const Napi::CallbackInfo& info) {
++  return AssignCurrentProcessToJob(info, false);
 +}
 +
 +/**
@@ -1283,13 +1711,14 @@ index 7b286d3d64..5239ba4e40 100644
  /**
  * Init
  */
-@@ -577,6 +910,10 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
+@@ -577,6 +920,11 @@ Napi::Object init(Napi::Env env, Napi::Object exports) {
    exports.Set("resize", Napi::Function::New(env, PtyResize));
    exports.Set("clear", Napi::Function::New(env, PtyClear));
    exports.Set("kill", Napi::Function::New(env, PtyKill));
 +  exports.Set("terminateJob", Napi::Function::New(env, PtyTerminateJob));
 +  exports.Set("listJobProcessIds", Napi::Function::New(env, PtyListJobProcessIds));
 +  exports.Set("assignCurrentProcessToJob", Napi::Function::New(env, PtyAssignCurrentProcessToJob));
++  exports.Set("assignCurrentProcessToStrictJob", Napi::Function::New(env, PtyAssignCurrentProcessToStrictJob));
 +  exports.Set("setActiveProcessLimit", Napi::Function::New(env, PtySetActiveProcessLimit));
    return exports;
  };

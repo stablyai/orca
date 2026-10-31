@@ -25,6 +25,7 @@ import {
 } from '../wsl-background-distro-gate'
 import { EXIT_SETTLE_MS } from './wsl-orcad-liveness-evidence'
 import { isWslUserActFor } from './wsl-user-act-scope'
+import { isWslDistroNotRunningRefusal } from '../../shared/wsl-distro-not-running-refusal'
 import {
   _resetRunningWslDistroCacheForTests,
   resolveRunningWslDistros
@@ -262,5 +263,24 @@ describe('user-act scope does not leak', () => {
     })
     await runAsWslUserAct('Ubuntu', () => resolveRunningWslDistros(probe))
     expect(inherited).toEqual([false])
+  })
+})
+
+describe('a poller recognizes the refusal however it arrives', () => {
+  it.each([
+    ['in process', (error: Error) => error],
+    ['over IPC', (error: Error) => new Error(`Error invoking remote method 'gh:issue': ${error}`)],
+    ['over RPC', (error: Error) => new Error(error.message)]
+  ])('%s', (_transport, deliver) => {
+    expect(isWslDistroNotRunningRefusal(deliver(new WslDistroStoppedError('Ubuntu')))).toBe(true)
+    expect(
+      isWslDistroNotRunningRefusal(
+        deliver(new WslDistroStoppedError('Ubuntu', { retryStartsIt: false }))
+      )
+    ).toBe(true)
+    expect(isWslDistroNotRunningRefusal(deliver(new WslDistroUnverifiableError('Ubuntu')))).toBe(
+      true
+    )
+    expect(isWslDistroNotRunningRefusal(deliver(new Error('gh: not logged in')))).toBe(false)
   })
 })

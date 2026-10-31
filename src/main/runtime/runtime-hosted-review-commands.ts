@@ -5,7 +5,7 @@ import type {
   CreateStackedHostedReviewResult,
   HostedReviewCreationEligibility,
   HostedReviewCreationEligibilityArgs,
-  HostedReviewInfo
+  HostedReviewForBranchReply
 } from '../../shared/hosted-review'
 import type { GitHubOwnerRepo } from '../../shared/github/pull-request-types'
 import type {
@@ -21,7 +21,8 @@ import {
 } from '../github/client'
 import { admissionTierForRefreshReason } from '../github/pr-refresh-candidate-policy'
 import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
-import { getHostedReviewForBranch } from '../source-control/hosted-review'
+import { hostedReviewForBranchReply } from '../../shared/hosted-review'
+import { readHostedReviewForBranch } from '../source-control/hosted-review'
 import { getStoredRepoExecutionHostId } from '../repo-execution-host'
 import { hostedReviewSshConnectionId } from '../source-control/hosted-review-execution-host'
 import {
@@ -30,6 +31,7 @@ import {
 } from '../source-control/hosted-review-creation'
 import type { HostedReviewExecutionOptions } from '../source-control/hosted-review-git-options'
 import { createStackedHostedReview } from '../source-control/stacked-hosted-review-creation'
+import { guardWslUncPathAccess } from '../wsl/wsl-unc-access-gate'
 
 type HostedReviewTargetArgs = { repoSelector: string; worktreeSelector?: string }
 
@@ -105,22 +107,25 @@ export class RuntimeHostedReviewCommands {
     currentHeadOid?: string | null
     active?: boolean
     force?: boolean
+    userRefresh?: boolean
+    reportReadOutcome?: boolean
     linkedGitHubPR?: number | null
     fallbackGitHubPR?: number | null
     linkedGitLabMR?: number | null
     linkedBitbucketPR?: number | null
     linkedAzureDevOpsPR?: number | null
     linkedGiteaPR?: number | null
-  }): Promise<HostedReviewInfo | null> {
+  }): Promise<HostedReviewForBranchReply> {
     const repo = await this.deps.resolveRepo(args.repoSelector)
     const executionOptions = this.deps.getExecutionOptions(repo, args.admissionTier ?? 'background')
-    const review = await getHostedReviewForBranch({
+    const read = await readHostedReviewForBranch({
       repoPath: repo.path,
       executionHostId: getStoredRepoExecutionHostId(repo),
       branch: args.branch,
       currentHeadOid: args.currentHeadOid ?? null,
       ...(args.active === true ? { active: true } : {}),
       ...(args.force === true ? { force: true } : {}),
+      ...(args.userRefresh === true ? { userRefresh: true } : {}),
       linkedGitHubPR: args.linkedGitHubPR ?? null,
       fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
       linkedGitLabMR: args.linkedGitLabMR ?? null,
@@ -129,10 +134,11 @@ export class RuntimeHostedReviewCommands {
       linkedGiteaPR: args.linkedGiteaPR ?? null,
       ...executionOptions
     })
+    const review = read.review
     if (review?.provider === 'github') {
       this.deps.recordCreated(repo.id, review.number, review.url)
     }
-    return review
+    return hostedReviewForBranchReply(read, args.reportReadOutcome)
   }
 
   async getHostedReviewCreationEligibility(
@@ -140,23 +146,32 @@ export class RuntimeHostedReviewCommands {
   ): Promise<HostedReviewCreationEligibility> {
     const { repo, repoPath } = await this.deps.resolveTarget(args)
     const executionOptions = this.deps.getExecutionOptions(repo, 'interactive')
-    return getHostedReviewCreationEligibility({
-      repoPath,
-      executionHostId: getStoredRepoExecutionHostId(repo),
-      branch: args.branch,
-      base: args.base ?? null,
-      hasUncommittedChanges: args.hasUncommittedChanges,
-      hasUpstream: args.hasUpstream,
-      ahead: args.ahead,
-      behind: args.behind,
-      linkedGitHubPR: args.linkedGitHubPR ?? null,
-      fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
-      linkedGitLabMR: args.linkedGitLabMR ?? null,
-      linkedBitbucketPR: args.linkedBitbucketPR ?? null,
-      linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
-      linkedGiteaPR: args.linkedGiteaPR ?? null,
-      ...executionOptions
-    })
+    // A paired client's Source Control asks on mount; it must not start a stopped distro (E9).
+    return guardWslUncPathAccess(
+      repo.path,
+      () =>
+        getHostedReviewCreationEligibility({
+          repoPath,
+          executionHostId: getStoredRepoExecutionHostId(repo),
+          branch: args.branch,
+          base: args.base ?? null,
+          hasUncommittedChanges: args.hasUncommittedChanges,
+          hasUpstream: args.hasUpstream,
+          ahead: args.ahead,
+          behind: args.behind,
+          linkedGitHubPR: args.linkedGitHubPR ?? null,
+          fallbackGitHubPR: args.linkedGitHubPR == null ? (args.fallbackGitHubPR ?? null) : null,
+          linkedGitLabMR: args.linkedGitLabMR ?? null,
+          linkedBitbucketPR: args.linkedBitbucketPR ?? null,
+          linkedAzureDevOpsPR: args.linkedAzureDevOpsPR ?? null,
+          linkedGiteaPR: args.linkedGiteaPR ?? null,
+          ...executionOptions
+        }),
+      {
+        wake: args.wakeWslDistro === true,
+        wslDistro: executionOptions?.localGitExecOptions?.wslDistro
+      }
+    )
   }
 
   async createHostedReview(

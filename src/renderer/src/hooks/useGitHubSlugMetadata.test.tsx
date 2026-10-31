@@ -109,8 +109,7 @@ describe('useGitHubSlugMetadata', () => {
     expect(apiMocks.listAssignableUsersBySlug).toHaveBeenCalledExactlyOnceWith({
       owner: 'stablyai',
       repo: 'orca',
-      host: 'github.com',
-      seedLogins: ['jinwoo']
+      host: 'github.com'
     })
     expect(renders).toBeLessThanOrEqual(4)
   })

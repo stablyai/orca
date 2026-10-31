@@ -1,3 +1,4 @@
+import { terminalStartError } from '../../../shared/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
 import {
@@ -21,6 +22,7 @@ import {
   refuseUnclassified
 } from '../../../shared/agent-session-wire-refusals'
 import { readAgentSessionErrorRefusal } from '../../../shared/agent-session-write-failure'
+import { WslHostWindowsDriveRefusalError } from '../../../shared/wsl-host-windows-drive-refusal'
 
 class LineageError extends Error {
   code = 'LINEAGE_PARENT_NOT_FOUND'
@@ -30,6 +32,80 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it.each(['agent_session_exited_during_start', 'agent_session_operation_unknown'] as const)(
+    'preserves %s while explaining the failed start',
+    (code) => {
+      const startError = terminalStartError('agent_session_exited_during_start', {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      })
+      const error =
+        code === 'agent_session_operation_unknown'
+          ? new Error(code, { cause: startError })
+          : startError
+      const response = mapRuntimeError('start', { runtimeId: 'host' }, error)
+      expect(response).toMatchObject({
+        id: 'start',
+        ok: false,
+        _meta: { runtimeId: 'host' },
+        error: {
+          code,
+          message: expect.stringContaining('Git Bash reported its limit of 128 open terminals')
+        }
+      })
+      expect(response.error.message).toContain('Close some Git Bash terminals and try again.')
+      expect(response.error.message.includes("Couldn't confirm the terminal started.")).toBe(
+        code === 'agent_session_operation_unknown'
+      )
+    }
+  )
+
+  it('keeps runtime_error and a readable message for a WSL host Windows drive refusal', () => {
+    const error = new WslHostWindowsDriveRefusalError('C:\\src\\app')
+    expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({
+      ok: false,
+      error: {
+        code: 'runtime_error',
+        message: expect.stringContaining('This folder is on a Windows drive (C:\\src\\app).'),
+        data: { kind: 'wsl_host_windows_drive_path', windowsPath: 'C:\\src\\app' }
+      }
+    })
+  })
+
+  it.each([
+    [
+      'terminal_held_wsl_distro_stopped:Ubuntu',
+      'stopped',
+      "The WSL distro Ubuntu is stopped, so Orca didn't start this terminal. Start the distro, then try again."
+    ],
+    [
+      'terminal_held_wsl_distro_unverifiable:Ubuntu',
+      'unverifiable',
+      "Orca couldn't check whether the WSL distro Ubuntu is running, so it didn't start this terminal. Start the distro, then try again."
+    ]
+  ])(
+    'keeps runtime_error for a held terminal (%s) with a readable message',
+    (raw, state, message) => {
+      expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(raw))).toMatchObject({
+        ok: false,
+        error: {
+          code: 'runtime_error',
+          message,
+          data: { wslDistroHold: { distro: 'Ubuntu', state } }
+        }
+      })
+    }
+  )
+
+  it('maps SSH and other errors exactly as before', () => {
+    for (const raw of ['ssh_connection_lost', 'Terminal not found', 'spawn exploded']) {
+      const mapped = mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, new Error(raw))
+      expect(mapped).toMatchObject({ ok: false, error: { code: 'runtime_error', message: raw } })
+      expect(mapped.ok === false ? mapped.error.data : undefined).toBeUndefined()
+    }
+  })
+
   it('names a deferred fork with its own code and reason', () => {
     expect(
       mapRuntimeError(

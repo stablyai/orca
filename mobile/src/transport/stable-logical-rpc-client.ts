@@ -9,6 +9,7 @@ import { projectMobileRpcRequestParams } from './mobile-rpc-request-projection'
 import { LogicalClientConnectionPath } from './logical-client-connection-path'
 import type { RelayHostReachability } from './relay-host-reachability'
 import { isRpcDeliveryUnknown, markRpcDeliveryUnknown } from './rpc-delivery-ambiguity'
+import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
 export type MobileConnectionPath = 'lan' | 'tailscale' | 'relay'
 
@@ -87,7 +88,7 @@ export function createStableLogicalRpcClient(
         return Promise.reject(new Error('Client closed'))
       }
       if (suspended) {
-        return Promise.reject(new Error('Client suspended'))
+        return Promise.reject(new LogicalClientSuspendedError())
       }
       const requestGeneration = generation
       const session = activeSession
@@ -103,7 +104,12 @@ export function createStableLogicalRpcClient(
             (error: unknown) => {
               // Keep the physical error as cause: only that layer knows whether the frame reached the wire.
               reject(
-                requestGeneration !== generation ? new LogicalClientCutoverError(error) : error
+                requestGeneration !== generation
+                  ? new LogicalClientCutoverError(error)
+                  : // Suspension retires the session under requests it never sent.
+                    suspended && !isRpcDeliveryUnknown(error)
+                    ? new LogicalClientSuspendedError()
+                    : error
               )
             }
           )
@@ -165,6 +171,11 @@ export function createStableLogicalRpcClient(
     notifyForeground: (reason) => {
       if (!suspended) {
         activeSession.notifyForeground(reason)
+      }
+    },
+    probeLivenessNow: () => {
+      if (!suspended) {
+        activeSession.probeLivenessNow?.()
       }
     },
     close() {

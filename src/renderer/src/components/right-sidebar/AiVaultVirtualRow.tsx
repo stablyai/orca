@@ -1,4 +1,4 @@
-import type { AgentStatusState } from '../../../../shared/agent-status-types'
+import type { AgentDotState } from '@/components/AgentStateDot'
 import { isAntigravityReferenceSession } from '../../../../shared/antigravity-session-origin'
 import type { AiVaultScope, AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { AiVaultResumeStartup } from '@/lib/ai-vault-resume-command'
@@ -81,7 +81,7 @@ export function AiVaultVirtualRow({
   buildResumeStartup: (session: AiVaultSession, worktreeId?: string | null) => AiVaultResumeStartup
   getOriginalPaneTarget: (session: AiVaultSession) => AiVaultOriginalPaneTarget | null
   isStructuredSessionOpen: (session: AiVaultSession) => boolean
-  getSessionLiveState: (session: AiVaultSession) => AgentStatusState | null
+  getSessionLiveState: (session: AiVaultSession) => AgentDotState | null
   getWorktreeInfo: (session: AiVaultSession) => AiVaultSessionWorktreeInfo | null
   getSessionResumeState: (session: AiVaultSession) => AiVaultSessionResumeState
   getSessionResumeActions: (session: AiVaultSession) => AiVaultSessionResumeActions
@@ -163,7 +163,7 @@ export function AiVaultVirtualRow({
         }
   const canOpenLocalSessionPaths =
     row.type === 'session' && canUseLocalAiVaultSessionPathActions(row.session.executionHostId)
-  // Synthetic SQLite/OpenCode identities have no single View Log file; Reveal/CWD retain their local-path gate.
+  // File viewing needs a conversation resource; Reveal/CWD retain their own path semantics.
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
   const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true

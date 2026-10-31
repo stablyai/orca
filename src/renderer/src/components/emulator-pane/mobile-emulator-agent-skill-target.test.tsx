@@ -50,7 +50,7 @@ beforeEach(() => {
     activeRepoId: null,
     activeWorktreeId: null,
     activeWorkspaceExecutionHostId: null,
-    endpointProjects: [],
+    projects: [],
     repos: [],
     worktreesByRepo: {},
     folderWorkspaces: [],

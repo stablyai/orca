@@ -20,10 +20,36 @@ export const WindowsShellOverrideParam = z
   // Canonicalize host-side to the .exe spellings exact-matched by spawn, even if the client did not.
   .transform((shell) => canonicalizeWindowsShellOverride(shell) ?? shell)
 
+const TerminalSurfaceCloseIdentity = z.object({
+  worktreeId: requiredString('Missing worktree id'),
+  tabId: requiredString('Missing tab id'),
+  leafId: requiredString('Missing leaf id'),
+  createdAt: z.number().finite().nullable(),
+  generation: z.number().int().nonnegative(),
+  hasLeaf: z.boolean(),
+  ptyId: z.string().nullable(),
+  incarnationId: z.string().nullable()
+})
+const TerminalSurfaceCloseCapture = z.object({
+  identity: TerminalSurfaceCloseIdentity,
+  holders: z
+    .array(
+      z.object({
+        hostId: OptionalExecutionHostId.unwrap(),
+        identity: TerminalSurfaceCloseIdentity.nullable()
+      })
+    )
+    .max(64)
+})
+
 export const TerminalHandle = z.object({
   terminal: requiredString('Missing terminal handle'),
   // Additive fence understood by newer hosts; legacy hosts safely ignore it.
   expectedIncarnationId: requiredString('Missing PTY incarnation').optional()
+})
+
+export const TerminalClose = TerminalHandle.extend({
+  originalPresentation: TerminalSurfaceCloseCapture.optional()
 })
 
 export const TerminalReadKittyFile = TerminalHandle.extend({
@@ -186,7 +212,9 @@ const TerminalColorQueryReplyColorsParam = z.object({
 })
 
 export const TerminalSetViewerColors = z.object({
-  colors: TerminalColorQueryReplyColorsParam
+  colors: TerminalColorQueryReplyColorsParam,
+  /** Full appearance for hidden OSC 4/12 and ?996n replies; validated by the host, dropped by older hosts. */
+  attributes: z.unknown().optional()
 })
 
 /** The provider session a terminal's launch resumes. */
@@ -223,6 +251,8 @@ export const TerminalCreateParams = z.object({
   launchAgent: z.string().refine(isTuiAgent).optional(),
   terminalKittyKeyboardProtocol: z.boolean().optional(),
   terminalColorQueryReplies: TerminalColorQueryReplyColorsParam.optional(),
+  /** The creator's palette and cursor, validated by the host; older hosts drop it. */
+  terminalViewAttributes: z.unknown().optional(),
   title: OptionalString,
   focus: z.unknown().optional(),
   // Ignored here; the CLI still sends it for hosts before v1.4.211, which route on it.

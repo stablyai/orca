@@ -15,7 +15,7 @@ export function registerJournalRowSchemaVersionTests(): void {
   // Inspect raw rows: upcasting hides the version older readers would see on disk.
   describe('journal row schema versions', () => {
     let root = ''
-    const opener = createTrackedJournalOpener()
+    const opener = createTrackedJournalOpener({ legacyInputs: true })
 
     beforeEach(async () => {
       root = await mkdtemp(join(tmpdir(), 'orca-journal-row-version-'))
@@ -65,7 +65,7 @@ export function registerJournalRowSchemaVersionTests(): void {
           ['item', 3]
         ])
       } finally {
-        opened.close()
+        await opened.close()
       }
     })
   })

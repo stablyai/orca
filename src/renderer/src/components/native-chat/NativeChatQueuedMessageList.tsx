@@ -4,7 +4,6 @@ import { AlertCircle, ChevronDown, ChevronRight, Play, Trash2 } from 'lucide-rea
 import { Button } from '@/components/ui/button'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
 import { cn } from '@/lib/utils'
-import { useAppStore } from '../../store'
 import { translate } from '@/i18n/i18n'
 import {
   NativeChatQueuedMessageCard,
@@ -18,8 +17,11 @@ import { NativeChatPendingIcon } from './NativeChatPendingIcon'
 import type { AgentSessionFailureFact } from '../../../../shared/agent-session-failure'
 import { NATIVE_CHAT_ROOT_SELECTOR } from '@/lib/native-chat-paste-request'
 import { focusNativeChatPromptCard } from './use-native-chat-prompt-card-focus'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../../shared/agent-session-wire'
-import type { QueuedEditAttachTarget } from './use-native-chat-queued-edit-image-intake'
+import {
+  headSteerableQueuedMessageCard,
+  queuedMessageCardNeedsAttention
+} from '../../../../shared/structured-agent-session-queued-cards'
+import type { QueuedEditAttachTarget } from './NativeChatQueuedMessageComposer'
 
 /** Keep host-held drafts outside the transcript until consumed; keep the live region mounted for the first card. */
 export function NativeChatQueuedMessageList({
@@ -43,7 +45,6 @@ export function NativeChatQueuedMessageList({
   /** The chat files added in a card's editor attach to, as its chat box attaches them. */
   editAttachTo?: QueuedEditAttachTarget
 }): React.JSX.Element {
-  const updateSettings = useAppStore((store) => store.updateSettings)
   const regionRef = useRef<HTMLDivElement>(null)
   const queueRef = useRef<HTMLDivElement>(null)
   const { cards, pause } = controller
@@ -54,12 +55,8 @@ export function NativeChatQueuedMessageList({
     setExpanded(true)
   }
   const newest = cards.at(-1)
-  const attentionCard = !expanded
-    ? cards.find(
-        (card) =>
-          card.state === 'returned' || card.pausedReason === QUEUED_MESSAGE_PAUSED_SEND_FAILED
-      )
-    : undefined
+  const steerableHead = controller.queueCapable ? headSteerableQueuedMessageCard(cards) : null
+  const attentionCard = !expanded ? cards.find(queuedMessageCardNeedsAttention) : undefined
   const attentionCaption = attentionCard
     ? queuedMessageCardCaption(attentionCard, agentName, statedFailures)
     : null
@@ -79,10 +76,6 @@ export function NativeChatQueuedMessageList({
       listRef.current.scrollTop = listRef.current.scrollHeight
     }
   }, [cards, newest, newestIsPersons])
-  // Only a host that queues sends has queueing to turn off; a kept card shows without it.
-  const turnOffQueueing = controller.queueCapable
-    ? () => void updateSettings({ nativeChatQueueFollowUps: false })
-    : undefined
   // Refocus only if focus stayed on the queue; an active prompt card takes priority over the composer.
   const refocusAfter = (action: Promise<unknown>): void => {
     void action.then(() => {
@@ -133,7 +126,7 @@ export function NativeChatQueuedMessageList({
               // Bound queue height to preserve transcript/composer space; allow extra room for edit thumbnails.
               className={cn(
                 'scrollbar-sleek divide-y divide-border overflow-y-auto',
-                controller.editor?.images?.chips.length ? 'max-h-72' : 'max-h-40'
+                controller.editor ? 'max-h-72' : 'max-h-40'
               )}
             >
               <NativeChatQueuedMessageRows
@@ -147,7 +140,8 @@ export function NativeChatQueuedMessageList({
                     chatWorktreeId={chatWorktreeId}
                     agentName={agentName}
                     statedFailures={statedFailures}
-                    showsSteerShortcut={controller.queueCapable && card === newest}
+                    showsSteerShortcut={card === steerableHead}
+                    agentWorking={controller.isWorking}
                     steerHeld={steerHeld}
                     pending={controller.pending(card.messageId)}
                     onSteer={() => refocusAfter(controller.steer(card.messageId))}
@@ -164,7 +158,6 @@ export function NativeChatQueuedMessageList({
                     }
                     editAttachTo={editAttachTo}
                     editDisabled={controller.editor !== undefined}
-                    onTurnOffQueueing={turnOffQueueing}
                   />
                 )}
               />

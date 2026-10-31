@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { PluginHostListEntry } from '../../../preload/api-types'
-import type { PluginChangeEvent } from '../../../shared/plugins/plugin-change-event'
+import type { PluginChangeEvent } from '../../../shared/plugins/events/plugin-change-event'
 import type { usePluginPanelsStore } from './plugin-panels'
 
 type List = () => Promise<PluginHostListEntry[]>
@@ -8,7 +8,7 @@ type PanelStore = typeof usePluginPanelsStore
 
 function plugin(): PluginHostListEntry {
   return {
-    pluginKey: 'orca-samples.current',
+    pluginKey: 'samples.current',
     consentFingerprint: 'test',
     name: 'Current',
     version: '1',

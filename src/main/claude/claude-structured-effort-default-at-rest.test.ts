@@ -21,18 +21,18 @@ import { structuredAgentSessionSendSelection } from '../../shared/structured-age
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { composeCodexSessionOptionCatalog } from '../codex/codex-structured-model-catalog'
 import { listedModels } from './claude-structured-model-catalog'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   PROVIDER_SESSION_ID,
   fakeClaude,
   identityFor,
-  recordingJournalSink,
+  recordingJournalSink
+} from './claude-structured-session-test-support'
+import {
   claudeStartupSettled,
   claudeOpened
-} from './claude-structured-session-test-support'
+} from './claude-structured-startup-settled-test-support'
 
 const SESSION = 'session-1'
 const ACCOUNT_HOME = '/accounts/claude'
@@ -109,6 +109,7 @@ async function startChild(
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: false,
+      cliFlag: async () => 'supported' as const,
       continuesChain: false
     }),
     onEvent: (event) => events.push(event),
@@ -191,8 +192,15 @@ function catalogService(store: AgentModelCatalogStore, record: AgentSessionRecor
   })
 }
 
-function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
+/** The options a client reads for the chat once its child is gone. */
+async function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
   const modelCatalog = catalogService(store, record)
+  // Acquiring this scope is separate from the passive picker read below.
+  await modelCatalog.prepareSaved({
+    agent: record.provider,
+    sessionId: SESSION,
+    inSessionWorkspace: true
+  })
   const resting = {
     child: null,
     params: { provider: 'claude' },
@@ -220,7 +228,11 @@ function readAtRest(store: AgentModelCatalogStore, record: AgentSessionRecord) {
     openConversation: async () => resting,
     conversation: async () => resting
   } as unknown as StructuredAgentSessionMutationContext
-  return readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+  try {
+    return await readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
+  } finally {
+    modelCatalog.stop()
+  }
 }
 
 function pickerEffortRow(result: Awaited<ReturnType<typeof readAtRest>>, agent = 'claude') {
@@ -422,7 +434,14 @@ describe('Claude effort default at rest', () => {
     const resting = await readAtRest(new AgentModelCatalogStore(), record)
 
     expect(resting.models).toEqual([
-      { id: 'gpt-5.5', label: 'gpt-5.5', isDefault: false, efforts: [], effortsKnown: false }
+      {
+        id: 'gpt-5.5',
+        label: 'GPT 5.5',
+        description: 'gpt-5.5',
+        isDefault: false,
+        efforts: [],
+        effortsKnown: false
+      }
     ])
     expect(pickerEffort(resting, 'codex')).toBe('high')
   })
@@ -461,7 +480,13 @@ describe('Claude effort default at rest', () => {
 
     const result = await readAtRest(store, record)
 
-    expect(result.current).toEqual({ model: 'gpt-5.5', defaulted: [], permissionMode: 'ask' })
+    expect(result.current).toEqual({
+      model: 'gpt-5.5',
+      defaulted: [],
+      permissionMode: 'ask',
+      acceptedInputSources: { model: 'saved' }
+    })
+    expect(result.current?.effort).toBeUndefined()
   })
 
   it("never saves the applied effort as the chat's pick, yet shows it at rest", async () => {

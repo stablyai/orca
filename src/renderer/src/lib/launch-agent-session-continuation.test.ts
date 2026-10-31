@@ -4,10 +4,13 @@ const launchAgentInNewTab = vi.hoisted(() => vi.fn())
 const writeClipboardText = vi.hoisted(() => vi.fn(async () => undefined))
 const ensureDetectedAgentsForWorktree = vi.hoisted(() => vi.fn())
 const toast = vi.hoisted(() => ({ error: vi.fn(), success: vi.fn(), warning: vi.fn() }))
-const store: { settings: { disabledTuiAgents: string[]; experimentalNativeChat?: boolean } } =
-  vi.hoisted(() => ({
-    settings: { disabledTuiAgents: [] }
-  }))
+const store: {
+  settings: { disabledTuiAgents: string[]; nativeChatProviders?: Readonly<Record<string, boolean>> }
+  getKnownWorktreeById: () => undefined
+} = vi.hoisted(() => ({
+  settings: { disabledTuiAgents: [] },
+  getKnownWorktreeById: () => undefined
+}))
 
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/launch-agent-in-new-tab', () => ({ launchAgentInNewTab }))
@@ -167,7 +170,7 @@ describe('launchAgentSessionContinuation', () => {
     expect(writeClipboardText).toHaveBeenCalledWith('continue the unfinished task')
   })
 
-  it('still reports a confirmed delivery as a success', async () => {
+  it('keeps the confirmed-delivery toast visible until dismissed', async () => {
     launchAgentInNewTab.mockImplementation((args: { onPromptDelivered?: () => void }): unknown => {
       args.onPromptDelivered?.()
       return {
@@ -184,7 +187,10 @@ describe('launchAgentSessionContinuation', () => {
       launchSource: 'sidebar'
     })
 
-    expect(toast.success).toHaveBeenCalledWith('Session context sent to Codex in a new session.')
+    expect(toast.success).toHaveBeenCalledWith(
+      'Session context sent to Codex in a new session.',
+      expect.objectContaining({ duration: Infinity, dismissible: true })
+    )
     expect(toast.warning).not.toHaveBeenCalled()
   })
 })
@@ -210,7 +216,7 @@ it('retains the accepted route across detection, and explicit chat declines with
         requestedSurface
       }
     })
-    store.settings.experimentalNativeChat = false
+    store.settings.nativeChatProviders = {}
     detected.resolve(['claude'])
     await pending
     const args = launchAgentInNewTab.mock.calls.at(-1)?.[0]

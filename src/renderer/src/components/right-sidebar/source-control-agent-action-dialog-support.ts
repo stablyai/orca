@@ -120,13 +120,25 @@ export function buildSourceControlAgentStatusCopy(args: {
     detecting
   } = args
   if (selectedAgentUnavailable) {
-    return `${getAgentCatalog().find((entry) => entry.id === selectedAgent)?.label ?? selectedAgent} is not enabled or was not detected on this workspace host.`
+    return translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.agentNotEnabledOrDetected',
+      '{{agent}} is not enabled or was not detected on this workspace host.',
+      {
+        agent: getAgentCatalog().find((entry) => entry.id === selectedAgent)?.label ?? selectedAgent
+      }
+    )
   }
   if (connectionUnavailable) {
-    return 'Unable to resolve the workspace connection.'
+    return translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.workspaceConnectionUnresolved',
+      'Unable to resolve the workspace connection.'
+    )
   }
   if (!hasEnabledAgents && !detecting) {
-    return 'No enabled agents were detected on this workspace host.'
+    return translate(
+      'auto.components.right.sidebar.SourceControlAgentActionDialog.noEnabledAgentsDetected',
+      'No enabled agents were detected on this workspace host.'
+    )
   }
   return null
 }

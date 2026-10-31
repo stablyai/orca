@@ -6,13 +6,15 @@ import { ChevronLeft, Check, RefreshCw, User } from 'lucide-react-native'
 import { loadHosts } from '../transport/host-store'
 import { useHostClient } from '../transport/host-client-hooks'
 import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-accounts-screen-styles'
 import { useNow } from '../hooks/use-now'
 import { ClaudeIcon, OpenAIIcon } from '../components/AgentIcons'
+import { AccountsSnapshotError, decodeAccountsSnapshot } from '../components/accounts-snapshot'
 import {
   type AccountsSnapshot,
   type ProviderKey,
-  decodeAccountsSnapshot,
   getActiveProviderRateLimits,
   getInactiveProviderUsage,
   getUsageBarState,
@@ -27,12 +29,16 @@ import {
 import { CodexResetCreditAction } from '../components/CodexResetCreditAction'
 import { useCodexResetCreditAction } from '../components/use-codex-reset-credit-action'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { useRouteHandoff } from '../navigation/route-handoff'
 
 type AccountsNotice = { title: string; message: string }
 
 // Use page ConfirmModal because RN Web Alert.alert is a no-op; Back must hand off to shell’s native stack.
 export function MobileAccountsScreen() {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const router = useRouteHandoff()
   const insets = useSafeAreaInsets()
   const { hostId } = useLocalSearchParams<{ hostId: string }>()
@@ -54,8 +60,8 @@ export function MobileAccountsScreen() {
   const rejectInvalidSnapshot = useCallback(() => {
     // Fail closed on unrecognized snapshot: stale data can expose finite reset for wrong account.
     setSnapshot(null)
-    setError('Invalid accounts snapshot from host')
-  }, [])
+    setError(t('accounts.screen.invalidSnapshot', 'Invalid accounts snapshot from host'))
+  }, [t])
   const {
     supported: codexResetSupported,
     resetting: resettingCodex,
@@ -94,7 +100,7 @@ export function MobileAccountsScreen() {
       }
       const host = hosts.find((h) => h.id === hostId)
       if (!host) {
-        setError('Host not found')
+        setError(t('accounts.screen.hostNotFound', 'Host not found'))
         return
       }
       setHostName(host.name)
@@ -102,7 +108,7 @@ export function MobileAccountsScreen() {
     return () => {
       stale = true
     }
-  }, [hostId])
+  }, [hostId, t])
 
   // Stream desktop poll/account-switch updates, falling back to one-shot accounts.list on subscription error.
   useEffect(() => {
@@ -138,7 +144,7 @@ export function MobileAccountsScreen() {
         setError(res.error.message)
       }
     } catch (e) {
-      if (e instanceof Error && e.message === 'Invalid accounts snapshot from host') {
+      if (e instanceof AccountsSnapshotError) {
         rejectInvalidSnapshot()
       } else {
         setError(e instanceof Error ? e.message : String(e))
@@ -164,27 +170,25 @@ export function MobileAccountsScreen() {
           : codexTarget?.runtime === 'wsl'
             ? 'accounts.selectCodexForTarget'
             : 'accounts.selectCodex'
+      const title = t('accounts.screen.switchFailed', 'Could not switch account')
       try {
         // Use distinct WSL-targeted RPC: older hosts silently strip unknown fields, so version skew must fail before mutation.
         const params =
           codexTarget?.runtime === 'wsl' ? { accountId, target: codexTarget } : { accountId }
         const res = await client.sendRequest(method, params)
         if (!res.ok) {
-          setNotice({ title: 'Could not switch account', message: res.error.message })
+          setNotice({ title, message: res.error.message })
         } else {
           // Refresh optimistically so disconnected subscription cannot delay feedback.
           await refresh()
         }
       } catch (e) {
-        setNotice({
-          title: 'Could not switch account',
-          message: e instanceof Error ? e.message : String(e)
-        })
+        setNotice({ title, message: e instanceof Error ? e.message : String(e) })
       } finally {
         setBusyAccountId(null)
       }
     },
-    [client, refresh, snapshot]
+    [client, refresh, snapshot, t]
   )
 
   const renderProviderSection = (provider: ProviderKey, title: string) => {
@@ -215,20 +219,22 @@ export function MobileAccountsScreen() {
             disabled={busyAccountId !== null || resettingCodex || connState !== 'connected'}
           >
             <View style={styles.rowMain}>
-              <Text style={styles.rowTitle}>System default</Text>
-              <Text style={styles.rowSubtitle}>Use the agent&apos;s own login</Text>
+              <Text style={styles.rowTitle}>{t('accounts.screen.default', 'System default')}</Text>
+              <Text style={styles.rowSubtitle}>
+                {t('accounts.screen.agentLogin', "Use the agent's own login")}
+              </Text>
               {/* Show system-default login usage for users without managed accounts. */}
               {activeAccountId === null && hasActiveProviderUsage(activeUsage) ? (
                 <View style={styles.usageRow}>
                   <UsageBar
-                    label="5h"
+                    label={t('accounts.screen.sessionWindow', '5h')}
                     usedPercent={activeSessionBar.usedPercent}
                     unavailable={activeSessionBar.unavailable}
                     loading={activeSessionBar.loading}
                     resetText={getWindowResetLabel(activeUsage, 'session', now)}
                   />
                   <UsageBar
-                    label="7d"
+                    label={t('accounts.screen.weeklyWindow', '7d')}
                     usedPercent={activeWeeklyBar.usedPercent}
                     unavailable={activeWeeklyBar.unavailable}
                     loading={activeWeeklyBar.loading}
@@ -276,14 +282,14 @@ export function MobileAccountsScreen() {
                     </Text>
                     <View style={styles.usageRow}>
                       <UsageBar
-                        label="5h"
+                        label={t('accounts.screen.sessionWindow', '5h')}
                         usedPercent={sessionBar.usedPercent}
                         unavailable={sessionBar.unavailable}
                         loading={sessionBar.loading}
                         resetText={getWindowResetLabel(usage, 'session', now)}
                       />
                       <UsageBar
-                        label="7d"
+                        label={t('accounts.screen.weeklyWindow', '7d')}
                         usedPercent={weeklyBar.usedPercent}
                         unavailable={weeklyBar.unavailable}
                         loading={weeklyBar.loading}
@@ -323,38 +329,25 @@ export function MobileAccountsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <View style={styles.topRow}>
-        <Pressable
-          style={styles.backButton}
-          onPress={() => router.back()}
-          accessibilityRole="button"
-          accessibilityLabel="Back"
-        >
-          <ChevronLeft size={22} color={colors.textPrimary} />
-        </Pressable>
-        <View style={styles.titleWrap}>
-          <Text style={styles.heading}>Accounts</Text>
-          {hostName ? (
-            <Text style={styles.subheading} numberOfLines={1}>
-              {hostName}
-            </Text>
-          ) : null}
-        </View>
-        <Pressable
-          style={styles.iconButton}
-          onPress={refresh}
-          disabled={!client || refreshing || connState !== 'connected'}
-          hitSlop={8}
-          accessibilityRole="button"
-          accessibilityLabel="Refresh accounts"
-        >
-          {refreshing ? (
-            <ActivityIndicator size="small" color={colors.textSecondary} />
-          ) : (
-            <RefreshCw size={18} color={colors.textSecondary} />
-          )}
-        </Pressable>
-      </View>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={() => router.back()}
+            accessibilityLabel={t('common.back', 'Back')}
+          />
+        }
+        title={t('accounts.screen.title', 'Accounts')}
+        subtitle={hostName || undefined}
+        trailing={
+          <NavBarButton
+            icon={refreshing ? RefreshingIcon : RefreshCw}
+            onPress={() => void refresh()}
+            disabled={!client || refreshing || connState !== 'connected'}
+            accessibilityLabel={t('accounts.screen.refreshAccounts', 'Refresh accounts')}
+          />
+        }
+      />
 
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + spacing.xl }]}
@@ -362,7 +355,11 @@ export function MobileAccountsScreen() {
         {connState !== 'connected' && !snapshot ? (
           <View style={styles.placeholder}>
             <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Connecting to {hostName || 'host'}…</Text>
+            <Text style={styles.placeholderText}>
+              {hostName
+                ? t('accounts.screen.connectingTo', 'Connecting to {{name}}…', { name: hostName })
+                : t('accounts.screen.connecting', 'Connecting to host…')}
+            </Text>
           </View>
         ) : error && !snapshot ? (
           <View style={styles.placeholder}>
@@ -371,7 +368,9 @@ export function MobileAccountsScreen() {
         ) : !snapshot ? (
           <View style={styles.placeholder}>
             <ActivityIndicator color={colors.textSecondary} />
-            <Text style={styles.placeholderText}>Loading accounts…</Text>
+            <Text style={styles.placeholderText}>
+              {t('accounts.screen.loadingAccounts', 'Loading accounts…')}
+            </Text>
           </View>
         ) : (
           <>
@@ -380,7 +379,10 @@ export function MobileAccountsScreen() {
             <View style={styles.footerHint}>
               <User size={14} color={colors.textMuted} />
               <Text style={styles.footerHintText}>
-                Add or re-authenticate accounts from desktop Settings → Accounts.
+                {t(
+                  'accounts.screen.manageAccountsHint',
+                  'Add or re-authenticate accounts from desktop Settings → Accounts.'
+                )}
               </Text>
             </View>
           </>
@@ -390,7 +392,7 @@ export function MobileAccountsScreen() {
         visible={codexResetConfirmation !== null}
         title={codexResetConfirmation?.title ?? ''}
         message={codexResetConfirmation?.message}
-        confirmLabel="Use reset"
+        confirmLabel={t('accounts.screen.useReset', 'Use reset')}
         onConfirm={acceptCodexReset}
         onCancel={cancelCodexReset}
       />
@@ -398,10 +400,14 @@ export function MobileAccountsScreen() {
         visible={notice !== null}
         title={notice?.title ?? ''}
         message={notice?.message}
-        confirmLabel="OK"
+        confirmLabel={t('common.ok', 'OK')}
         cancelLabel={null}
         onCancel={() => setNotice(null)}
       />
     </SafeAreaView>
   )
+}
+
+function RefreshingIcon({ color }: { color?: string }) {
+  return <ActivityIndicator size="small" color={color} />
 }

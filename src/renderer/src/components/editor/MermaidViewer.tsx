@@ -1,23 +1,49 @@
-import React, { useLayoutEffect, useRef } from 'react'
+import React, { useCallback, useLayoutEffect, useRef } from 'react'
 import { scrollTopCache, setWithLRU } from '@/lib/scroll-cache'
 import MermaidBlock from './MermaidBlock'
+import { useMermaidDiagramExpand } from './use-mermaid-diagram-expand'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
 
 type MermaidViewerProps = {
   content: string
-  filePath: string
+  scrollCacheKey: string
 }
 
 // Render full .mmd/.mermaid files directly as diagram source.
 export default function MermaidViewer({
   content,
-  filePath
+  scrollCacheKey
 }: MermaidViewerProps): React.JSX.Element {
   const rootRef = useRef<HTMLDivElement>(null)
+  const pendingScrollTopRef = useRef<number | undefined>(undefined)
+  const renderCompleteRef = useRef(false)
+  const restoreObserverRef = useRef<ResizeObserver | null>(null)
   const isDark = useDocumentDarkTheme()
+  const expandDiagram = useMermaidDiagramExpand()
+  const diagramSource = content.trim()
 
-  // Source and diagram heights differ; keep their scroll positions separate.
-  const scrollCacheKey = `${filePath}:mermaid-diagram`
+  const cancelPendingScroll = useCallback(() => {
+    pendingScrollTopRef.current = undefined
+    restoreObserverRef.current?.disconnect()
+    restoreObserverRef.current = null
+  }, [])
+  const restorePendingScroll = useCallback(() => {
+    const container = rootRef.current
+    const targetScrollTop = pendingScrollTopRef.current
+    if (!container || targetScrollTop === undefined || container.clientHeight === 0) {
+      return
+    }
+    const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
+    if (!renderCompleteRef.current && maxScrollTop < targetScrollTop) {
+      return
+    }
+    container.scrollTop = Math.min(targetScrollTop, maxScrollTop)
+    cancelPendingScroll()
+  }, [cancelPendingScroll])
+  const onRenderComplete = useCallback(() => {
+    renderCompleteRef.current = true
+    restorePendingScroll()
+  }, [restorePendingScroll])
 
   useLayoutEffect(() => {
     const container = rootRef.current
@@ -53,38 +79,40 @@ export default function MermaidViewer({
   useLayoutEffect(() => {
     const container = rootRef.current
     const targetScrollTop = scrollTopCache.get(scrollCacheKey)
+    pendingScrollTopRef.current = targetScrollTop
+    renderCompleteRef.current = false
     if (!container || targetScrollTop === undefined) {
       return
     }
-
-    let frameId = 0
-    let attempts = 0
-
-    // Async SVG may miss the first frame; bound restoration retries as MarkdownPreview does.
-    const tryRestore = (): void => {
-      const maxScrollTop = Math.max(0, container.scrollHeight - container.clientHeight)
-      const nextScrollTop = Math.min(targetScrollTop, maxScrollTop)
-      container.scrollTop = nextScrollTop
-
-      if (Math.abs(container.scrollTop - targetScrollTop) <= 1 || maxScrollTop >= targetScrollTop) {
-        return
-      }
-
-      attempts += 1
-      if (attempts < 30) {
-        frameId = window.requestAnimationFrame(tryRestore)
-      }
+    const observer =
+      typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(restorePendingScroll)
+    restoreObserverRef.current = observer
+    observer?.observe(container)
+    // User scrolling wins over a restore that is still waiting on render or layout.
+    const userScrollEvents = ['wheel', 'pointerdown', 'touchstart', 'keydown'] as const
+    userScrollEvents.forEach((type) =>
+      container.addEventListener(type, cancelPendingScroll, { passive: true })
+    )
+    restorePendingScroll()
+    return () => {
+      observer?.disconnect()
+      cancelPendingScroll()
+      renderCompleteRef.current = false
+      userScrollEvents.forEach((type) => container.removeEventListener(type, cancelPendingScroll))
     }
-
-    tryRestore()
-    return () => window.cancelAnimationFrame(frameId)
-  }, [scrollCacheKey, content])
+  }, [scrollCacheKey, diagramSource, restorePendingScroll, cancelPendingScroll])
 
   return (
     <div ref={rootRef} className="mermaid-viewer h-full min-h-0 overflow-auto scrollbar-editor">
       <div className="mermaid-viewer-canvas">
         {/* DOMPurify strips foreignObject HTML labels; request native SVG text so labels survive sanitization. */}
-        <MermaidBlock content={content.trim()} isDark={isDark} htmlLabels={false} />
+        <MermaidBlock
+          content={diagramSource}
+          isDark={isDark}
+          htmlLabels={false}
+          onRenderComplete={onRenderComplete}
+          onExpand={expandDiagram}
+        />
       </div>
     </div>
   )

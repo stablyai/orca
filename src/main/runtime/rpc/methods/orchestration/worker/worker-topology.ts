@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../../../../../shared/agent-session-host-authority'
 import { narrowStructuredLaunchSeedOptions } from '../../../../../../shared/native-chat/input/native-chat-session-option-defaults'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
@@ -11,6 +12,8 @@ export type WorkerEffect = {
   action?: string
   role?: string
   id?: string
+  /** A created worktree's name, so the coordinator can tell the user where the worker runs. */
+  name?: string
   state?: string
   tabId?: string
   leafId?: string
@@ -63,7 +66,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
   launchPreferences?: AgentLaunchPreferences
   taskId: string
   effects: WorkerEffect[]
-}): Promise<{ handle: string; warning?: string }> {
+}): Promise<RuntimeTerminalCreate> {
   const terminal = await args.runtime.createTerminal(`id:${args.worktreeId}`, {
     // Resolve ids through agent config; cursor alone opens the desktop app, its CLI is cursor-agent.
     startupAgent: args.agent,
@@ -82,7 +85,7 @@ export async function createExistingWorktreeWorkerTerminal(args: {
     surface: terminal.surface,
     warning: terminal.warning
   })
-  return { handle: terminal.handle, warning: terminal.warning }
+  return terminal
 }
 
 /** Return structured workers in the terminal authority shape; registry-backed pane/incarnation getters keep requireWorkerAuthority mode-independent. */

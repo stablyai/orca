@@ -5,9 +5,7 @@ import {
   AGENT_SESSION_RECOVERY_CAPSULE_FILE,
   AgentSessionRecoveryCapsule
 } from '../../runtime/agent-session-recovery-capsule'
-import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import {
-  insertTestJournalRowJson,
   liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
@@ -27,26 +25,17 @@ afterEach(() => vi.restoreAllMocks())
 
 function newerOrcaRow(root: string, sessionId: string = SESSION): void {
   const { db } = openTestJournalHostDatabase(root)
-  const last = liveTestJournalRows(db, sessionId).at(-1)
-  const parsed: unknown = last ? JSON.parse(last.rowJson) : null
-  if (!last || typeof parsed !== 'object' || parsed === null || !('epoch' in parsed)) {
-    throw new Error('the chat has no journal row to follow')
+  const first = liveTestJournalRows(db, sessionId)[0]
+  if (!first) {
+    throw new Error('the chat has no founding row')
   }
-  const { epoch } = parsed
-  const seq = last.seq + 1
-  insertTestJournalRowJson(
+  const anchor = JSON.parse(first.rowJson)
+  db.prepare('UPDATE journal_outcome_epochs SET format = 99 WHERE session_id = ?').run(sessionId)
+  updateTestJournalRowJson(
     db,
     sessionId,
-    seq,
-    JSON.stringify({
-      v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-      kind: 'future-mark',
-      epoch,
-      seq,
-      fence: 1,
-      ts: NOW
-    }),
-    NOW
+    1,
+    JSON.stringify({ ...anchor, v: 99, outcomeFormat: 99 })
   )
 }
 
@@ -57,10 +46,13 @@ function offersFile(root: string): Promise<Buffer> {
 async function keptWithoutAWord(
   host: Awaited<ReturnType<typeof interruptedRestart>>['host'],
   root: string,
-  acquire: ReturnType<typeof vi.fn>
+  acquire: ReturnType<typeof vi.fn>,
+  unopenedJournalIsNewer = false
 ) {
   const before = await offersFile(root)
-  expect(await host.restartResume.list()).toEqual([])
+  expect((await host.restartResume.list()).map((offer) => offer.sessionId)).toEqual(
+    unopenedJournalIsNewer ? [SESSION] : []
+  )
   expect(await offersFile(root)).toEqual(before)
   expect((await host.restartResume.continueAfterRestart([SESSION], 'modal')).continued).toEqual([])
   expect(acquire).not.toHaveBeenCalled()
@@ -71,10 +63,10 @@ async function keptWithoutAWord(
   expect(await capsule.listFailed(NOW)).toEqual([])
 }
 
-it('keeps the offer of a chat whose journal a newer Orca wrote, and offers, runs and counts nothing', async () => {
+it('lists an unopened newer journal passively and preserves its offer when acting is refused', async () => {
   const { host, root, acquire } = await interruptedRestart()
   newerOrcaRow(root)
-  await keptWithoutAWord(host, root, acquire)
+  await keptWithoutAWord(host, root, acquire, true)
 })
 
 it('keeps the offer of every chat in a newer Orca database, and offers, runs and counts nothing', async () => {
@@ -107,7 +99,7 @@ it('keeps the offer and files nothing when the send is refused as a newer Orca c
   expect(await host.restartResume.listFailures()).toEqual([])
 })
 
-it('keeps a failure already filed for a chat a newer Orca saved since, but does not show it', async () => {
+it('lists a filed failure passively and hides it once an action discovers a newer journal', async () => {
   const { host, root, acquire } = await interruptedRestart()
   await host.restartResume.list()
   acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
@@ -116,6 +108,8 @@ it('keeps a failure already filed for a chat a newer Orca saved since, but does 
   await host.close(SESSION, 'evict')
   newerOrcaRow(root)
 
+  expect(await host.restartResume.listFailures()).toMatchObject([{ sessionId: SESSION }])
+  await host.restartResume.continueAfterRestart([SESSION], 'retry')
   expect(await host.restartResume.listFailures()).toEqual([])
   expect(
     (await new AgentSessionRecoveryCapsule(root).listFailed(NOW)).map((f) => f.marker.sessionId)
@@ -173,7 +167,8 @@ it.each([
 
     if (listFirst) {
       expect((await host.restartResume.list()).map((candidate) => candidate.sessionId)).toEqual([
-        SESSION
+        SESSION,
+        NEWER
       ])
     }
     await host.restartResume.dismiss(undefined, audience)

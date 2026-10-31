@@ -16,6 +16,8 @@ describe('getRuntimeWorktreeRemovalOptionsKey', () => {
     const keys = [
       {},
       { force: true },
+      { deleteBranch: false },
+      { deleteBranch: true },
       { runHooks: true },
       { allowUnverifiedPtyStop: true },
       { allowFailedArchiveHook: true }

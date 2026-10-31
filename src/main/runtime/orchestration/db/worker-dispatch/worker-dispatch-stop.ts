@@ -5,6 +5,7 @@ import {
   type ContextOnlyDispatchReleaseResult
 } from '../../context-only-dispatch-release'
 import { isEquivalentPaneKey } from '../pane-key-match'
+import { refuseStopWhileKeptOpen } from '../worker-terminal/worker-terminal-user-keep'
 import type { OrchestrationDb } from '../orchestration-db'
 import { reconcileTaskAfterDispatchInterruption } from '../dispatch-context/task-dispatch-reconciliation'
 import {
@@ -67,6 +68,7 @@ export function beginWorkerStop(
       this.db.exec('COMMIT')
       return { disposition: 'already_settled', worker, dispatch }
     }
+    refuseStopWhileKeptOpen(this, dispatchId)
     // A different runtime epoch may retry a stranded stop; this epoch must preserve its in-flight stopping verdict for the exit event.
     if (
       !['ready', 'start_unknown'].includes(worker.state) &&

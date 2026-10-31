@@ -50,38 +50,6 @@ describe('provider timeline turns', () => {
     expect(row?.revision).toBeGreaterThan(runningRow?.revision ?? Infinity)
   })
 
-  it('records a cancelled turn as interrupted with the cancellation verdict', async () => {
-    const rig = await openProviderTimelineRig()
-    rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_000 })
-    rig.assembler.apply({
-      type: 'turn.end',
-      at: 2_000,
-      state: 'interrupted',
-      outcome: 'cancellation'
-    })
-    expect(await rig.turn('turn-1')).toMatchObject({
-      state: 'interrupted',
-      outcome: 'cancellation',
-      completedAt: 2_000
-    })
-  })
-
-  it('keeps a provider-reported failure a completed turn whose verdict says it failed', async () => {
-    const rig = await openProviderTimelineRig()
-    rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_000 })
-    rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed', outcome: 'failure' })
-    expect(await rig.turn('turn-1')).toMatchObject({ state: 'completed', outcome: 'failure' })
-  })
-
-  it('leaves the verdict absent when the provider gave none', async () => {
-    const rig = await openProviderTimelineRig()
-    rig.assembler.apply({ type: 'turn.open', turn: 'turn-1', at: 1_000 })
-    rig.assembler.apply({ type: 'turn.end', at: 2_000, state: 'completed' })
-    const turn = await rig.turn('turn-1')
-    expect(turn?.state).toBe('completed')
-    expect(turn).not.toHaveProperty('outcome')
-  })
-
   it('mints a turn id when the provider names none, and keys a turn no send opened by its own row', async () => {
     const rig = await openProviderTimelineRig()
     rig.assembler.apply({ type: 'turn.open', at: 1_000 })

@@ -1,5 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { resolve } from 'node:path'
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/setup-agent-sequencing'
+import type { CreateWorktreeResult } from '../../shared/worktree/create-types'
 import { resolveRegisteredWorktreePath } from './registered-worktree-roots-cache'
 import { computeWorkspaceRootAsync } from './worktree-logic'
 import type * as WorktreeLogic from './worktree-logic'
@@ -690,7 +692,9 @@ describe('registerWorktreeHandlers', () => {
           launch_source: 'new_workspace_composer',
           request_kind: 'new'
         },
-        surfaceOwner: false
+        surfaceOwner: false,
+        // The window's own create is the user's act (E9).
+        wslUserAct: true
       },
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
@@ -705,7 +709,8 @@ describe('registerWorktreeHandlers', () => {
           ORCA_WORKTREE_PATH: '/workspace/improve-dashboard'
         },
         activate: false,
-        surfaceOwner: false
+        surfaceOwner: false,
+        wslUserAct: true
       },
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
@@ -779,15 +784,17 @@ describe('registerWorktreeHandlers', () => {
           request_kind: 'new'
         }
       }
-    })) as { setup?: { command?: string; runnerScriptPath: string } }
+    })) as { setup?: CreateWorktreeResult['setup'] }
 
     expect(result.setup).toEqual(
       expect.objectContaining({
         runnerScriptPath: 'C:\\workspace\\repo\\.git\\orca\\setup-runner.sh',
-        command: expect.stringContaining('bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh')
+        command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
       })
     )
-    expect(result.setup?.command).toContain('printf')
+    expect(result.setup?.envVars[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
+      'bash /mnt/c/workspace/repo/.git/orca/setup-runner.sh'
+    )
   })
 
   it('opens Setup beside the startup terminal without surfacing the workspace', async () => {
@@ -822,15 +829,10 @@ describe('registerWorktreeHandlers', () => {
 
     expect(runtimeStub.createTerminal).toHaveBeenCalledTimes(2)
     expect(runtimeStub.splitTerminal).not.toHaveBeenCalled()
+    // The setup command itself is pinned in the startup-and-setup test above.
     expect(runtimeStub.createTerminal).toHaveBeenLastCalledWith(
       'id:repo-1::/workspace/improve-dashboard',
-      {
-        title: 'Setup',
-        command: expect.stringContaining('setup-runner.sh'),
-        env: expect.any(Object),
-        activate: false,
-        surfaceOwner: false
-      },
+      expect.objectContaining({ title: 'Setup', activate: false, surfaceOwner: false }),
       expect.objectContaining({ id: 'repo-1::/workspace/improve-dashboard' })
     )
   })

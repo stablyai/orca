@@ -12,6 +12,10 @@ export type JournalOperationReceipt = {
   committed: () => void
 }
 
+export type JournalReceiptPreparation =
+  | JournalOperationReceipt
+  | ((rows: readonly JournalRow[]) => JournalOperationReceipt | undefined)
+
 export function composeJournalOperationReceipts(
   ...receipts: JournalOperationReceipt[]
 ): JournalOperationReceipt {
@@ -43,6 +47,7 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
+  prepare?: (db: Database.Database, rows: readonly JournalRow[], savedAt: number) => () => void
   commit: (rows: readonly JournalRow[], savedAt: number) => void
   /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
@@ -53,21 +58,27 @@ export class JournalRowWriter {
 
   enqueue(
     build: (seq: number, ts: number) => JournalRow,
-    receipt?: JournalOperationReceipt
+    prepareReceipt?: JournalReceiptPreparation
   ): Promise<JournalRow> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
       const savedAt = this.deps.now()
       const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
+      const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
+      const streamed = !receipt && this.streamed([row])
       this.deps.database().transaction(
         (db) => {
-          insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          if (!this.deps.prepare) {
+            insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          }
+          const adopt = this.deps.prepare?.(db, [row], savedAt)
           receipt?.write(db, row)
+          return adopt
         },
-        !receipt && this.streamed([row])
+        streamed,
+        (adopt) => adopt?.()
       )
-      // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
       receipt?.committed()
       this.deps.commit([row], savedAt)
       return row
@@ -77,7 +88,7 @@ export class JournalRowWriter {
   /** Plan on the write lane and commit all rows atomically; receiptRow identifies the receipt target. */
   enqueueRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
-    receipt?: JournalOperationReceipt,
+    receipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): Promise<JournalRow[]> {
     return this.deps.serialize(() => this.writeRows(plan, receipt, receiptRow))
@@ -86,7 +97,7 @@ export class JournalRowWriter {
   /** Caller must already own the write lane. */
   writeRows(
     plan: () => readonly ((seq: number, ts: number) => JournalRow)[],
-    receipt?: JournalOperationReceipt,
+    prepareReceipt?: JournalReceiptPreparation,
     receiptRow?: (rows: readonly JournalRow[]) => JournalRow | undefined
   ): JournalRow[] {
     assertJournalWritable(this.deps.readOnly(), this.deps.sessionId)
@@ -99,14 +110,21 @@ export class JournalRowWriter {
     for (const row of rows) {
       assertJournalFence(row.fence, this.deps.highestFence())
     }
+    const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
+    const streamed = !receipt && this.streamed(rows)
     this.deps.database().transaction(
       (db) => {
-        for (const row of rows) {
-          insertJournalRow(db, this.deps.sessionId, row, ts)
+        if (!this.deps.prepare) {
+          for (const row of rows) {
+            insertJournalRow(db, this.deps.sessionId, row, ts)
+          }
         }
+        const adopt = this.deps.prepare?.(db, rows, ts)
         receipt?.write(db, receiptRow?.(rows))
+        return adopt
       },
-      !receipt && this.streamed(rows)
+      streamed,
+      (adopt) => adopt?.()
     )
     receipt?.committed()
     this.deps.commit(rows, ts)

@@ -6,7 +6,6 @@ import { notifyInstalledAgentSkillsChanged } from '@/hooks/installed-agent-skill
 import type { RepoSlice } from '../repos/repo-state'
 import { getProjectSetupRuntimeTarget } from './project-host-routing'
 import { mergeUpdatedProjectCompatibilityProject } from '../../../../shared/project-compatibility-merge'
-import { getProjectHostSetupProjectionFromState } from '../project-host-setup-selector'
 import { normalizeProjectRow } from '../../../../shared/project-catalog-row-normalization'
 
 export function createProjectUpdateActions(
@@ -17,23 +16,15 @@ export function createProjectUpdateActions(
     updateProject: async (projectId, updates, hostId) => {
       try {
         // Why: the caller names the host whose project row it edits; focus never picks it.
-        const state = get()
-        const owner = getProjectHostSetupProjectionFromState(state).setups.find(
-          (setup) => setup.projectId === projectId && setup.hostId === hostId
-        )
-        const endpointProjectId =
-          state.endpointProjectHostSetups.find(
-            (setup) => owner && setup.id === owner.id && setup.hostId === owner.hostId
-          )?.projectId ?? projectId
         const target = getProjectSetupRuntimeTarget(hostId)
         const updatedProject =
           target.kind === 'local'
-            ? await window.api.projects.update({ projectId: endpointProjectId, updates })
+            ? await window.api.projects.update({ projectId, updates })
             : (
                 await callRuntimeRpc<{ project: Project }>(
                   target,
                   'project.update',
-                  { projectId: endpointProjectId, updates },
+                  { projectId, updates },
                   { timeoutMs: 15_000 }
                 )
               ).project
@@ -44,8 +35,8 @@ export function createProjectUpdateActions(
         const normalizedProject = normalizeProjectRow(updatedProject)
         const runtimePreferenceChanged = 'localWindowsRuntimePreference' in updates
         set((state) => ({
-          endpointProjects: state.endpointProjects.map((project) =>
-            project.id === endpointProjectId
+          projects: state.projects.map((project) =>
+            project.id === projectId
               ? mergeUpdatedProjectCompatibilityProject(project, normalizedProject, updates)
               : project
           ),

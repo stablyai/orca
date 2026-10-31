@@ -142,7 +142,7 @@ describe('browser screencast lifecycle', () => {
       clearNavigationCaptureTimer: vi.fn(),
       bumpSnapshotGeneration: vi.fn(),
       observeGuestViewSize: () => false,
-      setDialogOpen: vi.fn()
+      openDialog: () => null
     })
 
     handler({}, 'Page.screencastFrame', { sessionId: 42, data: '' })

@@ -11,7 +11,6 @@ function baseParams(overrides: Partial<Parameters<typeof buildDispatchPreamble>[
     taskSpec: 'Implement the login form',
     coordinatorHandle: 'term_coord',
     workerHandle: 'term_worker',
-    heartbeatIntervalMinutes: 5,
     ...overrides
   }
 }
@@ -59,10 +58,9 @@ describe('buildDispatchPreamble', () => {
       .split('\n')
       .filter((line) => line.trimStart().startsWith('orca orchestration'))
 
-    expect(commandLines).toHaveLength(6)
+    expect(commandLines).toHaveLength(3)
     expect(result).not.toContain('\\\n')
     expect(commandLines.filter((line) => line.includes('--type worker_done'))).toHaveLength(1)
-    expect(commandLines.filter((line) => line.includes('--type heartbeat'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('orchestration ask'))).toHaveLength(1)
     expect(commandLines.filter((line) => line.includes('--type escalation'))).toHaveLength(1)
   })
@@ -109,12 +107,9 @@ describe('buildDispatchPreamble', () => {
     expect(section).toContain('do NOT run a sleep/poll loop')
     expect(section).toContain('do NOT keep calling')
     expect(section).toContain('A direct instruction from the user takes precedence')
-    expect(section).toMatch(/follow it without coordinator approval or a\s+fresh Dispatch/)
-    expect(section).toMatch(
-      /do not send lifecycle messages using the settled task or\s+Dispatch IDs/
-    )
+    expect(section).toMatch(/do it without the settled task or\s+Dispatch IDs/)
     expect(section).toContain('Never refuse a direct user request because you were a worker')
-    expect(section).toMatch(/fresh\s+preamble \+ TASK block/)
+    expect(section).toMatch(/fresh preamble\s+and TASK block/)
     expect(section).not.toMatch(/2 minutes/)
     expect(section).not.toMatch(/10 minutes/)
     expect(section).not.toMatch(/may exit/)
@@ -153,13 +148,8 @@ describe('buildDispatchPreamble', () => {
     expect(result).not.toMatch(/(^|\s)orca orchestration/m)
   })
 
-  it('tells the worker the heartbeat interval the user chose', () => {
-    const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: 15 }))
-    expect(result).toContain('# Send a heartbeat every 15 minutes')
-  })
-
-  it('never mentions heartbeats when the user turned them off', () => {
-    const result = buildDispatchPreamble(baseParams({ heartbeatIntervalMinutes: null }))
+  it('never mentions heartbeats', () => {
+    const result = buildDispatchPreamble(baseParams())
     expect(result).not.toMatch(/heartbeat/i)
     expect(cliFence(result)).toContain('orchestration ask')
   })
@@ -171,7 +161,6 @@ describe('buildDispatchPreamble', () => {
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
-      heartbeatIntervalMinutes: 5,
       baseDrift: {
         base: 'origin/main',
         behind: 7,
@@ -194,7 +183,6 @@ describe('buildDispatchPreamble', () => {
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
-      heartbeatIntervalMinutes: 5,
       baseDrift: {
         base: 'origin/main',
         behind: 0,
@@ -213,7 +201,6 @@ describe('buildDispatchPreamble', () => {
       taskSpec: 'do stuff',
       coordinatorHandle: 'term_c',
       workerHandle: 'term_w',
-      heartbeatIntervalMinutes: 5,
       baseDrift: {
         base: 'origin/main',
         behind: 3,
@@ -235,8 +222,7 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_SNAP',
       taskSpec: 'TASK_BODY',
       coordinatorHandle: 'term_COORD',
-      workerHandle: 'term_WORKER',
-      heartbeatIntervalMinutes: 5
+      workerHandle: 'term_WORKER'
     })
     expect(result).toMatchSnapshot()
   })
@@ -247,8 +233,7 @@ describe('buildDispatchPreamble', () => {
       dispatchId: 'ctx_SNAP',
       taskSpec: 'TASK_BODY',
       coordinatorHandle: 'orca_session_id:COORD',
-      workerHandle: 'orca_session_id:WORKER',
-      heartbeatIntervalMinutes: 5
+      workerHandle: 'orca_session_id:WORKER'
     })
     expect(result).toMatchSnapshot()
   })
@@ -260,8 +245,7 @@ describe('sub-dispatch section', () => {
     dispatchId: 'ctx_1',
     taskSpec: 'do the thing',
     coordinatorHandle: 'term_coord',
-    workerHandle: 'term_worker',
-    heartbeatIntervalMinutes: 5
+    workerHandle: 'term_worker'
   }
 
   it('is omitted explicitly when nesting is disallowed', () => {
@@ -307,7 +291,7 @@ describe('how the preamble names the worker and its coordinator, by kind', () =>
       expect(chat).not.toContain('Exit the shell')
       expect(chat).not.toContain('Your terminal')
       expect(chat).toContain('return to an idle prompt')
-      expect(chat).toContain(`check --terminal ${SESSION_WORKER}`)
+      expect(chat).toContain(`--from ${SESSION_WORKER}`)
       expect(afterWorkerDoneSection(chat).trimEnd().endsWith(CHAT_REDISPATCH)).toBe(true)
     }
   })

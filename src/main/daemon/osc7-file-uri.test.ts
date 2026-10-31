@@ -65,8 +65,13 @@ describe('parseFileUriPath', () => {
     }
   )
 
-  it('maps lowercase drvfs paths and rejects malformed percent encoding in WSL context', () => {
+  it('maps lowercase drvfs paths and keeps a literal % in WSL context', () => {
     expect(parseFileUriPath('file://host/mnt/c/work', { wslDistro: 'Ubuntu' })).toBe('C:\\work')
-    expect(parseFileUriPath('file://host/home/%ZZ', { wslDistro: 'Ubuntu' })).toBeNull()
+    // A folder named `%ZZ` is a valid path; nushell sends it unencoded.
+    expect(parseFileUriPath('file://host/home/%ZZ', { wslDistro: 'Ubuntu' })).toBe(
+      '\\\\wsl.localhost\\Ubuntu\\home\\%ZZ'
+    )
+    // Valid hex that is not UTF-8 is still rejected.
+    expect(parseFileUriPath('file://host/home/%FF', { wslDistro: 'Ubuntu' })).toBeNull()
   })
 })

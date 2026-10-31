@@ -4,8 +4,8 @@ import { isAdmissibleAgentJournalRenderItem } from '../../../src/shared/agent-se
 import type { AgentJournalRenderItem } from '../../../src/shared/agent-session-journal-types'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
-import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
-import type { MobileNativeChatMessageDetail } from './use-mobile-native-chat-message-detail'
+import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
+import type { MobileNativeChatMessageDetail } from './native-chat/transcript/use-mobile-native-chat-message-detail'
 
 const itemReplySchema = z.object({
   item: z.custom<AgentJournalRenderItem>(isAdmissibleAgentJournalRenderItem).nullable()

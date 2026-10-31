@@ -45,15 +45,22 @@ export function getStartupTerminalIngressIntent(args: {
   command?: string
   launchConfig?: SleepingAgentLaunchConfig
   terminalColorQueryReplies?: unknown
+  launcherColorQueryReplies?: unknown
+  launcherViewAttributes?: unknown
   terminalKittyKeyboardProtocol?: boolean
 }) {
+  const skipColors = agentSkipsStartupOscColorQueryReplies(args)
   // Seed every PTY: agents launched later from plain shells can also query before viewer colors arrive.
-  const colors = agentSkipsStartupOscColorQueryReplies(args)
+  const colors = skipColors
     ? {}
     : (normalizeColorQueryReplyColors(args.terminalColorQueryReplies) ?? {})
+  const launcherColors = skipColors
+    ? null
+    : normalizeColorQueryReplyColors(args.launcherColorQueryReplies)
   return parsePtyStartupIngressIntent({
     kittyKeyboardProtocol: args.terminalKittyKeyboardProtocol === true && isAgentLaunch(args),
     colors,
+    ...(launcherColors ? { launcherColors, launcherAttributes: args.launcherViewAttributes } : {}),
     deadlineMs: 5_000
   })
 }

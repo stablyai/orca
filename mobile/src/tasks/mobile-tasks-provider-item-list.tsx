@@ -1,4 +1,5 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   View,
   ActivityIndicator,
@@ -11,12 +12,13 @@ import {
   ChevronRight,
   triggerMediumImpact,
   Linking,
-  TaskProviderLogo,
+  ExternalLink,
   GitBranch,
   getHostedReviewSignalTone,
   getHostedReviewLabel,
   getHostedChecksLabel,
-  getHostedMergeLabel
+  getHostedMergeLabel,
+  type MobileColorScheme
 } from './mobile-tasks-dependencies'
 import { styles, getPrSignalToneStyle } from './mobile-tasks-legacy-styles'
 import {
@@ -26,10 +28,27 @@ import {
   formatUpdatedAt,
   taskKindLabel,
   getGitHubReviewSummary,
-  getGitHubMergeLabel
+  getGitHubMergeLabel,
+  type TaskItem
 } from './mobile-tasks-legacy-foundation'
+import { taskItemStateGlyph } from './mobile-tasks-item-state-glyph'
 
-export function renderMobileTasksProviderItemList(model: ConnectionPresentationModel) {
+// Where the item lives and how fresh it is; the glyph carries kind and state except for Jira and todos.
+function formatTaskRowMeta(item: TaskItem): string {
+  const lead =
+    item.provider === 'gitlabTodo'
+      ? `${item.status} · ${item.subtitle}`
+      : item.provider === 'jira'
+        ? `${item.subtitle} · ${item.status}`
+        : item.subtitle
+  return [lead, formatUpdatedAt(item.updatedAt)].filter(Boolean).join(' · ')
+}
+
+export function renderMobileTasksProviderItemList(
+  model: ConnectionPresentationModel,
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
+) {
   const {
     displayedEntries,
     emptyLabel,
@@ -54,23 +73,27 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
     taskUiReady
   } = model
   return loading ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : sortedItems.length === 0 ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <Text style={styles.emptyText}>{emptyLabel}</Text>
     </View>
   ) : (
     <FlatList
       data={displayedEntries}
+      extraData={colorScheme}
       keyExtractor={(entry) => entry.key}
       ItemSeparatorComponent={({ leadingItem, trailingItem }) =>
         leadingItem?.type === 'section' || trailingItem?.type === 'section' ? null : (
-          <View style={styles.separator} />
+          <View style={styles.taskRowSeparator} />
         )
       }
-      contentContainerStyle={[styles.list, { paddingBottom: spacing.lg + insets.bottom }]}
+      contentContainerStyle={[
+        styles.list,
+        { paddingBottom: spacing.lg + Math.max(insets.bottom, bottomBarHeight) }
+      ]}
       refreshing={refreshing}
       onRefresh={refreshTasks}
       ListFooterComponent={
@@ -78,7 +101,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
           <View style={styles.paginationFooter}>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Previous page"
+              accessibilityLabel={translate('tasks.providerItemList.previousPage', 'Previous page')}
               accessibilityState={{
                 disabled: githubCurrentPage === 0 || githubPaginationLoading
               }}
@@ -96,8 +119,14 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
               accessibilityRole="button"
               accessibilityLabel={
                 githubCountedTotalPages === null
-                  ? `Select page, Page ${githubCurrentPage + 1}`
-                  : `Select page, Page ${githubCurrentPage + 1} of ${githubTotalPages}`
+                  ? translate('tasks.providerItemList.selectPage', 'Select page, Page {{page}}', {
+                      page: githubCurrentPage + 1
+                    })
+                  : translate(
+                      'tasks.providerItemList.selectPageOfTotal',
+                      'Select page, Page {{page}} of {{total}}',
+                      { page: githubCurrentPage + 1, total: githubTotalPages }
+                    )
               }
               accessibilityState={{ disabled: githubPaginationLoading }}
               style={styles.paginationLabelButton}
@@ -111,13 +140,18 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
             >
               <Text style={styles.paginationLabel}>
                 {githubCountedTotalPages === null
-                  ? `Page ${githubCurrentPage + 1}`
-                  : `Page ${githubCurrentPage + 1} of ${githubTotalPages}`}
+                  ? translate('tasks.providerItemList.page', 'Page {{page}}', {
+                      page: githubCurrentPage + 1
+                    })
+                  : translate('tasks.providerItemList.pageOfTotal', 'Page {{page}} of {{total}}', {
+                      page: githubCurrentPage + 1,
+                      total: githubTotalPages
+                    })}
               </Text>
             </Pressable>
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Next page"
+              accessibilityLabel={translate('tasks.providerItemList.nextPage', 'Next page')}
               accessibilityState={{
                 disabled:
                   (!githubCanLoadUncountedNextPage && githubCurrentPage >= githubTotalPages - 1) ||
@@ -157,13 +191,25 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
         }
         const item = entry.item
         const repo = taskRepositoryMeta(item, reposById)
+        const glyph = taskItemStateGlyph(item)
+        const opensExternally = item.provider === 'gitlabTodo'
         const isGitHubPr = item.provider === 'github' && item.source.type === 'pr'
         const isGitLabMr = item.provider === 'gitlab' && item.source.type === 'mr'
         const githubPrDelta = isGitHubPr ? formatGitHubPRDelta(item.source) : null
         const branchSummary = hostedBranchSummary(item)
+        const mergeLabel = isGitHubPr
+          ? getGitHubMergeLabel(item.source)
+          : isGitLabMr
+            ? getHostedMergeLabel(item.source)
+            : null
         return (
           <Pressable
-            style={({ pressed }) => [styles.taskRow, pressed && styles.taskRowPressed]}
+            style={({ pressed }) => [
+              styles.taskRow,
+              styles.taskRowCentered,
+              pressed && styles.taskRowPressed
+            ]}
+            accessibilityRole={opensExternally ? 'link' : 'button'}
             onPress={() => {
               triggerMediumImpact()
               if (item.provider === 'gitlabTodo') {
@@ -173,24 +219,14 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
               setActionItem(item)
             }}
           >
-            <View style={styles.taskIcon}>
-              <TaskProviderLogo
-                provider={item.provider === 'gitlabTodo' ? 'gitlab' : item.provider}
-                size={15}
-                color={colors.textSecondary}
-              />
-            </View>
             <View style={styles.taskMain}>
-              <View style={styles.taskTitleRow}>
-                <Text style={styles.taskTitle} numberOfLines={2}>
-                  {item.title}
-                </Text>
-                <Text style={styles.updatedAt}>{formatUpdatedAt(item.updatedAt)}</Text>
-              </View>
+              <Text style={styles.taskTitle} numberOfLines={2}>
+                {item.title}
+              </Text>
               <View style={styles.metaRow}>
                 <View style={[styles.repoDot, { backgroundColor: repo.color }]} />
-                <Text style={styles.subtitle} numberOfLines={1}>
-                  {taskKindLabel(item)} · {item.subtitle}
+                <Text style={styles.taskRowMeta} numberOfLines={1}>
+                  {formatTaskRowMeta(item)}
                 </Text>
               </View>
               {branchSummary ? (
@@ -200,7 +236,9 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                     {branchSummary.head}
                   </Text>
                   <Text style={styles.branchMetaBase} numberOfLines={1}>
-                    into {branchSummary.base}
+                    {translate('tasks.providerItemList.intoBranch', 'into {{base}}', {
+                      base: branchSummary.base
+                    })}
                   </Text>
                 </View>
               ) : null}
@@ -237,7 +275,7 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                       {getHostedChecksLabel(item.source)}
                     </Text>
                   </View>
-                  {isGitHubPr || isGitLabMr ? (
+                  {mergeLabel ? (
                     <View
                       style={[
                         styles.prSignalChip,
@@ -245,21 +283,30 @@ export function renderMobileTasksProviderItemList(model: ConnectionPresentationM
                       ]}
                     >
                       <Text style={styles.prSignalText} numberOfLines={1}>
-                        {isGitHubPr
-                          ? getGitHubMergeLabel(item.source)
-                          : getHostedMergeLabel(item.source)}
+                        {mergeLabel}
                       </Text>
                     </View>
                   ) : null}
                 </View>
               ) : null}
             </View>
-            <View style={styles.taskRowTrailing}>
-              <View style={styles.statusPill}>
-                <Text style={styles.statusText} numberOfLines={1}>
-                  {item.status}
-                </Text>
-              </View>
+            <View
+              style={styles.taskRowTrailing}
+              accessibilityLabel={translate(
+                'tasks.providerItemList.kindAndStatus',
+                '{{kind}}, {{status}}',
+                {
+                  kind: taskKindLabel(item),
+                  status: item.status
+                }
+              )}
+            >
+              <glyph.icon size={16} color={glyph.color} strokeWidth={2.2} />
+              {opensExternally ? (
+                <ExternalLink size={14} color={colors.textMuted} />
+              ) : (
+                <ChevronRight size={14} color={colors.textMuted} />
+              )}
             </View>
           </Pressable>
         )

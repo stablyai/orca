@@ -1,12 +1,13 @@
 import { existsSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { isUnreadableError, writeSecureFile } from '../../shared/secure-file'
-import { isQualifiedPluginKey } from '../../shared/plugins/plugin-manifest'
+import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import {
   PLUGIN_STORAGE_KEY_LIMIT,
   PLUGIN_STORAGE_TOTAL_MAX_BYTES,
-  PLUGIN_STORAGE_VALUE_MAX_BYTES
-} from '../../shared/plugins/plugin-host-api'
+  PLUGIN_STORAGE_VALUE_MAX_BYTES,
+  type PluginJsonValue
+} from '../../shared/plugins/workers/plugin-host-api'
 
 // Keep plugin data/settings in separate qualified-key files (adapted from community PR #5801).
 
@@ -33,7 +34,7 @@ export class PluginKvStore {
   }
 
   /** Null means unreadable, never empty. */
-  private read(): Record<string, unknown> | null {
+  private read(): Record<string, PluginJsonValue> | null {
     try {
       if (!existsSync(this.filePath)) {
         return {}
@@ -41,9 +42,9 @@ export class PluginKvStore {
       if (statSync(this.filePath).size > PLUGIN_STORAGE_TOTAL_MAX_BYTES) {
         return {}
       }
-      const parsed: unknown = JSON.parse(readFileSync(this.filePath, 'utf8'))
+      const parsed: PluginJsonValue = JSON.parse(readFileSync(this.filePath, 'utf8'))
       if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-        return parsed as Record<string, unknown>
+        return parsed
       }
     } catch (error) {
       // Read denial cannot prove corruption; rewriting an empty store would discard existing keys.
@@ -55,11 +56,11 @@ export class PluginKvStore {
     return {}
   }
 
-  get(key: string): unknown {
+  get(key: string): PluginJsonValue | undefined {
     return this.read()?.[key]
   }
 
-  getAll(): Record<string, unknown> {
+  getAll(): Record<string, PluginJsonValue> {
     return this.read() ?? {}
   }
 
@@ -67,7 +68,7 @@ export class PluginKvStore {
     return Object.keys(this.read() ?? {})
   }
 
-  set(key: string, value: unknown): PluginKvWriteResult {
+  set(key: string, value: PluginJsonValue): PluginKvWriteResult {
     let serialized: string
     try {
       serialized = JSON.stringify(value)

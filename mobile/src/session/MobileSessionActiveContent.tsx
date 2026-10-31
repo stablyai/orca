@@ -1,13 +1,22 @@
+import { useMemo, useState } from 'react'
+import { computeActiveTerminalKeyboardLift } from '../terminal/terminal-keyboard-avoidance-lift'
+import { terminalPaneDirection, terminalPaneKeyboardLayout } from './mobile-terminal-pane-layout'
 import { Animated, View, Text, Pressable, ActivityIndicator } from 'react-native'
 import { saveTerminalTextScale } from '../storage/preferences'
 import { MobileBrowserPane } from '../browser/MobileBrowserPane'
 import { TerminalPaneView } from './TerminalPaneView'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
+import { MobileNativeChatDictationPreviewContext } from './native-chat/composer/mobile-native-chat-dictation-preview-context'
+import { MobileDictationMeterContext } from './mobile-dictation-meter-context'
 import { resolveMobileNativeChatSessionId } from './native-chat/mobile-native-chat-eligibility'
 import { colors } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { styles } from './mobile-session-styles'
 import type { MobileSessionController } from './use-mobile-session-controller'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
+import { useHostProfile } from '../transport/use-host-profile'
+import { useHostDisplay } from '../transport/use-host-display'
 import { FileReader } from './MobileSessionFileReader'
 import { MarkdownReader } from './MobileSessionMarkdownReader'
 
@@ -16,7 +25,11 @@ export function MobileSessionActiveContent({
 }: {
   controller: MobileSessionController
 }) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const executionHost = useWorkspaceExecutionHost()
+  const [paneFrame, setPaneFrame] = useState({ width: 0, height: 0 })
+  const paneDirection = terminalPaneDirection(paneFrame, controller.terminalSplitLayout)
   const {
     hostId,
     worktreeId,
@@ -28,6 +41,9 @@ export function MobileSessionActiveContent({
     setTerminalTextScale,
     terminalTextScaleRevisionRef,
     activeHandle,
+    terminalSplitActive,
+    visibleTerminalHandles,
+    notifyTerminalPaneFrame,
     markdownDocs,
     fileDocs,
     diffComments,
@@ -38,6 +54,7 @@ export function MobileSessionActiveContent({
     dictationMode,
     dictationEnabled,
     toastMessage,
+    handleTerminalInteraction,
     handleTerminalTap,
     browserScreencastSupported,
     showToast,
@@ -45,6 +62,7 @@ export function MobileSessionActiveContent({
     nativeChatOverlayInputLockReason,
     nativeChatController,
     dictation,
+    chatDictationPreview,
     handleDictationToggle,
     handleDictationPressIn,
     handleDictationPressOut,
@@ -90,13 +108,21 @@ export function MobileSessionActiveContent({
     toastAnimatedStyle,
     createTabBusy
   } = controller
+  const hostProfile = useHostProfile(hostId)
+  const hostTitle = useHostDisplay(hostProfile).title
+  const nativeChatImageSource = useMemo(
+    () => (client ? { client, worktreeId } : undefined),
+    [client, worktreeId]
+  )
   const content = showLoadingState ? (
     <View style={styles.emptyState}>
       <ActivityIndicator size="small" color={colors.textSecondary} />
     </View>
   ) : showEmptyState ? (
     <View style={styles.emptyState}>
-      <Text style={styles.emptyText}>No tabs in this session</Text>
+      <Text style={styles.emptyText}>
+        {t('session.activeContent.noTabs', 'No tabs in this session')}
+      </Text>
       {createError ? <Text style={styles.createError}>{createError}</Text> : null}
       <View style={styles.emptyActions}>
         <Pressable
@@ -111,7 +137,9 @@ export function MobileSessionActiveContent({
           }}
         >
           <Text style={styles.createButtonText}>
-            {createTabBusy ? 'Creating...' : 'Create Tab'}
+            {createTabBusy
+              ? t('session.activeContent.creatingTab', 'Creating...')
+              : t('session.activeContent.createTab', 'Create Tab')}
           </Text>
         </Pressable>
       </View>
@@ -141,7 +169,7 @@ export function MobileSessionActiveContent({
         documentId={JSON.stringify([hostId, executionHost, worktreeId, activeFileTab.id])}
         client={client}
         doc={fileDocs.get(activeFileTab.id)}
-        title={activeFileTab.title || 'File'}
+        title={activeFileTab.title || t('session.activeContent.fileTitle', 'File')}
         relativePath={activeFileTab.relativePath}
         language={activeFileTab.language}
         diffCommentActions={
@@ -190,17 +218,24 @@ export function MobileSessionActiveContent({
       )}
       <Text style={styles.emptyText}>
         {isPendingTerminalRecoveryParked
-          ? 'Terminal is taking longer than expected'
-          : activePendingTerminalTab.title || 'Loading terminal'}
+          ? t(
+              'session.activeContent.terminalTakingLonger',
+              'Terminal is taking longer than expected'
+            )
+          : activePendingTerminalTab.title ||
+            t('session.activeContent.loadingTerminal', 'Loading terminal')}
       </Text>
       {isPendingTerminalRecoveryParked && (
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Retry loading terminal"
+          accessibilityLabel={t(
+            'session.activeContent.retryLoadingTerminal',
+            'Retry loading terminal'
+          )}
           style={({ pressed }) => [styles.createButton, pressed && styles.newTerminalButtonPressed]}
           onPress={() => void retryPendingTerminalRecovery()}
         >
-          <Text style={styles.createButtonText}>Retry</Text>
+          <Text style={styles.createButtonText}>{t('common.retry', 'Retry')}</Text>
         </Pressable>
       )}
     </View>
@@ -211,7 +246,38 @@ export function MobileSessionActiveContent({
           key={terminal.handle}
           handle={terminal.handle}
           active={terminal.handle === activeHandle}
-          keyboardLift={terminal.handle === activeHandle ? activeTerminalKeyboardLift : 0}
+          visible={
+            visibleTerminalHandles?.includes(terminal.handle) ?? terminal.handle === activeHandle
+          }
+          splitIndex={
+            terminalSplitActive && visibleTerminalHandles.includes(terminal.handle)
+              ? visibleTerminalHandles.indexOf(terminal.handle)
+              : undefined
+          }
+          splitDirection={paneDirection}
+          splitFrame={paneFrame}
+          keyboardInset={keyboardLift}
+          title={terminal.title}
+          onFrame={notifyTerminalPaneFrame}
+          keyboardLift={
+            terminal.handle !== activeHandle &&
+            !(terminalSplitActive && visibleTerminalHandles.includes(terminal.handle))
+              ? 0
+              : terminalSplitActive
+                ? computeActiveTerminalKeyboardLift({
+                    keyboardLift: terminalPaneKeyboardLayout(
+                      paneFrame,
+                      paneDirection,
+                      visibleTerminalHandles.indexOf(terminal.handle),
+                      keyboardLift
+                    ).occlusion,
+                    metrics: controller.terminalKeyboardMetrics.get(terminal.handle),
+                    terminalFrameHeight:
+                      controller.getTerminalPaneViewport(terminal.handle).terminalFrameRef.current
+                        ?.height ?? 0
+                  })
+                : activeTerminalKeyboardLift
+          }
           terminalTheme={terminal.terminalTheme}
           textScale={terminalTextScale}
           onTextScaleChange={(scale) => {
@@ -232,30 +298,40 @@ export function MobileSessionActiveContent({
           onHaptic={handleHaptic}
           onTerminalInput={handleTerminalInput}
           onTerminalQueryReply={handleTerminalQueryReply}
+          onTerminalInteraction={handleTerminalInteraction}
           onTerminalTap={handleTerminalTap}
           onFileTap={handleFileTap}
           onOpenUrl={handleTerminalOpenUrl}
         />
       ))}
-      <MobileNativeChatOverlay
-        controller={nativeChatController}
-        activeSessionTabId={controller.activeSessionTab?.id}
-        onOpenFile={handleNativeChatFileTap}
-        images={nativeChatImages}
-        structuredComposer={nativeChatStructuredComposer}
-        onMicPress={dictationEnabled ? handleDictationToggle : undefined}
-        micActive={dictation.isRecording}
-        dictationMode={dictationMode}
-        onMicPressIn={handleDictationPressIn}
-        onMicPressOut={handleDictationPressOut}
-        inputLockReason={nativeChatOverlayInputLockReason}
-        sendErrorMessage={nativeChatSendError.message}
-        onClearSendError={nativeChatSendError.clear}
-        sendSurfaceId={controller.nativeChatScopeKey ?? ''}
-        sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
-        getSendCompletionGeneration={controller.getSendCompletionGeneration}
-        keyboardInset={keyboardLift}
-      />
+      <MobileNativeChatDictationPreviewContext.Provider value={chatDictationPreview}>
+        <MobileDictationMeterContext.Provider value={dictation.meter}>
+          <MobileNativeChatOverlay
+            controller={nativeChatController}
+            imageSource={nativeChatImageSource}
+            activeSessionTabId={controller.activeSessionTab?.id}
+            onOpenFile={handleNativeChatFileTap}
+            images={nativeChatImages}
+            structuredComposer={nativeChatStructuredComposer}
+            onMicPress={dictationEnabled ? handleDictationToggle : undefined}
+            micActive={dictation.isStarting || dictation.isRecording}
+            micStarting={dictation.isStarting}
+            micProcessing={dictation.isProcessing}
+            dictationMode={dictationMode}
+            onMicPressIn={handleDictationPressIn}
+            onMicPressOut={handleDictationPressOut}
+            inputLockReason={nativeChatOverlayInputLockReason}
+            sendErrorMessage={nativeChatSendError.message}
+            onClearSendError={nativeChatSendError.clear}
+            sendSurfaceId={controller.nativeChatScopeKey ?? ''}
+            sessionId={resolveMobileNativeChatSessionId(controller.activeSessionTab)}
+            getSendCompletionGeneration={controller.getSendCompletionGeneration}
+            keyboardInset={keyboardLift}
+            // A workspace routed to another server stops with that server, whose name the phone lacks.
+            hostName={executionHost === undefined && hostProfile ? hostTitle : null}
+          />
+        </MobileDictationMeterContext.Provider>
+      </MobileNativeChatDictationPreviewContext.Provider>
       {toastMessage && (
         <Animated.View pointerEvents="none" style={[styles.toast, toastAnimatedStyle]}>
           <Text style={styles.toastText}>{toastMessage}</Text>
@@ -270,6 +346,9 @@ export function MobileSessionActiveContent({
       onLayout={(e) => {
         const { width, height } = e.nativeEvent.layout
         notifyTerminalFrame({ width, height })
+        setPaneFrame((previous) =>
+          previous.width === width && previous.height === height ? previous : { width, height }
+        )
       }}
     >
       {content}

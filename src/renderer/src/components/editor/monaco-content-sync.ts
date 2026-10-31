@@ -56,19 +56,20 @@ function replaceModelContent(
 export function syncContentOnMount(
   editorInstance: editor.IStandaloneCodeEditor,
   content: string,
-  mode: MonacoContentSyncMode = 'undoable'
+  mode: MonacoContentSyncMode = 'undoable',
+  currentContentSnapshot?: string
 ): boolean {
   const model = editorInstance.getModel()
   if (!model) {
     return false
   }
-  const currentContent = model.getValue()
-  const normalizedContent = normalizeToModelEol(content, model, currentContent)
-  if (currentContent === normalizedContent) {
+  const modelContent = currentContentSnapshot ?? model.getValue()
+  const normalizedContent = normalizeToModelEol(content, model, modelContent)
+  if (modelContent === normalizedContent) {
     return false
   }
   // Avoid an undo stop on mount that would let Undo restore pre-remount text.
-  replaceModelContent(editorInstance, model, currentContent, normalizedContent, mode, false)
+  replaceModelContent(editorInstance, model, modelContent, normalizedContent, mode, false)
   return true
 }
 

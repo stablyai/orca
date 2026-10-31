@@ -3,7 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { toast } from 'sonner'
 import { useStructuredAgentSessionQueuedReorder } from './use-structured-agent-session-queued-reorder'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import {
   useStructuredAgentSessionMutate,
   type StructuredAgentSessionWrite

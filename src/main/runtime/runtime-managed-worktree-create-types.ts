@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import type { AgentLaunchPreferences } from '../../shared/agent-session-host-authority'
 import type { CreateWorktreeArgs } from '../../shared/worktree/create-types'
 import type {
@@ -17,6 +18,8 @@ import type { RuntimeNavigationTarget } from '../../shared/runtime-navigation'
 import type { RuntimeRepoSelector } from './runtime-repo-selector'
 
 export type RuntimeManagedWorktreeCreateArgs = {
+  /** A create someone asked for (UI, CLI, agent or paired client): its terminals may start a stopped WSL distro. */
+  wslUserAct?: true
   repoSelector: RuntimeRepoSelector
   name: string
   nameWasGenerated?: boolean
@@ -68,6 +71,8 @@ export type RuntimeManagedWorktreeCreateArgs = {
   startupPrompt?: string
   /** Main-only: caller delivers any uncarried startupPrompt through a compatible typed line and receives delivery status. */
   onStartupPromptCarry?: (carried: boolean) => void
+  /** Main-only completed startup creation; never projected onto the worktree RPC result. */
+  onStartupTerminalCreated?: (terminal: RuntimeTerminalCreate) => void
   /** Per-launch inputs used when `startupAgent` is the created terminal surface. */
   startupAgentArgs?: string | null
   /** Main-internal: an automation's saved extras, merged over the startup agent's arguments. */

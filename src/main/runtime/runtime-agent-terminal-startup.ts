@@ -24,7 +24,7 @@ import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-i
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
 import {
-  resolveLocalProjectRuntimeForWorktreeId,
+  resolvePlainTerminalProjectRuntime,
   resolvePlainTerminalPtyOptions
 } from '../local-project-runtime-resolution'
 import {
@@ -36,6 +36,7 @@ import { resolveQoderTerminalCommand } from './qoder-terminal-command-resolution
 import { resolveStartupShell } from '../../shared/tui-agent-startup-shell'
 import { resolveWslSessionContext } from '../daemon/wsl-session-context'
 import { isTuiAgentEnabled } from '../../shared/tui-agent-selection'
+import { resolveWslHostAgentLaunchInputs } from './wsl-host-agent-terminal-launch'
 
 /** No launch command could be built for a requested `startupAgent`. */
 export class AgentLaunchUnbuildableError extends Error {}
@@ -82,7 +83,13 @@ export async function resolveAgentTerminalCreateOptions(
       opts.shellOverride && store
         ? plannedAgent || opts.launchRuntime
           ? agentLaunchProjectRuntime(store, workspace, plannedAgent ?? opts.launchAgent)
-          : resolveLocalProjectRuntimeForWorktreeId(store, workspace.id)
+          : resolvePlainTerminalProjectRuntime(
+              store,
+              workspace.id,
+              workspace,
+              opts.tabId,
+              workspace.connectionId
+            )
         : undefined,
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     workspacePath: workspace.path
@@ -166,16 +173,19 @@ async function buildRuntimeAgentTerminalStartupOptions(
     throw new Error(`Agent ${agent} does not take a startup prompt on its launch command.`)
   }
   const scope = {
-    inputs: resolveAgentStartupPlanInputs({
-      agent,
-      settings,
-      platform: runtime.platform,
-      isRemote,
-      ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
-      shell: agentLaunchQuotingShell(runtime),
-      sessionOptions: host.toSessionOptions(opts.launchPreferences),
-      ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
-    }),
+    inputs: resolveWslHostAgentLaunchInputs(
+      resolveAgentStartupPlanInputs({
+        agent,
+        settings,
+        platform: runtime.platform,
+        isRemote,
+        ...(opts.agentArgs !== undefined ? { agentArgs: opts.agentArgs } : {}),
+        shell: agentLaunchQuotingShell(runtime),
+        sessionOptions: host.toSessionOptions(opts.launchPreferences),
+        ...(opts.suppressStartupUpdatePrompt ? { suppressStartupUpdatePrompt: true } : {})
+      }),
+      opts.env?.PATH
+    ),
     prompt: opts.startupPrompt ?? '',
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     hostIdentity: host.hostIdentity,
@@ -254,7 +264,9 @@ function resolveQoderLaunchCommand(
       store,
       store.getSettings(),
       workspace.id,
-      launch.shellOverride
+      launch.shellOverride,
+      workspace,
+      launch.tabId
     )
   }
   // Where the process runs: a `\\wsl$` cwd first, then a WSL shell, as the spawn decides it.

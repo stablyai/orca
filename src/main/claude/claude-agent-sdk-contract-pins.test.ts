@@ -1,3 +1,4 @@
+import { createClaudeCodeProcessSpawn } from './claude-agent-sdk-process-spawn'
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
@@ -142,7 +143,7 @@ function resolvedLaunch(permissionMode: AgentChatPermissionChoice, launchArgs: s
     resolveLaunchArgs: () => launchArgs,
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async () => '/repos/workspace-1',
-    resolveCommand: () => FAKE_CLI,
+    resolveCommand: () => ({ command: FAKE_CLI, prefixArgs: [] }),
     resolveAuthPolicy: () => ({ account: 'managed' })
   })({
     identity: {
@@ -500,3 +501,29 @@ describe('Claude Agent SDK contract pins', () => {
     )
   })
 })
+
+it.each(['/installed/launcher', '/installed/launcher.mjs'])(
+  'inserts the prefix at the real SDK spawn boundary for %s',
+  async (program) => {
+    let seen: { program: string; args?: readonly string[] } | undefined
+    const spawner = createClaudeCodeProcessSpawn(
+      (spec) => {
+        seen = spec
+        throw new Error('captured launcher contract')
+      },
+      'win32',
+      { pathToClaudeCodeExecutable: program, prefixArgs: ['run', '--', 'claude'] }
+    )
+    await expect(
+      drainQuery({ pathToClaudeCodeExecutable: program, spawnClaudeCodeProcess: spawner.spawn })
+    ).rejects.toThrow('captured launcher contract')
+    const prefixAt = program.endsWith('.mjs') ? 1 : 0
+    expect(seen?.args?.slice(prefixAt, prefixAt + 3)).toEqual(['run', '--', 'claude'])
+    if (prefixAt) {
+      expect(seen?.args?.[0]).toBe(program)
+    } else {
+      expect(seen?.program).toBe(program)
+    }
+    expect(seen?.args?.slice(prefixAt + 3)).toContain('--output-format')
+  }
+)

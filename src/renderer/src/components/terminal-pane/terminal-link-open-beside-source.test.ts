@@ -1,6 +1,7 @@
 import { openRoutedHttpLink } from '@/lib/http-link-destinations'
 import * as browserLinkOpen from './terminal-file-link-browser-open'
-import { describe, expect, it, vi } from 'vitest'
+import * as editorRevealFlash from '@/components/tab-group/editor-reveal-flash'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 import { activateAndRevealWorkspace } from '@/lib/worktree-activation'
 import { openDetectedFilePath } from './terminal-link-handlers'
 import { createTerminalLinkTestDoubles } from './terminal-link-handlers-test-fixtures'
@@ -231,6 +232,35 @@ describe('terminal file links carry their source tab', () => {
 })
 
 describe('terminal file link reveals target the opened view', () => {
+  afterEach(() => vi.restoreAllMocks())
+
+  it.each([
+    { existingFileId: null, flashes: false, label: 'a newly opened file' },
+    { existingFileId: '/tmp/src/a.ts', flashes: true, label: 'an existing document view' },
+    { existingFileId: '/tmp/src/b.ts', flashes: false, label: 'a reused preview for another file' }
+  ])('only flashes existing documents: $label', async ({ existingFileId, flashes }) => {
+    setPlatform('Macintosh')
+    const flash = vi
+      .spyOn(editorRevealFlash, 'flashRevealedEditorView')
+      .mockImplementation(() => {})
+    if (existingFileId) {
+      storeState.unifiedTabsByWorktree = {
+        'wt-1': [{ id: 'view:/tmp/src/a.ts', entityId: existingFileId, groupId: 'group-1' }]
+      }
+    }
+
+    openDetectedFilePath('/tmp/src/a.ts', 12, 3, deps)
+    await flushAsyncWork()
+    await flushDoubleRaf()
+
+    expect(flash).toHaveBeenCalledTimes(flashes ? 1 : 0)
+    if (flashes) {
+      expect(flash).toHaveBeenCalledWith('view:/tmp/src/a.ts')
+    }
+    expect(lastReveal()).toMatchObject({ viewStateId: 'view:/tmp/src/a.ts', line: 12, column: 3 })
+    expect(lastReveal().canApply?.()).toBe(true)
+  })
+
   it('scopes the reveal to the returned view', async () => {
     setPlatform('Macintosh')
 

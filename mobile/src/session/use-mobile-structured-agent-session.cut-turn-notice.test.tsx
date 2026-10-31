@@ -71,7 +71,9 @@ describe('useMobileStructuredAgentSession transcript', () => {
         _meta: { runtimeId: 'runtime-1' }
       })),
       subscribe: vi.fn((_method: string, _params: unknown, onData: (value: unknown) => void) => {
-        listener = onData
+        if (_method === 'agentSession.subscribe') {
+          listener = onData
+        }
         return () => {}
       })
     }

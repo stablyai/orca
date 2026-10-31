@@ -24,6 +24,7 @@ import type { AiVaultResumeTargetStatus } from '../../../src/shared/ai-vault-res
 import { QODER_OWNED_TERMINAL_CREATE_CAPABILITY } from '../../../src/shared/qoder-terminal-create-capability'
 import { agentHistoryHostStatusSchema } from '../agent-history/agent-history-reply-schema'
 import { readMobileRuntimeHostPlatform } from '../transport/mobile-runtime-host-platform'
+import { translate } from '../i18n/mobile-i18n'
 
 export function readMobileAiVaultResumeHost(statusResult: unknown) {
   const status = agentHistoryHostStatusSchema.safeParse(statusResult)
@@ -112,7 +113,7 @@ export async function resumeAiVaultSessionInTerminal(
   let terminalTab
   terminalTab = interpretOrThrowRefusalMessage(
     () => reviewTerminalCreateRun.interpret(created),
-    'Failed to create terminal'
+    translate('session.aiVaultResumeLaunch.createFailed', 'Failed to create terminal')
   )
   if (launchAtCreate) {
     return terminalTab
@@ -130,10 +131,12 @@ export async function resumeAiVaultSessionInTerminal(
   let accepted
   accepted = interpretOrThrowRefusalMessage(
     () => reviewTerminalSendRun.interpret(sent),
-    'Failed to send resume command'
+    translate('session.aiVaultResumeLaunch.sendFailed', 'Failed to send resume command')
   )
   if (!accepted) {
-    throw new Error('Terminal input is locked')
+    throw new Error(
+      translate('session.aiVaultResumeLaunch.inputLocked', 'Terminal input is locked')
+    )
   }
   return terminalTab
 }

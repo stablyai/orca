@@ -5,6 +5,7 @@ import { regenerateStructuredAgentSessionName } from '@/runtime/structured-agent
 import { useStructuredAgentSessionHostCapabilityState } from '@/runtime/structured-agent-session-host-capability'
 import { getStructuredAgentSessionStatusFeed } from '@/runtime/structured-agent-session-status-feed'
 import { STRUCTURED_AGENT_SESSION_REGENERATE_NAME_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
+import { nativeChatNamingErrorText } from './native-chat-naming-failure-copy'
 
 const noSubscription = () => () => {}
 
@@ -63,7 +64,7 @@ export function useNativeChatNamingFailure(
     return null
   }
   return {
-    message: failure.error.message,
+    message: nativeChatNamingErrorText(failure.error),
     canRegenerate: support === 'supported',
     regenerating: regenerating === true,
     regenerate,

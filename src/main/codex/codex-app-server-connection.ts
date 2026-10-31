@@ -4,7 +4,7 @@ import { spawnManagedProviderProcess } from '../provider-process/managed-provide
 import { createClaudeChildTreeReaper } from '../claude/claude-agent-sdk-exit-proof'
 import type { ProviderProcessLaunch } from '../provider-process/provider-process-launch'
 import { buildCodexAppServerExitError } from './app-server/codex-app-server-exit-error'
-import { withMissingProviderExecutable } from '../provider-process/provider-executable-missing'
+import { withProviderSpawnAbsence } from '../provider-process/provider-executable-missing'
 import { initializeCodexAppServerConnection } from './app-server/codex-app-server-handshake'
 import { CodexAppServerHandshakeExitUnprovenError } from './app-server/codex-app-server-handshake-exit-proof'
 import {
@@ -39,7 +39,8 @@ async function connectCodexAppServer(
   })
   const { child } = managed
   const tree = createClaudeChildTreeReaper(child, {
-    exited: () => managed.rootVerdict === 'exited'
+    exited: () => managed.rootVerdict === 'exited',
+    supervised: managed.supervised
   })
 
   let nextRequestId = 1
@@ -51,7 +52,7 @@ async function connectCodexAppServer(
 
   function buildExitError(cause?: Error): Error {
     const error = buildCodexAppServerExitError(managed.stderrTail(), cause)
-    return managed.executableMissing ? withMissingProviderExecutable(error) : error
+    return withProviderSpawnAbsence(error, managed.spawnAbsence)
   }
 
   const dispatcher = createCodexAppServerRecordDispatcher({
@@ -129,7 +130,7 @@ async function connectCodexAppServer(
   function request(
     method: string,
     params?: Record<string, unknown>,
-    options: { timeoutMs?: number | null; onReply?: () => void } = {}
+    options: { timeoutMs?: number | null; onReply?: (result?: unknown) => void } = {}
   ): Promise<unknown> {
     if (closing) {
       return Promise.reject(new Error(`codex app-server connection is closed (${method})`))
@@ -197,7 +198,7 @@ async function connectCodexAppServer(
           handlers.onExit?.(terminalError ?? buildExitError(), { expected: closing })
         }
         dispatcher.failPending(new Error('codex app-server connection closed'))
-        return result.root === 'exited'
+        return result.root === 'exited' || result.killDelivered === true
       })
       .finally(() => {
         closesInFlight -= 1

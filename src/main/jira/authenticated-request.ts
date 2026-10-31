@@ -183,21 +183,30 @@ export async function jiraRequestBinary(
   headers.set('Accept', '*/*')
   headers.set('User-Agent', JIRA_API_USER_AGENT)
   headers.set('Authorization', client.authorization)
-  const response = await jiraFetch(requestUrl.toString(), {
-    headers,
-    signal: options.signal,
-    ...(isJiraGatewayBaseUrl(apiBaseUrl(client.site)) ? { redirect: 'error' as const } : {})
-  })
-  if (!response.ok) {
-    throw await toJiraApiError(response, requestUrl.toString())
-  }
-  const contentType = response.headers.get('content-type') || 'application/octet-stream'
-  const bytes = await readFetchResponseBytesWithinLimit(
-    response,
-    options.maxBytes ?? 2 * 1024 * 1024
-  )
-  return {
-    data: Uint8Array.from(bytes).buffer,
-    contentType
+  const controller = new AbortController()
+  const signal = options.signal
+    ? AbortSignal.any([options.signal, controller.signal])
+    : controller.signal
+  try {
+    const response = await jiraFetch(requestUrl.toString(), {
+      headers,
+      signal,
+      ...(isJiraGatewayBaseUrl(apiBaseUrl(client.site)) ? { redirect: 'error' as const } : {})
+    })
+    if (!response.ok) {
+      throw await toJiraApiError(response, requestUrl.toString())
+    }
+    const contentType = response.headers.get('content-type') || 'application/octet-stream'
+    const bytes = await readFetchResponseBytesWithinLimit(
+      response,
+      options.maxBytes ?? 2 * 1024 * 1024
+    )
+    return {
+      data: Uint8Array.from(bytes).buffer,
+      contentType
+    }
+  } finally {
+    // Cancelling the web body alone can leave Chromium's native request unfinished.
+    controller.abort()
   }
 }

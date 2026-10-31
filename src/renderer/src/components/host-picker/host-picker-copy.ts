@@ -9,15 +9,9 @@ export function noHostsMatchLabel(): string {
 }
 
 export function moreHostsLabel(count: number): string {
-  return count === 1
-    ? translate(
-        'auto.components.hostPicker.moreHosts_one',
-        '{{count}} more host. Search by name to find it.',
-        { count }
-      )
-    : translate(
-        'auto.components.hostPicker.moreHosts_other',
-        '{{count}} more hosts. Search by name to find one.',
-        { count }
-      )
+  return translate(
+    'auto.components.hostPicker.moreHosts',
+    '{{count}} more hosts. Search by name to find one.',
+    { count, defaultValue_one: '{{count}} more host. Search by name to find it.' }
+  )
 }

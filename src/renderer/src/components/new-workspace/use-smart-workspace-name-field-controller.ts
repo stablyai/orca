@@ -13,6 +13,7 @@ import { getSmartWorkspaceNameFieldCopy } from './smart-workspace-name-field-cop
 export function useSmartWorkspaceNameFieldController(props: SmartWorkspaceNameFieldProps) {
   const search = useWorkItemSourceSearch({
     ...props,
+    defaultLinearWorkspaceId: 'all',
     typedTextEnabled: true,
     sourceSelected: props.selectedSource !== null,
     gitlabEnabled: Boolean(props.onGitLabItemSelect)

@@ -39,13 +39,17 @@ vi.mock('@/store', () => ({
   })
 }))
 
-vi.mock('@/store/selectors', () => ({
-  useAllWorktrees: () => [],
-  useRepoById: (repoId?: string) =>
-    repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
-  useRepoMap: () => new Map(),
-  useWorktreeMap: () => new Map()
-}))
+vi.mock('@/store/selectors', () => {
+  const emptyWorktrees: never[] = []
+  const emptyMap = new Map()
+  return {
+    getAllWorktreesFromState: () => emptyWorktrees,
+    useRepoById: (repoId?: string) =>
+      repoId ? { id: repoId, name: repoId, displayName: repoId, projectGroupId: null } : undefined,
+    getRepoMapFromState: () => emptyMap,
+    getWorktreeMapFromState: () => emptyMap
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback,

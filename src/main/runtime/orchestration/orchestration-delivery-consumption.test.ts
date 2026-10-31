@@ -1,7 +1,6 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { OrchestrationDb } from './db'
 import { createRootDispatch } from './db/root-dispatch-test-fixture'
-import { reconcileLifecycleMessage } from './lifecycle-reconciliation'
 
 describe('mailbox delivery consumption', () => {
   let db: OrchestrationDb
@@ -19,35 +18,6 @@ describe('mailbox delivery consumption', () => {
       db.insertMessage({ runId: run.id, from: 'worker', to: `run:${run.id}`, subject })
     return { run, params, insert }
   }
-
-  it('advances past a heartbeat batch when completion suppresses its contents', () => {
-    const { run, params } = setup()
-    const task = db.createTask({ runId: run.id, spec: 'work' })
-    const dispatch = createRootDispatch(db, task.id, 'worker')
-    const insert = (type: 'heartbeat' | 'worker_done') =>
-      db.insertMessage({
-        runId: run.id,
-        from: 'worker',
-        to: `run:${run.id}`,
-        subject: type,
-        type,
-        payload: JSON.stringify({ taskId: task.id, dispatchId: dispatch.id, outcome: 'succeeded' })
-      })
-    insert('heartbeat')
-    const first = db.getOrCreateRunDelivery(params)!
-    const done = insert('worker_done')
-    expect(reconcileLifecycleMessage(db, done).action).toBe('completed')
-    expect(db.getDeliveryRaw(first.delivery.id)?.acknowledged_at).toBeNull()
-    expect(db.hasOutstandingRunDelivery(run.id)).toBe(false)
-    expect(
-      db
-        .getOrCreateRunDelivery({ ...params, wakeTypes: ['worker_done'] })
-        ?.messages.map((m) => m.id)
-    ).toEqual([done.id])
-    expect(db.acknowledgeRunDelivery({ ...params, deliveryId: first.delivery.id }).duplicate).toBe(
-      false
-    )
-  })
 
   it('ignores a fully read batch without rewriting it', () => {
     const { params, insert } = setup()

@@ -272,7 +272,7 @@ export default function ConversationKnowledgePanel({
               <Input
                 value={searchQuery}
                 className="h-6"
-                variant="denseSearch"
+                density="compact"
                 aria-label={translate(
                   'conversationKnowledge.search.ariaLabel',
                   'Search conversation knowledge'

@@ -32,10 +32,14 @@ describe('MacosSystemSleepAssertion', () => {
 
     assertion.start('status-change')
 
-    expect(spawn).toHaveBeenCalledWith('/usr/bin/caffeinate', ['-i', '-s'], {
-      stdio: 'ignore',
-      windowsHide: true
-    })
+    expect(spawn).toHaveBeenCalledWith(
+      '/usr/bin/caffeinate',
+      ['-i', '-s', '-w', String(process.pid)],
+      {
+        stdio: 'ignore',
+        windowsHide: true
+      }
+    )
   })
 
   it('is a no-op off macOS', () => {

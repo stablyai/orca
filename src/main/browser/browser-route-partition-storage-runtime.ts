@@ -1,4 +1,3 @@
-import { app } from 'electron'
 import { listEnvironments } from '../../shared/runtime-environment-store'
 import {
   deriveBrowserRoutePartitionStorageScope,
@@ -22,6 +21,7 @@ import {
   currentBrowserRoutePartitionBindingFilePath
 } from './browser-route-partition-binding-runtime'
 import { browserRoutePartitionStorageDependencies } from './browser-route-partition-storage-dependencies'
+import { getRuntimeEnvironmentRegistryRoot } from '../ipc/runtime-environments/runtime-environment-registry-root'
 
 export type BrowserRoutePartitionStorageClear = {
   clearedPartitions: string[]
@@ -59,7 +59,7 @@ export async function collectOrphanedBrowserRoutePartitionStorage(
     })
   )
   const liveStorageScopes = new Set(
-    listEnvironments(app.getPath('userData')).map((environment) =>
+    listEnvironments(getRuntimeEnvironmentRegistryRoot()).map((environment) =>
       deriveBrowserRoutePartitionStorageScope({ orcaProfileId, environmentId: environment.id })
     )
   )

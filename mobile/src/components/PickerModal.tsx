@@ -1,8 +1,12 @@
-import type { ReactNode } from 'react'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { useState, type ReactNode } from 'react'
 import { View, Text, Pressable, StyleSheet } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { BottomDrawer } from './BottomDrawer'
+import { MobileSearchField } from './MobileSearchField'
 
 export type PickerOption<T extends string = string> = {
   value: T
@@ -23,11 +27,12 @@ type Props<T extends string = string> = {
   onClose: () => void
   onAfterClose?: () => void
   zIndex?: number
+  searchable?: boolean
 }
 
 type PickerModalContentProps<T extends string = string> = Pick<
   Props<T>,
-  'options' | 'selected' | 'onSelect' | 'onLongSelect' | 'onClose'
+  'options' | 'selected' | 'onSelect' | 'onLongSelect' | 'onClose' | 'searchable'
 >
 
 export function PickerModal<T extends string = string>({
@@ -40,8 +45,10 @@ export function PickerModal<T extends string = string>({
   onLongSelect,
   onClose,
   onAfterClose,
-  zIndex
+  zIndex,
+  searchable
 }: Props<T>) {
+  useMobileColorScheme()
   return (
     <BottomDrawer visible={visible} onClose={onClose} onAfterClose={onAfterClose} zIndex={zIndex}>
       <View style={styles.header}>
@@ -55,6 +62,7 @@ export function PickerModal<T extends string = string>({
         onSelect={onSelect}
         onLongSelect={onLongSelect}
         onClose={onClose}
+        searchable={searchable}
       />
     </BottomDrawer>
   )
@@ -65,12 +73,30 @@ function PickerModalContent<T extends string = string>({
   selected,
   onSelect,
   onLongSelect,
-  onClose
+  onClose,
+  searchable
 }: PickerModalContentProps<T>) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
+  const [query, setQuery] = useState('')
+  const visibleOptions = searchable
+    ? options.filter((option) =>
+        `${option.label} ${option.subtitle ?? ''}`
+          .toLocaleLowerCase()
+          .includes(query.trim().toLocaleLowerCase())
+      )
+    : options
   // Put option rows in shown child; closed BottomDrawer returns null, avoiding hidden-content rebuilds on parent renders.
   return (
     <View style={styles.group}>
-      {options.map((opt, i) => {
+      {searchable ? (
+        <MobileSearchField
+          value={query}
+          onChangeText={setQuery}
+          placeholder={t('automations.mobile.searchOptions', 'Search options')}
+        />
+      ) : null}
+      {visibleOptions.map((opt, i) => {
         const isSelected = opt.value === selected
         return (
           <View key={opt.value}>
@@ -122,7 +148,7 @@ function PickerModalContent<T extends string = string>({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   header: {
     paddingHorizontal: spacing.xs,
     paddingBottom: spacing.sm
@@ -138,8 +164,8 @@ const styles = StyleSheet.create({
     marginTop: 2
   },
   group: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   separator: {
@@ -154,7 +180,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md + 2
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   rowDisabled: {
     opacity: 0.45
@@ -180,4 +206,4 @@ const styles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 1
   }
-})
+}))

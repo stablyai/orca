@@ -6,9 +6,10 @@ import type { OpenFile } from '@/store/slices/editor'
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip'
 import EditorViewToggle, {
   CSV_VIEW_MODE_METADATA,
+  CUSTOM_EDITOR_SOURCE_METADATA,
   NOTEBOOK_VIEW_MODE_METADATA
 } from './EditorViewToggle'
-import type { EditorToggleValue } from './EditorViewToggle'
+import type { CustomEditorToggleValue, EditorToggleValue } from './EditorViewToggle'
 import type { EditorHeaderOpenFileState } from './editor-header'
 import { DiffNotesSendMenu } from './DiffNotesSendMenu'
 import { EditorPanelActionsMenu } from './EditorPanelActionsMenu'
@@ -22,6 +23,8 @@ import type { ArtifactWriteRequest } from '../../../../shared/artifacts'
 import { ArtifactPublishButton } from '@/components/artifacts/ArtifactPublishButton'
 import { editorArtifactSourceKey } from './editor-artifact-upload'
 
+const NO_CUSTOM_EDITOR_TITLES: Readonly<Record<CustomEditorToggleValue, string>> = {}
+
 type EditorPanelHeaderProps = {
   activeFile: OpenFile
   copiedPathVisible: boolean
@@ -30,6 +33,8 @@ type EditorPanelHeaderProps = {
   isMarkdown: boolean
   isCsv: boolean
   isNotebook: boolean
+  /** Titles of the file's plugin editors, by toggle value; empty when none apply. */
+  customEditorTitles?: Readonly<Record<CustomEditorToggleValue, string>>
   hasEditorToggle: boolean
   availableEditorToggleModes: readonly EditorToggleValue[]
   effectiveToggleValue: EditorToggleValue
@@ -64,6 +69,7 @@ export function EditorPanelHeader({
   isMarkdown,
   isCsv,
   isNotebook,
+  customEditorTitles = NO_CUSTOM_EDITOR_TITLES,
   hasEditorToggle,
   availableEditorToggleModes,
   effectiveToggleValue,
@@ -270,8 +276,15 @@ export function EditorPanelHeader({
           modes={availableEditorToggleModes}
           onChange={onEditorToggleChange}
           metadataOverride={
-            isCsv ? CSV_VIEW_MODE_METADATA : isNotebook ? NOTEBOOK_VIEW_MODE_METADATA : undefined
+            isCsv
+              ? CSV_VIEW_MODE_METADATA
+              : isNotebook
+                ? NOTEBOOK_VIEW_MODE_METADATA
+                : Object.keys(customEditorTitles).length > 0
+                  ? CUSTOM_EDITOR_SOURCE_METADATA
+                  : undefined
           }
+          customEditorTitles={customEditorTitles}
         />
       )}
       {canShowMarkdownTableOfContents && (

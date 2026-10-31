@@ -87,7 +87,8 @@ function ConceptSection({
             <li key={entry.id}>
               <Button
                 className="w-full justify-start whitespace-normal text-left"
-                variant="dense"
+                variant="ghost"
+                size="sm"
                 onClick={() => entry.item && onSelectItem(entry.item)}
               >
                 <span className="block break-words">{entry.label}</span>
@@ -120,7 +121,8 @@ function SourceSessionSection({
             <li key={item.id}>
               <Button
                 className="w-full justify-start whitespace-normal text-left"
-                variant="dense"
+                variant="ghost"
+                size="sm"
                 onClick={() => openConversationKnowledgeSourceHistory(item, sourceHistoryScope)}
               >
                 <span className="min-w-0 break-words">

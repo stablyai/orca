@@ -1,4 +1,5 @@
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../agent-chat-permission-mode'
+import { labelFromModelId } from '../../model-id-label'
 import type {
   AgentSessionOptionCatalog,
   CatalogMidSessionApply,
@@ -166,7 +167,15 @@ export function withTrackedNativeChatModel(
     return [...models]
   }
   const seeded = catalog.models.find((model) => model.id === trackedId)
-  return [...models, seeded ?? { id: trackedId, label: trackedId, options: [] }]
+  return [
+    ...models,
+    seeded ?? {
+      id: trackedId,
+      label: labelFromModelId(trackedId),
+      description: trackedId,
+      options: []
+    }
+  ]
 }
 
 /** No tracked model means no -m; name the CLI default only when the catalog proves it. */

@@ -9,7 +9,19 @@ const asyncStorage = vi.hoisted(() => ({
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
-import { dispatchMobileStructuredCommand } from './mobile-structured-composer-command'
+import {
+  dispatchMobileStructuredCommand,
+  type MobileStructuredCommandHolds
+} from './mobile-structured-composer-command'
+
+const IDLE: MobileStructuredCommandHolds = {
+  working: false,
+  prompt: false,
+  background: false,
+  backgroundTasksRunning: false,
+  sending: false
+}
+const holding = (shown: Partial<MobileStructuredCommandHolds>) => () => ({ ...IDLE, ...shown })
 
 function setup() {
   const sendRequest = vi.fn<
@@ -32,7 +44,8 @@ function setup() {
       setOption: vi.fn(async () => true),
       conversationCommands: ['clear', 'compact']
     },
-    busy: () => null,
+    holds: () => IDLE,
+    startFailures: () => [],
     waitsInLine: () => false,
     onError: vi.fn(),
     timeoutMs: 15000
@@ -101,7 +114,7 @@ describe('mobile structured conversation commands', () => {
         input.text = '/compact instructions'
       }
       if (reason === 'pending work') {
-        input.busy = () => 'working'
+        input.holds = holding({ working: true })
       }
       expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
       expect(sendRequest).not.toHaveBeenCalled()
@@ -112,11 +125,8 @@ describe('mobile structured conversation commands', () => {
     const { input, sendRequest } = setup()
     input.text = '/fast'
     input.controller.agent = 'omp'
-    await dispatchMobileStructuredCommand(input)
-    expect(input.onError).toHaveBeenCalledWith(
-      expect.stringContaining('/fast is not available'),
-      undefined
-    )
+    expect(await dispatchMobileStructuredCommand(input)).toBeNull()
+    expect(input.onError).not.toHaveBeenCalled()
     input.controller.sessionCommands = [{ name: 'fast', kind: 'command' }]
     expect(await dispatchMobileStructuredCommand(input)).toBeNull()
     expect(sendRequest).not.toHaveBeenCalled()
@@ -143,7 +153,7 @@ describe('mobile structured conversation commands', () => {
         }
       }
     })
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     input.waitsInLine = (command) => command === 'compact'
     expect(await dispatchMobileStructuredCommand(input)).toBe('accepted')
     const fields = requestFields(sendRequest.mock.calls[0])
@@ -154,19 +164,19 @@ describe('mobile structured conversation commands', () => {
   })
   it('a /clear while the agent works says so in plain words', async () => {
     const { input, sendRequest } = setup()
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /clear when it's done.",
       { refusedWhile: 'working' }
     )
-    input.busy = () => 'prompt'
+    input.holds = holding({ prompt: true })
     expect(await dispatchMobileStructuredCommand({ ...input, text: '/clear' })).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "Answer the agent's question or approval, then run /clear.",
       { refusedWhile: 'prompt' }
     )
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /compact when it's done.",
@@ -193,19 +203,39 @@ describe('mobile structured conversation commands', () => {
     }
     sendRequest.mockResolvedValue(refused)
     input.waitsInLine = () => true
-    input.busy = () => 'working'
+    input.holds = holding({ working: true })
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /compact when it's done.",
       { refusedWhile: 'working' }
     )
     // Keep a newer host’s unreadable cause as failure rather than claiming which work blocked it.
-    input.busy = () => null
+    input.holds = () => IDLE
     expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
     expect(input.onError).toHaveBeenLastCalledWith(
       "The agent is still working. Run /compact when it's done.",
       undefined
     )
+  })
+  it('holds for background tasks or a message still sending, and waits silently behind one in line', async () => {
+    const { input, sendRequest } = setup()
+    input.holds = holding({ background: true, backgroundTasksRunning: true })
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      'Wait for pending work and messages to finish before using this command.',
+      { refusedWhile: 'background' }
+    )
+    input.holds = holding({ sending: true })
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).toHaveBeenLastCalledWith(
+      'Your earlier message is still being sent. Run /compact once it has gone.',
+      { refusedWhile: 'sending' }
+    )
+    input.waitsInLine = () => true
+    vi.mocked(input.onError).mockClear()
+    expect(await dispatchMobileStructuredCommand(input)).toBe('rejected')
+    expect(input.onError).not.toHaveBeenCalled()
+    expect(sendRequest).not.toHaveBeenCalled()
   })
   it('keeps ordinary messages on the existing send path', async () => {
     const { input, sendRequest } = setup()

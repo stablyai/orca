@@ -30,8 +30,7 @@ describe('speech RPC methods', () => {
       dictationId: 'dict-1',
       audioBase64: 'AAAA',
       sampleRate: 16_000,
-      clientId: undefined,
-      connectionId: undefined
+      clientId: undefined
     })
   })
 

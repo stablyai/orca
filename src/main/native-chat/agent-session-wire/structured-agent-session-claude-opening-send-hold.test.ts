@@ -9,7 +9,7 @@ import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-ses
 import { agentSessionSendSubmission } from '../../../shared/agent-session-wire'
 import { projectStructuredAgentSessionMessages } from '../../../shared/structured-agent-session-message-projection'
 import { projectNativeChatTranscriptMessages } from '../../../shared/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from '../../../shared/native-chat-turn-membership'
 import { ClaudeStructuredSessionAdapter } from '../../claude/claude-structured-session-adapter'
 import {
@@ -20,7 +20,10 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -85,6 +88,7 @@ beforeEach(async ({ task }) => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -135,6 +139,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

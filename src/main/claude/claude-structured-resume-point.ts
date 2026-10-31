@@ -1,7 +1,7 @@
 import type {
   ClaudeSession,
   ClaudeStructuredSessionAdapterDeps
-} from './claude-structured-session-state'
+} from './structured/claude-structured-session-state'
 import { settleClaudeTurnEndWaiters } from './claude-request-end-wait'
 import { isRootClaudeFrame } from './claude-turn-opening'
 

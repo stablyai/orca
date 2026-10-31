@@ -2,7 +2,8 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import type {
   AgentSessionHistoryResult,
-  AgentSessionSubscribeEvent
+  AgentSessionQueuedMessage,
+  AgentSessionQueuePause
 } from '../../../src/shared/agent-session-wire'
 import { AGENT_SESSION_HISTORY_MAX_LIMIT } from '../../../src/shared/agent-session-wire'
 import { structuredAgentSessionHolderId } from '../../../src/shared/structured-agent-session-holder'
@@ -23,23 +24,12 @@ import {
   callAgentSession
 } from './mobile-structured-agent-session-rpc'
 import { subscribeTranscriptAfterHold } from './mobile-structured-transcript-subscription'
-import {
-  reduceMobileQueuePause,
-  reduceMobileQueuedMessageFeed,
-  type MobileQueuedMessageFeed,
-  type MobileQueuePause
-} from './mobile-structured-queued-message-feed'
 import { useMobileOlderPageLoader, type OlderPagePhase } from './use-mobile-older-page-loader'
-
-type QueuedFeed = {
-  messages: MobileQueuedMessageFeed
-  pause: MobileQueuePause
-}
-const NO_QUEUED_FEED: QueuedFeed = { messages: null, pause: null }
 
 const MAX_RETAINED_SESSION_STATES = 32
 
 export function useMobileStructuredAgentState(args: {
+  onCommandsChanged?: () => void
   client: RpcClient | null
   sessionId: string | null
   sessionKey: string | null
@@ -49,24 +39,25 @@ export function useMobileStructuredAgentState(args: {
 }): {
   state: StructuredAgentSessionState
   stateRef: { readonly current: StructuredAgentSessionState }
-  queuedMessages: MobileQueuedMessageFeed
-  queuePause: MobileQueuePause
+  /** Null until the host publishes a queue (older hosts never do). */
+  queuedMessages: AgentSessionQueuedMessage[] | null
+  queuePause: AgentSessionQueuePause | null
   olderPages: OlderPagePhase
   loadEarlier: () => void
 } {
   const { client, connected, enabled, sessionId, sessionKey } = args
+  const commandsChanged = useRef(args.onCommandsChanged)
+  useLayoutEffect(() => {
+    commandsChanged.current = args.onCommandsChanged
+  }, [args.onCommandsChanged])
   // Bound synchronous per-session retention so offline tab switches cannot grow memory indefinitely.
   const [sessionStates, setSessionStates] = useState<Map<string, StructuredAgentSessionState>>(
     () => new Map()
   )
-  const [queuedBySession, setQueuedBySession] = useState<Map<string, QueuedFeed>>(() => new Map())
   const state =
     enabled && sessionKey
       ? (sessionStates.get(sessionKey) ?? EMPTY_STRUCTURED_AGENT_SESSION)
       : EMPTY_STRUCTURED_AGENT_SESSION
-  const queued =
-    (enabled && sessionKey ? queuedBySession.get(sessionKey) : undefined) ?? NO_QUEUED_FEED
-  const queuedMessages = queued.messages
   const { phase: olderPages, load: loadOlderPages, supersede } = useMobileOlderPageLoader()
   const stateRef = useRef(state)
   useLayoutEffect(() => {
@@ -99,34 +90,6 @@ export function useMobileStructuredAgentState(args: {
     },
     [sessionKey]
   )
-  const applyQueued = useCallback(
-    (event: AgentSessionSubscribeEvent) => {
-      if (!sessionKey) {
-        return
-      }
-      setQueuedBySession((current) => {
-        const previous = current.get(sessionKey) ?? NO_QUEUED_FEED
-        const messages = reduceMobileQueuedMessageFeed(previous.messages, event)
-        const pause = reduceMobileQueuePause(previous.pause, event)
-        if (messages === previous.messages && pause === previous.pause) {
-          return current
-        }
-        const updated = new Map(current)
-        updated.delete(sessionKey)
-        updated.set(sessionKey, { messages, pause })
-        while (updated.size > MAX_RETAINED_SESSION_STATES) {
-          const oldest = updated.keys().next().value
-          if (oldest === undefined) {
-            break
-          }
-          updated.delete(oldest)
-        }
-        return updated
-      })
-    },
-    [sessionKey]
-  )
-
   useEffect(() => {
     supersede()
     if (!client || !sessionId || !enabled) {
@@ -146,7 +109,9 @@ export function useMobileStructuredAgentState(args: {
       applyRequests: apply,
       applyEvent: (event, options) => {
         apply({ type: 'event', event, ...options })
-        applyQueued(event)
+        if (event.type !== 'end' && event.commandsChanged) {
+          commandsChanged.current?.()
+        }
       },
       applyError: (message, refusal) => {
         if (stateRef.current.epoch !== null && refusal === undefined) {
@@ -185,7 +150,7 @@ export function useMobileStructuredAgentState(args: {
         )
         .catch(() => undefined)
     }
-  }, [apply, applyQueued, client, connected, enabled, sessionId, sessionKey, supersede])
+  }, [apply, client, connected, enabled, sessionId, sessionKey, supersede])
 
   const loadEarlier = useCallback(() => {
     const start = oldestStructuredAgentSessionCursor(stateRef.current)
@@ -262,5 +227,13 @@ export function useMobileStructuredAgentState(args: {
     loadEarlier()
   }, [drawsNothingFrom, loadEarlier, loadingEarlier])
 
-  return { state, stateRef, queuedMessages, queuePause: queued.pause, olderPages, loadEarlier }
+  return {
+    state,
+    stateRef,
+    // A published null is an empty queue; only an absent list is no claim.
+    queuedMessages: state.queuedMessages === undefined ? null : (state.queuedMessages ?? []),
+    queuePause: state.queuePause ?? null,
+    olderPages,
+    loadEarlier
+  }
 }

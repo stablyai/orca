@@ -114,7 +114,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   await rm(root, { recursive: true, force: true })
 })
 

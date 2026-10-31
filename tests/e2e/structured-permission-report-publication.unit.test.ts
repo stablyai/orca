@@ -4,8 +4,9 @@ import {
   THREAD_ID as CODEX_THREAD_ID
 } from '../../src/main/codex/codex-structured-session-adapter-fixture'
 import { structuredAgentRuntimeRegistration } from '../../src/main/runtime/structured-agent-runtime-registrations'
+import { createStructuredAgentEnvironmentResolvers } from '../../src/main/runtime/structured-agent-shell-environment'
 import { act, renderHook, waitFor, cleanup } from '@testing-library/react'
-import { afterEach, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { SDKStatusMessage } from '@anthropic-ai/claude-agent-sdk'
 const transport = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
@@ -24,7 +25,7 @@ import {
   USER_MESSAGE,
   PROVIDER_SESSION_ID
 } from '../../src/main/claude/claude-structured-session-test-support'
-import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/claude-structured-session-state'
+import type { ClaudeStructuredSessionEvent } from '../../src/main/claude/structured/claude-structured-session-state'
 import { structuredClaudeLifecycleEvent } from '../../src/main/runtime/structured-claude-runtime-adapter'
 import {
   hostTestState,
@@ -32,7 +33,10 @@ import {
   envelope,
   CALLER
 } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-harness'
-import { HOST_TEST_SESSION as sessionId } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import {
+  HOST_TEST_NOW,
+  HOST_TEST_SESSION as sessionId
+} from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { AGENT_SESSION_PERMISSION_OWN_RUNTIME_CAPABILITY } from '../../src/shared/agent-session-permission-modes-capability'
 import { resetStructuredAgentSessionStatusFeedsForTests } from '@/runtime/structured-agent-session-status-feed'
@@ -42,6 +46,16 @@ import { openHostRig, launch } from '../../src/main/acp/acp-structured-host.test
 import { GROK_CONFIG_OPTIONS } from '../../src/main/acp/acp-structured-adapter.test-support'
 import { closeProviderTimelineRigs } from '../../src/main/native-chat/agent-session-timeline/provider-timeline-assembler-test-support'
 import type { StructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host'
+
+import { agentSessionRefusalFailure } from '../../src/shared/agent-session-write-failure'
+import { forgetStructuredSessionSelection } from '@/lib/structured-agent-session-selection-controller'
+
+beforeEach(() => vi.spyOn(Date, 'now').mockReturnValue(HOST_TEST_NOW))
+afterEach(() => {
+  cleanup()
+  forgetStructuredSessionSelection(sessionId)
+  vi.restoreAllMocks()
+})
 
 afterEach(closeProviderTimelineRigs)
 
@@ -62,13 +76,16 @@ function permissionConsumersFor(
   transport.subscribe.mockImplementation(async (_target, emit) => ({
     unsubscribe: subscribe(emit)
   }))
-  const read = vi.fn(async (method: string) => {
+  const read = vi.fn(async (method: string, params?: Parameters<typeof host.setOption>[1]) => {
+    if (method === 'agentSession.setOption' && params) {
+      return write(method, method, { key: params.key, value: params.value }, params)
+    }
     if (method !== 'agentSession.options') {
       return new Promise<never>(() => {})
     }
     return host.readOptions(sessionId)
   })
-  transport.call.mockImplementation((_target, method) => read(method))
+  transport.call.mockImplementation((_target, method, params) => read(method, params))
   const client: RpcClient = {
     getState: () => 'connected',
     onStateChange: () => () => {},
@@ -82,23 +99,28 @@ function permissionConsumersFor(
   }
   const write = vi.fn()
   write.mockImplementation(
-    async (_method, _fingerprint, fields: { key: string; value: string }) => {
-      const result = await host.setOption(CALLER, {
-        envelope: envelope('agentSession.setOption', fields),
-        ...fields
-      })
-      if (!result.ok) {
-        throw new Error(`Permission pick refused: ${result.refusal.code}`)
-      }
-      return result.value
+    async (
+      _method: string,
+      _fingerprint: string,
+      fields: { key: string; value: string },
+      params?: Parameters<typeof host.setOption>[1]
+    ) => {
+      return host.setOption(
+        CALLER,
+        params ?? {
+          envelope: envelope('agentSession.setOption', fields),
+          ...fields
+        }
+      )
     }
   )
   const phoneWrite = vi.fn()
-  phoneWrite.mockImplementation(async (...args) => ({
-    status: 'accepted',
-    value: await write(...args),
-    sameFence: true
-  }))
+  phoneWrite.mockImplementation(async (...args) => {
+    const result = await write(...args)
+    return result.ok
+      ? { status: 'accepted', value: result.value, sameFence: true }
+      : { status: 'rejected', failure: agentSessionRefusalFailure(result.refusal) }
+  })
   const target = { kind: 'local' } as const
   const common = { agent, sessionId, fence }
   const hooks = [
@@ -121,11 +143,13 @@ function permissionConsumersFor(
         client,
         enabled: true,
         optionStamp: 'model|own',
+        turnId: null,
         hostSupport: {
           permissionModes: true,
           permissionOwn: true,
           statusFeed: true,
-          coherentModelCatalog: false
+          coherentModelCatalog: false,
+          sendOptions: false
         },
         mutate: phoneWrite
       })
@@ -281,7 +305,12 @@ it.each([1, 10, 100])(
         throw new Error('Both mounted permission consumers are required')
       }
       await act(async () => {
-        expect(await desktop.result.current.setStructuredOption('permissionMode', 'ask')).toBe(true)
+        const applied = await desktop.result.current.setStructuredOption('permissionMode', 'ask')
+        expect(
+          write.mock.settledResults.at(-1)?.value,
+          JSON.stringify(write.mock.settledResults.at(-1)?.value)
+        ).toMatchObject({ ok: true })
+        expect(applied).toBe(true)
       })
       expect(store.getRecord(sessionId)?.permissionMode).toBe('ask')
       expect(host.readStatusSummary(sessionId)?.runtimePermission).toEqual({
@@ -343,7 +372,8 @@ it.each([1, 10, 100])(
       await act(async () => {
         subscriptions.forEach((dispose) => dispose())
       })
-      expect(descriptions()).toEqual(Array(count * 2).fill('Permissions'))
+      // Report loss falls back to the saved mode, which the next turn applies.
+      expect(descriptions()).toEqual(Array(count * 2).fill('Full access'))
     } finally {
       cleanup()
       resetStructuredAgentSessionStatusFeedsForTests()
@@ -477,18 +507,16 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       resolveWorkspacePath: async () => root,
       resolveLaunchArgs: () => [],
       resolveClaudeAuthPolicy: () => ({ account: 'managed' as const }),
-      resolveCodexCommand: () => 'codex',
+      resolveCodexCommand: () => ({ command: 'codex', prefixArgs: [] }),
       readCodexInstallation: async () => ({ version: '0.136.0' }),
       readProcessStartTime: async () => 1_700_000_000_000,
       openCodexConnection: codex.openConnection
     },
     store,
     journalDatabase: host.deps.journalDatabase,
-    environment: {
-      resolveBaseEnvironment: async () => ({}),
-      resolveAgentEnvironment: async () => ({}),
-      refreshAfterMissingProgram: async () => {}
-    },
+    environment: createStructuredAgentEnvironmentResolvers({
+      resolveEnvironment: async () => ({})
+    }),
     host: () => host,
     followUps: { onDispatchSettledLate: () => {} },
     deliverLifecycle: (event) => {
@@ -513,7 +541,7 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
     await waitFor(() => expect(host.readStatusSummary(sessionId)?.hostExecutionPhase).toBe('ready'))
     const fence = store.getRecord(sessionId)!.lease.runtimeFence
     const child = host.collaboratorsForTests().sessions.get(sessionId)!.child!
-    const { mount } = permissionConsumersFor(host, 'codex', fence)
+    const { mount, write } = permissionConsumersFor(host, 'codex', fence)
     const views = mount()
     const descriptions = () =>
       views.map(
@@ -523,10 +551,16 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
     await waitFor(() => expect(descriptions()).toEqual(['Approve for me', 'Approve for me']))
     const desktop = views[0]!
     await act(async () => {
-      expect(await desktop.result.current.setStructuredOption('permissionMode', 'ask')).toBe(true)
+      const applied = await desktop.result.current.setStructuredOption('permissionMode', 'ask')
+      expect(
+        write.mock.settledResults.at(-1)?.value,
+        JSON.stringify(write.mock.settledResults.at(-1)?.value)
+      ).toMatchObject({ ok: true })
+      expect(applied).toBe(true)
     })
     const saved = structuredClone(store.getRecord(sessionId))
-    const staleRead = (await adapter.prepareReadOptions!({ sessionId, fence }))!
+    const readCurrentOptions = adapter.readOptions!.bind(adapter, { sessionId, fence })
+    expect((await readCurrentOptions()).current.reportedPermissionMode).toBe('auto')
     sending = adapter.dispatch({
       sessionId,
       clientMessageId: 'same-child-ask',
@@ -553,8 +587,11 @@ it('publishes accepted Codex fresh policy to desktop and phone without stale sta
       await Promise.all(settlements)
     })
     await waitFor(() => expect(descriptions()).toEqual(['Ask for approval', 'Ask for approval']))
-    expect(staleRead().current.reportedPermissionMode).toBe('ask')
-    expect(store.getRecord(sessionId)).toEqual(saved)
+    expect((await readCurrentOptions()).current.reportedPermissionMode).toBe('ask')
+    await host.drainStatusWrites()
+    const updated = store.getRecord(sessionId)
+    expect(updated).toEqual({ ...saved, lastTurn: updated?.lastTurn })
+    expect(updated?.lastTurn).toEqual({ state: 'open', at: expect.any(Number), prompt: '' })
     expect((await host.readOptions(sessionId)).current).toMatchObject({
       permissionMode: 'ask',
       reportedPermissionMode: 'ask'

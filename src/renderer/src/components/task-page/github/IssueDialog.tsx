@@ -87,11 +87,17 @@ export function TaskPageGitHubIssueDialog({
             const issuesSlug = entry?.sources?.issues
               ? `${entry.sources.issues.owner}/${entry.sources.issues.repo}`
               : null
-            const fallback = newIssueTargetRepo?.displayName ?? 'this repository'
+            const target = issuesSlug ?? newIssueTargetRepo?.displayName
             return (
               <DialogDescription>
-                {translate('auto.components.TaskPage.9f2b4c03a6', 'Filing in')}
-                {issuesSlug ?? fallback}
+                {target
+                  ? translate('auto.components.TaskPage.filingInTarget', 'Filing in {{target}}', {
+                      target
+                    })
+                  : translate(
+                      'auto.components.TaskPage.filingInThisRepository',
+                      'Filing in this repository'
+                    )}
               </DialogDescription>
             )
           })()}
@@ -211,7 +217,9 @@ export function TaskPageGitHubIssueDialog({
             />
           </div>
           <p className="text-[10px] text-muted-foreground">
-            {submitShortcutLabel} {translate('auto.components.TaskPage.fc0d8a1fa4', 'to submit.')}
+            {translate('auto.components.TaskPage.shortcutToSubmit', '{{shortcut}} to submit.', {
+              shortcut: submitShortcutLabel
+            })}
           </p>
         </div>
         <DialogFooter>

@@ -6,17 +6,15 @@ import { describe, expect, it } from 'vitest'
 import type { AgentSessionJournalIdentity } from '../../shared/agent-session-journal-types'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { CLAUDE_STRUCTURED_BASE_OPTIONS } from './claude-structured-launch-resolution'
-import {
-  ClaudeStructuredSessionAdapter,
-  type ClaudeStructuredSessionEvent
-} from './claude-structured-session-adapter'
+import { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
+import type { ClaudeStructuredSessionEvent } from './structured/claude-structured-session-state'
 import {
   realClaudeAuthenticated,
   realClaudeAvailable,
   realClaudeCommand,
   realClaudeLaunchHome
 } from './claude-real-cli-availability-test-support'
-import { claudeStartupSettled } from './claude-structured-session-test-support'
+import { claudeStartupSettled } from './claude-structured-startup-settled-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
 const SESSION_ID = 'real-cli-stop-task'
@@ -82,6 +80,7 @@ describe.skipIf(!realClaudeAvailable)('Claude structured real CLI targeted stop'
           providerSessionId,
           resumeLeafUuid: null,
           resumesTranscript: false,
+          cliFlag: async () => 'supported' as const,
           continuesChain: false
         }),
         onEvent: (event) => events.push(event),

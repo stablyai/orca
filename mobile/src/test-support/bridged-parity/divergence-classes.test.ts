@@ -198,7 +198,7 @@ describe('what the pin still admits', () => {
     expect(drift.join('\n')).toContain(
       `identical: pinned ${tally.identical}, ran ${moved.identical}`
     )
-    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 350, ran 349')
+    expect(drift.join('\n')).toContain('result-absent-settlement: pinned 337, ran 336')
   })
 
   it('goes red on a class that grew and on the corpus losing a golden', () => {

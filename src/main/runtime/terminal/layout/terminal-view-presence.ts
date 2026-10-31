@@ -65,11 +65,7 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
 
   /** Live local daemon sessions with no ingested bytes need attachment; existing headless state or snapshot reconciliation means attach already began. */
   protected isKnownUnattachedLocalDaemonPty(ptyId: string): boolean {
-    return this.terminalViewSubscribers.isKnownUnattachedLocal(ptyId)
-  }
-
-  protected reconcileSubscriberDrivenProviderAttach(ptyId: string): void {
-    this.terminalViewSubscribers.reconcileProviderAttach(ptyId)
+    return this.mainDaemonAttachments.isKnownUnattachedLocal(ptyId)
   }
 
   /** Mark a raw-output viewer without transferring terminal query authority. */
@@ -169,19 +165,14 @@ export abstract class OrcaRuntimeWithNotifyRemoteTerminalViewPresenceChanged ext
   /** Raw keystroke pass-through for the pop-out dashboard's terminal preview.
    *  Honors the mobile-presence lock like the main window's pty:write path. */
   async writeTerminalPreviewInput(ptyId: string, data: string): Promise<boolean> {
-    if (data.length === 0 || this.getDriver(ptyId).kind === 'mobile') {
+    if (data.length === 0) {
       return false
     }
     try {
       await assertTerminalInputWithinLimitWithYield(data)
       await this.writeTerminalInputChunks(ptyId, data, {
         inputKind: 'driving',
-        // Why: a phone can claim the floor while a paste yields between chunks.
-        beforeWrite: () => {
-          if (this.getDriver(ptyId).kind === 'mobile') {
-            throw new Error('terminal_mobile_driver_active')
-          }
-        }
+        inputSource: 'desktop'
       })
       return true
     } catch {

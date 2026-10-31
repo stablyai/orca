@@ -318,6 +318,26 @@ describe('credential cleanup invite reaper', () => {
     await database.close()
   })
 
+  it('skips drained invite and authorization reaps until the pause ends', async () => {
+    const database = await openInMemoryRelayDatabase()
+    let now = NOW
+    const store = new RelayCredentialStore(database, () => now)
+    await store.cleanup()
+    await insertInvite(database, { token: 'stale', state: 'consumed', updatedAt: NOW - 8 * DAY_MS })
+    await insertDirectAuthorization(database, { id: 'stale', deadline: NOW, consumedAt: NOW - 2 * DAY_MS })
+
+    now = NOW + 60_000
+    await store.cleanup()
+    expect(await remainingTokens(database)).toEqual(['stale'])
+    expect(await remainingIds(database, 'relay_direct_authorizations', 'direct_auth_id')).toEqual(['stale'])
+
+    now = NOW + 6 * 60_000
+    await store.cleanup()
+    expect(await remainingTokens(database)).toEqual([])
+    expect(await remainingIds(database, 'relay_direct_authorizations', 'direct_auth_id')).toEqual([])
+    await database.close()
+  })
+
   it('reaps confirm results and audit events only past their retention windows', async () => {
     const database = await openInMemoryRelayDatabase()
     const store = new RelayCredentialStore(database, () => NOW)

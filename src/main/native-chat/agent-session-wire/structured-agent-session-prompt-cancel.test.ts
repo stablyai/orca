@@ -328,35 +328,6 @@ describe("a card's own Cancel, as its provider answers it", () => {
     return { result, routes, answerPrompt, dismissPrompt, card }
   }
 
-  describe('on an approval whose subject a newer Orca wrote, which only its Cancel answers', () => {
-    const NEWER_SUBJECT: AgentJournalApprovalSubject = JSON.parse('{"kind":"diff","path":"a.ts"}')
-
-    it('has Claude decline the request, the turn going on, and keeps the subject as it was', async () => {
-      const { routes, dismissPrompt, card } = await cancelCard(
-        { kind: 'dismiss' },
-        1,
-        true,
-        true,
-        NEWER_SUBJECT
-      )
-
-      expect(dismissPrompt).toHaveBeenCalledWith(expect.objectContaining({ answer: true }))
-      expect(routes.interrupt).not.toHaveBeenCalled()
-      expect(routes.stop).not.toHaveBeenCalled()
-      expect(card).toMatchObject({
-        subject: { kind: 'diff', path: 'a.ts' },
-        resolution: { state: 'cancelled' }
-      })
-    })
-
-    it('has Codex end the turn holding it', async () => {
-      const { routes, dismissPrompt } = await cancelCard(undefined, 1, true, true, NEWER_SUBJECT)
-
-      expect(routes.interrupt).toHaveBeenCalledOnce()
-      expect(dismissPrompt).not.toHaveBeenCalled()
-    })
-  })
-
   it('interrupts the turn holding the card for a provider that gives no answer', async () => {
     const { routes, answerPrompt } = await cancelCard(undefined)
 

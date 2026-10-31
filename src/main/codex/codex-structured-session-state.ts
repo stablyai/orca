@@ -1,3 +1,4 @@
+import type { CodexRenameInvocationDeps } from './codex-provider-session-rename'
 import type { CodexAppliedSettings } from './codex-structured-applied-settings'
 import type { StructuredAgentSessionChildWorkProducer } from '../native-chat/agent-session-wire/structured-agent-session-subagent-rows'
 import type { StructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
@@ -41,6 +42,7 @@ export type CodexSessionCatalogAccess = AgentModelCatalogSessionAccess & {
 }
 
 export type CodexStructuredLaunch = {
+  prefixArgs?: readonly string[]
   command: string
   args: string[]
   cwd: string
@@ -95,6 +97,7 @@ export type CodexStructuredSessionEvent =
   | { type: 'ended'; sessionId: string; reason: string; observedAt?: number }
 
 export type CodexStructuredSessionAdapterDeps = {
+  renameInvocation?: CodexRenameInvocationDeps
   resolveAccountKind?: (home: string) => AgentSessionAccountKind | undefined
   atRestCommands?: StructuredAgentSessionAtRestCommands
   resolveLaunch: (input: StructuredLaunchRequest) => Promise<CodexStructuredLaunch>
@@ -174,7 +177,7 @@ export type CodexSession = {
   }
   /** The configured personality and tier a reset returns to, read before the first override. */
   nativeDefaults?: { personality?: string; serviceTier?: string }
-  /** Overrides actually attempted on this child, independently of future saved picks. */
+  /** Acquisition facts overlaid by controls actually sent, independently of reports or saved picks. */
   appliedTurnOptions?: Readonly<Record<string, string>>
   appliedSettings?: CodexAppliedSettings
   /** Optional for adapters without a host catalog store. */

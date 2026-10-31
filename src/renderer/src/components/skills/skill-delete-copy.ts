@@ -42,21 +42,24 @@ export function skillDeleteBlockReasonLabel(reason: SkillDeleteBlockReason): str
 }
 
 export function skillDeleteActionLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deleteOne', 'Delete {{count}} skill', { count })
-    : translate('auto.components.skills.count.deleteOther', 'Delete {{count}} skills', { count })
+  return translate('auto.components.skills.count.delete', 'Delete {{count}} skills', {
+    count,
+    defaultValue_one: 'Delete {{count}} skill'
+  })
 }
 
 function foldersLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deleteFolderOne', '{{count}} folder', { count })
-    : translate('auto.components.skills.count.deleteFolderOther', '{{count}} folders', { count })
+  return translate('auto.components.skills.count.deleteFolder', '{{count}} folders', {
+    count,
+    defaultValue_one: '{{count}} folder'
+  })
 }
 
 function linksLabel(count: number): string {
-  return count === 1
-    ? translate('auto.components.skills.count.deleteLinkOne', '{{count}} link', { count })
-    : translate('auto.components.skills.count.deleteLinkOther', '{{count}} links', { count })
+  return translate('auto.components.skills.count.deleteLink', '{{count}} links', {
+    count,
+    defaultValue_one: '{{count}} link'
+  })
 }
 
 /** Summarize folders/links by provider, omitting zero counts; return null when nothing is removable. */
@@ -118,9 +121,9 @@ export function skillDeleteNothingToDoLabel(count: number): string {
         'That skill cannot be deleted from here.'
       )
     : translate(
-        'auto.components.skills.SkillDelete.nothingOther',
+        'auto.components.skills.SkillDelete.nothing',
         'None of the {{count}} selected skills can be deleted from here.',
-        { count }
+        { count, defaultValue_one: 'The {{count}} selected skill cannot be deleted from here.' }
       )
 }
 

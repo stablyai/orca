@@ -13,6 +13,7 @@ import { LoadingSpinner } from '@/components/LoadingSpinner'
 import { translate } from '@/i18n/i18n'
 import type { WslHostDistro } from '../../../../shared/wsl-host-types'
 import { getWslHostServerFilesMissingLabel } from './wsl-host-row-status'
+import { wslSetVersion2Command } from '../../../../shared/wsl-host-failure-copy'
 
 export function wslDistroStateLabel(distro: WslHostDistro): string {
   if (distro.version === 1) {
@@ -24,6 +25,20 @@ export function wslDistroStateLabel(distro: WslHostDistro): string {
   return distro.state === 'running'
     ? translate('auto.components.sidebar.AddWslHostFormPanel.running', 'Running')
     : translate('auto.components.sidebar.AddWslHostFormPanel.stopped', 'Stopped')
+}
+
+/** Why a WSL 1 row is disabled, with the command that converts it. */
+export function wsl1DistroReason(name: string): string {
+  return translate(
+    'auto.components.sidebar.AddWslHostFormPanel.wsl1Reason',
+    'WSL 1 can’t run an Orca host; convert with {{command}}',
+    { command: wslSetVersion2Command(name) }
+  )
+}
+
+/** A version the registry did not report may be WSL 2, so only a known WSL 1 is excluded. */
+export function hasWsl2Distro(distros: readonly WslHostDistro[]): boolean {
+  return distros.some((distro) => distro.version !== 1)
 }
 
 export function canAddWslDistro(distro: WslHostDistro | undefined): boolean {
@@ -58,6 +73,9 @@ export function AddWslHostFormPanel({
   onCancel: () => void
 }): React.JSX.Element {
   const selected = distros.find((distro) => distro.name === selectedDistro)
+  // The closed select hides each row's reason, so the first WSL 1 distro's is repeated below it.
+  const wsl1Distro = distros.find((distro) => distro.version === 1)
+  const noWsl2Distros = !loading && !serverFilesMissing && !error && !hasWsl2Distro(distros)
   const stopped = selected?.state === 'stopped' && canAddWslDistro(selected)
   return (
     <>
@@ -68,7 +86,7 @@ export function AddWslHostFormPanel({
         <DialogDescription>
           {translate(
             'auto.components.sidebar.AddWslHostFormPanel.description',
-            'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Use it for new projects; projects you opened through \\\\wsl.localhost keep working as they are.'
+            'Orca runs its server inside the distro, so git, files and terminals run natively in Linux. Projects in this distro that you opened through \\\\wsl.localhost move to this host automatically once their terminals are idle; projects on a Windows drive (/mnt/…) stay on this computer. You can bring a moved project back from the sidebar.'
           )}
         </DialogDescription>
       </DialogHeader>
@@ -115,8 +133,17 @@ export function AddWslHostFormPanel({
           <SelectContent>
             {distros.map((distro) => (
               <SelectItem key={distro.name} value={distro.name} disabled={!canAddWslDistro(distro)}>
-                <span className="truncate">{distro.name}</span>
-                <span className="text-muted-foreground">{wslDistroStateLabel(distro)}</span>
+                <span className="flex min-w-0 flex-col">
+                  <span className="flex min-w-0 items-center gap-2">
+                    <span className="truncate">{distro.name}</span>
+                    <span className="text-muted-foreground">{wslDistroStateLabel(distro)}</span>
+                  </span>
+                  {distro.version === 1 ? (
+                    <span className="text-2xs text-muted-foreground">
+                      {wsl1DistroReason(distro.name)}
+                    </span>
+                  ) : null}
+                </span>
               </SelectItem>
             ))}
           </SelectContent>
@@ -126,13 +153,25 @@ export function AddWslHostFormPanel({
             {getWslHostServerFilesMissingLabel()}
           </p>
         ) : null}
-        {!loading && !serverFilesMissing && distros.length === 0 ? (
-          <p className="text-xs text-muted-foreground">
-            {translate(
-              'auto.components.sidebar.AddWslHostFormPanel.none',
-              'No WSL distros found. Install one with: wsl --install'
-            )}
-          </p>
+        {noWsl2Distros ? (
+          <div className="space-y-0.5 rounded-md border border-border bg-muted/30 px-3 py-2">
+            <p className="text-xs font-medium">
+              {translate(
+                'auto.components.sidebar.AddWslHostFormPanel.noWsl2Title',
+                'No WSL 2 distros found'
+              )}
+            </p>
+            <p className="text-2xs text-muted-foreground">
+              {translate(
+                'auto.components.sidebar.AddWslHostFormPanel.noWsl2Install',
+                'Install one from a Windows terminal with {{command}}, then choose Refresh.',
+                { command: 'wsl --install' }
+              )}
+            </p>
+          </div>
+        ) : null}
+        {wsl1Distro ? (
+          <p className="text-xs text-muted-foreground">{wsl1DistroReason(wsl1Distro.name)}</p>
         ) : null}
         {stopped ? (
           <p className="text-xs text-muted-foreground">

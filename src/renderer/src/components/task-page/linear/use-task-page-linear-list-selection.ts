@@ -1,7 +1,8 @@
+import { linearIssueReadError } from '@/lib/linear-read-error'
 import type { TaskPageProviderMetadataModel } from '../use-task-page-provider-metadata'
 import { useState, useMemo, useEffect } from 'react'
 import { LINEAR_ISSUE_LIST_MAX } from '../../../../../shared/linear/issue-read-limits'
-import { findTaskPageLinearIssue } from './task-page-linear-cache-selectors'
+import { translate } from '@/i18n/i18n'
 import type { LinearTeam } from '../../../../../shared/linear/workspace-types'
 import {
   buildLinearTeamUrl,
@@ -19,7 +20,6 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
   const {
     settings,
     linearStatus,
-    linearCacheSnapshot,
     linearIssues,
     linearIssueLimit,
     linearIssuePage,
@@ -72,9 +72,15 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
   const activeLinearIssueError =
     linearStatus.credentialError ??
     (selectedLinearProject && linearProjectTab === 'issues'
-      ? linearProjectIssuesError
+      ? (linearProjectIssuesError ??
+        (linearProjectIssuesResult.errors?.length
+          ? linearIssueReadError(linearProjectIssuesResult.errors[0].message)
+          : null))
       : selectedLinearCustomView?.model === 'issue'
-        ? linearCustomViewContentsError
+        ? (linearCustomViewContentsError ??
+          (linearCustomViewIssuesResult.errors?.length
+            ? linearIssueReadError(linearCustomViewIssuesResult.errors[0].message)
+            : null))
         : linearError)
   const activeLinearIssueCollectionErrors =
     selectedLinearProject && linearProjectTab === 'issues'
@@ -84,9 +90,13 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
         : undefined
   const activeLinearIssueHasCollectionError = (activeLinearIssueCollectionErrors?.length ?? 0) > 0
   const activeLinearIssueContextLabel = selectedLinearProject
-    ? `Project: ${selectedLinearProject.name}`
+    ? translate('auto.components.TaskPage.linearProjectContext', 'Project: {{name}}', {
+        name: selectedLinearProject.name
+      })
     : selectedLinearCustomView?.model === 'issue'
-      ? `View: ${selectedLinearCustomView.name}`
+      ? translate('auto.components.TaskPage.linearViewContext', 'View: {{name}}', {
+          name: selectedLinearCustomView.name
+        })
       : null
   const canLoadMorePlainLinearIssues =
     !activeLinearIssueContextLabel &&
@@ -128,24 +138,7 @@ export function useTaskPageLinearListSelectionPrelude(model: TaskPageProviderMet
       : selectedLinearCustomView?.model === 'issue'
         ? linearCustomViewIssueLimit
         : linearIssueLimit
-  const displayedLinearIssues = useMemo(
-    () =>
-      activeLinearIssues.map(
-        (issue) =>
-          findTaskPageLinearIssue(
-            linearCacheSnapshot.issueCache,
-            linearCacheSnapshot.searchCache,
-            linearCacheSnapshot.listCache,
-            issue.id
-          ) ?? issue
-      ),
-    [
-      activeLinearIssues,
-      linearCacheSnapshot.issueCache,
-      linearCacheSnapshot.listCache,
-      linearCacheSnapshot.searchCache
-    ]
-  )
+  const displayedLinearIssues = activeLinearIssues
   const linearIssueTeams = useMemo(() => {
     const seen = new Set<string>()
     const teams: LinearTeam[] = []

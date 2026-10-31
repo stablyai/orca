@@ -1,3 +1,8 @@
+import {
+  withGitHubRepoExecution,
+  githubRepoContext,
+  ghRepoExecOptions
+} from '../../github-repository-identity'
 import { runCoalescedProbe, type CoalescedProbes } from '../../../git/coalesced-probe'
 import { githubReadExecutionScope } from '../../github-read-execution-scope'
 import type { PRCheckDetail } from '../../../../shared/github/check-types'
@@ -241,16 +246,20 @@ export function getPRChecks(
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
 ): Promise<PRCheckDetail[]> {
-  const key = JSON.stringify([
-    repoPath,
-    prNumber,
-    headSha ?? null,
-    prRepo ?? null,
-    Boolean(options?.noCache),
-    connectionId ?? null,
-    githubReadExecutionScope(localGitOptions)
-  ])
-  return runCoalescedProbe(checksReads, key, () =>
-    readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions)
-  )
+  return withGitHubRepoExecution(repoPath, connectionId, localGitOptions, async () => {
+    const key = JSON.stringify([
+      repoPath,
+      prNumber,
+      headSha ?? null,
+      prRepo ?? null,
+      Boolean(options?.noCache),
+      connectionId ?? null,
+      githubReadExecutionScope(
+        ghRepoExecOptions(githubRepoContext(repoPath, connectionId, localGitOptions))
+      )
+    ])
+    return runCoalescedProbe(checksReads, key, () =>
+      readPRChecks(repoPath, prNumber, headSha, prRepo, options, connectionId, localGitOptions)
+    )
+  })
 }

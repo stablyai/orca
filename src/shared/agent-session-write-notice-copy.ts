@@ -78,6 +78,7 @@ export const AGENT_SESSION_WRITE_NOTICE_COPY = {
   compactAfterRetry: 'Retry your earlier message, then run /compact.',
   clearAfterSending: 'Your earlier message is still being sent. Run /clear once it has gone.',
   compactAfterSending: 'Your earlier message is still being sent. Run /compact once it has gone.',
+  pendingWork: 'Wait for pending work and messages to finish before using this command.',
   queueTooLarge: 'Too much text is waiting in the queue.',
   shrinkQueue: 'Delete a queued message, or wait for one to go through, then try again.',
   messageTooLarge: 'It is over the 256 KB limit for one message.',

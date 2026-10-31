@@ -358,4 +358,48 @@ describe('remote reattach type-ahead', () => {
       transport.destroy?.()
     })
   })
+
+  // A remount shows the pane's terminal id before its deferred attach starts; keys typed then are real.
+  describe('a remounted pane attaching its terminal', () => {
+    async function attachRemountedPane(options: Record<string, unknown> = {}) {
+      const { createRemoteRuntimePtyTransport } = await import('./remote-runtime-pty-transport')
+      const transport = createRemoteRuntimePtyTransport('env-1', {
+        worktreeId: 'wt-1',
+        tabId: 'tab-1',
+        leafId: 'pane:1',
+        bufferInputUntilConnect: true,
+        ...options
+      })
+      expect(transport.sendInput('ec', 'driving')).toBe(true)
+      transport.attach({ existingPtyId: ORIGINAL_ID, cols: 80, rows: 24, callbacks: {} })
+      expect(transport.sendInput('ho hi\r', 'driving')).toBe(true)
+      expect(inputFrameTexts()).toEqual([])
+      await completeAttach()
+      return transport
+    }
+
+    it('delivers typing from before and during the attach to the terminal it names', async () => {
+      const transport = await attachRemountedPane()
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toBe('echo hi\r'))
+      transport.destroy?.()
+    })
+
+    it('drops that typing when the host now holds another terminal', async () => {
+      resolvedHandle = 'terminal-2'
+      const transport = await attachRemountedPane()
+      await vi.waitFor(() => expect(transport.getPtyId()).toBe('remote:env-1@@terminal-2'))
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).not.toContain('echo')
+      transport.destroy?.()
+    })
+
+    it('drops typing from before the attach when the pane has startup work', async () => {
+      const transport = await attachRemountedPane({ releasePreconnectInput: () => false })
+      expect(transport.sendInput('live', 'driving')).toBe(true)
+      await vi.waitFor(() => expect(inputFrameTexts().join('')).toMatch(/live$/))
+      expect(inputFrameTexts().join('')).toBe('ho hi\rlive')
+      transport.destroy?.()
+    })
+  })
 })

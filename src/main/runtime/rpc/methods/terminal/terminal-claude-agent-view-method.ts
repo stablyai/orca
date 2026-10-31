@@ -1,3 +1,4 @@
+import { isTerminalInputPaused, TerminalInputPausedError } from '../../../terminal-input-admission'
 import { defineMethod, defineStreamingMethod } from '../../core'
 import { bindStructuredAgentSessionStream } from '../structured-agent-session-status-stream'
 import { TerminalViewClaudeAgent } from '../../../../../shared/rpc-contract/terminal-unary-params'
@@ -5,7 +6,7 @@ import { agentHookServer } from '../../../../agent-hooks/server'
 import { assertTerminalAgentSendable } from '../../terminal-agent-send-guard'
 import {
   assertTerminalSendExactPtyBinding,
-  isTerminalInputLockedForClient
+  terminalInputSourceForClient
 } from './terminal-input-delivery'
 import type { ClaudeAgentViewResult } from '../../../../../shared/claude-agent-view'
 
@@ -32,10 +33,11 @@ export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
     permission: 'workspace',
     params: TerminalViewClaudeAgent,
     handler: async (params, { runtime, signal }): Promise<{ view: ClaudeAgentViewResult }> => {
+      const inputSource = terminalInputSourceForClient(params.client)
       const leaf = runtime.resolveLiveLeafForHandle(params.terminal)
       const ptyId = leaf?.ptyId
       const paneKey = runtime.getLiveTerminalPaneKey(params.terminal)
-      if (!ptyId || !paneKey || isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
+      if (!ptyId || !paneKey || isTerminalInputPaused(runtime, ptyId, inputSource)) {
         return { view: { status: 'unavailable' } }
       }
       const rows = agentHookServer.getStatusSnapshotForPane(paneKey)
@@ -48,9 +50,6 @@ export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
       }
       const assertWritable = () => {
         assertTerminalSendExactPtyBinding(runtime, params.terminal, ptyId)
-        if (isTerminalInputLockedForClient(runtime, ptyId, params.client)) {
-          throw new Error('terminal_guard_not_writable')
-        }
       }
       try {
         const view = await agentHookServer.claudeAgentViews.view({
@@ -87,6 +86,7 @@ export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
               { text: input },
               {
                 inputKind: 'driving',
+                inputSource,
                 signal,
                 beforeWrite: async () => {
                   await assertTerminalAgentSendable({
@@ -106,8 +106,9 @@ export const TERMINAL_CLAUDE_AGENT_VIEW_METHODS = [
           return { view: { status: 'permission' } }
         }
         if (
-          error instanceof Error &&
-          ['terminal_guard_not_writable', 'terminal_guard_no_agent'].includes(error.message)
+          error instanceof TerminalInputPausedError ||
+          (error instanceof Error &&
+            ['terminal_guard_not_writable', 'terminal_guard_no_agent'].includes(error.message))
         ) {
           return { view: { status: 'unavailable' } }
         }

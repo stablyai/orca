@@ -16,6 +16,7 @@ const dependencies = vi.hoisted(() => ({
 
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',

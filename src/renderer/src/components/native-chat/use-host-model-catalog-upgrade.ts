@@ -20,7 +20,7 @@ import {
   joinHostModelListingWait
 } from '../../../../shared/host-model-listing-waits'
 
-/** Warm visible chats from the host catalog; share one listing wait per chat while built-ins stay usable. Recheck held unavailability on agent changes, focus and turn edges. */
+/** Warm visible chats from the host catalog and share one listing wait per chat. Recheck held unavailability on agent changes, focus and turn edges. */
 export function useHostModelCatalogUpgrade(args: {
   agent: AgentType
   sessionId: string
@@ -140,10 +140,10 @@ export function useHostModelCatalogUpgrade(args: {
       )
     }
     if (isHostModelListingWaitInFlight(waitKey)) {
-      // The host already answered that its listing is running: the built-in list stands meanwhile.
+      // A joined listing is still pending, so it cannot settle the seed as installed inventory.
       updateOptionState((current) =>
         current.record === activeOptionRecordRef.current
-          ? settleStructuredAgentSessionBuiltinCatalog(current)
+          ? settleStructuredAgentSessionBuiltinCatalog(current, true)
           : current
       )
       waitForListing()

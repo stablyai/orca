@@ -35,6 +35,59 @@ import { structuredAgentSessionPaneKey } from '../../../../shared/structured-age
 import { structuredAgentSessionDraftScopeKey } from './native-chat-composer-draft-store'
 
 describe('NativeChatStructuredSession', () => {
+  it('isolates mounted chats from unrelated settings and renders their live follow-up choice', async () => {
+    const original = useAppStore.getState().settings
+    const settings = { ...getDefaultSettings('/tmp'), nativeChatQueueFollowUps: false }
+    useAppStore.setState({ settings })
+    const view = render(
+      <>
+        {['local-chat', 'ssh-chat'].map((sessionId) => (
+          <NativeChatStructuredSession
+            key={sessionId}
+            isVisible
+            isFocusedGroup
+            tabId={sessionId}
+            sessionId={sessionId}
+            target={
+              sessionId === 'local-chat'
+                ? { kind: 'local' }
+                : { kind: 'environment', environmentId: 'ssh-host' }
+            }
+            agent="codex"
+          />
+        ))}
+      </>
+    )
+    try {
+      await act(async () => {})
+      mocks.controllerRender.mockClear()
+      act(() =>
+        useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: false } })
+      )
+      expect(mocks.controllerRender).not.toHaveBeenCalled()
+      act(() =>
+        useAppStore.setState({
+          settings: { ...settings, showTasksButton: !settings.showTasksButton }
+        })
+      )
+      expect(mocks.controllerRender).not.toHaveBeenCalled()
+      act(() => useAppStore.setState({ settings: { ...settings, nativeChatQueueFollowUps: true } }))
+      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
+        new Set(['local-chat', 'ssh-chat'])
+      )
+      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === true)).toBe(true)
+      mocks.controllerRender.mockClear()
+      act(() => useAppStore.setState({ settings }))
+      expect(new Set(mocks.controllerRender.mock.calls.map(([sessionId]) => sessionId))).toEqual(
+        new Set(['local-chat', 'ssh-chat'])
+      )
+      expect(mocks.controllerRender.mock.calls.every(([, queue]) => queue === false)).toBe(true)
+    } finally {
+      view.unmount()
+      useAppStore.setState({ settings: original })
+    }
+  })
+
   it('applies persisted appearance at the chat root and updates it live', () => {
     const original = useAppStore.getState().settings
     useAppStore.setState({
@@ -166,84 +219,21 @@ describe('NativeChatStructuredSession', () => {
     })
   })
 
-  it('routes the launch draft and app-menu paste to the structured composer', () => {
-    const draft = {
-      tabId: 'structured-draft-tab',
-      agent: 'codex' as const,
-      text: 'PR #19423 — review this change',
-      createdAt: Date.now()
-    }
-    useAppStore.getState().seedNativeChatLaunchDraft(draft)
+  it('routes app-menu paste to the structured composer', () => {
     render(
       <NativeChatStructuredSession
         isVisible
         isFocusedGroup
-        tabId={draft.tabId}
+        tabId="draft-tab"
         sessionId="draft-session"
         target={{ kind: 'local' }}
         agent="codex"
       />
     )
-    expect(mocks.composerProps?.launchSeed).toEqual({
-      launchDraft: draft,
-      launchDraftResolved: false,
-      ownsTabWideLaunchDraft: true
-    })
-    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
     const composer = screen.getByTestId('structured-composer')
     composer.focus()
     window.dispatchEvent(new Event('orca-app-menu-paste', { cancelable: true }))
-
     expect(mocks.pasteFromClipboard).toHaveBeenCalledOnce()
-  })
-
-  // Do not baseline launch drafts against the controller’s pre-read idle state; backfill could resolve unseen input.
-  it('holds the launch draft unresolved until the first journal read settles', () => {
-    const draft = {
-      tabId: 'structured-idle-tab',
-      agent: 'codex' as const,
-      text: 'PR #19423 — review this change',
-      createdAt: Date.now()
-    }
-    useAppStore.getState().seedNativeChatLaunchDraft(draft)
-    mocks.status = 'idle'
-    mocks.messages = [
-      {
-        id: 'user-1',
-        role: 'user',
-        source: 'transcript',
-        timestamp: draft.createdAt + 1,
-        blocks: [{ type: 'text', text: draft.text }]
-      }
-    ]
-    const { rerender } = render(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId={draft.tabId}
-        sessionId="idle-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-    expect(mocks.composerProps?.launchSeed).toMatchObject({
-      launchDraft: draft,
-      launchDraftResolved: false
-    })
-
-    mocks.status = 'ready'
-    rerender(
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId={draft.tabId}
-        sessionId="idle-session"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    )
-    expect(mocks.composerProps?.launchSeed?.launchDraftResolved).toBe(true)
-    act(() => useAppStore.getState().clearNativeChatLaunchDraft(draft.tabId))
   })
 
   it('focuses the chat on a click outside its controls and sends typing there to the composer', () => {
@@ -840,25 +830,26 @@ describe('NativeChatStructuredSession', () => {
         agent="claude"
       />
     )
-    const steerQueued = mocks.composerProps?.steerQueued
+    const steerHead = mocks.composerProps?.steerHead
     const onSubmitted = mocks.composerProps?.structuredTransport?.onSubmitted
-    if (!steerQueued || typeof onSubmitted !== 'function') {
+    if (!steerHead || typeof onSubmitted !== 'function') {
       throw new Error('Structured composer was not wired')
     }
     mocks.revealLatest.mockClear()
 
-    expect(steerQueued()).toBe(false)
+    expect(steerHead()).toBe(false)
     expect(mocks.revealLatest).not.toHaveBeenCalled()
 
     // The composer's sends reveal through its transport.
     onSubmitted()
     expect(mocks.revealLatest).toHaveBeenCalledOnce()
-    mocks.queuedSteerNewest.mockReturnValue(true)
-    expect(steerQueued()).toBe(true)
+    mocks.queuedSteerHead.mockReturnValue(true)
+    expect(steerHead()).toBe(true)
     expect(mocks.revealLatest).toHaveBeenCalledTimes(2)
   })
 
   it("brings the latest into view when a queued card's Steer sends it now", () => {
+    mocks.isWorking = true
     mocks.queuedCards = [
       { messageId: 'draft-1', position: 1, text: 'Also check SSH', state: 'waiting', hold: 'turn' }
     ]

@@ -1,15 +1,13 @@
 // The words for a usage limit an agent hit: which limit and when it resets.
 
-import {
-  sayAgentSessionFailureEnglish,
-  type AgentSessionFailureCopyId,
-  type AgentSessionFailureCopyValues,
-  type AgentSessionFailureSay
+import type {
+  AgentSessionFailureCopyId,
+  AgentSessionFailureCopyValues,
+  AgentSessionFailureSay
 } from './agent-session-failure-copy'
-import {
-  formatUsageLimitResetClock,
-  type AgentSessionUsageLimit,
-  type AgentSessionUsageLimitWindow
+import type {
+  AgentSessionUsageLimit,
+  AgentSessionUsageLimitWindow
 } from './agent-session-usage-limit'
 import { joinSentences } from './sentence-joining'
 
@@ -36,21 +34,4 @@ export function usageLimitWords(
     : say('usageLimitReached', agent)
   const reset = limit?.resetsAt !== undefined ? context.resetWords?.(limit.resetsAt) : null
   return joinSentences([lead, ...(reset ? [say('usageLimitResetsAt', { when: reset })] : [])])
-}
-
-/** For nameless readers such as mobile, append localized reset time to the host usage-limit sentence; retain other lines unchanged. */
-export function usageLimitLineText(block: {
-  text: string
-  failure?: { kind: string; usageLimit?: AgentSessionUsageLimit }
-}): string {
-  const resetsAt =
-    block.failure?.kind === 'usageLimitReached' ? block.failure.usageLimit?.resetsAt : undefined
-  return resetsAt === undefined
-    ? block.text
-    : joinSentences([
-        block.text,
-        sayAgentSessionFailureEnglish('usageLimitResetsAt', {
-          when: formatUsageLimitResetClock(resetsAt)
-        })
-      ])
 }

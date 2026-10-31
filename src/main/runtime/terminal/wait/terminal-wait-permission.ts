@@ -14,6 +14,7 @@ import type {
 } from '../../runtime-terminal-state-records'
 import { renewRuntimeMobileAgentStatusFromPtyTitle } from '../../runtime-mobile-agent-status-projection'
 import { getDisplayPromptLifecycle } from '../../runtime-worktree-status-projection'
+import { createTerminalInputReservation } from '../../terminal-input-admission'
 import type { RuntimeTerminalWriteOptions } from '../../runtime-terminal-writer'
 import type { WriteSettlement } from '../../../../shared/pty-write-settlement'
 import { resolvePtyWriteHostPlatform } from '../input/pty-write-host-platform'
@@ -276,7 +277,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     payload: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeAction(ptyId, action, payload, options)
+    return this.terminalWriter.writeAction(ptyId, action, payload, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
   }
 
   protected writeTerminalInputChunks(
@@ -284,7 +288,10 @@ export abstract class OrcaRuntimeWithResolveAuthoritativeTerminalWaitPermission 
     text: string,
     options: RuntimeTerminalWriteOptions
   ): Promise<WriteSettlement | undefined> {
-    return this.terminalWriter.writeChunks(ptyId, text, options)
+    return this.terminalWriter.writeChunks(ptyId, text, {
+      ...options,
+      reserveWrite: createTerminalInputReservation(this, options.inputSource, options.reserveWrite)
+    })
   }
 
   protected getPtyWriteHostPlatform(ptyId: string): NodeJS.Platform {

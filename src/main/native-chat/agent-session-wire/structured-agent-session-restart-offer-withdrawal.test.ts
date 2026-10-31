@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -124,7 +125,7 @@ it('keeps the offer when a tabbed chat is restored at boot (R-05)', async () => 
   const { host, store, root, acquire } = await offered()
   await store.setSessionTabVisibility(SESSION, true)
 
-  await host.restoreReadableSessions([SESSION])
+  await openTestChats(host, [SESSION])
 
   expect(acquire).not.toHaveBeenCalled()
   expect(await host.restartResume.list()).toHaveLength(1)
@@ -203,7 +204,7 @@ it('keeps the offer withdrawn after the idle sweep closes the chat and it is rea
   await vi.waitFor(async () => expect(await offersIn(root)).toEqual([]))
 })
 
-it('keeps a failure not retryable after the user moved on and the sweep closed the chat', async () => {
+it('rechecks a swept chat for supersession when the user explicitly retries', async () => {
   const state = await offered()
   const { host, clock } = state
   state.acquire.mockRejectedValueOnce(new Error('provider could not reconnect'))
@@ -216,6 +217,11 @@ it('keeps a failure not retryable after the user moved on and the sweep closed t
   await sweepOnce(host)
   expect(host.hasSession(SESSION)).toBe(false)
 
+  expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: true }])
+  expect(host.hasSession(SESSION)).toBe(false)
+  expect(
+    (await host.restartResume.continueAfterRestart([SESSION], 'stale-retry')).continued
+  ).toEqual([])
   expect(await host.restartResume.listFailures()).toMatchObject([{ retryable: false }])
 })
 

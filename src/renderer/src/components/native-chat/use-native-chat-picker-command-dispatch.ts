@@ -10,9 +10,9 @@ import {
   nativeChatComposerTargetIsRemote,
   type NativeChatResolvedTarget
 } from './native-chat-composer-target'
-import type { NativeChatPickerItem } from '../../../../shared/native-chat/input/native-chat-picker-items'
+import type { NativeChatPickerItem } from '../../../../shared/native-chat-composer-autocomplete'
 import type { NativeChatSendLifecycle } from './use-native-chat-send-lifecycle'
-import type { NativeChatPtySessionOptionsSurface } from './native-chat-pty-session-options'
+import type { NativeChatPtySessionOptionsSurface } from '../../../../shared/native-chat-pty-session-options'
 import {
   answerNativeChatCommandInComposer,
   type NativeChatLocalCommandAnswer

@@ -29,7 +29,7 @@ beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-pi-resolver-'))
 })
 afterEach(async () => {
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   await rm(root, { recursive: true, force: true })
 })
 
@@ -102,6 +102,7 @@ describe('Pi host launch resolution', () => {
     })
     expect(probeVersion).toHaveBeenCalledWith({
       program: '/host/bin/pi',
+      prefixArgs: [],
       cwd: h.workspace,
       env: { PATH: '/host/bin', HOME: '/host/home', PI_CODING_AGENT_DIR: '/host/account' }
     })
@@ -221,7 +222,7 @@ describe('Pi host launch resolution', () => {
       link: { ...h.prior(file), mintedAtFence: fence },
       now: 1_800_000_000_002
     })
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     const reopened = await openTestAgentSessionRecordStore(root)
     const launch = await createPiRpcLaunchResolver({
       store: reopened,

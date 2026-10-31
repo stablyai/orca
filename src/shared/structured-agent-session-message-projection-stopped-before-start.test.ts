@@ -12,7 +12,7 @@ import type {
 import {
   NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION,
   NATIVE_CHAT_STOPPED_BEFORE_START_TEXT
-} from './native-chat-stopped-before-start'
+} from './native-chat/native-chat-stopped-before-start'
 import {
   DISPATCH_REJECTED_CANCELLED,
   DISPATCH_REJECTED_WRITE_FAILED
@@ -22,7 +22,7 @@ import {
   projectNativeChatTranscript,
   projectNativeChatTranscriptMessages
 } from './native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from './native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership } from './native-chat-turn-membership'
 
 let sequence = 0

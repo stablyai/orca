@@ -14,7 +14,11 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { structuredAgentSessionCommandTurn } from './structured-agent-session-command-turn'
+import {
+  structuredAgentSessionCommandTurn,
+  structuredAgentSessionCommandWasStopped
+} from './structured-agent-session-command-turn'
+import type * as CommandTurnModule from './structured-agent-session-command-turn'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   HOST_TEST_NOW as NOW,
@@ -24,9 +28,20 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
+
+vi.mock('./structured-agent-session-command-turn', async (importOriginal) => {
+  const actual = await importOriginal<typeof CommandTurnModule>()
+  return {
+    ...actual,
+    structuredAgentSessionCommandWasStopped: vi.fn(actual.structuredAgentSessionCommandWasStopped)
+  }
+})
 
 const CALLER = { callerKey: 'client-1' }
 
@@ -52,6 +67,7 @@ beforeEach(async () => {
       providerSessionId: PROVIDER_SESSION_ID,
       resumeLeafUuid: null,
       resumesTranscript: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0,
+      cliFlag: async () => 'supported' as const,
       continuesChain: (store.getRecord(SESSION)?.providerHandleChain.length ?? 0) > 0
     }),
     onEvent: (event) => {
@@ -93,6 +109,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -163,14 +180,49 @@ async function commandState(cmid: string) {
   return readAgentJournalTurn(snapshot.items.find((item) => item.itemId === itemId)?.body)
 }
 
+it('stops an ordinary reply without reading command Stop history', async () => {
+  claude.routes.interrupt = () => {
+    throw new ClaudeControlRequestError('interrupt', 'Claude did not answer the interrupt.')
+  }
+  const body = hostTestMessage('ordinary reply')
+  await host.send(CALLER, { envelope: envelope('agentSession.send', { body }), body })
+  const { connection, uuid } = await sent('ordinary reply')
+  frame(connection, {
+    type: 'user',
+    uuid,
+    parent_tool_use_id: null,
+    message: { role: 'user', content: [{ type: 'text', text: 'ordinary reply' }] }
+  })
+  frame(connection, {
+    type: 'assistant',
+    uuid: 'ordinary-answer',
+    parent_tool_use_id: null,
+    message: { id: 'msg-ordinary', role: 'assistant', content: [{ type: 'text', text: 'Working' }] }
+  })
+  await host.flushStreamedEvents(SESSION)
+  const priorStop = vi.mocked(structuredAgentSessionCommandWasStopped).mockClear()
+
+  await expect(
+    host.cancel(CALLER, { envelope: envelope('agentSession.cancel', {}) })
+  ).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(priorStop).not.toHaveBeenCalled()
+  expect(connection.closed).toBe(true)
+})
+
 it('ends a hung /compact Claude will not interrupt by stopping it, and answers the next send in its own turn', async () => {
   claude.routes.interrupt = () => {
     throw new ClaudeControlRequestError('interrupt', 'Claude did not answer the interrupt.')
   }
   const cmid = await compact()
   const { connection: compacting } = await sent('/compact')
+  const priorStop = vi.mocked(structuredAgentSessionCommandWasStopped).mockClear()
 
   await expect(stop(cmid)).resolves.toMatchObject({ ok: true, value: { cancelled: true } })
+  expect(priorStop).toHaveBeenCalledExactlyOnceWith(
+    expect.anything(),
+    structuredAgentSessionCommandTurn(cmid).turnId
+  )
+  expect(priorStop).toHaveReturnedWith(false)
   await vi.waitFor(async () => expect((await commandState(cmid))?.state).toBe('interrupted'))
 
   const body = hostTestMessage('what next?')

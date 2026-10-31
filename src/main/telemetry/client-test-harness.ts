@@ -106,7 +106,7 @@ const CONSENT_ENV_VARS = [
   'TEAMCITY_VERSION'
 ] as const
 
-function stashAndClearConsentEnv(): Record<string, string | undefined> {
+export function stashAndClearConsentEnv(): Record<string, string | undefined> {
   const stash: Record<string, string | undefined> = {}
   for (const name of CONSENT_ENV_VARS) {
     stash[name] = process.env[name]
@@ -115,7 +115,7 @@ function stashAndClearConsentEnv(): Record<string, string | undefined> {
   return stash
 }
 
-function restoreConsentEnv(stash: Record<string, string | undefined>): void {
+export function restoreConsentEnv(stash: Record<string, string | undefined>): void {
   for (const name of CONSENT_ENV_VARS) {
     const prior = stash[name]
     if (prior === undefined) {
@@ -139,7 +139,7 @@ export function setupTelemetryClientTest(
   const mock = makeMockPostHog()
   const settings = makeFakeSettings(telemetry)
   const store = makeFakeStore(settings)
-  initTelemetry(store)
+  initTelemetry(store, () => {})
   _setPostHogClientForTests(mock as unknown as PostHog)
   _setCommonPropsForTests(BASE_COMMON)
   _setStoreForTests(store)

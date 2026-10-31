@@ -224,6 +224,11 @@ export type AgentSessionStatusSummary = {
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
+  /** The chat's saved effort, Fast and speed picks, encoded; another device's pick moves them so a
+   *  client re-reads options. Absent from older hosts. */
+  effort?: string
+  fastMode?: string
+  serviceTier?: string
   /** The tool the running turn is inside, else the last one it used. Absent unless `status`
    *  is 'working'. */
   toolName?: string
@@ -256,7 +261,12 @@ export type AgentSessionStatusSummary = {
 }
 
 /** `failedAt` dates the run, so a repeat failure with the same message still republishes. */
-export type AgentSessionNamingError = { message: string; failedAt: number }
+export type AgentSessionNamingError = {
+  message: string
+  failedAt: number
+  /** Names Orca-authored copy; `message` stays English for older clients. */
+  messageCode?: string
+}
 
 export type AgentSessionConversationName = {
   sessionId: string
@@ -312,7 +322,7 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Only queue-if-active callers with queued-messages.v1 receive this draft arm; non-waiting states occur only on settled-draft replays. */
+/** Only queue-if-active callers with queued-messages.v2 receive this draft arm; non-waiting states occur only on settled-draft replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number
@@ -363,6 +373,8 @@ export type AgentSessionModelOption = {
   description?: string
   isDefault: boolean
   defaultEffort?: string
+  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
+  declaredDefaultEffort?: string | null
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
@@ -424,4 +436,11 @@ export type AgentSessionSlashCommand = {
 }
 
 /** Per-session provider commands; older hosts return method_not_found and clients retain their curated catalog. */
-export type AgentSessionCommandsResult = { commands?: AgentSessionSlashCommand[] }
+export type AgentSessionCommandsResult = {
+  commands?: AgentSessionSlashCommand[]
+  commandsPending?: boolean
+}
+
+export type AgentSessionContinuationContext =
+  | { status: 'current'; capturedText?: string; transcriptPath?: string }
+  | { status: 'superseded' }

@@ -167,6 +167,11 @@ export function useSettingsPageEffects(
       settingsNavigationTarget.repoId,
       repoIdToRepresentative
     )
+    if (settingsNavigationTarget.intent === 'toggle' && activeSectionId === paneSectionId) {
+      clearSettingsTarget()
+      void closeSettingsPageWithPromptGuard()
+      return
+    }
     // Select the repo’s host before scrolling so host-specific anchors exist.
     const targetRepoId = resolveSettingsTargetRepoId(
       settingsNavigationTarget,
@@ -182,7 +187,7 @@ export function useSettingsPageEffects(
         : repoIdToHostSelection.get(targetRepoId)
       if (hostSelection) {
         setSettingsProjectHostSelection(
-          hostSelection.projectId,
+          hostSelection.selectionKey,
           hostSelection.hostId,
           hostSelection.setupId
         )
@@ -222,7 +227,9 @@ export function useSettingsPageEffects(
     setPendingNavRequestTick((tick) => tick + 1)
     clearSettingsTarget()
   }, [
+    activeSectionId,
     clearSettingsTarget,
+    closeSettingsPageWithPromptGuard,
     pendingNavSectionRef,
     pendingScrollTargetRef,
     repoIdToHostSelection,

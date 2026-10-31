@@ -8,9 +8,11 @@ import {
   CommandItem,
   CommandList
 } from '@/components/ui/command'
+import { nativeChatModelDescription } from './native-chat-model-description'
 import { translate } from '@/i18n/i18n'
 import type { SessionOptionSelectChoice } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { nativeChatSessionChoiceLabel } from './native-chat-session-option-labels'
+import { nativeChatSessionChoiceLabel } from '../../../../shared/native-chat-session-option-labels'
+import { sayNativeChatSessionOptionTranslated as say } from './native-chat-session-option-labels-text'
 import { NativeChatSessionOptionChoiceBody } from './NativeChatSessionOptionChoiceBody'
 import { NativeChatSessionOptionWriteGroup } from './NativeChatSessionOptionWriteGroup'
 
@@ -74,7 +76,7 @@ export function NativeChatModelCombobox({
         <NativeChatSessionOptionWriteGroup busy={busy}>
           <CommandGroup>
             {choices.map((choice) => {
-              const label = nativeChatSessionChoiceLabel(choice)
+              const label = nativeChatSessionChoiceLabel(choice, say)
               const current = choice.value === currentValue
               return (
                 <CommandItem
@@ -92,7 +94,7 @@ export function NativeChatModelCombobox({
                 >
                   <NativeChatSessionOptionChoiceBody
                     label={label}
-                    description={choice.description}
+                    description={nativeChatModelDescription(choice.value, choice.description)}
                   />
                   {/* Reserve the check slot so selecting a model cannot rewrap its label. */}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">

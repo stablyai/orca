@@ -24,29 +24,18 @@ import { admitRecordingLegacyRestore } from './legacy-restore-admission'
 import { TerminalSpawnWaiters } from './terminal-spawn-waiters'
 import { hostTerminalCapRefusal, TerminalSpawnHostShare } from './terminal-spawn-host-share'
 
-export type TerminalSpawnAdmissionMode = 'observe' | 'enforce'
+import type { TerminalSpawnAdmissionMode } from './terminal-spawn-admission-mode'
+export {
+  TERMINAL_SPAWN_ADMISSION_ARG,
+  TERMINAL_SPAWN_ADMISSION_ENV_VAR,
+  resolveTerminalSpawnAdmissionMode,
+  readTerminalSpawnAdmissionArg
+} from './terminal-spawn-admission-mode'
+export type { TerminalSpawnAdmissionMode } from './terminal-spawn-admission-mode'
 
 const RECENT_AUTOMATIC_WORK_MS = 10 * 60_000
 // Poll because another daemon releasing a slot cannot wake local waiters.
 const OTHER_DAEMON_POLL_MS = 500
-
-export const TERMINAL_SPAWN_ADMISSION_ARG = '--spawn-admission'
-
-// Observe bypasses pacing while retaining decisions for diagnostics.
-export const TERMINAL_SPAWN_ADMISSION_ENV_VAR = 'ORCA_TERMINAL_SPAWN_ADMISSION'
-
-export function resolveTerminalSpawnAdmissionMode(
-  env: NodeJS.ProcessEnv = process.env
-): TerminalSpawnAdmissionMode {
-  return env[TERMINAL_SPAWN_ADMISSION_ENV_VAR]?.trim().toLowerCase() === 'observe'
-    ? 'observe'
-    : 'enforce'
-}
-
-export function readTerminalSpawnAdmissionArg(argv: readonly string[]): TerminalSpawnAdmissionMode {
-  const index = argv.indexOf(TERMINAL_SPAWN_ADMISSION_ARG)
-  return index !== -1 && argv[index + 1] === 'enforce' ? 'enforce' : 'observe'
-}
 
 export type TerminalSpawnLease = {
   readonly charge: SpawnCharge
@@ -79,6 +68,7 @@ type TerminalSpawnGateOptions = {
   /** Runs synchronously before the first automatic fork is admitted. */
   armAutomaticWork?: () => void
   /** The execution host's terminal cap; defaults to capping this daemon alone. */
+  resolveMaximum?: () => number
   hostTerminals?: HostTerminalLedger
   /** Retain refused restores for clients that already discarded their own resume records. */
   legacyRestores?: LegacyRestoreRecords
@@ -119,7 +109,7 @@ export class TerminalSpawnGate {
     )
   }
 
-  /** Keep unpaced admission synchronous to preserve ordering against the host's shutdown fence. */
+  /** Only pacing adds an async boundary; callers recheck shutdown after await. */
   admit(
     facts: SpawnRequestFacts,
     cancel?: { signal: AbortSignal; error: () => Error },
@@ -127,7 +117,8 @@ export class TerminalSpawnGate {
   ): TerminalSpawnLease | Promise<TerminalSpawnLease> {
     return admitRecordingLegacyRestore(
       () => {
-        const attempt = this.attempt(facts, cancel, false)
+        const maximum = this.options.resolveMaximum?.() ?? this.host.maxTerminals
+        const attempt = this.attempt(facts, cancel, false, maximum)
         return attempt.kind === 'lease'
           ? attempt.lease
           : this.admitAfterWait(facts, cancel, attempt)
@@ -146,7 +137,8 @@ export class TerminalSpawnGate {
     let attempt: ReturnType<TerminalSpawnGate['attempt']> = first
     while (attempt.kind === 'wait') {
       await this.waiters.waitForChange(attempt.untilMs, cancel?.signal)
-      attempt = this.attempt(facts, cancel, true)
+      const maximum = this.options.resolveMaximum?.() ?? this.host.maxTerminals
+      attempt = this.attempt(facts, cancel, true, maximum)
     }
     return attempt.lease
   }
@@ -154,7 +146,8 @@ export class TerminalSpawnGate {
   private attempt(
     facts: SpawnRequestFacts,
     cancel: { signal: AbortSignal; error: () => Error } | undefined,
-    alreadyWaited: boolean
+    alreadyWaited: boolean,
+    maximum: number
   ): { kind: 'lease'; lease: TerminalSpawnLease } | { kind: 'wait'; untilMs: number } {
     if (cancel?.signal.aborted) {
       throw cancel.error()
@@ -180,8 +173,8 @@ export class TerminalSpawnGate {
     })
     if (this.mode === 'observe' || decision.kind === 'admit') {
       // Reserve first so refused forks cannot be logged as admitted.
-      if (!this.host.tryReserve(this.state)) {
-        this.refuseAtHostCap(facts, charge)
+      if (!this.host.tryReserve(this.state, maximum)) {
+        this.refuseAtHostCap(facts, charge, maximum)
       }
       this.record(decision, charge, facts, !alreadyWaited)
       return { kind: 'lease', lease: this.lease(facts, charge, now) }
@@ -189,9 +182,9 @@ export class TerminalSpawnGate {
     // Refuse at the host cap before spending time in the pacing queue.
     if (
       decision.kind === 'wait' &&
-      this.host.terminals(this.state) + 1 + others.terminals > this.host.maxTerminals
+      this.host.terminals(this.state) + 1 + others.terminals > maximum
     ) {
-      this.refuseAtHostCap(facts, charge)
+      this.refuseAtHostCap(facts, charge, maximum)
     }
     this.record(decision, charge, facts, !alreadyWaited)
     if (decision.kind === 'defer') {
@@ -255,14 +248,14 @@ export class TerminalSpawnGate {
     this.host.stop()
   }
 
-  private refuseAtHostCap(facts: SpawnRequestFacts, charge: SpawnCharge): never {
+  private refuseAtHostCap(facts: SpawnRequestFacts, charge: SpawnCharge, maximum: number): never {
     this.hostCapRefused += 1
     try {
       this.options.log('host-terminal-cap-reached', {
         charge,
         declaredIntent: facts.declaredIntent,
         terminals: this.host.terminals(this.state),
-        maxTerminals: this.host.maxTerminals
+        maxTerminals: maximum
       })
     } catch {
       // Diagnostics must never change the refusal.

@@ -2,7 +2,8 @@
 
 import '@testing-library/jest-dom/vitest'
 
-import { act, cleanup, render, screen } from '@testing-library/react'
+import { act, cleanup, screen } from '@testing-library/react'
+import { render } from './native-chat-tooltip-test-harness'
 import { createRef } from 'react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'

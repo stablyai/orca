@@ -6,6 +6,7 @@ import { bundledSkillSetupActionLabel } from '../settings/bundled-skill-setup-co
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { FeatureSetupInlineTerminal } from '../onboarding/FeatureSetupInlineTerminal'
 import { buildAgentFeatureSkillInstallCommand } from '@/lib/agent-feature-install-commands'
+import { buildSkillCommandForRuntime } from '../settings/CliSkillRuntimeSetup'
 import type { OnboardingFeatureSetupRuntimeContext } from '../onboarding/onboarding-feature-setup-runtime'
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { Check, Download, Globe2, Loader2, MonitorCog, Workflow } from 'lucide-react'
@@ -37,6 +38,7 @@ import {
   type AgentCapabilityInstallStatus
 } from './agent-capability-setup-status'
 import { translate } from '@/i18n/i18n'
+import { capabilitiesSetupBusyLabel, capabilityToggleLabel } from './agent-capability-setup-copy'
 import { track } from '@/lib/telemetry'
 
 export function AgentCapabilitiesSetupAction(props: {
@@ -93,7 +95,7 @@ export function AgentCapabilitiesSetupAction(props: {
     if (setupBusyLabel !== null) {
       return
     }
-    setSetupBusyLabel('Setting up capabilities...')
+    setSetupBusyLabel(capabilitiesSetupBusyLabel())
     try {
       const result = await runOnboardingFeatureSetup(featureSetup)
       if (featureSetup.browserUse) {
@@ -120,7 +122,9 @@ export function AgentCapabilitiesSetupAction(props: {
       // COMPAT(wsl-bridge): removed when WSL runs as an orcad host.
       if (legacyWsl) {
         const command = buildAgentFeatureSkillInstallCommand(result.skillNames)
-        await window.api.ui.writeClipboardText(command)
+        await window.api.ui.writeClipboardText(
+          buildSkillCommandForRuntime(command, activeRuntime.agentRuntime)
+        )
         setWslSetup({ command, runtime: activeRuntime, selection: featureSetup })
         return
       }
@@ -350,7 +354,7 @@ function AgentCapabilitySetupChecklist(props: {
               type="button"
               role="checkbox"
               aria-checked={selected}
-              aria-label={`${selected ? 'Disable' : 'Enable'} ${row.title}`}
+              aria-label={capabilityToggleLabel(selected, row.title)}
               className={cn(
                 'flex min-h-24 flex-col rounded-lg border px-4 py-3.5 text-left transition-colors',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',

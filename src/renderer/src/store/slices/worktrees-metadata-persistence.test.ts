@@ -2,6 +2,8 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AppState } from '../types'
 import { toast } from 'sonner'
 import type { RuntimeEnvironmentCallRequest } from '../../runtime/runtime-compatibility-test-fixture'
+import { createCompatibleRuntimeStatusResponse } from '../../runtime/runtime-compatibility-test-fixture'
+import { WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY } from '../../../../shared/worktree-runtime-capabilities'
 import { getHostedReviewCacheKey } from './hosted-review-cache-identity'
 import {
   getGitHubPRCacheKey,
@@ -13,7 +15,8 @@ import {
   mockApi,
   resetRemoteRuntimeMocks,
   resetWorktreeSliceModuleMemory,
-  runtimeEnvironmentCall
+  runtimeEnvironmentCall,
+  runtimeEnvironmentTransportCall
 } from './worktrees-slice-test-harness'
 
 const requestWorktreeBaseFallbackNotice = vi.hoisted(() => vi.fn())
@@ -39,6 +42,62 @@ describe('worktree remote runtime mutations', () => {
     vi.clearAllMocks()
     resetRemoteRuntimeMocks()
   })
+
+  it.each([true, false])(
+    'dismisses rename errors only on a capable remote host (%s)',
+    async (capable) => {
+      const store = createTestStore()
+      const wt = makeWorktree({
+        id: 'repo1::/path/wt1',
+        repoId: 'repo1',
+        hostId: 'runtime:env-1',
+        firstAgentMessageRenameError: 'Name agent failed'
+      })
+      store.setState({ worktreesByRepo: { repo1: [wt] } })
+      const status = createCompatibleRuntimeStatusResponse()
+      if (!capable) {
+        status.result.capabilities = status.result.capabilities?.filter(
+          (capability) => capability !== WORKTREE_RENAME_ERROR_DISMISS_RUNTIME_CAPABILITY
+        )
+      }
+      runtimeEnvironmentTransportCall.mockImplementation((args: RuntimeEnvironmentCallRequest) =>
+        args.method === 'status.get' ? status : runtimeEnvironmentCall(args)
+      )
+      runtimeEnvironmentCall.mockResolvedValue({
+        id: 'clear',
+        ok: true,
+        result: { worktree: { ...wt, firstAgentMessageRenameError: null } }
+      })
+
+      const result = await store
+        .getState()
+        .updateWorktreeMeta(
+          wt.id,
+          { firstAgentMessageRenameError: null },
+          { executionHostId: 'runtime:env-1' }
+        )
+
+      if (capable) {
+        expect(result).toEqual({ ok: true })
+        expect(runtimeEnvironmentCall).toHaveBeenCalledWith(
+          expect.objectContaining({
+            selector: 'env-1',
+            method: 'worktree.set',
+            params: { worktree: `id:${wt.id}`, firstAgentMessageRenameError: null }
+          })
+        )
+        expect(store.getState().worktreesByRepo.repo1[0]?.firstAgentMessageRenameError).toBeNull()
+      } else {
+        expect(result).toMatchObject({
+          ok: false,
+          error: expect.stringContaining('Update the remote runtime')
+        })
+        expect(
+          runtimeEnvironmentCall.mock.calls.some(([args]) => args.method === 'worktree.set')
+        ).toBe(false)
+      }
+    }
+  )
 
   it('persists worktree metadata through the active remote runtime environment', async () => {
     const store = createTestStore()

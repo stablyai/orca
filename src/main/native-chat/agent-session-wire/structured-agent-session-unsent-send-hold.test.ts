@@ -1,3 +1,4 @@
+import { openTestChats } from './structured-agent-session-open-test-chats.test-support'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { agentSessionFailureWords } from '../../../shared/agent-session-failure-words'
@@ -659,7 +660,7 @@ describe("the reopen's mark", () => {
     void working
     const sent = rig.dispatch.mock.calls.length
     rig.crashRestartHostProcess()
-    await rig.host.restoreReadableSessions([SESSION])
+    await openTestChats(rig.host, [SESSION])
     expect(rig.host.collaboratorsForTests().sessions.has(SESSION)).toBe(true)
     await observationClock.observe(100)
     expect(await rig.handoff(queued.id)).toBeUndefined()

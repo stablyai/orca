@@ -1,7 +1,8 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const troubleshootScreenStyles = StyleSheet.create({
+export const troubleshootScreenStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase,
@@ -15,7 +16,7 @@ export const troubleshootScreenStyles = StyleSheet.create({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -37,7 +38,7 @@ export const troubleshootScreenStyles = StyleSheet.create({
     justifyContent: 'center',
     gap: spacing.sm,
     backgroundColor: colors.bgRaised,
-    borderRadius: 10,
+    borderRadius: radii.control,
     paddingVertical: spacing.md,
     paddingHorizontal: spacing.lg,
     marginBottom: spacing.lg
@@ -86,7 +87,7 @@ export const troubleshootScreenStyles = StyleSheet.create({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     marginBottom: spacing.lg
   },
@@ -131,4 +132,4 @@ export const troubleshootScreenStyles = StyleSheet.create({
     color: colors.textMuted,
     lineHeight: 18
   }
-})
+}))

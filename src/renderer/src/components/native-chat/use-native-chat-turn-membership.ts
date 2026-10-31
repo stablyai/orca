@@ -6,7 +6,7 @@ import type {
 import type { NativeChatMessage } from '../../../../shared/native-chat-types'
 import type { AgentSessionLatestTurn } from '../../../../shared/agent-session-wire'
 import { nativeChatTurnMembership } from '../../../../shared/native-chat-turn-membership'
-import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 
 export type NativeChatTurnRows = {
   messages: readonly NativeChatMessage[]

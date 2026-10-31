@@ -1,6 +1,8 @@
-import { Suspense, useRef } from 'react'
+import { memo, Suspense, useCallback, useRef } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
+import { useAppStore } from '@/store'
+import { pendingCreationOpensNativeChat } from '@/lib/pending-worktree-creation'
 import Sidebar from '../components/Sidebar'
 import RightSidebar from '../components/right-sidebar'
 import { RecoverableRenderErrorBoundary } from '../components/error-boundaries/RecoverableRenderErrorBoundary'
@@ -12,9 +14,15 @@ import { RightSidebarToggle, TitlebarMainStrip } from './TitlebarMainStrip'
 import type { AppChromeLayout } from './use-app-chrome-layout'
 import type { FloatingWorkspacePanelState } from './use-floating-workspace-panel'
 
+// Skips the shell render each workspace switch causes; its props only change on toggle.
+const MemoFloatingTerminalToggleButton = memo(FloatingTerminalToggleButton)
+
 const Landing = lazy(() => import('../components/Landing'))
 const WorktreeCreationPanel = lazy(
   () => import('../components/worktree-creation/WorktreeCreationPanel')
+)
+const PendingNativeChatCreation = lazy(
+  () => import('../components/worktree-creation/PendingNativeChatCreation')
 )
 const TaskPage = lazy(() => import('../components/task-page/TaskPage'))
 const AutomationsPage = lazy(() => import('../components/automations/AutomationsPage'))
@@ -64,8 +72,20 @@ function WorktreeSidebar({
   )
 }
 
+// A chat-bound creation shows the chat itself, usable before its worktree exists.
+function PendingCreationSurface(props: {
+  creationId: string
+  reserveCollapsedSidebarHeaderSpace: boolean
+}): React.JSX.Element {
+  const opensChat = useAppStore((s) => {
+    const entry = s.pendingWorktreeCreations[props.creationId]
+    return entry ? pendingCreationOpensNativeChat(entry) : false
+  })
+  return opensChat ? <PendingNativeChatCreation {...props} /> : <WorktreeCreationPanel {...props} />
+}
+
 function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element {
-  const { activeView, activeWorktreeId, activePendingCreationId, creationLayoutActive } = layout
+  const { activeView, hasActiveWorktree, activePendingCreationId, creationLayoutActive } = layout
   return (
     <>
       {activeView === 'settings' ? <Settings /> : null}
@@ -77,12 +97,14 @@ function ActivePage({ layout }: { layout: AppChromeLayout }): React.JSX.Element 
       {activeView === 'space' ? <WorkspaceSpacePage /> : null}
       {activeView === 'mobile' ? <MobilePage /> : null}
       {activeView === 'terminal' && creationLayoutActive && activePendingCreationId ? (
-        <WorktreeCreationPanel
+        <PendingCreationSurface
           creationId={activePendingCreationId}
           reserveCollapsedSidebarHeaderSpace={layout.leftTitlebarChromeLayout.isFloating}
         />
       ) : null}
-      {activeView === 'terminal' && !activeWorktreeId && !creationLayoutActive ? <Landing /> : null}
+      {activeView === 'terminal' && !hasActiveWorktree && !creationLayoutActive ? (
+        <Landing />
+      ) : null}
     </>
   )
 }
@@ -98,6 +120,11 @@ export function AppWorkspaceShell(props: {
   const scrollOffsetRef = useRef(0)
   const scrollAnchorRef = useRef<VirtualizedScrollAnchor>(null)
   const sidebarScrollRefs = { scrollOffsetRef, scrollAnchorRef }
+  const { setOpenWithFocus } = floatingWorkspace
+  const toggleFloatingWorkspace = useCallback(
+    () => setOpenWithFocus((open) => !open),
+    [setOpenWithFocus]
+  )
 
   return (
     // Avoid active-worktree reset keys that remount whole surfaces during wake.
@@ -214,9 +241,9 @@ export function AppWorkspaceShell(props: {
                   </Suspense>
                 </div>
                 {floatingWorkspace.showToggleButton ? (
-                  <FloatingTerminalToggleButton
+                  <MemoFloatingTerminalToggleButton
                     open={floatingWorkspace.open}
-                    onToggle={() => floatingWorkspace.setOpenWithFocus((open) => !open)}
+                    onToggle={toggleFloatingWorkspace}
                   />
                 ) : null}
               </div>

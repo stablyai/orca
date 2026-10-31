@@ -223,6 +223,7 @@ export class RemoteRuntimeSharedControlConnection {
       getSocket: () => this.ws,
       markReady: () => {
         this.diagnostics.markReady()
+        this.options.onReady?.()
         // Clear predecessor-attempt diagnostics on recovery so Connected cannot retain stale failure details.
         this.publishDiagnostics()
         this.readyStableReset.schedule({

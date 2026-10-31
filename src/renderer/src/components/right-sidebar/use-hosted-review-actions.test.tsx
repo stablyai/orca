@@ -3,6 +3,7 @@
 import { act, createElement } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { toast } from 'sonner'
 import type { PRInfo } from '../../../../shared/github/pull-request-types'
 import type { Repo } from '../../../../shared/repo-types'
 import { useHostedReviewActions, type HostedReviewActionInfo } from './use-hosted-review-actions'
@@ -114,6 +115,7 @@ describe('useHostedReviewActions', () => {
   })
 
   afterEach(() => {
+    vi.restoreAllMocks()
     if (root) {
       act(() => root?.unmount())
       root = null
@@ -245,6 +247,31 @@ describe('useHostedReviewActions', () => {
       updates: { readyForReview: true }
     })
     expect(gitLabRefresh).toHaveBeenCalledTimes(1)
+  })
+
+  it('retains a GitLab ready failure without reporting success or refreshing', async () => {
+    const error =
+      'Failed to update issue: GitLab could not mark the merge request ready. Try again.'
+    vi.mocked(window.api.gl.updateMR).mockResolvedValue({ ok: false, error })
+    const successToast = vi.spyOn(toast, 'success').mockReturnValue('ready-success')
+    const errorToast = vi.spyOn(toast, 'error').mockReturnValue('ready-error')
+    const { onRefreshReview } = await renderHook(makeRepo(), undefined, undefined, true)
+
+    await act(async () => {
+      await latest?.handleMarkReadyForReview()
+    })
+
+    expect(window.api.gl.updateMR).toHaveBeenCalledExactlyOnceWith({
+      repoPath: '/repo',
+      repoId: 'repo-1',
+      iid: 1015,
+      updates: { readyForReview: true }
+    })
+    expect(latest?.actionError).toBe(error)
+    expect(latest?.readying).toBe(false)
+    expect(errorToast).toHaveBeenCalledExactlyOnceWith(error)
+    expect(successToast).not.toHaveBeenCalled()
+    expect(onRefreshReview).not.toHaveBeenCalled()
   })
 
   it('gates runtime-owned GitLab ready mutations on the host capability', async () => {

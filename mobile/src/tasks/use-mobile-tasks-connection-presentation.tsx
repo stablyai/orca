@@ -1,8 +1,10 @@
 import type { ProviderViewProjectionModel } from './use-mobile-tasks-provider-view-projection'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { classifyConnection } from './mobile-tasks-dependencies'
 import { PROVIDER_EMPTY_LABELS } from './mobile-task-view-options'
 
 export function useMobileTasksConnectionPresentation(model: ProviderViewProjectionModel) {
+  useMobileTranslation()
   const {
     connState,
     githubMode,

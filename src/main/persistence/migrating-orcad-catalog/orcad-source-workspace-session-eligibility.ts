@@ -6,8 +6,10 @@ import type {
   WorkspaceSessionState
 } from '../../../shared/workspace-session-state-types'
 import {
+  orcadMigrationOwnerKeyIsAmbiguous,
   orcadMigrationOwnerMatchesScope,
   orcadMigrationOwnsRepoId,
+  orcadMigrationScopeOwnsWholeHost,
   unqualifyOrcadMigrationOwnerKey,
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
@@ -26,11 +28,19 @@ export function collectUnsupportedSessionItems(
   sourceTerminalTabIds: ReadonlySet<string>
 ): string[] {
   const owns = (ownerKey: string): boolean => orcadMigrationOwnerMatchesScope(ownerKey, scope)
+  // A WSL move takes some of host `local`'s projects; the others, and rows a past move retained,
+  // stay on this desktop untouched, so only the selected projects' rows can refuse it.
+  const wholeHost = sourceHostPartition && orcadMigrationScopeOwnsWholeHost(scope)
+  // In a WSL move, an unattributable key that may be the selected project's refuses rather than
+  // staying behind; an SSH conversion keeps its own matching.
   const matches = (ownerKey: string): boolean =>
-    Boolean(ownerKey) && (sourceHostPartition || owns(ownerKey))
+    Boolean(ownerKey) &&
+    (wholeHost ||
+      owns(ownerKey) ||
+      (scope.kind === 'local-wsl' && orcadMigrationOwnerKeyIsAmbiguous(ownerKey, scope)))
   const items: string[] = []
   // Foreign projects stay behind; unsaved drafts still require preservation.
-  if (sourceHostPartition) {
+  if (wholeHost) {
     for (const [ownerKey, files] of Object.entries(session.openFilesByWorktree ?? {})) {
       if (!owns(ownerKey)) {
         items.push(...unsavedDraftItems(files, ownerKey))
@@ -39,7 +49,9 @@ export function collectUnsupportedSessionItems(
   }
   // The terminal gate proves exit before moves, so PTY bindings and shutdown markers can be dropped.
   for (const record of Object.values(session.sleepingAgentSessionsByPaneKey ?? {})) {
-    const touchesSource = matches(record.worktreeId) || record.connectionId === scope.targetId
+    const touchesSource =
+      matches(record.worktreeId) ||
+      (scope.targetId !== null && record.connectionId === scope.targetId)
     if (
       touchesSource &&
       !transferableSleepingAgentSession(record, session, scope, terminalTabIds) &&

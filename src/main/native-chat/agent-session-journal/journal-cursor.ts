@@ -5,7 +5,7 @@ import type {
   AgentJournalResetReason
 } from '../../../shared/agent-session-journal-types'
 import type { JournalReadSince } from './journal-store-contracts'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalReadRow } from './journal-read-row'
 
 export type JournalCursorRange = {
   epoch: string
@@ -20,6 +20,18 @@ export type JournalResume =
 
 export function sameJournalCursor(a: AgentJournalCursor, b: AgentJournalCursor): boolean {
   return a.epoch === b.epoch && a.sequence === b.sequence
+}
+
+export function journalWroteBeforeOpen(
+  current: Pick<AgentJournalCursor, 'epoch'>,
+  openedThrough: AgentJournalCursor,
+  sequence: number | undefined
+): boolean {
+  return (
+    sequence !== undefined &&
+    current.epoch === openedThrough.epoch &&
+    sequence <= openedThrough.sequence
+  )
 }
 
 /** Reload snapshots for epoch mismatches, rolled-back prefixes or compacted cursors. */
@@ -58,7 +70,7 @@ export function findSequenceGap(
 export function readJournalSince(
   source: {
     state: { epoch: string; lastSequence: number; oldestSequence: number }
-    rowsAfter: (afterSequence: number) => JournalRow[]
+    rowsAfter: (afterSequence: number) => JournalReadRow[]
   },
   cursor: AgentJournalCursor,
   currentCursor: () => AgentJournalCursor

@@ -10,6 +10,7 @@ import {
   GitCommit,
   GitCommitCompare,
   GitFilePath,
+  GitResolveConflict,
   GitForkSync,
   GitHistory,
   GitPush,
@@ -100,6 +101,12 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: WorktreeSelector,
     handler: async (params, { runtime }) => runtime.abortRuntimeGitMerge(params.worktree)
+  }),
+  defineMethod({
+    name: 'git.completeMerge',
+    permission: 'workspace',
+    params: WorktreeSelector,
+    handler: async (params, { runtime }) => runtime.completeRuntimeGitMerge(params.worktree)
   }),
   defineMethod({
     name: 'git.abortRebase',
@@ -220,6 +227,13 @@ export const GIT_METHODS = [
       runtime.bulkStageRuntimeGitPaths(params.worktree, params.filePaths, params.scope)
   }),
   defineMethod({
+    name: 'git.resolveConflict',
+    permission: 'workspace',
+    params: GitResolveConflict,
+    handler: async (params, { runtime }) =>
+      runtime.resolveRuntimeGitConflict(params.worktree, params.filePath, params.resolution)
+  }),
+  defineMethod({
     name: 'git.unstage',
     permission: 'workspace',
     params: GitFilePath,
@@ -252,7 +266,12 @@ export const GIT_METHODS = [
     permission: 'workspace',
     params: GitRemoteFileUrl,
     handler: async (params, { runtime }) =>
-      runtime.getRuntimeGitRemoteFileUrl(params.worktree, params.relativePath, params.line)
+      runtime.getRuntimeGitRemoteFileUrl(
+        params.worktree,
+        params.relativePath,
+        params.line,
+        params.endLine
+      )
   }),
   defineMethod({
     name: 'git.remoteCommitUrl',

@@ -1,3 +1,5 @@
+import { journalOutcomeSource } from './journal-outcome-format'
+import { publishJournalOutcomeEpoch } from './journal-outcome-write'
 import {
   journalItemEchoFields,
   journalItemEchoRestatement,
@@ -43,13 +45,14 @@ import {
 import type { JournalQueuePauseRestatement } from './queued-message-pause'
 import {
   deleteJournalEpochRows,
-  insertJournalRow,
   publishJournalSessionEpoch,
   readJournalSessionEpoch
 } from './journal-row-table'
 import type { AgentJournalEpochReason, JournalRow } from './journal-row-schema'
-import { assertJournalFence } from './journal-write-guards'
+import { AgentSessionJournalError, assertJournalFence } from './journal-write-guards'
 import type { JournalOperationReceipt } from './journal-row-writer'
+
+import type { JournalAttachmentClaim } from './journal-submission-hook'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
   echoOf?: JournalItemEcho['echoOf']
@@ -63,6 +66,8 @@ export type JournalReplacementItem = AgentJournalProducerLinkage & {
   executionOwner?: number
 }
 
+/** Survivors are restated from the open chat. That loses nothing another build wrote: a chat holding
+ * a key this build does not declare refuses to open, so no handle can reach here. */
 export function replaceJournalEpoch(input: {
   database: JournalHostDatabase
   identity: AgentSessionJournalIdentity
@@ -70,6 +75,8 @@ export function replaceJournalEpoch(input: {
   fence: number
   items: readonly JournalReplacementItem[]
   receipt?: (cursor: AgentJournalCursor) => JournalOperationReceipt
+  isLiveGoal?: (id: string) => boolean
+  claimAttachments?: JournalAttachmentClaim
   previous?: JournalReducerState
   /** Preserve Stop/Resume state so rewinds cannot release held cards or resurrect lifted pauses. */
   queuePause: JournalQueuePauseRestatement
@@ -187,22 +194,48 @@ export function replaceJournalEpoch(input: {
 
   const { sessionId } = input.identity
   const receipt = input.receipt?.({ epoch, sequence: state.lastSequence })
-  input.database.transaction((db) => {
-    const retired = readJournalSessionEpoch(db, sessionId)
-    if (retired !== null) {
-      deleteJournalEpochRows(db, sessionId, retired)
-    }
-    for (const row of rows) {
-      insertJournalRow(db, sessionId, row)
-    }
-    input.queue.receipt.write(db)
-    publishJournalSessionEpoch(db, input.identity, epoch)
-    receipt?.write(db)
-  })
-  input.queue.receipt.committed()
-
-  // Adopt the committed epoch immediately; later failures must not leave writers targeting deleted rows.
+  const claimsCommitted: (() => void)[] = []
   state.oldestSequence = 1
-  input.onPublished({ state, newer: null, damage: null })
+  input.database.transaction(
+    (db) => {
+      const retired = readJournalSessionEpoch(db, sessionId)
+      // The new epoch was built from the live one; refuse if another write replaced it meanwhile.
+      if (input.previous && retired !== input.previous.epoch) {
+        throw new AgentSessionJournalError('journal_row_rejected', 'the chat epoch changed')
+      }
+      if (retired !== null) {
+        journalOutcomeSource(db, sessionId, retired)
+      }
+      if (retired !== null) {
+        deleteJournalEpochRows(db, sessionId, retired)
+      }
+      for (const row of rows) {
+        const body = row.kind === 'item' || row.kind === 'submission' ? row.body : null
+        if (
+          body?.kind === 'message' &&
+          body.role === 'user' &&
+          !(row.kind === 'item' && input.isLiveGoal?.(row.itemId))
+        ) {
+          const commit = input.claimAttachments?.(db, body, false)
+          if (commit) {
+            claimsCommitted.push(commit)
+          }
+        }
+      }
+      input.queue.receipt.write(db)
+      publishJournalSessionEpoch(db, input.identity, epoch)
+      receipt?.write(db)
+      return publishJournalOutcomeEpoch(db, sessionId, state.epoch, rows)
+    },
+    false,
+    (publication) => {
+      // Adopt, then finish the nonthrowing ownership bookkeeping, before the fallible publication.
+      const state = publication.adopt()
+      claimsCommitted.forEach((commit) => commit())
+      input.queue.receipt.committed()
+      input.onPublished({ state, newer: null, damage: null })
+    }
+  )
+
   receipt?.committed()
 }

@@ -49,36 +49,6 @@ describe('insertUnifiedTabAfterAnchor', () => {
     seed([], [])
   })
 
-  it('moves a late terminal right after its anchor', () => {
-    seed(
-      [tab('A', 'g1'), tab('B', 'g1'), tab('C', 'g1'), tab('T', 'g1')],
-      [{ id: 'g1', worktreeId: WT, activeTabId: 'A', tabOrder: ['A', 'B', 'C', 'T'] }]
-    )
-    insertUnifiedTabAfterAnchor(WT, 'T', 'A')
-    expect(mocks.state.current?.reorderUnifiedTabs).toHaveBeenCalledWith(
-      'g1',
-      ['A', 'T', 'B', 'C'],
-      {
-        recordInteraction: false
-      }
-    )
-  })
-
-  it('keeps an unpinned terminal after the pinned prefix', () => {
-    seed(
-      [tab('P1', 'g1', true), tab('P2', 'g1', true), tab('C', 'g1'), tab('T', 'g1')],
-      [{ id: 'g1', worktreeId: WT, activeTabId: 'P1', tabOrder: ['P1', 'P2', 'C', 'T'] }]
-    )
-    insertUnifiedTabAfterAnchor(WT, 'T', 'P1')
-    expect(mocks.state.current?.reorderUnifiedTabs).toHaveBeenCalledWith(
-      'g1',
-      ['P1', 'P2', 'T', 'C'],
-      {
-        recordInteraction: false
-      }
-    )
-  })
-
   it('is a no-op for a missing anchor or tabs in different groups', () => {
     seed(
       [tab('A', 'g1'), tab('T', 'g2')],

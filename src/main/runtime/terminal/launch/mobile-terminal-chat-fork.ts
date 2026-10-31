@@ -7,6 +7,9 @@ import { agentLaunchQuotingShell } from '../../../../shared/agent-launch-runtime
 import { isWslShellName } from '../../../../shared/local-windows-terminal-runtime'
 import { isWslUncPath } from '../../../../shared/wsl-paths'
 import { isTuiAgent } from '../../../../shared/tui-agent-config'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentStartupShell } from '../../../../shared/tui-agent-startup-shell'
+import { resolveWslHostAgentCmdOverrides } from '../../wsl-host-agent-terminal-launch'
 import {
   assertAiVaultCopiedSessionStoreAllowed,
   buildAiVaultForkStartup,
@@ -40,14 +43,17 @@ export function buildMobileTerminalChatFork(args: {
   ) {
     throw new Error('chat_fork_runtime_incompatible')
   }
+  const liveShell = agentLaunchQuotingShell(runtime)
   const startupArgs = {
     session: source,
     host: {
       platform: runtime.platform,
       codexHome: getAiVaultResumeCodexHome(source.codexHome, runtime.platform),
-      liveShell: agentLaunchQuotingShell(runtime)
+      liveShell
     },
-    settings
+    settings: isTuiAgent(source.agent)
+      ? withWslHostAgentCommand(settings, source.agent, runtime.platform, liveShell)
+      : settings
   }
   if (prepared.forkedSession) {
     assertAiVaultCopiedSessionStoreAllowed(startupArgs)
@@ -77,4 +83,17 @@ export function buildMobileTerminalChatFork(args: {
     ...(isTuiAgent(source.agent) ? { launchAgent: source.agent } : {}),
     launchRuntime: runtime
   }
+}
+
+/** A fork is a launch of the stock CLI too; pin its distro path for this launch only. */
+function withWslHostAgentCommand(
+  settings: AiVaultResumeLaunchSettings,
+  agent: TuiAgent,
+  platform: NodeJS.Platform,
+  shell: AgentStartupShell
+): AiVaultResumeLaunchSettings {
+  const cmdOverrides = settings.agentCmdOverrides ?? {}
+  // Forks run where the source chat ran, which this module requires to be this local host.
+  const resolved = resolveWslHostAgentCmdOverrides({ agent, cmdOverrides, platform, shell })
+  return resolved === cmdOverrides ? settings : { ...settings, agentCmdOverrides: resolved }
 }

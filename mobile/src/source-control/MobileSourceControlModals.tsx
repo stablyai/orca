@@ -2,6 +2,7 @@ import { ActionSheetModal, type ActionSheetAction } from '../components/ActionSh
 import { ConfirmModal } from '../components/ConfirmModal'
 import { PickerModal } from '../components/PickerModal'
 import { openMobilePrUrl } from '../components/mobile-pr-url'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { MobileBranchDiffPreviewDrawer } from './MobileBranchDiffPreviewDrawer'
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 
@@ -11,6 +12,7 @@ type Props = {
 }
 
 export function MobileSourceControlModals({ state, actionSheetActions }: Props) {
+  const t = useMobileTranslation()
   const {
     branchDiffPreview,
     setBranchDiffPreview,
@@ -39,7 +41,7 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ActionSheetModal
         visible={showActionSheet}
-        title="Source Control"
+        title={t('sourceControl.modals.actionsTitle', 'Source Control')}
         message={branchLabel}
         actions={actionSheetActions}
         onClose={() => setShowActionSheet(false)}
@@ -47,13 +49,17 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ConfirmModal
         visible={discardTarget !== null}
-        title="Discard Change"
+        title={t('sourceControl.modals.discardTitle', 'Discard Change')}
         message={
           discardTarget
-            ? `Discard changes to "${discardTarget.path}"? This cannot be undone.`
+            ? t(
+                'sourceControl.modals.discardConfirmMessage',
+                'Discard changes to "{{path}}"? This cannot be undone.',
+                { path: discardTarget.path }
+              )
             : undefined
         }
-        confirmLabel="Discard"
+        confirmLabel={t('sourceControl.modals.discardButton', 'Discard')}
         destructive
         onConfirm={() => {
           if (discardTarget) {
@@ -68,11 +74,14 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <PickerModal
         visible={showBranchPicker}
-        title="Switch Branch"
+        title={t('sourceControl.modals.switchBranchTitle', 'Switch Branch')}
         options={(localBranches?.branches ?? []).map((b) => ({
           value: b,
           label: b,
-          subtitle: b === localBranches?.current ? 'current' : undefined
+          subtitle:
+            b === localBranches?.current
+              ? t('sourceControl.modals.currentBranch', 'current')
+              : undefined
         }))}
         selected={localBranches?.current ?? ''}
         onSelect={(branch) => {
@@ -87,13 +96,19 @@ export function MobileSourceControlModals({ state, actionSheetActions }: Props) 
 
       <ConfirmModal
         visible={createdPrUrl !== null}
-        title="Pull Request Created"
+        title={t('sourceControl.modals.prCreatedTitle', 'Pull Request Created')}
         message={
           createdPrWarning
-            ? `Open it in your browser?\n\n${createdPrWarning}`
-            : 'Open it in your browser?'
+            ? t(
+                'sourceControl.modals.openPrWithWarning',
+                'Open it in your browser?\n\n{{warning}}',
+                {
+                  warning: createdPrWarning
+                }
+              )
+            : t('sourceControl.modals.openPrMessage', 'Open it in your browser?')
         }
-        confirmLabel="Open"
+        confirmLabel={t('common.open', 'Open')}
         onConfirm={() => {
           if (createdPrUrl) {
             openMobilePrUrl(createdPrUrl)

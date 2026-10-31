@@ -127,64 +127,48 @@
       })
 
       // Probe 7: an oversized valid-looking call must receive a real refusal.
-      window.addEventListener('message', function (event) {
-        var data = event.data
-        if (event.source !== window.parent || !data || data.type !== 'orca-panel-action-result') {
-          return
-        }
-        if (data.requestId === 'oversized-probe') {
-          report(
-            'oversized-message',
-            !data.ok && data.errorCode === 'invalid_request',
-            data.errorCode || 'unexpected success'
-          )
-        }
-        if (data.requestId === 'flood-result') {
-          report(
-            'message-flood',
-            !data.ok && data.errorCode === 'rate_limited',
-            data.errorCode || 'unexpected success'
-          )
-        }
-      })
-
-      document.getElementById('bridge').addEventListener('click', function () {
-        window.parent.postMessage(
-          {
-            type: 'orca-panel-action',
-            requestId: 'oversized-probe',
-            action: 'workspace.readContext',
-            params: { padding: 'x'.repeat(128 * 1024) }
+      function expectRefusal(name, call, code) {
+        var settled = false
+        call.then(
+          function () {
+            settled = true
+            report(name, false, 'unexpected success')
           },
-          '*'
+          function (error) {
+            settled = true
+            report(name, error.code === code, error.code)
+          }
         )
         setTimeout(function () {
-          report('oversized-message', false, 'host sent no refusal')
+          if (!settled) {
+            report(name, false, 'host sent no refusal')
+          }
         }, 2000)
+      }
+
+      document.getElementById('bridge').addEventListener('click', function () {
+        expectRefusal(
+          'oversized-message',
+          window.orca.host.call('workspace.readContext', { padding: 'x'.repeat(128 * 1024) }),
+          'too_large'
+        )
 
         // Invalid, pong and binary floods must spend rate budget before parsing; the final valid call proves it.
         setTimeout(function () {
           for (var i = 0; i < 40; i++) {
             var payload =
               i % 3 === 0
-                ? { type: 'orca-panel-pong', pingId: i }
+                ? { orca: 1, kind: 'evt', event: 'pong', payload: i }
                 : i % 3 === 1
                   ? { type: 'invalid-hostile-message', sequence: i }
                   : new Uint8Array(2048)
             window.parent.postMessage(payload, '*')
           }
-          window.parent.postMessage(
-            {
-              type: 'orca-panel-action',
-              requestId: 'flood-result',
-              action: 'workspace.readContext',
-              params: {}
-            },
-            '*'
+          expectRefusal(
+            'message-flood',
+            window.orca.host.call('workspace.readContext', {}),
+            'rate_limited'
           )
-          setTimeout(function () {
-            report('message-flood', false, 'host sent no rate-limit refusal')
-          }, 2000)
         }, 150)
       })
 

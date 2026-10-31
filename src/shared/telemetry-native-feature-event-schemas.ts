@@ -82,6 +82,21 @@ export const cmdJPaletteFeatureTipAcknowledgedSchema = z
   })
   .strict()
 
+const chatUiFeatureTipVariantSchema = z.enum(['chat_ui_off', 'chat_ui_on'])
+export const chatUiFeatureTipShownSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+export const chatUiFeatureTipActionSchema = z
+  .object({
+    variant: chatUiFeatureTipVariantSchema,
+    action: z.enum(['use_chat_ui', 'stay_in_terminal', 'open_settings', 'dismissed']),
+    nth_repo_added: nthRepoAddedSchema
+  })
+  .strict()
+
 export const featureWallOpenedSchema = z
   .object({
     source: featureWallOpenSourceSchema

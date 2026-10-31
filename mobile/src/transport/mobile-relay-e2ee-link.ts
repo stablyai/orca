@@ -11,6 +11,7 @@ import { MobileE2EEV2ClientSession } from './mobile-e2ee-v2-client-session'
 import { MobileE2EEV2PhysicalChannel } from './mobile-e2ee-v2-physical-channel'
 import { websocketPayloadToUint8 } from './websocket-payload-bytes'
 import { relayConnectWebSocketUrl } from './mobile-relay-connect-url'
+import { WsInboundMessageQueue } from '../../../src/shared/ws-inbound-message-queue'
 
 // Native WebSockets normally emit close immediately after error or a relay-hello
 // refusal; bound the missing-close case so recovery is never left pending.
@@ -53,7 +54,7 @@ export class MobileRelayE2eeLink {
   private closed = false
   private rejectedHelloCode: number | null = null
   private closeGraceTimer: ReturnType<typeof setTimeout> | null = null
-  private inboundChain: Promise<void> = Promise.resolve()
+  private readonly inbound: WsInboundMessageQueue
 
   constructor(options: MobileRelayE2eeLinkOptions) {
     this.options = options
@@ -78,6 +79,19 @@ export class MobileRelayE2eeLink {
       onBinary: options.onBinary,
       onError: (error) => this.fail(error)
     })
+    this.inbound = new WsInboundMessageQueue(
+      async (raw) => {
+        if (this.closed || this.rejectedHelloCode !== null) {
+          return
+        }
+        if (!this.outerReady) {
+          this.acceptHello(raw)
+        } else {
+          await this.channel.handleMessage(raw)
+        }
+      },
+      (error) => this.fail(asError(error))
+    )
     this.bindSocket()
   }
 
@@ -95,6 +109,7 @@ export class MobileRelayE2eeLink {
     }
     this.closed = true
     this.clearCloseGrace()
+    this.inbound.dispose()
     this.channel.dispose()
     this.socket.close()
   }
@@ -117,18 +132,7 @@ export class MobileRelayE2eeLink {
       this.options.onOpen?.()
     }
     this.socket.onmessage = (event) => {
-      this.inboundChain = this.inboundChain
-        .then(async () => {
-          if (this.closed || this.rejectedHelloCode !== null) {
-            return
-          }
-          if (!this.outerReady) {
-            this.acceptHello(event.data)
-          } else {
-            await this.channel.handleMessage(event.data)
-          }
-        })
-        .catch((error: unknown) => this.fail(asError(error)))
+      void this.inbound.enqueue(event.data)
     }
     // `error` is often delivered just before `close`; wait for close so a
     // typed relay code is not replaced by a generic transport error.
@@ -205,6 +209,7 @@ export class MobileRelayE2eeLink {
     }
     this.closed = true
     this.clearCloseGrace()
+    this.inbound.dispose()
     this.channel.dispose()
     this.options.onError(error)
     this.socket.close()

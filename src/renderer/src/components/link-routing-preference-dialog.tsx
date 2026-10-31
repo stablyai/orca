@@ -62,7 +62,7 @@ export function LinkRoutingPreferenceDialogProvider({
   const displayHost = displayHostForUrl(displayedRequest?.options.url)
   const openLinksInAppDefault = displayedRequest?.options.openLinksInAppDefault === true
   const isMac = navigator.userAgent.includes('Mac')
-  const systemBrowserShortcutKeys = isMac ? ['⇧', '⌘'] : ['Shift', 'Ctrl']
+  const systemBrowserShortcutKeys = isMac ? ['⇧', '⌘'] : ['⇧', 'Ctrl']
 
   useEffect(() => {
     setContextualToursBlockingSurfaceVisible(activeRequest !== null)

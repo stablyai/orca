@@ -146,6 +146,17 @@ export function createShedSubagentsField(subagents: readonly AgentSubagentSnapsh
   return `${AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX}${subagentRosterDigest(subagents)}`
 }
 
+/** Shedding and its marker shipped together, so an unmarked envelope's absent roster is empty. */
+export function hasShedSubagentsField(shedFields: unknown): boolean {
+  return (
+    Array.isArray(shedFields) &&
+    shedFields.some(
+      (field) =>
+        typeof field === 'string' && field.startsWith(AGENT_HOOK_SHED_SUBAGENTS_DIGEST_PREFIX)
+    )
+  )
+}
+
 function hasMatchingShedSubagentsField(
   shedFields: readonly unknown[],
   previous: ParsedAgentStatusPayload

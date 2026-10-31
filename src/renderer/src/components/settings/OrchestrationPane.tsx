@@ -1,6 +1,7 @@
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import { useCallback, useState } from 'react'
 import { OrchestrationSkillPromptDialog } from './OrchestrationSkillPromptDialog'
+import { buildSkillCommandForRuntime } from './CliSkillRuntimeSetup'
 import { ORCHESTRATION_SKILL_INSTALL_COMMAND } from '@/lib/agent-feature-install-commands'
 import { ArrowRightLeft, GitBranch, ListChecks, Workflow, type LucideIcon } from 'lucide-react'
 import { ORCHESTRATION_SKILL_NAME } from '@/lib/agent-feature-skill-names'
@@ -27,8 +28,7 @@ import {
   getNestedWorkerDepthDescription,
   getNestedWorkerDepthTitle
 } from './nested-worker-depth-copy'
-import { OrchestrationChatErrorSetting } from './OrchestrationChatErrorSetting'
-import { OrchestrationHeartbeatSetting } from './OrchestrationHeartbeatSetting'
+import { OrchestrationWorkerAutoReleaseSetting } from './OrchestrationWorkerAutoReleaseSetting'
 
 const EXAMPLE_ICONS = {
   handoff: ArrowRightLeft,
@@ -162,16 +162,19 @@ export function OrchestrationPane({
         />
       ) : null}
       {showLocalRuntimeSettings ? (
-        <OrchestrationHeartbeatSetting settings={settings} updateSettings={updateSettings} />
-      ) : null}
-      {showLocalRuntimeSettings ? (
-        <OrchestrationChatErrorSetting settings={settings} updateSettings={updateSettings} />
+        <OrchestrationWorkerAutoReleaseSetting
+          settings={settings}
+          updateSettings={updateSettings}
+        />
       ) : null}
 
       {/* COMPAT(wsl-bridge): removed when WSL runs as an orcad host. */}
       {activeSkillRuntime.agentRuntime?.runtime === 'wsl' ? (
         <OrchestrationSkillPromptDialog
-          command={ORCHESTRATION_SKILL_INSTALL_COMMAND}
+          command={buildSkillCommandForRuntime(
+            ORCHESTRATION_SKILL_INSTALL_COMMAND,
+            activeSkillRuntime.agentRuntime
+          )}
           open={skillPromptOpen}
           onOpenChange={setSkillPromptOpen}
         />

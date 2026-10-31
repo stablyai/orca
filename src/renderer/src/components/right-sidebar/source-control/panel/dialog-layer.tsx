@@ -230,7 +230,10 @@ export function SourceControlDialogLayer({
           'auto.components.right.sidebar.SourceControl.f4c766f1ca',
           'Choose the agent and command template for this run.'
         )}
-        generateLabel="Generate"
+        generateLabel={translate(
+          'auto.components.right.sidebar.SourceControl.aee92f8684',
+          'Generate'
+        )}
         settings={settings}
         repo={repo}
         discoveryHostKey={discoveryHostKey}
@@ -250,7 +253,10 @@ export function SourceControlDialogLayer({
           'auto.components.right.sidebar.SourceControl.f4c766f1ca',
           'Choose the agent and command template for this run.'
         )}
-        generateLabel="Generate"
+        generateLabel={translate(
+          'auto.components.right.sidebar.SourceControl.aee92f8684',
+          'Generate'
+        )}
         settings={settings}
         repo={repo}
         discoveryHostKey={discoveryHostKey}

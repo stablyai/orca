@@ -14,7 +14,7 @@ import { collectOrcadMigrationRetiredWorktreeNamespaces } from './orcad-source-r
 import { collectOrcadMigrationSourceAutomationState } from './orcad-source-automation-state'
 import { collectOrcadMigrationSourceWorkspaceSession } from './orcad-source-workspace-session'
 import {
-  createOrcadMigrationSourceScope,
+  createOrcadMigrationExportScope,
   orcadMigrationOwnerMatchesScope,
   unqualifyOrcadMigrationOwnerKey
 } from './orcad-source-scope'
@@ -47,12 +47,21 @@ export type OrcadMigrationSourceDormantInspection = {
   runningAutomationItems: string[]
   /** Retained on this desktop after confirmed "Move anyway". */
   leftBehindItems: string[]
+  /** Automations a local WSL move carries disabled, to re-enable on the host once it commits. */
+  automationsEnabledAtSource: string[]
 }
 
 /** Confirmed "Move anyway" permits retaining unsupported state; unsaved-draft blockers still apply. */
-export function orcadMigrationLeavesBehind(state: PersistedState, targetId: string): boolean {
-  return state.sshTargets.some(
-    (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+export function orcadMigrationLeavesBehind(
+  state: PersistedState,
+  targetId: string | null
+): boolean {
+  // A local WSL move has no "Move anyway": what can't move blocks it.
+  return (
+    targetId !== null &&
+    state.sshTargets.some(
+      (target) => target.id === targetId && target.managedServerLeaveBehind !== undefined
+    )
   )
 }
 
@@ -61,9 +70,11 @@ export function collectOrcadMigrationSourceDormantState(
   source: OrcadMigrationManifestSource,
   catalog: OrcadMigrationCatalogPayload,
   storage?: TerminalScrollbackSnapshotStorage,
-  destinationEnvironmentId?: string
+  destinationEnvironmentId?: string,
+  /** A WSL move's slept panes; see `projectOrcadMigrationSessionScrollback`. */
+  daemonHistoryLeaf?: (tabId: string, leafId: string) => boolean
 ): OrcadMigrationSourceDormantInspection {
-  const scope = createOrcadMigrationSourceScope({ source, catalog, repos: state.repos })
+  const scope = createOrcadMigrationExportScope({ source, catalog, repos: state.repos })
   const blockedCounts = emptyBlockedCounts()
   const destinationRepos = catalog.repositories.map(toOrcadDestinationRepository)
   const setupByRepoId = new Map(
@@ -173,7 +184,8 @@ export function collectOrcadMigrationSourceDormantState(
     source,
     catalog,
     storage,
-    leaveBehind
+    leaveBehind,
+    daemonHistoryLeaf
   )
   const blockedSessionItems = [...workspaceSession.blockedItems]
   const automationState = collectOrcadMigrationSourceAutomationState(state, source, catalog)
@@ -242,7 +254,8 @@ export function collectOrcadMigrationSourceDormantState(
       : automationState.runningAutomationNames.map(
           (name) => `${name} is running; wait for it to finish, then connect again`
         ),
-    leftBehindItems
+    leftBehindItems,
+    automationsEnabledAtSource: automationState.enabledAtSourceIds
   }
 }
 

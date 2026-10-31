@@ -8,7 +8,7 @@ import type * as AttachmentsHook from './use-native-chat-composer-attachments'
 import type * as SendHook from './use-native-chat-structured-composer-send'
 import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 import { createMemoryNativeChatComposerDraftStorage } from './native-chat-composer-draft-storage'
-import { imageReferenceToken } from '../../../../shared/native-chat-image-reference'
+import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
 import type * as RemoteRuntimePtyIdModule from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 
 vi.mock('@/i18n/i18n', () => ({
@@ -20,9 +20,6 @@ vi.mock('../../../../shared/remote-runtime/remote-runtime-pty-id', async (import
   isRemoteRuntimePtyId: () => false
 }))
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 const mocks = vi.hoisted(() => {
   const launchDrafts: Record<string, NativeChatLaunchDraft> = {}
   return { launchDrafts }

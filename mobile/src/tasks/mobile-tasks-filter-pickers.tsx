@@ -1,14 +1,15 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
+import { translate } from '../i18n/mobile-i18n'
 import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
-  Check,
   colors,
   PickerModal,
   ActivityIndicator
 } from './mobile-tasks-dependencies'
+import { ListGroup } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListRow'
 import { linearWorkspaceSelect } from './mobile-task-runtime-operations'
 import { styles } from './mobile-tasks-legacy-styles'
 import { JIRA_FILTER_OPTIONS } from './mobile-task-view-options'
@@ -34,37 +35,41 @@ export function renderMobileTasksGitHubProjectFieldsPicker(model: ConnectionPres
       onClose={() => setShowGitHubProjectFieldsPicker(false)}
     >
       <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>Project Fields</Text>
-        <Text style={styles.sheetSubtitle}>Choose which Project fields appear on item cards.</Text>
+        <Text style={styles.sheetTitle}>
+          {translate('tasks.filterPickers.fieldsTitle', 'Project Fields')}
+        </Text>
+        <Text style={styles.sheetSubtitle}>
+          {translate(
+            'tasks.filterPickers.fieldsSubtitle',
+            'Choose which Project fields appear on item cards.'
+          )}
+        </Text>
       </View>
-      <View style={styles.repoPickerGroup}>
-        {githubProjectAvailableSummaryFields.length === 0 ? (
-          <Text style={styles.repoPickerSubtitle}>This view has no extra fields to show.</Text>
-        ) : (
-          githubProjectAvailableSummaryFields.map((field, index) => {
+      {githubProjectAvailableSummaryFields.length === 0 ? (
+        <Text style={styles.repoPickerSubtitle}>
+          {translate('tasks.filterPickers.noFields', 'This view has no extra fields to show.')}
+        </Text>
+      ) : (
+        <ListGroup>
+          {githubProjectAvailableSummaryFields.map((field) => {
             const visible = !githubProjectHiddenFieldIds.has(field.id)
             return (
-              <View key={field.id}>
-                {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                <Pressable
-                  style={styles.repoPickerRow}
-                  onPress={() => toggleGitHubProjectFieldVisibility(field.id)}
-                >
-                  <View style={styles.repoPickerTextWrap}>
-                    <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                      {field.name}
-                    </Text>
-                    <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                      {visible ? 'Shown on cards' : 'Hidden from cards'}
-                    </Text>
-                  </View>
-                  {visible ? <Check size={15} color={colors.textPrimary} /> : null}
-                </Pressable>
-              </View>
+              <ListRow
+                key={field.id}
+                title={field.name}
+                subtitle={
+                  visible
+                    ? translate('tasks.filterPickers.fieldShown', 'Shown on cards')
+                    : translate('tasks.filterPickers.fieldHidden', 'Hidden from cards')
+                }
+                selected={visible}
+                accessibilityRole="checkbox"
+                onPress={() => toggleGitHubProjectFieldVisibility(field.id)}
+              />
             )
-          })
-        )}
-      </View>
+          })}
+        </ListGroup>
+      )}
     </BottomDrawer>
   )
 }
@@ -82,7 +87,7 @@ export function renderMobileTasksGitLabViewPicker(model: ConnectionPresentationM
   return (
     <PickerModal
       visible={taskUiReady && showGitLabViewPicker}
-      title="GitLab View"
+      title={translate('tasks.filterPickers.gitlabView', 'GitLab View')}
       options={GITLAB_VIEW_OPTIONS}
       selected={gitlabView}
       onSelect={(view) => {
@@ -99,21 +104,14 @@ export function renderMobileTasksGitLabViewPicker(model: ConnectionPresentationM
 }
 
 export function renderMobileTasksGitLabFilterPicker(model: ConnectionPresentationModel) {
-  const {
-    gitlabFilter,
-    setGitlabFilter,
-    setShowGitLabFilterPicker,
-    showGitLabFilterPicker,
-    taskUiReady
-  } = model
   return (
     <PickerModal
-      visible={taskUiReady && showGitLabFilterPicker}
-      title="GitLab Filter"
+      visible={model.taskUiReady && model.showGitLabFilterPicker}
+      title={translate('tasks.filterPickers.gitlabFilter', 'GitLab Filter')}
       options={GITLAB_FILTER_OPTIONS}
-      selected={gitlabFilter}
-      onSelect={setGitlabFilter}
-      onClose={() => setShowGitLabFilterPicker(false)}
+      selected={model.gitlabFilter}
+      onSelect={model.setGitlabFilter}
+      onClose={() => model.setShowGitLabFilterPicker(false)}
     />
   )
 }
@@ -132,7 +130,7 @@ export function renderMobileTasksLinearFilterPicker(model: ConnectionPresentatio
   return (
     <PickerModal
       visible={taskUiReady && showLinearFilterPicker}
-      title="Linear Filter"
+      title={translate('tasks.filterPickers.linearFilter', 'Linear Filter')}
       options={LINEAR_FILTER_OPTIONS}
       selected={linearFilter}
       onSelect={(filter) => {
@@ -162,7 +160,7 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
   return (
     <PickerModal
       visible={taskUiReady && showLinearWorkspacePicker}
-      title="Linear Workspace"
+      title={translate('tasks.filterPickers.linearWorkspace', 'Linear Workspace')}
       options={linearWorkspaceOptions}
       selected={selectedLinearWorkspaceId ?? ''}
       onSelect={(workspaceId) => {
@@ -173,7 +171,14 @@ export function renderMobileTasksLinearWorkspacePicker(model: ConnectionPresenta
             .request(client, { workspaceId })
             .then(() => loadLinearContext())
             .catch((err) => {
-              setError(err instanceof Error ? err.message : 'Failed to switch workspace')
+              setError(
+                err instanceof Error
+                  ? err.message
+                  : translate(
+                      'tasks.filterPickers.switchWorkspaceFailed',
+                      'Failed to switch workspace'
+                    )
+              )
             })
         }
       }}
@@ -192,68 +197,61 @@ export function renderMobileTasksLinearTeamPicker(model: ConnectionPresentationM
     showLinearTeamPicker,
     taskUiReady
   } = model
+  const count = linearTeams.length
   return (
     <BottomDrawer
       visible={taskUiReady && showLinearTeamPicker}
       onClose={() => setShowLinearTeamPicker(false)}
     >
       <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>Linear Teams</Text>
-        <Text style={styles.sheetSubtitle}>Choose which teams appear in Tasks.</Text>
+        <Text style={styles.sheetTitle}>
+          {translate('tasks.filterPickers.teamsTitle', 'Linear Teams')}
+        </Text>
+        <Text style={styles.sheetSubtitle}>
+          {translate('tasks.filterPickers.teamsSubtitle', 'Choose which teams appear in Tasks.')}
+        </Text>
       </View>
-      <View style={styles.repoPickerGroup}>
-        <Pressable
-          style={styles.repoPickerRow}
+      <ListGroup>
+        <ListRow
+          key="all"
+          title={translate('tasks.filterPickers.allTeams', 'All teams')}
+          subtitle={
+            count === 1
+              ? translate('tasks.filterPickers.teams_one', '{{count}} team', { count })
+              : translate('tasks.filterPickers.teams_other', '{{count}} teams', { count })
+          }
+          selected={selectedLinearTeamIds.size === linearTeams.length}
+          accessibilityRole="checkbox"
           onPress={() => {
             const next = new Set(linearTeams.map((team) => team.id))
             setSelectedLinearTeamIds(next)
             persistLinearTeamSelection(next, linearTeams)
           }}
-        >
-          <View style={styles.repoPickerTextWrap}>
-            <Text style={styles.repoPickerTitle}>All teams</Text>
-            <Text style={styles.repoPickerSubtitle}>{linearTeams.length} teams</Text>
-          </View>
-          {selectedLinearTeamIds.size === linearTeams.length ? (
-            <Check size={15} color={colors.textPrimary} />
-          ) : null}
-        </Pressable>
-        {linearTeams.map((team) => {
-          const selected = selectedLinearTeamIds.has(team.id)
-          return (
-            <View key={team.id}>
-              <View style={styles.actionSeparator} />
-              <Pressable
-                style={styles.repoPickerRow}
-                onPress={() => {
-                  const next = new Set(selectedLinearTeamIds)
-                  if (next.has(team.id)) {
-                    next.delete(team.id)
-                  } else {
-                    next.add(team.id)
-                  }
-                  const normalized =
-                    next.size === 0 || next.size === linearTeams.length
-                      ? new Set(linearTeams.map((entry) => entry.id))
-                      : next
-                  setSelectedLinearTeamIds(normalized)
-                  persistLinearTeamSelection(normalized, linearTeams)
-                }}
-              >
-                <View style={styles.repoPickerTextWrap}>
-                  <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                    {team.name}
-                  </Text>
-                  <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                    {team.workspaceName ?? team.key}
-                  </Text>
-                </View>
-                {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-              </Pressable>
-            </View>
-          )
-        })}
-      </View>
+        />
+        {linearTeams.map((team) => (
+          <ListRow
+            key={team.id}
+            title={team.name}
+            subtitle={team.workspaceName ?? team.key}
+            selected={selectedLinearTeamIds.has(team.id)}
+            accessibilityRole="checkbox"
+            onPress={() => {
+              const next = new Set(selectedLinearTeamIds)
+              if (next.has(team.id)) {
+                next.delete(team.id)
+              } else {
+                next.add(team.id)
+              }
+              const normalized =
+                next.size === 0 || next.size === linearTeams.length
+                  ? new Set(linearTeams.map((entry) => entry.id))
+                  : next
+              setSelectedLinearTeamIds(normalized)
+              persistLinearTeamSelection(normalized, linearTeams)
+            }}
+          />
+        ))}
+      </ListGroup>
     </BottomDrawer>
   )
 }
@@ -275,60 +273,57 @@ export function renderMobileTasksLinearStatusPicker(model: ConnectionPresentatio
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
     >
       <View style={styles.sheetHeader}>
-        <Text style={styles.sheetTitle}>Change Status</Text>
+        <Text style={styles.sheetTitle}>
+          {translate('tasks.filterPickers.changeStatus', 'Change Status')}
+        </Text>
         <Text style={styles.sheetSubtitle}>
-          {linearStatusPickerItem?.source.identifier ?? 'Linear issue'}
+          {linearStatusPickerItem?.source.identifier ??
+            translate('tasks.filterPickers.linearIssue', 'Linear issue')}
         </Text>
       </View>
-      <View style={styles.repoPickerGroup}>
+      <ListGroup>
         {linearStatesLoading ? (
           <View style={styles.detailLoadingInline}>
             <ActivityIndicator size="small" color={colors.textSecondary} />
-            <Text style={styles.detailMuted}>Loading states...</Text>
+            <Text style={styles.detailMuted}>
+              {translate('tasks.filterPickers.loadingStates', 'Loading states...')}
+            </Text>
           </View>
         ) : linearStates.length === 0 ? (
-          <Text style={styles.emptyInlineText}>No states available</Text>
+          <Text style={styles.emptyInlineText}>
+            {translate('tasks.filterPickers.noStates', 'No states available')}
+          </Text>
         ) : (
-          linearStates.map((state, index) => {
-            const selected =
-              state.name === linearStatusPickerItem?.source.state.name &&
-              state.type === linearStatusPickerItem?.source.state.type
-            return (
-              <View key={state.id}>
-                {index > 0 ? <View style={styles.actionSeparator} /> : null}
-                <Pressable
-                  style={styles.repoPickerRow}
-                  disabled={mutatingStatus}
-                  onPress={() => {
-                    if (!linearStatusPickerItem) {
-                      return
-                    }
-                    void setLinearStatus(linearStatusPickerItem, state, {
-                      closeDetail: false
-                    }).then(() => setLinearStatusPickerItem(null))
-                  }}
-                >
-                  <View
-                    style={[
-                      styles.pickerRepoDot,
-                      { backgroundColor: state.color || colors.textMuted }
-                    ]}
-                  />
-                  <View style={styles.repoPickerTextWrap}>
-                    <Text style={styles.repoPickerTitle} numberOfLines={1}>
-                      {state.name}
-                    </Text>
-                    <Text style={styles.repoPickerSubtitle} numberOfLines={1}>
-                      {state.type}
-                    </Text>
-                  </View>
-                  {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-                </Pressable>
-              </View>
-            )
-          })
+          linearStates.map((state) => (
+            <ListRow
+              key={state.id}
+              title={state.name}
+              subtitle={state.type}
+              leading={
+                <View
+                  style={[
+                    styles.pickerRepoDot,
+                    { backgroundColor: state.color || colors.textMuted }
+                  ]}
+                />
+              }
+              selected={
+                state.name === linearStatusPickerItem?.source.state.name &&
+                state.type === linearStatusPickerItem?.source.state.type
+              }
+              disabled={mutatingStatus}
+              onPress={() => {
+                if (!linearStatusPickerItem) {
+                  return
+                }
+                void setLinearStatus(linearStatusPickerItem, state, {
+                  closeDetail: false
+                }).then(() => setLinearStatusPickerItem(null))
+              }}
+            />
+          ))
         )}
-      </View>
+      </ListGroup>
     </BottomDrawer>
   )
 }
@@ -347,7 +342,7 @@ export function renderMobileTasksJiraFilterPicker(model: ConnectionPresentationM
   return (
     <PickerModal
       visible={taskUiReady && showJiraFilterPicker}
-      title="Jira Filter"
+      title={translate('tasks.filterPickers.jiraFilter', 'Jira Filter')}
       options={JIRA_FILTER_OPTIONS}
       selected={jiraFilter}
       onSelect={(filter) => {
@@ -362,26 +357,17 @@ export function renderMobileTasksJiraFilterPicker(model: ConnectionPresentationM
 }
 
 export function renderMobileTasksJiraSitePicker(model: ConnectionPresentationModel) {
-  const {
-    jiraConnection,
-    jiraSiteOptions,
-    setItems,
-    setJiraConnection,
-    setShowJiraSitePicker,
-    showJiraSitePicker,
-    taskUiReady
-  } = model
   return (
     <PickerModal
-      visible={taskUiReady && showJiraSitePicker}
-      title="Jira Site"
-      options={jiraSiteOptions}
-      selected={jiraConnection.selection ?? ''}
+      visible={model.taskUiReady && model.showJiraSitePicker}
+      title={translate('tasks.filterPickers.jiraSite', 'Jira Site')}
+      options={model.jiraSiteOptions}
+      selected={model.jiraConnection.selection ?? ''}
       onSelect={(siteId) => {
-        setJiraConnection((current) => ({ ...current, selection: siteId }))
-        setItems([])
+        model.setJiraConnection((current) => ({ ...current, selection: siteId }))
+        model.setItems([])
       }}
-      onClose={() => setShowJiraSitePicker(false)}
+      onClose={() => model.setShowJiraSitePicker(false)}
     />
   )
 }

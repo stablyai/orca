@@ -75,22 +75,17 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setShowGitHubPresetPicker,
     setShowGitHubProjectFieldsPicker,
     setShowGitHubProjectPicker,
-    setShowGitHubProjectSortPicker,
     setShowGitHubProjectViewPicker,
     setShowGitLabFilterPicker,
     setShowGitLabViewPicker,
     setShowLinearConnect,
     setShowLinearDisplayPicker,
     setShowLinearFilterPicker,
-    setShowLinearGroupPicker,
-    setShowLinearOrderPicker,
     setShowLinearTeamPicker,
-    setShowLinearViewPicker,
     setShowLinearWorkspacePicker,
-    setShowProviderPicker,
     setShowRepoPicker,
     setSelectedRepoIds,
-    setShowSortPicker,
+    setShowFilterSheet,
     setTaskStateHydrated,
     setTasksSupportState,
     setTrustedOrcaHooks,
@@ -109,24 +104,19 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
       setTasksSupportState({ kind: 'unknown', client: null })
       setShowLinearWorkspacePicker(false)
       setShowLinearTeamPicker(false)
-      setShowLinearViewPicker(false)
-      setShowLinearGroupPicker(false)
-      setShowLinearOrderPicker(false)
       setShowLinearDisplayPicker(false)
       setShowLinearConnect(false)
-      setShowProviderPicker(false)
       setShowGitHubKindPicker(false)
       setShowGitHubPresetPicker(false)
       setShowGitLabViewPicker(false)
       setShowGitLabFilterPicker(false)
       setShowLinearFilterPicker(false)
-      setShowSortPicker(false)
+      setShowFilterSheet(false)
       setShowRepoPicker(false)
       setShowGitHubIssueSourcePicker(false)
       setShowGitHubPagePicker(false)
       setShowGitHubProjectPicker(false)
       setShowGitHubProjectViewPicker(false)
-      setShowGitHubProjectSortPicker(false)
       setShowGitHubProjectFieldsPicker(false)
       setPendingGitHubProjectViewSelection(null)
       setActionItem(null)
@@ -151,24 +141,19 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
     setTasksSupportState({ kind: 'unknown', client })
     setShowLinearWorkspacePicker(false)
     setShowLinearTeamPicker(false)
-    setShowLinearViewPicker(false)
-    setShowLinearGroupPicker(false)
-    setShowLinearOrderPicker(false)
     setShowLinearDisplayPicker(false)
     setShowLinearConnect(false)
-    setShowProviderPicker(false)
     setShowGitHubKindPicker(false)
     setShowGitHubPresetPicker(false)
     setShowGitLabViewPicker(false)
     setShowGitLabFilterPicker(false)
     setShowLinearFilterPicker(false)
-    setShowSortPicker(false)
+    setShowFilterSheet(false)
     setShowRepoPicker(false)
     setShowGitHubIssueSourcePicker(false)
     setShowGitHubPagePicker(false)
     setShowGitHubProjectPicker(false)
     setShowGitHubProjectViewPicker(false)
-    setShowGitHubProjectSortPicker(false)
     setShowGitHubProjectFieldsPicker(false)
     setPendingGitHubProjectViewSelection(null)
     setActionItem(null)
@@ -201,24 +186,19 @@ export function useMobileTasksRuntimeHydration(model: ClientSettingsActionsModel
         setGithubProjectTable(null)
         setShowLinearWorkspacePicker(false)
         setShowLinearTeamPicker(false)
-        setShowLinearViewPicker(false)
-        setShowLinearGroupPicker(false)
-        setShowLinearOrderPicker(false)
         setShowLinearDisplayPicker(false)
         setShowLinearConnect(false)
-        setShowProviderPicker(false)
         setShowGitHubKindPicker(false)
         setShowGitHubPresetPicker(false)
         setShowGitLabViewPicker(false)
         setShowGitLabFilterPicker(false)
         setShowLinearFilterPicker(false)
-        setShowSortPicker(false)
+        setShowFilterSheet(false)
         setShowRepoPicker(false)
         setShowGitHubIssueSourcePicker(false)
         setShowGitHubPagePicker(false)
         setShowGitHubProjectPicker(false)
         setShowGitHubProjectViewPicker(false)
-        setShowGitHubProjectSortPicker(false)
         setShowGitHubProjectFieldsPicker(false)
         setPendingGitHubProjectViewSelection(null)
         setActionItem(null)

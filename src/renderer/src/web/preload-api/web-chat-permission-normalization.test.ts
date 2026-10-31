@@ -32,6 +32,7 @@ it.each([
     }
     const loaded = migrateStoredWebSettings(stored)
     expect(loaded.agentPermissionDefault).toBeDefined()
+    expect(loaded.agentLaunchChoices).toBeUndefined()
     expect(resolveAgentPermission('claude', loaded).choice).toBe(choice)
     expect(resolveAgentPermission('codex', loaded).choice).toBe('own')
     expect(loaded.agentDefaultArgs?.claude).toBe(raw)

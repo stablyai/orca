@@ -545,11 +545,25 @@ describe('isMuseReadyPromptPreview', () => {
     ).toBe(true)
   })
 
+  it('recognizes a composer without the voice-input label (#25005)', () => {
+    expect(
+      isMuseReadyPromptPreview(
+        waitTextFor(['  Muse Code 1.4.2', '──────────────────────────❯ ──────────────────────────'])
+      )
+    ).toBe(true)
+  })
+
   it('refuses a bare Muse mention without its composer', () => {
     expect(isMuseReadyPromptPreview(waitTextFor(['comparing Muse Code vs codex']))).toBe(false)
     expect(
       isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.3.0', '  echo · /private/tmp · YOLO']))
     ).toBe(false)
+    expect(isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.4.2 (1.4.2-R1)', '~/app ❯']))).toBe(
+      false
+    )
+    expect(isMuseReadyPromptPreview(waitTextFor(['Muse Code 1.4.2', '╭─ ~/app', '╰─❯']))).toBe(
+      false
+    )
   })
 
   it('refuses the Muse trust dialog, which carries no banner or composer', () => {

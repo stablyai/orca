@@ -210,6 +210,8 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     consumePendingQuitAndStopAllSessions: () => Promise.resolve(false),
     onOpenSkillShare: () => noopUnsubscribe,
     consumePendingSkillShare: () => Promise.resolve(null),
+    onOpenPluginInstallLink: () => noopUnsubscribe,
+    consumePendingPluginInstallLink: () => Promise.resolve(null),
     // Why: the web client has no OS shell handing it files, so there is never a queued open.
     onOpenMarkdownFiles: () => noopUnsubscribe,
     consumePendingMarkdownFileOpens: () => Promise.resolve([]),
@@ -235,6 +237,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onWorktreeHistoryNavigate: () => noopUnsubscribe,
     onRequestTabCreate: () => noopUnsubscribe,
     replyTabCreate: () => {},
+    browserTabRequestsReady: () => {},
     onRequestRemoteCliBrowserScope: () => noopUnsubscribe,
     replyRemoteCliBrowserScope: () => {},
     onRequestTabSetProfile: () => noopUnsubscribe,

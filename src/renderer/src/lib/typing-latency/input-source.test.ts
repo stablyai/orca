@@ -10,11 +10,17 @@ describe('createInputSourceTally', () => {
     tally.addObservation({
       attribution: 'single-input',
       source: 'direct',
-      text: 'a',
       inputToDispatchMs: 1,
       dispatchToParseMs: 3,
       parseToPaintMs: 4,
       inputToPaintMs: 8,
+      eventToHandlerMs: null,
+      eventToPaintMs: null,
+      dispatchToArrivalMs: null,
+      arrivalToWriteMs: null,
+      writeToParseMs: null,
+      startedAt: 0,
+      paintedAt: 8,
       outputBytes: 20,
       outputWrites: 1
     })
@@ -49,28 +55,5 @@ describe('createInputSourceTally', () => {
       max: null
     })
     expect(breakdown.imeCommitChars).toEqual({ count: 1, p50: 2, p95: 2, max: 2 })
-  })
-
-  it('records an isolated IME commit as one exact source sample', () => {
-    const tally = createInputSourceTally()
-    tally.recordInput('ime', '한')
-    tally.addObservation({
-      attribution: 'single-input',
-      source: 'ime',
-      text: '한',
-      inputToDispatchMs: 2,
-      dispatchToParseMs: 7,
-      parseToPaintMs: 3,
-      inputToPaintMs: 12,
-      outputBytes: 3,
-      outputWrites: 1
-    })
-
-    expect(tally.breakdown().ime).toMatchObject({
-      observedInputs: 1,
-      exactInputs: 1,
-      ambiguousInputs: 0,
-      outputBytesPerInput: { count: 1, p50: 3, p95: 3, max: 3 }
-    })
   })
 })

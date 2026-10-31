@@ -1,9 +1,20 @@
+import * as selectionOperations from '../../../src/shared/structured-agent-session-selection-operations'
+import {
+  rememberMobileCreatedStructuredSession,
+  mobileCreatedStructuredSession
+} from './mobile-created-structured-sessions'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { describe, expect, it, vi } from 'vitest'
-import type { AgentSessionOptionsResult } from '../../../src/shared/agent-session-wire'
+import type {
+  AgentSessionOptionResult,
+  AgentSessionOptionsResult
+} from '../../../src/shared/agent-session-wire'
 import type { RpcClient } from '../transport/rpc-client'
-import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
+import type {
+  StructuredAgentSessionMutate,
+  StructuredAgentSessionMutationResult
+} from './mobile-structured-agent-session-rpc'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 
 function optionsFor(permissionMode?: string): AgentSessionOptionsResult {
@@ -64,12 +75,14 @@ async function mountOptions(props: ProbeProps) {
       sessionId: 'session-1',
       enabled: true,
       fence: probe.fence,
+      turnId: null,
       mutate,
       optionStamp: probe.optionStamp,
       hostSupport:
         probe.hostAdvertisesPermissionModes === null
           ? null
           : {
+              sendOptions: false,
               permissionModes: probe.hostAdvertisesPermissionModes ?? true,
               permissionOwn: probe.permissionOwn,
               statusFeed: false
@@ -88,6 +101,8 @@ async function mountOptions(props: ProbeProps) {
   })
   await settle()
   return {
+    pending: () => rendered.current?.pendingOptionId,
+    images: () => rendered.current?.acceptsImages,
     offered: () => {
       const entry = rendered.current?.optionSnapshot.find(
         (descriptor) => descriptor.id === 'permissionMode'
@@ -106,11 +121,15 @@ async function mountOptions(props: ProbeProps) {
       })
       await settle()
     },
-    pick: async (mode: string) => {
+    pick: async (mode: string, waitForResult = false) => {
+      let result!: Promise<boolean>
       await act(async () => {
-        void rendered.current?.setStructuredOption('permissionMode', mode)
+        result = rendered.current!.setStructuredOption('permissionMode', mode)
       })
       await settle()
+      if (waitForResult) {
+        return result
+      }
     },
     unmount: () => act(async () => renderer?.unmount())
   }
@@ -118,16 +137,52 @@ async function mountOptions(props: ProbeProps) {
 
 // STA-10671: a 1.4.224 host ignores per-chat modes and runs its own Agent Permissions.
 describe('the permission pill against a host predating per-chat modes', () => {
-  it("says the chat runs the host's Agent Permissions, and offers nothing to pick", async () => {
+  it('publishes legacyHostPermissions only after a current options answer', async () => {
+    const factory = vi.spyOn(selectionOperations, 'createStructuredSessionSelectionController')
+    const old = Promise.withResolvers<AgentSessionOptionsResult>()
+    const current = Promise.withResolvers<AgentSessionOptionsResult>()
+    const rpc = optionsClient(undefined)
+    const send = rpc.client.sendRequest
+    let reads = 0
+    rpc.client.sendRequest = async (method, params, config) =>
+      method === 'agentSession.options'
+        ? {
+            id: 'held',
+            ok: true,
+            result: await (++reads === 1 ? old.promise : current.promise),
+            _meta: { runtimeId: 'runtime-1' }
+          }
+        : send(method, params, config)
+    rememberMobileCreatedStructuredSession('session-1', '/workspace')
     const options = await mountOptions({
-      client: optionsClient(undefined).client,
+      client: rpc.client,
       fence: 1,
-      optionStamp: 'gpt-live|',
+      optionStamp: '',
       hostAdvertisesPermissionModes: false
     })
+    const constructed = factory.mock.results.at(-1)
+    if (constructed?.type !== 'return') {
+      throw new Error('Phone selection owner was not created')
+    }
+    const controller = constructed.value
+    await act(async () => {
+      const pick = controller.issue('model', 'gpt-live', null)
+      controller.settle(pick, { kind: 'unknown' })
+    })
+    await act(async () => old.resolve({ ...optionsFor(), acceptsImages: false }))
+    expect(options.permission()).toBeNull()
+    expect(options.images()).toBe(true)
+    expect(mobileCreatedStructuredSession('session-1')).toEqual({ worktree: '/workspace' })
+    await act(async () => current.resolve({ ...optionsFor(), acceptsImages: false }))
     expect(options.permission()).toBe('host')
     expect(options.offered()).toEqual(['host'])
+    expect(options.images()).toBe(false)
+    expect(mobileCreatedStructuredSession('session-1')).toBeUndefined()
+    vi.mocked(mutate).mockClear()
+    expect(await options.pick('own', true)).toBe(false)
+    expect(mutate).not.toHaveBeenCalled()
     await options.unmount()
+    factory.mockRestore()
   })
 
   // 1.4.225–1.4.226 apply modes without advertising the capability: their stated mode wins.
@@ -150,6 +205,9 @@ describe('the permission pill against a host predating per-chat modes', () => {
       hostAdvertisesPermissionModes: null
     })
     expect(options.permission()).toBeNull()
+    vi.mocked(mutate).mockClear()
+    expect(await options.pick('own', true)).toBe(false)
+    expect(mutate).not.toHaveBeenCalled()
     await options.unmount()
   })
 })
@@ -217,14 +275,39 @@ describe('the permission mode on the phone', () => {
   })
 
   it('shows a pick at once while its write waits behind a start, and stays pickable', async () => {
-    vi.mocked(mutate).mockImplementation(() => new Promise(() => {}))
+    const first =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    const second =
+      Promise.withResolvers<StructuredAgentSessionMutationResult<AgentSessionOptionResult>>()
+    vi.mocked(mutate)
+      .mockReset()
+      .mockReturnValueOnce(first.promise)
+      .mockReturnValueOnce(second.promise)
     const rpc = optionsClient('ask')
     const options = await mountOptions({ client: rpc.client, fence: 1, optionStamp: '' })
+    const send = rpc.client.sendRequest
+    rpc.client.sendRequest = (method, params, config) =>
+      method === 'agentSession.options' ? new Promise(() => {}) : send(method, params, config)
     await options.pick('full-access')
     expect(options.permission()).toBe('full-access')
     await options.pick('auto')
     expect(options.permission()).toBe('auto')
     expect(vi.mocked(mutate)).toHaveBeenCalledTimes(2)
+    for (const [reply, value] of [
+      [second, 'auto'],
+      [first, 'full-access']
+    ] as const) {
+      await act(async () =>
+        reply.resolve({
+          status: 'accepted',
+          value: { key: 'permissionMode', value, options: { permissionMode: value } },
+          sameFence: true
+        })
+      )
+      expect(options.pending()).toBeNull()
+      expect(options.offered()).toContain('auto')
+      expect(options.permission()).toBe('auto')
+    }
     await options.unmount()
   })
 

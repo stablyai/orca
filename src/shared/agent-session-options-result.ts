@@ -8,7 +8,12 @@ import type {
   AgentSessionModelOption
 } from './agent-session-wire'
 
-/** Additive read-only choices/effective next-turn values; older hosts may reject this without changing structured v1 writes. */
+export type AgentSessionAcceptedInputSources = Partial<
+  Record<'model' | 'effort' | 'fastMode' | 'serviceTier', 'saved' | 'seeded' | 'policy'>
+>
+
+/** Provider-reported choices and effective next-turn values. Additive read-only
+ *  surface so older hosts can reject it without changing structured v1 writes. */
 export type AgentSessionOptionsResult = {
   rewind?: AgentSessionRewindSupport
   conversationCommands?: readonly AgentSessionConversationCommand[]
@@ -21,14 +26,20 @@ export type AgentSessionOptionsResult = {
   /** This session takes image attachments. Absent = unknown (an older host). */
   acceptsImages?: boolean
   models: AgentSessionModelOption[]
+  /** False means inventory is unknown; retain existing rows. Absent keeps older hosts' authoritative-list behavior. */
+  modelsKnown?: false
   /** The `models` ids the agent's own finished listing names, excluding host-added rows and
    *  unverified launch-only rows. Absent: nothing verified, as from an older host. */
   listedModelIds?: string[]
   /** Session/account/transport support. Absent means unknown, never unsupported. */
   fastModeSupport?: AgentSessionFastModeSupport
   current: {
+    /** Accepted input origins; an empty map excludes all display-only observations. */
+    acceptedInputSources?: AgentSessionAcceptedInputSources
     model?: string
     effort?: string
+    /** Child-scoped actual for display only; effort remains accepted raw input. */
+    reportedEffort?: string
     /** Canonical preference for the next turn. Explicit false is meaningful. */
     fastMode?: boolean
     /** Next-turn service tier id where the model lists `serviceTiers`; `default` is standard. */

@@ -9,7 +9,10 @@ import {
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { openAgentSessionJournal } from '../agent-session-journal/journal-store-factory'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { settleStaleStructuredAgentSessionState } from './structured-agent-session-dead-generation-settlement'
 import { settleObservedExitForTest } from './structured-agent-session-observed-exit.test-fixture'
 import { captureUnfinishedStructuredAgentSessionWork } from './structured-agent-session-unfinished-work'
@@ -37,6 +40,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await journal.close()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

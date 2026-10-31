@@ -2,10 +2,11 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as WslModule from './wsl'
 import type { Repo } from '../shared/repo-types'
 
-const { mkdirMock, getWslHomeMock, getWslHomeAsyncMock } = vi.hoisted(() => ({
+const { mkdirMock, getWslHomeMock, getWslHomeAsyncMock, runningStateMock } = vi.hoisted(() => ({
   mkdirMock: vi.fn(),
   getWslHomeMock: vi.fn(),
-  getWslHomeAsyncMock: vi.fn()
+  getWslHomeAsyncMock: vi.fn(),
+  runningStateMock: vi.fn(async (_distro: string, _options?: unknown) => 'running')
 }))
 
 vi.mock('fs/promises', () => ({
@@ -18,7 +19,15 @@ vi.mock('./wsl', async (importOriginal) => ({
   getWslHomeAsync: getWslHomeAsyncMock
 }))
 
-import { prepareLocalWorktreeRootForRepo } from './worktree-root-preparation'
+vi.mock('./wsl-background-distro-gate', async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  readWslDistroRunningState: runningStateMock
+}))
+
+import {
+  prepareLocalWorktreeRootForRepo,
+  prepareLocalWorktreeRootsForRepos
+} from './worktree-root-preparation'
 
 const repo: Repo = {
   id: 'repo-1',
@@ -40,6 +49,7 @@ describe('prepareLocalWorktreeRootForRepo', () => {
       throw new Error('synchronous wsl.exe home probe must not run on the main thread')
     })
     getWslHomeAsyncMock.mockReset().mockResolvedValue(null)
+    runningStateMock.mockReset().mockResolvedValue('running')
     store.getSettings.mockReset().mockReturnValue({
       workspaceDir: '/Users/alice/orca/workspaces',
       nestWorkspaces: false
@@ -112,5 +122,27 @@ describe('prepareLocalWorktreeRootForRepo', () => {
     mkdirMock.mockRejectedValueOnce(new Error('permission denied'))
 
     await expect(prepareLocalWorktreeRootForRepo(store as never, repo)).resolves.toBeUndefined()
+  })
+
+  // G8: a workspaceDir edit fans out to every repo; it must not boot a stopped distro's home probe.
+  it('skips a WSL repo whose distro is stopped when preparing every root', async () => {
+    const originalPlatform = process.platform
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    runningStateMock.mockResolvedValue('stopped')
+    store.getSettings.mockReturnValue({ workspaceDir: 'C:\\workspaces', nestWorkspaces: false })
+    const wslRepo = { ...repo, id: 'repo-2', path: '\\\\wsl.localhost\\Ubuntu\\home\\jin\\repo' }
+
+    try {
+      await prepareLocalWorktreeRootsForRepos({ ...store, getRepos: () => [repo, wslRepo] })
+
+      expect(runningStateMock).toHaveBeenCalledWith('Ubuntu', expect.anything())
+      expect(getWslHomeAsyncMock).not.toHaveBeenCalled()
+      expect(mkdirMock).toHaveBeenCalledTimes(1)
+      expect(mkdirMock).not.toHaveBeenCalledWith(expect.stringContaining('wsl.localhost'), {
+        recursive: true
+      })
+    } finally {
+      Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
+    }
   })
 })

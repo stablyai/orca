@@ -1,3 +1,4 @@
+import type { TerminalStartFailure } from '../../shared/terminal-start-failure'
 import type {
   AsyncIoHealthRequest,
   FullDiskAccessStatusRequest,
@@ -298,6 +299,7 @@ export type RpcResponseError = {
   id: string
   ok: false
   error: string
+  terminalStartFailure?: TerminalStartFailure
 }
 
 export type RpcResponse<T = unknown> = RpcResponseOk<T> | RpcResponseError

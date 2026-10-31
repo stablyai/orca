@@ -15,6 +15,17 @@ export function servesLocalWslMigrationSource(
   return isWslHostOrcadProcess(env, platform)
 }
 
+// E2E hosts stand in for a WSL host's orcad; a real one is identified by isWslHostOrcadProcess.
+export const ORCA_E2E_WSL_MOVE_DESTINATION_ENV = 'ORCA_E2E_WSL_MOVE_DESTINATION'
+
+/**
+ * Whether this host is a WSL move's destination: it installs moved panes' terminal history and
+ * serves their stored scrollback. Every other host keeps that wire surface off.
+ */
+export function servesWslMovedPaneHistory(env: NodeJS.ProcessEnv = process.env): boolean {
+  return isWslHostOrcadProcess(env) || env[ORCA_E2E_WSL_MOVE_DESTINATION_ENV] === '1'
+}
+
 export function assertOrcadMigrationSourceServedHere(
   source: OrcadMigrationManifestSource,
   env: NodeJS.ProcessEnv = process.env,

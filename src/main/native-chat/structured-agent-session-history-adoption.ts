@@ -112,6 +112,7 @@ export function structuredAdoptionConflictError(
 export async function resolveStructuredAgentSessionAdoption(input: {
   providerSessionId: string
   candidateAccountHomes: readonly AgentSessionAccountHome[]
+  exhaustionReason?: 'transcriptNotFound' | 'transcriptUnreadable'
   resolveTranscript: (args: {
     providerSessionId: string
     accountHome: AgentSessionAccountHome
@@ -139,6 +140,6 @@ export async function resolveStructuredAgentSessionAdoption(input: {
   }
   // Wrong-home fallback silently turns resume into a blank chat under the old name.
   throw agentSessionRefusalError('agent_session_identity_required', {
-    reason: 'transcriptNotFound'
+    reason: input.exhaustionReason ?? 'transcriptNotFound'
   })
 }

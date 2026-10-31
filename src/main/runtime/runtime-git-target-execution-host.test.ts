@@ -24,10 +24,6 @@ import { OrcaRuntimeService } from './orca-runtime'
 const REMOTE_PATH = '/srv/app-feature'
 const WORKTREE_ID = 'repo-shared::/srv/app-feature'
 
-type RuntimeInternals = {
-  resolveWorktreeSelector: (selector: string) => Promise<unknown>
-}
-
 function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string) {
   const store = {
     getSettings: () => ({ disabledTuiAgents: [], workspaceDir: '/tmp/workspaces' }),
@@ -37,7 +33,7 @@ function makeRuntime(repos: readonly Record<string, unknown>[], hostId?: string)
     getRepo: (id: string) => repos.find((repo) => repo.id === id)
   }
   const runtime = new OrcaRuntimeService(store as never)
-  vi.spyOn(runtime as unknown as RuntimeInternals, 'resolveWorktreeSelector').mockResolvedValue({
+  runtime['resolveGitWorktreeSelector'] = vi.fn().mockResolvedValue({
     id: WORKTREE_ID,
     repoId: 'repo-shared',
     path: REMOTE_PATH,

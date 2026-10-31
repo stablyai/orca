@@ -480,7 +480,7 @@ describe('deferred structured agent-session event sink', () => {
       agentJournalItemKey(identity(0))
     ])
     await journal.close()
-    closeTestJournalHostDatabase(root)
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
 

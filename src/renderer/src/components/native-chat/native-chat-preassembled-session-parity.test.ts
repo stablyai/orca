@@ -7,7 +7,7 @@ import {
   reset as resetAssembler
 } from './native-chat-incremental-assembler'
 import { prepareNativeChatLiveMessages } from './native-chat-live-message-preparation'
-import { mergeNativeChatLiveSession } from './native-chat-live-status'
+import { mergeNativeChatLiveSession } from '../../../../shared/native-chat/native-chat-live-status'
 import { assembleNativeChatSession } from './native-chat-session-assembler'
 
 const CLAUDE_COMMANDS = new Set(

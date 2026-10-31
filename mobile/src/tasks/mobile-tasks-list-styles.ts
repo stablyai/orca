@@ -1,6 +1,6 @@
-import { StyleSheet, colors, radii, spacing } from './mobile-tasks-dependencies'
+import { themedStyleSheet, colors, radii, spacing, StyleSheet } from './mobile-tasks-dependencies'
 
-export const mobileTasksListStyles = StyleSheet.create({
+export const mobileTasksListStyles = themedStyleSheet(() => ({
   taskRow: {
     flexDirection: 'row',
     alignItems: 'flex-start',
@@ -9,6 +9,14 @@ export const mobileTasksListStyles = StyleSheet.create({
   },
   taskRowPressed: {
     backgroundColor: colors.bgRaised
+  },
+  taskRowCentered: {
+    alignItems: 'center'
+  },
+  taskRowSeparator: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: colors.borderSubtle,
+    marginLeft: spacing.lg
   },
   taskIcon: {
     width: 20,
@@ -47,16 +55,21 @@ export const mobileTasksListStyles = StyleSheet.create({
   repoDot: {
     width: 7,
     height: 7,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   pickerRepoDot: {
     width: 9,
     height: 9,
-    borderRadius: 4.5
+    borderRadius: radii.pill
   },
   subtitle: {
     flex: 1,
     fontSize: 11,
+    color: colors.textSecondary
+  },
+  taskRowMeta: {
+    flex: 1,
+    fontSize: 12,
     color: colors.textSecondary
   },
   branchMetaRow: {
@@ -89,7 +102,7 @@ export const mobileTasksListStyles = StyleSheet.create({
     alignSelf: 'flex-start',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.xs + 2,
     paddingVertical: 2
@@ -111,7 +124,7 @@ export const mobileTasksListStyles = StyleSheet.create({
   statusPill: {
     maxWidth: 112,
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderWidth: 1,
@@ -120,7 +133,7 @@ export const mobileTasksListStyles = StyleSheet.create({
   statusPillSelf: {
     alignSelf: 'flex-start',
     backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 3,
     borderWidth: 1,
@@ -135,15 +148,16 @@ export const mobileTasksListStyles = StyleSheet.create({
   linearStateDot: {
     width: 7,
     height: 7,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   linearListTrailing: {
     alignItems: 'flex-end',
     gap: spacing.xs
   },
   taskRowTrailing: {
-    alignItems: 'flex-end',
-    gap: spacing.xs
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.xs + 2
   },
   statusText: {
     fontSize: 11,
@@ -169,7 +183,7 @@ export const mobileTasksListStyles = StyleSheet.create({
     justifyContent: 'center',
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised,
     paddingVertical: spacing.sm
   },
@@ -184,8 +198,8 @@ export const mobileTasksListStyles = StyleSheet.create({
   paginationLabelButton: {
     flex: 1,
     alignItems: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.xs,
     paddingVertical: spacing.sm
   }
-})
+}))

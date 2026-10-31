@@ -152,7 +152,7 @@ export type StructuredAgentSessionEventTarget = {
 
 export type DeferredStructuredAgentSessionEventSink = {
   sink: StructuredAgentSessionEventSink
-  exitObservation(): Pick<StructuredAgentSessionExitObservation, 'heldSends' | 'observedAt'>
+  exitObservation(): Omit<StructuredAgentSessionExitObservation, 'record'>
   bind(target: StructuredAgentSessionEventTarget): void
   unbind(): void
   close(): void

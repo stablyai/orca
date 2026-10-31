@@ -6,6 +6,8 @@ import { Button } from '@/components/ui/button'
 import type { GitHubProjectViewError } from '../../../../shared/github/project-result-types'
 import type { GhAuthDiagnostic } from '../../../../shared/github/auth-types'
 import { translate } from '@/i18n/i18n'
+import { projectViewErrorMessage } from './project-view-error-copy'
+import { openAppHttpLink } from '@/lib/app-http-link-open'
 
 type AuthErrorKind = 'auth_required' | 'scope_missing'
 
@@ -76,11 +78,6 @@ function unsetEnvVarCommand(varName: string): { label: string; command: string }
   }
 }
 
-function openExternal(url: string): void {
-  // Route through Electron’s shell IPC because window.open may not reach the default browser.
-  void window.api.shell.openUrl(url)
-}
-
 async function copyToClipboard(text: string): Promise<void> {
   try {
     await window.api.ui.writeClipboardText(text)
@@ -129,8 +126,16 @@ export function buildRemediation(
   // Missing Enterprise credentials outrank token/scope advice for another host.
   if (diag.requiredHost && diag.requiredHostAuthenticated === false) {
     return {
-      summary: `\`gh\` is not signed in to ${diag.requiredHost}.`,
-      detail: `GitHub Enterprise hosts need their own \`gh\` login, separate from github.com. Run the login command in a terminal, complete the browser flow on ${diag.requiredHost}, then reload.`,
+      summary: translate(
+        'projectViews.authHelp.hostSignedOut',
+        '`gh` is not signed in to {{host}}.',
+        { host: diag.requiredHost }
+      ),
+      detail: translate(
+        'projectViews.authHelp.hostSignedOutDetail',
+        'GitHub Enterprise hosts need their own `gh` login, separate from github.com. Run the login command in a terminal, complete the browser flow on {{host}}, then reload.',
+        { host: diag.requiredHost }
+      ),
       commands: [
         {
           label: translate(
@@ -145,9 +150,14 @@ export function buildRemediation(
 
   if (!diag.ghAvailable) {
     return {
-      summary: 'GitHub CLI (`gh`) is not installed or not on PATH.',
-      detail:
-        'Orca uses `gh` to talk to GitHub Projects. Install it from cli.github.com, then sign in.',
+      summary: translate(
+        'projectViews.authHelp.ghMissing',
+        'GitHub CLI (`gh`) is not installed or not on PATH.'
+      ),
+      detail: translate(
+        'projectViews.authHelp.ghMissingDetail',
+        'Orca uses `gh` to talk to GitHub Projects. Install it from cli.github.com, then sign in.'
+      ),
       commands: [
         {
           label: translate(
@@ -166,13 +176,32 @@ export function buildRemediation(
   if (active?.envToken) {
     const varName = active.envToken
     const fallback = diag.hasKeyringFallback
-      ? ' Your keyring already has a `gh` login that will take over once the env var is gone.'
-      : ' After unsetting it, run `gh auth login` to sign in normally, then retry.'
+      ? translate(
+          'projectViews.authHelp.envTokenKeyringFallback',
+          'Your keyring already has a `gh` login that will take over once the env var is gone.'
+        )
+      : translate(
+          'projectViews.authHelp.envTokenLoginAfterUnset',
+          'After unsetting it, run `gh auth login` to sign in normally, then retry.'
+        )
+    const removal = IS_WINDOWS
+      ? translate(
+          'projectViews.authHelp.envTokenRemoveWindows',
+          'Find where `{{varName}}` is set (System or User environment variables, or your PowerShell profile), remove it, then restart Orca so the new environment is picked up.',
+          { varName }
+        )
+      : translate(
+          'projectViews.authHelp.envTokenRemovePosix',
+          "Find where `{{varName}}` is exported (commonly `~/.zshrc`, `~/.zshenv`, `~/.bashrc`, `~/.profile`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.",
+          { varName }
+        )
     return {
-      summary: `\`${varName}\` is set in your environment, so \`gh\` is using that token instead of your keyring login. \`gh auth refresh\` cannot modify env-supplied tokens — that's why running it didn't help.`,
-      detail: IS_WINDOWS
-        ? `Find where \`${varName}\` is set (System or User environment variables, or your PowerShell profile), remove it, then restart Orca so the new environment is picked up.${fallback}`
-        : `Find where \`${varName}\` is exported (commonly \`~/.zshrc\`, \`~/.zshenv\`, \`~/.bashrc\`, \`~/.profile\`, or your shell's secrets manager), remove it, then restart Orca so the new environment is picked up.${fallback}`,
+      summary: translate(
+        'projectViews.authHelp.envTokenActive',
+        "`{{varName}}` is set in your environment, so `gh` is using that token instead of your keyring login. `gh auth refresh` cannot modify env-supplied tokens — that's why running it didn't help.",
+        { varName }
+      ),
+      detail: `${removal} ${fallback}`,
       commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
@@ -182,10 +211,22 @@ export function buildRemediation(
   if (diag.envTokenInProcess && (!active || diag.missingScopes.length > 0)) {
     const varName = diag.envTokenInProcess
     return {
-      summary: `Orca inherited \`${varName}\` from your shell, and \`gh\` is using that token. \`gh auth refresh\` doesn't apply to env-supplied tokens.`,
-      detail: `Unset \`${varName}\` in the shell that launches Orca${
-        IS_WINDOWS ? ' (or in your user environment variables)' : ' (or in your shell rc file)'
-      }, then restart Orca.`,
+      summary: translate(
+        'projectViews.authHelp.envTokenInherited',
+        "Orca inherited `{{varName}}` from your shell, and `gh` is using that token. `gh auth refresh` doesn't apply to env-supplied tokens.",
+        { varName }
+      ),
+      detail: IS_WINDOWS
+        ? translate(
+            'projectViews.authHelp.envTokenInheritedDetailWindows',
+            'Unset `{{varName}}` in the shell that launches Orca (or in your user environment variables), then restart Orca.',
+            { varName }
+          )
+        : translate(
+            'projectViews.authHelp.envTokenInheritedDetailPosix',
+            'Unset `{{varName}}` in the shell that launches Orca (or in your shell rc file), then restart Orca.',
+            { varName }
+          ),
       commands: [findEnvVarCommand(varName), unsetEnvVarCommand(varName)],
       docsUrl: 'https://cli.github.com/manual/gh_help_environment'
     }
@@ -193,7 +234,10 @@ export function buildRemediation(
 
   if (kind === 'auth_required' || !active) {
     return {
-      summary: 'You’re not signed in to GitHub via `gh`.',
+      summary: translate(
+        'projectViews.authHelp.signedOut',
+        'You’re not signed in to GitHub via `gh`.'
+      ),
       commands: [
         {
           label: translate(
@@ -208,13 +252,15 @@ export function buildRemediation(
 
   if (diag.missingScopes.length > 0) {
     return {
-      summary: `Your \`gh\` token is missing the ${diag.missingScopes
-        .map((s) => `\`${s}\``)
-        .join(
-          ', '
-        )} scope${diag.missingScopes.length === 1 ? '' : 's'} needed for GitHub Projects.`,
-      detail:
-        'Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.',
+      summary: translate(
+        'projectViews.authHelp.missingScopes',
+        'Your `gh` token is missing scopes needed for GitHub Projects: {{scopes}}.',
+        { scopes: diag.missingScopes.map((scope) => `\`${scope}\``).join(', ') }
+      ),
+      detail: translate(
+        'projectViews.authHelp.missingScopesDetail',
+        'Run the refresh command in a terminal. It will open a browser to authorize the new scopes, then come back here and reload.'
+      ),
       commands: [
         {
           label: translate(
@@ -230,8 +276,10 @@ export function buildRemediation(
   // Valid scopes can still fail on org visibility or SAML SSO authorization.
   return {
     summary: errorMessage,
-    detail:
-      'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.',
+    detail: translate(
+      'projectViews.authHelp.accessDeniedDetail',
+      'Your token has the required scopes but GitHub still denied access. If the project is in an org with SAML SSO, you must authorize this token for the org under Settings → Developer settings → Personal access tokens → Configure SSO.'
+    ),
     commands: [
       {
         label: translate(
@@ -273,7 +321,7 @@ export function GhAuthErrorHelp({
     }
   }, [host])
 
-  const remedy = buildRemediation(error.message, error.type, diag, host)
+  const remedy = buildRemediation(projectViewErrorMessage(error, { host }), error.type, diag, host)
   const docsUrl = remedy.docsUrl
 
   if (variant === 'banner') {
@@ -296,7 +344,7 @@ export function GhAuthErrorHelp({
           {docsUrl ? (
             <button
               type="button"
-              onClick={() => openExternal(docsUrl)}
+              onClick={(event) => openAppHttpLink(docsUrl, { event })}
               className="inline-flex items-center gap-1 rounded border border-amber-500/30 px-1.5 py-0.5 text-[11px] hover:bg-amber-500/20"
             >
               <ExternalLink className="size-3" />{' '}
@@ -334,7 +382,11 @@ export function GhAuthErrorHelp({
           </Button>
         ))}
         {docsUrl ? (
-          <Button size="sm" variant="outline" onClick={() => openExternal(docsUrl)}>
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={(event) => openAppHttpLink(docsUrl, { event })}
+          >
             <ExternalLink className="mr-1 size-3.5" />{' '}
             {translate('auto.components.github.project.GhAuthErrorHelp.baa006f9af', 'Docs')}
           </Button>

@@ -7,8 +7,8 @@ import { uploadFileViaSystemSsh } from '../system-transport/system-ssh-file-bina
 
 const { startRouteMock } = vi.hoisted(() => ({ startRouteMock: vi.fn() }))
 
-vi.mock('ssh2', async () =>
-  (await import('../__tests__/ssh-connection-test-client')).createSsh2Module()
+vi.mock('../ssh2-module-load', async () =>
+  (await import('../__tests__/ssh-connection-test-client')).createSsh2LoaderModule()
 )
 vi.mock('../system-transport/system-ssh-binary', async () =>
   (await import('./ssh-connection-test-harness')).createSystemSshBinaryModule()

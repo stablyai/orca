@@ -102,6 +102,7 @@ export async function settleStructuredAgentSessionProviderStarted(
         error
       })
     )
+    const sourceChild = session.child
     context.runtimeState.startupAttempts.ready(event.sessionId, child)
     noteStructuredAgentSessionRuntimePermission(session.child, event.reportedOptions, true)
     context.publishStatus?.(event.sessionId)
@@ -112,9 +113,22 @@ export async function settleStructuredAgentSessionProviderStarted(
       event.reportedOptions
     )
     void context.wakeDelivery(event.sessionId)
-    noteStructuredAgentSessionProviderStarted(context.deps, event.sessionId)
+    noteStructuredAgentSessionProviderStarted(
+      context.deps,
+      event.sessionId,
+      () =>
+        context.sessions.get(event.sessionId)?.child === sourceChild &&
+        sourceChild?.catalogSource?.() !== false
+    )
     if (event.catalogListing) {
-      saveStructuredAgentSessionListing(context, event.sessionId, event.catalogListing)
+      saveStructuredAgentSessionListing(
+        context,
+        event.sessionId,
+        event.catalogListing,
+        () =>
+          context.sessions.get(event.sessionId)?.child === sourceChild &&
+          sourceChild?.catalogSource?.() !== false
+      )
     }
     context.publishStatus?.(event.sessionId)
     return undefined
@@ -214,9 +228,13 @@ async function recordStartedHandle(
     return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
   }
   try {
-    await store.transitionHandoff(event.sessionId, (record) =>
+    const committed = await store.transitionHandoff(event.sessionId, (record) =>
       recordAgentSessionProviderHandle({ record, fence: event.fence, link, now: context.now() })
     )
+    // Inherit only a committed new context; a resumed CLI keeps its own later title.
+    if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {
+      context.deps.nameProviderConversation?.(committed)
+    }
     return true
   } catch (error) {
     logger.warn('recording the handle a started provider answered with failed', {
@@ -231,11 +249,12 @@ async function recordStartedHandle(
 /** Prompt catalog recheck after startup may prove installation or restored sign-in; the probe decides. */
 export function noteStructuredAgentSessionProviderStarted(
   deps: Pick<StructuredAgentSessionHostDeps, 'store' | 'modelCatalog'>,
-  sessionId: string
+  sessionId: string,
+  source?: () => boolean
 ): void {
   const record = deps.store.getRecord(sessionId)
   if (record) {
-    deps.modelCatalog?.providerStarted(record)
+    deps.modelCatalog?.providerStarted(record, source)
   }
 }
 

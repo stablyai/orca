@@ -195,6 +195,14 @@ export function structuredAgentSessionHostSaysWorking(
   return hostWorking ?? derived()
 }
 
+/** Working through the gap between turn end/Resume and the host's next queued-send update. */
+export function structuredAgentSessionQueueSendsNext(
+  nextQueuedMessageId: string | null | undefined,
+  isWorking: boolean
+): boolean {
+  return nextQueuedMessageId != null && !isWorking
+}
+
 /** Use host-named actionable prompts; older hosts treat every pending prompt as waiting. */
 export function isActionableStructuredAgentSessionPrompt(
   itemId: string,

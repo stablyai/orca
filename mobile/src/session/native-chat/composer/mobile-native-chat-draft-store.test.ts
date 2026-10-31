@@ -4,9 +4,22 @@ import { afterEach, describe, expect, it } from 'vitest'
 import type { NativeChatMessage } from '../../../../../src/shared/native-chat-types'
 import { useMobileNativeChatDrafts } from './use-mobile-native-chat-drafts'
 import {
+  clearMobileNativeChatDraftForSend,
+  readMobileNativeChatDraftEditGeneration,
+  readMobileNativeChatPickedSkills,
+  editMobileNativeChatDraft,
+  readMobileNativeChatSkillOrigin,
+  recordMobileNativeChatSkillPick,
+  restoreMobileNativeChatPickedSkills,
   resetMobileNativeChatDraftStoreForTests,
+  setMobileNativeChatDraftText,
   useMobileNativeChatDraft
 } from './mobile-native-chat-draft-store'
+import {
+  readMobileNativeChatDraftInputs,
+  updateMobileNativeChatDraftInputs,
+  resetMobileNativeChatDraftInputsForTests
+} from './mobile-native-chat-draft-inputs'
 
 type DraftState = ReturnType<typeof useMobileNativeChatDrafts> & { composerText: string }
 
@@ -17,6 +30,7 @@ describe('mobile native-chat draft store', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     resetMobileNativeChatDraftStoreForTests()
+    resetMobileNativeChatDraftInputsForTests()
     renderer = null
     state = null
   })
@@ -69,6 +83,25 @@ describe('mobile native-chat draft store', () => {
     act(() => currentState().setComposerText('ping'))
     act(() => currentState().clearDraftForSend(editedOrigin, 'ping'))
     expect(currentState().composerText).toBe('ping')
+  })
+
+  it('keeps main picked refs across Send-clear but revokes them on a real token edit', () => {
+    const scope = 'sent-skills'
+    setMobileNativeChatDraftText(scope, '$review draft')
+    updateMobileNativeChatDraftInputs(scope, () => ({
+      images: [],
+      files: [],
+      skills: [{ name: 'review', path: '/remote/SKILL.md' }]
+    }))
+    const generation = readMobileNativeChatDraftEditGeneration(scope)
+    clearMobileNativeChatDraftForSend(scope, generation - 1, '$review draft')
+    expect(readMobileNativeChatDraftInputs(scope).skills).toHaveLength(1)
+    clearMobileNativeChatDraftForSend(scope, generation, '$review draft')
+    expect(readMobileNativeChatPickedSkills(scope)).toEqual([
+      { name: 'review', path: '/remote/SKILL.md' }
+    ])
+    editMobileNativeChatDraft(scope, 'different text')
+    expect(readMobileNativeChatPickedSkills(scope)).toEqual([])
   })
 
   it('keeps a typed draft after the chat screen unmounts and remounts', async () => {
@@ -141,5 +174,43 @@ describe('mobile native-chat draft store', () => {
 
     expect(shown).toBe('typed')
     expect(screenRenders).toBe(rendersBeforeTyping)
+  })
+})
+
+describe('picked skills', () => {
+  afterEach(() => resetMobileNativeChatDraftStoreForTests())
+
+  it('forgets a pick once an edit deletes its token, even if the name is typed again', () => {
+    const review = { name: 'review', path: '/a/review/SKILL.md' }
+    setMobileNativeChatDraftText('draft', 'fix $review then ')
+    recordMobileNativeChatSkillPick('draft', { token: '$review', path: review.path })
+    editMobileNativeChatDraft('draft', 'fix it then ')
+    editMobileNativeChatDraft('draft', 'fix it then $review')
+    expect(readMobileNativeChatPickedSkills('draft')).toEqual([])
+  })
+
+  it('keeps a picked skill as the send origin through a send clear, until an edit stops it leading', () => {
+    editMobileNativeChatDraft('draft', '/triage ')
+    recordMobileNativeChatSkillPick('draft', { token: '/triage' })
+    editMobileNativeChatDraft('draft', '/triage the flaky test')
+    setMobileNativeChatDraftText('draft', '')
+    setMobileNativeChatDraftText('draft', '/triage the flaky test')
+    expect(readMobileNativeChatSkillOrigin('draft')).toBe('/triage')
+    editMobileNativeChatDraft('draft', 'the flaky test')
+    expect(readMobileNativeChatSkillOrigin('draft')).toBeNull()
+  })
+
+  it('replaces the file a re-picked token named, and gives a rejected draft its files back', () => {
+    const first = { name: 'review', path: '/a/review/SKILL.md' }
+    const second = { name: 'review', path: '/b/review/SKILL.md' }
+    editMobileNativeChatDraft('draft', '$review ')
+    recordMobileNativeChatSkillPick('draft', { token: '$review', path: first.path })
+    recordMobileNativeChatSkillPick('draft', { token: '$review', path: second.path })
+    expect(readMobileNativeChatPickedSkills('draft')).toEqual([second])
+
+    editMobileNativeChatDraft('draft', 'something else')
+    setMobileNativeChatDraftText('draft', '$review ')
+    restoreMobileNativeChatPickedSkills('draft', [second])
+    expect(readMobileNativeChatPickedSkills('draft')).toEqual([second])
   })
 })

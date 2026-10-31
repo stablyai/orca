@@ -5,17 +5,25 @@ import {
   type ClaudeStructuredSdkOptions
 } from './claude-structured-launch-resolution'
 import { claudeStructuredSpawnOptions } from './claude-structured-spawn-options'
+import type { ClaudeCliFlagFact } from './claude-cli-flag-support'
 
 function launched(
   saved: Record<string, string>,
-  options: { resumesTranscript?: boolean; base?: ClaudeStructuredSdkOptions } = {}
+  options: {
+    resumesTranscript?: boolean
+    base?: ClaudeStructuredSdkOptions
+    effortFlag?: ClaudeCliFlagFact
+    flagSettingsControl?: ClaudeCliFlagFact
+  } = {}
 ) {
   return claudeStructuredSpawnOptions({
     launch: {
       options: options.base ?? CLAUDE_STRUCTURED_BASE_OPTIONS,
       resumesTranscript: options.resumesTranscript ?? true
     },
-    saved
+    saved,
+    effortFlag: options.effortFlag ?? 'supported',
+    flagSettingsControl: options.flagSettingsControl ?? 'supported'
   })
 }
 
@@ -54,6 +62,17 @@ describe('a Claude chat launched with its saved options', () => {
     }
   )
 
+  it.each(['unknown', 'unsupported'] as const)(
+    'keeps saved effort off the command line when --effort is %s',
+    (flag) => {
+      const spawn = launched({ model: 'opus', effort: 'high' }, { effortFlag: flag })
+
+      expect(spawn.sdkOptions).toMatchObject({ model: 'opus' })
+      expect(spawn.sdkOptions).not.toHaveProperty('effort')
+      expect(Object.fromEntries(spawn.options)).toEqual({ model: 'opus' })
+    }
+  )
+
   it('leaves out an effort no Claude can parse, and Fast it cannot decode', () => {
     const spawn = launched({ effort: 'ludicrous', fastMode: 'yes' })
 
@@ -67,6 +86,13 @@ describe('a Claude chat launched with its saved options', () => {
     expect(spawn.sdkOptions).not.toHaveProperty('settings')
     expect(spawn.options.get('fastMode')).toBe('true')
     expect(spawn.fastModeAtStart).toBe(true)
+    // A CLI that never answers the control cannot apply it at start; never claim it is on.
+    const old = launched(
+      { fastMode: 'true' },
+      { resumesTranscript: false, flagSettingsControl: 'unsupported' }
+    )
+    expect(old.options.has('fastMode')).toBe(false)
+    expect(old.fastModeAtStart).toBe(false)
   })
 
   it('passes a saved Fast off to a new conversation', () => {

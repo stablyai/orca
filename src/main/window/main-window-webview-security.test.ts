@@ -6,6 +6,7 @@ const mocks = vi.hoisted(() => ({
   installNavigationPolicy: vi.fn(),
   isAllowedPartition: vi.fn(),
   attachRouteGuest: vi.fn(),
+  installJavaScriptDialogs: vi.fn(),
   registerPluginGuard: vi.fn()
 }))
 
@@ -29,6 +30,12 @@ vi.mock('../browser/local-ssh-browser-partitions', () => ({
   isLocalSshBrowserPartition: () => false,
   enforceLocalSshWebRtcPolicyForGuest: vi.fn()
 }))
+vi.mock('../browser/extensions/browser-extension-session-loader', () => ({
+  getBrowserExtensionSessionForProfile: () => null
+}))
+vi.mock('../browser/browser-javascript-dialogs', () => ({
+  installBrowserJavaScriptDialogs: mocks.installJavaScriptDialogs
+}))
 vi.mock('../browser/doc-preview-protocol', () => ({
   isDocPreviewSession: (candidate: unknown) => candidate === 'doc-preview-session'
 }))
@@ -47,13 +54,14 @@ import { buildDocPreviewUrl, DOC_PREVIEW_PARTITION } from '../../shared/doc-prev
 
 function installOnFakeWindow(): {
   handlers: Record<string, (...args: never[]) => void>
-  webContents: { on: ReturnType<typeof vi.fn> }
+  webContents: { on: ReturnType<typeof vi.fn>; setWebRTCIPHandlingPolicy: ReturnType<typeof vi.fn> }
 } {
   const handlers: Record<string, (...args: never[]) => void> = {}
   const webContents = {
     on: vi.fn((event: string, handler: (...args: never[]) => void) => {
       handlers[event] = handler
-    })
+    }),
+    setWebRTCIPHandlingPolicy: vi.fn()
   }
   installMainWindowWebviewSecurity({ webContents } as never)
   return { handlers, webContents }
@@ -88,6 +96,7 @@ describe('main window webview security', () => {
     expect(preventDefault).toHaveBeenCalledOnce()
     expect(mocks.installNavigationPolicy).toHaveBeenCalledWith(webContents)
     expect(mocks.registerPluginGuard).toHaveBeenCalledWith(webContents)
+    expect(webContents.setWebRTCIPHandlingPolicy).toHaveBeenCalledWith('disable_non_proxied_udp')
   })
 
   it('removes renderer preload input and restores every hardened preference', () => {
@@ -113,12 +122,28 @@ describe('main window webview security', () => {
       partition: 'persist:orca-browser',
       contextIsolation: true,
       nodeIntegration: false,
-      nodeIntegrationInSubFrames: false,
+      nodeIntegrationInSubFrames: true,
       sandbox: true,
       webSecurity: true
     })
     expect(preferences).not.toHaveProperty('preloadURL')
     expect(String(preferences.preload)).toMatch(/browser-window-close-preload\.js$/)
+  })
+
+  it('runs preloads in subframes of every local profile tab, so extensions switched on later reach it', () => {
+    const { handlers } = installOnFakeWindow()
+    mocks.isAllowedPartition.mockReturnValue(true)
+    const preferences: Record<string, unknown> = {
+      partition: 'persist:orca-browser-work',
+      nodeIntegrationInSubFrames: false
+    }
+    handlers['will-attach-webview']?.(
+      { preventDefault: vi.fn() } as never,
+      preferences as never,
+      { src: 'https://example.com' } as never
+    )
+
+    expect(preferences.nodeIntegrationInSubFrames).toBe(true)
   })
 })
 
@@ -251,6 +276,7 @@ describe('orca-preview scheme admission', () => {
       }
     )
     expect(mocks.attachRouteGuest).not.toHaveBeenCalled()
+    expect(mocks.installJavaScriptDialogs).not.toHaveBeenCalled()
   })
 
   it('keeps browser guests on the browsing profile and its route registration', () => {
@@ -261,6 +287,7 @@ describe('orca-preview scheme admission', () => {
     expect(mocks.attachGuestPolicies).toHaveBeenCalledOnce()
     expect(mocks.attachGuestPolicies.mock.calls[0]?.[2]).toBeUndefined()
     expect(mocks.attachRouteGuest).toHaveBeenCalledOnce()
+    expect(mocks.installJavaScriptDialogs).toHaveBeenCalledOnce()
   })
 
   // WebContents teardown leaves no preview readers; clear grants and the dead failure sink.

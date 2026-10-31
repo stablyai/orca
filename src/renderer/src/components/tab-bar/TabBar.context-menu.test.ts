@@ -35,8 +35,6 @@ const useAppStoreMock = vi.fn(
       activeTabId: string | null
       activeTabType: 'terminal' | 'editor' | 'browser' | 'simulator' | null
       gitStatusByWorktree: Record<string, never[]>
-      endpointProjects: never[]
-      endpointProjectHostSetups: never[]
       repos: never[]
       worktreesByRepo: Record<string, never[]>
       unifiedTabsByWorktree: Record<string, unknown[]>
@@ -53,8 +51,6 @@ const useAppStoreMock = vi.fn(
       activeTabId: appStoreSnapshot.activeTabId,
       activeTabType: appStoreSnapshot.activeTabType,
       gitStatusByWorktree: {},
-      endpointProjects: [],
-      endpointProjectHostSetups: [],
       repos: [],
       worktreesByRepo: {},
       unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
@@ -69,6 +65,7 @@ const useAppStoreMock = vi.fn(
 )
 
 vi.mock('react', async () => await stubHeadlessReact())
+vi.mock('@/store/plugin-new-files', () => ({ usePluginNewFiles: () => [] }))
 vi.mock('zustand/react/shallow', () => stubShallowSelector())
 // The headless React stub has no dispatcher for the hook each tab row subscribes to language changes with.
 vi.mock('react-i18next', async () => ({
@@ -99,8 +96,6 @@ useAppStoreExport.getState = vi.fn(() => ({
   activeTabId: appStoreSnapshot.activeTabId,
   activeTabType: appStoreSnapshot.activeTabType,
   gitStatusByWorktree: {},
-  endpointProjects: [],
-  endpointProjectHostSetups: [],
   repos: [],
   worktreesByRepo: {},
   unifiedTabsByWorktree: appStoreSnapshot.unifiedTabsByWorktree,
@@ -353,7 +348,7 @@ describe('TabBar context menu wiring', () => {
     expect(sortable[0].props.tabCount).toBe(2)
   })
 
-  it('keeps the tab strip content-sized while allowing horizontal scrolling', async () => {
+  it('keeps the tab strip content-sized until horizontal scrolling is needed', async () => {
     const element = await renderTabBar({
       tabs: [TERMINAL_TAB],
       editorFiles: [EDITOR_FILE],
@@ -362,7 +357,7 @@ describe('TabBar context menu wiring', () => {
     })
     const divs = findChildrenByType(element, 'div')
     const stripWrapper = divs.find((candidate) =>
-      String(candidate.props.className ?? '').includes('group/tab-strip')
+      String(candidate.props.className ?? '').includes('flex-[0_1_auto]')
     )
     const strip = divs.find((candidate) =>
       String(candidate.props.className ?? '').includes('terminal-tab-strip')
@@ -371,7 +366,6 @@ describe('TabBar context menu wiring', () => {
     expect(stripWrapper).toBeTruthy()
     expect(stripWrapper?.props.className).toContain('min-w-0')
     expect(stripWrapper?.props.className).toContain('max-w-full')
-    expect(stripWrapper?.props.className).toContain('flex-[0_1_auto]')
     expect(strip).toBeTruthy()
     expect(strip?.props.className).toContain('min-w-0')
     expect(strip?.props.className).toContain('flex-1')

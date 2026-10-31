@@ -13,3 +13,11 @@ export function isIntegrationCredentialDecryptionError(error: unknown): boolean 
     message.includes(credentialDecryptionMessage('Bitbucket'))
   )
 }
+
+export const LINEAR_AUTHENTICATION_ERROR = 'Linear authentication expired for this workspace.'
+
+export function linearIssueReadFailureMessage(error: unknown): string {
+  return isIntegrationCredentialDecryptionError(error)
+    ? credentialDecryptionMessage('Linear')
+    : 'Unable to load Linear issues. Try again.'
+}

@@ -111,7 +111,7 @@ describe('createSetupRunnerScript', () => {
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
         ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
-        { cwd: 'C:\\repo-worktree' }
+        { cwd: 'C:\\repo-worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         'C:\\repo\\.git\\orca\\setup-runner.sh',
@@ -150,7 +150,7 @@ describe('createSetupRunnerScript', () => {
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
         ['rev-parse', '--git-path', 'orca/setup-runner.cmd'],
-        { cwd: 'C:\\repo-worktree' }
+        { cwd: 'C:\\repo-worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         'C:\\repo\\.git\\orca\\setup-runner.cmd',
@@ -246,7 +246,7 @@ describe('createSetupRunnerScript', () => {
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
         ['rev-parse', '--git-path', 'orca/setup-runner.cmd'],
-        { cwd: 'C:\\repo-worktree' }
+        { cwd: 'C:\\repo-worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         'C:\\repo\\.git\\orca\\setup-runner.cmd',
@@ -281,7 +281,7 @@ describe('createSetupRunnerScript', () => {
 
       expect(gitExecFileSyncMock).toHaveBeenCalledWith(
         ['rev-parse', '--git-path', 'orca/setup-runner.sh'],
-        { cwd: '/test/worktree' }
+        { cwd: '/test/worktree', hostGit: true }
       )
       expect(writeFileSyncMock).toHaveBeenCalledWith(
         '/test/repo/.git/orca/setup-runner.sh',

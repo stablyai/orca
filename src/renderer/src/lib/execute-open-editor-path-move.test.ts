@@ -28,6 +28,7 @@ import { useAppStore } from '@/store'
 import { executeOpenEditorPathMove } from './execute-open-editor-path-move'
 import { __activeEditorPathMoveCountForTests } from '@/components/editor/editor-path-move-inflight'
 import { getDiskBaselineSignature } from '../../../shared/disk-baseline-signature'
+import { captureWorktreeOperationGenerationSnapshot } from './worktree-operation-generation'
 import { buildEditorExternalWatchEventHandler as createExternalWatchEventHandler } from '@/hooks/editor-external-watch-event-reconciliation'
 import {
   drawTabsFromMain,
@@ -117,6 +118,37 @@ describe('executeOpenEditorPathMove', () => {
       .openFiles.find((file) => file.runtimeEnvironmentId === 'env-server')!
     state.setEditorDraft(remote.id, 'server draft')
     state.markFileDirty(remote.id, true)
+    useAppStore.setState((current) => ({
+      openFiles: current.openFiles.map((file) =>
+        file.id === remote.id
+          ? {
+              ...file,
+              operationProvenance: {
+                ownershipProjection: 'explicit',
+                generation: captureWorktreeOperationGenerationSnapshot(
+                  { runtimeEnvironmentId: 'env-server', executionHostId: 'runtime:env-server' },
+                  { endpoint: { kind: 'environment', environmentId: 'env-server' }, at: 'ssh:box' }
+                )
+              }
+            }
+          : file
+      )
+    }))
+    await executeOpenEditorPathMove({
+      context: {
+        ...CONTEXT,
+        target: { kind: 'environment', environmentId: 'env-server' },
+        expectedExecutionHostId: 'ssh:other'
+      },
+      fromPath: '/repo/a.md',
+      toPath: '/repo/other.md',
+      worktreeId: 'wt-1',
+      worktreePath: '/repo'
+    })
+    expect(useAppStore.getState().openFiles.every((file) => file.filePath === '/repo/a.md')).toBe(
+      true
+    )
+    expect(useAppStore.getState().editorDrafts[remote.id]).toBe('server draft')
 
     await executeOpenEditorPathMove({
       context: { ...CONTEXT, expectedExecutionHostId: 'local' },

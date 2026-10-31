@@ -6,7 +6,7 @@ import { pairToolBlocks } from '../../../../shared/native-chat/tools/native-chat
 import {
   nativeChatWorkRunEditKey,
   nativeChatWorkRunEntries
-} from '../../../../shared/native-chat-work-run'
+} from '../../../../shared/native-chat/native-chat-work-run'
 import { projectStructuredAgentSessionMessages } from '../../../../shared/structured-agent-session-message-projection'
 import { buildEditCards } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import { buildNativeChatTranscriptSlots } from './native-chat-transcript-slots'

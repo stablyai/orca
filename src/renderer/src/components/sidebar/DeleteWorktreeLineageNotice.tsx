@@ -1,7 +1,3 @@
-import {
-  selectCanonicalProjects,
-  selectCanonicalProjectHostSetups
-} from '@/store/project-host-setup-selector'
 import { Workflow } from 'lucide-react'
 import { useMemo, type JSX } from 'react'
 import type { Repo } from '../../../../shared/repo-types'
@@ -36,8 +32,8 @@ export function DeleteWorktreeLineageNotice({
   dirtyChangePreviewsByWorktreeId,
   changeCheckStatesByWorktreeId
 }: DeleteWorktreeLineageNoticeProps): JSX.Element | null {
-  const projects = useAppStore((s) => selectCanonicalProjects(s))
-  const projectHostSetups = useAppStore((s) => selectCanonicalProjectHostSetups(s))
+  const projects = useAppStore((s) => s.projects)
+  const projectHostSetups = useAppStore((s) => s.projectHostSetups)
   const projectIndex = useMemo(
     () =>
       buildProjectGroupingIndex({
@@ -74,16 +70,14 @@ export function DeleteWorktreeLineageNotice({
             )}
           </div>
           <div className="mt-1 text-muted-foreground">
-            {childWorkspaceCount === 1
-              ? translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.66798cc6a2',
-                  'Deleting this workspace also deletes 1 child workspace.'
-                )
-              : translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.29b98bf9cd',
-                  'Deleting this workspace also deletes {{value0}} child workspaces.',
-                  { value0: childWorkspaceCount }
-                )}
+            {translate(
+              'auto.components.sidebar.DeleteWorktreeLineageNotice.alsoDeletesChildren',
+              'Deleting this workspace also deletes {{count}} child workspaces.',
+              {
+                count: childWorkspaceCount,
+                defaultValue_one: 'Deleting this workspace also deletes {{count}} child workspace.'
+              }
+            )}
             {foreignProjects.length > 0 ? ` (${foreignProjects.join(', ')})` : null}
           </div>
           {/* Constrain grid min-content width so nowrap paths cannot widen the modal. */}
@@ -112,10 +106,10 @@ export function DeleteWorktreeLineageNotice({
             ))}
             {descendants.length > 4 ? (
               <div className="text-muted-foreground">
-                +{descendants.length - 4}{' '}
                 {translate(
-                  'auto.components.sidebar.DeleteWorktreeLineageNotice.ad407c2d55',
-                  'more'
+                  'auto.components.sidebar.DeleteWorktreeLineageNotice.moreChildren',
+                  '+{{count}} more',
+                  { count: descendants.length - 4, defaultValue_one: '+{{count}} more' }
                 )}
               </div>
             ) : null}

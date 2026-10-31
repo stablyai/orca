@@ -75,8 +75,6 @@ export function startStructuredAgentSessionLiveRead(args: {
   /** The open generation whose first frame has not arrived yet. */
   let openingFrameGeneration = 0
   let stateGeneration = 0
-  /** The current-request version whose failed read already reopened the subscription once. */
-  let failedRequestsVersion: string | undefined
   let unsubscribe = (): void => {}
   let shouldStopCoalescedEvent = (): boolean => true
   const coalescer = createStructuredAgentSessionEventCoalescer((event) => {
@@ -136,15 +134,7 @@ export function startStructuredAgentSessionLiveRead(args: {
     read: args.readCurrentRequests,
     complete: (marker, items) => args.applyRequests?.({ type: 'requests-complete', marker, items }),
     replaceMarker: (marker) => args.applyRequests?.({ type: 'requests-marker', marker }),
-    error: (error, marker) => {
-      reportReadFailure(error)
-      // Reopening re-reads this version; retry it only once to avoid a deterministic resubscribe loop.
-      if (failedRequestsVersion === marker.version) {
-        return
-      }
-      failedRequestsVersion = marker.version
-      loseContact()
-    }
+    error: reportReadFailure
   })
   const handleEvent = (event: AgentSessionSubscribeEvent, eventOpenGeneration: number): void => {
     if (!isCurrentOpenGeneration(eventOpenGeneration)) {
@@ -174,7 +164,7 @@ export function startStructuredAgentSessionLiveRead(args: {
       openingFrameGeneration = 0
     }
     // First resumed batch replaces detached state; apply alone so coalescing cannot turn it into unchanged state.
-    if (opensSubscription && event.type === 'batch') {
+    if (opensSubscription) {
       coalescer.flush()
       if (isCurrentOpenGeneration(eventOpenGeneration)) {
         args.applyEvent(event, { opensSubscription: true })

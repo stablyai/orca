@@ -42,10 +42,6 @@ function publishStoreState(next: MobileRelayStoreState): void {
   mocks.listeners.forEach((listener) => listener())
 }
 
-vi.mock('../../i18n/i18n', () => ({
-  translate: (_key: string, fallback: string) => fallback
-}))
-
 describe('MobilePairingConnectionOptions', () => {
   let statusListener: ((detail: MobileRelayStatusDetail) => void) | null
   const connect = vi.fn().mockResolvedValue(null)
@@ -280,6 +276,28 @@ describe('MobilePairingConnectionOptions', () => {
 
     statusListener?.({ status: 'offline' })
     await waitFor(() => expect(screen.queryByTestId('relay-cell-line')).toBeNull())
+  })
+
+  it('shows clock guidance from status and clears it when Relay recovers', async () => {
+    mocks.state = {
+      ...mocks.state,
+      orcaProfileAuthStatus: {
+        activeProfileId: 'profile-1',
+        configured: true,
+        state: 'connected',
+        persistence: 'encrypted'
+      }
+    }
+    render(<MobilePairingConnectionOptions value="automatic" onChange={vi.fn()} />)
+    await waitFor(() => expect(screen.getByText('Ready')).toBeVisible())
+
+    statusListener?.({ status: 'offline', clockOffsetMs: -38_000 })
+    expect(await screen.findByRole('alert')).toHaveTextContent(
+      "Your computer's clock is off by about 38 seconds. Turn on automatic time, then retry."
+    )
+
+    statusListener?.({ status: 'registered' })
+    await waitFor(() => expect(screen.queryByRole('alert')).toBeNull())
   })
 
   it('keeps LAN available while Relay is retrying', async () => {

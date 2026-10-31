@@ -8,7 +8,7 @@ import type {
   NativeChatSubagentState
 } from '../../../../shared/native-chat-types'
 import { projectNativeChatTranscript } from '../../../../shared/native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from '../../../../shared/native-chat/transcript/native-chat-turn-grouping'
 import {
   nativeChatTurnMembership,
   type NativeChatTurnJournal

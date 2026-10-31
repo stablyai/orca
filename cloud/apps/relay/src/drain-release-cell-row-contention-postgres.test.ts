@@ -289,6 +289,28 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
     }
   }
 
+  // Holds `cellIds`' relay_cells rows in an open transaction until the returned release runs.
+  async function holdCellRows(cellIds: string[]): Promise<() => Promise<void>> {
+    let release!: () => void
+    const released = new Promise<void>((resolve) => (release = resolve))
+    let held!: () => void
+    const acquired = new Promise<void>((resolve) => (held = resolve))
+    const holder = observer.transaction(async (transaction) => {
+      await transaction.queryLocked(
+        `SELECT cell_id FROM relay_cells WHERE cell_id IN (${cellIds.map(() => '?').join(', ')})
+         ORDER BY cell_id ASC`,
+        cellIds
+      )
+      held()
+      await released
+    })
+    await acquired
+    return async () => {
+      release()
+      await holder
+    }
+  }
+
   // Every host holds a live control lease on the source, then the source is
   // isolated for a roll: the state an Asia drain starts from.
   async function seed(hosts: Identity[]): Promise<void> {
@@ -762,8 +784,42 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
     }
   }, 120_000)
 
+  it('places a reconnecting host off the isolated source while that source row is held', async () => {
+    delay.enabled = false
+    await heartbeatAll()
+    const host = hostIdentity(9_000)
+    await seed([host])
+    // A drain release holds the source row for its whole transaction; target-only placement never asks for it.
+    const sourceHeld = await holdCellRows([SOURCE.id])
+    try {
+      const grant = await Promise.race([
+        directors[1]!.store.assign(host, 'asia-east2', 'asia-east2'),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 3_000))
+      ])
+      expect(grant).not.toBe('blocked')
+      expect(TARGETS.map(({ id }) => id)).toContain(grant === 'blocked' ? null : grant.cellId)
+    } finally {
+      await sourceHeld()
+    }
+    // Control: the same hold on the target rows does block a placement, so the hold above was real.
+    const other = hostIdentity(9_001)
+    await seed([other])
+    const targetsHeld = await holdCellRows(TARGETS.map(({ id }) => id))
+    const placement = directors[2]!.store.assign(other, 'asia-east2', 'asia-east2')
+    try {
+      const raced = await Promise.race([
+        placement.then(() => 'placed' as const),
+        new Promise<'blocked'>((resolve) => setTimeout(() => resolve('blocked'), 1_000))
+      ])
+      expect(raced).toBe('blocked')
+    } finally {
+      await targetsHeld()
+    }
+    expect((await placement).cellId).not.toBe(SOURCE.id)
+  }, 30_000)
+
   it('keeps placing while an Asia drain holds the source row', async () => {
-    // Baseline sticky rejects were 90–140/200 with ~3.5/3.5 backends lock-waiting; assert those, since runner pacing alone changes placements/s.
+    // Baseline sticky rejects were 90–140/200; assert outcomes, since runner pacing alone changes placements/s and the sampled lock-wait mean (reported, not asserted).
     for (const [rate, neighboursCapped] of [
       [6, false],
       [18, false],
@@ -772,7 +828,6 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
       const report = await run(ASIA_ROUND_TRIP_MS, rate, neighboursCapped)
       expect(report.dials.failed).toEqual({})
       expect(total(report.dials.admissionRejected)).toBeLessThan(0.1 * report.dials.attempted)
-      expect(report.director.lockWaitingMean).toBeLessThan(0.5)
       expect(report.dials.placedCrossRegion).toBe(neighboursCapped ? report.dials.placed : 0)
       if (rate === 18) {
         // Fused counter/COMMIT removes the lock-held reply round trip; separate COMMIT once completed only 79/180 releases before pool timeouts.
@@ -789,11 +844,10 @@ describePostgres('PostgreSQL drain releases against director placement', () => {
         expect(report.placed).toBe(report.hosts)
         // A busy own row is refused at once by design; what must not happen is
         // the sticky slot backing up behind it. Before: 72-143 wait-timeouts at
-        // 400ms and 1s, 2.4-3.6 director backends lock-waiting.
+        // 400ms and 1s (the sampled lock-wait mean is reported, not asserted).
         const { relay_assignment_row_busy: _refused, ...slotRejections } =
           report.firstAttempt.rejected
         expect(total(slotRejections)).toBeLessThan(0.1 * report.hosts)
-        expect(report.lockWaitingMean).toBeLessThan(0.5)
         // A redial that beats its own release meets its own row (16-80 of 180, by how many
         // releases are still in flight at the dial) and is answered at once. That release
         // has finished by the next dial, so no host is refused twice. Measured p95 5.6-6.5s;

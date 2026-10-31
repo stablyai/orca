@@ -1,3 +1,7 @@
+import {
+  linearIssueReadFixture,
+  readLinearIssueForTest
+} from '@/store/slices/linear-slice-test-harness'
 import { describe, expect, it } from 'vitest'
 
 import {
@@ -171,19 +175,22 @@ describe('readLinkedLinearIssuesWithLimit', () => {
       identifier: `ENG-${index + 1}`,
       workspaceId: null
     }))
-    const results = await readLinkedLinearIssuesWithLimit(
-      refs,
-      async (ref) => {
-        active += 1
-        maxActive = Math.max(maxActive, active)
-        await Promise.resolve()
-        active -= 1
-        return issue({ id: ref.identifier, identifier: ref.identifier })
-      },
-      3
+    const results = await readLinearIssueForTest(
+      readLinkedLinearIssuesWithLimit(
+        refs,
+        (ref) =>
+          linearIssueReadFixture<LinearIssue | null>(async () => {
+            active += 1
+            maxActive = Math.max(maxActive, active)
+            await Promise.resolve()
+            active -= 1
+            return issue({ id: ref.identifier, identifier: ref.identifier })
+          }),
+        3
+      )
     )
 
     expect(maxActive).toBe(3)
-    expect(results.map((item) => item?.identifier)).toEqual(refs.map((ref) => ref.identifier))
+    expect(results?.map((item) => item?.identifier)).toEqual(refs.map((ref) => ref.identifier))
   })
 })

@@ -2,7 +2,8 @@ import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentJournalRenderItem
 } from '../../../shared/agent-session-journal-types'
-import { withNativeChatCutTurnNotices } from '../../../shared/native-chat-cut-turn-notice'
+import { AgentSessionAcquisitionRootExitObservedError } from './structured-agent-session-adapter'
+import { withNativeChatCutTurnNotices } from '../../../shared/native-chat/transcript/native-chat-cut-turn-notice'
 
 import { readFile } from 'node:fs/promises'
 import { join } from 'node:path'
@@ -61,7 +62,8 @@ export async function interruptedRestart(
   probeOwner: NonNullable<StructuredAgentSessionHostDeps['probeOwner']> = async () => ({
     outcome: 'pid-absent'
   }),
-  agents: StructuredAgentRegistry = claudeAndCodexDeclared()
+  agents: StructuredAgentRegistry = claudeAndCodexDeclared(),
+  closeEvidence?: 'kill-delivered'
 ) {
   const previous = hostTestState()
   let children: AgentChildWorkView[] = []
@@ -136,6 +138,14 @@ export async function interruptedRestart(
       expect(queued).toMatchObject({ ok: true, value: { queued: expect.anything() } })
     }
   }
+  if (closeEvidence) {
+    previous.host.deps.adapter.closeSession = async () => {
+      throw new AgentSessionAcquisitionRootExitObservedError(
+        new Error('writer killed'),
+        closeEvidence
+      )
+    }
+  }
   await previous.host.flushAllStreamedEvents()
   const store = await openTestAgentSessionRecordStore(previous.root)
   const closeSession = vi.fn(async () => true)
@@ -176,19 +186,27 @@ export function throwAfterContinuationAccepted(): void {
   })
 }
 
-/** Fail folding after continuation commit to model uncertain readback; install immediately before sending. */
+/** Fail the continuation's fold; its row and receipt roll back before any dispatch. */
 export function continuationCannotFold(): void {
   const fold = reducer.applyJournalRow
   vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row) => {
-    if (row.kind !== 'submission') {
-      fold(state, row)
-      return
+    if (row.kind === 'submission') {
+      throw new Error('the continuation could not fold')
     }
-    // Advance sequence/fence before failure, matching reducer ordering.
-    state.lastSequence = Math.max(state.lastSequence, row.seq)
-    state.highestFence = Math.max(state.highestFence, row.fence)
-    throw new Error('the accepted continuation could not fold')
+    fold(state, row)
   })
+}
+
+/** The agent admits the continuation but no delivery proof arrives; only its later output can settle it. */
+export function continuationUnanswered(state: {
+  host: StructuredAgentSessionHost
+  dispatch: ReturnType<typeof hostTestState>['dispatch']
+}): void {
+  state.dispatch.mockResolvedValueOnce({ state: 'admitted' })
+  const wait = state.host.waitForSendSettlement
+  vi.spyOn(state.host, 'waitForSendSettlement').mockImplementation(async (...args) =>
+    args[2]?.until === 'handed-over' ? wait(...args) : undefined
+  )
 }
 
 export async function statusNotes(host: StructuredAgentSessionHost) {

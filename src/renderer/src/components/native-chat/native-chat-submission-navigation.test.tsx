@@ -48,9 +48,6 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatSendClassified: vi.fn()
 }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 
 afterEach(() => {
   cleanup()
@@ -412,7 +409,8 @@ it('reveals a structured prompt answer at the press, before the host accepts it'
           steer: async () => {},
           remove: async () => {},
           edit: async () => {},
-          steerNewest: () => false
+          steerHead: () => false,
+          isWorking: false
         }
       },
       vi.fn()

@@ -11,6 +11,7 @@ import { pruneUnreferencedWorktreeIdentityMeta } from '../loading-store/worktree
 import {
   createOrcadMigrationSourceScope,
   orcadMigrationOwnerMatchesScope,
+  orcadMigrationScopeOwnsWholeHost,
   unqualifyOrcadMigrationOwnerKey,
   type OrcadMigrationSourceScope
 } from './orcad-source-scope'
@@ -21,28 +22,36 @@ export function inspectOrcadSourceWorktreeMetadata(
 ) {
   const rows: { sourceKey: string; meta: WorktreeMeta }[] = []
   let blockedCount = 0
+  const wholeHost = orcadMigrationScopeOwnsWholeHost(scope)
   for (const [sourceKey, meta] of Object.entries(state.worktreeMeta)) {
     const host = getExecutionHostIdFromWorktreeHostIdentity(sourceKey)
     if ((host && host !== scope.hostId) || (meta.hostId && meta.hostId !== scope.hostId)) {
-      if (host === scope.hostId || meta.hostId === scope.hostId) {
+      if (
+        (host === scope.hostId || meta.hostId === scope.hostId) &&
+        (wholeHost || orcadMigrationOwnerMatchesScope(sourceKey, scope))
+      ) {
         blockedCount++
       }
       continue
     }
     if (orcadMigrationOwnerMatchesScope(sourceKey, scope, meta.hostId)) {
       rows.push({ sourceKey, meta })
-    } else if (meta.hostId === scope.hostId || host === scope.hostId) {
+    } else if (wholeHost && (meta.hostId === scope.hostId || host === scope.hostId)) {
       blockedCount++
     }
   }
   const referenced = new Set(Object.values(state.worktreeIdentityAliases ?? {}).flat())
   for (const [identity, meta] of Object.entries(state.worktreeMetaByIdentity ?? {})) {
-    if (meta.hostId === scope.hostId && !referenced.has(identity)) {
+    // An unreferenced identity names no worktree, so only a whole-host move can claim it.
+    if (wholeHost && meta.hostId === scope.hostId && !referenced.has(identity)) {
       blockedCount++
     }
   }
   for (const [alias, identities] of Object.entries(state.worktreeIdentityAliases ?? {})) {
     if (getExecutionHostIdFromWorktreeHostIdentity(alias) !== scope.hostId) {
+      continue
+    }
+    if (!wholeHost && !orcadMigrationOwnerMatchesScope(alias, scope)) {
       continue
     }
     if (isDanglingAlias(state, identities) && orcadMigrationOwnerMatchesScope(alias, scope)) {

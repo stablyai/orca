@@ -1,11 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { projectHostSetupCompatibilityFromRepos } from '../../shared/project-host-setup-projection'
 import type { SessionSearchScopeCatalog } from './session-search-scope-catalog'
 import { resolveSessionSearchScope } from './session-search-scope-resolution'
 
 function catalog(overrides: Partial<SessionSearchScopeCatalog> = {}): SessionSearchScopeCatalog {
   return {
-    repos: [{ id: 'repo-1', path: '/work/app', displayName: 'app', badgeColor: '', addedAt: 0 }],
+    repos: [{ id: 'repo-1', path: '/work/app' }],
     projects: [],
     projectHostSetups: [],
     worktreeMeta: {},
@@ -83,18 +82,7 @@ describe('workspace scope', () => {
         kind: 'workspace',
         worktreeId: 'folder-1::/work/notes::workspace:11111111-1111-4111-8111-111111111111'
       },
-      catalog({
-        repos: [
-          {
-            id: 'folder-1',
-            path: '/work/notes',
-            kind: 'folder',
-            displayName: 'notes',
-            badgeColor: '',
-            addedAt: 0
-          }
-        ]
-      })
+      catalog({ repos: [{ id: 'folder-1', path: '/work/notes', kind: 'folder' }] })
     )
     expect(paths(resolution)).toEqual(['/work/notes'])
   })
@@ -149,7 +137,7 @@ describe('project scope', () => {
   it("uses a repo's own worktree base path instead of the global root", () => {
     const resolution = resolveSessionSearchScope(
       { kind: 'project', projectKey: 'repo:repo-1' },
-      catalog({ repos: [{ ...catalog().repos[0], worktreeBasePath: '/trees/app' }] })
+      catalog({ repos: [{ id: 'repo-1', path: '/work/app', worktreeBasePath: '/trees/app' }] })
     )
     // Include older worktrees created before the repo’s base path was configured.
     expect(paths(resolution)).toEqual(['/home/me/orca/workspaces/app', '/trees/app', '/work/app'])
@@ -200,20 +188,10 @@ describe('project scope', () => {
     const resolution = resolveSessionSearchScope(
       { kind: 'project', projectKey: 'project:proj-1' },
       catalog({
-        repos: [{ ...catalog().repos[0], path: '/srv/app' }],
-        projects: [
-          {
-            id: 'proj-1',
-            sourceRepoIds: ['repo-1'],
-            displayName: 'app',
-            badgeColor: '',
-            createdAt: 0,
-            updatedAt: 0
-          }
-        ],
+        repos: [{ id: 'repo-1', path: '/srv/app' }],
+        projects: [{ id: 'proj-1', sourceRepoIds: ['repo-1'] }],
         projectHostSetups: [
           {
-            ...projectHostSetupCompatibilityFromRepos(catalog().repos).setups[0],
             projectId: 'proj-1',
             repoId: 'repo-1',
             path: '/srv/app',
@@ -228,18 +206,7 @@ describe('project scope', () => {
   it('takes a folder workspace project as its folder', () => {
     const resolution = resolveSessionSearchScope(
       { kind: 'project', projectKey: 'repo:folder-1' },
-      catalog({
-        repos: [
-          {
-            id: 'folder-1',
-            path: '/work/notes',
-            kind: 'folder',
-            displayName: 'notes',
-            badgeColor: '',
-            addedAt: 0
-          }
-        ]
-      })
+      catalog({ repos: [{ id: 'folder-1', path: '/work/notes', kind: 'folder' }] })
     )
     expect(paths(resolution)).toEqual(['/work/notes'])
   })
@@ -254,18 +221,7 @@ describe('project scope', () => {
     expect(
       resolveSessionSearchScope(
         { kind: 'project', projectKey: 'project:proj-1' },
-        catalog({
-          projects: [
-            {
-              id: 'proj-1',
-              sourceRepoIds: ['repo-elsewhere'],
-              displayName: 'app',
-              badgeColor: '',
-              createdAt: 0,
-              updatedAt: 0
-            }
-          ]
-        })
+        catalog({ projects: [{ id: 'proj-1', sourceRepoIds: ['repo-elsewhere'] }] })
       )
     ).toEqual({ kind: 'unknown' })
   })

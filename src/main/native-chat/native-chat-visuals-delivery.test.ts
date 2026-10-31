@@ -136,7 +136,7 @@ describe('preparing a chat for visuals', () => {
       resolveProviderChildEnv(
         await createCodexStructuredLaunchResolver({
           store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
-          resolveCommand: () => 'codex',
+          resolveCommand: () => ({ command: 'codex', prefixArgs: [] }),
           resolveLaunchArgs: () => [],
           prepareVisuals: async () => (withVisuals ? visuals : null)
         })({

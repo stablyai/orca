@@ -25,15 +25,9 @@ vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => (
 
 import type { AgentJournalCursor } from '../../../../shared/agent-session-journal-types'
 import type { AgentSessionHistoryPage } from '../../../../shared/agent-session-wire'
-import {
-  AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-  AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
-  AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
-} from '../../../../shared/agent-session-stop-capabilities'
-import {
-  AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
-  RUNTIME_CAPABILITIES
-} from '../../../../shared/protocol-version'
+
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
+
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { resetStructuredAgentSessionReadOwnersForTests } from './structured-agent-session-read-owner'
@@ -142,17 +136,6 @@ describe('a structured chat on a paired server', () => {
     mocks.subscribe.mockResolvedValue({ unsubscribe: vi.fn() })
   })
 
-  it('advertises every capability these actions ask about', () => {
-    expect(RUNTIME_CAPABILITIES).toEqual(
-      expect.arrayContaining([
-        AGENT_SESSION_CONVERSATION_STOP_RUNTIME_CAPABILITY,
-        AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY,
-        AGENT_SESSION_QUESTION_ANSWERS_RUNTIME_CAPABILITY,
-        AGENT_SESSION_REPEATED_STOP_RUNTIME_CAPABILITY
-      ])
-    )
-  })
-
   it('reads, sends, stops, answers, and releases through the server', async () => {
     const unsubscribe = vi.fn()
     mocks.subscribe.mockResolvedValue({ unsubscribe })
@@ -217,17 +200,9 @@ describe('a structured chat on a paired server', () => {
       expect.any(Function)
     )
     expect(mocks.subscribe.mock.calls.every(([target]) => target === PAIRED_TARGET)).toBe(true)
-    expect(mocks.call.mock.calls.every(([target]) => target === PAIRED_TARGET)).toBe(true)
-  })
-
-  it("reads the rail's conversation outline from the server", async () => {
-    olderHistoryUnloaded = true
-    render(PAIRED_TARGET)
-
-    await waitFor(() =>
-      expect(calls('agentSession.conversationOutline')).toEqual([
-        { target: PAIRED_TARGET, params: { sessionId: 'session-a' } }
-      ])
+    // The options view memoizes an equal target by environment, so routing compares by value.
+    expect(mocks.call.mock.calls.map(([target]) => target)).toEqual(
+      mocks.call.mock.calls.map(() => PAIRED_TARGET)
     )
   })
 

@@ -1,7 +1,7 @@
 import { useCallback, useState } from 'react'
-import { Alert, StyleSheet } from 'react-native'
+import { Alert, View } from 'react-native'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
-import { useOpenMobileAccounts } from '../accounts/use-open-mobile-accounts'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { getProvenCachedWorktrees } from '../cache/worktree-cache'
 import { ActionSheetModal } from '../components/ActionSheetModal'
 import { ConfirmModal } from '../components/ConfirmModal'
@@ -11,7 +11,10 @@ import { useResponsiveLayout } from '../layout/responsive-layout'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useOpenMobileSession } from '../session/use-open-mobile-session'
 import { useOpenMobileTasks } from '../tasks/use-open-mobile-tasks'
+import { useOpenMobileAutomations } from '../automations/use-open-mobile-automations'
 import { colors } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import {
   useDisconnectHostClient,
   useForceReconnect,
@@ -23,44 +26,44 @@ import { removeHostAndCloseClient } from '../transport/host-removal-lifecycle'
 import { loadHostCatalog } from '../transport/host-store'
 import type { HostCatalogEntry, HostProfile } from '../transport/types'
 import { useOpenMobileHostEdit } from '../transport/use-open-mobile-host-edit'
-import type { HomeWorktreeSummary } from '../worktree/home-worktree-info'
-import { isResumeTargetConfirmedMissing, type HomeResumeCard } from '../worktree/home-resume-card'
+import { mobileConnectionPathLabel } from '../transport/mobile-connection-path-label'
+import type { HomeJumpBackInRow } from '../worktree/home-jump-back-in'
+import { isResumeTargetConfirmedMissing } from '../worktree/home-resume-card'
+import { MobileHomeAppUpdateCard } from './MobileHomeAppUpdateCard'
+import { MobileHomeBottomBar, MobileHomePairBar } from './MobileHomeBottomBar'
 import { MobileHomeEmptyState } from './MobileHomeEmptyState'
 import { MobileHomeHostList } from './MobileHomeHostList'
-import { MobileHomeListFooter } from './MobileHomeListFooter'
+import { MobileHomeJumpBackIn } from './MobileHomeJumpBackIn'
 import { MobileHomeTopBar } from './MobileHomeTopBar'
 import { useMobileHomeData } from './use-mobile-home-data'
 import { newWorkspaceOverlayHref } from '../new-workspace/new-workspace-overlay-route'
 
 export function MobileHomeScreen() {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   const data = useMobileHomeData()
   const insets = useSafeAreaInsets()
   const { isWideLayout, contentMaxWidth } = useResponsiveLayout()
   const openMobileHostEdit = useOpenMobileHostEdit()
   const openMobileTasks = useOpenMobileTasks()
+  const openMobileAutomations = useOpenMobileAutomations()
   const openMobileSession = useOpenMobileSession()
-  const openMobileAccounts = useOpenMobileAccounts()
   const disconnectHostClient = useDisconnectHostClient()
   const forgetHostClient = useForgetHostClient()
   const forceReconnectHost = useForceReconnect()
   const [actionTarget, setActionTarget] = useState<HostProfile | null>(null)
   const [confirmRemove, setConfirmRemove] = useState<{ id: string; name: string } | null>(null)
 
-  const openResume = useCallback(
-    (card: HomeResumeCard) => {
-      if (
-        isResumeTargetConfirmedMissing(
-          card,
-          getProvenCachedWorktrees(card.hostId) as HomeWorktreeSummary[] | null
-        )
-      ) {
-        data.router.push(hostRouteWithNotice(card.hostId, 'worktree-missing'))
+  const openWorktree = useCallback(
+    (row: HomeJumpBackInRow) => {
+      if (isResumeTargetConfirmedMissing(row, getProvenCachedWorktrees(row.hostId))) {
+        data.router.push(hostRouteWithNotice(row.hostId, 'worktree-missing'))
         return
       }
       openMobileSession({
-        hostId: card.hostId,
-        worktreeId: card.worktree.worktreeId,
-        name: card.worktree.displayName || card.worktree.repo
+        hostId: row.hostId,
+        worktreeId: row.worktree.worktreeId,
+        name: row.worktree.displayName || row.worktree.repo
       })
     },
     [data.router, openMobileSession]
@@ -72,7 +75,12 @@ export function MobileHomeScreen() {
     } else if (host.credentialStatus === 'temporarily-unavailable') {
       void loadHostCatalog()
         .then(data.setHostCatalog)
-        .catch(() => Alert.alert('Could not check pairing', 'Please try again.'))
+        .catch(() =>
+          Alert.alert(
+            t('home.screen.pairingCheckFailed', 'Could not check pairing'),
+            t('home.screen.tryAgain', 'Please try again.')
+          )
+        )
     } else {
       data.router.push(`/h/${host.id}`)
     }
@@ -97,62 +105,94 @@ export function MobileHomeScreen() {
       data.setHostCatalog(await loadHostCatalog())
     } catch {
       setConfirmRemove(host)
-      Alert.alert('Could not remove host', 'Please try again.')
+      Alert.alert(
+        t('home.screen.removeHostFailed', 'Could not remove host'),
+        t('home.screen.tryAgain', 'Please try again.')
+      )
     }
   }
 
+  const pairDesktop = () => data.router.push('/pair-scan')
+  const actionTargetPath = actionTarget ? data.hostConnections[actionTarget.id]?.path : undefined
+  const actionTargetConnected =
+    actionTarget != null && data.hostStates[actionTarget.id] === 'connected'
+
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <MobileHomeTopBar onOpenSettings={() => data.router.push('/settings')} />
-      {data.hostCatalog.length === 0 ? (
-        <MobileHomeEmptyState
-          bottomInset={insets.bottom}
-          contentMaxWidth={contentMaxWidth}
-          isWideLayout={isWideLayout}
-          onPairDesktop={() => data.router.push('/pair-scan')}
-        />
+      <MobileHomeTopBar
+        showBrand={!data.hostCatalogLoaded || data.hostCatalog.length > 0}
+        onOpenSettings={() => data.router.push('/settings')}
+      />
+      {!data.hostCatalogLoaded ? (
+        <View style={styles.fill} />
+      ) : data.hostCatalog.length === 0 ? (
+        <>
+          <MobileHomeEmptyState contentMaxWidth={contentMaxWidth} isWideLayout={isWideLayout} />
+          <MobileHomePairBar
+            bottomInset={insets.bottom}
+            contentMaxWidth={contentMaxWidth}
+            isWideLayout={isWideLayout}
+            onPairDesktop={pairDesktop}
+          />
+        </>
       ) : (
-        <MobileHomeHostList
-          autoConnectHostIds={data.autoConnectHostIds}
-          bottomInset={insets.bottom}
-          contentMaxWidth={contentMaxWidth}
-          footer={
-            <MobileHomeListFooter
-              accountsHosts={data.accountsHosts}
-              connectedHosts={data.connectedHosts}
-              resumeCard={data.resumeCard}
-              taskProvidersByHost={data.taskProvidersByHost}
-              onCreateWorkspace={() =>
-                data.router.push(
-                  newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id))
-                )
-              }
-              onOpenAccounts={openMobileAccounts}
-              onOpenResume={openResume}
-              onOpenTasks={openMobileTasks}
-              onPairDesktop={() => data.router.push('/pair-scan')}
-            />
-          }
-          hostAttempts={data.hostAttempts}
-          hostLastConnected={data.hostLastConnected}
-          hostConnections={data.hostConnections}
-          hosts={data.sortedHostCatalog}
-          hostStates={data.hostStates}
-          isWideLayout={isWideLayout}
-          stats={data.stats}
-          worktreeInfo={data.worktreeInfo}
-          onOpen={openHost}
-          onLongPress={(host) => {
-            triggerMediumImpact()
-            openHostActions(host)
-          }}
-          onOpenActions={openHostActions}
-        />
+        <>
+          <MobileHomeHostList
+            autoConnectHostIds={data.autoConnectHostIds}
+            bottomInset={0}
+            contentMaxWidth={contentMaxWidth}
+            header={
+              data.jumpBackInRows.length > 0 ? (
+                <MobileHomeJumpBackIn
+                  rows={data.jumpBackInRows}
+                  hosts={data.sortedHostCatalog}
+                  onOpen={openWorktree}
+                />
+              ) : null
+            }
+            footer={<MobileHomeAppUpdateCard />}
+            hostAttempts={data.hostAttempts}
+            hostLastConnected={data.hostLastConnected}
+            hostConnections={data.hostConnections}
+            hosts={data.sortedHostCatalog}
+            hostStates={data.hostStates}
+            isWideLayout={isWideLayout}
+            worktreeInfo={data.worktreeInfo}
+            onOpen={openHost}
+            onOpenActions={(host) => {
+              triggerMediumImpact()
+              openHostActions(host)
+            }}
+            onPairDesktop={pairDesktop}
+          />
+          <MobileHomeBottomBar
+            bottomInset={insets.bottom}
+            contentMaxWidth={contentMaxWidth}
+            isWideLayout={isWideLayout}
+            connectedHosts={data.connectedHosts}
+            onOpenTasks={(hostId) => openMobileTasks(hostId)}
+            onOpenAutomations={openMobileAutomations}
+            onCreateWorkspace={() =>
+              data.router.push(newWorkspaceOverlayHref(data.connectedHosts.map((host) => host.id)))
+            }
+          />
+        </>
       )}
       <ActionSheetModal
         visible={actionTarget != null}
         title={actionTarget?.name}
-        message={actionTarget ? hostEndpointLabel(actionTarget.endpoint) : undefined}
+        message={
+          actionTarget
+            ? [
+                actionTargetConnected && actionTargetPath
+                  ? mobileConnectionPathLabel(actionTargetPath)
+                  : null,
+                hostEndpointLabel(actionTarget.endpoint)
+              ]
+                .filter(Boolean)
+                .join(' · ')
+            : undefined
+        }
         actions={getHostListActionSheetActions({
           host: actionTarget,
           state: actionTarget
@@ -177,9 +217,11 @@ export function MobileHomeScreen() {
       />
       <ConfirmModal
         visible={confirmRemove != null}
-        title="Remove Host"
-        message={`Remove "${confirmRemove?.name}"? You can re-pair later.`}
-        confirmLabel="Remove"
+        title={t('home.screen.removeHostTitle', 'Remove Host')}
+        message={t('home.screen.removeHostMessage', 'Remove "{{name}}"? You can re-pair later.', {
+          name: confirmRemove?.name
+        })}
+        confirmLabel={t('common.remove', 'Remove')}
         destructive
         onConfirm={() => void handleRemove()}
         onCancel={() => setConfirmRemove(null)}
@@ -188,6 +230,7 @@ export function MobileHomeScreen() {
   )
 }
 
-const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: colors.bgBase }
-})
+const styles = themedStyleSheet(() => ({
+  container: { flex: 1, backgroundColor: colors.bgBase },
+  fill: { flex: 1 }
+}))

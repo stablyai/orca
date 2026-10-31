@@ -46,7 +46,6 @@ export default function ConversationKnowledgeSidebarHost({
     >
       <SheetContent
         side="left"
-        variant="workspace"
         showCloseButton={false}
         aria-describedby={undefined}
         className="sm:max-w-none"

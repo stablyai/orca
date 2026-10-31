@@ -250,6 +250,7 @@ describe('the idle edge after a restart, before any orchestration call', () => {
       _orchestrationDb: null,
       ensureOrchestrationFederationRelay: vi.fn(),
       scheduleRestoredMessageRepoints: vi.fn(),
+      continueRestoredWorkerMail: vi.fn(),
       deliverPendingMessagesForHandle: (handle: string) => delivered.push(handle),
       notifyStructuredSessionJournalActivity: vi.fn()
     })

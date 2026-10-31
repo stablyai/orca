@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
@@ -7,12 +8,19 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../..
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type * as StructuredAgentClient from '@/runtime/structured-agent-session-client'
 import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
+import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'
 
 const mocks = vi.hoisted(() => ({
+  capability: vi.fn(),
   detection: vi.fn<() => UseDetectedAgentsResult>(),
   launch: vi.fn()
+}))
+vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
+  ...(await importOriginal<typeof StructuredAgentClient>()),
+  supportsStructuredAgentSessionContinuationContext: mocks.capability
 }))
 vi.mock('@/hooks/useDetectedAgents', () => ({ useDetectedAgents: mocks.detection }))
 vi.mock('@/hooks/useAgentDetectionTarget', () => ({
@@ -40,11 +48,12 @@ const detection: UseDetectedAgentsResult = {
 }
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.capability.mockResolvedValue(false)
   mocks.detection.mockReturnValue(detection)
   mocks.launch.mockResolvedValue(true)
   setLocalRuntimeCapabilitiesForTests([CHAT])
   useAppStore.setState({
-    settings: { ...getDefaultSettings('/test'), experimentalNativeChat: true },
+    settings: { ...getDefaultSettings('/test'), nativeChatProviders: EVERY_AGENT_CHAT },
     repos: [{ id: 'repo-1', path: '/repo', displayName: 'repo', badgeColor: '', addedAt: 0 }],
     worktreesByRepo: {
       'repo-1': [makeWorktree({ id: 'wt-1', repoId: 'repo-1', path: '/repo', hostId: 'local' })]
@@ -100,4 +109,93 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
     initialCwd: '/repo/packages/app',
     launchChoice: { route: 'terminal-tui', requestedSurface: 'terminal' }
   })
+})
+
+it.each(['chat', undefined] as const)(
+  'labels useful %s fallback without promising older history',
+  (sourceKind) => {
+    render(
+      <AgentSessionContinuationDialog
+        open
+        request={{ ...request, source: { ...request.source, sourceKind } }}
+        onOpenChange={vi.fn()}
+      />,
+      { wrapper: TooltipProvider }
+    )
+    expect(
+      screen.getByText(
+        sourceKind === 'chat'
+          ? 'Uses recent messages currently loaded in this chat and the current workspace.'
+          : 'Uses captured text and the current workspace.'
+      )
+    ).toBeTruthy()
+    expect(screen.queryByText(/reading older transcript details/)).toBeNull()
+    expect(screen.getByText('/repo/.')).toBeTruthy()
+  }
+)
+
+it('keeps the replacement chooser open when an earlier accepted launch completes', async () => {
+  const cwd = `/repo/${'long-workspace-directory/'.repeat(12)}project`
+  function Chat({ epoch }: { epoch: string }) {
+    const handOff = useNativeChatHandOff({
+      pane: {
+        tabId: 'tab',
+        sessionId: 'chat',
+        agent: 'codex',
+        isVisible: true,
+        target: { kind: 'local' }
+      },
+      directory: { worktreeId: 'wt-1', worktreePath: cwd, runtimeEnvironmentId: null },
+      epoch,
+      messages: [
+        {
+          id: '1',
+          source: 'transcript',
+          role: 'user',
+          timestamp: 1,
+          blocks: [{ type: 'text', text: 'Saved task' }]
+        }
+      ],
+      focusComposer: () => {}
+    })
+    return (
+      <>
+        <button onClick={() => handOff.open()}>Open hand-off</button>
+        {handOff.dialog}
+      </>
+    )
+  }
+  const capability = Promise.withResolvers<boolean>()
+  mocks.capability.mockReturnValueOnce(capability.promise)
+  const launchA = Promise.withResolvers<boolean>()
+  mocks.launch.mockReturnValueOnce(launchA.promise).mockResolvedValueOnce(true)
+  const view = render(<Chat epoch="a" />, { wrapper: TooltipProvider })
+  await act(async () => fireEvent.click(screen.getByText('Open hand-off')))
+  expect(screen.getByText('Preparing saved chat context…')).toBeTruthy()
+  expect(screen.getByText(cwd)).toBeTruthy()
+  expect(
+    screen.queryByText(/Detecting Agents|Uses captured|recent messages currently loaded/)
+  ).toBeNull()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(true)
+  expect(screen.getAllByRole<HTMLButtonElement>('combobox').every((item) => item.disabled)).toBe(
+    true
+  )
+  fireEvent.click(screen.getByText('Cancel'))
+  await act(async () => capability.resolve(false))
+  expect(screen.queryByRole('dialog')).toBeNull()
+  await act(async () => fireEvent.click(screen.getByText('Open hand-off')))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch).toHaveBeenCalledOnce()
+  view.rerender(<Chat epoch="b" />)
+  await act(async () => fireEvent.click(screen.getByText('Open hand-off')))
+  await act(async () => launchA.resolve(true))
+  expect(screen.getByRole('dialog')).toBeTruthy()
+  expect(
+    screen.getByRole<HTMLButtonElement>('button', { name: 'Start New Session' }).disabled
+  ).toBe(false)
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch).toHaveBeenCalledTimes(2)
+  expect(screen.queryByRole('dialog')).toBeNull()
 })

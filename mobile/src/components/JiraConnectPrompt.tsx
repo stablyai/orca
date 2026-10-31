@@ -1,5 +1,8 @@
-import { Pressable, StyleSheet, Text, View } from 'react-native'
+import { Pressable, Text, View } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
 
 type Props = {
@@ -16,17 +19,28 @@ export function JiraConnectPrompt({
   disabled,
   onCheckAgain
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={styles.centered}>
       <TaskProviderLogo provider="jira" size={32} color={colors.textSecondary} />
       <Text style={styles.emptyText}>
-        {unavailableReason ? 'Update Orca desktop' : 'Connect Jira on your desktop'}
+        {unavailableReason
+          ? t('components.jiraConnectPrompt.updateDesktop', 'Update Orca desktop')
+          : t('components.jiraConnectPrompt.connectOnDesktop', 'Connect Jira on your desktop')}
       </Text>
       <Text style={styles.centeredHint}>
         {unavailableReason ??
           (credentialError
-            ? `Jira is saved but unreadable: ${credentialError}`
-            : 'Add your Jira site in Orca desktop under Settings → Integrations, then check again.')}
+            ? t(
+                'components.jiraConnectPrompt.credentialUnreadable',
+                'Jira is saved but unreadable: {{credentialError}}',
+                { credentialError }
+              )
+            : t(
+                'components.jiraConnectPrompt.connectHint',
+                'Add your Jira site in Orca desktop under Settings → Integrations, then check again.'
+              ))}
       </Text>
       <Pressable
         style={styles.checkAgainButton}
@@ -37,13 +51,15 @@ export function JiraConnectPrompt({
           }
         }}
       >
-        <Text style={styles.checkAgainText}>Check again</Text>
+        <Text style={styles.checkAgainText}>
+          {t('components.jiraConnectPrompt.checkAgain', 'Check again')}
+        </Text>
       </Pressable>
     </View>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   centered: {
     flex: 1,
     alignItems: 'center',
@@ -66,7 +82,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2,
     marginTop: spacing.md,
@@ -76,4 +92,4 @@ const styles = StyleSheet.create({
     color: colors.textPrimary,
     fontSize: typography.bodySize
   }
-})
+}))

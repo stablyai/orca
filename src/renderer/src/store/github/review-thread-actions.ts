@@ -2,12 +2,20 @@ import type { StateCreator } from 'zustand'
 import type { AppState } from '../types'
 import type { GitHubSlice } from './slice-types'
 import { callRuntimeRpc } from '../../runtime/runtime-rpc-client'
+import {
+  markPRCommentThreadResolved,
+  restorePRCommentThreadSnapshot
+} from '@/lib/pr-comment-thread-resolution'
 import { prCommentsCacheSuffix, sourceScopedRepoCacheKey } from './cache-identity'
 import {
   getGitHubRepoSourceSettings,
   getGitHubSourceTarget,
   getGitHubWorkItemRequestContext
 } from './work-item-routing'
+import {
+  reviewThreadInFlightKey,
+  withReviewThreadInFlight
+} from './review-thread-resolution-in-flight'
 
 export const createReviewThreadActions = (
   set: Parameters<StateCreator<AppState>>[0],
@@ -30,62 +38,88 @@ export const createReviewThreadActions = (
       repo !== undefined
     )
 
-    // Optimistic toggle of isResolved for this thread; reverts if the API call fails.
-    const prev = get().commentsCache[cacheKey]?.data
-    if (prev) {
-      set((s) => ({
-        commentsCache: {
-          ...s.commentsCache,
-          [cacheKey]: {
-            ...s.commentsCache[cacheKey],
-            data: prev.map((c) => (c.threadId === threadId ? { ...c, isResolved: resolve } : c))
-          }
-        }
-      }))
+    const inFlightKey = reviewThreadInFlightKey(cacheKey, threadId)
+    // Why: overlapping opposite requests can settle in either order; true keeps callers from toasting or rolling back.
+    if (get().reviewThreadResolutionsInFlight[inFlightKey] !== undefined) {
+      return true
     }
-
-    const requestContext = getGitHubWorkItemRequestContext(
-      get(),
-      getGitHubSourceTarget(get(), repo, options?.sourceContext),
-      repoId ?? repoPath,
-      repoPath,
-      options?.sourceContext
-    )
-    let ok = false
+    set((s) => withReviewThreadInFlight(s, inFlightKey, threadId))
     try {
-      ok =
-        requestContext.target.kind === 'environment'
-          ? await callRuntimeRpc<boolean>(
-              { kind: 'environment', environmentId: requestContext.target.environmentId },
-              'github.resolveReviewThread',
-              {
-                repo: requestContext.target.runtimeRepoId,
+      const previousThreadComments =
+        get().commentsCache[cacheKey]?.data?.filter((comment) => comment.threadId === threadId) ??
+        []
+      if (previousThreadComments.length > 0) {
+        set((s) => {
+          const entry = s.commentsCache[cacheKey]
+          if (!entry?.data) {
+            return s
+          }
+          return {
+            commentsCache: {
+              ...s.commentsCache,
+              [cacheKey]: {
+                ...entry,
+                data: markPRCommentThreadResolved(entry.data, threadId, resolve)
+              }
+            }
+          }
+        })
+      }
+
+      const requestContext = getGitHubWorkItemRequestContext(
+        get(),
+        getGitHubSourceTarget(get(), repo, options?.sourceContext),
+        repoId ?? repoPath,
+        repoPath,
+        options?.sourceContext
+      )
+      let ok = false
+      try {
+        ok =
+          requestContext.target.kind === 'environment'
+            ? await callRuntimeRpc<boolean>(
+                { kind: 'environment', environmentId: requestContext.target.environmentId },
+                'github.resolveReviewThread',
+                {
+                  repo: requestContext.target.runtimeRepoId,
+                  threadId,
+                  resolve,
+                  prRepo: options?.prRepo ?? null
+                },
+                { timeoutMs: 30_000 }
+              )
+            : await window.api.gh.resolveReviewThread({
+                repoPath,
+                repoId,
                 threadId,
                 resolve,
-                prRepo: options?.prRepo ?? null
-              },
-              { timeoutMs: 30_000 }
-            )
-          : await window.api.gh.resolveReviewThread({
-              repoPath,
-              repoId,
-              threadId,
-              resolve,
-              prRepo: options?.prRepo ?? null,
-              sourceContext: options?.sourceContext
-            })
-    } catch (err) {
-      console.error('Failed to update review thread:', err)
-      ok = false
+                prRepo: options?.prRepo ?? null,
+                sourceContext: options?.sourceContext
+              })
+      } catch (err) {
+        console.error('Failed to update review thread:', err)
+        ok = false
+      }
+      if (!ok && previousThreadComments.length > 0) {
+        set((s) => {
+          const entry = s.commentsCache[cacheKey]
+          if (!entry?.data) {
+            return s
+          }
+          return {
+            commentsCache: {
+              ...s.commentsCache,
+              [cacheKey]: {
+                ...entry,
+                data: restorePRCommentThreadSnapshot(entry.data, previousThreadComments)
+              }
+            }
+          }
+        })
+      }
+      return ok
+    } finally {
+      set((s) => withReviewThreadInFlight(s, inFlightKey, null))
     }
-    if (!ok && prev) {
-      set((s) => ({
-        commentsCache: {
-          ...s.commentsCache,
-          [cacheKey]: { ...s.commentsCache[cacheKey], data: prev }
-        }
-      }))
-    }
-    return ok
   }
 })

@@ -99,6 +99,7 @@ export async function openAcpAdapterRig(
     (async () => ({
       spec,
       command: `/opt/bin/${spec.command}`,
+      prefixArgs: [],
       args: spec.args({ fullAccess: false, pluginDir: null }),
       cwd: '/workspace/project',
       env: { ...RIG_ENV, ...account },

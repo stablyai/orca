@@ -78,10 +78,11 @@ describe('agent CLI install-dir fallback', () => {
       join(home, '.local', 'bin', 'claude'),
       join('/opt/homebrew/bin', 'codex'),
       join('/usr/local/bin', 'cursor-agent'),
+      join('/opt/local/bin', 'gemini'),
       join(home, '.opencode', 'bin', 'opencode')
     )
     expect(
-      resolveAll(['claude', 'codex', 'cursor-agent', 'opencode'], {
+      resolveAll(['claude', 'codex', 'cursor-agent', 'gemini', 'opencode'], {
         platform: 'darwin',
         homePath: home
       })
@@ -89,6 +90,7 @@ describe('agent CLI install-dir fallback', () => {
       claude: join(home, '.local', 'bin', 'claude'),
       codex: join('/opt/homebrew/bin', 'codex'),
       'cursor-agent': join('/usr/local/bin', 'cursor-agent'),
+      gemini: join('/opt/local/bin', 'gemini'),
       opencode: join(home, '.opencode', 'bin', 'opencode')
     })
   })
@@ -189,6 +191,7 @@ describe('agent CLI install-dir fallback', () => {
       for (const directory of [
         '/opt/homebrew/bin',
         '/usr/local/bin',
+        '/opt/local/bin',
         '/snap/bin',
         '/home/linuxbrew/.linuxbrew/bin',
         '/nix/var/nix/profiles/default/bin',

@@ -61,7 +61,8 @@ export function ConversationKnowledgeRelationGraph({
           <li key={relation.id} className="rounded-lg border border-border bg-background p-2.5">
             <div className="grid grid-cols-[minmax(0,1fr)_auto_minmax(0,1fr)] items-center gap-2">
               <Button
-                variant="denseStrong"
+                variant="secondary"
+                size="xs"
                 className="min-w-0 justify-start text-left"
                 onClick={() => setFocusedConcept(conceptKey(relation.subject))}
               >
@@ -73,7 +74,8 @@ export function ConversationKnowledgeRelationGraph({
                 <ArrowRight className="size-3 shrink-0" />
               </div>
               <Button
-                variant="denseStrong"
+                variant="secondary"
+                size="xs"
                 className="min-w-0 justify-start text-left"
                 onClick={() => setFocusedConcept(conceptKey(relation.object))}
               >
@@ -92,7 +94,8 @@ export function ConversationKnowledgeRelationGraph({
               {relation.assertions.map((assertion) => (
                 <Button
                   key={`${assertion.item.id}:${assertion.entry.evidence.messageId}:${assertion.entry.text}`}
-                  variant="denseMuted"
+                  variant="ghost"
+                  size="sm"
                   className="w-full justify-start text-left"
                   onClick={() => onSelect(assertion)}
                 >
@@ -103,8 +106,10 @@ export function ConversationKnowledgeRelationGraph({
                   >
                     {claimStatusLabel(assertion.entry.lifecycle?.status)}
                   </Badge>
-                  <span>{claimReliabilityLabel(assertion.entry.reliability)}</span>
-                  <span className="min-w-0 truncate">
+                  <span className="text-muted-foreground">
+                    {claimReliabilityLabel(assertion.entry.reliability)}
+                  </span>
+                  <span className="min-w-0 truncate text-muted-foreground">
                     {assertion.item.source.agent} · {assertion.item.source.sessionId} ·{' '}
                     {conversationKnowledgeEvidenceMessageIds(assertion.entry).join(' · ')}
                   </span>

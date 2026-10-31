@@ -20,19 +20,15 @@ import { NativeChatFindBar } from './NativeChatFindBar'
 import { useNativeChatCanSend } from './use-native-chat-can-send'
 import { NativeChatInteractiveCard } from './NativeChatInteractiveCard'
 import { nativeChatAskRequiresTerminal } from '../../../../shared/native-chat-agent-support'
-import { useNativeChatInteractivePromptCard } from './use-native-chat-interactive-prompt-card'
-import { useNativeChatPromptCardPresentation } from './use-native-chat-prompt-card-presentation'
+import { useNativeChatTerminalPromptCard } from './use-native-chat-interactive-prompt-card'
 import { NativeChatPromptStrip } from './NativeChatPromptCollapse'
 import { NativeChatEmptyState } from './NativeChatEmptyState'
 import { useNativeChatInteractiveSend } from './use-native-chat-interactive-send'
-import { shouldClearNativeChatWorkingSuppression } from './native-chat-working-suppression'
-import { resolveNativeChatTerminalTurn } from './native-chat-terminal-turn'
+import { shouldClearNativeChatWorkingSuppression } from '../../../../shared/native-chat/native-chat-working-suppression'
+import { resolveNativeChatTerminalTurn } from '../../../../shared/native-chat/native-chat-terminal-turn'
 import { useNativeChatTerminalTurnTiming } from './use-native-chat-terminal-turn-timing'
-import {
-  launchPromptAsMessage,
-  pendingSendsAsMessages,
-  shouldPruneLaunchPrompt
-} from './native-chat-pending'
+import { launchPromptAsMessage, shouldPruneLaunchPrompt } from './native-chat-pending'
+import { pendingSendsAsMessages } from '../../../../shared/native-chat-pending-sends'
 import { useNativeChatPendingDelivery } from './use-native-chat-pending-delivery'
 import {
   appendCommandMarkerCache,
@@ -58,6 +54,7 @@ import type { NativeChatResolvedViewProps } from './native-chat-view-types'
 import { useNativeChatFileLinkContext } from './use-native-chat-file-link-context'
 import { useRecheckNativeChatFileLinksWhenTurnEnds } from './use-native-chat-file-link-existence'
 import { useNativeChatLocalCommandAnswer } from './use-native-chat-local-command-answer'
+import { useNativeChatImageRuntimeContext } from './native-chat-image-runtime-context'
 import { matchNativeChatSplitShortcut } from './native-chat-split-shortcut'
 import { getShortcutPlatform } from '@/lib/shortcut-platform'
 import { formatShortcutLabel } from '@/hooks/useShortcutLabel'
@@ -80,6 +77,7 @@ export function NativeChatResolvedView({
   const selectOwner = useMemo(() => createNativeChatRuntimeSelector(terminalTabId), [terminalTabId])
   const runtimeEnvironmentId = useAppStore(selectOwner)
   const keybindings = useAppStore((s) => s.keybindings)
+  const imageRuntimeContext = useNativeChatImageRuntimeContext(terminalTabId)
   const session = useNativeChatRetainedSession({
     paneKey,
     agent,
@@ -189,18 +187,20 @@ export function NativeChatResolvedView({
         : new Map([...(launchPromptDeliveryNotices ?? []), ...delivery.notices]),
     [launchPromptDeliveryNotices, delivery.notices]
   )
-  const promptCard = useNativeChatInteractivePromptCard({
-    paneKey,
-    messages: sessionAfterCommandBoundaries.messages,
-    transcriptSettled: session.readPhase === 'ready'
-  })
-  // A prompt card and composer must never share the input region: composer text would answer the agent’s selector.
-  const promptCardPresentation = useNativeChatPromptCardPresentation({
+  const {
+    promptCard,
+    presentation: promptCardPresentation,
+    actionKey
+  } = useNativeChatTerminalPromptCard({
     paneKey,
     targetPtyId,
-    card: promptCard,
-    canSend,
-    transcriptSettled: session.readPhase === 'ready'
+    runtimeEnvironmentId,
+    agent,
+    sessionId,
+    transcriptPath: transcriptPath ?? null,
+    messages: sessionAfterCommandBoundaries.messages,
+    transcriptSettled: session.readPhase === 'ready',
+    canSend
   })
   const { card: shownPromptCard, collapsedCard } = promptCardPresentation
   const mountedPromptCard = shownPromptCard ?? collapsedCard
@@ -371,6 +371,7 @@ export function NativeChatResolvedView({
             onLinkClick={onLinkClick}
             allowFileUriLinks={fileLinkContext !== null}
             deliveryNotices={deliveryNotices}
+            runtimeContext={imageRuntimeContext}
           />
         )}
       </div>
@@ -378,7 +379,7 @@ export function NativeChatResolvedView({
       {mountedPromptCard ? (
         <div hidden={collapsedCard !== null} inert={collapsedCard !== null} className="contents">
           <NativeChatInteractiveCard
-            key={promptCardPresentation.occurrenceKey ?? 'prompt'}
+            key={actionKey}
             card={mountedPromptCard}
             send={interactiveSend}
             requiresTerminal={nativeChatAskRequiresTerminal(agent)}

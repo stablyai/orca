@@ -1,4 +1,4 @@
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
 // `none` is omitted: native-chat-session-option-labels.ts has no translation for it.
@@ -20,8 +20,17 @@ const MUSE_EFFORT: CatalogOption = {
     defaultValue: 'high'
   },
   apply: {
-    launchArgs: (value) => ['--reasoning-effort', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('muse', tokens, ['--reasoning-effort'])
+    ...agentChoiceCliApply(
+      'muse',
+      [
+        {
+          kind: 'value',
+          names: ['--reasoning-effort'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--reasoning-effort'
+    )
   }
 }
 
@@ -30,8 +39,17 @@ export const MUSE_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Muse has account-scoped IDs and no listing command: seed no picker; let worker-start pass the caller's --model.
   models: [],
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('muse', tokens, ['--model'])
+    ...agentChoiceCliApply(
+      'muse',
+      [
+        {
+          kind: 'value',
+          names: ['--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    )
   },
   unknownModelOptions: [MUSE_EFFORT]
 }

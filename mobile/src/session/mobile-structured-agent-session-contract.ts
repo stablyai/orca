@@ -1,8 +1,12 @@
 import type { AgentSessionSlashCommand } from '../../../src/shared/agent-session-wire'
+import type { NativeChatSendFollowUp } from '../../../src/shared/native-chat-follow-up-behavior'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
-import type { MobileNativeChatSendOutcome } from './native-chat/mobile-native-chat-send'
-import type { MobileNativeChatVisualSource } from './mobile-native-chat-visual-read'
+import type {
+  MobileNativeChatSendIntent,
+  MobileNativeChatSendOutcome
+} from './native-chat/mobile-native-chat-send'
+import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
 import type { MobileChatPermission } from './native-chat/input/mobile-native-chat-permission'
 import type { MobileChatQuestion } from './native-chat/input/mobile-native-chat-question'
 import type { MobileNativeChatSession } from './use-mobile-native-chat-session'
@@ -11,6 +15,7 @@ import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-r
 import type { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
 import type { useMobileStructuredAgentTurnTiming } from './use-mobile-structured-agent-turn-timing'
 import type { StructuredMobileSendAttachment } from './use-mobile-structured-send-with-outcome'
+import type { AgentJournalSkillRef } from '../../../src/shared/agent-session-journal-types'
 import type {
   MobileNativeChatCommandRefusalCauses,
   MobileNativeChatSendErrorReporter
@@ -21,14 +26,21 @@ import type { MobileStructuredBackgroundTasks } from './use-mobile-structured-ba
 export type StructuredMobileSession = ReturnType<typeof useMobileStructuredAgentOptions> &
   ReturnType<typeof useMobileStructuredAgentTurnTiming> & {
     session: MobileNativeChatSession
+    asyncQuestionSourceScope: string
     isWorking: boolean
+    /** Desktop's Stop rule: a running turn, or conversation Stop while working or sending. */
+    canStop: boolean
+    /** While the agent works on a host that queues: what a tap on Send does and whether holding it offers the other way; null otherwise. */
+    sendFollowUp: NativeChatSendFollowUp | null
     turnId: string | null
     turnIndicator: NativeChatLiveTurnIndicator
     sendWithOutcome: (
       text: string,
       images?: string[],
       deadline?: number,
-      attachments?: readonly StructuredMobileSendAttachment[]
+      attachments?: readonly StructuredMobileSendAttachment[],
+      skills?: readonly AgentJournalSkillRef[],
+      intent?: MobileNativeChatSendIntent
     ) => Promise<MobileNativeChatSendOutcome>
     cancel: () => void
     receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
@@ -58,8 +70,11 @@ export type MobileStructuredAgentSessionArgs = {
   hostSupport: StructuredAgentSessionHostSupport | null
   agent: string | null
   /** What the session reported for its `/` menu; undefined until read or on an older host. */
+  onCommandsChanged?: () => void
   sessionCommands?: readonly AgentSessionSlashCommand[]
+  composerScopeKey?: string | null
   appendComposerText?: (text: string) => boolean
+  onQueuedEditNotice?: (message: string) => void
   onSendError: MobileNativeChatSendErrorReporter
   // Accepted queued actions retire the route’s failure banner.
   onActionResolved?: () => void

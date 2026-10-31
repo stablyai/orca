@@ -14,22 +14,24 @@ import type { ProviderRateLimits, RateLimitState } from '../../../../shared/rate
 import { Button } from '../ui/button'
 import { Badge } from '../ui/badge'
 import { ManagedRuntimeInstallRow } from '../managed-runtime/ManagedRuntimeInstallRow'
-import { useAppStore } from '../../store'
 import { antigravityChatSignInRunning } from '@/runtime/antigravity-chat-sign-in-status'
 import {
   AntigravityChatSignInRow,
   antigravityChatSignInBlocked,
   useAntigravityChatSignIn
 } from './AntigravityChatSignInRow'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 export function AntigravityAccountsSection({
   owner,
   target,
-  label
+  label,
+  ownerPlatform
 }: {
   owner: RuntimeClientTarget
   target: AntigravityAccountTarget
   label: string
+  ownerPlatform?: string | null
 }): React.JSX.Element {
   const [state, setState] = useState<AntigravityAccountState | null>(null)
   const [usage, setUsage] = useState<ProviderRateLimits | null>(null)
@@ -39,11 +41,11 @@ export function AntigravityAccountsSection({
   const mounted = useRef(true)
   const ownerKind = owner.kind
   const environmentId = owner.kind === 'environment' ? owner.environmentId : null
+  const windowsHost = ownerPlatform === 'win32' && target.runtime === 'host'
   const runtime = target.runtime
   const wslDistro = target.wslDistro ?? null
   // Chats run on the host itself, never in a WSL distro.
-  const nativeChat = useAppStore((s) => s.settings?.experimentalNativeChat === true)
-  const chats = nativeChat && runtime !== 'wsl'
+  const chats = runtime !== 'wsl'
   const chatRuntime = useManagedRuntimeInstall(owner, 'antigravity', chats)
   // A remote host's sign-in finishes from the address pasted back into its row.
   const chatSignIn = chats && chatRuntime.kind === 'active'
@@ -164,6 +166,7 @@ export function AntigravityAccountsSection({
           className="underline"
           href="https://antigravity.google/docs/cli/install/"
           target="_blank"
+          onClick={openAppHttpLinkFromAnchor}
           rel="noopener noreferrer"
         >
           {translate('accounts.antigravity.docs', 'Sign-in instructions')}
@@ -189,10 +192,15 @@ export function AntigravityAccountsSection({
           </p>
           {state.selectedAccountId && state.activeAccountId !== state.selectedAccountId && (
             <p className="text-xs text-destructive">
-              {translate(
-                'accounts.antigravity.changed',
-                'The native account changed. Select a saved account again before launching agy.'
-              )}
+              {windowsHost
+                ? translate(
+                    'accounts.antigravity.windowsChanged',
+                    'The host default account changed. Select a saved account to apply it again.'
+                  )
+                : translate(
+                    'accounts.antigravity.changed',
+                    'The native account changed. Select a saved account again before launching agy.'
+                  )}
             </p>
           )}
           <div className="flex flex-wrap items-center gap-2">
@@ -278,10 +286,15 @@ export function AntigravityAccountsSection({
         </div>
       )}
       <p className="text-xs text-muted-foreground">
-        {translate(
-          'accounts.antigravity.sessions',
-          'Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.'
-        )}
+        {windowsHost
+          ? translate(
+              'accounts.antigravity.windowsSessions',
+              'Select applies and verifies the host default agy credential. Command choices and later account changes are handled by agy. Existing sessions may keep their previous account.'
+            )
+          : translate(
+              'accounts.antigravity.sessions',
+              'Selection applies to new agy sessions on this host. Existing sessions may keep their previous account.'
+            )}
       </p>
       {chats && chatRuntime.kind === 'active' ? (
         <div className="space-y-4">

@@ -1,3 +1,4 @@
+import type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 import { isAgentSessionRewindRecord, type AgentSessionRewindRecord } from './agent-session-rewind'
 import { isAgentSessionLaunchArgs } from './agent-session-launch-args'
 import { isAgentSessionConversationName } from './agent-session/agent-session-conversation-name'
@@ -10,6 +11,7 @@ import {
 } from './agent-session-legacy-handoff-lease'
 /** Identity pins location, provider and account home independently of terminal tabs; the lease separately grants one process writer authority. */
 
+import type { AgentSessionLastTurn } from './agent-session-last-turn'
 import type { ExecutionHostId } from './execution-host'
 import {
   isAgentSessionConversationCommandRecord,
@@ -24,12 +26,14 @@ import {
   type AgentSessionProviderContextBoundary
 } from './agent-session-provider-context'
 import { isStructuredAgentId } from './agent-session-provider-handle-encoding'
+import { isNonNegativeSafeInteger } from './ssh-retained-payload-limits'
 import {
   isAgentSessionAccountHome,
   MAX_PATH_LENGTH,
   type AgentSessionAccountHome
 } from './agent-session-account-home'
 
+export type { AgentSessionDeathEvidence } from './agent-session-death-evidence'
 export type { AgentSessionAccountHome } from './agent-session-account-home'
 export type { AgentSessionOptionsReplacement } from './agent-session-options-replacement'
 
@@ -73,19 +77,6 @@ export type AgentSessionProcessIdentity = {
 /** released has no owner; conflicted retains a legacy terminal owner that recovery waits for and never stops because it is the user's agent. */
 export type AgentSessionClaimStatus = 'reserved' | 'live' | 'conflicted' | 'released'
 
-export type AgentSessionDeathEvidence = {
-  kind: 'exit-observed' | 'pid-absent' | 'identity-mismatch'
-  detail: string
-  observedAt: number
-  /** Fence of the owner (or reservation) this death is about; a fence names exactly one. Absent on
-   *  evidence older builds wrote, which then speaks for no turn. */
-  ownerFence?: number
-  /** Last liveness proof by the transport holder; absent for surface release, failed start or older evidence. */
-  lastProvenAliveAt?: number
-  /** Quit/update/crash when the provider died with its runtime; absent for independent/unknown death. Keep open strings and read with isAgentSessionOrcaStopCause. */
-  runtimeEnd?: string
-}
-
 export type AgentSessionLease = {
   sessionId: string
   runtimeKind: AgentSessionOwnerRuntimeKind
@@ -123,6 +114,8 @@ export type AgentSessionRecord = {
   providerHandleChain: AgentSessionProviderHandleLink[]
   providerContextBoundary?: AgentSessionProviderContextBoundary
   accountHome: AgentSessionAccountHome
+  /** Optional host-written construction observation; checked independently of record readability. */
+  acquiredAccount?: unknown
   /** Initial launch directory in host path syntax. Floating sessions resume here; worktree/folder IDs resolve their durable location. */
   launchDirectory?: string
   /** Provider options the user chose, replayed whenever a new owner starts the session. */
@@ -140,6 +133,8 @@ export type AgentSessionRecord = {
   conversationNameSource?: 'user'
   /** When the user's Sleep stopped this chat; the next admitted send clears it. */
   sleptAt?: number
+  /** Latest turn edge for lists that must not open conversation history. */
+  lastTurn?: AgentSessionLastTurn
   launchArgs?: AgentSessionLaunchArgs
   lease: AgentSessionLease
   createdAt: number
@@ -250,17 +245,14 @@ function isAgentSessionDeathEvidence(value: unknown): value is AgentSessionDeath
   const { observedAt, lastProvenAliveAt, ownerFence, runtimeEnd } = evidence
   return (
     (evidence.kind === 'exit-observed' ||
+      evidence.kind === 'kill-delivered' ||
       evidence.kind === 'pid-absent' ||
       evidence.kind === 'identity-mismatch') &&
     isBoundedString(evidence.detail, MAX_AGENT_SESSION_DEATH_DETAIL_CHARS) &&
-    typeof observedAt === 'number' &&
-    Number.isSafeInteger(observedAt) &&
-    observedAt >= 0 &&
-    (ownerFence === undefined || (Number.isSafeInteger(ownerFence) && ownerFence >= 0)) &&
+    isNonNegativeSafeInteger(observedAt) &&
+    (ownerFence === undefined || isNonNegativeSafeInteger(ownerFence)) &&
     (lastProvenAliveAt === undefined ||
-      (Number.isSafeInteger(lastProvenAliveAt) &&
-        lastProvenAliveAt >= 0 &&
-        lastProvenAliveAt <= observedAt)) &&
+      (isNonNegativeSafeInteger(lastProvenAliveAt) && lastProvenAliveAt <= observedAt)) &&
     (runtimeEnd === undefined || isBoundedString(runtimeEnd, MAX_ID_LENGTH))
   )
 }
@@ -270,12 +262,11 @@ function isStoredRecordObject(value: unknown): value is Record<string, unknown> 
 }
 
 function isPersistedAgentSessionObservationLease(
-  value: unknown
-): value is PersistedAgentSessionObservationLease {
-  if (!isStoredRecordObject(value)) {
+  lease: unknown
+): lease is PersistedAgentSessionObservationLease {
+  if (!isStoredRecordObject(lease)) {
     return false
   }
-  const lease = value
   return (
     isAgentSessionId(lease.sessionId) &&
     isPersistedAgentSessionRuntimeKind(lease.runtimeKind) &&

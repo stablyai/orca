@@ -93,6 +93,7 @@ export async function performSend(
     /** Persist only source kind in the submission. */
     source?: AgentSessionMessageSource
     options?: Readonly<Record<string, string>>
+    selection?: Readonly<Record<string, string>>
   }
 ): Promise<TurnOutcome<AgentSessionSendResult>> {
   const existing = ctx.journal
@@ -110,7 +111,7 @@ export async function performSend(
       value: { clientMessageId: input.clientMessageId, submission: { ...existing } }
     }
   }
-  const captured = captureStructuredExecutionOptions(ctx, input.options)
+  const captured = captureStructuredExecutionOptions(ctx, input.options, input.selection)
   if ('refusal' in captured) {
     return { ok: false, refusal: captured.refusal }
   }

@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { renderHook } from '@testing-library/react'
+import { act, renderHook } from '@testing-library/react'
 import { describe, expect, it, vi } from 'vitest'
 import { useNativeChatPickerState } from './use-native-chat-picker-state'
 
@@ -53,4 +53,39 @@ describe('useNativeChatPickerState', () => {
     expect(pickerMode(draft, false)).toBe(typedMode)
     expect(pickerMode(draft, true)).toBe('none')
   })
+})
+
+it('owns demand for the actual slash-menu lifetime, including dismissal and unmount', () => {
+  const onPickerDemand = vi.fn()
+  const { result, rerender, unmount } = renderHook(
+    (draft: string) =>
+      useNativeChatPickerState({
+        agent: 'claude',
+        terminalTabId: 'tab-1',
+        draftScopeKey: 'pane-1',
+        draft,
+        caret: draft.length,
+        agentCommands: [{ name: 'clear' }],
+        recalledFromHistory: false,
+        disabled: false,
+        isComposing: () => false,
+        textareaRef: { current: null },
+        setDraft: vi.fn(),
+        setCaret: vi.fn(),
+        setActiveSuggestion: vi.fn(),
+        onPickerDemand
+      }),
+    { initialProps: '' }
+  )
+  expect(onPickerDemand).toHaveBeenLastCalledWith(false)
+  rerender('/cl')
+  expect(onPickerDemand).toHaveBeenLastCalledWith(true)
+  const autocomplete = result.current.autocomplete
+  if (autocomplete.mode !== 'slash') {
+    throw new Error('Expected the slash menu')
+  }
+  act(() => result.current.dismiss(autocomplete.triggerKey))
+  expect(onPickerDemand).toHaveBeenLastCalledWith(false)
+  unmount()
+  expect(onPickerDemand).toHaveBeenLastCalledWith(false)
 })

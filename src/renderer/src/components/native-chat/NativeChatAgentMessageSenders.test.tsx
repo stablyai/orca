@@ -115,7 +115,7 @@ describe('the name a sender is shown under', () => {
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
     renderSenders(source({}, 'Recorded name'))
-    expect(screen.getByRole('button', { name: 'Recorded name' })).toBeInTheDocument()
+    expect(screen.getByText('Recorded name')).toBeInTheDocument()
     expect(screen.queryByText('Parser worker')).not.toBeInTheDocument()
   })
 
@@ -130,7 +130,7 @@ describe('the name a sender is shown under', () => {
         tabsByWorktree: { [WORKTREE]: [terminalTab({ customTitle: 'New name' })] }
       })
     })
-    expect(screen.getByRole('button', { name: 'Recorded name' })).toBeInTheDocument()
+    expect(screen.getByText('Recorded name')).toBeInTheDocument()
     expect(screen.queryByText('New name')).not.toBeInTheDocument()
   })
 
@@ -144,7 +144,7 @@ describe('the name a sender is shown under', () => {
         orcaSessionId: SESSION
       })
     )
-    expect(screen.getByRole('button', { name: 'Port the parser' })).toBeInTheDocument()
+    expect(screen.getByText('Port the parser')).toBeInTheDocument()
   })
 
   it('keeps the recorded name for a chat sender whose tab has no name of its own', () => {
@@ -155,7 +155,7 @@ describe('the name a sender is shown under', () => {
         'Port the parser task'
       )
     )
-    expect(screen.getByRole('button', { name: 'Port the parser task' })).toBeInTheDocument()
+    expect(screen.getByText('Port the parser task')).toBeInTheDocument()
   })
 
   it('keeps the recorded name when its agent row has no name of its own', () => {
@@ -164,12 +164,12 @@ describe('the name a sender is shown under', () => {
       agentStatusByPaneKey: { [`${TAB}:${LEAF}`]: agentRow(HANDLE) }
     })
     renderSenders(source({}))
-    expect(screen.getByRole('button', { name: 'Recorded name' })).toBeInTheDocument()
+    expect(screen.getByText('Recorded name')).toBeInTheDocument()
   })
 
   it('keeps the recorded name once the sender is gone from this window', () => {
     renderSenders(source({}))
-    expect(screen.getByRole('button', { name: 'Recorded name' })).toBeInTheDocument()
+    expect(screen.getByText('Recorded name')).toBeInTheDocument()
   })
 
   it('keeps the recorded name for a sender on another host, whatever runs here', () => {

@@ -1,8 +1,9 @@
 import { StyleSheet } from 'react-native'
 
-import { colors, spacing, radii, typography } from '../theme/mobile-theme'
+import { colors, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
 
-export const mobileSessionFrameStyles = StyleSheet.create({
+export const mobileSessionFrameStyles = themedStyleSheet(() => ({
   container: {
     flex: 1,
     backgroundColor: colors.bgBase
@@ -31,23 +32,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     paddingVertical: spacing.xs
   },
   // Each 36pt visual reserves 4pt per side for its 44pt touch area.
-  headerButton: {
-    width: 36,
-    height: 36,
-    borderRadius: radii.button,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginHorizontal: spacing.xs
-  },
-  headerButtonPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  headerButtonActive: {
-    backgroundColor: colors.bgRaised
-  },
-  headerButtonDisabled: {
-    opacity: 0.45
-  },
   sessionTitleBlock: {
     flex: 1,
     minWidth: 0
@@ -174,11 +158,6 @@ export const mobileSessionFrameStyles = StyleSheet.create({
   newTerminalButtonPressed: {
     backgroundColor: colors.bgRaised
   },
-  tabActionDivider: {
-    width: StyleSheet.hairlineWidth,
-    height: 18,
-    backgroundColor: colors.borderSubtle
-  },
   contentFrame: {
     flex: 1,
     minHeight: 0
@@ -223,4 +202,4 @@ export const mobileSessionFrameStyles = StyleSheet.create({
     color: colors.statusRed,
     fontSize: typography.bodySize
   }
-})
+}))

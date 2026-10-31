@@ -1,3 +1,7 @@
+import {
+  classifyTerminalCreationFailure,
+  terminalExitError
+} from '../../../../shared/terminal-start-failure'
 import type { AgentSessionOwnerBinding } from '../../../../shared/agent-session-host-authority'
 import { ClaimedAgentPtyOwnerRegistry } from '../../../../shared/claimed-agent-pty-owner'
 import { isPtyIncarnationId } from '../../../../shared/pty-incarnation'
@@ -30,14 +34,16 @@ export function seedTerminalRestoreRecordsFromSpawnResult(
   const lastTitle =
     typeof result.lastTitle === 'string' && result.lastTitle.length > 0
       ? result.lastTitle
-      : typeof result.coldRestore?.lastTitle === 'string' && result.coldRestore.lastTitle.length > 0
-        ? result.coldRestore.lastTitle
-        : undefined
+      : undefined
   if (text !== undefined || lastTitle !== undefined) {
     runtime?.seedTerminalRestoreTail?.(result.id, {
       ...(text !== undefined ? { text } : {}),
       ...(lastTitle !== undefined ? { lastTitle } : {})
     })
+  }
+  if (result.isReattach === true) {
+    runtime?.startReattachedOutputClock?.(result.id)
+    runtime?.restoreReattachedAgentStatus?.(result.id)
   }
 }
 
@@ -46,9 +52,24 @@ export function assertSpawnReplyWasLive(result: PtySpawnResult): void {
     return
   }
   // Lower layers may canonicalize IDs; controller-local pending identity cannot prove this exit.
-  throw Object.assign(new Error('agent_session_exited_during_start'), {
-    agentSessionOperationOutcome: 'unknown' as const
-  })
+  const error = Object.assign(
+    terminalExitError('agent_session_exited_during_start', result.exitCause, result.incarnationId),
+    {
+      agentSessionOperationOutcome: 'unknown' as const
+    }
+  )
+  throw classifyTerminalCreationFailure(error, result)
+}
+
+export function assertSpawnRegistrationAllowed(
+  runtime: Pick<OrcaRuntimeService, 'assertPtyRegistrationAllowed'> | undefined,
+  result: PtySpawnResult
+): void {
+  try {
+    runtime?.assertPtyRegistrationAllowed?.(result.id, result.incarnationId)
+  } catch (error) {
+    throw classifyTerminalCreationFailure(error, result)
+  }
 }
 
 export async function reconcileAgentSessionOwnerListings(): Promise<void> {

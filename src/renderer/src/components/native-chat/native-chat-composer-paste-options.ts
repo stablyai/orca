@@ -14,6 +14,7 @@ export type UseNativeChatComposerPasteArgs = {
   attachResolvedPaths: (paths: string[], connectionId?: string | null) => void
   /** Files a file manager copied attach through the composer's drop route. */
   attachCopiedFiles: (paths: string[], options?: { focus?: boolean }) => void
+  captureExternalPaths?: () => (paths: string[]) => void | Promise<void>
   /** Capture reserved-chip ownership before clipboard awaits so file resolution survives composer unmount. */
   captureCopiedFiles: (options?: {
     focus?: boolean

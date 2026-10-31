@@ -24,6 +24,7 @@ import {
 import { readAiVaultSessionTitlesFromFiles } from './session-title-file-reader'
 import { resolveHostReadableAiVaultTitleRequests } from './session-title-request-paths'
 import { listLocalAiVaultSubagentSessions } from './session-subagent-reader'
+import { noteWslDistroMayHaveStopped, noteWslDistroWoken } from '../wsl-background-distro-gate'
 
 if (!process.send) {
   throw new Error('AI Vault service requires a parent IPC channel.')
@@ -236,6 +237,14 @@ process.on('message', (raw: AiVaultServiceParentMessage) => {
   }
   if (raw?.type === 'shutdown') {
     void shutdown()
+    return
+  }
+  if (raw?.type === 'wslDistroNote' && typeof raw.distro === 'string') {
+    if (raw.kind === 'stopped') {
+      noteWslDistroMayHaveStopped(raw.distro)
+    } else {
+      noteWslDistroWoken(raw.distro)
+    }
     return
   }
   if (isAiVaultServiceRequest(raw)) {

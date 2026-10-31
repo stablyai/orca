@@ -1,8 +1,14 @@
 import type { RpcClient } from '../../../transport/rpc-client'
-import { useMobileOmpModelDiscovery } from '../../use-mobile-omp-model-discovery'
+import { useMobileNativeChatModelDiscovery } from '../../use-mobile-native-chat-model-discovery'
+import { writeMobileNativeChatSessionOptions } from './mobile-native-chat-session-option-persistence'
+import {
+  getAgentSessionOptionCatalog,
+  type AgentSessionOptionCatalog
+} from '../../../../../src/shared/agent-session-option-catalog'
 import type { AgentSessionConversationCommand } from '../../../../../src/shared/agent-session/agent-session-conversation-command'
 import { useCallback, useMemo } from 'react'
 import type {
+  NativeChatSessionOptionSettingsMutation,
   SessionOptionDescriptor,
   SessionOptionValue,
   SessionOptionsSurface
@@ -14,6 +20,10 @@ import {
   useMobileNativeChatSessionOptions,
   type MobileNativeChatSessionOptionsController
 } from './use-mobile-native-chat-session-options'
+
+function isAuthoritativeListing(catalog: AgentSessionOptionCatalog | null): boolean {
+  return catalog?.listModels !== undefined && catalog.discoveredModelsAreAuthoritative === true
+}
 
 export function useMobileNativeChatSessionOptionController(args: {
   client?: RpcClient | null
@@ -67,12 +77,27 @@ export function useMobileNativeChatSessionOptionController(args: {
     }
   }, [activeSessionTabId, isTabChatView, toggleTabChatView])
 
-  const discoveredModels = useMobileOmpModelDiscovery({
-    client: args.client ?? null,
+  const client = args.client ?? null
+  const discoveredModels = useMobileNativeChatModelDiscovery({
+    client,
+    agent,
     hostId,
     worktreeId,
-    enabled: !activeChatStructured && agent === 'omp' && activeSessionTabId !== null
+    // Phone-only limit: only lists that can retire a model are fetched; desktop also enriches seed lists, without per-visit CLI probes.
+    enabled:
+      !activeChatStructured &&
+      activeSessionTabId !== null &&
+      agent !== null &&
+      isAuthoritativeListing(getAgentSessionOptionCatalog(agent))
   })
+  const writeSettings = useCallback(
+    (mutation: NativeChatSessionOptionSettingsMutation) => {
+      if (client) {
+        void writeMobileNativeChatSessionOptions(client, mutation)
+      }
+    },
+    [client]
+  )
   const sessionOptions = useMobileNativeChatSessionOptions({
     discoveredModels,
     modelSwitchCommand: args.modelSwitchCommand,
@@ -80,7 +105,8 @@ export function useMobileNativeChatSessionOptionController(args: {
     scopeKey: mobileNativeChatScopeKey(hostId, worktreeId, activeSessionTabId),
     reportedModel,
     dispatchCommand,
-    onAgentPicker: handleAgentPicker
+    onAgentPicker: handleAgentPicker,
+    writeSettings
   })
   // Kept with nothing to pick (OMP lists no models): the "/" menu reads the chat's commands from it.
   const structuredController = useMemo<MobileNativeChatSessionOptionsController | null>(

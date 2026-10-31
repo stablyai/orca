@@ -197,31 +197,6 @@ describe('context usage across a restart', () => {
     after.release()
   })
 
-  it('keeps the last known size of a turn the child crashed in', async () => {
-    const journal = await openJournal()
-    const crashed = acquire(journal)
-    crashed.translator.handle(initFrame(900))
-    crashed.translator.handle(userFrame('turn-a', 1_000))
-    crashed.translator.handle(assistantFrame('reply-a', 2_000, 20_000))
-    crashed.translator.handle(resultFrame(3_000))
-    crashed.translator.handle(initFrame(3900))
-    crashed.translator.handle(userFrame('turn-b', 4_000))
-    crashed.translator.handle(assistantFrame('reply-b', 5_000, 120_000))
-    await crashed.settle()
-    crashed.release()
-
-    await settleStaleStructuredAgentSessionState({
-      journal,
-      sessionId: 'orca-session',
-      fence: 2,
-      acquisitionGeneration: 'next',
-      deathEvidence: null
-    })
-    const turns = journal.snapshot().items.map((item) => readAgentJournalTurn(item.body)?.state)
-    expect(turns).toContain('unverifiable')
-    expect(ring(journal)).toMatchObject({ usedTokens: 120_000, windowTokens: 1_000_000 })
-  })
-
   it('never brings a settled turn back to running with a context write that ran late', async () => {
     const journal = await openJournal()
     const live = acquire(journal)
@@ -248,21 +223,6 @@ describe('context usage across a restart', () => {
       state: 'unverifiable',
       contextUsage: { used: { kind: 'estimate', usage: { inputTokens: 30_000 } } }
     })
-    live.release()
-  })
-
-  it("reads a new session's implied window the same from its loaded rows and from the host", async () => {
-    const journal = await openJournal()
-    const live = acquire(journal)
-    live.translator.modelWritten('opus[1m]')
-    live.translator.handle(initFrame(900))
-    live.translator.handle(userFrame('turn-a', 1_000))
-    live.translator.handle(assistantFrame('reply-a', 2_000, 150_000))
-    await live.settle()
-    const expected = { usedTokens: 150_000, windowTokens: 1_000_000, percentage: 15 }
-    expect(ring(journal)).toMatchObject(expected)
-    expect(journal.contextUsage()).toMatchObject({ window: { tokens: 1_000_000 } })
-    expect(selectStructuredAgentContextUsage([], journal.contextUsage())).toMatchObject(expected)
     live.release()
   })
 

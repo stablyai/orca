@@ -7,6 +7,7 @@ import type { SidebarHostOption } from '../../sidebar-host-options'
 import { planSidebarRows } from '../../../../../../shared/sidebar-list/sidebar-row-plan'
 import { addHostSectionRows } from '../../../../../../shared/sidebar-list/host-section-rows'
 import {
+  collapsedSameNameProjectHeaders,
   project,
   projectHostSetups,
   repo,
@@ -16,38 +17,7 @@ import {
 } from '../../worktree-list-groups-test-fixtures'
 import { getProjectHeaderHostContexts } from './project-header-host-context'
 
-const local = { ...repo, displayName: 'app' }
-const paired: Repo = { ...local, id: 'home-app', executionHostId: 'runtime:home' }
-const hosts: SidebarHostOption[] = [
-  {
-    id: 'local',
-    label: 'Local Mac',
-    detail: 'This computer',
-    kind: 'local',
-    health: 'local',
-    presence: 'local'
-  },
-  {
-    id: 'runtime:home',
-    label: 'Home',
-    detail: 'home.example',
-    kind: 'runtime',
-    health: 'disconnected',
-    presence: 'configured'
-  }
-]
-function header(value: Repo): GroupHeaderRow {
-  return {
-    type: 'header',
-    key: `repo:${value.id}`,
-    label: value.displayName,
-    count: 1,
-    icon: { kind: 'project' },
-    repo: value
-  }
-}
-const repoMap = new Map([local, paired].map((value) => [value.id, value]))
-const rows = [header(local), header(paired)]
+const { local, paired, hosts, header, repoMap, rows } = collapsedSameNameProjectHeaders()
 const folder: ProjectGroup = {
   id: 'folder',
   name: 'app',

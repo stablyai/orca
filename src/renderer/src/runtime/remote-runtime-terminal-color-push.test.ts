@@ -1,12 +1,30 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { RuntimeHostStatusSnapshot } from '../../../shared/runtime-host-status'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
-import type { TerminalOscColorQueryReplyColors } from '../../../shared/terminal-osc-color-reply'
+import type {
+  TerminalViewAttributes,
+  TerminalViewRgb
+} from '../../../shared/terminal-view-attributes'
 import { createRemoteRuntimeTerminalColorPush } from './remote-runtime-terminal-color-push'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 
-const DARK = { foreground: '#ffffff', background: '#282c34' }
-const LIGHT = { foreground: '#2e3434', background: '#ffffff' }
+function appearance(
+  foreground: TerminalViewRgb,
+  background: TerminalViewRgb
+): TerminalViewAttributes {
+  return {
+    foreground,
+    background,
+    cursor: foreground,
+    ansi: Array.from({ length: 256 }, (): TerminalViewRgb => [0, 0, 0]),
+    colorSchemeMode: background[0] > 128 ? 'light' : 'dark',
+    cursorStyle: 'block',
+    cursorBlink: false
+  }
+}
+
+const DARK = appearance([255, 255, 255], [40, 44, 52])
+const LIGHT = appearance([46, 52, 52], [255, 255, 255])
 
 function snapshot(
   environmentId: string,
@@ -42,9 +60,9 @@ function methodNotFound(): RuntimeRpcCallError {
 }
 
 function harness() {
-  const calls: [string, TerminalOscColorQueryReplyColors][] = []
-  const call = vi.fn(async (environmentId: string, colors: TerminalOscColorQueryReplyColors) => {
-    calls.push([environmentId, colors])
+  const calls: [string, TerminalViewAttributes][] = []
+  const call = vi.fn(async (environmentId: string, attributes: TerminalViewAttributes) => {
+    calls.push([environmentId, attributes])
   })
   return { calls, call, push: createRemoteRuntimeTerminalColorPush(call) }
 }
@@ -52,7 +70,7 @@ function harness() {
 describe("pushing this client's terminal colours to paired hosts", () => {
   it('tells a host its colours when it connects, and again after it reconnects', () => {
     const { calls, push } = harness()
-    push.setColors(DARK)
+    push.setAttributes(DARK)
     expect(calls).toEqual([])
 
     push.observeStatusSnapshot(snapshot('env-a'))
@@ -75,9 +93,9 @@ describe("pushing this client's terminal colours to paired hosts", () => {
     push.observeStatusSnapshot(snapshot('env-b'))
     push.observeStatusSnapshot(snapshot('env-c', { verification: 'unavailable' }))
 
-    push.setColors(DARK)
-    push.setColors({ ...DARK })
-    push.setColors(LIGHT)
+    push.setAttributes(DARK)
+    push.setAttributes(structuredClone(DARK))
+    push.setAttributes(LIGHT)
 
     expect(calls).toEqual([
       ['env-a', DARK],
@@ -89,7 +107,7 @@ describe("pushing this client's terminal colours to paired hosts", () => {
 
   it('re-pushes unchanged colours on focus, since another client may have pushed since', () => {
     const { calls, push } = harness()
-    push.setColors(DARK)
+    push.setAttributes(DARK)
     push.observeStatusSnapshot(snapshot('env-a'))
 
     push.pushToAllHosts()
@@ -103,12 +121,12 @@ describe("pushing this client's terminal colours to paired hosts", () => {
   it('stops asking a host that predates the method until it reconnects', async () => {
     const { calls, call, push } = harness()
     call.mockRejectedValueOnce(methodNotFound())
-    push.setColors(DARK)
+    push.setAttributes(DARK)
     push.observeStatusSnapshot(snapshot('env-old'))
     await Promise.resolve()
 
     push.pushToAllHosts()
-    push.setColors(LIGHT)
+    push.setAttributes(LIGHT)
     expect(calls).toEqual([])
 
     push.observeStatusSnapshot(snapshot('env-old', { runtimeId: 'updated' }))
@@ -118,7 +136,7 @@ describe("pushing this client's terminal colours to paired hosts", () => {
   it('keeps pushing after a transient failure', async () => {
     const { calls, call, push } = harness()
     call.mockRejectedValueOnce(new Error('socket closed'))
-    push.setColors(DARK)
+    push.setAttributes(DARK)
     push.observeStatusSnapshot(snapshot('env-a'))
     await Promise.resolve()
 

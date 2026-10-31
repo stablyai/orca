@@ -6,6 +6,9 @@ import { scriptDeclaresPosixShell } from '../shared/setup-script-shebang'
 import { resolveWindowsShellStartupFamily } from '../shared/windows-terminal-shell'
 import { resolveWindowsGitBashShellPath } from './git-bash'
 import { gitExecFileSync } from './git/runner'
+import { isLocalGitRuntimeRouterInstalled } from './git/command-runner/local-git-runtime-route'
+import { readWorktreeGitPath } from './git/worktree-git-path'
+import { knownWslAutomountRoots } from './wsl/wsl-automount-root'
 import { isWslPath, toWindowsWslPath, toLinuxPath } from './wsl'
 import { getHookRuntimeTarget, getHookWslContext } from './hook-runtime-target'
 import { SETUP_RUNNER_PATH_ENV_KEYS, getSetupRunnerEnvVars } from './setup-hook-env-vars'
@@ -19,10 +22,11 @@ import type { SetupRunnerShell } from '../shared/setup-runner-command'
 
 type SetupRunnerShellSettings = Record<string, unknown> | undefined
 
-function getGitPath(cwd: string, relativePath: string, runtimeTarget?: HookRuntimeTarget): string {
+function getGitPath(cwd: string, relativePath: string): string {
   return gitExecFileSync(['rev-parse', '--git-path', relativePath], {
     cwd,
-    ...(runtimeTarget?.wslDistro ? { wslDistro: runtimeTarget.wslDistro } : {})
+    // Host Git on purpose: a read-only path lookup, kept off a synchronous wsl.exe.
+    hostGit: true
   }).trim()
 }
 
@@ -84,10 +88,14 @@ function createWorktreeRunnerScript(args: {
   // Linked worktrees have .git files; resolve the per-worktree gitdir through Git.
   const runnerExtension = runnerShell.family === 'cmd' ? 'cmd' : 'sh'
   const gitRelPath = `orca/${runnerBaseName}.${runnerExtension}`
-  let runnerScriptPath = getGitPath(worktreePath, gitRelPath, runtimeTarget)
+  // With the D1c Git router, read the link: if WSL Git made the worktree, host Git can't.
+  const fromLink = isLocalGitRuntimeRouterInstalled()
+    ? readWorktreeGitPath(worktreePath, gitRelPath, knownWslAutomountRoots())
+    : null
+  let runnerScriptPath = fromLink ?? getGitPath(worktreePath, gitRelPath)
 
   // Convert WSL Git's Linux path to a path Windows filesystem calls can reach.
-  if (wslWorktree) {
+  if (wslWorktree && !fromLink) {
     const wslInfo = getHookWslContext(worktreePath, runtimeTarget)
     if (wslInfo?.distro) {
       runnerScriptPath = toWindowsWslPath(runnerScriptPath.trim(), wslInfo.distro)

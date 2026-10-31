@@ -1,7 +1,9 @@
 // Keep additions replayable so late hydration and crash recovery merge returned text/images without replacing the draft.
 
+import type { JSONContent } from '@tiptap/react'
+import { promptTextContent, appendPromptDocumentText } from './native-chat-prompt-document-text'
 import { appendReturnedDraftText } from '../../../../shared/returned-draft-text'
-import { appendPromptDocumentText } from './native-chat-prompt-document-text'
+import { isLoneStructuredAgentSessionConversationCommand } from '../../../../shared/structured-agent-session-composer'
 import { basename } from '@/lib/path'
 import type {
   NativeChatComposerDraft,
@@ -10,6 +12,8 @@ import type {
 
 export type NativeChatComposerDraftAddition = {
   readonly text?: string
+  readonly document?: JSONContent
+  readonly pastedTextFiles?: Readonly<Record<string, string>>
   readonly images?: readonly NativeChatComposerDraftImage[]
   /** Only an image the user attaches takes the place of a placeholder with its file name. */
   readonly fromUser?: boolean
@@ -45,19 +49,38 @@ export function placeNativeChatComposerDraftAddition(
 export function withNativeChatComposerDraftAddition(
   draft: NativeChatComposerDraft,
   addition: NativeChatComposerDraftAddition
-): Pick<NativeChatComposerDraft, 'text' | 'images' | 'document'> {
+): Pick<NativeChatComposerDraft, 'text' | 'images' | 'document' | 'pastedTextFiles'> {
   const fills = new Set(addition.fills)
   // An existing unique image id proves the addition already landed, regardless of later typing.
   if (
     addition.images?.some(({ id }) => !fills.has(id) && draft.images.some((held) => held.id === id))
   ) {
-    return { text: draft.text, images: draft.images, document: draft.document }
+    return {
+      text: draft.text,
+      images: draft.images,
+      document: draft.document,
+      pastedTextFiles: draft.pastedTextFiles
+    }
   }
-  const text = appendReturnedDraftText(draft.text, addition.text ?? '')
+  const returned = addition.text ?? ''
+  const kept = draft.text.trimEnd()
+  const replaces = kept === '' || isLoneStructuredAgentSessionConversationCommand(kept)
+  let text = appendReturnedDraftText(draft.text, returned)
+  const returnedBlocks = addition.document?.content ?? []
+  const heldBlocks = draft.document?.content ?? promptTextContent(draft.text).content ?? []
+  // Equal visible tokens do not establish equal selected files.
+  if (
+    addition.document &&
+    returned.trim() &&
+    text === draft.text &&
+    JSON.stringify(heldBlocks.slice(-returnedBlocks.length)) !== JSON.stringify(returnedBlocks)
+  ) {
+    text = `${kept}\n\n${returned}`
+  }
   const images = [...draft.images]
   let at = addition.before ? images.findIndex((held) => held.id === addition.before) : -1
-  for (const { id, path, connectionId } of addition.images ?? []) {
-    const image = { id, path, ...(connectionId ? { connectionId } : {}) }
+  for (const image of addition.images ?? []) {
+    const { id } = image
     const held = images.findIndex((candidate) => candidate.id === id)
     if (fills.has(id) && held !== -1) {
       if (images[held].unavailableName !== undefined) {
@@ -69,5 +92,31 @@ export function withNativeChatComposerDraftAddition(
       images.splice(at++, 0, image)
     }
   }
-  return { text, images, document: appendPromptDocumentText(draft.document, draft.text, text) }
+  const document =
+    text === draft.text
+      ? draft.document
+      : addition.document
+        ? replaces
+          ? addition.document
+          : {
+              type: 'doc',
+              content: [
+                ...(appendPromptDocumentText(
+                  draft.document ?? promptTextContent(draft.text),
+                  draft.text,
+                  kept
+                )?.content ?? []),
+                { type: 'paragraph' },
+                ...returnedBlocks
+              ]
+            }
+        : replaces
+          ? promptTextContent(text)
+          : appendPromptDocumentText(draft.document, draft.text, text)
+  return {
+    text,
+    images,
+    document,
+    pastedTextFiles: { ...draft.pastedTextFiles, ...addition.pastedTextFiles }
+  }
 }

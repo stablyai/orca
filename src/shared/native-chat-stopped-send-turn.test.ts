@@ -7,7 +7,7 @@ import type {
   AgentJournalTurnScope
 } from './agent-session-journal-types'
 import { projectNativeChatTranscript } from './native-chat-transcript-projection'
-import { nativeChatRowsInDrawOrder } from './native-chat-turn-grouping'
+import { nativeChatRowsInDrawOrder } from './native-chat/transcript/native-chat-turn-grouping'
 import { nativeChatTurnMembership, structuredAgentTurnAnchors } from './native-chat-turn-membership'
 import { DISPATCH_REJECTED_CANCELLED } from './structured-agent-session-dispatch-rejection'
 import { projectStructuredAgentSessionMessages } from './structured-agent-session-message-projection'

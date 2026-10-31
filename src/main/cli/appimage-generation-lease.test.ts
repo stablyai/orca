@@ -1,12 +1,11 @@
 import { existsSync } from 'node:fs'
-import { mkdir, mkdtemp, readdir, rm, utimes, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, rm, utimes, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
 import {
   inspectAppImageGenerationLeases,
   leaseAppImageGenerationForCurrentProcess,
-  resolveAppImageGenerationOfExecutable,
   type AppImageLeaseProcessReader,
   type ProcessStartTicksRead
 } from './appimage-generation-lease'
@@ -39,35 +38,6 @@ function reader(
 }
 
 describe('AppImage generation leases', () => {
-  it('locates the generation an executable runs from', async () => {
-    const { cacheRootPath, rootPath, execPath } = await makeCache()
-    expect(resolveAppImageGenerationOfExecutable(execPath)).toEqual({
-      cacheRootPath,
-      namespaceKey: NAMESPACE,
-      generationKey: GENERATION,
-      rootPath
-    })
-    expect(resolveAppImageGenerationOfExecutable('/usr/lib/orca-ide/orca-ide')).toBeNull()
-    expect(resolveAppImageGenerationOfExecutable(join(rootPath, 'node'))).toBeNull()
-  })
-
-  it('locates the generation its bundled Node runs from, as a terminal daemon does', async () => {
-    const { cacheRootPath, rootPath } = await makeCache()
-    const node = join(rootPath, 'resources', 'node-runtime', 'bin', 'node')
-    expect(resolveAppImageGenerationOfExecutable(node)).toEqual({
-      cacheRootPath,
-      namespaceKey: NAMESPACE,
-      generationKey: GENERATION,
-      rootPath
-    })
-    expect(
-      resolveAppImageGenerationOfExecutable(join(rootPath, 'resources', 'bin', 'node'))
-    ).toBeNull()
-    expect(
-      resolveAppImageGenerationOfExecutable('/opt/x/resources/node-runtime/bin/node')
-    ).toBeNull()
-  })
-
   it('leases the generation for a daemon on its bundled Node', async () => {
     const { cacheRootPath, rootPath } = await makeCache()
     const lease = await leaseAppImageGenerationForCurrentProcess({
@@ -84,74 +54,6 @@ describe('AppImage generation leases', () => {
         reader({ 11: { status: 'present', startTicks: '700' } })
       )
     ).resolves.toEqual({ status: 'live' })
-  })
-
-  it('records nothing off Linux or outside an extracted generation', async () => {
-    const { execPath } = await makeCache()
-    const live = reader({ 10: { status: 'present', startTicks: '500' } })
-    await expect(
-      leaseAppImageGenerationForCurrentProcess({
-        execPath,
-        pid: 10,
-        platform: 'darwin',
-        reader: live
-      })
-    ).resolves.toBeNull()
-    await expect(
-      leaseAppImageGenerationForCurrentProcess({
-        execPath: '/opt/Orca/orca-ide',
-        pid: 10,
-        platform: 'linux',
-        reader: live
-      })
-    ).resolves.toBeNull()
-  })
-
-  it('treats a lease whose holder still runs as live', async () => {
-    const { cacheRootPath, rootPath, execPath } = await makeCache()
-    const live = reader({ 10: { status: 'present', startTicks: '500' } })
-    const leasePath = await leaseAppImageGenerationForCurrentProcess({
-      execPath,
-      pid: 10,
-      platform: 'linux',
-      reader: live
-    })
-
-    expect(leasePath).not.toBeNull()
-    await expect(inspectAppImageGenerationLeases(cacheRootPath, rootPath, live)).resolves.toEqual({
-      status: 'live'
-    })
-    expect(existsSync(leasePath!)).toBe(true)
-  })
-
-  it('reclaims leases from an exited, recycled or previous-boot holder', async () => {
-    const { cacheRootPath, rootPath, execPath } = await makeCache()
-    const writer = reader({
-      10: { status: 'present', startTicks: '500' },
-      11: { status: 'present', startTicks: '600' },
-      12: { status: 'present', startTicks: '700' }
-    })
-    for (const pid of [10, 11, 12]) {
-      await leaseAppImageGenerationForCurrentProcess({
-        execPath,
-        pid,
-        platform: 'linux',
-        reader: writer
-      })
-    }
-    const later = reader(
-      {
-        // 10 exited; 11's pid was recycled; 12 matches but the host rebooted.
-        11: { status: 'present', startTicks: '999' },
-        12: { status: 'present', startTicks: '700' }
-      },
-      'boot-2'
-    )
-
-    await expect(inspectAppImageGenerationLeases(cacheRootPath, rootPath, later)).resolves.toEqual({
-      status: 'exited'
-    })
-    await expect(readdir(join(cacheRootPath, 'leases'))).resolves.toEqual([])
   })
 
   it('keeps the generation when a holder cannot be verified', async () => {

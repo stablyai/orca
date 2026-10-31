@@ -146,6 +146,7 @@ export function useMobileSessionDocumentReaders(scope: MobileSessionTabApplicati
           worktreeId,
           relativePath: tab.relativePath,
           diffSource: tab.diffSource,
+          ...(tab.oldPath ? { oldPath: tab.oldPath } : {}),
           ignoreTrimWhitespace: shouldIgnoreTrimWhitespace(diffShowWhitespace)
         })
         publish(doc)

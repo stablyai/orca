@@ -68,10 +68,11 @@ export function describeReleasedStopNoteProjection(port: ScenarioPort): void {
           const after = reduce(before, replies)
           expect(render(after)).toEqual({ type: 'text', text: ordinary.text })
           expect(rig.journal.itemBody(noteId)).toEqual(unconfirmed)
+          // The turn end is one saved sequence that touches only the turn, whichever writer made it.
           const since = rig.journal.readSince(before.cursor!)
           expect(since).toMatchObject({
             ok: true,
-            rows: [expect.objectContaining({ kind: batch ? 'lifecycle-batch' : 'item' })]
+            rows: [expect.objectContaining({ kind: 'outcome', itemIds: [turnItemId] })]
           })
         }
       )

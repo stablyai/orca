@@ -65,7 +65,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { setClaudeStructuredOption } from './claude-structured-options'
-import type { ClaudeSession } from './claude-structured-session-state'
+import type { ClaudeSession } from './structured/claude-structured-session-state'
 
 /** Verbatim row shapes from Claude Code 2.1.260's list_models response. */
 const DEFAULT_ROW = { value: 'default', resolvedModel: 'claude-opus-5', displayName: 'Default' }

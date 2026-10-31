@@ -1,4 +1,4 @@
-import type * as NodeFs from 'node:fs'
+import type * as NodeFsPromises from 'node:fs/promises'
 import { appendFileSync } from 'node:fs'
 import {
   chmod,
@@ -22,18 +22,16 @@ const fsFaults: {
   writeError: NodeJS.ErrnoException | null
 } = vi.hoisted(() => ({ beforeCopyWrite: null, writeError: null }))
 
-vi.mock('node:fs', async (importOriginal) => {
-  const actual = await importOriginal<typeof NodeFs>()
+vi.mock('node:fs/promises', async (importOriginal) => {
+  const actual = await importOriginal<typeof NodeFsPromises>()
   return {
     ...actual,
-    createWriteStream: (...args: Parameters<typeof actual.createWriteStream>) => {
+    writeFile: (...args: Parameters<typeof actual.writeFile>) => {
       fsFaults.beforeCopyWrite?.()
-      const stream = actual.createWriteStream(...args)
-      const writeError = fsFaults.writeError
-      if (writeError) {
-        stream.once('open', () => stream.destroy(writeError))
+      if (fsFaults.writeError) {
+        return Promise.reject(fsFaults.writeError)
       }
-      return stream
+      return actual.writeFile(...args)
     }
   }
 })
@@ -44,11 +42,8 @@ vi.mock('../ipc/runtime-import-limits', async (importOriginal) => ({
   REMOTE_IMPORT_MAX_TOTAL_BYTES: 16
 }))
 
-import {
-  materializeDragTempPaths,
-  mayNeedDragTempCopy,
-  type DragTempCopyEnvironment
-} from './dragged-temp-file-copy'
+import { materializeDragTempPaths, type DragTempCopyEnvironment } from './dragged-temp-file-copy'
+import { mayNeedDragTempCopy } from './drag-temp-path'
 
 const SCREENSHOT_NAME = 'Screenshot 2026-09-28 at 4.03.11 PM.png'
 const canChangePermissions = process.platform !== 'win32' && process.getuid?.() !== 0
@@ -299,14 +294,13 @@ describe('materializeDragTempPaths', () => {
     expect(await copyDirs()).toHaveLength(2)
   })
 
-  it('rejects a source that changes mid-copy and leaves no copy behind', async () => {
+  it('keeps proven buffered bytes when the source changes after reading', async () => {
     const source = await dragTempFile('shot.png', 'png')
     fsFaults.beforeCopyWrite = () => appendFileSync(source, '-grown')
 
-    expect(await materializeDragTempPaths([source], env)).toEqual([
-      { sourcePath: source, status: 'failed', reason: 'changed' }
-    ])
-    expect(await readdir(env.copyRoot)).toEqual([])
+    const [result] = await materializeDragTempPaths([source], env)
+    expect(await readFile(importedPath(result), 'utf8')).toBe('png')
+    expect(await readFile(source, 'utf8')).toBe('png-grown')
   })
 
   it('reports a full disk as a reason token, logging the errno, and leaves no copy behind', async () => {

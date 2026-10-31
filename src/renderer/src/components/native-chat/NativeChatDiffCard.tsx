@@ -11,6 +11,8 @@ import { nativeChatToolRowVerb } from './native-chat-tool-line-label'
 import { nativeChatEditFilePatchText } from '../../../../shared/native-chat/tools/native-chat-edit-cards'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
 import {
+  nativeChatEditFileBaseName,
+  nativeChatEditGutterChars,
   unifiedLineNumber,
   type NativeChatEditFile,
   type NativeChatEditLine
@@ -25,10 +27,6 @@ function VerbIcon({ kind }: { kind: NativeChatEditFile['changeKind'] }): React.J
     return <FileMinus2 className={className} />
   }
   return <FilePen className={className} />
-}
-
-function baseName(path: string): string {
-  return path.split(/[\\/]/).at(-1) || path
 }
 
 /** Mark omitted file regions so gutter line jumps do not resemble missing rendered content. */
@@ -145,10 +143,7 @@ export function NativeChatDiffCard({
   }, [revealSignal, onReveal, setExpanded])
   const copyText = useMemo(() => nativeChatEditFilePatchText(file.lines), [file.lines])
   const hasBody = file.lines.length > 0
-  const widest = file.lineNumbersKnown
-    ? file.lines.reduce((max, line) => Math.max(max, unifiedLineNumber(line) ?? 0), 0)
-    : 0
-  const gutterWidth = file.lineNumbersKnown ? Math.max(3, String(widest).length + 1) : 0
+  const gutterWidth = nativeChatEditGutterChars(file)
 
   return (
     <div ref={cardRef} className="my-1 min-w-0">
@@ -175,7 +170,7 @@ export function NativeChatDiffCard({
                 title={file.oldPath}
                 aria-hidden="true"
               >
-                {baseName(file.oldPath)}
+                {nativeChatEditFileBaseName(file.oldPath)}
               </span>
               <span className="sr-only">{file.oldPath}</span>
               <span className="shrink-0 text-chat-foreground-faint">→</span>
@@ -183,7 +178,7 @@ export function NativeChatDiffCard({
           ) : null}
           <NativeChatToolFileTarget
             path={file.path}
-            label={baseName(file.path)}
+            label={nativeChatEditFileBaseName(file.path)}
             className="min-w-0 truncate text-chat-foreground"
             // A deleted file has nothing left to open.
             onLinkClick={file.changeKind === 'deleted' ? undefined : onLinkClick}

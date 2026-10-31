@@ -21,7 +21,7 @@ export type StructuredAgentSessionRestartCandidateReader = (
 ) => StructuredAgentSessionResumableSet
 
 export function createStructuredAgentSessionRestartCandidateReader(deps: {
-  /** Listing reveals marker chats before these map reads. */
+  /** Only explicit actions open marker chats; passive listings use saved previews. */
   sessions: ReadonlyMap<string, StructuredAgentSessionRestartJournalSource>
   getRecord: (sessionId: string) => AgentSessionRecord | null
   adapter: StructuredAgentSessionAdapter
@@ -36,10 +36,12 @@ export function createStructuredAgentSessionRestartCandidateReader(deps: {
       supportsRecord: (record) => hostCanStartRecord(deps, record),
       movedOn: deps.movedOn,
       savedByNewerOrca: deps.savedByNewerOrca,
-      latestPrompt: (sessionId) =>
-        latestStructuredAgentSessionPrompt(
-          deps.sessions.get(sessionId)?.journal.snapshot().items ?? []
-        ),
+      latestPrompt: (sessionId) => {
+        const session = deps.sessions.get(sessionId)
+        return session
+          ? latestStructuredAgentSessionPrompt(session.journal.snapshot().items)
+          : (deps.getRecord(sessionId)?.lastTurn?.prompt ?? '')
+      },
       leaseState
     })
 }

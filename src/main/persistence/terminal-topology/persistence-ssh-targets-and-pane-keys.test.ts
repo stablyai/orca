@@ -23,6 +23,7 @@ const { loadUserSshConfigMock, sshConfigHostsToTargetsMock } = vi.hoisted(() => 
 
 vi.mock('../../ssh/config/ssh-config-parser', () => ({
   loadUserSshConfig: loadUserSshConfigMock,
+  loadUserSshConfigWithText: () => ({ hosts: loadUserSshConfigMock(), text: '' }),
   sshConfigHostsToTargets: sshConfigHostsToTargetsMock
 }))
 const { trackMock, getCohortAtEmitMock } = vi.hoisted(() => ({
@@ -388,21 +389,21 @@ describe('Store', () => {
     ]
 
     const store = await createStore()
-    const sshStore = new SshConnectionStore(store)
+    const sshStore = new SshConnectionStore(store, { config: async () => null })
 
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2200, 'ssh-cfg-1'))
-    const inserted = sshStore.importFromSshConfig()
+    const inserted = (await sshStore.importFromSshConfig()).targets
     expect(inserted).toHaveLength(1)
     expect(inserted[0]?.source).toBe('ssh-config')
     expect(inserted[0]?.port).toBe(2200)
     // Keep config ownership during port rotation so repeated imports do not dirty the profile.
     sshConfigHostsToTargetsMock.mockReturnValue(candidate(2222, 'ssh-cfg-2'))
-    const changed = sshStore.importFromSshConfig()
+    const changed = (await sshStore.importFromSshConfig()).targets
     expect(changed).toHaveLength(1)
     expect(changed[0]?.port).toBe(2222)
     expect(changed[0]?.source).toBe('ssh-config')
 
-    expect(sshStore.importFromSshConfig()).toHaveLength(0)
+    expect((await sshStore.importFromSshConfig()).targets).toHaveLength(0)
 
     store.flush()
     const onDisk = (readDataFile() as { sshTargets?: Record<string, unknown>[] }).sshTargets

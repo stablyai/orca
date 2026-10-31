@@ -116,9 +116,9 @@ export function SkillFreshnessNudge(): null {
             'An installed Orca skill is out of date'
           )
         : translate(
-            'auto.components.skills.SkillFreshnessNudge.titleMany',
-            '{{value0}} installed Orca skills are out of date',
-            { value0: names.size }
+            'auto.components.skills.SkillFreshnessNudge.title',
+            '{{count}} installed Orca skills are out of date',
+            { count: names.size, defaultValue_one: '{{count}} installed Orca skill is out of date' }
           ),
       {
         description: translate(

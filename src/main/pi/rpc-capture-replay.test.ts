@@ -4,6 +4,8 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { z } from 'zod'
 import { JsonlRpcTimelineLane } from '../jsonl-rpc/timeline-lane'
 import { PiRpcTurns } from './rpc-turns'
+import { PiRpcOptionObservations, readPiRpcSessionOptions } from './rpc-options'
+import { piRpcStateSchema } from './rpc-protocol'
 import { piRpcFailureFact } from './rpc-prompt-delivery'
 import { agentSessionFailureSentence } from '../../shared/agent-session-failure-words'
 import { piRpcDialogPresentation } from './rpc-extension-dialogs'
@@ -125,6 +127,35 @@ function transcript(rows: Awaited<ReturnType<typeof replay>>['rows']): string {
 }
 
 describe('scrubbed Pi 1.0.4 RPC captures', () => {
+  it('keeps captured current reports provisional until the native model listing arrives', async () => {
+    const frames = capture('command-only')
+    const response = (command: string) =>
+      frames.find(({ dir, frame }) => dir === 'out' && frame.command === command)?.frame.data
+    const observed = new PiRpcOptionObservations(
+      { current: new Map(), writes: new Map() },
+      () => true
+    )
+    const state = piRpcStateSchema.parse(response('get_state'))
+    observed.seed(state)
+    observed.prepareState(vi.fn())(state)
+    expect(observed.read()).toMatchObject({
+      models: [],
+      modelsKnown: false,
+      current: { model: 'openai-codex/gpt-6.1-sol', effort: 'medium' }
+    })
+    const adopt = observed.prepare()
+    expect(
+      adopt(await readPiRpcSessionOptions({ request: async (command) => response(command) }))
+    ).toBe(true)
+    expect(observed.read().modelsKnown).toBeUndefined()
+    expect(observed.read().models).toContainEqual(
+      expect.objectContaining({
+        id: 'openai-codex/gpt-6.1-sol',
+        label: 'GPT-6.1 Sol'
+      })
+    )
+  })
+
   it('records tool output, streamed text, and all three consumed inputs in one settled run', async () => {
     const result = await replay('steer-followup')
     expect(result.failed).not.toHaveBeenCalled()

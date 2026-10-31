@@ -1,5 +1,5 @@
 import { agentJournalSubmissionKey } from '../../../src/shared/agent-session-journal-item-key'
-import { agentSessionWriteNoticeEnglish } from '../../../src/shared/agent-session-refusal-notice'
+import { mobileAgentSessionWriteNoticeText } from './agent-session-write-notice-copy'
 import { agentSessionVisibleFailureFacts } from '../../../src/shared/agent-session-visible-failures'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import { dispatchWasWithdrawn } from '../../../src/shared/structured-agent-session-dispatch-rejection'
@@ -24,7 +24,7 @@ export function mobileNativeChatUnsentNotices(
   return new Map(
     rejected.map((submission) => [
       agentJournalSubmissionKey(submission.clientMessageId),
-      agentSessionWriteNoticeEnglish(
+      mobileAgentSessionWriteNoticeText(
         structuredAgentSessionRecordedRejectionParts(submission, { agentName }, startFailures)
       )
     ])

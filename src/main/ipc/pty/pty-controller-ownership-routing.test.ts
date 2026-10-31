@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { setupPtyIpcSuite } from '../pty-ipc-test-harness'
+import { setupPtyIpcSuite } from './pty-ipc-test-harness'
 import type { AgentSessionOwnerBinding } from '../../../shared/agent-session-host-authority'
 import { LocalPtyProvider } from '../../providers/local-pty-provider'
 import { registerPtyHandlers } from './register-handlers'
@@ -7,48 +7,48 @@ import { clearPtyOwnershipForConnection, clearProviderPtyState } from './provide
 import { setPtyOwnership } from './provider/ownership-state'
 import { setLocalPtyProvider } from './provider/registry'
 
-vi.mock('electron', () => import('../pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
-vi.mock('fs', () => import('../pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
-vi.mock('node-pty', () => import('../pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
+vi.mock('electron', () => import('./pty-ipc-mock-registry').then((m) => m.electronModuleMock()))
+vi.mock('fs', () => import('./pty-ipc-mock-registry').then((m) => m.fsModuleMock()))
+vi.mock('node-pty', () => import('./pty-ipc-mock-registry').then((m) => m.nodePtyModuleMock()))
 vi.mock('node:child_process', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).childProcessModuleMock(await importOriginal())
 )
 vi.mock('../../opencode/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.openCodeHookServiceModuleMock())
 )
 vi.mock('../../mimo/hook-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.mimoHookServiceModuleMock())
 )
 vi.mock('../../agent-hooks/server', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.agentHookServerModuleMock())
 )
 vi.mock('../../pi/titlebar-extension-service', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.piTitlebarExtensionModuleMock())
 )
-vi.mock('../../pwsh', () => import('../pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
+vi.mock('../../pwsh', () => import('./pty-ipc-mock-registry').then((m) => m.pwshModuleMock()))
 vi.mock('../../wsl', async (importOriginal) =>
-  (await import('../pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
+  (await import('./pty-ipc-mock-registry')).wslModuleMock(await importOriginal())
 )
 vi.mock('../../telemetry/client', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.telemetryClientModuleMock())
 )
 vi.mock('../../telemetry/classify-error', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.classifyErrorModuleMock())
 )
 vi.mock('../../cli/linux-terminal-orca-cli-shim', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.linuxCliShimModuleMock())
 )
 vi.mock('../../memory/pty-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.ptyRegistryModuleMock())
 )
 vi.mock('../../agent-hooks/migration-unsupported-pty-state', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.migrationUnsupportedPtyModuleMock())
 )
 vi.mock('../../codex/codex-pane-account-registry', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexPaneAccountRegistryModuleMock())
 )
 vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
-  import('../pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
+  import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
 describe('registerPtyHandlers', () => {
@@ -180,17 +180,36 @@ describe('registerPtyHandlers', () => {
       0
     )
   })
-  it('seeds the title of a session adopted by subscriber-driven attach', async () => {
+  it('seeds the screen and title of a session adopted by main attach', async () => {
     const daemonPtyId = 'repo-1::/tmp/wt@@title-handoff'
     const localProvider = createAgentClaimProvider({})
-    localProvider.attach.mockResolvedValueOnce({ lastTitle: '⠋ Claude' })
+    localProvider.attach.mockResolvedValueOnce({
+      id: daemonPtyId,
+      snapshot: 'idle composer\r\n',
+      snapshotCols: 120,
+      snapshotRows: 40,
+      lastTitle: '⠋ Claude'
+    })
     setLocalPtyProvider(localProvider as never)
+    const seedHeadlessTerminal = vi.fn()
     const seedTerminalRestoreTail = vi.fn()
-    const controller = registerAgentClaimController({ seedTerminalRestoreTail })
+    const controller = registerAgentClaimController({
+      seedHeadlessTerminal,
+      seedTerminalRestoreTail
+    })
 
     await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
 
-    expect(seedTerminalRestoreTail).toHaveBeenCalledWith(daemonPtyId, { lastTitle: '⠋ Claude' })
+    expect(seedHeadlessTerminal).toHaveBeenCalledWith(
+      daemonPtyId,
+      'idle composer\r\n',
+      { cols: 120, rows: 40 },
+      {}
+    )
+    expect(seedTerminalRestoreTail).toHaveBeenCalledWith(daemonPtyId, {
+      text: 'idle composer\r\n',
+      lastTitle: '⠋ Claude'
+    })
   })
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
     const provider = createAgentClaimProvider({})

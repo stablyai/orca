@@ -1,7 +1,7 @@
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import type { ActiveRightSidebarTab } from '@/store/slices/editor'
-import { isPluginPanelTabKey } from '../../../../shared/plugins/plugin-manifest'
+import { isPluginPanelTabKey } from '../../../../shared/plugins/manifest/plugin-manifest'
 
 const FileExplorer = lazy(() => import('./FileExplorer'))
 const SourceControl = lazy(() => import('./SourceControl'))

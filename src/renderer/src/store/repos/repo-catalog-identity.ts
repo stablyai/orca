@@ -1,7 +1,7 @@
 import type { Repo } from '../../../../shared/repo-types'
 import { applyInheritedProjectGroups } from '../../../../shared/project-group-inheritance'
 import { reconcileFetchedRepos } from '../slices/repo-identity-reconcile'
-import { getRepoHostIdentity } from '../slices/repo-host-identity'
+import { getRepoRowIdentity } from '../slices/repo-host-identity'
 import { getRepoExecutionHostId } from '../../../../shared/execution-host'
 import type { RepoSlice } from './repo-state'
 import { mergeFetchedProjectCompatibilityForHost } from '../../../../shared/project-compatibility-host-merge'
@@ -14,14 +14,14 @@ export function mergeFetchedReposForHost(
   hostId: string
 ): readonly Repo[] {
   const fetchedWithProjectGroups = applyInheritedProjectGroups(previous, fetched)
-  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoHostIdentity))
+  const fetchedIdentities = new Set(fetchedWithProjectGroups.map(getRepoRowIdentity))
   const preserved = previous.filter((repo) => {
     const existingHostId = getRepoExecutionHostId(repo)
-    return existingHostId !== hostId || fetchedIdentities.has(getRepoHostIdentity(repo))
+    return existingHostId !== hostId || fetchedIdentities.has(getRepoRowIdentity(repo))
   })
   return reconcileFetchedRepos(
     previous,
-    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoHostIdentity)
+    mergeByIdentity(preserved, fetchedWithProjectGroups, getRepoRowIdentity)
   )
 }
 
@@ -30,18 +30,14 @@ export function mergeProjectCompatibilityForHostRepoChange({
   nextRepos,
   hostId
 }: {
-  previous: Pick<RepoSlice, 'endpointProjects' | 'endpointProjectHostSetups'>
+  previous: Pick<RepoSlice, 'projects' | 'projectHostSetups'>
   nextRepos: readonly Repo[]
   hostId: string
-}): Pick<RepoSlice, 'endpointProjects' | 'endpointProjectHostSetups'> {
-  const merged = mergeFetchedProjectCompatibilityForHost({
-    previous: {
-      projects: previous.endpointProjects,
-      projectHostSetups: previous.endpointProjectHostSetups
-    },
+}): Pick<RepoSlice, 'projects' | 'projectHostSetups'> {
+  return mergeFetchedProjectCompatibilityForHost({
+    previous,
     fetched: projectCompatibilityFromRepos(nextRepos),
     repos: nextRepos,
     hostId
   })
-  return { endpointProjects: merged.projects, endpointProjectHostSetups: merged.projectHostSetups }
 }

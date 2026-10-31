@@ -1,5 +1,5 @@
-import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild as mockChild } from '../../shared/__fixtures__/fake-spawned-child'
 
 const {
   spawnMock,
@@ -42,16 +42,6 @@ vi.mock('../github/gh-account-token', async (importOriginal) => {
 
 import { ghExecFileAsync } from './runner'
 import { _resetGhRateLimitBreaker, recordGhPrimaryRateLimit } from './gh-rate-limit-breaker'
-
-function mockChild(pid = 4321) {
-  return Object.assign(new EventEmitter(), {
-    pid,
-    kill: vi.fn(() => true),
-    stdin: Object.assign(new EventEmitter(), { end: vi.fn() }),
-    stdout: new EventEmitter(),
-    stderr: new EventEmitter()
-  })
-}
 
 /** Spawns a child that settles with `stdout`, capturing the env the runner handed it. */
 function spawnSettledChild(stdout: string): {

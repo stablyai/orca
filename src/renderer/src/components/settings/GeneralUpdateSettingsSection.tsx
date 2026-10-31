@@ -8,10 +8,12 @@ import { Button } from '../ui/button'
 import { SearchableSetting } from './SearchableSetting'
 import { SettingsSubsectionHeader } from './SettingsFormControls'
 import { translate } from '@/i18n/i18n'
+import { updaterMessageText } from '@/lib/updater-message-copy'
 import { getUpdateCheckClickOptions, getUpdateCheckHint } from '@/lib/update-check-click-options'
 import { GeneralRemoteServerUpdates } from './GeneralRemoteServerUpdates'
 import { ReleaseChannelSection } from './ReleaseChannelSection'
 import { getReleaseNotesUrlForVersion } from '../../../../shared/release-channel'
+import { openAppHttpLinkFromAnchor } from '@/lib/app-http-link-open'
 
 export function GeneralUpdateSettingsSection(): React.JSX.Element {
   const updateStatus = useAppStore((s) => s.updateStatus)
@@ -189,6 +191,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                     updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
                   }
                   target="_blank"
+                  onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
                   className="underline hover:text-foreground"
                 >
@@ -228,6 +231,7 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
                     updateStatus.releaseUrl ?? getReleaseNotesUrlForVersion(updateStatus.version)
                   }
                   target="_blank"
+                  onClick={openAppHttpLinkFromAnchor}
                   rel="noopener noreferrer"
                   className="underline hover:text-foreground"
                 >
@@ -243,17 +247,17 @@ export function GeneralUpdateSettingsSection(): React.JSX.Element {
             (updateStatus.installBlock
               ? getUpdateInstallBlockGuidance(updateStatus.installBlock).explainer
               : updateStatus.recovery?.kind === 'linux-package-install'
-                ? updateStatus.message
+                ? updaterMessageText(updateStatus)
                 : updateVersionRef.current
                   ? translate(
                       'auto.components.settings.GeneralUpdateSettingsSection.b9ad70c30d',
                       'Update error. {{value0}}',
-                      { value0: updateStatus.message }
+                      { value0: updaterMessageText(updateStatus) }
                     )
                   : translate(
                       'auto.components.settings.GeneralUpdateSettingsSection.bd79d412f0',
                       'Update check failed. {{value0}}',
-                      { value0: updateStatus.message }
+                      { value0: updaterMessageText(updateStatus) }
                     ))}
         </p>
       </SearchableSetting>

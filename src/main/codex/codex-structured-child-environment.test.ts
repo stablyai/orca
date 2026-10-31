@@ -33,7 +33,7 @@ async function codexChildEnv(
   const launch = await createCodexStructuredLaunchResolver({
     store: { getRecord: () => record, pinLaunchDirectory: vi.fn() },
     resolveEnvironment: async () => env,
-    resolveCommand: () => command,
+    resolveCommand: () => ({ command: command, prefixArgs: [] }),
     resolveLaunchArgs: () => []
   })({
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a launch reads only the session id of its identity here.

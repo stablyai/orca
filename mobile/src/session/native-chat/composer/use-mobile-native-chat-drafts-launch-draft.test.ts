@@ -117,7 +117,35 @@ describe('useMobileNativeChatDrafts launch draft', () => {
       )
     )
 
-    expect(state?.readSeededLaunchDraftSeed()).toEqual({ text: 'issue link', createdAt: 7 })
+    expect(state?.readSeededLaunchDraftSeed()).toMatchObject({ text: 'issue link', createdAt: 7 })
+  })
+
+  it('prefills over user turns older than the launch draft, retiring once a new turn lands', async () => {
+    const older = { ...userTextMessage('m1', 'earlier prompt'), timestamp: 1_000 }
+    await mount('a')
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [older],
+          launchDraft: 'issue link',
+          launchDraftCreatedAt: 100_000
+        })
+      )
+    )
+    expect(state?.composerText).toBe('issue link')
+
+    await act(async () =>
+      renderer?.update(
+        createElement(Harness, {
+          tabId: 'a',
+          messages: [older, { ...userTextMessage('m2', 'sent from the TUI'), timestamp: 2_000 }],
+          launchDraft: 'issue link',
+          launchDraftCreatedAt: 100_000
+        })
+      )
+    )
+    expect(state?.composerText).toBe('')
   })
 
   it('does not overwrite typed composer text with a launch draft', async () => {

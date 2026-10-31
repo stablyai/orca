@@ -17,7 +17,7 @@ import type { ClaudeCommandTurn } from './claude-command-turn'
 import { createClaudeTurnOpener, type ClaudeTurnSource } from './claude-turn-opening'
 import { refineClaudeQuotaTurnEnd } from './claude-terminal-failure'
 import type { ClaudeUsageLimitEvidence } from './claude-usage-limits'
-import type { ClaudeStartedSend } from './claude-structured-session-state'
+import type { ClaudeStartedSend } from './structured/claude-structured-session-state'
 
 export type ClaudeOpenTurnDeps = {
   sink: StructuredAgentSessionEventSink

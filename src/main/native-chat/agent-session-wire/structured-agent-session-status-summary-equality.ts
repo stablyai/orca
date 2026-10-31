@@ -30,6 +30,9 @@ export function structuredStatusSummariesEqual(
     a.runtimePermission?.fence === b.runtimePermission?.fence &&
     a.runtimePermission?.mode === b.runtimePermission?.mode &&
     (a.runtimePermission === undefined) === (b.runtimePermission === undefined) &&
+    a.effort === b.effort &&
+    a.fastMode === b.fastMode &&
+    a.serviceTier === b.serviceTier &&
     a.toolName === b.toolName &&
     a.toolInput === b.toolInput &&
     a.lastAssistantMessage === b.lastAssistantMessage &&

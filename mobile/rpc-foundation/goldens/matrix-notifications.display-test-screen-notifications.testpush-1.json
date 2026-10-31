@@ -99,7 +99,7 @@
         "startedAt": 0
       }
     },
-    "1813829924d9": {
+    "1697b5e93ff5": {
       "crash": {
         "$rpc": "null"
       },
@@ -111,11 +111,29 @@
       "labels": ["Send test notification"],
       "text": [
         "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
+        "Test push delivery, or a local notification when push is unavailable.",
         "Send test notification",
         "Send test notification",
         "Troubleshooting",
-        "Accepted by Orca’s push service. Check for the notification."
+        "Could not reach the desktop. Try again."
+      ]
+    },
+    "170e48b3b256": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "Pressable": 2,
+        "Text": 5,
+        "View": 3
+      },
+      "labels": ["Send test notification"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Test push delivery, or a local notification when push is unavailable.",
+        "Send test notification",
+        "Send test notification",
+        "Troubleshooting"
       ]
     },
     "1d12f3e78a48": {
@@ -156,7 +174,7 @@
         }
       }
     },
-    "2632a7be552e": {
+    "1fe5ab7da384": {
       "crash": {
         "$rpc": "null"
       },
@@ -168,11 +186,11 @@
       "labels": ["Send test notification"],
       "text": [
         "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
+        "Test push delivery, or a local notification when push is unavailable.",
         "Send test notification",
         "Send test notification",
         "Troubleshooting",
-        "Update your desktop to run this test."
+        "Accepted by Orca’s push service. Check for the notification."
       ]
     },
     "401bb4233294": {
@@ -240,7 +258,7 @@
         }
       }
     },
-    "4f67ed2e2c74": {
+    "5ba4fa4750da": {
       "crash": {
         "$rpc": "null"
       },
@@ -252,11 +270,11 @@
       "labels": ["Send test notification"],
       "text": [
         "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
+        "Test push delivery, or a local notification when push is unavailable.",
         "Send test notification",
         "Send test notification",
         "Troubleshooting",
-        "Could not reach the desktop. Try again."
+        "transport failure"
       ]
     },
     "649d12c8eb9b": {
@@ -294,7 +312,7 @@
         }
       }
     },
-    "6967f95147f9": {
+    "6a40b555d64d": {
       "crash": {
         "$rpc": "null"
       },
@@ -306,7 +324,7 @@
       "labels": ["Sending…"],
       "text": [
         "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
+        "Test push delivery, or a local notification when push is unavailable.",
         "Send test notification",
         "Sending…",
         "Troubleshooting"
@@ -383,7 +401,7 @@
         }
       }
     },
-    "b7f125cb7db0": {
+    "9f9fa89c12c8": {
       "crash": {
         "$rpc": "null"
       },
@@ -395,11 +413,44 @@
       "labels": ["Send test notification"],
       "text": [
         "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
+        "Test push delivery, or a local notification when push is unavailable.",
         "Send test notification",
         "Send test notification",
         "Troubleshooting",
-        "transport failure"
+        "This desktop does not support push notifications. Update it to receive push. Local test scheduled. Check for the notification. This checks display only; it does not verify agent alert delivery."
+      ]
+    },
+    "b23af609a818": {
+      "name": "notification.schedule",
+      "ordinal": 3,
+      "value": {
+        "content": {
+          "body": "Local notification test from this phone.",
+          "sound": "default",
+          "title": "Test notification"
+        },
+        "trigger": {
+          "channelId": "orca-desktop"
+        }
+      }
+    },
+    "b590df6ffade": {
+      "crash": {
+        "$rpc": "null"
+      },
+      "elements": {
+        "Pressable": 2,
+        "Text": 6,
+        "View": 3
+      },
+      "labels": ["Send test notification"],
+      "text": [
+        "Having trouble receiving alerts?",
+        "Test push delivery, or a local notification when push is unavailable.",
+        "Send test notification",
+        "Send test notification",
+        "Troubleshooting",
+        "Could not send through Orca’s push service. Try again."
       ]
     },
     "c37bd4097e53": {
@@ -474,24 +525,6 @@
         }
       }
     },
-    "d86c08a509c4": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "Pressable": 2,
-        "Text": 5,
-        "View": 3
-      },
-      "labels": ["Send test notification"],
-      "text": [
-        "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
-        "Send test notification",
-        "Send test notification",
-        "Troubleshooting"
-      ]
-    },
     "eb79a9b3682a": {
       "status": "fulfilled",
       "startedAt": 0,
@@ -536,25 +569,6 @@
         }
       }
     },
-    "f3e2e816b496": {
-      "crash": {
-        "$rpc": "null"
-      },
-      "elements": {
-        "Pressable": 2,
-        "Text": 6,
-        "View": 3
-      },
-      "labels": ["Send test notification"],
-      "text": [
-        "Having trouble receiving alerts?",
-        "Send a test through Orca’s push service.",
-        "Send test notification",
-        "Send test notification",
-        "Troubleshooting",
-        "Could not send through Orca’s push service. Try again."
-      ]
-    },
     "f68b017d64bd": {
       "name": "notifications.testPush#1",
       "ordinal": 2,
@@ -572,7 +586,7 @@
           "settlements": {
             "mount": "eb79a9b3682a"
           },
-          "state": "d86c08a509c4",
+          "state": "170e48b3b256",
           "effects": []
         }
       },
@@ -585,7 +599,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "6967f95147f9",
+          "state": "6a40b555d64d",
           "effects": []
         }
       },
@@ -598,7 +612,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "1813829924d9",
+          "state": "1fe5ab7da384",
           "effects": []
         }
       },
@@ -611,7 +625,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "f3e2e816b496",
+          "state": "b590df6ffade",
           "effects": []
         }
       },
@@ -624,7 +638,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "f3e2e816b496",
+          "state": "b590df6ffade",
           "effects": []
         }
       },
@@ -637,7 +651,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "f3e2e816b496",
+          "state": "b590df6ffade",
           "effects": []
         }
       },
@@ -650,7 +664,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "f3e2e816b496",
+          "state": "b590df6ffade",
           "effects": []
         }
       },
@@ -663,7 +677,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "f3e2e816b496",
+          "state": "b590df6ffade",
           "effects": []
         }
       },
@@ -676,7 +690,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "4f67ed2e2c74",
+          "state": "1697b5e93ff5",
           "effects": []
         }
       },
@@ -689,7 +703,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "4f67ed2e2c74",
+          "state": "1697b5e93ff5",
           "effects": []
         }
       },
@@ -702,8 +716,8 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "2632a7be552e",
-          "effects": []
+          "state": "9f9fa89c12c8",
+          "effects": ["b23af609a818"]
         }
       },
       {
@@ -715,7 +729,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "b7f125cb7db0",
+          "state": "5ba4fa4750da",
           "effects": []
         }
       },
@@ -728,7 +742,7 @@
             "mount": "eb79a9b3682a",
             "press": "eb79a9b3682a"
           },
-          "state": "d86c08a509c4",
+          "state": "170e48b3b256",
           "effects": []
         }
       }

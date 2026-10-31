@@ -8,7 +8,7 @@ import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import type { AgentSessionRewindFork } from '../../shared/agent-session-rewind'
-import { claudeSessionIdForOrcaSession } from '../claude/claude-structured-launch-resolution'
+import { claudeSessionIdForOrcaSession } from '../claude/structured/claude-structured-session-id'
 import { fakeClaude } from '../claude/claude-structured-session-test-support'
 import { claudeAndCodexAgents } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
@@ -24,7 +24,10 @@ import type { AgentSessionRecordStore } from './agent-session-record-store'
 import { openTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { createClaudeStructuredLaunchResolver } from './structured-agent-launch-composition.test-support'
 import { createStructuredClaudeRuntimeAdapter } from './structured-claude-runtime-adapter'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
 const caller = { callerKey: 'desktop' }
@@ -120,7 +123,7 @@ beforeEach(async () => {
     resolveWorkspacePath: async (id) => `/repos/${id}`,
     resolveLaunch: createClaudeStructuredLaunchResolver({
       store,
-      resolveCommand: () => '/usr/local/bin/claude',
+      resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
       resolveLaunchArgs: () => [],
       resolveAuthPolicy: () => ({ account: 'system' })
     }),
@@ -149,6 +152,7 @@ afterEach(async () => {
   vi.restoreAllMocks()
   await host.flushAllStreamedEvents()
   await adapter.closeAll()
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

@@ -5,10 +5,6 @@ import {
   toRuntimeExecutionHostId
 } from '../../../shared/execution-host'
 import type { AppState } from '@/store/types'
-import {
-  getProjectHostSetupProjectionFromState,
-  type ProjectCatalogReadState
-} from '@/store/project-host-setup-selector'
 import { findWorktreeById } from '@/store/slices/worktree-helpers'
 import { requestsCwdOutsideWorkspaceRootForWorkspace } from '../../../shared/terminal-startup-cwd'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -24,7 +20,7 @@ import {
   getLocalRepoProjectExecutionRuntimeContext
 } from '@/lib/local-preflight-context'
 import type { NativeChatLaunchPromptDelivery } from '@/lib/native-chat-launch-prompt-delivery'
-import { isNativeChatTranscriptLocalReadable } from '@/lib/native-chat-transcript-readability'
+import { isNativeChatTranscriptLocalReadable } from '../../../shared/native-chat/transcript/native-chat-transcript-readability'
 import { getExecutionHostIdForWorktree } from '@/lib/worktree-runtime-owner'
 import { readLocalRuntimeCapabilitiesOrUnknown } from '@/runtime/local-runtime-capabilities'
 import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
@@ -74,26 +70,21 @@ const AGENT_LAUNCH_ROUTE_KEYS = [
   'runtimeEnvironments',
   'runtimeEnvironmentCatalogHydrated',
   'removedRuntimeEnvironmentIds',
-  'activeRepoId'
-] as const satisfies readonly (keyof AppState)[]
+  'activeRepoId',
+  'projects'
+] as const satisfies readonly (keyof AgentLaunchRouteStore)[]
 type AgentLaunchRouteKey = (typeof AGENT_LAUNCH_ROUTE_KEYS)[number]
 // Completeness, not just membership: a reader input missing from the list fails to compile.
 type AssertNoMissingRouteKey<T extends never> = T
 export type AgentLaunchRouteKeysAreComplete = AssertNoMissingRouteKey<
   Exclude<keyof AgentLaunchRouteStore, AgentLaunchRouteKey>
 >
-export type AgentLaunchRouteWatchState = Pick<AppState, AgentLaunchRouteKey> &
-  ProjectCatalogReadState
-export type AgentLaunchRouteView = Pick<AppState, AgentLaunchRouteKey> & {
-  projectHostSetupProjection: ReturnType<typeof getProjectHostSetupProjectionFromState>
-}
+export type AgentLaunchRouteView = { [K in AgentLaunchRouteKey]: AppState[K] }
 
 export const agentLaunchRouteInputsChanged = (
-  next: AgentLaunchRouteWatchState,
-  previous: AgentLaunchRouteWatchState
-): boolean =>
-  AGENT_LAUNCH_ROUTE_KEYS.some((key) => next[key] !== previous[key]) ||
-  getProjectHostSetupProjectionFromState(next) !== getProjectHostSetupProjectionFromState(previous)
+  next: AgentLaunchRouteView,
+  previous: AgentLaunchRouteView
+): boolean => AGENT_LAUNCH_ROUTE_KEYS.some((key) => next[key] !== previous[key])
 
 let lastRouteView: AgentLaunchRouteView | undefined
 export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteView {
@@ -113,7 +104,7 @@ export function selectAgentLaunchRouteView(state: AppState): AgentLaunchRouteVie
       runtimeEnvironmentCatalogHydrated: state.runtimeEnvironmentCatalogHydrated,
       removedRuntimeEnvironmentIds: state.removedRuntimeEnvironmentIds,
       activeRepoId: state.activeRepoId,
-      projectHostSetupProjection: getProjectHostSetupProjectionFromState(state)
+      projects: state.projects
     }
   }
   return lastRouteView
@@ -237,15 +228,18 @@ export function buildAgentLaunchRouteInput(
       executionHostId
     ),
     // Only custom cwd forces a terminal; workspace-root cwd follows the same rule as host agent-launch-mode.ts.
-    startsOutsideWorkspaceRoot: requestsCwdOutsideWorkspaceRootForWorkspace({
-      workspaceId: workspace.worktreeId,
-      requestedCwd: tuiCustomization?.cwd,
-      workspacePath: workspace.worktreeId
-        ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
-        : undefined,
-      resolveFolderWorkspacePath: (folderWorkspaceId) =>
-        selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)?.folderPath
-    }),
+    startsOutsideWorkspaceRoot: tuiCustomization?.cwd?.trim()
+      ? requestsCwdOutsideWorkspaceRootForWorkspace({
+          workspaceId: workspace.worktreeId,
+          requestedCwd: tuiCustomization?.cwd,
+          workspacePath: workspace.worktreeId
+            ? findWorktreeById(selectWorktreesByRepo(store) ?? {}, workspace.worktreeId)?.path
+            : undefined,
+          resolveFolderWorkspacePath: (folderWorkspaceId) =>
+            selectFolderWorkspaces(store)?.find((entry) => entry.id === folderWorkspaceId)
+              ?.folderPath
+        })
+      : false,
     ...hostStructuredAgentsInput(store, executionHostId)
   }
 }

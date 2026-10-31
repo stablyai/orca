@@ -23,3 +23,20 @@ export function saveSignInModels(
     )
   }
 }
+
+export function captureSignInModelPublisher(spec: AcpLaunchSpec, current: () => boolean) {
+  const revision = agentModelCatalogStore.retirementRevision(spec.agent)
+  return (
+    accountHome: AgentSessionAccountHome,
+    started: AcpSessionStarted,
+    connected: boolean
+  ): void => {
+    if (
+      connected &&
+      current() &&
+      agentModelCatalogStore.retirementRevision(spec.agent) === revision
+    ) {
+      saveSignInModels(spec, accountHome, started)
+    }
+  }
+}

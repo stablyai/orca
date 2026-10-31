@@ -134,12 +134,11 @@ it.each(['claude', 'codex'] as const)(
     if (!replay.ok) {
       throw new Error('Expected the held writes to remain replayable')
     }
-    expect(replay.rows[0]).toMatchObject({ kind: 'item', body: { kind: 'status', text: 'before' } })
+    expect(replay.rows[0]).toMatchObject({ kind: 'outcome' })
+    const durable = reopened.snapshot().items.filter((item) => item.sequence > cursor.sequence)
+    expect(durable[0]?.body).toMatchObject({ kind: 'status', text: 'before' })
     expect(
-      replay.rows.findIndex(
-        (row) =>
-          row.kind === 'item' && row.body.kind === 'tool-call' && row.body.state === 'completed'
-      )
+      durable.findIndex((item) => item.body.kind === 'tool-call' && item.body.state === 'completed')
     ).toBeGreaterThan(0)
     expect(
       reopened.snapshot().items.flatMap(({ body }) => (body.kind === 'tool-call' ? [body] : []))
@@ -211,12 +210,18 @@ it('hands an ACP omitted-field completion to SQLite before root exit with a bloc
   if (!replay.ok) {
     throw new Error('Expected the held writes to remain replayable')
   }
-  expect(replay.rows[0]).toMatchObject({ kind: 'item', body: { kind: 'status', text: 'before' } })
+  expect(replay.rows[0]).toMatchObject({ kind: 'outcome' })
+  // The call began before the cursor, so its revision keeps that place; the held writes' own
+  // groups still show the status landing first and the completion after it.
+  const touched = replay.rows.map((row) => (row.kind === 'outcome' ? row.itemIds : []))
+  const items = reopened.snapshot().items
+  const status = items.find((item) => item.body.kind === 'status' && item.body.text === 'before')
+  const call = items.find(
+    (item) => item.body.kind === 'tool-call' && item.body.callId === 'sleep-1'
+  )
+  expect(touched[0]).toEqual([status?.itemId])
   expect(
-    replay.rows.findIndex(
-      (row) =>
-        row.kind === 'item' && row.body.kind === 'tool-call' && row.body.state === 'completed'
-    )
+    touched.findIndex((ids) => call !== undefined && ids.includes(call.itemId))
   ).toBeGreaterThan(0)
   expect(
     reopened.snapshot().items.flatMap(({ body }) => (body.kind === 'tool-call' ? [body] : []))

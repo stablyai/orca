@@ -6,7 +6,9 @@ import type {
   AutomationRunUsage,
   ExternalAutomationManager
 } from '../../../../shared/automations-types'
-import type { Project, ProjectHostSetup } from '../../../../shared/project-types'
+import type { ProjectHostSetup } from '../../../../shared/project-types'
+import type { AutomationHostCatalogEntry } from './automation-host-catalog-types'
+import type { AppState } from '@/store/types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { Worktree } from '../../../../shared/worktree/types'
 import type {
@@ -218,11 +220,11 @@ export function makeWorktree(overrides: Partial<Worktree> = {}): Worktree {
   }
 }
 
+export type AutomationsPageFixtureState = Record<string, unknown> &
+  Pick<AppState, 'repos' | 'projectHostSetups' | 'worktreesByRepo'>
+
 export type AutomationsPageStoreFixtures = {
-  state: Record<string, unknown> & {
-    endpointProjects: Project[]
-    endpointProjectHostSetups: ProjectHostSetup[]
-  }
+  state: AutomationsPageFixtureState
   repoMap: Map<string, Repo>
   worktreeMap: Map<string, Worktree>
 }
@@ -235,17 +237,7 @@ export function makeStoreState(): AutomationsPageStoreFixtures {
   return {
     state: {
       repos: [repo],
-      endpointProjects: [
-        {
-          id: 'project-1',
-          displayName: repo.displayName,
-          badgeColor: repo.badgeColor,
-          sourceRepoIds: [repo.id],
-          createdAt: 1,
-          updatedAt: 1
-        }
-      ],
-      endpointProjectHostSetups: [makeProjectHostSetup()],
+      projectHostSetups: [makeProjectHostSetup()],
       worktreesByRepo: { [REPO_ID]: [worktree] },
       unifiedTabsByWorktree: {},
       terminalLayoutsByTabId: {},
@@ -288,4 +280,17 @@ export function makeStoreState(): AutomationsPageStoreFixtures {
     repoMap: new Map([[REPO_ID, repo]]),
     worktreeMap: new Map([[WORKSPACE_ID, worktree]])
   }
+}
+
+export type DetailPaneProps = {
+  selected: Automation | null
+  selectedHostEntry: AutomationHostCatalogEntry | null
+  selectedRuns: AutomationRun[]
+  selectedRunsNotice: { message: string } | null
+  runNow: (automation: Automation) => void
+  toggleAutomation: (automation: Automation) => void
+  requestDeleteAutomation: (automation: Automation) => void
+  openEditDialog: (automation: Automation) => void
+  openAutomationRunPage: (run: AutomationRun) => void
+  recoverSelectedRuns: (action: 'retry') => void
 }

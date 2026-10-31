@@ -1,3 +1,4 @@
+import { structuredAgentLabel } from '@/lib/structured-agent-session-launch-label'
 import { useMemo, useState } from 'react'
 import type { AgentSessionUnavailable } from '../../../../shared/agent-session-availability'
 import { readAgentSessionFailureFact } from '../../../../shared/agent-session-failure'
@@ -12,7 +13,10 @@ import { agentSessionRefusalReasonWords } from '../../../../shared/agent-session
 import type { AgentSessionWriteRefusal } from '../../../../shared/agent-session-write-failure'
 import { isStructuredAgentSessionStartFailureRow } from '../../../../shared/structured-agent-session-start-failure-row-key'
 import { sayAgentSessionFailureTranslated } from './agent-session-failure-words-text'
-import { notSignedInSentence } from '../../../../shared/agent-session-availability-sentences'
+import {
+  cliMissingSentence,
+  notSignedInSentence
+} from '../../../../shared/agent-session-availability-sentences'
 import { nativeChatAntigravitySignInContent } from './native-chat-antigravity-settings'
 import type { NativeChatComposerNotice } from './native-chat-composer-notice'
 
@@ -57,7 +61,8 @@ function shownRejectionReason(
 export function useNativeChatAvailabilityNotice(input: {
   unavailable: AgentSessionUnavailable | null | undefined
   agent: AgentType
-  agentLabel: string
+  /** The WSL distro the chat's host runs in, to say where the agent is missing. */
+  wslDistro?: string | null
   launchFailure: AgentSessionWriteRefusal | null
   journalItems: readonly AgentJournalRenderItem[] | undefined
   submissions?: readonly NoticeSubmission[]
@@ -96,14 +101,21 @@ export function useNativeChatAvailabilityNotice(input: {
   ) {
     return null
   }
+  const agentName = structuredAgentLabel(input.agent)
   return {
     key: 'availability',
     kind: 'error',
     text:
       unavailable.reason === 'cliMissing'
-        ? sayAgentSessionFailureTranslated('cliMissing', { agent: input.agentLabel })
+        ? cliMissingSentence(
+            {
+              agentName,
+              ...(input.wslDistro ? { wslDistro: input.wslDistro } : {})
+            },
+            sayAgentSessionFailureTranslated
+          )
         : notSignedInSentence(
-            { agentName: input.agentLabel },
+            { agentName },
             { kind: 'notSignedIn', account: unavailable.account },
             sayAgentSessionFailureTranslated
           ),

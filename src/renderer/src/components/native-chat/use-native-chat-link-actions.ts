@@ -4,7 +4,7 @@ import {
   type LinkActionRequest
 } from '@/components/link-actions/link-action-request'
 import type { CommentMarkdownLinkClickHandler } from '@/components/sidebar/CommentMarkdown'
-import { routeNativeChatHref } from '../../../../shared/native-chat-href-routing'
+import { routeNativeChatHref } from '../../../../shared/native-chat/native-chat-href-routing'
 import { useAppStore } from '../../store'
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import { resolveNativeChatHttpLinkRouting } from './native-chat-link-target-actions'

@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -59,7 +60,8 @@ export {
   AgentSessionPreSpawnError,
   AgentSessionPromptAnswerRejectedError,
   AgentSessionPromptUnavailableError,
-  isAgentSessionPreSpawnError
+  isAgentSessionPreSpawnError,
+  launchPreparationFailure
 } from './structured-agent-session-adapter-errors'
 export type { AgentSessionPreSpawnReason } from './structured-agent-session-adapter-errors'
 
@@ -70,11 +72,14 @@ export {
 } from './structured-agent-session-acquisition-errors'
 
 export type AgentSessionAcquisition = {
+  accountRecipe?: ClaudeAccountRecipe
   process: AgentSessionProcessIdentity
   /** Spawn-time handles only; protocol handles come from open. */
   link?: AgentSessionProviderHandleLink
   /** Exact host-local child identity, even when acquisitions reuse a durable fence. */
   acquisitionGeneration: string
+  /** The account home this child launched under, when its launch follows the selection. */
+  accountHome?: AgentSessionAccountHome
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
@@ -117,6 +122,7 @@ export type StructuredAgentSessionEndedEvent = {
   /** Absent means provider exit without extra detail; host faults retain their own classification. */
   failure?: SubmissionRejectionFact
   cause: 'unexpected-exit' | 'requested-close'
+  deathEvidenceKind?: 'kill-delivered'
   /** Execution-host observations from a requested provider close, when available. */
   processExit?: {
     root: 'live' | 'unverifiable' | 'exited'
@@ -275,27 +281,53 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
   setOption(
     input: StructuredAgentSessionSetOptionInput
   ): Promise<void | Readonly<Record<string, string>>>
+  /** Opt in only when setOption can update idle metadata without a provider turn. */
+  canSetOptionWhileIdle?(input: StructuredAgentSessionSetOptionInput): boolean
+  /** Applied inputs for this exact child; observations never decide message admission. */
+  readAppliedInputOptions?(input: {
+    sessionId: string
+    fence: number
+    acquisitionGeneration: string | null
+    next: AgentSessionExecutionOptions | undefined
+  }): { active: AgentSessionExecutionOptions; next: AgentSessionExecutionOptions } | null
   /** Synchronous capability projection; never acquires inventory or changes saved intent. */
   projectOptions?(
     sessionId: string,
     options: Readonly<Record<string, string>>
   ): StructuredAgentSessionOptionProjection | undefined
-  /** Fetch outside the lane; apply under the same child’s fence. */
-  prepareReadOptions?(input: {
-    sessionId: string
-    fence: number
-  }): Promise<() => StructuredAgentSessionLiveOptions> | undefined
+  /** Memory projection only; optional native observations belong to provider activity. */
   readOptions?(input: {
     sessionId: string
     fence: number
   }): Promise<StructuredAgentSessionLiveOptions>
-  readOptionRestoreFailures?(sessionId: string): readonly string[]
+  /** A fresh independent text task; never acquires or writes a turn in the chat. */
+  generateText?(input: {
+    agent: string
+    accountHome: AgentSessionAccountHome
+    prompt: string
+    shouldExecute?: () => boolean
+  }): Promise<string | null>
   /** Copy the provider conversation without changing the chat’s ID; omit for CLI-based forks. */
   copyConversation?(input: {
     identity: AgentSessionJournalIdentity
     providerSessionId: string
     accountHome: AgentSessionAccountHome
   }): Promise<AiVaultConversationCopy>
+  /** Give the agent's own conversation the user's chat name, as the agent's own rename would:
+   *  through the live child holding that conversation, otherwise at rest. Best effort. */
+  renameProviderSession?(input: {
+    record: AgentSessionRecord
+    providerSessionId: string
+    name: string
+  }): Promise<void>
+  /** Capture native invocation inputs at the committed explicit occurrence. */
+  nameProviderConversation?(input: {
+    record: AgentSessionRecord
+    name: string
+    sequence: number
+    inheritance?: boolean
+  }): Promise<void> | undefined
+  stopProviderNaming?(): void
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Sink-failure shutdown leaves exit recovery unexpected. */

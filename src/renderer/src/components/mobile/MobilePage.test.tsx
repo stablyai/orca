@@ -187,7 +187,7 @@ describe('MobilePage pairing connection mode', () => {
     await user.click(screen.getByRole('button', { name: 'Continue' }))
   }
 
-  it('opens Android troubleshooting in the system browser', async () => {
+  it('opens the Android install guide when no workspace browser can host it', async () => {
     const user = userEvent.setup()
     render(<MobilePage />)
 

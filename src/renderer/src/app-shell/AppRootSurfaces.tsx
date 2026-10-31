@@ -1,8 +1,9 @@
+import { useTranslation } from 'react-i18next'
 import { ModalBoundary, OverlayBoundary } from './app-root-surface-boundaries'
 import { OnboardingLanguageLoading } from '../components/onboarding/OnboardingLanguageLoading'
 import { useLanguageReadiness } from '../i18n/language-readiness'
 import { NotificationCardStack } from '../components/NotificationCardStack'
-import { Suspense } from 'react'
+import { memo, Suspense } from 'react'
 import { createPortal } from 'react-dom'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { translate } from '@/i18n/i18n'
@@ -13,11 +14,13 @@ import { MarkdownTemplatePicker } from '../components/editor/MarkdownTemplatePic
 import RecentTabSwitcher from '../components/tab-bar/RecentTabSwitcher'
 import { SkillFreshnessUpdateDialog } from '../components/skills/SkillFreshnessUpdateDialog'
 import { StarNagCard } from '../components/StarNagCard'
+import { CodexSharedSettingsNoticeCard } from '../components/CodexSharedSettingsNoticeCard'
 import { NativeChatResumeOnRestartModal } from '../components/NativeChatResumeRuntimeModal'
 import { StarNagAgentValueMomentObserver } from '../components/star-nag/StarNagAgentValueMomentObserver'
 import { StarNagToastHost } from '../components/star-nag/StarNagToastHost'
 import { TelemetryFirstLaunchSurface } from '../components/TelemetryFirstLaunchSurface'
 import { ZoomOverlay } from '../components/ZoomOverlay'
+import { WslMoveDialogHost } from '../components/wsl-move/WslMoveDialog'
 import { shouldRenderPetOverlay } from '../components/pet/pet-overlay-visibility'
 import { useAppStore } from '../store'
 import type { UpdateStatus } from '../../../shared/update-status-types'
@@ -107,12 +110,14 @@ function shouldMountUpdateCardForStatus(status: UpdateStatus): boolean {
   return true
 }
 
-/** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. */
-export function AppRootSurfaces(props: {
+/** Keep root overlays in stable sibling order; fetch gated chunks only when their surfaces can appear. Memoized so active-workspace App renders skip every root overlay. */
+export const AppRootSurfaces = memo(function AppRootSurfaces(props: {
   floatingWorkspace: FloatingWorkspacePanelState
   onboardingGate: OnboardingGate
 }): React.JSX.Element {
   const { floatingWorkspace, onboardingGate } = props
+  // Memoized: subscribe so a language change still repaints its labels.
+  useTranslation()
   const languageReady = useLanguageReadiness((state) => state.ready)
   const { mountedLazyModalIds, shouldMountAddRepoDialog } = useLazyModalMounts()
   usePreloadWorktreeJumpPalette()
@@ -209,6 +214,8 @@ export function AppRootSurfaces(props: {
             <AiVaultSessionHistoryDialog />
           </ModalBoundary>
         ) : null}
+        {/* Own store, not activeModal: another modal must never evict a running move. */}
+        <WslMoveDialogHost />
         {/* Opened by toast, SSH host row and terminal pane. */}
         {activeModal === 'node-dist-mirror' ? (
           <ModalBoundary boundaryId="modal.node-dist-mirror" resetKey>
@@ -296,6 +303,9 @@ export function AppRootSurfaces(props: {
         </Suspense>
         <OverlayBoundary boundaryId="overlay.star-nag" resetKey={activeView}>
           <StarNagCard />
+        </OverlayBoundary>
+        <OverlayBoundary boundaryId="overlay.codex-shared-settings-notice" resetKey={activeView}>
+          <CodexSharedSettingsNoticeCard />
         </OverlayBoundary>
       </NotificationCardStack>
       <OverlayBoundary boundaryId="overlay.native-chat-resume-on-restart" resetKey={activeView}>
@@ -395,4 +405,4 @@ export function AppRootSurfaces(props: {
       </Suspense>
     </>
   )
-}
+})

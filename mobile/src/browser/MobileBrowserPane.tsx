@@ -2,6 +2,8 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { AppState, type View } from 'react-native'
 import type { BrowserLoadError } from '../../../src/shared/browser-workspace-types'
+import { translate } from '../i18n/mobile-i18n'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { RpcClient } from '../transport/rpc-client'
 import type { BrowserScreencastFrameMetadata } from '../transport/browser-screencast-protocol'
 import type { MobileBrowserViewMode } from './browser-screencast-request'
@@ -73,6 +75,7 @@ export function MobileBrowserPane({
   bottomInset,
   onToast
 }: MobileBrowserPaneProps) {
+  useMobileTranslation()
   const [browserViewMode, setBrowserViewMode] = useState<MobileBrowserViewMode>(() =>
     getInitialMobileBrowserViewMode(worktreeId, tab.browserPageId, tab.url)
   )
@@ -219,7 +222,7 @@ export function MobileBrowserPane({
   const navigateToAddress = useCallback(async () => {
     const url = normalizeBrowserUrl(addressValue)
     if (!url) {
-      setError('Enter a valid URL.')
+      setError(translate('browser.pane.invalidUrl', 'Enter a valid URL.'))
       return
     }
     const settled = await sendBrowserRequest(

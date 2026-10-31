@@ -13,10 +13,7 @@ import type { PtyLivenessVerdict } from '../../../../shared/pty-liveness-verdict
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { exitedSplitPaneFacts } from './exited-split-pane-rule'
 import { closedPaneOfExitedPty, type ClosedPaneOfExit } from './closed-pane-of-exited-pty'
-import type {
-  RuntimePtyWorktreeRecord,
-  RuntimeLeafRecord
-} from '../../runtime-terminal-state-records'
+import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
 
 export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDisconnected {
   protected abstract pruneDisconnectedPtyRecords(): void
@@ -27,8 +24,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
     exitCode: number,
     cause: TerminalExitCause
   ): void
-
-  protected abstract resolveExitWaiters(leaf: RuntimeLeafRecord): void
 
   protected abstract pruneDisconnectedPtyTranscript(pty: RuntimePtyWorktreeRecord): void
 
@@ -166,10 +161,12 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       advertisedUrlWatcher.unbindPty(ptyId)
       this.mobileSubscribers.delete(ptyId)
       this.terminalViewSubscribers.clearSubscribers(ptyId)
+      this.mainDaemonAttachments.forget(ptyId)
       this.mobileDisplayModes.delete(ptyId)
       this.resizeListeners.delete(ptyId)
       this.lastRendererSizes.delete(ptyId)
       this.recentPtyOutputById.delete(ptyId)
+      this.launchComposerReadyByPtyId.delete(ptyId)
       this.setupCompletionTokenByPtyId.delete(ptyId)
       this.clearWaitBlockedCheckState(ptyId)
       this.ptyOutputSequenceById.delete(ptyId)
@@ -210,10 +207,9 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
         if (mailboxHandle) {
           this.mailPointerRepointScheduler.schedule(mailboxHandle)
         }
-        const boundRun = this._orchestrationDb?.getCurrentRunForPane?.(
+        for (const boundRun of this._orchestrationDb?.runsBoundToPane?.(
           `${leaf.tabId}:${leaf.leafId}`
-        )
-        if (boundRun) {
+        ) ?? []) {
           this.mailPointerRepointScheduler.schedule(`run:${boundRun.id}`)
         }
       }
@@ -230,7 +226,11 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       this.trustDialogStatus.forget(ptyId)
       if (processDeathCertified) {
         // The bounded verdict register also fences late graphs after the PTY record was pruned.
-        this.rememberPtyLivenessVerdict(ptyId, { status: 'exited' })
+        this.rememberPtyLivenessVerdict(ptyId, {
+          status: 'exited',
+          incarnationId: exitIncarnationId ?? candidateIncarnation ?? undefined,
+          cause: exitCause
+        })
       }
       if (pty) {
         pty.connected = false
@@ -283,7 +283,6 @@ export abstract class OrcaRuntimeWithOnPtyExit extends OrcaRuntimeWithOnClientDi
       leaf.lastExitCode = exitCode
       leaf.lastExitCause = exitCause
       leaf.lastAgentStatusObservedLive = false
-      this.resolveExitWaiters(leaf)
       const leafHandle = this.handleByLeafKey.get(this.getLeafKey(leaf.tabId, leaf.leafId))
       if (leafHandle) {
         exitedSurfaces.push({ handle: leafHandle, paneKey: `${leaf.tabId}:${leaf.leafId}` })

@@ -127,8 +127,10 @@ export function settleMailboxPointerEnter(
           SET delivered_at = COALESCE(delivered_at, datetime('now')),
               pointer_enter_pending = 0, pointer_pty_id = NULL,
               pointer_process_incarnation = NULL
-          WHERE pointer_pty_id = ? AND pointer_process_incarnation = ?
-            AND pointer_enter_pending IN (${expectedPhases.map(() => '?').join(',')})
+          WHERE ((pointer_pty_id = ? AND pointer_process_incarnation = ?
+              AND pointer_enter_pending IN (${expectedPhases.map(() => '?').join(',')}))
+            -- A check that read the mail cleared this claim; the pointer was still shown.
+            OR (read = 1 AND pointer_enter_pending = 0))
             AND id IN (${placeholders})`,
     leadingParams: [target.ptyId, target.processIncarnation, ...expectedPhases]
   }))

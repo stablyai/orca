@@ -1,3 +1,5 @@
+import { resolveAgentChoiceLayers } from '../../agent-choice-layers'
+import { isTuiAgent } from '../../tui-agent-config'
 import type { AgentType } from '../../agent-status-types'
 import {
   AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
@@ -117,13 +119,32 @@ export function resolveStructuredLaunchSeedOptions(
 /** A new chat's seed: the saved selection plus the permission default narrowed to the agent. */
 export function structuredLaunchSeedOptions(
   settings:
-    | (Pick<GlobalSettings, 'nativeChatSessionOptions' | 'nativeChatPermissionMode'> &
+    | (Pick<
+        GlobalSettings,
+        'nativeChatSessionOptions' | 'nativeChatPermissionMode' | 'agentLaunchChoices'
+      > &
         NewChatPermissionSettings)
     | null
     | undefined,
   agent: AgentType
 ): Record<string, string> | undefined {
-  const selection = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
+  const remembered = resolveStructuredLaunchSeedOptions(settings?.nativeChatSessionOptions, agent)
+  const choices = isTuiAgent(agent)
+    ? resolveAgentChoiceLayers({
+        agent,
+        argumentOwner: 'defaults',
+        defaults: settings?.agentLaunchChoices?.[agent],
+        remembered: {
+          model: remembered?.model,
+          options: Object.fromEntries(
+            Object.entries(remembered ?? {}).filter(([key]) => key !== 'model')
+          )
+        }
+      })
+    : undefined
+  const selection = choices
+    ? parseStructuredLaunchSeedOptions({ ...choices.options, model: choices.model })
+    : remembered
   const permissionMode = newChatPermissionModeForSettings(agent, settings)
   return permissionMode
     ? { ...selection, [AGENT_CHAT_PERMISSION_MODE_OPTION_ID]: permissionMode }
@@ -143,8 +164,7 @@ export function applyNativeChatSessionOptionPicks(args: {
   return persisted
 }
 
-/** Applies one host-owned delta to the latest record. Returning null means the
- * authoritative model list found nothing to retire. */
+/** Applies user picks; null means the saved selection stays unchanged. */
 export function applyNativeChatSessionOptionSettingsMutation(
   persisted: PersistedNativeChatSessionOptions | null | undefined,
   mutation: NativeChatSessionOptionSettingsMutation
@@ -156,24 +176,8 @@ export function applyNativeChatSessionOptionSettingsMutation(
       picks: mutation.picks
     })
   }
-  const modelId = persisted?.[mutation.agent]?.model
-  if (!modelId || mutation.availableModelIds.includes(modelId)) {
-    return null
-  }
-  return clearNativeChatSessionOptionModel(persisted, mutation.agent)
-}
-
-/** Clear ids proven retired: stale launch flags pass through verbatim and Grok exits fatally. Retain model-scoped options for reselect. */
-export function clearNativeChatSessionOptionModel(
-  persisted: PersistedNativeChatSessionOptions | null | undefined,
-  agent: AgentType
-): PersistedNativeChatSessionOptions {
-  const currentAgent = persisted?.[agent]
-  if (!currentAgent?.model) {
-    return { ...persisted }
-  }
-  const { model: _dropped, ...rest } = currentAgent
-  return { ...persisted, [agent]: rest }
+  // Older clients still send catalog-based clearing; observations cannot change a saved pick.
+  return null
 }
 
 export function updateNativeChatSessionOptionDefaults(args: {

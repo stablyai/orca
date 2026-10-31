@@ -66,23 +66,37 @@ function composerContinuationRows(
   return continuation
 }
 
+function hasFooterGap(context: TerminalCursorContext, index: number): boolean {
+  return index > 0 && !(context.rowsBelow[index - 1] ?? '').trim()
+}
+
+function isCodexFooterRow(context: TerminalCursorContext, index: number): boolean {
+  const row = context.rowsBelow[index] ?? ''
+  const undimmed = context.typedRowsBelow[index] ?? ''
+  const gap = hasFooterGap(context, index)
+  const isDimmedFooter = gap && !undimmed.trim() && context.rowsBelowWrapped?.[index] === false
+  const isColoredFooter =
+    gap &&
+    context.rowsBelowCustomForeground?.[index] === true &&
+    context.rowsBelowWrapped?.[index] === false
+  return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row)
+}
+
 function findCodexFooterIndex(context: TerminalCursorContext): number {
-  for (let index = context.rowsBelow.length - 1; index >= 0; index -= 1) {
-    const row = context.rowsBelow[index] ?? ''
-    if (!row.trim()) {
-      continue
-    }
-    const undimmed = context.typedRowsBelow[index] ?? ''
-    const hasFooterGap = index > 0 && !(context.rowsBelow[index - 1] ?? '').trim()
-    const isDimmedFooter =
-      hasFooterGap && !undimmed.trim() && context.rowsBelowWrapped?.[index] === false
-    const isColoredFooter =
-      hasFooterGap &&
-      context.rowsBelowCustomForeground?.[index] === true &&
-      context.rowsBelowWrapped?.[index] === false
-    return isDimmedFooter || isColoredFooter || CODEX_FOOTER_LINE.test(row) ? index : -1
+  const last = context.rowsBelow.findLastIndex((row) => row.trim())
+  if (last === -1 || isCodexFooterRow(context, last)) {
+    return last
   }
-  return -1
+  // Why: Codex's separate status line keeps its hint row (`? for shortcuts`) directly below it.
+  const status = last - 1
+  if (
+    COMPOSER_FRAME_LINE.test(context.rowsBelow[last] ?? '') ||
+    !(context.rowsBelow[status] ?? '').trim() ||
+    !hasFooterGap(context, status)
+  ) {
+    return -1
+  }
+  return isCodexFooterRow(context, status) ? status : -1
 }
 
 // Codex before 0.152 rotated these (codex-rs/tui/src/chatwidget.rs PLACEHOLDERS, SIDE_PLACEHOLDERS).

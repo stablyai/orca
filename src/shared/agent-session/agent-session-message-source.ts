@@ -11,6 +11,7 @@ export type AgentMessageSender = Readonly<{
   party: Omit<OrchestrationPartyIdentity, 'paneKey'>
   /** What Orca called the sender when it wrote, kept for when it is gone; null when it had none. */
   name: string | null
+  relation?: 'worker' | 'coordinator' | 'none'
 }>
 
 /** One orchestration message a notice points at: its record, and its sender's `senders` address. */
@@ -80,6 +81,7 @@ const senderSchema = z.object({
     terminalHandle: z.string().nullable(),
     orcaSessionId: orcaSessionIdSchema.nullable()
   }),
+  relation: salvagedOptional('relation', z.enum(['worker', 'coordinator', 'none'])),
   name: z.unknown().transform(agentMessageSenderName)
 })
 

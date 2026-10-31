@@ -32,24 +32,31 @@ export async function verifyHashAddressedPluginContent(
   return { ok: true }
 }
 
+// Why no cache: a hash costs ~1 ms for typical plugin trees, and bytes changed after a first
+// load must be caught on the next one. Only checks already in flight are shared.
 export class PluginContentVerifier {
-  private readonly verifications = new Map<string, Promise<PluginContentIntegrityResult>>()
+  private readonly inFlight = new Map<string, Promise<PluginContentIntegrityResult>>()
 
-  clear(): void {
-    this.verifications.clear()
-  }
-
+  /** Re-hashes the tree on every load; concurrent loads of the same tree share one hash. */
   async verify(plugin: HashAddressedPluginContent & { pluginKey: string }): Promise<void> {
-    // Same-key installs can change during verification; cache by immutable content identity.
     const identity = JSON.stringify([plugin.pluginKey, plugin.rootDir, plugin.contentHash])
-    let verification = this.verifications.get(identity)
+    let verification = this.inFlight.get(identity)
     if (!verification) {
-      verification = verifyHashAddressedPluginContent(plugin)
-      this.verifications.set(identity, verification)
+      verification = verifyHashAddressedPluginContent(plugin).finally(() => {
+        this.inFlight.delete(identity)
+      })
+      this.inFlight.set(identity, verification)
     }
     const result = await verification
     if (!result.ok) {
-      this.verifications.delete(identity)
+      throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
+    }
+  }
+
+  /** Unshared check for code about to run: a hash started before this call must not vouch for it. */
+  async verifyNow(plugin: HashAddressedPluginContent & { pluginKey: string }): Promise<void> {
+    const result = await verifyHashAddressedPluginContent(plugin)
+    if (!result.ok) {
       throw new Error(`plugin ${plugin.pluginKey} failed integrity verification: ${result.error}`)
     }
   }

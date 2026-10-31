@@ -1,4 +1,7 @@
-import { startQueuedEditLease } from '../../../src/shared/queued-message-edit-lease'
+import {
+  startQueuedEditLease,
+  type QueuedEditLeaseLoss
+} from '../../../src/shared/queued-message-edit-lease'
 import type { RpcClient } from '../transport/rpc-client'
 import { callAgentSession } from './mobile-structured-agent-session-rpc'
 import { structuredSessionOperationId } from './structured-session-operation-id'
@@ -10,12 +13,14 @@ export function startMobileQueuedEditLease(args: {
   sessionId: string
   messageId: string
   expectedBodyFingerprint: string
+  onLost: (loss: QueuedEditLeaseLoss) => void
 }) {
   return startQueuedEditLease({
     sessionId: args.sessionId,
     messageId: args.messageId,
     editId: structuredSessionOperationId(),
     expectedBodyFingerprint: args.expectedBodyFingerprint,
+    onLost: args.onLost,
     request: (params) => {
       const client = args.getClient()
       return client

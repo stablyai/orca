@@ -33,7 +33,7 @@ export function RemoteRuntimeRecoveryCard({
 }: {
   icon: 'retrying' | 'waiting' | 'sign-in' | 'stopped'
   title: string
-  body: string
+  body?: string
   downSince?: number | null
   tailscaleHost?: string | null
   action?: { label: string; onClick: () => void } | null
@@ -74,7 +74,9 @@ export function RemoteRuntimeRecoveryCard({
               </div>
             ) : null}
           </div>
-          <div className="mt-0.5 text-xs leading-5 text-muted-foreground">{body}</div>
+          {body ? (
+            <div className="mt-0.5 text-xs leading-5 text-muted-foreground">{body}</div>
+          ) : null}
           {tailscaleHost ? (
             <div className="mt-1 flex min-w-0 items-center gap-1.5 text-xs text-muted-foreground">
               <span className="shrink-0">{remoteRuntimeTailscaleHintLabel()}</span>

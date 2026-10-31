@@ -109,7 +109,14 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
     const reclaim: AgentSessionCreateOperation['reclaim'] = {}
     const operation = (async (): Promise<RuntimeCreateAgentSessionResult> => {
       // Reserve before async preflight so racing retries cannot independently dispatch.
-      const workspace = await this.resolveTerminalWorkspaceLaunchScope(request.worktree)
+      // Only the agent-session RPC reaches here: the caller's own act, as its spawn below.
+      const workspace = await this.resolveTerminalWorkspaceLaunchScope(
+        request.worktree,
+        undefined,
+        {
+          wslUserAct: true
+        }
+      )
       if (
         !(await this.executionOwnerSupportsAgentSessionOperation(
           workspace,
@@ -168,10 +175,13 @@ export abstract class OrcaRuntimeWithCreateAgentSession extends OrcaRuntimeWithG
       }
       try {
         terminal = await this.createTerminal(`id:${workspace.id}`, {
+          // Only the agent-session RPC reaches here: the caller's own act.
+          wslUserAct: true,
           // No requested surface: the host-planned launch uses unknown.
           startupAgent: request.agent,
           ...(request.prompt ? { startupPrompt: request.prompt } : {}),
           startupPromptDelivery: request.promptDelivery,
+          suppressStartupUpdatePrompt: request.promptDelivery === 'auto-submit',
           // TEMPORARY: see `startupPromptCarry`.
           startupPromptCarry: 'force-line',
           ...(request.agentArgs !== undefined ? { agentArgs: request.agentArgs } : {}),

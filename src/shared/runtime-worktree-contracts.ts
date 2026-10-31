@@ -5,6 +5,7 @@ import type { ProgramStatusFacet } from './program-status/facet'
 import type { CheckStatus } from './github/pull-request-types'
 import type { AgentChildWorkView } from './agent-status-child-work-view'
 import type { AgentSubagentSnapshot } from './agent-status-subagent-snapshot'
+import type { RuntimeTerminalInteractiveWait } from './runtime-terminal-contracts'
 import type { BaseRefSearchResult, Repo } from './repo-types'
 import type { CreateWorktreeResult, RemoveWorktreeResult } from './worktree/create-types'
 import type {
@@ -32,12 +33,16 @@ export type RuntimeWorktreeAgentRow = {
   prompt: string
   taskTitle: string | null
   displayName: string | null
+  /** The name desktop's compact row leads with (rename, chat or live title). Old hosts omit it. */
+  conversationName?: string
   lastAssistantMessage: string | null
   toolName: string | null
   toolInput: string | null
   interrupted: boolean
   /** Main-agent state/verdict/clock even while subagents keep the row working; old hosts omit it, falling back to interrupted. */
   mainAgent?: AgentMainAgentStatus
+  /** Same as `terminal show`, only when requested: null is "looked, no wait"; absent is not evaluated (structured workers, old hosts). */
+  agentWait?: RuntimeTerminalInteractiveWait | null
   stateStartedAt: number
   updatedAt: number
   /** Native canonical views win over the CLI roster, including an explicit empty list. */

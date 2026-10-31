@@ -11,7 +11,10 @@ import { DISPATCH_REJECTED_CANCELLED } from '../../../shared/structured-agent-se
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -245,6 +248,7 @@ afterEach(async () => {
   }
   vi.restoreAllMocks()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

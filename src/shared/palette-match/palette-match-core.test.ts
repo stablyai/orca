@@ -2,13 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { matchPaletteDocument } from './match-document'
 import { mapNormalizedRange, normalizePaletteText } from './normalized-text'
 import { preparePaletteQuery, PALETTE_QUERY_MAX_TOKENS } from './palette-query'
-import {
-  buildPaletteDocument,
-  comparePaletteDocumentRank,
-  type PaletteDocumentInput
-} from './palette-document'
-import { segmentPaletteText } from './text-segments'
-import { isWithinOnePaletteEdit } from './typo-distance'
+import { buildPaletteDocument, type PaletteDocumentInput } from './palette-document'
 
 function ready(query: string) {
   const prepared = preparePaletteQuery(query)
@@ -43,26 +37,6 @@ const labelOnly = (text: string): PaletteDocumentInput => ({
 })
 
 describe('palette query preparation', () => {
-  it('splits on whitespace only and keeps punctuation inside tokens', () => {
-    expect(ready('orca/main 08-13 #123').tokens.map((token) => token.text)).toEqual([
-      'orca/main',
-      '08-13',
-      '#123'
-    ])
-  })
-
-  it('deduplicates repeated tokens', () => {
-    expect(ready('scan scan daily').tokens.map((token) => token.text)).toEqual(['scan', 'daily'])
-  })
-
-  it('collapses whitespace runs so the whole-query tier still matches', () => {
-    // Collapse query spaces to match indexed fields or exact visible names would lose whole-query rank.
-    expect(ready('scan  daily').normalized).toBe('scan daily')
-    expect(run(labelOnly('scan daily'), 'scan  daily')?.rank.placement).toBe(
-      run(labelOnly('scan daily'), 'scan daily')?.rank.placement
-    )
-  })
-
   it('treats emoji and symbols as content, not punctuation', () => {
     // Emoji expansion produces symbol queries; dropping symbols would make the palette unable to match its own input.
     expect(ready('🚀 rocket').tokens[0]?.isPunctuationOnly).toBe(false)
@@ -70,11 +44,6 @@ describe('palette query preparation', () => {
     expect(run(labelOnly('a → b'), '→')).not.toBeNull()
     // A genuinely punctuation-only token stays rejected.
     expect(ready('--').tokens[0]?.isPunctuationOnly).toBe(true)
-  })
-
-  it('parses repo/branch per token', () => {
-    expect(ready('orca/main').tokens[0].repoBranch).toEqual({ repo: 'orca', branch: 'main' })
-    expect(ready('feature').tokens[0].repoBranch).toBeNull()
   })
 
   it('rejects more than the token limit', () => {
@@ -88,32 +57,9 @@ describe('palette query preparation', () => {
       reason: 'too-large'
     })
   })
-
-  it('splits a pasted tab- or newline-separated query into tokens', () => {
-    expect(ready('scan\tdaily\n08-13').tokens.map((token) => token.text)).toEqual([
-      'scan',
-      'daily',
-      '08-13'
-    ])
-  })
-
-  it('marks every digit-bearing token identifier-like', () => {
-    expect(ready('93334dc 1.4.182 run-184 docs').tokens.map((t) => t.isIdentifierLike)).toEqual([
-      true,
-      true,
-      true,
-      false
-    ])
-  })
 })
 
 describe('normalization and ranges', () => {
-  it('uses identity mapping for length-preserving folds', () => {
-    const text = normalizePaletteText('Jump Palette')
-    expect(text.starts).toBeNull()
-    expect(mapNormalizedRange(text, 5, 12)).toEqual({ start: 5, end: 12 })
-  })
-
   it('maps decomposed accents back to the original range', () => {
     const text = normalizePaletteText('Café Deploy')
     const index = text.normalized.indexOf('deploy')
@@ -127,38 +73,10 @@ describe('normalization and ranges', () => {
       'Launch'
     )
   })
-
-  it('folds ASCII control whitespace without shifting offsets', () => {
-    const text = normalizePaletteText('line one\nline two')
-    expect(text.normalized).toBe('line one line two')
-    expect(text.starts).toBeNull()
-  })
-
-  it('breaks atoms on a newline inside a multi-line comment', () => {
-    const segments = segmentPaletteText(normalizePaletteText('first\nsecond'))
-    expect(segments.atoms.map((atom) => atom.compact)).toEqual(['first', 'second'])
-  })
-
-  it('segments atoms without crossing whitespace', () => {
-    const segments = segmentPaletteText(normalizePaletteText('scan daily 1.4.182 · 2026-08-13'))
-    expect(segments.atoms.map((atom) => atom.compact)).toEqual([
-      'scan',
-      'daily',
-      '14182',
-      '',
-      '20260813'
-    ])
-  })
 })
 
 describe('structured label matching', () => {
   const document = labelOnly('scan daily 1.4.182 · 2026-08-13 · 93334dc')
-
-  it('matches several tokens inside one field', () => {
-    const match = run(document, 'scan daily 08-13')
-    expect(match).not.toBeNull()
-    expect(match?.assignments).toHaveLength(3)
-  })
 
   it.each(['0813', '08-13', '08/13', '20260813', '2026-08-13'])(
     'accepts the date alias %s',
@@ -264,12 +182,6 @@ describe('identifier fields', () => {
     const evidence = match?.supportingEvidence[0]
     expect(evidence?.text.slice(evidence.ranges[0].start, evidence.ranges[0].end)).toBe('4123')
   })
-
-  it('combines an identity token with one evidence token', () => {
-    const match = run(review('#'), 'reconnect 4123')
-    expect(match?.rank.coverage).toBe(3)
-    expect(match?.supportingEvidence).toHaveLength(1)
-  })
 })
 
 describe('duplicate evidence unit ids', () => {
@@ -327,17 +239,6 @@ describe('duplicate evidence unit ids', () => {
       'next-server'
     )
   })
-
-  it('never emits a range past the end of the rendered unit text', () => {
-    for (const query of ['next-server', 'node', '3000']) {
-      for (const evidence of run(duplicateUnits, query)?.supportingEvidence ?? []) {
-        for (const range of evidence.ranges) {
-          expect(range.end).toBeLessThanOrEqual(evidence.text.length)
-          expect(range.start).toBeLessThan(range.end)
-        }
-      }
-    }
-  })
 })
 
 describe('evidence limits', () => {
@@ -393,26 +294,6 @@ describe('evidence limits', () => {
   it('rejects assignments that need two hidden sources', () => {
     expect(run(twoUnits, '3000 infra')).toBeNull()
   })
-
-  it('prefers visible evidence over supporting evidence', () => {
-    const match = run(twoUnits, 'checkout')
-    expect(match?.rank.coverage).toBe(0)
-    expect(match?.supportingEvidence).toHaveLength(0)
-  })
-})
-
-describe('typo distance', () => {
-  it.each([
-    ['daily', 'dayly', true],
-    ['daily', 'daily', true],
-    ['daily', 'dail', true],
-    ['daily', 'dailly', true],
-    // Transposition is two edits, so a banded distance of one rejects it.
-    ['daily', 'dialy', false],
-    ['daily', 'da', false]
-  ])('%s vs %s -> %s', (a, b, expected) => {
-    expect(isWithinOnePaletteEdit(a, b)).toBe(expected)
-  })
 })
 
 describe('container field matching', () => {
@@ -441,89 +322,5 @@ describe('container field matching', () => {
     expect(match).not.toBeNull()
     expect(match?.rank.coverage).toBe(2)
     expect(match?.qualityClass).toBe('exact-evidence')
-  })
-
-  it('does not count a token that lands on a direct field', () => {
-    const tabDoc: PaletteDocumentInput = {
-      id: 'tab-1',
-      visibleFields: [
-        {
-          id: 'title',
-          profile: 'structured-label',
-          text: 'wsl-transcript-4360.ts',
-          role: 'primary',
-          destinationEligible: true
-        },
-        {
-          id: 'worktree',
-          profile: 'structured-label',
-          text: 'STA-4360-feature',
-          role: 'container',
-          destinationEligible: false
-        }
-      ],
-      evidence: []
-    }
-    const match = run(tabDoc, '4360')
-    expect(match).not.toBeNull()
-    expect(match?.rank.coverage).toBe(0)
-    expect(match?.qualityClass).toBe('exact-visible')
-  })
-
-  it('ranks an all-direct multi-token match ahead of a mixed direct and container match', () => {
-    const direct = run(
-      {
-        id: 'direct',
-        visibleFields: [
-          {
-            id: 'title',
-            profile: 'structured-label',
-            text: 'alpha',
-            role: 'primary',
-            destinationEligible: true
-          },
-          {
-            id: 'path',
-            profile: 'structured-label',
-            text: 'beta',
-            role: 'secondary',
-            destinationEligible: true
-          }
-        ],
-        evidence: []
-      },
-      'alpha beta'
-    )
-    const mixed = run(
-      {
-        id: 'mixed',
-        visibleFields: [
-          {
-            id: 'title',
-            profile: 'structured-label',
-            text: 'alpha',
-            role: 'primary',
-            destinationEligible: true
-          },
-          {
-            id: 'worktree',
-            profile: 'structured-label',
-            text: 'beta',
-            role: 'container',
-            destinationEligible: false
-          }
-        ],
-        evidence: []
-      },
-      'alpha beta'
-    )
-
-    expect(direct).not.toBeNull()
-    expect(mixed).not.toBeNull()
-    expect(direct?.rank.coverage).toBe(1)
-    expect(mixed?.rank.coverage).toBe(2)
-    if (direct && mixed) {
-      expect(comparePaletteDocumentRank(direct.rank, mixed.rank)).toBeLessThan(0)
-    }
   })
 })

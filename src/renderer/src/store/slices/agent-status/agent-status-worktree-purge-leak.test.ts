@@ -106,10 +106,17 @@ describe('bulk worktree purge evicts pane-scoped agent/unread/input maps (leak r
     const store = createTestStore()
     seedPaneState(store)
     const epochBefore = store.getState().agentStatusEpoch
+    const previous = store.getState().agentStatusByPaneKey[PANE]
+    const accepted = vi.fn()
+    const dispose = store.getState().subscribeAgentStatusChanges(accepted)
 
     store.getState().purgeWorktreeTerminalState([WT])
 
     const s = store.getState()
+    expect(accepted).toHaveBeenCalledExactlyOnceWith([
+      { paneKey: PANE, previous, current: undefined }
+    ])
+    dispose()
     expect(s.agentStatusByPaneKey[PANE]).toBeUndefined()
     expect(s.agentStatusEpoch).toBe(epochBefore + 1)
     expect(s.agentLaunchConfigByPaneKey[PANE]).toBeUndefined()

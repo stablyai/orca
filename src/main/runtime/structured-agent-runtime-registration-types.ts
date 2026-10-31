@@ -44,8 +44,9 @@ export type StructuredAgentAccountHomeRequest = {
   launchEnv: NodeJS.ProcessEnv
   /** Where the chat runs; null for a read with no workspace (the model catalog). */
   location: AgentSessionExecutionLocation | null
-  /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection. */
-  purpose: 'launch' | 'read'
+  /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection.
+   *  `identity` is a read that names the selected account before its folder exists. */
+  purpose: 'launch' | 'read' | 'identity'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
 }
@@ -72,7 +73,7 @@ export type StructuredAgentLaunchCheck = {
   resolveLaunch: (
     env: Record<string, string>,
     commandSettings: StructuredAgentCommandSettings
-  ) => { command: string; env: Record<string, string> }
+  ) => { command: string; prefixArgs: string[]; env: Record<string, string> }
   /** The ascending releases that binary's `--version` must reach; see `agentCliMinimumVersion`. */
   minimumVersions: readonly string[]
 }
@@ -101,6 +102,9 @@ export type StructuredAgentRuntimeMetadata = StructuredAgentCliConversations & {
     request: StructuredAgentAccountHomeRequest,
     services: StructuredAgentAccountHomeServices
   ) => Promise<AgentSessionAccountHome>
+  /** Whether a start of an existing chat launches under the account `resolveAccountHome` picks now
+   *  rather than the one its record pins; absent keeps the record's. */
+  launchFollowsSelection?: () => boolean
 }
 
 export type StructuredAgentRuntimeRegistration = StructuredAgentRuntimeMetadata & {

@@ -83,8 +83,8 @@ function StructuredAgentSessionOwnedAttention({
         observationKey: boundary.observationKey
       }
     })
-    const stopRead = subscribeAgentSubjectReads((reads) => {
-      const read = reads.find((entry) => entry.subjectKey === paneKey)?.structured
+    const stopRead = subscribeAgentSubjectReads((_reads, readsBySubjectKey) => {
+      const read = readsBySubjectKey.get(paneKey)?.structured
       if (
         !read ||
         read.sessionId !== tab.entityId ||

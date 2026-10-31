@@ -110,7 +110,8 @@ describe('worker-stop on a structured worker this runtime cannot reach', () => {
         state: 'stop_unknown'
       }
     )
-    expect(close).toHaveBeenCalledWith(SESSION, 'evict')
+    // worker-stop is never refused, so it passes no admission.
+    expect(close).toHaveBeenCalledWith(SESSION, 'evict', undefined)
     expect(db.getWorkerDispatch(dispatchId)?.state).toBe('stop_unknown')
   })
 

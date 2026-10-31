@@ -3,7 +3,7 @@
 import { cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import type { QueuedMessageCard } from './structured-agent-session-queued-cards'
+import type { QueuedMessageCard } from '../../../../shared/structured-agent-session-queued-cards'
 import type { StructuredAgentSessionQueuedMessagesController } from './use-structured-agent-session-queued-messages'
 
 vi.mock('../../store', () => {
@@ -59,7 +59,8 @@ function element(cards: QueuedMessageCard[], agentName = 'Agent') {
     edit: async () => {},
     clear: async () => false,
     resume: async () => false,
-    steerNewest: () => false
+    steerHead: () => false,
+    isWorking: true
   }
   return (
     <TooltipProvider>

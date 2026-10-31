@@ -5,11 +5,12 @@ import { PluginBundledBootstrapCoordinator } from './plugin-bundled-bootstrap-co
 const unchanged: PluginBundledBootstrapResult = {
   installed: [],
   unchanged: ['stablyai.orca-theme'],
+  retired: [],
   errors: []
 }
 
 describe('PluginBundledBootstrapCoordinator', () => {
-  it('skips disabled requests and refreshes discovery only after publication', async () => {
+  it('skips disabled requests and refreshes discovery only after publication or retirement', async () => {
     let enabled = false
     const bootstrap = vi
       .fn()
@@ -17,6 +18,13 @@ describe('PluginBundledBootstrapCoordinator', () => {
       .mockResolvedValueOnce({
         installed: ['stablyai.orca-theme'],
         unchanged: [],
+        retired: [],
+        errors: []
+      })
+      .mockResolvedValueOnce({
+        installed: [],
+        unchanged: [],
+        retired: ['stablyai.orca-theme'],
         errors: []
       })
     const refreshPlugins = vi.fn().mockResolvedValue(undefined)
@@ -35,6 +43,8 @@ describe('PluginBundledBootstrapCoordinator', () => {
     expect(refreshPlugins).not.toHaveBeenCalled()
     await coordinator.request()
     expect(refreshPlugins).toHaveBeenCalledOnce()
+    await coordinator.request()
+    expect(refreshPlugins).toHaveBeenCalledTimes(2)
   })
 
   it('serializes overlapping startup and feature-toggle requests', async () => {

@@ -4,6 +4,7 @@ import {
   SOURCE_CONTROL_HUB_TAB_LABELS,
   type SourceControlHubTab
 } from './mobile-source-control-hub-tab'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { hubStyles } from './mobile-source-control-hub-styles'
 
 type Props = {
@@ -12,6 +13,7 @@ type Props = {
 }
 
 export function MobileSourceControlSegments({ active, onSelect }: Props) {
+  useMobileColorScheme()
   return (
     <View style={hubStyles.segments} accessibilityRole="tablist">
       {SOURCE_CONTROL_HUB_TABS.map((tab) => {

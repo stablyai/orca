@@ -1,5 +1,10 @@
 // @vitest-environment happy-dom
 
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
 import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-session-contracts'
@@ -85,7 +90,6 @@ import {
   clearNativeChatDraftCacheForTests,
   readNativeChatDraftCache
 } from '@/components/native-chat/native-chat-draft-cache'
-import { structuredAgentSessionDraftScopeKey } from '@/components/native-chat/native-chat-composer-draft-store'
 import { StructuredAgentSessionCreateRefusalError } from '@/lib/launch-structured-agent-session'
 import {
   getStructuredAgentSessionLaunchLifecycle,
@@ -374,6 +378,9 @@ describe('one action delivered twice while its chat is still starting', () => {
       prompt: 'PR context',
       promptDelivery: 'draft'
     })
+    const scope = structuredAgentSessionDraftScopeKey(click.sessionId)
+    expect(readNativeChatComposerDraft(scope).text).toBe('PR context')
+    updateNativeChatComposerDraft(scope, { text: '', document: undefined }, 'immediate')
     const repeat = startStructuredAgentLaunch(WORKTREE_ID, 'codex', {
       requestId: 'continue-click',
       prompt: 'PR context',
@@ -381,7 +388,7 @@ describe('one action delivered twice while its chat is still starting', () => {
     })
 
     expect(repeat.sessionId).toBe(click.sessionId)
-    expect(mocks.seedDraft).toHaveBeenCalledOnce()
+    expect(readNativeChatComposerDraft(scope).text).toBe('')
   })
 
   it('opens a new chat for a click after the start failed', async () => {

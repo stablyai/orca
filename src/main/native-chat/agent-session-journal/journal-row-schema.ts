@@ -22,6 +22,7 @@ import {
 import { isJournalTag } from '../../../shared/agent-session-journal-open-union'
 import type { StructuredAgentSessionStopCause } from '../agent-session-wire/structured-agent-session-stop-cause'
 import { dropUnusableRowAnnotations } from './journal-row-unusable-annotations'
+import { journalRowDeclaresMore } from './journal-storage-row-schema'
 import { journalQueueRowContent, type JournalQueueRow } from './journal-queue-events'
 
 /** Put additive annotations on the base: older strict prompt bodies reject unknown keys. */
@@ -208,7 +209,14 @@ export function parseJournalRow(line: string): JournalRowParse {
   if (version === null || !Number.isInteger(version) || version < 1) {
     return { ok: false, unreadable: false }
   }
-  if (version > AGENT_SESSION_JOURNAL_SCHEMA_VERSION) {
+  // A key or tag this build does not declare in a row of a kind it reads is refused as newer before
+  // it can be normalized away and the row's value restated without it.
+  if (
+    version > AGENT_SESSION_JOURNAL_SCHEMA_VERSION ||
+    (typeof record.kind === 'string' &&
+      KNOWN_ROW_KINDS.has(record.kind) &&
+      journalRowDeclaresMore(record))
+  ) {
     return { ok: false, unreadable: true }
   }
   const upcast = upcastRow(record, version)

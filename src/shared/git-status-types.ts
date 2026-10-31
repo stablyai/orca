@@ -16,6 +16,8 @@ export type GitSubmoduleStatus = {
   commitChanged: boolean
   trackedChanges: boolean
   untrackedChanges: boolean
+  // Effective submodule.recurse makes parent restore reset the checkout; older hosts omit it.
+  restoreRecurses?: boolean
 }
 
 // Legacy consumers may use modified styling, but unresolved conflicts must not offer file-dependent diff/drag/edit actions: both_deleted may have no file.
@@ -69,6 +71,8 @@ export type GitStatusResult = {
   // Explicitly invalidates a previously published total for this merge-base OID.
   // Kept separate so older hosts/clients remain compatible with omitted totals.
   branchLineTotalUnavailable?: string
+  // Git's error when status could not be read; empty entries then do not mean a clean tree.
+  readError?: string
 }
 
 // Without hasUpstream, ahead/behind 0/0 are placeholders, not proof of sync. Explicit upstream refreshes can fail independently of worktree status.

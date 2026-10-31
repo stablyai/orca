@@ -33,7 +33,6 @@ import type { StructuredAgentSessionMutationContext } from '../native-chat/agent
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { PI_RPC_AGENT } from '../pi/rpc-agent-definition'
-import { piModelCatalogFromListing } from '../pi/rpc-model-catalog-probe'
 
 // A chat whose agent offers permission modes also names its own, which a new chat leaves at Ask.
 const modeOf = (agent: string) => (agentChatPermissionModes(agent) ? { permissionMode: 'ask' } : {})
@@ -108,13 +107,14 @@ const GROK_LISTING = grokModelCatalogFromState({
   ]
 })
 
-const PI_LISTING = piModelCatalogFromListing(
-  [
-    'provider   model            context  max-out  thinking  images',
-    'anthropic  claude-sonnet-4  200K     64K      yes       yes',
-    'openai     gpt-6            400K     128K     yes       yes'
-  ].join('\n')
-)
+const PI_LISTING: AgentSessionModelOption[] = [
+  { id: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { id: 'openai/gpt-6', label: 'GPT-6' }
+].map((model) => ({
+  ...model,
+  isDefault: false,
+  efforts: ['off', 'minimal', 'low', 'medium', 'high'].map((value) => ({ value, label: value }))
+}))
 
 type Account = {
   models: AgentSessionModelOption[]
@@ -277,6 +277,7 @@ async function newChatFrames(
     await modelCatalog.read({ agent, waitForListing: true, workspacePath }),
     { newLaunch: true }
   )
+  await modelCatalog.prepareSaved({ agent, sessionId: record.sessionId, inSessionWorkspace: true })
   // Read before applying the answer: applying updates the state's option record in place.
   const firstPills = pills(first)
   const atRest = await readStructuredAgentSessionOptions(context, record.sessionId, {
@@ -284,6 +285,13 @@ async function newChatFrames(
   })
   const settled = applyStructuredAgentSessionOptions(first, seed, atRest, { newLaunch: true })
   return { atRest, first: firstPills, settled: pills(settled) }
+}
+
+const AT_REST_METADATA = {
+  confirmed: undefined,
+  fastMode: undefined,
+  serviceTier: undefined,
+  reportedPermissionMode: undefined
 }
 
 describe("a new chat's effort pill before its agent starts", () => {
@@ -299,7 +307,14 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(first.model?.value).toBe(model)
       expect(first.effort?.value).toBe(effort)
       expect(settled).toEqual(first)
-      expect(atRest.current).toEqual({ model, effort, defaulted: [], ...modeOf(agent) })
+      expect(atRest.current).toStrictEqual({
+        model,
+        effort,
+        defaulted: [],
+        ...modeOf(agent),
+        ...AT_REST_METADATA,
+        acceptedInputSources: { model: 'policy', effort: 'policy' }
+      })
     }
   )
 
@@ -313,7 +328,13 @@ describe("a new chat's effort pill before its agent starts", () => {
       expect(first.model?.value).toBeUndefined()
       expect(first.effort).toBeNull()
       expect(settled).toEqual(first)
-      expect(atRest.current).toEqual({ defaulted: [], ...modeOf(agent) })
+      expect(atRest.current).toStrictEqual({
+        defaulted: [],
+        ...modeOf(agent),
+        effort: undefined,
+        ...AT_REST_METADATA,
+        acceptedInputSources: {}
+      })
     }
   )
 
@@ -323,11 +344,13 @@ describe("a new chat's effort pill before its agent starts", () => {
       readsWithoutModel: false
     })
 
-    expect(atRest.current).toEqual({
+    expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
       effort: 'high',
       defaulted: [],
-      permissionMode: 'ask'
+      permissionMode: 'ask',
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'policy', effort: 'policy' }
     })
     expect(atRest.conversationCommands).toEqual(['clear', 'compact'])
   })
@@ -335,22 +358,26 @@ describe("a new chat's effort pill before its agent starts", () => {
   it('names the folder’s default effort for a client that needs a model too', async () => {
     const { atRest } = await newChatFrames('codex', { readsWithoutModel: false })
 
-    expect(atRest.current).toEqual({
+    expect(atRest.current).toStrictEqual({
       model: 'gpt-5.5',
       effort: 'medium',
       defaulted: [],
-      permissionMode: 'ask'
+      permissionMode: 'ask',
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'policy', effort: 'policy' }
     })
   })
 
   it('keeps a saved effort over the default model’s', async () => {
     const { atRest, settled } = await newChatFrames('grok', { saved: { effort: 'high' } })
 
-    expect(atRest.current).toEqual({
+    expect(atRest.current).toStrictEqual({
       model: 'grok-4',
       effort: 'high',
       defaulted: [],
-      ...modeOf('grok')
+      ...modeOf('grok'),
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'policy', effort: 'saved' }
     })
     expect(settled.effort?.value).toBe('high')
   })
@@ -358,6 +385,13 @@ describe("a new chat's effort pill before its agent starts", () => {
   it('leaves the effort of a saved model to the agent, as its running child reports it', async () => {
     const { atRest } = await newChatFrames('codex', { saved: { model: 'gpt-5.5-mini' } })
 
-    expect(atRest.current).toEqual({ model: 'gpt-5.5-mini', defaulted: [], permissionMode: 'ask' })
+    expect(atRest.current).toStrictEqual({
+      model: 'gpt-5.5-mini',
+      defaulted: [],
+      permissionMode: 'ask',
+      effort: undefined,
+      ...AT_REST_METADATA,
+      acceptedInputSources: { model: 'saved' }
+    })
   })
 })

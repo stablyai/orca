@@ -125,7 +125,7 @@ export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | nul
     .filter((entry): entry is GitRemoteEntry & { canonicalKey: string } => !!entry.canonicalKey)
     .sort((left, right) => {
       const priority = primaryRemoteSortKey(left) - primaryRemoteSortKey(right)
-      return priority === 0 ? left.name.localeCompare(right.name) : priority
+      return priority === 0 ? left.name.localeCompare(right.name, 'en') : priority
     })
   const selected = entries[0]
   return selected
@@ -135,14 +135,4 @@ export function deriveGitRemoteIdentity(stdout: string): GitRemoteIdentity | nul
         remoteUrl: selected.url
       }
     : null
-}
-
-export function normalizeSavedGitRemoteIdentity(
-  identity: GitRemoteIdentity | null | undefined
-): GitRemoteIdentity | null {
-  const canonicalKey =
-    typeof identity?.canonicalKey === 'string' ? identity.canonicalKey.trim() : ''
-  const remoteName = typeof identity?.remoteName === 'string' ? identity.remoteName.trim() : ''
-  const remoteUrl = typeof identity?.remoteUrl === 'string' ? identity.remoteUrl.trim() : ''
-  return canonicalKey && remoteName && remoteUrl ? { canonicalKey, remoteName, remoteUrl } : null
 }

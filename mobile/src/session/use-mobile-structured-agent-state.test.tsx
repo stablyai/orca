@@ -6,7 +6,11 @@ import type {
   AgentJournalRenderItem,
   AgentJournalResetReason
 } from '../../../src/shared/agent-session-journal-types'
-import type { AgentSessionHistoryPage } from '../../../src/shared/agent-session-wire'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/structured-agent-session-coalescer'
+import type {
+  AgentSessionSubscribeEvent,
+  AgentSessionHistoryPage
+} from '../../../src/shared/agent-session-wire'
 import { publishConnectionRevival } from '../transport/connection-revival-signal'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentState } from './use-mobile-structured-agent-state'
@@ -122,8 +126,38 @@ describe('useMobileStructuredAgentState older history', () => {
       })
     })
     await vi.waitFor(() => expect(hook.current!.state.status).toBe('ready'))
-    return { hook, historyCursors }
+    return { hook, historyCursors, emit: (event: AgentSessionSubscribeEvent) => onFrame?.(event) }
   }
+
+  it('keeps a row removed when its upsert and removal arrive within one streaming window', async () => {
+    const { hook, emit } = await mountWithOlderPages({}, [])
+    vi.useFakeTimers()
+    try {
+      const batch = {
+        cursor: cursorAt(1001),
+        items: [said(1001)],
+        removedItemIds: [],
+        submissions: []
+      }
+      act(() => emit({ type: 'batch', sessionId: 'session-1', batch }))
+      act(() =>
+        emit({
+          type: 'batch',
+          sessionId: 'session-1',
+          batch: { ...batch, cursor: cursorAt(1002), items: [], removedItemIds: ['item-1001'] }
+        })
+      )
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
+      })
+      expect(hook.current!.state.items).toEqual([])
+      expect(hook.current!.state.cursor?.sequence).toBe(1002)
+    } finally {
+      act(() => renderer?.unmount())
+      renderer = null
+      vi.useRealTimers()
+    }
+  })
 
   it("reads past pages of a subagent's rows to the session's own older rows", async () => {
     const { hook, historyCursors } = await mountWithOlderPages({

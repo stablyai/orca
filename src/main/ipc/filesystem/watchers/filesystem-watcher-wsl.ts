@@ -1,5 +1,5 @@
 /** Poll inside WSL so distro shutdown kills the watcher instead of Windows UNC polling repeatedly waking it. */
-import { spawn, type ChildProcessWithoutNullStreams } from 'node:child_process'
+import type { PipedChildProcess } from '@orca/process-host/process-spec'
 import { StringDecoder } from 'node:string_decoder'
 import type { WebContents } from 'electron'
 import type { Event as WatcherEvent } from '@parcel/watcher'
@@ -8,7 +8,7 @@ import { parseWslUncPath } from '../../../../shared/wsl-paths'
 import { createWslWatcherProcessExit, createWslWatcherStartup } from './wsl-watcher-process-exit'
 import * as watcherChildRegistry from '../watcher-process/parcel-watcher-child-registry'
 import { createDebouncedBatch, type DebouncedBatch } from './filesystem-watcher-batch-control'
-import { resolveWslInteropSpawnCwd } from '../../../wsl-interop-spawn-directory'
+import { spawnWslWatcherProcess } from './wsl-watcher-spawn'
 
 export type WatcherSubscription = {
   unsubscribe(): Promise<void>
@@ -32,7 +32,7 @@ export type WslWatcherDeps = {
 
 const POLL_INTERVAL_SECONDS = 2
 const STARTUP_TIMEOUT_MS = 10_000
-const [SNAPSHOT_START, SNAPSHOT_END] = ['\x1e', '\x1f']
+const [SNAPSHOT_START, SNAPSHOT_END] = ['\0\x1e\0', '\0\x1f\0']
 const MAX_STREAM_BUFFER_CHARS = 10 * 1024 * 1024
 
 type WslSnapshotEntry = {
@@ -68,11 +68,11 @@ function buildSnapshotScript(ignoreDirs: readonly string[]): string {
     'set -efu',
     'root=$1',
     'while :; do',
-    "  printf '\\036'",
+    "  printf '\\000\\036\\000'",
     '  if [ -d "$root" ]; then',
     `    find "$root" -mindepth 1 -maxdepth 2 ${prune} -printf '%y\\t%T@\\t%p\\0' 2>/dev/null || true`,
     '  fi',
-    "  printf '\\037'",
+    "  printf '\\000\\037\\000'",
     `  sleep ${POLL_INTERVAL_SECONDS} || exit 0`,
     'done'
   ].join('\n')
@@ -181,6 +181,8 @@ export async function createWslWatcher(
       return
     }
     stopped = true
+    // Stop queued UNC stats without cancelling the conservative overflow refresh.
+    root.batch.statAbortController.abort()
     // First: the overflow refresh below reads the root, which would boot a just-stopped distro.
     deps.onUnexpectedStop?.(root, distro)
     markOverflowWithoutUncStat(root)
@@ -211,13 +213,13 @@ export async function createWslWatcher(
     while (true) {
       const start = streamBuffer.indexOf(SNAPSHOT_START)
       if (start === -1) {
-        streamBuffer = streamBuffer.slice(-1)
+        streamBuffer = streamBuffer.slice(-(SNAPSHOT_START.length - 1))
         return
       }
       if (start > 0) {
         streamBuffer = streamBuffer.slice(start)
       }
-      const end = streamBuffer.indexOf(SNAPSHOT_END, 1)
+      const end = streamBuffer.indexOf(SNAPSHOT_END, SNAPSHOT_START.length)
       if (end === -1) {
         if (streamBuffer.length > MAX_STREAM_BUFFER_CHARS) {
           streamBuffer = ''
@@ -226,24 +228,19 @@ export async function createWslWatcher(
         }
         return
       }
-      const frame = streamBuffer.slice(1, end)
-      streamBuffer = streamBuffer.slice(end + 1)
+      const frame = streamBuffer.slice(SNAPSHOT_START.length, end)
+      streamBuffer = streamBuffer.slice(end + SNAPSHOT_END.length)
       ingestFrame(frame)
     }
   }
 
-  let child: ChildProcessWithoutNullStreams
+  let child: PipedChildProcess
   const releaseChildReservation = watcherChildRegistry.reserveWatcherChild()
   if (!releaseChildReservation) {
     throw new watcherChildRegistry.WatcherChildCapacityError()
   }
   try {
-    child = spawn('wsl.exe', ['-d', distro, '--exec', 'sh', '-s', '--', linuxPath], {
-      stdio: ['pipe', 'pipe', 'pipe'],
-      windowsHide: true,
-      // Inherited cwd may be a deleted worktree, causing spawn wsl.exe ENOENT (#16463).
-      cwd: resolveWslInteropSpawnCwd()
-    })
+    child = spawnWslWatcherProcess(distro, linuxPath)
   } catch (error) {
     releaseChildReservation()
     throw error instanceof Error ? error : new Error(String(error))

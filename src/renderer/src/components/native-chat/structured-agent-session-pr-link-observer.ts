@@ -1,4 +1,4 @@
-import { useAppStore } from '@/store'
+import type { StructuredAgentSessionReadEffects } from './structured-agent-session-read-owner-contract'
 import { sameStructuredReadTarget } from '@/attention/agent-subject-read-actions'
 import { structuredAgentSessionTargetForTab } from '@/runtime/structured-agent-session-owner'
 import type { AgentSessionSubscribeEvent } from '../../../../shared/agent-session-wire'
@@ -10,9 +10,12 @@ import { getStructuredAgentSessionTabs } from './structured-agent-session-tabs'
 export function createStructuredAgentSessionPRLinkObserver(
   sessionId: string,
   target: RuntimeClientTarget
-): (event: AgentSessionSubscribeEvent) => void {
+): (
+  event: AgentSessionSubscribeEvent,
+  getState: StructuredAgentSessionReadEffects['getState']
+) => void {
   const detect = createTerminalGitHubPRLinkDetector()
-  return (event) => {
+  return (event, getState) => {
     // Why: only live batches; replayed history would re-link PRs the user may have unlinked.
     if (event.type !== 'batch') {
       return
@@ -25,7 +28,7 @@ export function createStructuredAgentSessionPRLinkObserver(
     if (!links.length) {
       return
     }
-    const state = useAppStore.getState()
+    const state = getState()
     const tab = getStructuredAgentSessionTabs(state.unifiedTabsByWorktree).find((candidate) => {
       const tabTarget =
         candidate.entityId === sessionId && structuredAgentSessionTargetForTab(state, candidate)

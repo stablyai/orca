@@ -1,6 +1,18 @@
-import { StyleSheet, colors, radii, spacing, typography } from './mobile-tasks-dependencies'
+import {
+  StyleSheet,
+  themedStyleSheet,
+  colors,
+  radii,
+  spacing,
+  typography
+} from './mobile-tasks-dependencies'
+import {
+  composerInputStyles,
+  COMPOSER_TEXT_SIZE
+} from '../components/composer-input/composer-input-styles'
+import { LIST_ROW_PADDING } from '../components/list/ListGroup'
 
-export const mobileTasksDetailStyles = StyleSheet.create({
+export const mobileTasksDetailStyles = themedStyleSheet(() => ({
   groupSeparator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
@@ -48,14 +60,71 @@ export const mobileTasksDetailStyles = StyleSheet.create({
     color: colors.textMuted,
     marginTop: 2
   },
+  itemHeader: {
+    paddingHorizontal: spacing.xs,
+    marginBottom: spacing.md,
+    gap: 2
+  },
+  itemKindRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6
+  },
+  itemKind: {
+    flex: 1,
+    fontSize: 13,
+    color: colors.textSecondary
+  },
+  itemTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    lineHeight: 22,
+    color: colors.textPrimary
+  },
+  itemMeta: {
+    fontSize: 13,
+    color: colors.textSecondary
+  },
+  itemActionBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: spacing.sm
+  },
+  itemStartButton: {
+    flex: 1,
+    height: 40,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    borderRadius: radii.control,
+    backgroundColor: colors.textPrimary,
+    paddingHorizontal: spacing.md
+  },
+  itemStartButtonPressed: {
+    opacity: 0.85
+  },
+  itemStartButtonBusy: {
+    opacity: 0.6
+  },
+  itemStartText: {
+    fontSize: 15,
+    fontWeight: '600',
+    color: colors.bgBase
+  },
+  // Lines prose up with the row text of the groups above it.
+  itemSectionBody: {
+    paddingHorizontal: LIST_ROW_PADDING,
+    gap: spacing.sm
+  },
   actionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   detailGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     padding: spacing.md,
     marginBottom: spacing.md,
     gap: spacing.md
@@ -100,14 +169,14 @@ export const mobileTasksDetailStyles = StyleSheet.create({
   detailChip: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    backgroundColor: colors.bgRaised,
-    borderRadius: 999,
+    backgroundColor: colors.translucentFill,
+    borderRadius: radii.pill,
     paddingHorizontal: spacing.sm,
     paddingVertical: 2
   },
   detailChipSelected: {
     borderColor: colors.accentBlue,
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.translucentFill
   },
   detailChipText: {
     fontSize: 11,
@@ -121,7 +190,7 @@ export const mobileTasksDetailStyles = StyleSheet.create({
   issueTypeDot: {
     width: 7,
     height: 7,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   detailSection: {
     gap: spacing.xs
@@ -144,16 +213,10 @@ export const mobileTasksDetailStyles = StyleSheet.create({
     fontSize: 11,
     color: colors.textMuted
   },
+  // Pickers sit beside text fields in these forms, so they wear the same field shell.
   fieldButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+    ...composerInputStyles.field,
+    paddingVertical: spacing.sm
   },
   fieldButtonDisabled: {
     opacity: 0.55
@@ -163,7 +226,7 @@ export const mobileTasksDetailStyles = StyleSheet.create({
   },
   fieldButtonText: {
     flex: 1,
-    fontSize: typography.bodySize,
+    fontSize: COMPOSER_TEXT_SIZE,
     color: colors.textPrimary
   }
-})
+}))

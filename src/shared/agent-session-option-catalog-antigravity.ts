@@ -1,4 +1,4 @@
-import { removeAgentArgOption } from './agent-session-option-agent-args'
+import { agentChoiceCliApply } from './agent-choice-cli-apply'
 import type { AgentSessionOptionCatalog, CatalogOption } from './agent-session-option-catalog-types'
 
 const ANTIGRAVITY_EFFORT: CatalogOption = {
@@ -15,8 +15,17 @@ const ANTIGRAVITY_EFFORT: CatalogOption = {
     defaultValue: 'high'
   },
   apply: {
-    launchArgs: (value) => ['--effort', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('antigravity', tokens, ['--effort']),
+    ...agentChoiceCliApply(
+      'antigravity',
+      [
+        {
+          kind: 'value',
+          names: ['--effort'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--effort'
+    ),
     midSession: { kind: 'command', build: (value) => `/effort ${String(value)}` }
   }
 }
@@ -26,8 +35,17 @@ export const ANTIGRAVITY_SESSION_OPTION_CATALOG: AgentSessionOptionCatalog = {
   // Model availability is account-scoped; worker-start accepts the slug reported by `agy models`.
   models: [],
   modelApply: {
-    launchArgs: (value) => ['--model', String(value)],
-    removeAgentArgs: (tokens) => removeAgentArgOption('antigravity', tokens, ['--model']),
+    ...agentChoiceCliApply(
+      'antigravity',
+      [
+        {
+          kind: 'value',
+          names: ['--model'],
+          lift: 'separate-and-long-equals'
+        }
+      ],
+      '--model'
+    ),
     midSession: { kind: 'agent-picker', command: '/model' }
   },
   unknownModelOptions: [ANTIGRAVITY_EFFORT]

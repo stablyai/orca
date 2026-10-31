@@ -25,7 +25,7 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
   }
   const nested = (data as { orca?: unknown }).orca
   const record = (nested && typeof nested === 'object' ? nested : data) as Record<string, unknown>
-  // Only gateway pushes carry a fingerprint; locally scheduled data does not.
+  // Push and socket alerts use the same paired-host identity.
   const hostFingerprint = readString(record.hostFingerprint)
   if (!hostFingerprint) {
     return null

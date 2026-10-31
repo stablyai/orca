@@ -205,10 +205,7 @@ export function createRepoUpdateActions(
             return {
               repos: nextRepos,
               ...mergeProjectCompatibilityForHostRepoChange({
-                previous: {
-                  endpointProjects: s.endpointProjects,
-                  endpointProjectHostSetups: s.endpointProjectHostSetups
-                },
+                previous: { projects: s.projects, projectHostSetups: s.projectHostSetups },
                 nextRepos,
                 hostId: ownerHostId
               }),

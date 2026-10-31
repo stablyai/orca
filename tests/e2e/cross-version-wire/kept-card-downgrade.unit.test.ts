@@ -94,7 +94,8 @@ async function acceptPersonSend(
 
 test("an older build reads the send this build's quit left queued, its source included, and settles it", async () => {
   const directory = mkdtempSync(join(tmpdir(), 'orca-kept-leftover-downgrade-'))
-  const journals = createTrackedJournalOpener()
+  // A chat this build has not converted keeps input rows, so an older build can still read it.
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   try {
     const quitting = await journals.open({ identity: IDENTITY, stateDirectory: directory })
     await acceptPersonSend(quitting, 'left-queued')

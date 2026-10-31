@@ -20,9 +20,9 @@ describe('buildManagedWorktreeCreateArgs', () => {
       branchNameOverride: 'feature/test'
     }
     expect(build(request)).not.toHaveProperty('branchIntent')
-    expect(build({ ...request, branchIntent: 'open-existing' })).toMatchObject({
-      branchIntent: 'open-existing'
-    })
+    for (const branchIntent of ['open-existing', 'open-existing-v2', 'create-new']) {
+      expect(build({ ...request, branchIntent })).toMatchObject({ branchIntent })
+    }
   })
 
   it('omits name provenance when the client did not claim a generated name', () => {
@@ -89,6 +89,9 @@ describe('buildManagedWorktreeCreateArgs', () => {
       }
     )
     expect(automationRun).not.toHaveProperty('allowLocalBaseFallback')
+    // E9: a person's create may start a stopped WSL distro for its terminals; an automation's never.
+    expect(build({ repo: 'id:repo-1', name: 'feature' })).toMatchObject({ wslUserAct: true })
+    expect(automationRun).not.toHaveProperty('wslUserAct')
   })
 })
 

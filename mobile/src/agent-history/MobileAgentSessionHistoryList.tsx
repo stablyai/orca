@@ -1,25 +1,27 @@
-import { useCallback, useMemo, useState } from 'react'
-import { ActivityIndicator, Pressable, RefreshControl, SectionList, Text, View } from 'react-native'
-import { Play } from 'lucide-react-native'
-import { colors } from '../theme/mobile-theme'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
-import { recentSessionConversationTurns } from '../../../src/shared/ai-vault-session-display'
+import { useCallback, useState } from 'react'
+import { RefreshControl, SectionList, View } from 'react-native'
+import { colors, spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { SectionHeader } from '../components/list/SectionHeader'
 import type { AiVaultSession } from '../../../src/shared/ai-vault-types'
 import type { MobileAgentHistorySection } from './agent-history-sections'
-import type { MobileAgentHistoryCard } from './agent-history-session-card'
+import type {
+  MobileAgentHistoryCard,
+  MobileAgentHistoryResumeActionState
+} from './agent-history-session-card'
+import { AgentHistorySessionRow } from './AgentHistorySessionRow'
 import { styles } from './agent-history-styles'
-
-// Render bounded preview turns only on card tap to keep list cheap.
-const PREVIEW_TURN_LIMIT = 5
 
 type Props = {
   sections: MobileAgentHistorySection[]
   sessionsById: ReadonlyMap<string, AiVaultSession>
   refreshing: boolean
   showCurrentWorktreeBadges: boolean
-  resumeActionStateBySessionId?: ReadonlyMap<string, { disabled: boolean; loading: boolean }>
+  resumeActionStateBySessionId?: ReadonlyMap<string, MobileAgentHistoryResumeActionState>
   onResume?: (session: AiVaultSession) => void | Promise<void>
   onRefresh: () => void
+  /** Clears the bottom search bar floating over the list. */
+  bottomPadding?: number
 }
 
 export function MobileAgentSessionHistoryList({
@@ -29,8 +31,10 @@ export function MobileAgentSessionHistoryList({
   showCurrentWorktreeBadges,
   resumeActionStateBySessionId,
   onResume,
-  onRefresh
+  onRefresh,
+  bottomPadding = 0
 }: Props) {
+  const colorScheme = useMobileColorScheme()
   const [expandedId, setExpandedId] = useState<string | null>(null)
 
   const toggleExpanded = useCallback((id: string) => {
@@ -39,7 +43,7 @@ export function MobileAgentSessionHistoryList({
 
   const renderItem = useCallback(
     ({ item }: { item: MobileAgentHistoryCard }) => (
-      <AgentHistoryCardRow
+      <AgentHistorySessionRow
         card={item}
         expanded={expandedId === item.id}
         session={sessionsById.get(item.id) ?? null}
@@ -62,9 +66,10 @@ export function MobileAgentSessionHistoryList({
   return (
     <SectionList
       sections={sections}
+      extraData={colorScheme}
       keyExtractor={(card) => card.id}
       stickySectionHeadersEnabled={false}
-      contentContainerStyle={styles.list}
+      contentContainerStyle={{ paddingBottom: spacing.xl + bottomPadding }}
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
@@ -73,103 +78,20 @@ export function MobileAgentSessionHistoryList({
         />
       }
       renderSectionHeader={({ section }) => (
-        <View style={styles.groupHeader}>
-          <Text style={styles.groupHeaderText} numberOfLines={1}>
-            {section.label}
-          </Text>
-          <Text style={styles.groupHeaderCount}>{section.data.length}</Text>
-        </View>
+        <SectionHeader
+          title={section.label}
+          trailing={String(section.data.length)}
+          first={section === sections[0]}
+        />
       )}
       renderItem={renderItem}
+      ItemSeparatorComponent={RowSeparator}
+      keyboardDismissMode="on-drag"
+      keyboardShouldPersistTaps="handled"
     />
   )
 }
 
-function AgentHistoryCardRow({
-  card,
-  expanded,
-  session,
-  showCurrentWorktreeBadge,
-  resumeActionState,
-  onResume,
-  onPress
-}: {
-  card: MobileAgentHistoryCard
-  expanded: boolean
-  session: AiVaultSession | null
-  showCurrentWorktreeBadge: boolean
-  resumeActionState?: { disabled: boolean; loading: boolean }
-  onResume?: (session: AiVaultSession) => void | Promise<void>
-  onPress: () => void
-}) {
-  const previewTurns = useMemo(
-    () => (expanded && session ? recentSessionConversationTurns(session, PREVIEW_TURN_LIMIT) : []),
-    [expanded, session]
-  )
-
-  return (
-    <Pressable
-      style={({ pressed }) => [styles.card, pressed && styles.cardPressed]}
-      onPress={onPress}
-    >
-      <View style={styles.cardTopRow}>
-        <MobileAgentIcon agentId={card.agent} size={16} />
-        <Text style={styles.cardTitle} numberOfLines={1}>
-          {card.title}
-        </Text>
-        {card.timeAgo ? <Text style={styles.cardTimeAgo}>{card.timeAgo}</Text> : null}
-      </View>
-      {card.lastMessage ? (
-        <Text style={styles.cardLastMessage} numberOfLines={expanded ? undefined : 2}>
-          {card.lastMessage}
-        </Text>
-      ) : null}
-      <View style={styles.cardMetaRow}>
-        <Text style={styles.cardMetaText}>{card.agentLabel}</Text>
-        <Text style={styles.cardMetaText}>
-          {card.messageCount} {card.messageCount === 1 ? 'message' : 'messages'}
-        </Text>
-        {showCurrentWorktreeBadge && card.isCurrentWorktree ? (
-          <View style={styles.currentBadge}>
-            <Text style={styles.currentBadgeText}>current worktree</Text>
-          </View>
-        ) : null}
-        {session && onResume ? (
-          <Pressable
-            style={({ pressed }) => [
-              styles.resumeButton,
-              resumeActionState?.disabled && styles.resumeButtonDisabled,
-              pressed && !resumeActionState?.disabled && styles.resumeButtonPressed
-            ]}
-            onPress={(event) => {
-              event.stopPropagation()
-              if (!resumeActionState?.disabled) {
-                void onResume(session)
-              }
-            }}
-            disabled={resumeActionState?.disabled}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel="Resume agent session"
-          >
-            {resumeActionState?.loading ? (
-              <ActivityIndicator size="small" color={colors.textPrimary} />
-            ) : (
-              <Play size={17} color={colors.textPrimary} strokeWidth={2.4} />
-            )}
-          </Pressable>
-        ) : null}
-      </View>
-      {expanded && previewTurns.length > 0 ? (
-        <View style={styles.preview}>
-          {previewTurns.map((turn, index) => (
-            <View key={`${card.id}-turn-${index}`} style={styles.previewTurn}>
-              <Text style={styles.previewRole}>{turn.role}</Text>
-              <Text style={styles.previewText}>{turn.text}</Text>
-            </View>
-          ))}
-        </View>
-      ) : null}
-    </Pressable>
-  )
+function RowSeparator() {
+  return <View style={styles.separator} />
 }
