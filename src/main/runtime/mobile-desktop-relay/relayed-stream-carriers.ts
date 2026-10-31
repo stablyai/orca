@@ -1,11 +1,16 @@
-/** terminal-stream-id renumbers result/header ids; none carries no id (one phone screencast at a time).
- * Refuse phone-binary-frames because the relay cannot forward their input. */
-export type RelayedStreamCarrier = 'terminal-stream-id' | 'none' | 'phone-binary-frames'
+/** terminal-stream-id renumbers result/header ids; untagged-binary sends binary frames that carry no id
+ * (one phone screencast at a time); none sends no binary.
+ * client-stream-ids keeps ids as sent: the client allocates them, and its binary input is forwarded unread. */
+export type RelayedStreamCarrier =
+  | 'terminal-stream-id'
+  | 'untagged-binary'
+  | 'none'
+  | 'client-stream-ids'
 
 export const RELAYED_STREAM_CARRIERS: ReadonlyMap<string, RelayedStreamCarrier> = new Map([
   ['terminal.subscribe', 'terminal-stream-id'],
-  ['terminal.multiplex', 'phone-binary-frames'],
-  ['browser.screencast', 'none'],
+  ['terminal.multiplex', 'client-stream-ids'],
+  ['browser.screencast', 'untagged-binary'],
   ['agentSession.subscribe', 'none'],
   ['agentSession.subscribeStatus', 'none'],
   ['nativeChat.subscribe', 'none'],

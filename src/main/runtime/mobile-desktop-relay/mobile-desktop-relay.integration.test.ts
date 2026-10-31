@@ -4,23 +4,18 @@ import { mkdtempSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import WebSocket from 'ws'
 import { z } from 'zod'
-import {
-  decrypt,
-  decryptBytes,
-  deriveSharedKey,
-  encrypt,
-  generateKeyPair,
-  publicKeyFromBase64,
-  publicKeyToBase64
-} from '../../../shared/e2ee-crypto'
 import { parsePairingCode, type PairingOffer } from '../../../shared/pairing'
 import {
   DELEGATED_MOBILE_DEVICE_SYNC_METHOD,
   DelegatedMobileDeviceSyncParamsSchema
 } from '../../../shared/delegated-mobile-device-contract'
-import { decodeTerminalStreamFrame } from '../../../shared/terminal-stream-protocol'
+import {
+  decodeTerminalStreamFrame,
+  encodeTerminalStreamFrame,
+  encodeTerminalStreamJson,
+  TerminalStreamOpcode
+} from '../../../shared/terminal-stream-protocol'
 import { sendRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
 import { mintBrowserScreencastSubscriptionId } from '../browser-screencast-subscription-id'
 import { OrcaRuntimeService } from '../orca-runtime'
@@ -36,9 +31,18 @@ import { RUNTIME_CLIENT_CAPABILITY_METHODS } from '../rpc/methods/runtime-client
 import { WORKTREE_METHODS } from '../rpc/methods/worktree'
 import { CLIENT_UI_METHODS } from '../rpc/methods/client-ui'
 import { PAIRING_METHODS } from '../rpc/methods/pairing'
+import { FILE_MUTATION_METHODS } from '../rpc/methods/files-mutation-methods'
+import {
+  RUNTIME_CLIENT_RELAY_RUNTIME_CAPABILITY,
+  RUNTIME_CLIENT_RELAY_TERMINAL_MULTIPLEX_RUNTIME_CAPABILITY
+} from '../../../shared/mobile-desktop-relay-contract'
 import { sendRequest } from '../runtime-rpc-test-harness'
 import { makeStore } from '../runtime-rpc-worktree-store-fixtures'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
+import {
+  connectRelayTestClient,
+  type RelayTestFrame as Frame
+} from './relay-test-client.test-fixture'
 import type * as PassthroughSocketModule from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
 
 const passthroughOpens = vi.hoisted(() => {
@@ -98,7 +102,6 @@ class SeatObservableRuntime extends OrcaRuntimeService {
 
 const WORKTREE = 'id:repo-1::/tmp/worktree-a'
 const TARGET = 'runtime:env-1'
-type Frame = Record<string, unknown>
 
 describe('mobile desktop relay: phone -> desktop -> server', () => {
   const cleanups: (() => Promise<void> | void)[] = []
@@ -139,7 +142,8 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
         ...RUNTIME_CLIENT_CAPABILITY_METHODS,
         ...CLIENT_UI_METHODS,
         ...WORKTREE_METHODS,
-        ...PAIRING_METHODS
+        ...PAIRING_METHODS,
+        ...FILE_MUTATION_METHODS
       ],
       enableWebSocket: true,
       wsPort: 0
@@ -233,74 +237,18 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     return { host, desktop, desktopSpawns, children, syncedNames, state, handle }
   }
 
-  async function connectPhone(desktop: OrcaRuntimeRpcServer, name: string) {
-    const pairing = pair(desktop, 'mobile', name)
-    const keys = generateKeyPair()
-    const sharedKey = deriveSharedKey(keys.secretKey, publicKeyFromBase64(pairing.publicKeyB64))
-    const ws = new WebSocket(pairing.endpoint)
-    const frames: Frame[] = []
-    const binaries: Uint8Array[] = []
-    let authenticated = false
-    const ready = new Promise<void>((resolve) => {
-      ws.on('message', (data: Buffer, isBinary) => {
-        if (isBinary) {
-          binaries.push(decryptBytes(new Uint8Array(data), sharedKey)!)
-          return
-        }
-        const text = data.toString()
-        if (text.includes('e2ee_ready')) {
-          ws.send(
-            encrypt(
-              JSON.stringify({ type: 'e2ee_auth', deviceToken: pairing.deviceToken }),
-              sharedKey
-            )
-          )
-          return
-        }
-        const frame = z.record(z.string(), z.unknown()).parse(JSON.parse(decrypt(text, sharedKey)!))
-        if (!authenticated) {
-          authenticated = frame.type === 'e2ee_authenticated'
-          resolve()
-          return
-        }
-        frames.push(frame)
-      })
+  async function connectPhone(
+    desktop: OrcaRuntimeRpcServer,
+    name: string,
+    scope: 'mobile' | 'runtime' = 'mobile',
+    clientCapabilities: readonly string[] = []
+  ) {
+    const client = await connectRelayTestClient(pair(desktop, scope, name), {
+      clientCapabilities,
+      defaultExecutionHost: TARGET
     })
-    ws.once('open', () =>
-      ws.send(
-        JSON.stringify({ type: 'e2ee_hello', publicKeyB64: publicKeyToBase64(keys.publicKey) })
-      )
-    )
-    await ready
-    cleanups.push(() => ws.close())
-    const token = pairing.deviceToken
-    return {
-      token,
-      deviceId: pairing.pairedDeviceId!,
-      frames,
-      binaries,
-      close: () => ws.close(),
-      send(id: string, method: string, params: unknown, executionHost: string | null = TARGET) {
-        ws.send(
-          encrypt(
-            JSON.stringify({
-              id,
-              deviceToken: token,
-              method,
-              params,
-              executionHost: executionHost ?? undefined
-            }),
-            sharedKey
-          )
-        )
-      },
-      next: (id: string, predicate: (frame: Frame) => boolean = () => true) =>
-        vi.waitFor(() => {
-          const frame = frames.find((candidate) => candidate.id === id && predicate(candidate))
-          expect(frame).toBeDefined()
-          return frame!
-        })
-    }
+    cleanups.push(() => client.close())
+    return client
   }
   type Phone = Awaited<ReturnType<typeof connectPhone>>
 
@@ -650,5 +598,264 @@ describe('mobile desktop relay: phone -> desktop -> server', () => {
     state.retire('env-1')
     phone.send('updated', 'terminal.list', {})
     expect(isOk(await phone.next('updated'))).toBe(true)
+  })
+  const capabilitiesOf = (frame: Frame) =>
+    z.object({ result: z.object({ capabilities: z.array(z.string()) }) }).parse(frame).result
+      .capabilities
+
+  it('relays a paired desktop client to the server as its own delegated device, never handing it the server token', async () => {
+    const { host, desktop, children, syncedNames, handle } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime')
+
+    client.send('status', 'status.get', {}, null)
+    phone.send('status', 'status.get', {}, null)
+    expect(capabilitiesOf(await client.next('status'))).toContain(
+      RUNTIME_CLIENT_RELAY_RUNTIME_CAPABILITY
+    )
+    expect(capabilitiesOf(await phone.next('status'))).not.toContain(
+      RUNTIME_CLIENT_RELAY_RUNTIME_CAPABILITY
+    )
+    // Pairing alone mints nothing on the server; no phone subscribes, so desktop input is not floor-paused.
+    phone.send('phone-list', 'terminal.list', {})
+    expect(isOk(await phone.next('phone-list'))).toBe(true)
+    expect(children().map((device) => device.phoneKey)).toEqual([phone.deviceId])
+
+    client.send('list', 'terminal.list', {})
+    expect(isOk(await client.next('list'))).toBe(true)
+    expect(passthroughOpens.hostReplies.some((frame) => JSON.parse(frame).id === 'list')).toBe(true)
+    const delegated = children().find((device) => device.phoneKey === client.deviceId)!
+    // A first step reuses the phone child scope on the server, which already allows every execution-host route.
+    expect(delegated.scope).toBe('mobile')
+    expect(syncedNames.at(-1)).toEqual([
+      `iPhone via ${desktop.runtime.readMachineName()}`,
+      `Laptop via ${desktop.runtime.readMachineName()}`
+    ])
+    client.send('in', 'terminal.send', {
+      terminal: handle,
+      text: 'pwd',
+      client: { id: client.token, type: 'desktop' }
+    })
+    expect(sendAccepted(await client.next('in'))).toBe(true)
+    expect(host.writes).toContain('pwd')
+
+    client.send('watch', 'terminal.subscribe', {
+      terminal: handle,
+      client: { id: client.token, type: 'desktop' }
+    })
+    await client.next('watch')
+    host.runtime.onPtyData('pty-shared', 'relayed-output', Date.now())
+    await client.next('watch', (frame) => JSON.stringify(frame).includes('relayed-output'))
+    expect(JSON.stringify(client.frames)).not.toContain(delegated.token)
+  })
+
+  it("keeps a paired desktop client's untargeted and desktop-owned calls on the desktop", async () => {
+    const { desktop } = await startTopology()
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime')
+    const opensBefore = passthroughOpens.count
+
+    // Desktop-owned routes stay here even when targeted, as for phones; non-server targets are untouched.
+    client.send('settings', 'settings.get', {})
+    client.send('absent', 'terminal.list', {}, null)
+    client.send('local', 'terminal.list', {}, 'local')
+    client.send('ssh', 'terminal.list', {}, 'ssh:devbox')
+    for (const id of ['settings', 'absent', 'local', 'ssh']) {
+      expect(isOk(await client.next(id))).toBe(true)
+    }
+    expect(passthroughOpens.count).toBe(opensBefore)
+  })
+
+  it('never runs a server-targeted call from a paired desktop client on the desktop instead', async () => {
+    const { desktop, desktopSpawns, children } = await startTopology()
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime')
+    const desktopWrite = vi.spyOn(desktop.runtime, 'writeFileExplorerFile')
+    const opensBefore = passthroughOpens.count
+
+    // files.write is not relayable, so naming a server refuses it rather than writing on this computer.
+    client.send('write', 'files.write', { worktree: WORKTREE, relativePath: 'a.txt', content: 'x' })
+    expect(errorCode(await client.next('write'))).toBe('forbidden')
+    client.send('garbled', 'terminal.list', {}, 'runtime:')
+    expect(errorCode(await client.next('garbled'))).toBe('invalid_argument')
+    expect(desktopWrite).not.toHaveBeenCalled()
+    expect(passthroughOpens.count).toBe(opensBefore)
+
+    client.send('multiplex', 'terminal.multiplex', {})
+    expect(errorCode(await client.next('multiplex'))).toBe('forbidden')
+    client.send(
+      'unknown',
+      'terminal.create',
+      {
+        worktree: WORKTREE,
+        command: 'bash',
+        tabId: 'tab-2',
+        leafId: '22222222-2222-4222-8222-222222222222'
+      },
+      'runtime:env-unknown'
+    )
+    expect(errorCode(await client.next('unknown'))).toBe('remote_runtime_unavailable')
+    expect(desktopSpawns).toEqual([])
+    // Only a server the client reached gets a device for it; an unknown target enrolls it nowhere.
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    phone.send('phone-list', 'terminal.list', {})
+    expect(isOk(await phone.next('phone-list'))).toBe(true)
+    expect(children().map((device) => device.phoneKey)).toEqual([phone.deviceId])
+  })
+
+  it('runs a targeted call from a paired desktop client locally on a desktop that relays to no server', async () => {
+    const desktop = await startRuntime()
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime')
+    const opensBefore = passthroughOpens.count
+
+    client.send('status', 'status.get', {}, null)
+    expect(capabilitiesOf(await client.next('status'))).not.toContain(
+      RUNTIME_CLIENT_RELAY_RUNTIME_CAPABILITY
+    )
+    client.send('list', 'terminal.list', {})
+    expect(isOk(await client.next('list'))).toBe(true)
+    expect(passthroughOpens.count).toBe(opensBefore)
+  })
+
+  it("revokes a desktop client's server device when the desktop revokes the client, leaving its phones", async () => {
+    const { desktop, children, handle } = await startTopology()
+    const phone = await connectPhone(desktop.server, 'iPhone')
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime')
+    await subscribe(phone, handle)
+    client.send('list', 'terminal.list', {})
+    expect(isOk(await client.next('list'))).toBe(true)
+    expect(children().map((device) => device.phoneKey)).toEqual([phone.deviceId, client.deviceId])
+
+    expect(desktop.server.revokeRuntimeAccess(client.deviceId)).toBe(true)
+    await vi.waitFor(() =>
+      expect(children().map((device) => device.phoneKey)).toEqual([phone.deviceId])
+    )
+  })
+  // A client-chosen id no allocator on either computer would produce, so any renumbering shows.
+  const CLIENT_STREAM = 4242
+  const MULTIPLEX_CLIENT = [RUNTIME_CLIENT_RELAY_TERMINAL_MULTIPLEX_RUNTIME_CAPABILITY]
+  const streamFrame = (opcode: TerminalStreamOpcode, streamId: number, payload: Uint8Array) =>
+    encodeTerminalStreamFrame({ opcode, streamId, seq: 0, payload })
+  const subscribeFrame = (handle: string) =>
+    streamFrame(
+      TerminalStreamOpcode.Subscribe,
+      0,
+      encodeTerminalStreamJson({
+        streamId: CLIENT_STREAM,
+        terminal: handle,
+        client: { id: 'desktop:tab:leaf:relayed', type: 'desktop' },
+        viewport: { cols: 80, rows: 24 }
+      })
+    )
+  const inputFrame = (text: string) =>
+    streamFrame(TerminalStreamOpcode.Input, CLIENT_STREAM, new TextEncoder().encode(text))
+  const outputOn = (client: Phone, streamId: number, text: string) =>
+    client.binaries.some((bytes) => {
+      const frame = decodeTerminalStreamFrame(bytes)
+      return frame?.streamId === streamId && new TextDecoder().decode(frame.payload).includes(text)
+    })
+  const isReady = (frame: Frame) =>
+    z.object({ result: z.object({ type: z.literal('ready') }) }).safeParse(frame).success
+
+  it("relays a negotiated client's terminal multiplex with its own stream ids, both ways", async () => {
+    const { host, desktop, handle } = await startTopology()
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime', MULTIPLEX_CLIENT)
+    client.send('status', 'status.get', {}, null)
+    expect(capabilitiesOf(await client.next('status'))).toContain(
+      RUNTIME_CLIENT_RELAY_TERMINAL_MULTIPLEX_RUNTIME_CAPABILITY
+    )
+
+    client.send('multiplex', 'terminal.multiplex', {})
+    await client.next('multiplex', isReady)
+    client.sendBinary(subscribeFrame(handle))
+    // The server answers on the client's id, so the subscribe reached it unrenumbered.
+    await client.next(
+      'multiplex',
+      (frame) =>
+        z.object({ result: z.object({ streamId: z.literal(CLIENT_STREAM) }) }).safeParse(frame)
+          .success
+    )
+    await vi.waitFor(() =>
+      expect(
+        client.binaries.some(
+          (bytes) =>
+            decodeTerminalStreamFrame(bytes)?.opcode === TerminalStreamOpcode.SnapshotEnd &&
+            decodeTerminalStreamFrame(bytes)?.streamId === CLIENT_STREAM
+        )
+      ).toBe(true)
+    )
+    host.runtime.onPtyData('pty-shared', 'relayed-output', Date.now())
+    await vi.waitFor(() => expect(outputOn(client, CLIENT_STREAM, 'relayed-output')).toBe(true))
+
+    client.sendBinary(inputFrame('whoami'))
+    await vi.waitFor(() => expect(host.writes).toContain('whoami'))
+    // One connection carries one relayed multiplex, local or relayed, and phones never get one.
+    client.send('second', 'terminal.multiplex', {})
+    expect(errorCode(await client.next('second'))).toBe('forbidden')
+    client.send('local', 'terminal.multiplex', {}, null)
+    expect(await client.next('local')).toMatchObject({
+      ok: false,
+      error: { code: 'runtime_error', message: 'binary_handler_mode_conflict' }
+    })
+    const phone = await connectPhone(desktop.server, 'iPhone', 'mobile', MULTIPLEX_CLIENT)
+    phone.send('multiplex', 'terminal.multiplex', {})
+    expect(errorCode(await phone.next('multiplex'))).toBe('forbidden')
+  })
+
+  it('keeps refusing a relayed multiplex to a client that never declared the capability', async () => {
+    const { desktop } = await startTopology()
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime')
+    const opensBefore = passthroughOpens.count
+
+    client.send('multiplex', 'terminal.multiplex', {})
+    expect(errorCode(await client.next('multiplex'))).toBe('forbidden')
+    expect(passthroughOpens.count).toBe(opensBefore)
+  })
+
+  it('reports a revoked multiplex as unavailable, and a fresh one after the next sync carries input', async () => {
+    const { host, desktop, children, state, handle } = await startTopology()
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime', MULTIPLEX_CLIENT)
+    client.send('multiplex', 'terminal.multiplex', {})
+    await client.next('multiplex', isReady)
+
+    await host.server.revokeMobileDevice(children()[0]!.deviceId)
+    expect(errorCode(await client.next('multiplex', (frame) => frame.ok === false))).toBe(
+      'remote_runtime_unavailable'
+    )
+    state.retire('env-1')
+    client.send('again', 'terminal.multiplex', {})
+    await client.next('again', isReady)
+    client.sendBinary(subscribeFrame(handle))
+    client.sendBinary(inputFrame('after-drop'))
+    await vi.waitFor(() => expect(host.writes).toContain('after-drop'))
+  })
+
+  it('keeps an untargeted multiplex local on a connection no relayed multiplex owns', async () => {
+    const { host, desktop } = await startTopology()
+    const metadata = readRuntimeMetadata(desktop.userDataPath)!
+    const created = await sendRequest(metadata.transports[0]!.endpoint, {
+      id: 'create-local',
+      authToken: metadata.authToken,
+      method: 'terminal.create',
+      params: {
+        worktree: WORKTREE,
+        command: 'bash',
+        tabId: 'tab-local',
+        leafId: '33333333-3333-4333-8333-333333333333',
+        activate: true
+      }
+    })
+    const local = z.object({ terminal: z.object({ handle: z.string() }) }).parse(created.result)
+    const client = await connectPhone(desktop.server, 'Laptop', 'runtime', MULTIPLEX_CLIENT)
+    const opensBefore = passthroughOpens.count
+
+    client.send('multiplex', 'terminal.multiplex', {}, null)
+    await client.next('multiplex', isReady)
+    client.sendBinary(subscribeFrame(local.terminal.handle))
+    client.sendBinary(inputFrame('stays-here'))
+    await vi.waitFor(() => expect(desktop.writes).toContain('stays-here'))
+    expect(host.writes).not.toContain('stays-here')
+    expect(passthroughOpens.count).toBe(opensBefore)
+    // A relayed multiplex would take this connection's binary frames from its local streams.
+    client.send('relayed', 'terminal.multiplex', {})
+    expect(errorCode(await client.next('relayed'))).toBe('forbidden')
   })
 })

@@ -3,6 +3,7 @@ import {
   readTerminalStreamFrameId,
   writeTerminalStreamFrameId
 } from '../../../shared/terminal-stream-protocol'
+import type { RelayedStreamCarrier } from './relayed-stream-carriers'
 
 const STRIPPED_ENVELOPE_FIELDS = new Set(['deviceToken', 'executionHost'])
 
@@ -68,26 +69,57 @@ export function withRelayedLaunchChatDefault(
   })
 }
 
-/** Renumber host stream ids: each host starts at 1, but the phone routes all binary frames on one socket. */
+type OpenRelayedRequest = {
+  hostStreamIds: number[]
+  swallow: boolean
+  carrier: RelayedStreamCarrier | undefined
+}
+
+/** Renumber host stream ids: each host starts at 1, but the phone routes all binary frames on one socket.
+ * A client-stream-ids request keeps its ids: its client allocated them, so they already fit its socket. */
 export class RelayedPhoneReplies {
   // Relay-owned requests have no phone awaiting their replies.
-  private readonly openRequests = new Map<string, { hostStreamIds: number[]; swallow: boolean }>()
+  private readonly openRequests = new Map<string, OpenRelayedRequest>()
   private readonly desktopStreamIds = new Map<number, number>()
+  private clientStreamRequestId: string | null = null
 
   constructor(private readonly allocateStreamId: () => number) {}
 
-  noteForwarded(requestId: string, options: { swallowReplies?: boolean } = {}): void {
+  noteForwarded(
+    requestId: string,
+    options: { swallowReplies?: boolean; carrier?: RelayedStreamCarrier } = {}
+  ): void {
     this.openRequests.set(requestId, {
       hostStreamIds: [],
-      swallow: options.swallowReplies === true
+      swallow: options.swallowReplies === true,
+      carrier: options.carrier
     })
+    if (options.carrier === 'client-stream-ids') {
+      this.clientStreamRequestId = requestId
+    }
   }
 
   takeOpenRequestIds(): string[] {
     const ids = [...this.openRequests].filter(([, open]) => !open.swallow).map(([id]) => id)
     this.openRequests.clear()
     this.desktopStreamIds.clear()
+    this.clientStreamRequestId = null
     return ids
+  }
+
+  /** Whether a client-stream-ids request is still open, so this link owns its client's binary frames. */
+  carriesClientStreams(): boolean {
+    return this.clientStreamRequestId !== null
+  }
+
+  /** Whether relayed binary other than a multiplex is, or may soon be, live on the caller's socket. */
+  carriesOtherBinaryStreams(): boolean {
+    return (
+      this.desktopStreamIds.size > 0 ||
+      [...this.openRequests.values()].some(
+        (open) => open.carrier === 'terminal-stream-id' || open.carrier === 'untagged-binary'
+      )
+    )
   }
 
   /** Return the phone frame, or null to drop it. */
@@ -104,12 +136,20 @@ export class RelayedPhoneReplies {
     const open = this.openRequests.get(parsed.id)
     const result = parsed.result
     let renumbered = false
-    if (open && isRecord(result) && typeof result.streamId === 'number') {
+    if (
+      open &&
+      open.carrier !== 'client-stream-ids' &&
+      isRecord(result) &&
+      typeof result.streamId === 'number'
+    ) {
       result.streamId = this.desktopStreamId(result.streamId, open.hostStreamIds)
       renumbered = true
     }
-    // Unsubscribe sends no end; cap retained streams until link closure.
-    if (open && (parsed.streaming !== true || (isRecord(result) && result.type === 'end'))) {
+    // Unsubscribe sends no end; cap retained streams until link closure. A multiplex `end` closes one client stream only.
+    const endsRequest =
+      parsed.streaming !== true ||
+      (open?.carrier !== 'client-stream-ids' && isRecord(result) && result.type === 'end')
+    if (open && endsRequest) {
       this.finish(parsed.id, open.hostStreamIds)
     }
     if (open?.swallow) {
@@ -118,10 +158,11 @@ export class RelayedPhoneReplies {
     return renumbered ? JSON.stringify(parsed) : plaintext
   }
 
-  /** Drop terminal frames for streams never announced to the phone. */
+  /** Drop terminal frames for streams never announced to the phone. A client-stream-ids link passes every
+   * frame through: the server owns that stream state, and the client unsubscribes streams it no longer has. */
   binary(bytes: Uint8Array<ArrayBufferLike>): Uint8Array<ArrayBufferLike> | null {
     const hostStreamId = readTerminalStreamFrameId(bytes)
-    if (hostStreamId === null) {
+    if (hostStreamId === null || this.clientStreamRequestId !== null) {
       return bytes
     }
     const desktopStreamId = this.desktopStreamIds.get(hostStreamId)
@@ -145,6 +186,9 @@ export class RelayedPhoneReplies {
 
   private finish(requestId: string, hostStreamIds: number[]): void {
     this.openRequests.delete(requestId)
+    if (this.clientStreamRequestId === requestId) {
+      this.clientStreamRequestId = null
+    }
     for (const hostStreamId of hostStreamIds) {
       this.desktopStreamIds.delete(hostStreamId)
     }

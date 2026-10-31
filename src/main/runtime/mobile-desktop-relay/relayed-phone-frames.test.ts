@@ -126,6 +126,27 @@ describe('RelayedPhoneReplies', () => {
     relay.noteForwarded('mine-2', { swallowReplies: true })
     expect(relay.takeOpenRequestIds()).toEqual(['open'])
   })
+  it('keeps client-allocated stream ids in both directions and passes frames for streams it never saw', () => {
+    const relay = replies()
+    relay.noteForwarded('m', { carrier: 'client-stream-ids' })
+    const ended = JSON.stringify({
+      id: 'm',
+      ok: true,
+      streaming: true,
+      result: { type: 'end', streamId: 4242 },
+      _meta: {}
+    })
+    // The server owns multiplex stream state; the client unsubscribes streams it has dropped.
+    expect(relay.text(subscribed('m', 4242))).toBe(subscribed('m', 4242))
+    expect(relay.text(ended)).toBe(ended)
+    expect(decodeTerminalStreamFrame(relay.binary(output(4242))!)?.streamId).toBe(4242)
+    expect(decodeTerminalStreamFrame(relay.binary(output(9))!)?.streamId).toBe(9)
+    // One stream's end leaves the multiplex open; only its final reply releases the lane.
+    expect(relay.carriesClientStreams()).toBe(true)
+    relay.text('{"id":"m","ok":false,"error":{"code":"x","message":"y"},"_meta":{}}')
+    expect(relay.carriesClientStreams()).toBe(false)
+    expect(relay.binary(output(4242))).toBeNull()
+  })
 })
 
 it.each(['chat', 'terminal'] as const)(

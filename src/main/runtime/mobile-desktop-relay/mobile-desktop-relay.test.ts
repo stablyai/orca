@@ -4,11 +4,13 @@ import { BROWSER_CLIENT_HOST_RUNTIME_CAPABILITY } from '../../../shared/protocol
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { RemoteRuntimeClientError } from '../../../shared/remote-runtime/remote-runtime-client-error'
 import type { RemoteRuntimePassthroughCallbacks } from '../../../shared/remote-runtime/remote-runtime-passthrough-socket'
-import { MobileDesktopRelay, type RelayedPhone } from './mobile-desktop-relay'
+import { MobileDesktopRelay } from './mobile-desktop-relay'
+import type { RelayedPhone } from './relay-link'
 import type { MobileDesktopRelayHosts } from './mobile-desktop-relay-hosts'
 
 type FakeSocket = {
   sent: string[]
+  binaries: Uint8Array[]
   capabilities: readonly string[]
   callbacks: RemoteRuntimePassthroughCallbacks
   closed: boolean
@@ -26,12 +28,23 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-passthrough-socket', () =
     capabilities: readonly string[],
     callbacks: RemoteRuntimePassthroughCallbacks
   ) => {
-    const socket: FakeSocket = { sent: [], capabilities, callbacks, closed: false, accepts: true }
+    const socket: FakeSocket = {
+      sent: [],
+      binaries: [],
+      capabilities,
+      callbacks,
+      closed: false,
+      accepts: true
+    }
     sockets.push(socket)
     await openGate.wait
     return {
       send: (frame: string) => {
         socket.sent.push(frame)
+        return socket.accepts
+      },
+      sendBinary: (bytes: Uint8Array) => {
+        socket.binaries.push(bytes)
         return socket.accepts
       },
       close: () => {
@@ -223,6 +236,25 @@ describe('MobileDesktopRelay', () => {
     await vi.waitFor(() => expect(sockets[1]!.closed).toBe(true))
   })
 
+  it("hands the caller its own token wherever the server echoes the caller's delegated token", async () => {
+    sockets.length = 0
+    const { relay, phone, replies } = relayWithPhone()
+    relay.forward(phone, 'env-1', { id: 's', method: 'terminal.subscribe' }, '{"id":"s"}')
+    await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+    const driver = { kind: 'mobile', clientId: 'host-token' }
+    sockets[0]!.callbacks.onText(
+      JSON.stringify({
+        id: 's',
+        ok: true,
+        streaming: true,
+        result: { type: 'driver-changed', driver }
+      })
+    )
+    expect(replies).toHaveLength(1)
+    expect(replies[0]).not.toContain('host-token')
+    expect(JSON.parse(replies[0]!).result.driver.clientId).toBe('desktop-token')
+  })
+
   it('treats a server whose sync failed as unavailable, and syncs again on the next request', async () => {
     sockets.length = 0
     let failing = true
@@ -334,6 +366,98 @@ describe('MobileDesktopRelay', () => {
     expect(JSON.parse(replies[0]!)).toMatchObject({
       id: 'a',
       error: { code: 'remote_runtime_unavailable' }
+    })
+  })
+  describe('a relayed terminal multiplex', () => {
+    const multiplex = (id: string) => ({ id, method: 'terminal.multiplex' })
+    const bytes = Uint8Array.of(0x74, 1, 7, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0)
+
+    it('takes its connection’s binary frames only while open, and lets every other connection fall through', async () => {
+      sockets.length = 0
+      let release = () => {}
+      openGate.wait = new Promise((resolve) => (release = resolve))
+      const { relay, phone, replies } = relayWithPhone()
+      const client: RelayedPhone = { ...phone, carriesClientStreams: true }
+      expect(relay.forwardClientBinary('conn-1', bytes)).toBe(false)
+      relay.forward(client, 'env-1', multiplex('m'), '{"id":"m","method":"terminal.multiplex"}')
+      // Frames racing the open are swallowed: they never reach local streams, and nothing on the server reads them.
+      await vi.waitFor(() => expect(sockets).toHaveLength(1))
+      expect(relay.forwardClientBinary('conn-1', bytes)).toBe(true)
+      expect(relay.forwardClientBinary('conn-2', bytes)).toBe(false)
+      release()
+      await vi.waitFor(() => expect(sockets[0]!.sent).toHaveLength(1))
+      expect(sockets[0]!.binaries).toEqual([])
+      openGate.wait = Promise.resolve()
+
+      expect(relay.forwardClientBinary('conn-1', bytes)).toBe(true)
+      expect(sockets[0]!.binaries).toEqual([bytes])
+      sockets[0]!.callbacks.onText('{"id":"m","ok":false,"error":{"code":"x","message":"y"}}')
+      expect(replies).toHaveLength(1)
+      expect(relay.forwardClientBinary('conn-1', bytes)).toBe(false)
+    })
+
+    it('refuses a phone, and releases the lane when the server socket drops', async () => {
+      sockets.length = 0
+      const { relay, phone, replies } = relayWithPhone()
+      relay.forward(phone, 'env-1', multiplex('p'), '{"id":"p"}')
+      expect(JSON.parse(replies[0]!).error.code).toBe('forbidden')
+      expect(sockets).toEqual([])
+
+      const client: RelayedPhone = { ...phone, carriesClientStreams: true }
+      relay.forward(client, 'env-1', multiplex('m'), '{"id":"m"}')
+      await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+      sockets[0]!.callbacks.onClose(new RemoteRuntimeClientError('remote_runtime_unavailable', 'x'))
+      expect(JSON.parse(replies[1]!)).toMatchObject({
+        id: 'm',
+        error: { code: 'remote_runtime_unavailable' }
+      })
+      expect(relay.forwardClientBinary('conn-1', bytes)).toBe(false)
+    })
+
+    it('keeps a relayed screencast and a relayed multiplex off the same connection, either way round', async () => {
+      sockets.length = 0
+      const { relay, phone, replies } = relayWithPhone()
+      const client: RelayedPhone = { ...phone, carriesClientStreams: true }
+      const screencast = (id: string) => ({ id, method: 'browser.screencast' })
+      relay.forward(client, 'env-1', screencast('cast'), '{"id":"cast"}')
+      relay.forward(client, 'env-1', multiplex('m'), '{"id":"m"}')
+      expect(JSON.parse(replies[0]!)).toMatchObject({ id: 'm', error: { code: 'forbidden' } })
+
+      await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+      sockets[0]!.callbacks.onText(
+        '{"id":"cast","ok":true,"streaming":true,"result":{"type":"end"}}'
+      )
+      relay.forward(client, 'env-1', multiplex('m2'), '{"id":"m2"}')
+      expect(relay.carriesClientStreams('conn-1')).toBe(true)
+      relay.forward(client, 'env-1', screencast('cast2'), '{"id":"cast2"}')
+      expect(JSON.parse(replies.at(-1)!)).toMatchObject({
+        id: 'cast2',
+        error: { code: 'forbidden' }
+      })
+    })
+
+    it('ends the link when the server cannot queue client input or the client cannot take output', async () => {
+      sockets.length = 0
+      const { relay, phone, replies } = relayWithPhone()
+      let clientAccepts = true
+      const client: RelayedPhone = {
+        ...phone,
+        carriesClientStreams: true,
+        sendBinary: () => clientAccepts
+      }
+      relay.forward(client, 'env-1', multiplex('m'), '{"id":"m"}')
+      await vi.waitFor(() => expect(sockets[0]?.sent).toHaveLength(1))
+      sockets[0]!.accepts = false
+      relay.forwardClientBinary('conn-1', bytes)
+      await vi.waitFor(() => expect(sockets[0]!.closed).toBe(true))
+      expect(JSON.parse(replies[0]!).error.code).toBe('remote_runtime_unavailable')
+
+      relay.forward(client, 'env-1', multiplex('m2'), '{"id":"m2"}')
+      await vi.waitFor(() => expect(sockets[1]?.sent).toHaveLength(1))
+      clientAccepts = false
+      sockets[1]!.callbacks.onBinary(bytes)
+      await vi.waitFor(() => expect(sockets[1]!.closed).toBe(true))
+      expect(relay.forwardClientBinary('conn-1', bytes)).toBe(false)
     })
   })
 })
