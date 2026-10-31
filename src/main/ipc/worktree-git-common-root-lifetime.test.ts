@@ -541,14 +541,15 @@ it.each([
     await refreshWorktreeHeadIdentities(consumer, consumer.headIdentityRefresh, false)
     native.mockImplementation(async (...args) => {
       const installed = await installNative(...args)
-      await rm(fsControl.root, { recursive: true })
       fsControl.stat = async () => {
         fsControl.stat = null
+        // Reconciliation starts after fallback retirement, so removal cannot emit fallback batches.
+        await rm(fsControl.root, { recursive: true })
+        fsControl.read = async () => {
+          reachedRead()
+          await blocked.promise
+        }
         throw Object.assign(new Error('controlled root absence'), { code })
-      }
-      fsControl.read = async () => {
-        reachedRead()
-        await blocked.promise
       }
       return installed
     })
