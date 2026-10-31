@@ -19,6 +19,8 @@ export type RuntimeTerminalWriteOptions = {
   afterWrite?: (ptyId: string) => void | Promise<void>
   suffixFailureError?: string
   requireWriteSettlement?: true
+  /** Hold an Enter until a fresh launch's composer is up, refusing the send if it never comes (#34580). */
+  waitForLaunchComposer?: true
 }
 
 export class RuntimeTerminalWriter {
