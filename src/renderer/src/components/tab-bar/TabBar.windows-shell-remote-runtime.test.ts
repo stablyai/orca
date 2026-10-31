@@ -1,3 +1,4 @@
+import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { expandNode, findDropdownMenuItemByText } from './tab-bar-dropdown-menu-item-probe'
 import {
@@ -71,12 +72,12 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.activeRuntimeEnvironmentId = 'web-env-1'
     appStoreSnapshot.worktreesByRepo = {
       fixture: [
-        {
+        makeWorktree({
           id: 'wt-1',
           repoId: 'fixture',
           hostId: 'local',
           runtimeOwnerEnvironmentId: 'web-env-1'
-        }
+        })
       ]
     }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
@@ -139,12 +140,12 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.activeRuntimeEnvironmentId = 'desktop-env-1'
     appStoreSnapshot.worktreesByRepo = {
       fixture: [
-        {
+        makeWorktree({
           id: 'wt-1',
           repoId: 'fixture',
           hostId: 'local',
           runtimeOwnerEnvironmentId: 'desktop-env-1'
-        }
+        })
       ]
     }
     const capabilities = await import('@/lib/windows-terminal-capabilities')
@@ -208,12 +209,12 @@ describe('TabBar PowerShell launch wiring', () => {
     appStoreSnapshot.activeRuntimeEnvironmentId = 'serve-env-1'
     appStoreSnapshot.worktreesByRepo = {
       fixture: [
-        {
+        makeWorktree({
           id: 'wt-1',
           repoId: 'fixture',
           hostId: 'local',
           runtimeOwnerEnvironmentId: 'serve-env-1'
-        }
+        })
       ]
     }
     const capabilities = await import('@/lib/windows-terminal-capabilities')

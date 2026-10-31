@@ -1,5 +1,6 @@
 // @vitest-environment happy-dom
 import { useRef, useState } from 'react'
+import { useAppStore } from '@/store'
 import { cleanup, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -17,12 +18,10 @@ import type { SettingsNavigationModel } from './use-settings-navigation-model'
 import type { SettingsTerminalModel } from './use-settings-terminal-model'
 
 vi.mock('@/lib/host-chat-program-acquisition', () => ({ useChatProgramFacts: () => {} }))
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (value: { settingsSearchQuery: string }) => unknown) =>
-    selector({ settingsSearchQuery: '' })
-}))
+const initial = useAppStore.getState()
 afterEach(() => {
   cleanup()
+  useAppStore.setState(initial, true)
   vi.restoreAllMocks()
 })
 

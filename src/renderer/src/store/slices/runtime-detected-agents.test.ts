@@ -51,6 +51,59 @@ describe('workspace agent detection on a host without workspace-scoped detection
   beforeEach(() => {
     clearRuntimeCompatibilityCacheForTests()
     runtimeEnvironmentCall.mockReset()
+    createTestStore().getState().clearRuntimeDetectedAgents('env-1')
+  })
+
+  it('keeps paired RPC rejection unknown, retained refresh data usable, and empty recovery known', async () => {
+    const store = createTestStore()
+    const fail = () => {
+      serveHost({ hostPlatform: 'win32', scoped: true })
+      const serve = runtimeEnvironmentCall.getMockImplementation()
+      if (!serve) {
+        throw new Error('Missing host transport')
+      }
+      runtimeEnvironmentCall.mockImplementation((request) =>
+        request.method.startsWith('preflight.')
+          ? Promise.resolve({
+              id: request.method,
+              ok: false,
+              error: { code: 'runtime_error', message: 'login environment unavailable' },
+              _meta: { runtimeId: 'remote-runtime' }
+            })
+          : serve(request)
+      )
+    }
+    fail()
+    await store.getState().ensureRuntimeDetectedAgents('env-1', 'wt-1')
+    expect(store.getState().runtimeDetectedAgentIds[KEY]).toBeUndefined()
+    expect(store.getState().runtimeAgentInventoryOutcome(KEY)).toBe('failed')
+    expect(agentCalls()).toHaveLength(1)
+    serveHost({ hostPlatform: 'win32', scoped: true })
+    await store.getState().refreshRuntimeDetectedAgents('env-1', 'wt-1')
+    fail()
+    await store.getState().refreshRuntimeDetectedAgents('env-1', 'wt-1')
+    expect(store.getState().runtimeDetectedAgentIds[KEY]).toEqual(['codex'])
+    expect(store.getState().runtimeAgentInventoryOutcome(KEY)).toBe('failed')
+    expect(store.getState().isRefreshingRuntimeAgents[KEY]).toBe(false)
+    expect(agentCalls()).toHaveLength(3)
+    serveHost({ hostPlatform: 'win32', scoped: true })
+    const serve = runtimeEnvironmentCall.getMockImplementation()
+    if (!serve) {
+      throw new Error('Missing host transport')
+    }
+    runtimeEnvironmentCall.mockImplementation((request) =>
+      request.method === 'preflight.refreshAgents'
+        ? Promise.resolve({
+            id: request.method,
+            ok: true,
+            result: { agents: [] },
+            _meta: { runtimeId: 'remote-runtime' }
+          })
+        : serve(request)
+    )
+    await store.getState().refreshRuntimeDetectedAgents('env-1', 'wt-1')
+    expect(store.getState().runtimeDetectedAgentIds[KEY]).toEqual([])
+    expect(store.getState().runtimeAgentInventoryOutcome(KEY)).toBe('successful')
   })
 
   it.each([

@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { useAppStore } from '@/store'
 import { getDefaultSettings } from '../../../../shared/constants'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { SourceControlAiSettingsPatch } from '../../../../shared/source-control-ai-types'
@@ -13,18 +14,15 @@ import {
 import { toast } from 'sonner'
 import { startTransition, StrictMode, Suspense } from 'react'
 
-const state = vi.hoisted(() => ({ settingsSearchQuery: '' }))
-vi.mock('../../store', () => ({
-  useAppStore: (selector: (value: typeof state) => unknown) => selector(state)
-}))
+const initial = useAppStore.getState()
 vi.mock('sonner', () => ({ toast: { error: vi.fn() } }))
 
 afterEach(() => {
   cleanup()
+  useAppStore.setState(initial, true)
   vi.restoreAllMocks()
 })
 beforeEach(() => {
-  state.settingsSearchQuery = ''
   vi.clearAllMocks()
 })
 
@@ -132,7 +130,9 @@ describe('Chat names setting', () => {
     expect(screen.getByRole('button', { name: 'Advanced' }).getAttribute('aria-expanded')).toBe(
       'false'
     )
-    state.settingsSearchQuery = 'naming agent'
+    act(() => {
+      useAppStore.setState({ settingsSearchQuery: 'naming agent' })
+    })
     rerender(element())
     expect(screen.getByRole('combobox').textContent).toContain('Use chat agent')
     expect(screen.getByRole('button', { name: 'Advanced' }).hasAttribute('disabled')).toBe(true)
@@ -227,7 +227,9 @@ describe('Chat names setting', () => {
     const { settings, element, rerender, onDirtyChange } = renderSetting()
     changeTemplate('Keep my edits')
     settings.nativeChatAutoName = false
-    state.settingsSearchQuery = 'unmatched search'
+    act(() => {
+      useAppStore.setState({ settingsSearchQuery: 'unmatched search' })
+    })
     rerender(element())
     expect(screen.getByDisplayValue('Keep my edits')).toBeTruthy()
     expect(onDirtyChange).toHaveBeenLastCalledWith(true)

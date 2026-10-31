@@ -38,24 +38,20 @@ export async function detectWslCommandsOnPath(
     'done'
   ].join('\n')
 
-  try {
-    // Use cached login PATH without shell startup banners.
-    const result = await runWslProcess({
-      distro: wslTarget.distro,
-      loginPath: 'preferred',
-      script,
-      // POSIX `command -v` loop; declared because the payload is opaque here.
-      shell: 'sh',
-      timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
-    })
-    // Timeout/nonzero results may contain partial stdout, not a complete inventory.
-    if (result.timedOut || result.code !== 0) {
-      return new Set()
-    }
-    return parseWslDetectedCommands(result.stdout)
-  } catch {
-    return new Set()
+  // Use cached login PATH without shell startup banners.
+  const result = await runWslProcess({
+    distro: wslTarget.distro,
+    loginPath: 'preferred',
+    script,
+    // POSIX `command -v` loop; declared because the payload is opaque here.
+    shell: 'sh',
+    timeoutMs: WSL_AGENT_DETECTION_TIMEOUT_MS
+  })
+  // Failed login capture or partial output cannot establish a complete inventory.
+  if (result.timedOut || result.code !== 0 || !result.environmentResolved) {
+    throw new Error('Could not check installed agents in WSL')
   }
+  return parseWslDetectedCommands(result.stdout)
 }
 
 function parseWslDetectedCommands(stdout: string): Set<string> {

@@ -8,16 +8,23 @@ import { STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT } from '../../../..
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import type * as Observation from '@/components/tab-bar/use-new-tab-agent-menu-rows'
 import type * as StructuredAgentClient from '@/runtime/structured-agent-session-client'
 import type { UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
 import { useNativeChatHandOff } from '../native-chat/use-native-chat-hand-off'
 import { AgentSessionContinuationDialog } from './AgentSessionContinuationDialog'
 
 const mocks = vi.hoisted(() => ({
+  observe: vi.fn<typeof Observation.useAgentMenuObservation>(),
   capability: vi.fn(),
   detection: vi.fn<() => UseDetectedAgentsResult>(),
   launch: vi.fn()
 }))
+vi.mock('@/components/tab-bar/use-new-tab-agent-menu-rows', async (importOriginal) => {
+  const actual = await importOriginal<typeof Observation>()
+  mocks.observe.mockImplementation(actual.useAgentMenuObservation)
+  return { ...actual, useAgentMenuObservation: mocks.observe }
+})
 vi.mock('@/runtime/structured-agent-session-client', async (importOriginal) => ({
   ...(await importOriginal<typeof StructuredAgentClient>()),
   supportsStructuredAgentSessionContinuationContext: mocks.capability
@@ -69,6 +76,19 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
   const props = { open: true, request, onOpenChange: vi.fn() }
   mocks.detection.mockReturnValue({ ...detection, detectedIds: null, detectionFailed: true })
   const view = render(<AgentSessionContinuationDialog {...props} />, { wrapper: TooltipProvider })
+  expect(mocks.observe).toHaveBeenLastCalledWith(
+    { workspace: { kind: 'git-worktree', worktreeId: 'wt-1' }, launchCwd: '/repo/.' },
+    true,
+    { kind: 'local' },
+    false,
+    { wakeOnOpen: true }
+  )
+  const observed = mocks.observe.mock.results.at(-1)?.value
+  expect(observed?.model.state).toBe('settled')
+  if (!observed || observed.model.state !== 'settled') {
+    throw new Error('Expected settled observation')
+  }
+  expect(observed.model.rows.filter((row: { kind: string }) => row.kind === 'cli')).toEqual([])
   expect(screen.getByText('Could not detect Agents on this workspace host.')).toBeTruthy()
   mocks.detection.mockReturnValue({ ...detection, detectedIds: null, isLoading: true })
   view.rerender(<AgentSessionContinuationDialog {...props} request={{ ...request }} />)
@@ -90,7 +110,19 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
   fireEvent.click(screen.getByRole('button', { name: 'Start Codex in a terminal' }))
   expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
   view.rerender(<AgentSessionContinuationDialog {...props} open={false} />)
+  expect(mocks.observe.mock.calls.at(-1)?.slice(1)).toEqual([
+    false,
+    { kind: 'local' },
+    false,
+    { wakeOnOpen: true }
+  ])
   view.rerender(<AgentSessionContinuationDialog {...props} />)
+  expect(mocks.observe.mock.calls.at(-1)?.slice(1)).toEqual([
+    true,
+    { kind: 'local' },
+    false,
+    { wakeOnOpen: true }
+  ])
   expect(screen.getAllByRole('combobox')[0].textContent).not.toContain('(CLI)')
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice.requestedSurface).toBeUndefined()

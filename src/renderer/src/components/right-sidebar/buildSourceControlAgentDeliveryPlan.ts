@@ -12,6 +12,7 @@ type BuildSourceControlAgentDeliveryPlanArgs = {
   selectedAgent: TuiAgent | null
   commandInput: string
   agentArgs?: string | undefined
+  explicitInventoryFailed?: boolean
   detectedAgents: TuiAgent[]
   connectionUnavailable: boolean
   launchPlatform?: NodeJS.Platform
@@ -26,6 +27,7 @@ export function buildSourceControlAgentDeliveryPlan({
   commandInput,
   agentArgs,
   detectedAgents,
+  explicitInventoryFailed,
   connectionUnavailable,
   launchPlatform,
   isRemote
@@ -38,6 +40,7 @@ export function buildSourceControlAgentDeliveryPlan({
     commandInput,
     agentArgs,
     detectedAgents,
+    explicitInventoryFailed,
     disabledAgents: (agentLaunchPreferences ?? settings)?.disabledTuiAgents,
     cmdOverrides: settings?.agentCmdOverrides,
     terminalWindowsShell: settings?.terminalWindowsShell,

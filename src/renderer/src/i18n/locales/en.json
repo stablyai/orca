@@ -777,6 +777,10 @@
       }
     },
     "agents": {
+      "coverageDetectionFailed": "Couldn't check which agents are installed. Retry in Settings → Agents.",
+      "localDetectionFailed": "Couldn't check which agents are installed on this computer",
+      "localDetectionRetry": "Couldn't check which agents are installed on this computer. Try again.",
+      "repairRuntime": "Open project Settings → Project Runtime to change it.",
       "permissionsTitle": "Permissions",
       "permissionsChoiceExplanation": "What every agent may do without asking. You can set one agent differently below.",
       "permissionEachOwn": "Each agent's own settings",

@@ -26,8 +26,12 @@ import {
 } from '@/lib/execution-host-facts'
 import { beginStructuredAgentSessionProvisionalLaunch } from '@/lib/agent-session/structured-agent-session-provisional-tab'
 import type { DeclinedStructuredLaunchTerminalOptions } from '@/lib/structured-agent-session-launch-admission'
+import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
+import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import {
-  ensureDetectedAgentsForNewWorktree,
+  detectionTargetForNewWorktree,
+  ensureDetectedAgentsForTarget,
+  readAgentInventoryForTarget,
   type RepoHostFields
 } from '@/lib/agent-detection-target-inventory'
 
@@ -72,9 +76,25 @@ export async function resolveDirectWorkItemAgent(args: {
 }): Promise<{ agent: TuiAgent | null; unavailable: boolean; store: AppState }> {
   // Why: the new workspace's own host answers; a paired server's project must not probe this client.
   const workspace = worktreeLaunchWorkspace(args.worktreeId)
-  const ids = (
-    await ensureDetectedAgentsForNewWorktree(args.latestStore, args.worktreeId, args.repoHost)
-  ).filter(isTuiAgent)
+  const detectionTarget = detectionTargetForNewWorktree(
+    args.latestStore,
+    args.worktreeId,
+    args.repoHost
+  )
+  const localContextKey =
+    detectionTarget.kind === 'local'
+      ? localAgentInventoryContextKey(
+          getLocalAgentPreflightContext(
+            args.latestStore,
+            undefined,
+            undefined,
+            detectionTarget.worktreeId
+          )
+        )
+      : undefined
+  const ids = (await ensureDetectedAgentsForTarget(args.latestStore, detectionTarget)).filter(
+    isTuiAgent
+  )
   const current = useAppStore.getState()
   const wanted =
     args.agentOverride ??
@@ -92,12 +112,29 @@ export async function resolveDirectWorkItemAgent(args: {
   const detected = [...(choices?.detected ?? ids)]
   // A chosen agent may open as a chat without its CLI; the automatic pick stays on detected ones.
   if (args.agentOverride !== undefined) {
+    const sameTarget =
+      JSON.stringify(detectionTarget) ===
+      JSON.stringify(detectionTargetForNewWorktree(store, args.worktreeId, args.repoHost))
+    const sameContext =
+      detectionTarget.kind !== 'local' ||
+      localContextKey ===
+        localAgentInventoryContextKey(
+          getLocalAgentPreflightContext(store, undefined, undefined, detectionTarget.worktreeId)
+        )
+    const inventoryFailed =
+      sameTarget &&
+      sameContext &&
+      readAgentInventoryForTarget(store, detectionTarget).state === 'failed'
+
     return {
       store,
       agent: args.agentOverride,
       unavailable:
+        !sameTarget ||
+        !sameContext ||
         !isTuiAgentEnabled(args.agentOverride, preferences?.disabledTuiAgents) ||
-        (!detected.includes(args.agentOverride) &&
+        (!inventoryFailed &&
+          !detected.includes(args.agentOverride) &&
           !agentChoiceMayOpenAsChat(store, args.agentOverride, workspace, detected))
     }
   }

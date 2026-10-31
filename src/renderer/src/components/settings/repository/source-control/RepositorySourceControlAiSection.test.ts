@@ -4,7 +4,6 @@ import { afterEach, describe, expect, it, vi } from 'vitest'
 import { act, render, cleanup, fireEvent } from '@testing-library/react'
 import '../../__fixtures__/settings-persistence-test-fixture'
 import React from 'react'
-import type { TuiAgent } from '../../../../../../shared/tui-agent'
 import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
 import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control-ai-actions'
@@ -32,6 +31,7 @@ import { clearHostAgentMenuSettingsForTests } from '../../use-host-agent-launch-
 import { mutateHostAgentLaunchSettings } from '../../agent-launch-settings-transport'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: rpc,
@@ -317,12 +317,18 @@ it.each(['', '--model raw'])(
 )
 
 it('keeps default and missing-agent editors disabled only until the host inventory settles', async () => {
+  useAppStore.getState().clearLocalDetectedAgents()
   const settings = useAppStore.getState().settings!
   useAppStore.setState({
-    settings: { ...settings, nativeChatProviders: {} },
-    detectedAgentIds: null,
-    ensureDetectedAgents: vi.fn(() => new Promise<TuiAgent[]>(() => {}))
+    settings: { ...settings, nativeChatProviders: {} }
   })
+  type DetectAgents = Window['api']['preflight']['detectAgents']
+  const reply = Promise.withResolvers<Awaited<ReturnType<DetectAgents>>>()
+  const detected: Awaited<ReturnType<DetectAgents>> = ['claude']
+  const detectAgents = vi.spyOn(window.api.preflight, 'detectAgents').mockReturnValue(reply.promise)
+  const expectedContext = getLocalAgentPreflightContext(useAppStore.getState())
+  const originalEnsure = useAppStore.getState().ensureDetectedAgents
+  const ensure = vi.spyOn(useAppStore.getState(), 'ensureDetectedAgents')
   const onPick = vi.fn()
   const picker = (agent: 'codex' | null) =>
     React.createElement(
@@ -330,18 +336,79 @@ it('keeps default and missing-agent editors disabled only until the host invento
       null,
       React.createElement(SourceControlActionAgentPicker, { agent, onPick })
     )
-  const view = render(picker(null))
-  expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(true)
-  view.rerender(picker('codex'))
-  expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(true)
-  await act(async () => useAppStore.setState({ detectedAgentIds: ['claude'] }))
-  expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(false)
-  expect(onPick).not.toHaveBeenCalled()
-  fireEvent.click(view.getByRole('combobox'))
-  const available = view.getAllByRole('option').find((row) => row.textContent?.includes('Claude'))
-  expect(available).toBeDefined()
-  fireEvent.click(available!)
-  expect(onPick).toHaveBeenCalledWith('claude', {})
+  let view: ReturnType<typeof render> | undefined
+  try {
+    expect(useAppStore.getState().detectedAgentIds).toBeNull()
+    view = render(picker(null))
+    expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(true)
+    view.rerender(picker('codex'))
+    expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(true)
+    expect(ensure).toHaveBeenCalledExactlyOnceWith(undefined)
+    expect(detectAgents).toHaveBeenCalledExactlyOnceWith({ ...expectedContext, enabledOnly: true })
+    expect(useAppStore.getState().readLocalAgentInventory()).toEqual({
+      ids: null,
+      state: 'pending'
+    })
+    await act(async () => {
+      reply.resolve(detected)
+      const completed = await Promise.all(
+        ensure.mock.results.map((result) => {
+          if (result.type !== 'return') {
+            throw new Error('Expected the real inventory owner to return its settlement promise')
+          }
+          return result.value
+        })
+      )
+      expect(completed).toEqual([['claude']])
+    })
+    expect(useAppStore.getState().readLocalAgentInventory()).toEqual({
+      ids: ['claude'],
+      state: 'successful'
+    })
+    expect(useAppStore.getState().detectedAgentIds).toEqual(['claude'])
+    expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(false)
+    expect(onPick).not.toHaveBeenCalled()
+    fireEvent.click(view.getByRole('combobox'))
+    const available = view.getAllByRole('option').find((row) => row.textContent?.includes('Claude'))
+    expect(available).toBeDefined()
+    fireEvent.click(available!)
+    expect(onPick).toHaveBeenCalledWith('claude', {})
+  } finally {
+    try {
+      await act(async () => {
+        try {
+          if (view) {
+            view.unmount()
+          } else {
+            cleanup()
+          }
+        } finally {
+          reply.resolve(detected)
+          const drained = await Promise.allSettled(
+            ensure.mock.results.flatMap((result) =>
+              result.type === 'return' ? [result.value] : []
+            )
+          )
+          expect(drained).toEqual([{ status: 'fulfilled', value: ['claude'] }])
+          expect(ensure.mock.results.map((result) => result.type)).toEqual(['return'])
+        }
+      })
+    } finally {
+      try {
+        useAppStore.getState().clearLocalDetectedAgents()
+      } finally {
+        try {
+          detectAgents.mockRestore()
+        } finally {
+          try {
+            ensure.mockRestore()
+          } finally {
+            useAppStore.setState({ ensureDetectedAgents: originalEnsure })
+          }
+        }
+      }
+    }
+  }
 })
 
 it.each([1, 10])(
@@ -482,3 +549,65 @@ it.each([1, 10])(
     }
   }
 )
+
+it('opens the global unset recipe list after cold failure and persists the complete command through its writer', async () => {
+  const base = useAppStore.getState().settings!
+  useAppStore.getState().clearLocalDetectedAgents()
+  useAppStore.setState({
+    settingsSearchQuery: '',
+    settings: {
+      ...base,
+      defaultTuiAgent: 'blank',
+      agentDefaultSurface: 'terminal',
+      nativeChatProviders: {},
+      sourceControlAi: {
+        ...base.sourceControlAi!,
+        enabled: true,
+        actions: {
+          fixChecks: {
+            agentId: null,
+            agentArgs: '--verbose',
+            commandInputTemplate: 'fix {basePrompt}'
+          }
+        }
+      }
+    }
+  })
+  window.api.preflight.detectAgents = vi.fn().mockRejectedValue(new Error('login capture failed'))
+  await useAppStore.getState().ensureDetectedAgents()
+  function Defaults() {
+    const settings = useAppStore((state) => state.settings)!
+    return React.createElement(SourceControlAiActionRecipeDefaults, {
+      config: settings.sourceControlAi!,
+      defaultTuiAgent: settings.defaultTuiAgent,
+      searchQuery: '',
+      writeConfig: async (patch) => {
+        const current = useAppStore.getState().settings!.sourceControlAi!
+        const updates = typeof patch === 'function' ? patch(current) : patch
+        await useAppStore.getState().updateSettings({ sourceControlAi: { ...current, ...updates } })
+      }
+    })
+  }
+  const view = render(React.createElement(TooltipProvider, null, React.createElement(Defaults)))
+  await act(async () => {})
+  const row = view.getByText('Broken checks fixes').parentElement?.parentElement?.parentElement
+  if (!(row instanceof HTMLElement)) {
+    throw new Error('Missing global Checks recipe')
+  }
+  const { within } = await import('@testing-library/react')
+  expect(within(row).getByRole('combobox').textContent).toContain('Use default agent')
+  await act(async () => fireEvent.click(within(row).getByRole('combobox')))
+  const command = view
+    .getAllByRole('option')
+    .find((option) => option.textContent?.startsWith('Claude'))
+  if (!command) {
+    throw new Error('Missing configured command')
+  }
+  await act(async () => fireEvent.click(command))
+  expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toMatchObject({
+    agentId: 'claude',
+    agentArgs: '--verbose',
+    commandInputTemplate: 'fix {basePrompt}'
+  })
+  expect(useAppStore.getState().readLocalAgentInventory()).toEqual({ ids: null, state: 'failed' })
+})

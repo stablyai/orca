@@ -57,7 +57,7 @@ describe('execution-host Qoder command selection', () => {
     }
   )
 
-  it('queries each execution host without sharing a result or falling back after contact loss', async () => {
+  it('queries each execution host without sharing a result and preserves the original command after contact loss', async () => {
     const options = { launchAgent: 'qoder' as const, command: 'qodercli --resume existing-session' }
     const detect = vi
       .fn()
@@ -70,9 +70,7 @@ describe('execution-host Qoder command selection', () => {
       'qoder --resume existing-session'
     )
     expect((await resolveQoderTerminalCommand(options, ssh, detect)).command).toBe(options.command)
-    await expect(resolveQoderTerminalCommand(options, ssh, detect)).rejects.toThrow(
-      'Host disconnected'
-    )
+    await expect(resolveQoderTerminalCommand(options, ssh, detect)).resolves.toBe(options)
     expect(detect.mock.calls).toEqual([
       [['qodercli', 'qoder'], wsl],
       [['qodercli', 'qoder'], ssh],

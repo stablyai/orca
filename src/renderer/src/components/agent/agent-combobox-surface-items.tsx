@@ -59,12 +59,17 @@ export function surfaceCommandValues(
     value: TuiAgent | null
     blankValue: string
     blankMatchesQuery: boolean
+    terminal?: boolean
   }
 ): { rows: NewTabAgentMenuRow[]; selected: string | null; highlighted: string } {
   // Disabled rows are listed with their reason, so every agent is searched, not only pickable ones.
   const rows = visibleSurfaceRows(model, getAgentCatalog(), picker.query)
   const selected =
-    surfaceRowValue(visibleSurfaceRows(model, getAgentCatalog(), ''), picker.value) ?? null
+    surfaceRowValue(
+      visibleSurfaceRows(model, getAgentCatalog(), ''),
+      picker.value,
+      picker.terminal
+    ) ?? null
   const first = rows.find((row) => row.kind !== 'chat-unavailable')
   const highlighted = !picker.query.trim()
     ? (selected ?? picker.blankValue)
@@ -79,10 +84,12 @@ export function surfaceCommandValues(
 /** The row that carries the selected agent: its chat row when it has one, so the lit button shows. */
 export function surfaceRowValue(
   rows: readonly NewTabAgentMenuRow[],
-  agent: TuiAgent | null
+  agent: TuiAgent | null,
+  terminal = false
 ): string | undefined {
   const own = rows.filter((row) => row.agent === agent && row.kind !== 'chat-unavailable')
-  const row = own.find((candidate) => candidate.kind === 'chat') ?? own[0]
+  const companion = terminal ? own.find((candidate) => candidate.kind === 'cli') : undefined
+  const row = companion ?? own.find((candidate) => candidate.kind === 'chat') ?? own[0]
   return row ? rowId(row) : undefined
 }
 
@@ -162,7 +169,7 @@ export function SurfaceAgentItems({
       </CommandItem>
     ))
   }
-  const pickedValue = surfaceRowValue(rows, value)
+  const pickedValue = surfaceRowValue(rows, value, surfaceRows.selection.cli)
   const terminalPicked = surfaceRows.selection.cli
   return rows.map((row, index) => {
     const id = rowId(row)

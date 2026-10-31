@@ -233,7 +233,7 @@ describe('AgentsPane', () => {
 
     const markup = renderPane(getDefaultSettings('/tmp'))
 
-    expect(markup).toContain('Couldn’t detect installed agents')
+    expect(markup).toContain('check which agents are installed on this computer')
     expect(markup).toContain('Retry')
     expect(markup).not.toContain('Detecting installed agents…')
   })

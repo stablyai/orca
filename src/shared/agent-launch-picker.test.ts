@@ -398,6 +398,20 @@ it('retains a raw permission spelling even when its literal value happens to nam
 })
 
 it('keeps offered host Chat independent of preference through the actual row builder and adapter', () => {
+  const coldInput: Parameters<typeof buildNewTabAgentMenuRows>[0] = {
+    settings: { agentDefaultSurface: 'terminal' },
+    detectedOnHost: null,
+    chatAgents: [],
+    hostChatAnswer: () => 'no-chats',
+    chatProgram: () => 'unknown'
+  }
+  const configuredRows = buildNewTabAgentMenuRows({
+    ...coldInput,
+    configurationCommandCandidates: ['codex']
+  })
+  expect(configuredRows).toEqual([{ kind: 'terminal', agent: 'codex' }])
+  expect(buildNewTabAgentMenuRows(coldInput)).toEqual([])
+  expect(buildNewTabAgentMenuRows({ ...coldInput, configurationCommandCandidates: [] })).toEqual([])
   for (const scenario of [
     {
       defaultMode: 'chat',

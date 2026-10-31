@@ -62,6 +62,20 @@ describe('local detected agent context lifecycle', () => {
     })
   })
 
+  it('evicts published failures with their project and clears all local failures', async () => {
+    const store = createTestStore([makeRepo('repo-a')])
+    detectAgents.mockRejectedValue(new Error('probe failed'))
+    await store.getState().ensureDetectedAgents()
+    expect(store.getState().readLocalAgentInventory()).toEqual({ ids: null, state: 'failed' })
+    expect(Object.keys(store.getState().localAgentInventoryFailedByContext)).toHaveLength(1)
+    store.getState().clearLocalDetectedAgentContextsForProjects(['repo-a'])
+    expect(store.getState().localAgentInventoryFailedByContext).toEqual({})
+    expect(store.getState().readLocalAgentInventory()).toEqual({ ids: null, state: 'pending' })
+    await store.getState().ensureNativeDetectedAgents()
+    store.getState().clearLocalDetectedAgents()
+    expect(store.getState().localAgentInventoryFailedByContext).toEqual({})
+  })
+
   it('keeps complete Settings inventory separate from automatic probes in either completion order', async () => {
     const store = createTestStore([])
     const resolveDetection = new Map<boolean, (ids: string[]) => void>()
@@ -279,8 +293,8 @@ describe('local detected agent context lifecycle', () => {
       }
 
       expect(store.getState().localDetectedAgentIdsByContext).toEqual({
-        host: refreshFails ? [] : ['codex', 'kiro'],
-        'host\u0000all-agents': refreshFails ? [] : ['codex', 'kiro']
+        host: refreshFails ? null : ['codex', 'kiro'],
+        'host\u0000all-agents': refreshFails ? null : ['codex', 'kiro']
       })
       expect(store.getState().isDetectingLocalAgentsByContext).toEqual({})
       expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
@@ -329,7 +343,7 @@ describe('local detected agent context lifecycle', () => {
     refreshAgents.mockRejectedValueOnce(new Error('shell unavailable'))
     await expect(store.getState().refreshAllDetectedAgents()).resolves.toEqual([])
     expect(store.getState().detectedAgentIds).toEqual(['claude'])
-    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toEqual([])
+    expect(store.getState().localDetectedAgentIdsByContext['host\u0000all-agents']).toBeNull()
     expect(store.getState().readLocalAgentInventory().state).toBe('failed')
     expect(store.getState().isRefreshingLocalAgentsByContext).toEqual({})
     detectAgents.mockResolvedValueOnce(['claude', 'kiro'])

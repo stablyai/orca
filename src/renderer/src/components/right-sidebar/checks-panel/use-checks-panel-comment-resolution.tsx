@@ -185,7 +185,11 @@ export function useChecksPanelCommentResolution(model: ChecksPanelCommentResolut
       repo?.id,
       workspace,
       detectedAgentIds,
-      observation.preferences
+      observation.preferences,
+      observation.failedAttempt &&
+        !observation.detection.isLoading &&
+        !observation.detection.isRefreshing &&
+        !observation.detection.needsServerUpdate
     ) == null
   const noEnabledAgentKnown = noAgentFor('resolveConflicts')
   const actionDisabledReason = (actionId: SourceControlActionId): string | undefined =>

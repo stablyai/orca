@@ -13,6 +13,7 @@ export function AgentDetectionCatalog({
   undetectedAgents,
   detectionPending,
   detectionFailed,
+  detectionFailureMessage,
   isRefreshing,
   activeServerEnvironmentId,
   activeServerName,
@@ -23,6 +24,7 @@ export function AgentDetectionCatalog({
   undetectedAgents: AgentCatalogEntry[]
   detectionPending: boolean
   detectionFailed: boolean
+  detectionFailureMessage?: string
   isRefreshing: boolean
   activeServerEnvironmentId: string | null
   activeServerName: string | null
@@ -151,10 +153,11 @@ export function AgentDetectionCatalog({
         <div className="flex items-start justify-between gap-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2 text-xs text-destructive">
           <span className="flex min-w-0 items-start gap-2">
             <AlertTriangle className="mt-0.5 size-3.5 shrink-0" />
-            {translate(
-              'auto.components.settings.AgentsPane.remoteDetectionFailed',
-              'Couldn’t detect installed agents. Check the host connection and try again.'
-            )}
+            {detectionFailureMessage ??
+              translate(
+                'auto.components.settings.AgentsPane.remoteDetectionFailed',
+                'Couldn’t detect installed agents. Check the host connection and try again.'
+              )}
           </span>
           <Button
             type="button"

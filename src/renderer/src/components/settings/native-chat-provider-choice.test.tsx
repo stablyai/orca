@@ -8,6 +8,7 @@ import { normalizeNativeChatProviderChoices } from '../../../../shared/native-ch
 import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import { installManagedRuntime } from '@/runtime/managed-runtime-install-status'
 import { buildNewTabAgentMenuRows } from '@/lib/new-tab-agent-menu-rows'
+import type { LocalDetectedAgentState } from '@/store/slices/local-detected-agent-store-state'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import type { ManagedRuntimeInstallObservation } from '@/runtime/use-managed-runtime-install'
@@ -19,10 +20,26 @@ import { AgentCatalogRow } from './AgentCatalogRow'
 import { AgentLaunchSettingsCatalog } from './AgentLaunchSettingsCatalog'
 import { buildAgentOpensAs, saveNativeChatProviderChoice } from './native-chat-provider-choice'
 
+const refreshNative = vi.hoisted(() =>
+  vi.fn<LocalDetectedAgentState['refreshDetectedAgents']>(async () => {
+    throw new Error('unexpected native inventory refresh in row-only proof')
+  })
+)
 const store = vi.hoisted(
-  (): { settings: unknown; localDetectedAgentIdsByContext: { host: TuiAgent[] | null } } => ({
+  (): { settings: unknown } & Pick<
+    LocalDetectedAgentState,
+    | 'localDetectedAgentIdsByContext'
+    | 'localAgentInventoryFailedByContext'
+    | 'isDetectingLocalAgentsByContext'
+    | 'isRefreshingLocalAgentsByContext'
+    | 'refreshDetectedAgents'
+  > => ({
     settings: null,
-    localDetectedAgentIdsByContext: { host: ['claude'] }
+    localDetectedAgentIdsByContext: { host: ['claude'] },
+    localAgentInventoryFailedByContext: {},
+    isDetectingLocalAgentsByContext: {},
+    isRefreshingLocalAgentsByContext: {},
+    refreshDetectedAgents: refreshNative
   })
 )
 const inventory = vi.hoisted(
@@ -95,7 +112,14 @@ beforeEach(() => {
   inventory.failed = false
   inventory.chatAvailable = true
   inventory.nativePrograms = []
-  store.localDetectedAgentIdsByContext.host = ['claude']
+  store.settings = null
+  store.localDetectedAgentIdsByContext = { host: ['claude'] }
+  store.localAgentInventoryFailedByContext = {}
+  store.isDetectingLocalAgentsByContext = {}
+  store.isRefreshingLocalAgentsByContext = {}
+  refreshNative
+    .mockReset()
+    .mockRejectedValue(new Error('unexpected native inventory refresh in row-only proof'))
   runtime.current = { kind: 'pending' }
   vi.stubGlobal('api', { platform: { get: () => ({ platform: 'darwin' }) } })
 })

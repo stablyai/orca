@@ -1,24 +1,11 @@
-import {
-  ensureAgentLaunchPreferences,
-  type AgentLaunchPreferences
-} from '@/components/settings/use-host-agent-launch-preferences'
-import {
-  resolveChecksActionAgent,
-  sourceControlRepoAgentRows
-} from '@/lib/source-control-agent-picker'
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { sourceControlRepoAgentRows } from '@/lib/source-control-agent-picker'
+import { resolveSavedAgentOverride, pickExistingWorktreeAgent } from './fix-checks-agent-admission'
 export { resolveChecksActionAgent } from '@/lib/source-control-agent-picker'
-import {
-  AgentLaunchChoiceCancelled,
-  acquireAgentLaunchChoices
-} from './host-chat-program-acquisition'
+import { AgentLaunchChoiceCancelled } from './host-chat-program-acquisition'
 import { toast } from 'sonner'
-import {
-  ensureDetectedAgentsForRepo,
-  ensureDetectedAgentsForWorktree,
-  type RepoHostFields
-} from '@/lib/agent-detection-target-inventory'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
-import { type ProspectiveWorkspace, worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
+import { worktreeLaunchWorkspace } from '@/lib/agent-launch-route-input'
 import { findGithubPrWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
@@ -32,9 +19,7 @@ import {
   DEFAULT_SOURCE_CONTROL_ACTION_COMMAND_TEMPLATES,
   renderSourceControlActionCommandTemplate
 } from '../../../shared/source-control-ai-actions'
-import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import type { GitHubWorkItem } from '../../../shared/github/work-item-types'
-import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { LaunchSource } from '../../../shared/telemetry-events'
 import { translate } from '@/i18n/i18n'
@@ -54,87 +39,6 @@ type StartFixChecksAgentArgs = {
   launchSource: LaunchSource
   telemetrySource?: WorkspaceCreateTelemetrySource
   openModalFallback?: () => void
-}
-
-type SavedAgentOverrideResult =
-  | { kind: 'agent'; agent: TuiAgent }
-  | { kind: 'launch-default' }
-  | { kind: 'blocked' }
-
-async function resolveSavedAgentOverride(
-  savedAgentId: () => TuiAgent | null | undefined,
-  repo: (RepoHostFields & { id: string }) | null,
-  workspace: ProspectiveWorkspace,
-  preferencesPromise: Promise<AgentLaunchPreferences>
-): Promise<SavedAgentOverrideResult> {
-  if (!savedAgentId()) {
-    return { kind: 'launch-default' }
-  }
-  const pendingAgents = ensureDetectedAgentsForRepo(useAppStore.getState(), repo ?? {})
-  // Why: a paired server answers per workspace, so only the enabled check can run before it exists;
-  // the direct launch checks installation on the new workspace.
-  const [choices, preferences] = await Promise.all([
-    pendingAgents ? acquireAgentLaunchChoices(workspace, () => pendingAgents) : null,
-    preferencesPromise
-  ])
-  const detected = choices?.detected ?? null
-  const current = useAppStore.getState()
-  const savedAgent = savedAgentId()
-  if (!savedAgent) {
-    return { kind: 'launch-default' }
-  }
-  const available = pendingAgents
-    ? resolveChecksActionAgent(current, 'fixChecks', repo?.id, workspace, detected, preferences) ===
-      savedAgent
-    : isTuiAgentEnabled(savedAgent, preferences.disabledTuiAgents)
-  if (!available) {
-    toast.error(
-      translate(
-        'auto.lib.fix.checks.agent.launch.4c7f783a7a',
-        'Saved checks agent is not available on this workspace host.'
-      )
-    )
-    return { kind: 'blocked' }
-  }
-  return { kind: 'agent', agent: savedAgent }
-}
-
-async function pickExistingWorktreeAgent(worktreeId: string): Promise<TuiAgent | null> {
-  const workspace = worktreeLaunchWorkspace(worktreeId)
-  const [choices, preferences] = await Promise.all([
-    acquireAgentLaunchChoices(workspace, () =>
-      ensureDetectedAgentsForWorktree(useAppStore.getState(), worktreeId)
-    ),
-    ensureAgentLaunchPreferences(useAppStore.getState(), workspace)
-  ])
-  const state = useAppStore.getState()
-  const repoId = state.allWorktrees().find((entry) => entry.id === worktreeId)?.repoId
-  const agent = resolveChecksActionAgent(
-    state,
-    'fixChecks',
-    repoId,
-    workspace,
-    choices.detected,
-    preferences
-  )
-  if (!agent) {
-    const repo = state.repos.find((entry) => entry.id === repoId)
-    const savedAgent = readSourceControlLaunchRecipeAgentId(
-      resolveSourceControlActionRecipe({ settings: state.settings, repo, actionId: 'fixChecks' })
-    )
-    toast.error(
-      savedAgent
-        ? translate(
-            'auto.lib.fix.checks.agent.launch.4c7f783a7a',
-            'Saved checks agent is not available on this workspace host.'
-          )
-        : translate(
-            'auto.lib.fix.checks.agent.launch.2ebf794906',
-            'No enabled AI agent was detected on this workspace host.'
-          )
-    )
-  }
-  return agent
 }
 
 export function startFixChecksAgent(args: StartFixChecksAgentArgs): Promise<boolean> {
@@ -287,7 +191,8 @@ async function launchFixChecksAgent(args: StartFixChecksAgentArgs): Promise<bool
   return await launchWorkItemDirect({
     item: { ...args.item, pasteContent: prompt },
     repoId: args.repoId,
-    agentLaunchPreferences,
+    agentLaunchPreferences:
+      agentOverride.kind === 'agent' ? agentOverride.preferences : agentLaunchPreferences,
     launchSource: args.launchSource,
     telemetrySource: args.telemetrySource,
     promptDelivery: 'submit-after-ready',

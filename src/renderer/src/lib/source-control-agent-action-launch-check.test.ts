@@ -28,3 +28,18 @@ describe('checkSourceControlAgentActionLaunch', () => {
     })
   })
 })
+
+it('an explicit failed attempt bypasses only membership, keeping enabled/input/argument/command checks', () => {
+  const input = { ...BASE, detectedAgents: [], explicitInventoryFailed: true }
+  expect(checkSourceControlAgentActionLaunch(input)).toEqual({ ok: true })
+  for (const change of [
+    { disabledAgents: ['codex' as const] },
+    { commandInput: ' ' },
+    { agentArgs: '--model "unterminated' }
+  ]) {
+    expect(checkSourceControlAgentActionLaunch({ ...input, ...change }).ok).toBe(false)
+  }
+  expect(checkSourceControlAgentActionLaunch({ ...input, explicitInventoryFailed: false }).ok).toBe(
+    false
+  )
+})

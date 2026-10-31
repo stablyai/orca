@@ -93,7 +93,8 @@ export function resolveChecksActionAgent(
   repoId: string | undefined,
   workspace: ProspectiveWorkspace,
   detected: readonly TuiAgent[] | null,
-  preferences?: AgentLaunchPreferences
+  preferences?: AgentLaunchPreferences,
+  explicitInventoryFailed = false
 ): TuiAgent | null {
   const policy = preferences ?? state.settings
   const repo = state.repos.find((entry) => entry.id === repoId)
@@ -104,6 +105,9 @@ export function resolveChecksActionAgent(
     isTuiAgentEnabled(agent, policy?.disabledTuiAgents) &&
     (detected?.includes(agent) === true ||
       readAgentLaunchChoice(state, agent, workspace, detected).chatEligibility !== 'no')
+  if (savedAgent && explicitInventoryFailed) {
+    return isTuiAgentEnabled(savedAgent, policy?.disabledTuiAgents) ? savedAgent : null
+  }
   if (savedAgent && actionId === 'fixChecks') {
     return usable(savedAgent) ? savedAgent : null
   }

@@ -244,7 +244,8 @@ describe('createDetectedAgentsSlice WSL context', () => {
     } as Partial<AppState>)
 
     await expect(store.getState().ensureDetectedAgents()).resolves.toEqual([])
-    expect(store.getState().detectedAgentIds).toEqual([])
+    expect(store.getState().detectedAgentIds).toBeNull()
+    expect(store.getState().readLocalAgentInventory().state).toBe('failed')
 
     expect(detectAgents).toHaveBeenCalledWith({
       enabledOnly: true,
@@ -443,7 +444,8 @@ describe('createDetectedAgentsSlice WSL context', () => {
 
     expect(store.getState().detectedAgentIds).toBeNull()
     await expect(detected).resolves.toEqual([])
-    expect(store.getState().detectedAgentIds).toEqual([])
+    expect(store.getState().detectedAgentIds).toBeNull()
+    expect(store.getState().readLocalAgentInventory().state).toBe('failed')
   })
 
   it('clears local detection cache explicitly after a project runtime switch', async () => {

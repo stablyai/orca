@@ -1,33 +1,34 @@
-import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
-import type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
-export type { AgentMenuRowsTarget, NewTabAgentMenuModel } from './new-tab-agent-menu-model'
+import type {
+  AgentMenuObservationOptions,
+  AgentMenuRowsTarget,
+  NewTabAgentMenuModel
+} from './agent-menu-observation-types'
+export type {
+  AgentMenuObservationOptions,
+  AgentMenuRowsTarget,
+  NewTabAgentMenuModel
+} from './agent-menu-observation-types'
 import { useSyncExternalStore } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { STRUCTURED_AGENT_SESSION_AVAILABILITY_RUNTIME_CAPABILITY as AVAILABILITY } from '../../../../shared/protocol-version'
 import { LOCAL_EXECUTION_HOST_ID, parseExecutionHostId } from '../../../../shared/execution-host'
-import { lastVerifiedRuntimeStatus } from '../../../../shared/runtime-host-status'
-import {
-  isRuntimeHostContactRevokedVerdict,
-  runtimeHostContactForEntry
-} from '../../../../shared/runtime-host-contact'
-import { isTuiAgent } from '../../../../shared/tui-agent-config'
 import { useAppStore } from '@/store'
 import { useAgentPickerRefusedWake } from './use-agent-picker-refused-wake'
+import { useLocalAgentPreflightContext } from '@/hooks/useLocalAgentPreflightContext'
+import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId
 } from '@/lib/agent-launch-route-input'
 import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
-import {
-  readHostStructuredAgents,
-  hostStructuredAgentsCatalogUnlearned as catalogUnlearned
-} from '@/runtime/host-structured-agents'
-import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
+import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { useHostStructuredAgentAvailability } from '@/runtime/use-host-structured-agent-availability'
 import {
   buildNewTabAgentMenuRows,
   hostChatAnswer,
+  hostChatCatalogUnlearned,
+  agentMenuChatAgents,
   type HostChatAnswer
 } from '@/lib/new-tab-agent-menu-rows'
 import {
@@ -35,6 +36,8 @@ import {
   subscribeLocalRuntimeCapabilityObservation
 } from '@/runtime/local-runtime-capabilities'
 import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import { getAgentCatalog } from '@/lib/agent-catalog'
+import { readAgentMenuHostFacts } from '@/lib/agent-menu-host-facts'
 import { readDetectedAgentsForTarget } from '@/lib/agent-detection-target-inventory'
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { readChatProgram } from '@/lib/host-chat-program'
@@ -50,16 +53,14 @@ export function useNewTabAgentMenuRows(
   detectionTarget: AgentDetectionTarget | undefined,
   options?: AgentMenuObservationOptions
 ): NewTabAgentMenuModel {
-  return useAgentMenuObservation(target, open, detectionTarget, options).model
+  return useAgentMenuObservation(target, open, detectionTarget, false, options).model
 }
-
-/** `wakeOnOpen`: `open` is the user opening this picker, a user act that may start its WSL distro. */
-export type AgentMenuObservationOptions = { wakeOnOpen?: boolean }
 
 export function useAgentMenuObservation(
   target: string | AgentMenuRowsTarget | null,
   open: boolean,
   detectionTarget: AgentDetectionTarget | undefined,
+  configurationCommands = false,
   options?: AgentMenuObservationOptions
 ) {
   const worktreeId = typeof target === 'string' ? target : target?.workspace.worktreeId
@@ -70,11 +71,27 @@ export function useAgentMenuObservation(
     (state) => typeof target === 'string' && state.activeWorktreeId === worktreeId
   )
   // Why: acquiring while the workspace is shown means the first open already knows its agents.
-  const acquired = useDetectedAgents(open || worktreeShown ? detectionTarget : undefined)
+  const acquiring = open || worktreeShown
+  const acquired = useDetectedAgents(acquiring ? detectionTarget : undefined)
   useAgentPickerRefusedWake(options?.wakeOnOpen === true && open, detectionTarget)
   // Closing the menu or leaving the workspace must not erase the known inventory.
+  const retainedTarget = acquiring ? undefined : detectionTarget
+  const retainedLocal = retainedTarget?.kind === 'local' ? retainedTarget : undefined
+  const retainedContext = useLocalAgentPreflightContext(
+    retainedLocal?.worktreeId,
+    retainedLocal !== undefined && retainedLocal.contextKey == null
+  )
+  const retainedKey = retainedLocal
+    ? (retainedLocal.contextKey ?? localAgentInventoryContextKey(retainedContext))
+    : undefined
   const storedIds = useAppStore((state) =>
-    detectionTarget ? readDetectedAgentsForTarget(state, detectionTarget) : null
+    retainedTarget
+      ? retainedLocal
+        ? retainedKey
+          ? (state.localDetectedAgentIdsByContext[retainedKey] ?? null)
+          : state.detectedAgentIds
+        : readDetectedAgentsForTarget(state, retainedTarget)
+      : null
   )
   // No owner means no agents to offer; a later owner publication resumes normal detection.
   const detection = {
@@ -95,26 +112,7 @@ export function useAgentMenuObservation(
       ? { kind: workspaceKindForWorktreeId(target), worktreeId: target }
       : (target?.workspace ?? { kind: 'floating' as const })
   const facts = useAppStore(
-    useShallow((state) => {
-      const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
-      const host = parseExecutionHostId(input.executionHostId)
-      const status =
-        host?.kind === 'runtime'
-          ? state.runtimeStatusByEnvironmentId.get(host.environmentId)
-          : undefined
-      const contact = runtimeHostContactForEntry(status)
-      return {
-        executionHostId: input.executionHostId,
-        runtimeId: host?.kind === 'runtime' ? lastVerifiedRuntimeStatus(status)?.runtimeId : null,
-        pairingRevision:
-          host?.kind === 'runtime' ? getRuntimeEnvironmentRevision(host.environmentId) : undefined,
-        contact: `${status?.connectionGeneration}:${status?.hostContactEpoch}:${isRuntimeHostContactRevokedVerdict(contact)}`,
-        checking:
-          contact.verdict === 'unverifiable' &&
-          ['checking', 'transport-connecting'].includes(contact.reason),
-        capabilities: input.hostCapabilities?.join(',')
-      }
-    })
+    useShallow((state) => readAgentMenuHostFacts(state, workspace, detectionTarget))
   )
   const state = useAppStore.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
@@ -169,17 +167,7 @@ export function useAgentMenuObservation(
     readHostStructuredAgents(facts.executionHostId, state.runtimeStatusByEnvironmentId)?.map(
       ({ agent }) => agent
     )
-  const chatAgents = [
-    ...new Set([
-      'claude',
-      'codex',
-      ...(localCatalog ?? []),
-      ...(hostCatalog ?? []),
-      ...Object.keys(settings?.nativeChatProviders ?? {})
-        .filter(isTuiAgent)
-        .filter((agent) => nativeChatPreferenceFor(settings, agent))
-    ])
-  ].filter(isTuiAgent)
+  const chatAgents = agentMenuChatAgents(settings, localCatalog, hostCatalog)
   const inventoryFailed =
     detection.detectedIds === null && (detection.detectionFailed || detection.needsServerUpdate)
   const localAcquiring = ['unlearned', 'pending'].includes(localCapabilities.state)
@@ -188,10 +176,10 @@ export function useAgentMenuObservation(
   const hostCatalogPending =
     !roster &&
     availability?.state !== 'pending' &&
-    catalogUnlearned(facts.executionHostId, facts.runtimeId, input.hostCapabilities)
+    hostChatCatalogUnlearned(facts.executionHostId, facts.runtimeId, input.hostCapabilities)
   const localCatalogPending =
     !local &&
-    catalogUnlearned(
+    hostChatCatalogUnlearned(
       LOCAL_EXECUTION_HOST_ID,
       null,
       localCapabilities.state === 'known' ? localCapabilities.capabilities : null
@@ -234,7 +222,22 @@ export function useAgentMenuObservation(
   const executionHostId = unresolvedTarget
     ? undefined
     : parseExecutionHostId(facts.executionHostId)?.id
+  const failedAttempt = detectionTarget?.kind === 'local' ? detection.detectionFailed : facts.failed
+  const configurationCommandCandidates =
+    configurationCommands &&
+    detectionTarget &&
+    !unresolvedTarget &&
+    !loading &&
+    !detection.isLoading &&
+    !detection.isRefreshing &&
+    !detection.needsServerUpdate &&
+    detection.detectedIds === null &&
+    failedAttempt &&
+    (!input.projectRuntime || input.projectRuntime.status === 'resolved')
+      ? getAgentCatalog().map(({ id }) => id)
+      : undefined
   const rows = buildNewTabAgentMenuRows({
+    configurationCommandCandidates,
     settings,
     detectedOnHost: detection.detectedIds,
     chatAgents,
@@ -266,6 +269,7 @@ export function useAgentMenuObservation(
     model,
     preferences: { defaultTuiAgent, disabledTuiAgents, agentLaunchChoices },
     preferencesPending,
+    failedAttempt,
     detection,
     contextKey: JSON.stringify([workspace, launchCwd, facts]),
     selectionFor: (agent: TuiAgent | null, surface?: AgentLaunchSurface) => {

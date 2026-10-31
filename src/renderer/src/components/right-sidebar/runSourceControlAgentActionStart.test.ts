@@ -682,6 +682,27 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
   }
 )
 
+it('rechecks current intent after held recovery before either save or dispatch', async () => {
+  vi.clearAllMocks()
+  const recovery = Promise.withResolvers<{ inFlight: boolean }>()
+  mocks.mutationInFlight.mockReturnValueOnce(recovery.promise)
+  const validateBeforeLaunch = vi.fn(() => null)
+  const starting = runSourceControlAgentActionStart(
+    buildArgs({
+      saveTargetValue: 'global',
+      settings: getDefaultSettings('/tmp'),
+      validateBeforeLaunch,
+      recoveryContext: { target: { kind: 'local' }, worktreeId: 'wt-1', worktreePath: '/repo' }
+    })
+  )
+  expect(validateBeforeLaunch).not.toHaveBeenCalled()
+  recovery.resolve({ inFlight: false })
+  expect(await starting).toBe(false)
+  expect(validateBeforeLaunch).toHaveBeenCalledOnce()
+  expect(mocks.onSaveAgentDefault).not.toHaveBeenCalled()
+  expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
+})
+
 it('saves a foreign resolved literal as current raw and starts from the canonical saved result', async () => {
   vi.clearAllMocks()
   const base = getDefaultSettings('/tmp')

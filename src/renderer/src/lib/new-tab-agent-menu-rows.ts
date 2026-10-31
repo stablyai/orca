@@ -1,3 +1,11 @@
+import { nativeChatPreferenceFor } from '../../../shared/structured-native-chat-launch-route'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { TuiAgent } from '../../../shared/tui-agent'
+import { isTuiAgent } from '../../../shared/tui-agent-config'
+import {
+  readHostStructuredAgentsForRuntime,
+  hostStructuredAgentsReadFailed
+} from '@/runtime/host-structured-agents'
 import {
   structuredAgentLaunchSupport,
   type AgentLaunchRoutingInput
@@ -36,4 +44,36 @@ export function hostChatAnswer(input: AgentLaunchRoutingInput): HostChatAnswer {
     case 'reused-terminal':
       return 'yes'
   }
+}
+
+export function hostChatCatalogUnlearned(
+  host: string,
+  runtimeId: string | null | undefined,
+  capabilities: readonly string[] | null | undefined
+): boolean {
+  return (
+    runtimeId !== undefined &&
+    capabilities?.includes(CATALOG) === true &&
+    !readHostStructuredAgentsForRuntime(host, runtimeId) &&
+    !hostStructuredAgentsReadFailed(host, runtimeId)
+  )
+}
+
+export function agentMenuChatAgents(
+  settings: Pick<GlobalSettings, 'nativeChatProviders' | 'agentDefaultSurface'> | null | undefined,
+  localCatalog: readonly string[] | undefined,
+  hostCatalog: readonly string[] | undefined
+): TuiAgent[] {
+  const chatAgents = [
+    ...new Set([
+      'claude',
+      'codex',
+      ...(localCatalog ?? []),
+      ...(hostCatalog ?? []),
+      ...Object.keys(settings?.nativeChatProviders ?? {})
+        .filter(isTuiAgent)
+        .filter((agent) => nativeChatPreferenceFor(settings, agent))
+    ])
+  ].filter(isTuiAgent)
+  return chatAgents
 }

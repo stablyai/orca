@@ -1,3 +1,5 @@
+import { captureSourceControlActionSelection } from '../../../../../shared/source-control-ai-operation-policy'
+import { useSavedSourceControlActionStart } from '../use-saved-source-control-action-start'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import { projectAgentLaunchSettings } from '../../../../../shared/agent-launch-settings'
 import { clearHostAgentMenuSettingsForTests } from '@/components/settings/use-host-agent-launch-preferences'
@@ -47,11 +49,14 @@ function deferred<T>() {
   })
   return { promise, resolve }
 }
-function fixture(saved = true, paired = false) {
+function fixture(saved = true, paired = false, failed = false) {
   setLocalRuntimeCapabilitiesForTests([])
   Object.defineProperty(window, 'api', {
     configurable: true,
-    value: { gh: { onWorkItemMutated: () => () => {} } }
+    value: {
+      gh: { onWorkItemMutated: () => () => {} },
+      preflight: { detectAgents: vi.fn().mockRejectedValue(new Error('capture failed')) }
+    }
   })
   const settings = getDefaultSettings('/tmp/pr-31310')
   settings.sourceControlAi!.actions = saved
@@ -82,7 +87,7 @@ function fixture(saved = true, paired = false) {
     repos: [repo],
     worktreesByRepo: { [repo.id]: [worktree] },
     detectedAgentIds: null,
-    ensureDetectedAgents: detect
+    ensureDetectedAgents: failed ? original.ensureDetectedAgents : detect
   })
   if (paired) {
     settings.disabledTuiAgents = ['codex']
@@ -411,6 +416,96 @@ it.each(['before-delivery', 'during-ack'])(
     )
     act(() => f.result.current.handleResolveCommentsWithAI(f.groups))
     await waitFor(() => expect(launch).toHaveBeenCalledTimes(2))
+  }
+)
+
+it('runs a cold saved explicit queue action through the real validator and holds acknowledgement until delivery', async () => {
+  useAppStore.getState().clearLocalDetectedAgents()
+  const delivery = deferred<{ delivered: boolean; failureNotified: boolean }>()
+  launch.mockReturnValue({
+    surface: { kind: 'local-terminal', tabId: 'cold-saved' },
+    promptDeliveryResult: delivery.promise
+  })
+  const f = fixture(true, false, true)
+  await waitFor(() =>
+    expect(useAppStore.getState().readLocalAgentInventory('repo-1::wt-1').state).toBe('failed')
+  )
+  expect(f.result.current.noEnabledAgentKnown).toBe(false)
+  act(() => {
+    f.result.current.handleResolveCommentsWithAI(f.groups)
+    f.result.current.handleResolveCommentsWithAI(f.groups)
+  })
+  await waitFor(() => expect(launch).toHaveBeenCalledOnce())
+  expect(launch.mock.calls[0]?.[0]).toMatchObject({
+    agent: 'codex',
+    requestedSurface: 'terminal',
+    worktreeId: 'repo-1::wt-1'
+  })
+  expect(f.resolveThread).not.toHaveBeenCalled()
+  expect(f.composer).not.toHaveBeenCalled()
+  expect(useAppStore.getState().readLocalAgentInventory('repo-1::wt-1')).toEqual({
+    ids: null,
+    state: 'failed'
+  })
+  await act(() => delivery.resolve({ delivered: true, failureNotified: false }))
+  await waitFor(() => expect(f.resolveThread).toHaveBeenCalledOnce())
+})
+
+it.each(['disabled', 'missing-owner'] as const)(
+  'cancels a saved failed-inventory action made %s across recovery',
+  async (change) => {
+    useAppStore.getState().clearLocalDetectedAgents()
+    const f = fixture(true, false, true)
+    await waitFor(() =>
+      expect(useAppStore.getState().readLocalAgentInventory('repo-1::wt-1').state).toBe('failed')
+    )
+    const recovery = deferred<{ inFlight: boolean }>()
+    const mutationInFlight = vi.fn(() => recovery.promise)
+    Object.assign(window.api, { git: { mutationInFlight } })
+    const starter = renderHook(() => useSavedSourceControlActionStart())
+    const state = useAppStore.getState(),
+      onFallback = vi.fn()
+    let started = Promise.resolve()
+    act(() => {
+      started = starter.result.current.start({
+        selection: captureSourceControlActionSelection({
+          settings: state.settings,
+          repo: state.repos[0],
+          actionId: 'resolveComments'
+        }),
+        basePrompt: 'fix comments',
+        actionId: 'resolveComments',
+        repoId: 'repo-1',
+        repo: state.repos[0],
+        settings: state.settings,
+        worktreeId: 'repo-1::wt-1',
+        connectionId: null,
+        promptDelivery: 'submit-after-ready',
+        launchSource: 'source_control_recovery',
+        onFallback,
+        onClose: vi.fn(),
+        recoveryContext: {
+          target: { kind: 'local' },
+          worktreeId: 'repo-1::wt-1',
+          worktreePath: '/repo'
+        }
+      })
+    })
+    await waitFor(() => expect(mutationInFlight).toHaveBeenCalledOnce())
+    act(() =>
+      useAppStore.setState(
+        change === 'disabled'
+          ? { settings: { ...state.settings!, disabledTuiAgents: ['codex'] } }
+          : { worktreesByRepo: {}, repos: [] }
+      )
+    )
+    await act(async () => {
+      recovery.resolve({ inFlight: false })
+      await started
+    })
+    expect(launch).not.toHaveBeenCalled()
+    expect(onFallback).toHaveBeenCalledOnce()
+    expect(f.resolveThread).not.toHaveBeenCalled()
   }
 )
 

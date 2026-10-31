@@ -6,11 +6,7 @@ import {
 import { useChatProgramFacts } from '@/lib/host-chat-program-acquisition'
 import { useMemo } from 'react'
 import { toast } from 'sonner'
-import type {
-  AgentLaunchSettings,
-  AgentLaunchSettingsMutation
-} from '../../../../shared/agent-launch-settings'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
+import type { AgentLaunchSettingsMutation } from '../../../../shared/agent-launch-settings'
 import { AUTO_TUI_AGENT_ARGS } from '../../../../shared/tui-agent-permissions'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
@@ -30,7 +26,7 @@ import {
   AllAgentsPermissionSetting,
   type AgentPermissionChoiceRow
 } from './AgentPermissionChoiceControls'
-import type { AgentPermissionsSettingProps } from './AgentPermissionsSetting'
+import type { AgentLaunchSettingsCatalogProps } from './agent-launch-settings-catalog-types'
 import {
   buildAgentRowPermissions,
   sharedAgentPermissionChoice as sharedChoice
@@ -50,20 +46,24 @@ import {
 } from '@/lib/host-chat-program'
 import { useAppStore } from '@/store'
 import { readNativeDetectedAgents } from '@/store/slices/local-detected-agent-store-state'
-import { useDetectedAgents, type AgentDetectionTarget } from '@/hooks/useDetectedAgents'
+import { useDetectedAgents } from '@/hooks/useDetectedAgents'
 import { AgentDefaultSetting } from './AgentDefaultSetting'
 import { AgentDetectionCatalog } from './AgentDetectionCatalog'
 import type { AgentCatalogRowProps } from './AgentCatalogRow'
 import { HostAgentEnvironmentEditor } from './HostAgentEnvironmentEditor'
 import { buildCodexSessionSourceHomeControl } from './codex-session-source-home-control'
 import { buildAgentOpensAs } from './native-chat-provider-choice'
-import { AgentChatRuntimeArea } from './AgentChatChoiceControls'
+import { useLocalAgentPreflightContext } from '@/hooks/useLocalAgentPreflightContext'
+import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
+import { projectRuntimeRepairSentence } from '../../../../shared/project-runtime-repair-message'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
+import { NativeAgentInventoryFailure, AgentChatRuntimeArea } from './AgentChatChoiceControls'
 import { chatProviderAgents, useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
 import { readHostStructuredAgents } from '@/runtime/host-structured-agents'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { translate } from '@/i18n/i18n'
 
-export type AgentPermissionsRenderer = (props: AgentPermissionsSettingProps) => React.ReactNode
+export type { AgentPermissionsRenderer } from './agent-launch-settings-catalog-types'
 
 export function AgentLaunchSettingsCatalog({
   settings,
@@ -77,32 +77,42 @@ export function AgentLaunchSettingsCatalog({
   nativeChatPermissionsSupported = false,
   chatOwnSupported = false,
   local
-}: {
-  settings: AgentLaunchSettings
-  mutate: (mutation: AgentLaunchSettingsMutation) => Promise<void>
-  detectionTarget: AgentDetectionTarget
-  hostName: string | null
-  renderPermissions: AgentPermissionsRenderer
-  refreshSettings?: () => void
-  autoSupported?: boolean
-  choicesSupported?: boolean
-  nativeChatPermissionsSupported?: boolean
-  chatOwnSupported?: boolean
-  local?: {
-    settings: GlobalSettings
-    saveEnvironment: (agent: TuiAgent, value: Record<string, string>) => Promise<void>
-    updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
-  }
-}): React.JSX.Element {
+}: AgentLaunchSettingsCatalogProps): React.JSX.Element {
   const {
     detectedIds: detected,
     detectionFailed,
     isRefreshing,
     refresh
   } = useDetectedAgents(detectionTarget, 'all')
+  const localContext = useLocalAgentPreflightContext(
+    detectionTarget.kind === 'local' ? detectionTarget.worktreeId : undefined,
+    detectionTarget.kind === 'local'
+  )
+  const projectRuntime = localContext?.projectRuntime
+  const catalogShowsNativeFailure =
+    detectionTarget.kind === 'local' &&
+    detectionFailed &&
+    localAgentInventoryContextKey(localContext) === 'host'
+  const localDetectionFailure =
+    detectionTarget.kind !== 'local'
+      ? undefined
+      : projectRuntime?.status === 'repair-required'
+        ? `${projectRuntimeRepairSentence(projectRuntime.repair, translate)} ${translate('settings.agents.repairRuntime', 'Open project Settings → Project Runtime to change it.')}`
+        : translate(
+            'settings.agents.localDetectionRetry',
+            "Couldn't check which agents are installed on this computer. Try again."
+          )
   const detectedIds = useMemo(() => (detected ? new Set(detected) : null), [detected])
   useHostStructuredAgentsVersion()
   const installedHere = useAppStore(readNativeDetectedAgents)
+  const nativeInventoryFailed = useAppStore(
+    (state) =>
+      readNativeDetectedAgents(state) === null &&
+      state.localAgentInventoryFailedByContext.host === true &&
+      !state.isDetectingLocalAgentsByContext.host &&
+      !state.isRefreshingLocalAgentsByContext.host
+  )
+  const refreshNative = useAppStore((state) => state.refreshDetectedAgents)
   const workspace =
     detectionTarget.kind === 'runtime'
       ? { kind: 'git-worktree' as const, runtimeEnvironmentId: detectionTarget.environmentId }
@@ -317,6 +327,15 @@ export function AgentLaunchSettingsCatalog({
   }
   return (
     <>
+      {local &&
+      chatAgents.some((agent) => isTuiAgentEnabled(agent, local.settings.disabledTuiAgents)) ? (
+        <NativeAgentInventoryFailure
+          failed={nativeInventoryFailed && !catalogShowsNativeFailure}
+          onRetry={() => {
+            void refreshNative(FLOATING_TERMINAL_WORKTREE_ID)
+          }}
+        />
+      ) : null}
       <AgentDefaultSetting
         defaultAgent={settings.defaultTuiAgent}
         detectedIds={detectedIds}
@@ -362,6 +381,7 @@ export function AgentLaunchSettingsCatalog({
         undetectedAgents={undetectedAgents}
         detectionPending={detectedIds === null}
         detectionFailed={detectionFailed}
+        detectionFailureMessage={localDetectionFailure}
         isRefreshing={isRefreshing}
         activeServerEnvironmentId={
           detectionTarget.kind === 'runtime' ? detectionTarget.environmentId : null

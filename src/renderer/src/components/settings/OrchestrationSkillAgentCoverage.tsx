@@ -24,6 +24,7 @@ function skillReadFailed(observed: BundledSkillObserved | undefined): boolean {
 
 function getAgentCoverageSummary(props: {
   loading: boolean
+  detectionFailed: boolean
   totalCount: number
   installedCount: number
   fullCoverage: boolean
@@ -35,6 +36,12 @@ function getAgentCoverageSummary(props: {
     return translate(
       'auto.components.settings.OrchestrationSkillAgentCoverage.checking',
       'Checking installed agents and skill paths…'
+    )
+  }
+  if (props.detectionFailed) {
+    return translate(
+      'settings.agents.coverageDetectionFailed',
+      "Couldn't check which agents are installed. Retry in Settings → Agents."
     )
   }
   if (totalCount === 0) {
@@ -110,10 +117,13 @@ export function OrchestrationSkillAgentCoverage(props: {
   className?: string
 }): React.JSX.Element {
   const { skills, sources, loading: skillsLoading, embedded = false, className } = props
-  const { detectedIds, isLoading: agentsLoading } = useDetectedAgents(
-    props.plan ? undefined : { kind: 'local' }
-  )
-  const loading = !props.plan && (skillsLoading || agentsLoading || detectedIds === null)
+  const {
+    detectedIds,
+    isLoading: agentsLoading,
+    detectionFailed
+  } = useDetectedAgents(props.plan ? undefined : { kind: 'local' })
+  const loading =
+    !props.plan && (skillsLoading || agentsLoading || (detectedIds === null && !detectionFailed))
   const ops = props.plan?.skills.find((skill) => skill.name === ORCHESTRATION_SKILL_NAME)?.ops ?? []
   const plannedAgents = sortOrchestrationAgents([...new Set(ops.flatMap((op) => op.agents))])
   const shared = ops.find((op) => op.role === 'shared')?.observed
@@ -150,6 +160,7 @@ export function OrchestrationSkillAgentCoverage(props: {
   const showAgentChips = !loading && totalCount > 0 && !fullCoverage
   const summary = getAgentCoverageSummary({
     loading,
+    detectionFailed: !props.plan && detectionFailed,
     totalCount,
     installedCount,
     fullCoverage,

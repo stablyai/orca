@@ -78,7 +78,11 @@ export function SkillBundleInstallFlow(props: {
     environmentId,
     wslDistro: executionTarget?.distro ?? null
   })
-  const providers = providerChoice ?? defaultSelectedSkillProviders(detectedAgents)
+  const providers =
+    providerChoice ??
+    (detectedAgents.state === 'failed'
+      ? new Set<SkillInstallProviderId>()
+      : defaultSelectedSkillProviders(detectedAgents.ids))
   const riskSummary = useMemo(
     () => summarizeSkillInstallRisk(checklistItemsFromVersion(props.version), selectedSkillIds),
     [props.version, selectedSkillIds]
@@ -307,7 +311,7 @@ export function SkillBundleInstallFlow(props: {
               resetPreview()
             }}
             providers={providers}
-            detectedAgents={detectedAgents}
+            detectedAgents={detectedAgents.ids}
             onProvidersChange={setProviderChoice}
             busy={busy}
             runtimeEnvironments={runtimeEnvironments}

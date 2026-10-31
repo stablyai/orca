@@ -1,3 +1,4 @@
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { expandNode, findDropdownMenuItemByText } from './tab-bar-dropdown-menu-item-probe'
 import {
@@ -55,10 +56,21 @@ describe('TabBar PowerShell launch wiring', () => {
   })
 
   it('shows the Windows shell rows for an SSH Windows host', async () => {
-    appStoreSnapshot.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
-    appStoreSnapshot.sshConnectionStates = new Map([['ssh-1', { remotePlatform: 'win32' }]])
+    appStoreSnapshot.repos = [{ ...TEST_REPO, id: 'repo-1', connectionId: 'ssh-1' }]
+    appStoreSnapshot.sshConnectionStates = new Map([
+      [
+        'ssh-1',
+        {
+          targetId: 'ssh-1',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          remotePlatform: 'win32'
+        }
+      ]
+    ])
     appStoreSnapshot.worktreesByRepo = {
-      'repo-1': [{ id: 'wt-ssh', repoId: 'repo-1' }]
+      'repo-1': [makeWorktree({ id: 'wt-ssh', repoId: 'repo-1' })]
     }
     const detectRemoteWindowsTerminalCapabilities = vi.fn().mockResolvedValue({
       wslAvailable: true,
@@ -126,10 +138,21 @@ describe('TabBar PowerShell launch wiring', () => {
   })
 
   it('keeps SSH Linux hosts on the generic new-terminal entry', async () => {
-    appStoreSnapshot.repos = [{ id: 'repo-1', connectionId: 'ssh-1' }]
-    appStoreSnapshot.sshConnectionStates = new Map([['ssh-1', { remotePlatform: 'linux' }]])
+    appStoreSnapshot.repos = [{ ...TEST_REPO, id: 'repo-1', connectionId: 'ssh-1' }]
+    appStoreSnapshot.sshConnectionStates = new Map([
+      [
+        'ssh-1',
+        {
+          targetId: 'ssh-1',
+          status: 'connected',
+          error: null,
+          reconnectAttempt: 0,
+          remotePlatform: 'linux'
+        }
+      ]
+    ])
     appStoreSnapshot.worktreesByRepo = {
-      'repo-1': [{ id: 'wt-ssh', repoId: 'repo-1' }]
+      'repo-1': [makeWorktree({ id: 'wt-ssh', repoId: 'repo-1' })]
     }
     const detectRemoteWindowsTerminalCapabilities = vi.fn().mockResolvedValue({
       wslAvailable: false,

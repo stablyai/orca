@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef } from 'react'
 import { useAppStore } from '@/store'
-import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
+import { useLocalAgentPreflightContext } from './useLocalAgentPreflightContext'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import { runtimeHostContactForEntry } from '../../../shared/runtime-host-contact'
 import type { TuiAgent } from '../../../shared/tui-agent'
@@ -64,16 +64,17 @@ export function useDetectedAgents(
       ? getRuntimeAgentInventoryKey(targetId, runtimeWorktreeId)
       : targetId
   const includeDisabled = inventory === 'all'
-  const completeLocalContextKey = useAppStore((s) =>
-    targetKind === 'local' && includeDisabled
-      ? localAgentInventoryContextKey(
-          getLocalAgentPreflightContext(s, undefined, undefined, localWorktreeId),
-          true
-        )
-      : undefined
+  const suppliedLocalKey = target?.kind === 'local' ? target.contextKey : undefined
+  const localContext = useLocalAgentPreflightContext(
+    localWorktreeId,
+    targetKind === 'local' && (!suppliedLocalKey || includeDisabled)
   )
   const localContextKey =
-    completeLocalContextKey ?? (target?.kind === 'local' ? target.contextKey : undefined)
+    targetKind === 'local'
+      ? includeDisabled
+        ? localAgentInventoryContextKey(localContext, true)
+        : (suppliedLocalKey ?? localAgentInventoryContextKey(localContext))
+      : undefined
   const remoteTargetKey =
     targetKind === 'ssh' && targetId
       ? `ssh:${targetId}`
@@ -159,12 +160,20 @@ export function useDetectedAgents(
       ? s.runtimeAgentDetectionNeedsServerUpdate[recordKey] === true
       : false
   )
+  const localDetectionFailed = useAppStore(
+    (s) =>
+      targetKind === 'local' &&
+      localContextKey !== undefined &&
+      s.localAgentInventoryFailedByContext[localContextKey] === true
+  )
   const detectionFailed =
-    detectedIds === null &&
-    !isLoading &&
-    !isRefreshing &&
-    remoteTargetKey !== null &&
-    observedRemoteTargetKeysRef.current.has(remoteTargetKey)
+    targetKind === 'local'
+      ? localDetectionFailed && !isLoading && !isRefreshing
+      : detectedIds === null &&
+        !isLoading &&
+        !isRefreshing &&
+        remoteTargetKey !== null &&
+        observedRemoteTargetKeysRef.current.has(remoteTargetKey)
   const localProbePending = targetKind === 'local' && (isLoading || isRefreshing)
   // Refresh the inventory’s host; refreshing local PATH while showing remote agents would silently do nothing.
   const refresh = useCallback((): Promise<TuiAgent[]> => {
@@ -227,7 +236,7 @@ export function useDetectedAgents(
         void state.ensureRuntimeDetectedAgents(targetId, runtimeWorktreeId)
       }
     } else {
-      if (detectedIds === null && !localProbePending) {
+      if (detectedIds === null && !localProbePending && !localDetectionFailed) {
         void (includeDisabled
           ? state.ensureAllDetectedAgents(localWorktreeId)
           : state.ensureDetectedAgents(localWorktreeId))
@@ -245,6 +254,7 @@ export function useDetectedAgents(
     sshConnected,
     detectedIds,
     localProbePending,
+    localDetectionFailed,
     localWorktreeId,
     runtimeWorktreeId,
     localContextKey

@@ -1,8 +1,14 @@
+import {
+  exerciseAgentMenuConfigurationCommands,
+  exerciseAgentMenuConfigurationCommandWork
+} from './agent-menu-configuration-commands.test-fixture'
+import { exerciseAgentMenuRetainedFailure } from './agent-menu-retained-failure.test-fixture'
 // @vitest-environment happy-dom
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import type { TuiAgent } from '../../../../shared/tui-agent'
+import type { AgentDetectionTarget, UseDetectedAgentsResult } from '@/hooks/useDetectedAgents'
 import { useAgentDetectionTargetForWorktree } from '@/hooks/useAgentDetectionTarget'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
@@ -10,6 +16,8 @@ import {
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
+import { readAgentMenuHostFacts } from '@/lib/agent-menu-host-facts'
+import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
 import type * as RouteInput from '@/lib/agent-launch-route-input'
 import type * as ChatProgram from '@/lib/host-chat-program'
 import type * as MenuRows from '@/lib/new-tab-agent-menu-rows'
@@ -39,6 +47,7 @@ const mocks = vi.hoisted(() => ({
   failed: vi.fn(),
   load: vi.fn(),
   detection: vi.fn(),
+  refresh: vi.fn<UseDetectedAgentsResult['refresh']>().mockResolvedValue([]),
   realRoutes: false,
   routes: Array<RouteInput.AgentLaunchRouteArgs>(),
   answers: Array<Parameters<typeof MenuRows.hostChatAnswer>[0]>(),
@@ -46,6 +55,8 @@ const mocks = vi.hoisted(() => ({
   records: 0,
   lists: 0,
   metadata: 0,
+  candidateVisits: 0,
+  rowVisits: 0,
   countedLists: new WeakSet<object>(),
   program:
     vi.fn<
@@ -69,7 +80,25 @@ vi.mock('@/lib/new-tab-agent-menu-rows', async (importOriginal) => {
   return {
     ...actual,
     buildNewTabAgentMenuRows: (...args: Parameters<typeof actual.buildNewTabAgentMenuRows>) => {
+      args[0].configurationCommandCandidates?.forEach((value, index, candidates) => {
+        Object.defineProperty(candidates, index, {
+          configurable: true,
+          get: () => {
+            mocks.candidateVisits++
+            return value
+          }
+        })
+      })
       const rows = actual.buildNewTabAgentMenuRows(...args)
+      rows.forEach((value, index) =>
+        Object.defineProperty(rows, index, {
+          configurable: true,
+          get: () => {
+            mocks.rowVisits++
+            return value
+          }
+        })
+      )
       mocks.metadata += rows.length
       return rows
     },
@@ -97,7 +126,15 @@ vi.mock('@/lib/structured-agent-session-host-admission', () => ({
 }))
 // Like the real hook: a closed menu acquires nothing, and the stored inventory stays.
 vi.mock('@/hooks/useDetectedAgents', () => ({
-  useDetectedAgents: mocks.detection
+  useDetectedAgents: (target: AgentDetectionTarget | undefined): UseDetectedAgentsResult => ({
+    detectedIds: null,
+    isLoading: target === undefined,
+    isRefreshing: false,
+    detectionFailed: false,
+    needsServerUpdate: false,
+    refresh: mocks.refresh,
+    ...(target === undefined ? {} : mocks.detection(target))
+  })
 }))
 vi.mock('@/runtime/host-structured-agents', () => ({
   readHostStructuredAgents: mocks.catalog,
@@ -312,6 +349,7 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             detectedWorktreesByRepo: {},
             activeWorktreeId: worktreeId,
             activeWorkspaceExecutionHostId: 'local',
+            localDetectedAgentIdsByContext: { host: ids },
             settings: {
               ...getDefaultSettings('/home/me'),
               nativeChatProviders: { claude: true, codex: true },
@@ -346,7 +384,12 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
                 ? 'missing'
                 : undefined
             )
-            act(() => useAppStore.setState({ detectedAgentIds: phase === 'loading' ? null : ids }))
+            act(() =>
+              useAppStore.setState({
+                detectedAgentIds: phase === 'loading' ? null : ids,
+                localDetectedAgentIdsByContext: { host: phase === 'loading' ? null : ids }
+              })
+            )
             mocks.detection.mockReturnValue({ detectedIds: phase === 'loading' ? null : ids })
             const controller = hook.result.current.controller
             if (controller) {
@@ -360,9 +403,8 @@ it('shares real answer preparation at N and 10N across candidates, owners and se
             hook.rerender({ target, phase })
             const measured = work(),
               { model, selectionFor } = hook.result.current
-            expect(measured.routes).toBeLessThanOrEqual(
-              measured.selectors + 1 + Number(Boolean(launchCwd))
-            )
+            expect(measured.selectors).toBeGreaterThan(0)
+            expect(measured.routes).toBe(1 + Number(Boolean(launchCwd)))
             if (launchCwd) {
               expect(measured.records).toBeGreaterThanOrEqual(count)
             } else {
@@ -475,7 +517,12 @@ it("reads a publishing host's one snapshot, holding a placeholder only until it 
 
 it('shows an older host from client facts and never asks it per agent', () => {
   mocks.publishing = false
-  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
+  const initialProps: { open: boolean; contextKey?: string } = { open: true }
+  const hook = renderHook(
+    ({ open, contextKey }: typeof initialProps) =>
+      useNewTabAgentMenuRows('one', open, { kind: 'local', worktreeId: 'one', contextKey }),
+    { initialProps }
+  )
   expect(
     hook.result.current.state === 'settled' &&
       hook.result.current.rows.find((r) => r.agent === 'claude')
@@ -484,6 +531,38 @@ it('shows an older host from client facts and never asks it per agent', () => {
   })
   expect(mocks.subscribe).not.toHaveBeenCalled()
   expect(mocks.support).not.toHaveBeenCalled()
+  const retainedIds: TuiAgent[] = ['gemini']
+  const retainedEmpty: TuiAgent[] = []
+  act(() =>
+    useAppStore.setState({
+      activeWorktreeId: 'elsewhere',
+      localDetectedAgentIdsByContext: { host: retainedIds, exact: retainedEmpty },
+      detectedAgentIds: ['codex']
+    })
+  )
+  hook.rerender({ open: false })
+  expect(hook.result.current.state === 'settled' && hook.result.current.detection.detectedIds).toBe(
+    retainedIds
+  )
+  hook.rerender({ open: false, contextKey: 'exact' })
+  expect(hook.result.current.state === 'settled' && hook.result.current.detection.detectedIds).toBe(
+    retainedEmpty
+  )
+  hook.rerender({ open: false, contextKey: '' })
+  expect(hook.result.current.state === 'settled' && hook.result.current.detection.detectedIds).toBe(
+    useAppStore.getState().detectedAgentIds
+  )
+  act(() =>
+    useAppStore.setState({ localDetectedAgentIdsByContext: { host: null, exact: retainedEmpty } })
+  )
+  hook.rerender({ open: false })
+  expect(hook.result.current.state).toBe('loading')
+  act(() => useAppStore.setState({ localDetectedAgentIdsByContext: { host: retainedEmpty } }))
+  mocks.detection.mockReturnValue({ detectedIds: retainedEmpty })
+  hook.rerender({ open: true })
+  expect(hook.result.current.state === 'settled' && hook.result.current.detection.detectedIds).toBe(
+    retainedEmpty
+  )
 })
 
 it('updates the real menu when the global default changes and retains opposite overrides', async () => {
@@ -627,6 +706,34 @@ it('preserves per-agent published answers and direct route inputs across context
         mocks.program.mockClear()
         hook.rerender({ target })
         await act(async () => {})
+        const state = useAppStore.getState()
+        const detectionTarget =
+          host === 'local'
+            ? { kind: 'local' as const, worktreeId }
+            : { kind: 'runtime' as const, environmentId: 'prepared', worktreeId }
+        const facts = readAgentMenuHostFacts(state, target.workspace, detectionTarget)
+        const direct = actualRouteInput.buildAgentLaunchRouteInput(state, {
+          agent: 'claude',
+          workspace: target.workspace
+        })
+        expect(facts).toEqual({
+          failed: false,
+          executionHostId: direct.executionHostId,
+          runtimeId: host === 'local' ? null : 'prepared-context',
+          pairingRevision: host === 'local' ? undefined : getRuntimeEnvironmentRevision('prepared'),
+          contact: 'undefined:undefined:false',
+          checking: false,
+          capabilities: direct.hostCapabilities?.join(',')
+        })
+        expect(Object.keys(facts)).toEqual([
+          'failed',
+          'executionHostId',
+          'runtimeId',
+          'pairingRevision',
+          'contact',
+          'checking',
+          'capabilities'
+        ])
         expect(mocks.program.mock.calls.length).toBeGreaterThan(0)
         for (const [, , baseline] of mocks.program.mock.calls) {
           expect(baseline).toHaveProperty('startsOutsideWorkspaceRoot', false)
@@ -681,4 +788,16 @@ it('preserves per-agent published answers and direct route inputs across context
       }
     }
   }
+})
+
+it('separates cold-only configuration commands from observation and ordinary launch rows', () => {
+  exerciseAgentMenuConfigurationCommands(mocks)
+})
+
+it('bounds added configuration candidate and row work at N and 10N without unrelated renders', async () => {
+  await exerciseAgentMenuConfigurationCommandWork(mocks)
+})
+
+it('selects the actual keyed retained failure without reacting to another host outcome', async () => {
+  await exerciseAgentMenuRetainedFailure((value) => mocks.detection.mockReturnValue(value))
 })

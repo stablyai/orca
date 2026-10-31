@@ -1,3 +1,4 @@
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { useEffect } from 'react'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isCustomAgentId } from '../../../../shared/commit-message-agent-spec'
@@ -25,15 +26,18 @@ export function useSourceControlActionAgent(
 ): ActionAgent & { resolve: (agent: SourceControlActionRecipe['agentId']) => ActionAgent } {
   const disabledAgents = useAppStore((state) => state.settings?.disabledTuiAgents)
   const detected = useAppStore(readNativeDetectedAgents)
+  const failed = useAppStore(
+    (state) => state.readLocalAgentInventory(FLOATING_TERMINAL_WORKTREE_ID).state === 'failed'
+  )
   const resolve = (selected: SourceControlActionRecipe['agentId']): ActionAgent =>
-    detected === null
+    detected === null && !failed
       ? { status: 'pending' }
       : {
           status: 'ready',
           agent: pickSourceControlLaunchAgent({
             savedAgent: selected && !isCustomAgentId(selected) ? selected : null,
             defaultAgent,
-            detectedAgents: detected,
+            detectedAgents: detected ?? [],
             disabledAgents
           })
         }
