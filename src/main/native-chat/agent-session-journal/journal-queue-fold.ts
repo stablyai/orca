@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 // Latch handoff outcomes before rewind can retire their rows; requeue only proven-undelivered sends.
 
 import type {
@@ -213,7 +214,7 @@ function setCard(state: JournalReducerState, card: QueuedMessageRow): void {
     const prior = state.queue.cards.get(card.messageId)
     state.queue.cards.set(card.messageId, card)
     state.queue.revision += 1
-    state.inputOrder.queueChanged(state, prior, card)
+    journalInputOrder(state).queueChanged(state, prior, card)
   }
 }
 

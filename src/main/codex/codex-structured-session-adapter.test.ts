@@ -116,7 +116,8 @@ describe('CodexStructuredSessionAdapter.acquire', () => {
       models: [
         {
           id: 'gpt-live',
-          label: 'gpt-live',
+          label: 'GPT Live',
+          description: 'gpt-live',
           isDefault: false,
           efforts: [],
           effortsKnown: false

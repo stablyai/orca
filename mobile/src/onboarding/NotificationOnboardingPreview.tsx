@@ -156,14 +156,14 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgPanel,
     borderColor: colors.borderSubtle,
     borderWidth: 1,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.md
   },
   appIcon: {
     width: 32,
     height: 32,
-    borderRadius: radii.camera,
+    borderRadius: radii.tile,
     backgroundColor: colors.bgRaised,
     alignItems: 'center',
     justifyContent: 'center'

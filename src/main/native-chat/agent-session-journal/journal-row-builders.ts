@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
@@ -113,7 +114,7 @@ export function journalSubmissionRowBuilder(
       inputOrderContext: {
         source: { epoch: state().epoch, sequence: seq },
         basis: 'observed',
-        cut: state().inputOrder.lineage.at(seq)
+        cut: journalInputOrder(state()).lineage.at(seq)
       },
       providerHandle: agentSessionJournalProviderHandle(identity),
       ...input,

@@ -1,6 +1,9 @@
 import { structuredAgentSessionSeedCatalog } from './structured-agent-session-seed-catalog'
 import { describe, expect, it } from 'vitest'
-import { CLAUDE_SESSION_OPTION_CATALOG } from './agent-session-option-catalog-claude-codex'
+import {
+  CLAUDE_SESSION_OPTION_CATALOG,
+  CODEX_SESSION_OPTION_CATALOG
+} from './agent-session-option-catalog-claude-codex'
 import type { AgentSessionModelCatalogResult } from './agent-session-wire'
 import {
   applyStructuredAgentSessionModelCatalog,
@@ -91,7 +94,7 @@ describe('a Claude model its CLI no longer lists', () => {
     const model = structuredAgentSessionOptionSnapshot(view).find((entry) => entry.id === 'model')
     expect(model?.kind).toMatchObject({
       currentValue: 'sonnet',
-      choices: expect.arrayContaining([{ value: 'sonnet', label: 'sonnet' }])
+      choices: expect.arrayContaining([{ value: 'sonnet', label: 'Sonnet', description: 'sonnet' }])
     })
   })
 
@@ -102,7 +105,9 @@ describe('a Claude model its CLI no longer lists', () => {
       structuredAgentSessionOptionSnapshot(view).find((entry) => entry.id === 'model')?.kind
     ).toMatchObject({
       currentValue: 'claude-gone',
-      choices: expect.arrayContaining([{ value: 'claude-gone', label: 'claude-gone' }])
+      choices: expect.arrayContaining([
+        { value: 'claude-gone', label: 'Claude Gone', description: 'claude-gone' }
+      ])
     })
     const haiku = { id: 'haiku', label: 'Haiku', isDefault: false, efforts: [] }
     const listed = applyStructuredAgentSessionOptions(fresh(), CLAUDE_SESSION_OPTION_CATALOG, {
@@ -122,6 +127,152 @@ describe('a Claude model its CLI no longer lists', () => {
 })
 
 describe('what a send carries', () => {
+  it('shows an unlisted seed before discovery and sends it literally to an older Claude host', () => {
+    const seed = { model: 'custom/sonnet[1m]', effort: 'high' }
+    const state = fresh()
+    const view = structuredAgentSessionOptionView(state, seed, {})
+    expect(view.catalogSource).toBe('seed')
+    expect(structuredAgentSessionOptionSnapshot(view)).toMatchObject([
+      {
+        id: 'model',
+        kind: {
+          currentValue: seed.model,
+          choices: [
+            { value: seed.model, label: 'Custom Sonnet (1M context)', description: seed.model }
+          ]
+        }
+      },
+      { id: 'effort', kind: { currentValue: 'high' }, settable: false }
+    ])
+    expect(structuredAgentSessionSendSelection(view)).toEqual(seed)
+    expect(structuredAgentSessionMessageSelection(view)).toEqual(seed)
+    expect(state.record.values).toEqual({})
+  })
+
+  it('keeps a provisional Codex effort out of capture across a reply and catalog refresh', () => {
+    const catalog: AgentSessionModelCatalogResult = {
+      origin: 'probe',
+      fetchedAt: 1,
+      listingNamesConfiguredModel: true,
+      models: [
+        {
+          id: 'native',
+          label: 'Native',
+          isDefault: true,
+          defaultEffort: 'low',
+          efforts: levels('low', 'high')
+        }
+      ]
+    }
+    const launch = { newLaunch: true, coherentCatalog: true }
+    let state = applyStructuredAgentSessionModelCatalog(
+      createStructuredAgentSessionOptionState('codex', CODEX_SESSION_OPTION_CATALOG),
+      CODEX_SESSION_OPTION_CATALOG,
+      catalog,
+      launch
+    )
+    // The first send still pins policy defaults on hosts that have not answered options.
+    expect(structuredAgentSessionMessageSelection(state)).toMatchObject({
+      model: 'native',
+      effort: 'low'
+    })
+    state = applyStructuredAgentSessionOptions(
+      state,
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [],
+        current: { model: 'native', defaulted: [], acceptedInputSources: { model: 'saved' } }
+      },
+      launch
+    )
+    const recorded = structuredClone(state.record.values)
+    for (const defaultEffort of ['low', 'high', undefined]) {
+      state = applyStructuredAgentSessionModelCatalog(
+        state,
+        CODEX_SESSION_OPTION_CATALOG,
+        {
+          ...catalog,
+          models: catalog.models.map((row) => ({ ...row, defaultEffort }))
+        },
+        launch
+      )
+      const effort = structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')
+      expect(effort?.kind.currentValue).toBe(defaultEffort)
+      expect(effort?.valueSource).toBe(defaultEffort ? 'default' : 'unknown')
+      expect(
+        structuredAgentSessionOptionSnapshot(state).find((row) => row.id === 'effort')?.kind
+          .currentValue
+      ).toBeUndefined()
+      expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'native' })
+      expect(state.record.values).toEqual(recorded)
+    }
+    state.record.values.model = { value: 'unlisted', source: 'dispatched' }
+    expect(
+      structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')
+    ).toBeUndefined()
+  })
+
+  it.each(['claude', 'codex', 'opencode', 'grok', 'pi', 'omp'])(
+    'shows %s declared effort after a reply without changing its send selection',
+    (agent) => {
+      const seed = structuredAgentSessionSeedCatalog(agent)
+      const row = { ...SONNET, defaultEffort: 'high', declaredDefaultEffort: 'low' }
+      for (const listedModelIds of [['sonnet'], ['other'], undefined]) {
+        for (const declaration of ['low', null, undefined]) {
+          const { declaredDefaultEffort: _observation, ...oldRow } = row
+          const state = applyStructuredAgentSessionOptions(
+            createStructuredAgentSessionOptionState(agent, seed),
+            seed,
+            {
+              models: [
+                {
+                  ...oldRow,
+                  ...(declaration !== undefined ? { declaredDefaultEffort: declaration } : {})
+                }
+              ],
+              listedModelIds,
+              current: { model: 'sonnet', defaulted: [], acceptedInputSources: { model: 'saved' } }
+            }
+          )
+          const excluded = listedModelIds !== undefined && !listedModelIds.includes('sonnet')
+          const expected = excluded
+            ? undefined
+            : (declaration ??
+              (declaration === undefined && agent === 'codex' && listedModelIds
+                ? 'high'
+                : undefined))
+          const snapshot = structuredAgentSessionShownSnapshot(state)
+          expect(snapshot.find((row) => row.id === 'effort')?.kind.currentValue).toBe(expected)
+          expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'sonnet' })
+          expect(structuredAgentSessionSendSelection(state)).toEqual(
+            agent === 'claude' ? { model: 'sonnet' } : undefined
+          )
+          const held = structuredAgentSessionOptionView(state, undefined, {
+            model: 'sonnet',
+            effort: 'max'
+          })
+          expect(
+            structuredAgentSessionShownSnapshot(held).find((row) => row.id === 'effort')?.kind
+              .currentValue
+          ).toBe(agent === 'pi' && !excluded ? 'high' : 'max')
+          expect(structuredAgentSessionMessageSelection(held)).toEqual({
+            model: 'sonnet',
+            effort: 'max'
+          })
+          const picked = commitStructuredAgentSessionOption(state, 'effort', 'high')
+          expect(
+            structuredAgentSessionShownSnapshot(picked).find((row) => row.id === 'effort')?.kind
+              .currentValue
+          ).toBe('high')
+          expect(structuredAgentSessionMessageSelection(picked)).toEqual({
+            model: 'sonnet',
+            effort: 'high'
+          })
+        }
+      }
+    }
+  )
+
   it('carries the default it shows when nothing names a model', () => {
     const named = { ...SONNET, isDefault: true }
     const listing = { ...LISTED, models: [OPUS, named], listingNamesConfiguredModel: true }
@@ -129,20 +280,19 @@ describe('what a send carries', () => {
   })
 
   it('carries held picks without committing them to the chat', () => {
-    const listed = {
-      ...withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] }),
-      pendingId: 'model'
-    }
+    const listed = withHostList(fresh(), { ...LISTED, models: [OPUS, SONNET] })
     const originalRecord = structuredClone(listed.record)
     const view = structuredAgentSessionOptionView(listed, remembered, {
       model: 'sonnet',
       effort: 'high'
     })
     expect(structuredAgentSessionSendSelection(view)).toEqual({ model: 'sonnet', effort: 'high' })
-    expect(view.pendingId).toBe('model')
     expect(view.record).not.toBe(listed.record)
     expect(listed.record).toEqual(originalRecord)
-    expect(carried(listed, remembered, { model: 'sonnet' })).toEqual({ model: 'sonnet' })
+    expect(carried(listed, remembered, { model: 'sonnet' })).toEqual({
+      model: 'sonnet',
+      effort: 'max'
+    })
     expect(carried(withHostList(), undefined, { model: 'claude-retired' })).toEqual({
       model: 'claude-retired'
     })
@@ -337,26 +487,33 @@ describe('Pi supported selection apart from saved intent', () => {
   })
 })
 
-it('bounds exact capture by catalog width at N and 10N', () => {
-  const work: number[] = []
+it.each(['claude', 'codex'] as const)('bounds %s capture and display work', (agent) => {
+  const work: { capture: number; rows: number; verified: number }[] = []
+  const seed = agent === 'codex' ? CODEX_SESSION_OPTION_CATALOG : CLAUDE_SESSION_OPTION_CATALOG
   for (const count of [10, 100]) {
-    let visits = 0
+    let rows = 0
+    let verified = 0
+    const model = `model-${count - 1}`
     const models = Array.from({ length: count }, (_, index) => ({
       id: `model-${index}`,
       label: `Model ${index}`,
       isDefault: false,
-      efforts: levels('high')
+      defaultEffort: 'high',
+      efforts: levels('low', 'high')
     }))
     const state = applyStructuredAgentSessionOptions(
-      fresh(),
-      CLAUDE_SESSION_OPTION_CATALOG,
+      createStructuredAgentSessionOptionState(agent, seed),
+      seed,
       {
         models,
         listedModelIds: models.map((row) => row.id),
         current: {
-          model: `model-${count - 1}`,
-          effort: 'high',
-          acceptedInputSources: { model: 'saved', effort: 'saved' }
+          model,
+          ...(agent === 'claude' ? { effort: 'high' } : {}),
+          acceptedInputSources: {
+            model: 'saved',
+            ...(agent === 'claude' ? { effort: 'saved' as const } : {})
+          }
         }
       },
       { newLaunch: false, coherentCatalog: false }
@@ -364,19 +521,64 @@ it('bounds exact capture by catalog width at N and 10N', () => {
     for (const row of state.catalog?.models ?? []) {
       const id = row.id
       Object.defineProperty(row, 'id', {
-        get() {
-          visits++
+        get: () => {
+          rows++
           return id
         }
       })
     }
-    expect(structuredAgentSessionMessageSelection(state)).toEqual({
-      model: `model-${count - 1}`,
-      effort: 'high'
+    state.verifiedModelIds?.forEach((id, index, ids) => {
+      Object.defineProperty(ids, index, {
+        get: () => {
+          verified++
+          return id
+        }
+      })
     })
-    expect(visits).toBeLessThanOrEqual(10 * count)
-    work.push(visits)
+    expect(structuredAgentSessionMessageSelection(state)).toEqual({
+      model,
+      ...(agent === 'claude' ? { effort: 'high' } : {})
+    })
+    const capture = rows
+    expect(capture).toBeLessThanOrEqual(10 * count)
+    rows = 0
+    verified = 0
+    expect(
+      structuredAgentSessionShownSnapshot(state).find((row) => row.id === 'effort')
+    ).toMatchObject({
+      valueSource: agent === 'codex' ? 'default' : 'dispatched',
+      kind: { currentValue: 'high' }
+    })
+    expect(rows).toBeGreaterThanOrEqual(count)
+    expect(rows).toBeLessThanOrEqual(10 * count)
+    expect(verified).toBeGreaterThanOrEqual(count)
+    expect(verified).toBeLessThanOrEqual(5 * count)
+    work.push({ capture, rows, verified })
+    if (agent === 'codex') {
+      for (const effort of ['low', 'high']) {
+        const accepted = commitStructuredAgentSessionOption(state, 'effort', effort)
+        rows = verified = 0
+        const canonical = structuredAgentSessionOptionSnapshot(accepted)
+        const canonicalWork = { rows, verified }
+        rows = verified = 0
+        const shown = structuredAgentSessionShownSnapshot(accepted)
+        const shownWork = { rows, verified }
+        expect(shownWork).toEqual(canonicalWork)
+        expect(shown).toEqual(canonical)
+        expect(shown.find((row) => row.id === 'effort')).toMatchObject({
+          valueSource: 'dispatched',
+          kind: { currentValue: effort }
+        })
+        expect(structuredAgentSessionMessageSelection(accepted)).toEqual({ model, effort })
+        console.info(
+          'accepted-codex-projection-visits',
+          JSON.stringify({ count, effort, canonicalWork, shownWork })
+        )
+      }
+    }
   }
-  expect(work[1]).toBeLessThanOrEqual(11 * work[0])
-  console.info('selection-capture-catalog-visits', JSON.stringify(work))
+  expect(work[1].capture).toBeLessThanOrEqual(11 * work[0].capture)
+  expect(work[1].rows).toBeLessThanOrEqual(11 * work[0].rows)
+  expect(work[1].verified).toBeLessThanOrEqual(11 * work[0].verified)
+  console.info(`${agent}-shown-projection-visits`, JSON.stringify(work))
 })

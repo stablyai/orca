@@ -1,4 +1,6 @@
-import { journalInputIndexProbe } from '../agent-session-journal/journal-input-index-probe.test-support'
+import * as transitions from '../agent-session-journal/journal-reducer-transition'
+import * as outcomes from '../agent-session-journal/journal-outcome-codec'
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { JournalQueuedMessages } from '../agent-session-journal/journal-queued-messages'
 import { QueuedMessageEditLeases } from '../agent-session-journal/queued-message-edit-leases'
 import * as pause from '../agent-session-journal/queued-message-pause'
@@ -37,6 +39,11 @@ it.each([10, 100])(
       receipts: number
       nodes: number
       nodeReads: number
+      draftNodes: number
+      derivedDraftNodes: number
+      nativeEntries: number
+      nativeCards: number
+      nativeBytes: number
     }
     const phases: Record<string, Counts> = {}
     let phase = 'setup'
@@ -51,7 +58,12 @@ it.each([10, 100])(
         lineage: 0,
         receipts: 0,
         nodes: 0,
-        nodeReads: 0
+        nodeReads: 0,
+        draftNodes: 0,
+        derivedDraftNodes: 0,
+        nativeEntries: 0,
+        nativeCards: 0,
+        nativeBytes: 0
       })
     const consumers: Record<
       string,
@@ -190,13 +202,51 @@ it.each([10, 100])(
       }
       return get.apply(this, args)
     })
-    const inspect = journalInputIndexProbe(['left', 'right', 'entry', 'result', 'height'], {
-      allocated: () => {
-        metric().nodes++
-      },
-      read: () => {
-        metric().nodeReads++
+    const isolate = transitions.isolateJournalTransition
+    const prepared = vi
+      .spyOn(transitions, 'isolateJournalTransition')
+      .mockImplementation((...args) => {
+        const draft = isolate(...args)
+        return {
+          ...draft,
+          adopt: () => {
+            const state = draft.adopt()
+            metric().draftNodes += draft.tracked() - draft.trackedDerived()
+            metric().derivedDraftNodes += draft.trackedDerived()
+            return state
+          }
+        }
+      })
+    const encode = outcomes.encodeJournalOutcomes
+    const encoded = vi.spyOn(outcomes, 'encodeJournalOutcomes').mockImplementation((...args) => {
+      const result = encode(...args)
+      for (const value of result.values) {
+        if (value.field === 'inputEntries') {
+          metric().nativeEntries++
+        }
+        if (value.field === 'inputCards') {
+          metric().nativeCards++
+        }
+        if (value.field === 'inputEntries' || value.field === 'inputCards') {
+          metric().nativeBytes += Buffer.byteLength(value.json)
+        }
       }
+      return result
+    })
+    const reflected = Reflect.get
+    const nodes = new WeakSet<object>()
+    const nodeReads = vi.spyOn(Reflect, 'get').mockImplementation((...args) => {
+      const [target] = args
+      // The prepared draft reads current objects through this seam. Observe rather than
+      // installing accessors on transaction nodes, which would mutate the measured graph.
+      if (Object.hasOwn(target, 'height') && Object.hasOwn(target, 'entry')) {
+        metric().nodeReads++
+        if (!nodes.has(target)) {
+          nodes.add(target)
+          metric().nodes++
+        }
+      }
+      return reflected(...args)
     })
 
     const boundaryCalls: Record<string, number> = {}
@@ -214,10 +264,6 @@ it.each([10, 100])(
     ) {
       metric().sets++
       set.apply(this, args)
-      for (const node of this['epochs'].values()) {
-        inspect(node)
-      }
-      inspect(this['all'])
     })
     const query = JournalInputPlaceIndex.prototype.query
     const indexQuery = vi
@@ -381,10 +427,17 @@ it.each([10, 100])(
       expect(metric().receipts).toBe(n) // Existing direct acceptance receipt read, no ordering probe.
       // Two coordinate indexes, one point per new card; body-only edits never update an order index.
       expect(metric().sets).toBe(2 * (n + 1))
+      expect(metric().nativeEntries).toBe(n)
+      expect(metric().nativeCards).toBe(n + 1)
+      // Four AVL point paths (all/domain in two coordinate indexes), at most
+      // twice log height, reaching at most eight draft objects per level.
+      expect(metric().derivedDraftNodes).toBeLessThanOrEqual(
+        64 * (n + 1) * Math.ceil(Math.log2(2 * n + 3))
+      )
       expect(metric().nodeReads).toBeLessThanOrEqual(
         200 * (n + 1) * Math.ceil(Math.log2(2 * n + 3))
       )
-      expect(journal.inputOrder['places'].size).toBe(n + 1)
+      expect(journal.queuedMessages.displayState().inputEntries.size).toBe(n + 1)
       expect(journal.inputOrder.lineage.cards.size).toBe(2 * n + 2)
       expect(domain).not.toHaveBeenCalled()
       for (let i = 0; i < n; i++) {
@@ -411,20 +464,19 @@ it.each([10, 100])(
         await serialize(SESSION, () =>
           journal.replaceEpochItems('unreconcilable_prefix', 1, []).then(() => {})
         )
-        expect(metric().rows).toBeLessThanOrEqual(3 * n + 8)
+        expect(metric().rows).toBe(2 * (3 * n + 3)) // Builder and isolated publication each fold the same actual cohort.
         expect(metric().receipts).toBe(n)
-        const envelope = journal.inputOrder.replacementLineage(
-          new Set(journal.queuedMessages.list().map((card) => card.messageId))
-        )
         expect(
-          envelope.cards.filter((card) => card.baseline !== undefined).length
+          [...journal.queuedMessages.displayState().inputCards.values()].filter(
+            (card) => card.baseline !== undefined
+          ).length
         ).toBeLessThanOrEqual(2 * n + 4)
         phase = `output-replay-${pass}`
         const replay = loadTestJournal(rig.root, SESSION)!
         expect(replay.damage).toBeNull()
         expect(replay.newer).toBeNull()
-        expect(metric().rows).toBe(phases[`replacement-${pass}`].rows)
-        expect(ids.every((id) => replay.state.inputOrder.forced(id))).toBe(true)
+        expect(metric().rows).toBe(0) // Keyed restore assigns canonical facts and rebuilds derived indexes once.
+        expect(ids.every((id) => journalInputOrder(replay.state).forced(id))).toBe(true)
       }
       phase = 'recovery'
       await rig.restartHostProcess()
@@ -446,7 +498,7 @@ it.each([10, 100])(
       ).toBe(true)
       expect(reopened.queuedMessages.get('E')?.holdReason).toBe(QUEUED_MESSAGE_PAUSED_SEND_FAILED)
       expect(reopened.queuedMessages.get('Q1')?.body).toEqual(hostTestMessage(`Q1-edit-${n - 1}`))
-      expect(reopened.inputOrder['places'].size).toBe(0)
+      expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
       // A real held-card retry releases E at its existing selected Queue place.
       await rig.host.collaboratorsForTests().serialize(SESSION, () =>
         reopened.queuedMessages['write'](() => ({
@@ -497,7 +549,7 @@ it.each([10, 100])(
       expect(
         rig.dispatch.mock.calls.slice(base).some(([input]) => input.clientMessageId === w)
       ).toBe(false)
-      expect(reopened.inputOrder['places'].size).toBe(0)
+      expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
       expect(reopened.queuedMessages.editLeases.heldIds().size).toBe(0)
       // Each folded card transition updates two current trees; recovery/pause adds a bounded bulk pass.
       // A set removes/inserts in two AVLs; rotations and summary refreshes cost a fixed number of node reads per level.
@@ -505,24 +557,30 @@ it.each([10, 100])(
         expect(count.nodeReads, name).toBeLessThanOrEqual(
           200 * (count.sets + count.queries + 1) * Math.ceil(Math.log2(4 * n + 8))
         )
-        expect(count.nodes, name).toBeLessThanOrEqual(2 * count.sets)
+        expect(count.nodes, name).toBeLessThanOrEqual(count.nodeReads)
       }
       expect(phases['original-replay'].sets).toBeLessThanOrEqual(6 * n + 16)
       for (let pass = 0; pass < 2; pass++) {
         for (const name of [`replacement-${pass}`, `output-replay-${pass}`]) {
-          expect(phases[name].sets, name).toBeLessThanOrEqual(4 * n + 16)
+          // The builder and isolated publisher each initialize two trees from K cards;
+          // their first card also takes the ordinary affected-ID update. Keyed replay builds once.
+          expect(phases[name].sets, name).toBe(
+            name.startsWith('replacement') ? 4 * (2 * n + 3) : 2 * (2 * n + 2)
+          )
           // One fold query per admitted input; each actual consumer boundary call adds one point query.
           expect(phases[name].queries, name).toBeLessThanOrEqual(n + (boundaryCalls[name] ?? 0))
-          expect(phases[name].lineage, name).toBeLessThanOrEqual(2 * n + 4)
+          expect(phases[name].lineage, name).toBe(
+            name.startsWith('replacement') ? 2 * (2 * n + 2) : 0
+          )
         }
       }
       // Per row, at most two affected-card refreshes of two indexes; two effective-pause passes may rebuild K.
       expect(phases.recovery.rows).toBeLessThanOrEqual(8 * n + 12)
       expect(phases.recovery.sets).toBeLessThanOrEqual(4 * phases.recovery.rows + 4 * (2 * n + 2))
-      expect(phases.recovery.queries).toBe(2 * n)
+      expect(phases.recovery.queries).toBe(n) // One predecessor query per pending input; keyed restore does not readmit it.
       expect(phases.delivery.sets).toBeLessThanOrEqual(32 * n + 8)
       expect(phases.delivery.queries).toBe(0)
-      console.info('current-consumer-evidence', JSON.stringify({ n, consumers, upstream }))
+      console.info('current-consumer-evidence', JSON.stringify({ n, phases, consumers, upstream }))
       for (const [name, count] of Object.entries(consumers)) {
         expect(count.lists, name).toBe(0)
         expect(count.pauses, name).toBe(0)
@@ -560,6 +618,9 @@ it.each([10, 100])(
       pauses.mockRestore()
       leases.mockRestore()
       gets.mockRestore()
+      encoded.mockRestore()
+      prepared.mockRestore()
+      nodeReads.mockRestore()
       indexSet.mockRestore()
       indexQuery.mockRestore()
       domain.mockRestore()

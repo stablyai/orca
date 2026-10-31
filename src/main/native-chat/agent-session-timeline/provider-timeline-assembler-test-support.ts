@@ -232,7 +232,7 @@ export async function openProviderTimelineRig(
     stateDirectory: root,
     now: () => 1_000
   }
-  const journal = await journals.open(journalOptions)
+  let journal = await journals.open(journalOptions)
   const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
   deferred.bind({ journal, fence: 1, publish: () => {} })
   cleanups.push(async () => {
@@ -284,7 +284,9 @@ export async function openProviderTimelineRig(
       await rows()
       await journal.close()
       await closeTestJournalHostDatabase(root)
-      return journals.open(journalOptions)
+      journal = await journals.open(journalOptions)
+      rig.journal = journal
+      return journal
     },
     restart: async (more = {}) => {
       generations += 1

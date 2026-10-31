@@ -1,9 +1,4 @@
-import {
-  journalInputIndexProbe,
-  journalInputHistoryProbe
-} from './journal-input-index-probe.test-support'
-import { JournalInputDomainIndex } from './journal-input-domain-index'
-import { JournalInputPlaceIndex } from './journal-input-place-index'
+import { journalInputOrder } from './journal-input-order'
 import { insertCommandReceiptIfAbsent, readCommandReceipt } from './command-receipt-table'
 import { writeCommandReceiptTestRecord } from './command-receipt-test-support'
 import type { JournalRow } from './journal-row-schema'
@@ -24,9 +19,8 @@ import {
   createTrackedJournalOpener,
   loadTestJournal,
   openTestJournalHostDatabase,
-  liveTestJournalRows,
-  insertTestJournalRow,
-  writeTestLegacyTerminalGaps
+  readTestJournalOutcomes,
+  insertTestJournalRow
 } from './journal-host-database-test-support'
 import {
   selectedStructuredSubmission,
@@ -44,7 +38,7 @@ function knownPredecessors(owner: AgentSessionJournal | JournalReducerState, id:
   const submission = state.submissions.get(id)
   return submission
     ? [...state.queue.cards.values()]
-        .filter((card) => state.inputOrder.precedes(card, submission))
+        .filter((card) => journalInputOrder(state).precedes(card, submission))
         .map((card) => card.messageId)
     : []
 }
@@ -82,8 +76,9 @@ it('preserves the forced queue place through command removal, two epoch replacem
     })
     for (let round = 0; round < 2; round++) {
       await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
-      expect(knownPredecessors(journal, 'M')).toEqual(['C', 'D'])
-      expect(journal.queuedMessages.get('C')?.state).toBe('withdrawn')
+      expect(knownPredecessors(journal, 'M')).toEqual(['D'])
+      expect(journal.inputOrder.forced('M')).toBe(true)
+      expect(journal.queuedMessages.get('C')).toBeNull()
       expect(selectStructuredAgentSessionInput(journal)).toMatchObject({
         kind: 'card',
         card: { messageId: 'D' }
@@ -91,7 +86,8 @@ it('preserves the forced queue place through command removal, two epoch replacem
     }
     await journal.close()
     const reopened = await journals.open({ identity, stateDirectory: root })
-    expect(knownPredecessors(reopened, 'M')).toEqual(['C', 'D'])
+    expect(knownPredecessors(reopened, 'M')).toEqual(['D'])
+    expect(reopened.inputOrder.forced('M')).toBe(true)
     await holdUnsentSends(reopened, { fence: 0, hold: { cause: 'hostRestarted' } })
     expect(
       reopened.queuedMessages
@@ -208,14 +204,17 @@ it.each(['resume', 'accepted'] as const)(
       expect(target).toEqual(cursor)
       expect(committed).toBe(1)
       expect(journal.reopenFloor()).toBeNull()
-      const rows = liveTestJournalRows(
+      const marks = readTestJournalOutcomes(
         openTestJournalHostDatabase(root).db,
         identity.sessionId
-      ).map((r) => JSON.parse(r.rowJson))
-      expect(rows.find((r) => r.queueReopen === true)).toMatchObject({
-        queueReopenSince: floor.sequence,
-        seq: cursor.sequence - 1
-      })
+      ).filter((record) => record.field === '$' && record.key === '"queuePauseMarks"')
+      expect(
+        marks.some(
+          (record) =>
+            record.seq < cursor.sequence &&
+            JSON.parse(record.json).reopenedSequence === floor.sequence
+        )
+      ).toBe(true)
       expect(knownPredecessors(journal, 'M')).toEqual(release === 'resume' ? ['C'] : [])
       if (release === 'accepted') {
         expect(journal.queuedMessages.pauses().map((p) => p.reason)).toEqual(['restarted'])
@@ -270,7 +269,7 @@ it.each(['resume', 'accepted'] as const)(
 
 it('keeps the receipt callback live after replacement of a legacy null-boundary card', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-input-replacement-'))
-  const journals = createTrackedJournalOpener()
+  const journals = createTrackedJournalOpener({ legacyInputs: true })
   const identity = {
     sessionId: 'null-order',
     workspaceId: 'folder',
@@ -329,7 +328,7 @@ it.each(['legacy', 'observed'] as const)(
   'retains %s import evidence through two production replacements and replay',
   async (basis) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-source-domain-'))
-    const journals = createTrackedJournalOpener()
+    const journals = createTrackedJournalOpener({ legacyInputs: true })
     const identity = {
       sessionId: 'domain',
       workspaceId: 'folder',
@@ -446,18 +445,24 @@ it.each(['legacy', 'observed'] as const)(
         for (const card of ['D', 'N']) {
           expect(
             ['M1', 'M2', 'M3'].map((id) =>
-              state.inputOrder.precedes(state.queue.cards.get(card)!, state.submissions.get(id)!)
+              journalInputOrder(state).precedes(
+                state.queue.cards.get(card)!,
+                state.submissions.get(id)!
+              )
             )
           ).toEqual(expected)
         }
-        expect(['M1', 'M2', 'M3'].map((id) => state.inputOrder.forced(id))).toEqual([
+        expect(['M1', 'M2', 'M3'].map((id) => journalInputOrder(state).forced(id))).toEqual([
           true,
           true,
           true
         ])
         expect(
           ['M1', 'M2', 'M3'].map((id) =>
-            state.inputOrder.precedes(state.queue.cards.get('L')!, state.submissions.get(id)!)
+            journalInputOrder(state).precedes(
+              state.queue.cards.get('L')!,
+              state.submissions.get(id)!
+            )
           )
         ).toEqual([false, false, false])
       }
@@ -559,244 +564,3 @@ it('retries partial keeps from committed facts and carries rank moves on the fir
     await rm(root, { recursive: true, force: true })
   }
 })
-
-it.each([10, 100])(
-  'indexes the initial legacy writer shape without promoting foreign/null comparison N=%i',
-  async (n) => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-legacy-baseline-'))
-    const journals = createTrackedJournalOpener()
-    const identity = {
-      sessionId: 'baseline',
-      workspaceId: 'folder',
-      hostId: 'ssh',
-      agent: 'claude' as const,
-      providerHandle: claudeProviderHandle('thread', null)
-    }
-    let journal = await journals.open({ identity, stateDirectory: root })
-    const database = openTestJournalHostDatabase(root)
-    const cost = { sets: 0, queries: 0, nodes: 0, reads: 0 }
-    const inspect = journalInputIndexProbe(['index', 'left', 'right'], {
-      allocated: () => {
-        cost.nodes++
-      },
-      read: () => {
-        cost.reads++
-      }
-    })
-    const set = JournalInputDomainIndex.prototype.set
-    const domainSets = vi
-      .spyOn(JournalInputDomainIndex.prototype, 'set')
-      .mockImplementation(function (this: JournalInputDomainIndex, ...args) {
-        cost.sets++
-        inspect(this['root'])
-        set.apply(this, args)
-        inspect(this['root'])
-      })
-    const query = JournalInputDomainIndex.prototype.query
-    const domainQueries = vi
-      .spyOn(JournalInputDomainIndex.prototype, 'query')
-      .mockImplementation(function (this: JournalInputDomainIndex, ...args) {
-        cost.queries++
-        return query.apply(this, args)
-      })
-    const indexSets = vi.spyOn(JournalInputPlaceIndex.prototype, 'set')
-    const release = journalInputHistoryProbe()
-    try {
-      const { epoch, sequence } = journal.cursor()
-      let seq = sequence
-      await journal.close()
-      const base = () => ({ v: 3, epoch, seq: ++seq, fence: 0, ts: 1 })
-      const queue = (
-        id: string,
-        queuedAt: { epoch: string; sequence: number } | null,
-        command = false
-      ) =>
-        insertTestJournalRow(database.db, identity.sessionId, {
-          ...base(),
-          kind: 'queue',
-          messageId: id,
-          change: {
-            op: 'queued',
-            body: command ? { ...message('/compact'), command: { name: 'compact' } } : message(id),
-            position: id === 'C' ? 1 : id === 'D' ? 2 : 3,
-            queuedAt
-          }
-        })
-      queue('C', { epoch, sequence: seq }, true)
-      queue('F', { epoch: 'original-foreign', sequence: 1 })
-      queue('N', null)
-      database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
-      const ids = Array.from({ length: n }, (_, i) => `M${i + 1}`)
-      for (let i = 0; i < n; i++) {
-        queue(`ordinary-${i}`, { epoch, sequence: seq })
-      }
-      queue('D', { epoch: 'original-foreign', sequence: 1 })
-      seq = writeTestLegacyTerminalGaps(
-        database.db,
-        identity.sessionId,
-        {
-          epoch,
-          sequence: seq,
-          fence: 0,
-          providerHandle: agentSessionJournalProviderHandle(identity)
-        },
-        n
-      )
-      for (const id of ids) {
-        const target: JournalRow = {
-          ...base(),
-          kind: 'submission',
-          clientMessageId: id,
-          payloadFingerprint: id,
-          body: message(id),
-          providerHandle: agentSessionJournalProviderHandle(identity),
-          handoverRecorded: true,
-          origin: 'client'
-        }
-        insertTestJournalRow(database.db, identity.sessionId, target)
-        if (id !== 'M2') {
-          database.transaction((db) =>
-            insertCommandReceiptIfAbsent(
-              db,
-              { kind: 'global' },
-              {
-                operationId: id,
-                sessionId: identity.sessionId,
-                callerKey: 'fixture',
-                method: 'agentSession.send',
-                fingerprint: id,
-                status: 'accepted',
-                acceptedAt: 1,
-                result: { kind: 'journal-row', epoch: 'original-foreign', sequence: 100 }
-              }
-            )
-          )
-        }
-      }
-      queue('later-F', { epoch: 'original-foreign', sequence: 1 })
-      journal = await journals.open({ identity, stateDirectory: root })
-      expect(release.spy).not.toHaveBeenCalled()
-      const check = (state: JournalReducerState) => {
-        for (const card of ['F', 'D']) {
-          expect(
-            ['M1', 'M2', 'M3'].map((id) =>
-              state.inputOrder.precedes(state.queue.cards.get(card)!, state.submissions.get(id)!)
-            )
-          ).toEqual([true, false, true])
-        }
-        for (const card of ['N', 'later-F']) {
-          expect(
-            ['M1', 'M2', 'M3'].map((id) =>
-              state.inputOrder.precedes(state.queue.cards.get(card)!, state.submissions.get(id)!)
-            )
-          ).toEqual([false, false, false])
-        }
-        expect(['M1', 'M2', 'M3'].every((id) => state.inputOrder.forced(id))).toBe(true)
-      }
-      for (let pass = 0; pass < 3; pass++) {
-        domainSets.mockClear()
-        domainQueries.mockClear()
-        indexSets.mockClear()
-        if (pass) {
-          await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
-        }
-        check(journal.queuedMessages.displayState())
-        const replay = loadTestJournal(root, identity.sessionId)!
-        expect(replay.damage).toBeNull()
-        check(replay.state)
-        if (pass) {
-          const rows = liveTestJournalRows(database.db, identity.sessionId).map((row) =>
-            JSON.parse(row.rowJson)
-          )
-          expect(rows.length).toBeLessThanOrEqual(2 * n + 12)
-          const baseline = journal.inputOrder
-            .replacementLineage(
-              new Set(journal.queuedMessages.list().map((card) => card.messageId))
-            )
-            .cards.filter((card) => card.baseline !== undefined).length
-          expect(baseline).toBeLessThanOrEqual(n + 6)
-          for (const id of ids) {
-            journal.inputOrder.predecessors(journal.queuedMessages.displayState(), id)
-            replay.state.inputOrder.predecessors(replay.state, id)
-          }
-          expect(domainQueries).toHaveBeenCalledTimes(2 * n)
-          // Each independent fold adds at most one command-witness transition beyond the frozen baseline; each update traverses at most 54 introduction nodes.
-          expect(domainSets.mock.calls.length).toBeLessThanOrEqual(4 * (n + 6) + 2 * rows.length)
-          expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
-            54 * domainSets.mock.calls.length + 8 * rows.length
-          )
-          console.info(
-            'legacy-normalized-output',
-            JSON.stringify({
-              n,
-              pass,
-              rows: rows.length,
-              baseline,
-              domainSets: domainSets.mock.calls.length,
-              domainQueries: domainQueries.mock.calls.length,
-              indexSets: indexSets.mock.calls.length
-            })
-          )
-        }
-      }
-      domainSets.mockClear()
-      domainQueries.mockClear()
-      indexSets.mockClear()
-      await holdUnsentSends(journal, { fence: 0, hold: { cause: 'hostRestarted' } })
-      expect(domainQueries).toHaveBeenCalledTimes(n)
-      // One finite-rank move per current card and one keep per input, each updating its one frozen coordinate through at most 54 introduction nodes.
-      expect(domainSets.mock.calls.length).toBeLessThanOrEqual(16 * (n + 6))
-      expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
-        54 * domainSets.mock.calls.length + 16 * (n + 6)
-      )
-      console.info(
-        'legacy-recovery-index',
-        JSON.stringify({
-          n,
-          domainSets: domainSets.mock.calls.length,
-          domainQueries: domainQueries.mock.calls.length,
-          indexSets: indexSets.mock.calls.length
-        })
-      )
-      for (const id of ids) {
-        expect(journal.submission(id)).toMatchObject({
-          dispatchState: 'rejected',
-          keptAsQueuedMessageId: id
-        })
-      }
-      const ranks = journal.queuedMessages
-        .list()
-        .filter((card) => card.state === 'waiting')
-        .map((card) => card.position)
-      expect(
-        ranks.every((rank, i) => Number.isFinite(rank) && (i === 0 || rank > ranks[i - 1]))
-      ).toBe(true)
-      // One point path allocates at most 54 nodes; point/prefix traversals read at most four fields per level.
-      expect(cost.nodes).toBeLessThanOrEqual(54 * cost.sets)
-      expect(cost.reads).toBeLessThanOrEqual(4 * 54 * (cost.sets + cost.queries))
-      console.info('frozen-baseline-nodes', JSON.stringify({ n, ...cost }))
-      expect(release.spy).toHaveBeenCalledOnce()
-      expect(release.visits()).toBe(2 * n + 5)
-      const finished = loadTestJournal(root, identity.sessionId)!
-      expect(finished.damage).toBeNull()
-      expect(release.spy).toHaveBeenCalledTimes(2)
-      expect(release.visits()).toBe(2 * (2 * n + 5))
-      expect(
-        [...finished.state.inputOrder.lineage.cards.values()].every((card) => !card.baseline)
-      ).toBe(true)
-      expect(journal.inputOrder['cards']['domains']).toBeUndefined()
-      expect(journal.inputOrder['places'].size).toBe(0)
-      expect(journal.inputOrder['witnesses'].size).toBe(0)
-      expect(
-        [...journal.inputOrder.lineage.cards.values()].every((card) => card.baseline === undefined)
-      ).toBe(true)
-    } finally {
-      domainSets.mockRestore()
-      domainQueries.mockRestore()
-      indexSets.mockRestore()
-      release.spy.mockRestore()
-      await journals.closeAll()
-      await rm(root, { recursive: true, force: true })
-    }
-  }
-)

@@ -1,5 +1,10 @@
 import { journalItemDeclaresEcho } from './journal-item-echo'
-import { JournalInputOrder } from './journal-input-order'
+import {
+  journalInputOrder,
+  initializeJournalInputOrder,
+  type JournalInputOrder
+} from './journal-input-order'
+import type { JournalInputEntry, JournalInputCard } from './journal-input-lineage'
 // Live append and replay share this fold. Revisions change content, preserving creation position
 // and unspecified producer linkage; queued/rejected submissions use their handoff/settlement positions.
 
@@ -80,16 +85,17 @@ export type JournalReducerState = {
   normalizedHandOffs: Set<string>
   /** The queued messages, folded from their own rows and their hand-offs (`journal-queue-fold.ts`). */
   queue: JournalQueueState
-  inputOrder: JournalInputOrder
+  inputEntries: Map<string, JournalInputEntry>
+  inputCards: Map<string, JournalInputCard>
   historyOrigin: JournalHistoryOrigin | null
 }
 
 export function createJournalReducerState(
   sessionId: string,
   epoch: string,
-  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[0]
+  originalAcceptance?: ConstructorParameters<typeof JournalInputOrder>[1]
 ): JournalReducerState {
-  return {
+  const state: JournalReducerState = {
     sessionId,
     epoch,
     lastSequence: 0,
@@ -114,9 +120,12 @@ export function createJournalReducerState(
     queuedHandOffPlaces: new Map(),
     normalizedHandOffs: new Set(),
     queue: createJournalQueueState(),
-    inputOrder: new JournalInputOrder(originalAcceptance),
+    inputEntries: new Map(),
+    inputCards: new Map(),
     historyOrigin: null
   }
+  initializeJournalInputOrder(state, originalAcceptance)
+  return state
 }
 
 export function applyJournalRow(
@@ -124,10 +133,10 @@ export function applyJournalRow(
   row: JournalRow,
   savedAt = row.ts
 ): void {
-  state.inputOrder.beforeRow(state, row)
+  journalInputOrder(state).beforeRow(state, row)
   applyJournalRowFacts(state, row, savedAt)
   foldJournalQueueRow(state, row)
-  state.inputOrder.afterRow(state, row)
+  journalInputOrder(state).afterRow(state, row)
 }
 
 function applyJournalRowFacts(state: JournalReducerState, row: JournalRow, savedAt: number): void {

@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 // Adopt legacy cards and delete their rows atomically, using the same fold before and after import.
 // Retry failed bulk import on next open; do not loop while the host is running.
 
@@ -61,7 +62,7 @@ function unconfirmedHandOff(
   | { attempt: string; holdReason?: undefined }
   | { attempt?: undefined; holdReason: string }
   | null {
-  const attempts = [...state.inputOrder.linkedTo(row.messageId)].sort(
+  const attempts = [...journalInputOrder(state).linkedTo(row.messageId)].sort(
     (a, b) => (a.submittedSequence ?? 0) - (b.submittedSequence ?? 0)
   )
   if (!attempts.some(handOffInDoubt)) {
@@ -109,7 +110,7 @@ export class LegacyQueuedCards {
       return ''
     }
     const state = this.deps.state()
-    return `${this.revision}:${state.epoch}:${state.inputOrder.linkedVersion()}`
+    return `${this.revision}:${state.epoch}:${journalInputOrder(state).linkedVersion()}`
   }
 
   cards(): readonly QueuedMessageRow[] {

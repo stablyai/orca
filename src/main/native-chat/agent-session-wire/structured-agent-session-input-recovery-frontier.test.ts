@@ -1,3 +1,4 @@
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { writeLegacyGapFixture } from './structured-agent-session-legacy-gap.test-support'
 import type { JournalReducerState } from '../agent-session-journal/journal-reducer'
 import { expect, it, vi } from 'vitest'
@@ -133,7 +134,7 @@ it.each([
       }
       expect(actual).toEqual(expected)
       expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
-      expect(reopened.inputOrder['places'].size).toBe(0)
+      expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
       expect(rig.dispatch.mock.calls.filter(([i]) => i.clientMessageId === w)).toHaveLength(1)
     } finally {
       blocked = ''
@@ -193,9 +194,9 @@ it('retains an automatic unentered link through two production replacements and 
       })
       const replay = loadTestJournal(rig.root, SESSION)!
       expect(replay.damage).toBeNull()
-      expect(replay.state.inputOrder.lineage.cards.get('D')!.introduced).toBe(intro)
+      expect(journalInputOrder(replay.state).lineage.cards.get('D')!.introduced).toBe(intro)
       expect(
-        replay.state.inputOrder.precedes(
+        journalInputOrder(replay.state).precedes(
           replay.state.queue.cards.get('D')!,
           replay.state.submissions.get(m.id)!
         )
@@ -210,8 +211,8 @@ it('retains an automatic unentered link through two production replacements and 
     expect(rig.dispatch.mock.calls.map(([i]) => i.clientMessageId)).toEqual([w, h, m.id])
     expect(await rig.submission(h)).toMatchObject({ dispatchState: 'accepted' })
     expect(await rig.submission(m.id)).toMatchObject({ dispatchState: 'accepted' })
-    expect(journal.inputOrder['places'].size).toBe(0)
-    expect(journal.inputOrder['witnesses'].size).toBe(0)
+    expect(journal.queuedMessages.displayState().inputEntries.size).toBe(0)
+    expect(loadTestJournal(rig.root, SESSION)!.state.inputEntries.size).toBe(0)
   } finally {
     release()
     await rig.dispose()
@@ -223,6 +224,7 @@ it.each([10, 100])(
   async (n) => {
     const rig = await createQueuedMessageTestRig({
       restartable: true,
+      legacyInputs: true,
       probeOwner: async () => ({ outcome: 'pid-absent' })
     })
     try {
@@ -231,9 +233,11 @@ it.each([10, 100])(
       writeLegacyGapFixture(rig.root, original, n)
       const check = (state: JournalReducerState) => {
         const m = state.submissions.get('legacy-M')!
-        expect.soft(state.inputOrder.forced('legacy-M')).toBe(true)
+        expect.soft(journalInputOrder(state).forced('legacy-M')).toBe(true)
         expect
-          .soft(['C', 'D'].map((id) => state.inputOrder.precedes(state.queue.cards.get(id)!, m)))
+          .soft(
+            ['C', 'D'].map((id) => journalInputOrder(state).precedes(state.queue.cards.get(id)!, m))
+          )
           .toEqual([true, true])
       }
       check(loadTestJournal(rig.root, SESSION)!.state)
@@ -283,8 +287,8 @@ it.each([10, 100])(
         )
         .toEqual(['D', 'legacy-M'])
       expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
-      expect(reopened.inputOrder['places'].size).toBe(0)
-      expect(reopened.inputOrder['witnesses'].size).toBe(0)
+      expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
+      expect(loadTestJournal(rig.root, SESSION)!.state.inputEntries.size).toBe(0)
       expect([...reopened.inputOrder.lineage.cards.values()].every((c) => !c.baseline)).toBe(true)
     } finally {
       await rig.dispose()

@@ -1,14 +1,21 @@
-import { FlatList, Pressable, Text, View } from 'react-native'
+import { useRef, useState } from 'react'
+import { ScrollView, type View } from 'react-native'
 import { ChevronLeft, ListChecks, MoreHorizontal } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { MobileDiffReviewQueueFilter } from '../session/mobile-diff-review-queue'
 import { REVIEW_FILTERS } from '../session/mobile-diff-review-screen-model'
 import { shouldShowTrigger } from './mobile-pr-sidebar-presentation'
 import { mobileDiffReviewStyles as styles } from './mobile-diff-review-screen-styles'
+import type { ActionSheetAction } from './ActionSheetModal'
+import { FilterChip } from './nav-bar/FilterChip'
+import { NavBar } from './nav-bar/NavBar'
+import { NavBarButton } from './nav-bar/NavBarButton'
+import { PullDownMenu } from './nav-bar/PullDownMenu'
 
 type Props = {
+  /** The ⋯ menu's actions. */
+  actions: ActionSheetAction[]
   filter: MobileDiffReviewQueueFilter
   isWideLayout: boolean
   prSidebarIsGithubRepo: boolean
@@ -16,14 +23,13 @@ type Props = {
   queueLength: number
   reviewedCount: number
   unsentCount: number
-  worktreeLabel: string
   onBack: () => void
-  onOpenActions: () => void
   onOpenPRSidebar: () => void
   onSelectFilter: (filter: MobileDiffReviewQueueFilter) => void
 }
 
 export function MobileDiffReviewHeader({
+  actions,
   filter,
   isWideLayout,
   prSidebarIsGithubRepo,
@@ -31,15 +37,15 @@ export function MobileDiffReviewHeader({
   queueLength,
   reviewedCount,
   unsentCount,
-  worktreeLabel,
   onBack,
-  onOpenActions,
   onOpenPRSidebar,
   onSelectFilter
 }: Props) {
   const t = useMobileTranslation()
-  const colorScheme = useMobileColorScheme()
+  useMobileColorScheme()
   const count = unsentCount
+  const moreRef = useRef<View>(null)
+  const [menuOpen, setMenuOpen] = useState(false)
   const filters: Record<
     MobileDiffReviewQueueFilter,
     { label: string; accessibilityLabel: string }
@@ -87,94 +93,76 @@ export function MobileDiffReviewHeader({
     isWideLayout,
     canDock: prSidebarCanDock
   })
+  const subtitle = [
+    t(
+      'components.diffReviewHeader.reviewedProgress',
+      '{{reviewedCount}}/{{queueLength}} reviewed',
+      { reviewedCount, queueLength }
+    ),
+    count === 1
+      ? t('components.diffReviewHeader.unsentNotes_one', '{{count}} unsent note', { count })
+      : t('components.diffReviewHeader.unsentNotes_other', '{{count}} unsent notes', { count })
+  ].join(' · ')
   return (
-    <View style={styles.header}>
-      <View style={styles.topBar}>
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={onBack}
-          accessibilityRole="button"
-          accessibilityLabel={t('common.back', 'Back')}
-        >
-          <ChevronLeft size={19} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-        <View style={styles.titleBlock}>
-          <Text style={styles.title} numberOfLines={1}>
-            {t('components.diffReviewHeader.title', 'Changes')}
-          </Text>
-          <Text style={styles.subtitle} numberOfLines={1}>
-            {worktreeLabel}
-          </Text>
-        </View>
-        {showPRTrigger ? (
-          <Pressable
-            style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-            onPress={onOpenPRSidebar}
-            accessibilityRole="button"
-            accessibilityLabel={t(
-              'components.diffReviewHeader.openPullRequestSidebar',
-              'Open pull request sidebar'
-            )}
+    <>
+      <NavBar
+        leading={
+          <NavBarButton
+            icon={ChevronLeft}
+            onPress={onBack}
+            accessibilityLabel={t('common.back', 'Back')}
+          />
+        }
+        title={t('components.diffReviewHeader.title', 'Changes')}
+        subtitle={subtitle}
+        trailing={
+          <>
+            {showPRTrigger ? (
+              <NavBarButton
+                icon={ListChecks}
+                onPress={onOpenPRSidebar}
+                accessibilityLabel={t(
+                  'components.diffReviewHeader.openPullRequestSidebar',
+                  'Open pull request sidebar'
+                )}
+              />
+            ) : null}
+            <NavBarButton
+              ref={moreRef}
+              icon={MoreHorizontal}
+              onPress={() => setMenuOpen(true)}
+              active={menuOpen}
+              accessibilityLabel={t(
+                'components.diffReviewHeader.openReviewActions',
+                'Open review actions'
+              )}
+            />
+          </>
+        }
+        accessory={
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filterRow}
           >
-            <ListChecks size={19} color={colors.textPrimary} strokeWidth={2.2} />
-          </Pressable>
-        ) : null}
-        <Pressable
-          style={({ pressed }) => [styles.iconButton, pressed && styles.iconButtonPressed]}
-          onPress={onOpenActions}
-          accessibilityRole="button"
-          accessibilityLabel={t(
-            'components.diffReviewHeader.openReviewActions',
-            'Open review actions'
-          )}
-        >
-          <MoreHorizontal size={19} color={colors.textPrimary} strokeWidth={2.2} />
-        </Pressable>
-      </View>
-      <View style={styles.progressRow}>
-        <Text style={styles.progressText}>
-          {t(
-            'components.diffReviewHeader.reviewedProgress',
-            '{{reviewedCount}}/{{queueLength}} reviewed',
-            {
-              reviewedCount,
-              queueLength
-            }
-          )}
-        </Text>
-        <Text style={styles.progressText}>
-          {count === 1
-            ? t('components.diffReviewHeader.unsentNotes_one', '{{count}} unsent note', { count })
-            : t('components.diffReviewHeader.unsentNotes_other', '{{count}} unsent notes', {
-                count
-              })}
-        </Text>
-      </View>
-      <FlatList
-        data={REVIEW_FILTERS}
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        keyExtractor={(item) => item}
-        extraData={[colorScheme, t]}
-        contentContainerStyle={styles.filterRow}
-        renderItem={({ item }) => (
-          <Pressable
-            style={({ pressed }) => [
-              styles.filterChip,
-              filter === item && styles.filterChipActive,
-              pressed && styles.filterChipPressed
-            ]}
-            onPress={() => onSelectFilter(item)}
-            accessibilityRole="button"
-            accessibilityState={{ selected: filter === item }}
-            accessibilityLabel={filters[item].accessibilityLabel}
-          >
-            <Text style={[styles.filterText, filter === item && styles.filterTextActive]}>
-              {filters[item].label}
-            </Text>
-          </Pressable>
-        )}
+            {REVIEW_FILTERS.map((item) => (
+              <FilterChip
+                key={item}
+                label={filters[item].label}
+                active={filter === item}
+                onPress={() => onSelectFilter(item)}
+                accessibilityLabel={filters[item].accessibilityLabel}
+              />
+            ))}
+          </ScrollView>
+        }
       />
-    </View>
+      <PullDownMenu
+        visible={menuOpen}
+        anchorRef={moreRef}
+        groups={[actions]}
+        onClose={() => setMenuOpen(false)}
+      />
+    </>
   )
 }

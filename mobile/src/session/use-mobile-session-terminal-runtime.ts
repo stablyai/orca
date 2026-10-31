@@ -59,6 +59,7 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
   deviceTokenRef.current = clientId
   // Use state so loaded endpoint hints trigger a render.
   const [hostEndpoint, setHostEndpoint] = useState<string | null>(null)
+  const [hostName, setHostName] = useState<string | null>(null)
   const clientRef = useRef<RpcClient | null>(null)
   const connStateRef = useRef<ConnectionState>(connState)
   // Carry measured phone dimensions on subscribes so the host fits before snapshot serialization.
@@ -209,6 +210,8 @@ export function useMobileSessionTerminalRuntime(scope: MobileSessionScreenStateM
     deviceTokenRef,
     hostEndpoint,
     setHostEndpoint,
+    hostName,
+    setHostName,
     clientRef,
     connStateRef,
     viewportRef,

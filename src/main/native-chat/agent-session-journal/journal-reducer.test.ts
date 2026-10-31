@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import { describe, expect, it } from 'vitest'
 import {
@@ -49,7 +50,7 @@ function fold(rows: JournalRow[]): JournalReducerState {
   for (const row of rows) {
     applyJournalRow(state, row)
     expect(
-      state.inputOrder
+      journalInputOrder(state)
         .unsettledSubmissions()
         .map((entry) => entry.clientMessageId)
         .sort()
@@ -61,8 +62,8 @@ function fold(rows: JournalRow[]): JournalReducerState {
     )
     for (const entry of state.submissions.values()) {
       if (entry.dispatchState !== 'pending') {
-        expect(state.inputOrder.forced(entry.clientMessageId)).toBe(false)
-        expect(state.inputOrder.place(entry.clientMessageId)).toBeUndefined()
+        expect(journalInputOrder(state).forced(entry.clientMessageId)).toBe(false)
+        expect(journalInputOrder(state).place(entry.clientMessageId)).toBeUndefined()
       }
     }
   }
@@ -781,5 +782,5 @@ it('retires unknown execution debt with the submission tombstone', () => {
     }
   ])
   expect(state.submissions.has('retired')).toBe(false)
-  expect(state.inputOrder.unsettledSubmissions()).toEqual([])
+  expect(journalInputOrder(state).unsettledSubmissions()).toEqual([])
 })

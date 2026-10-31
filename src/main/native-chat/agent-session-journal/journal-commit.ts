@@ -1,16 +1,10 @@
 import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
-import { applyJournalRow, type JournalReducerState } from './journal-reducer'
-import type { JournalRow } from './journal-row-schema'
+import type { JournalReducerState } from './journal-reducer'
 
-export function commitJournalRows(
+export function retireCoveredJournalFloor(
   state: JournalReducerState,
-  rows: readonly JournalRow[],
-  savedAt: number,
   reopenFloor: AgentJournalCursor | null
 ): AgentJournalCursor | null {
-  for (const row of rows) {
-    applyJournalRow(state, row, savedAt)
-  }
   return reopenFloor?.epoch === state.epoch &&
     state.queuePauseMarks.reopenedSequence >= reopenFloor.sequence
     ? null

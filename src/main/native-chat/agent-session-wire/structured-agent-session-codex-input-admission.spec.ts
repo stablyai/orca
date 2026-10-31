@@ -539,8 +539,7 @@ it('keeps earlier B before historically forced proven-unrun A through close and 
     expect.soft(delivered).toEqual([b, a])
     expect(starts()).toHaveLength(3)
     expect(reopened.queuedMessages.list().filter((c) => c.state === 'waiting')).toEqual([])
-    expect(reopened.inputOrder['places'].size).toBe(0)
-    expect(reopened.inputOrder['witnesses'].size).toBe(0)
+    expect(reopened.queuedMessages.displayState().inputEntries.size).toBe(0)
   } finally {
     preparation.resolve(config)
     await adapter.closeAll()

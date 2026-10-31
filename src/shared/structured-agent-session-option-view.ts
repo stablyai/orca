@@ -12,6 +12,7 @@ import {
   structuredAgentSessionOwnValue
 } from './structured-agent-session-option-state'
 import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from './agent-chat-permission-mode'
+import { structuredAgentSessionDescribedModel } from './structured-agent-session-option-snapshot'
 
 /** Query base or immutable launch seed, with finite controller operations above it.
  *  Display provenance stays separate from accepted input while catalog labels load. */
@@ -47,8 +48,50 @@ export function structuredAgentSessionOptionView(
 export function structuredAgentSessionShownSnapshot(
   state: StructuredAgentSessionOptionState
 ): SessionOptionDescriptor[] {
-  return structuredAgentSessionOptionSnapshot(
-    structuredAgentSessionOptionView(state, undefined, {})
+  const view = structuredAgentSessionOptionView(state, undefined, {})
+  const snapshot = structuredAgentSessionOptionSnapshot(view)
+  const model = structuredAgentSessionModelId(view.record, 'any')
+  if (
+    !model ||
+    !snapshot.some(
+      (descriptor) =>
+        descriptor.id === 'effort' &&
+        descriptor.kind.type === 'select' &&
+        descriptor.kind.currentValue === undefined
+    )
+  ) {
+    return snapshot
+  }
+  const described = structuredAgentSessionDescribedModel(view, model)
+  const effort = described?.options.find((option) => option.id === 'effort')?.kind
+  const declaration = described?.declaredDefaultEffort
+  const fallback =
+    declaration !== undefined
+      ? declaration
+      : view.record.agent === 'codex' &&
+          view.verifiedModelIds?.includes(model) &&
+          effort?.type === 'select' &&
+          effort.defaultIsCliDefault
+        ? effort.defaultValue
+        : undefined
+  if (
+    !fallback ||
+    effort?.type !== 'select' ||
+    (declaration !== undefined && !effort.choices.some((choice) => choice.value === fallback))
+  ) {
+    return snapshot
+  }
+  // A declared default supplies context only; both Send paths still read the canonical snapshot.
+  return snapshot.map((descriptor) =>
+    descriptor.id === 'effort' &&
+    descriptor.kind.type === 'select' &&
+    descriptor.kind.currentValue === undefined
+      ? {
+          ...descriptor,
+          valueSource: 'default',
+          kind: { ...descriptor.kind, currentValue: fallback }
+        }
+      : descriptor
   )
 }
 
@@ -60,10 +103,6 @@ function modelOptionView(
   const unconfirmedSeed =
     seed !== undefined && structuredAgentSessionModelId(state.record, 'own') === null
   const hasHeld = Object.keys(held).length > 0
-  const seeded =
-    unconfirmedSeed &&
-    (state.catalogSource === 'host' || state.catalogSource === 'live') &&
-    (held.model === undefined || held.model === seed.model)
   if (!state.catalog || (!unconfirmedSeed && !hasHeld)) {
     return state
   }
@@ -73,20 +112,8 @@ function modelOptionView(
   }
   if (unconfirmedSeed) {
     view = commitStructuredAgentSessionOptionValues(view, seed, 'seeded')
-    if (!seeded) {
-      // The immutable input remains capturable before a host list can label it.
-      for (const id of Object.keys(seed)) {
-        const tracked = view.record.values[id]
-        if (tracked) {
-          tracked.source = 'default'
-        }
-      }
-      if (state.catalogSource === 'host' && !hasHeld) {
-        view = { ...view, catalogSource: 'seed' }
-      }
-    }
   }
-  return { ...commitStructuredAgentSessionOptionValues(view, held), pendingId: state.pendingId }
+  return commitStructuredAgentSessionOptionValues(view, held)
 }
 
 /** Claude sends its own values plus held picks. New chats/older hosts pin shown defaults on first send; resumed chats display defaults without sending them. */

@@ -4,7 +4,9 @@ import type {
 } from '../../../../shared/runtime-terminal-contracts'
 import {
   buildPtyTerminalWaitBlockedResult,
-  buildPtyTerminalWaitResult
+  buildPtyTerminalWaitExitError,
+  buildPtyTerminalWaitResult,
+  getPtyTerminalState
 } from '../../terminal-wait-results'
 import { readsTrustedScreen } from '../../agent-state-rules/agent-state-rules-engine'
 import { showsScreenProbeBanner } from '../../agent-state-rules/agent-state-text-anchors'
@@ -74,6 +76,9 @@ export class RuntimeTerminalWait {
     const { pty } = this.deps.getTerminalPty(handle)
     if (condition === 'exit' && !pty.connected && !this.deps.exitUnsettled(pty)) {
       return buildPtyTerminalWaitResult(handle, condition, pty)
+    }
+    if (condition !== 'exit' && getPtyTerminalState(pty) === 'exited') {
+      throw buildPtyTerminalWaitExitError(pty)
     }
     const waitText = buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview)
     // Only strong verdicts settle synchronously; weak evidence needs the poll's rendered-screen check.

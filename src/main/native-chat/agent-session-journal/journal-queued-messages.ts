@@ -1,3 +1,4 @@
+import { journalInputOrder } from './journal-input-order'
 import { journalQueueAdoptionPlan } from './journal-queue-adoption-plan'
 import {
   journalAttachmentClaimReceipt,
@@ -63,7 +64,7 @@ export class JournalQueuedMessages {
 
   inputState(): JournalReducerState {
     const state = this.deps.state()
-    state.inputOrder.overlay(state, this.legacy.cards())
+    journalInputOrder(state).overlay(state, this.legacy.cards())
     return state
   }
   displayState(): JournalReducerState {
@@ -92,11 +93,11 @@ export class JournalQueuedMessages {
   /** Selection reads identity summaries; current values are resolved after edits. */
   nextInputCard(automatic = true): QueuedMessageRow | null {
     const state = this.inputState()
-    const identity = state.inputOrder.head(state, this.deps.reopenFloor())
+    const identity = journalInputOrder(state).head(state, this.deps.reopenFloor())
     const card = identity ? this.get(identity.messageId) : null
     return !card ||
       card.state === 'returned' ||
-      state.inputOrder.paused(state, card, this.deps.reopenFloor()) ||
+      journalInputOrder(state).paused(state, card, this.deps.reopenFloor()) ||
       (automatic && this.editLeases.isHeld(card.messageId))
       ? null
       : card

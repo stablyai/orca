@@ -130,7 +130,7 @@ async function connectCodexAppServer(
   function request(
     method: string,
     params?: Record<string, unknown>,
-    options: { timeoutMs?: number | null; onReply?: () => void } = {}
+    options: { timeoutMs?: number | null; onReply?: (result?: unknown) => void } = {}
   ): Promise<unknown> {
     if (closing) {
       return Promise.reject(new Error(`codex app-server connection is closed (${method})`))

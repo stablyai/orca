@@ -373,6 +373,8 @@ export type AgentSessionModelOption = {
   description?: string
   isDefault: boolean
   defaultEffort?: string
+  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
+  declaredDefaultEffort?: string | null
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean

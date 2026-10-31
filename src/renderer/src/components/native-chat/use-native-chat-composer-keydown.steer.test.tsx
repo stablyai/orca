@@ -42,12 +42,20 @@ function setup(
   return { handler: hook.result.current, callbacks }
 }
 
-function enter(modifiers: Partial<{ metaKey: boolean; ctrlKey: boolean; shiftKey: boolean }> = {}) {
+function enter(
+  modifiers: Partial<{
+    metaKey: boolean
+    ctrlKey: boolean
+    shiftKey: boolean
+    repeat: boolean
+  }> = {}
+) {
   return {
     key: 'Enter',
     shiftKey: false,
     metaKey: false,
     ctrlKey: false,
+    repeat: false,
     keyCode: 0,
     nativeEvent: { isComposing: false },
     preventDefault: vi.fn(),
@@ -58,7 +66,7 @@ function enter(modifiers: Partial<{ metaKey: boolean; ctrlKey: boolean; shiftKey
 type Handler = ReturnType<typeof useNativeChatComposerKeyDown>
 
 function press(handler: Handler, event: ReturnType<typeof enter>): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only key, modifiers, keyCode, nativeEvent and preventDefault, all present on this stub.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the hook reads only key, modifiers, repeat, keyCode, nativeEvent and preventDefault, all present on this stub.
   handler(event as unknown as Parameters<Handler>[0])
 }
 
@@ -94,6 +102,11 @@ describe('composer send and steer chords', () => {
     expect(callbacks.send).not.toHaveBeenCalled()
     expect(callbacks.setDraft).not.toHaveBeenCalled()
     expect(event.preventDefault).toHaveBeenCalled()
+    // Holding the chord steers once, not each card that becomes the head.
+    const held = enter({ metaKey: true, shiftKey: true, repeat: true })
+    press(handler, held)
+    expect(steerHead).toHaveBeenCalledTimes(1)
+    expect(held.preventDefault).toHaveBeenCalled()
   })
 
   it('Ctrl — not ⌘ — is the modifier off Mac', () => {

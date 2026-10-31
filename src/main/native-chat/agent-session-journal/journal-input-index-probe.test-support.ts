@@ -4,8 +4,9 @@ import { JournalInputLineageOwner } from './journal-input-lineage'
 export function journalInputIndexProbe(
   keys: readonly string[],
   count: { allocated: () => void; read: () => void }
-): (node: unknown) => void {
+): ((node: unknown) => void) & { restore: () => void } {
   const seen = new WeakMap<object, Map<string, unknown>>()
+  const originals: { node: object; key: string; descriptor?: PropertyDescriptor }[] = []
   const inspect = (node: unknown): void => {
     if (typeof node !== 'object' || node === null) {
       return
@@ -20,7 +21,9 @@ export function journalInputIndexProbe(
     seen.set(node, values)
     count.allocated()
     for (const key of keys) {
-      values.set(key, Object.getOwnPropertyDescriptor(node, key)?.value)
+      const descriptor = Object.getOwnPropertyDescriptor(node, key)
+      originals.push({ node, key, descriptor })
+      values.set(key, descriptor?.value)
       if (key === 'left' || key === 'right') {
         inspect(values.get(key))
       }
@@ -36,7 +39,24 @@ export function journalInputIndexProbe(
       })
     }
   }
-  return inspect
+  return Object.assign(inspect, {
+    restore: () => {
+      for (const { node, key, descriptor } of originals) {
+        const value = seen.get(node)?.get(key)
+        if (descriptor || value !== undefined) {
+          Object.defineProperty(node, key, {
+            ...descriptor,
+            value,
+            writable: true,
+            configurable: true
+          })
+        } else {
+          Reflect.deleteProperty(node, key)
+        }
+      }
+      originals.length = 0
+    }
+  })
 }
 
 export function journalInputHistoryProbe() {

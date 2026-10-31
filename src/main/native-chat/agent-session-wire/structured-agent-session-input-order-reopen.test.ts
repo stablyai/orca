@@ -1,3 +1,4 @@
+import { journalInputOrder } from '../agent-session-journal/journal-input-order'
 import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { expect, it, vi } from 'vitest'
 import {
@@ -84,7 +85,7 @@ it.each([false, true])(
       expect(replayBefore.damage).toBeNull()
       expect(replayBefore.newer).toBeNull()
       expect(journal.inputOrder.forced(m.id)).toBe(false)
-      expect(replayBefore.state.inputOrder.forced(m.id)).toBe(false)
+      expect(journalInputOrder(replayBefore.state).forced(m.id)).toBe(false)
       waiting.mockRestore()
 
       await rig.restartHostProcess()
@@ -283,7 +284,7 @@ it('keeps an earlier-process recovery identity through two adoptions after both 
       const replay = loadTestJournal(rig.root, SESSION)!
       expect(replay.damage).toBeNull()
       expect(
-        replay.state.inputOrder.precedes(
+        journalInputOrder(replay.state).precedes(
           replay.state.queue.cards.get('N')!,
           replay.state.submissions.get(m.id)!
         )

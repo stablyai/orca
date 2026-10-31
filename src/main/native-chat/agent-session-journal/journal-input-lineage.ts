@@ -5,11 +5,12 @@ export type JournalInputContext = {
   basis: 'observed' | 'legacy'
   cut: number
 }
-export type JournalCardLineage = {
-  messageId: string
+export type JournalInputCard = {
   introduced: number
   baseline?: { coordinate: AgentJournalCursor | null }
 }
+export type JournalCardLineage = JournalInputCard & { messageId: string }
+export type JournalInputEntry = { context: JournalInputContext; witnessCardId?: string }
 export type JournalInputLineage = { clock: number; cards: JournalCardLineage[] }
 
 const object = (value: unknown): value is Record<string, unknown> =>
@@ -74,7 +75,7 @@ export function queryInputContext<T>(
 
 /** Initial source coordinates and introduction cuts never follow physical restatement rows. */
 export class JournalInputLineageOwner {
-  readonly cards = new Map<string, JournalCardLineage>()
+  constructor(readonly cards: Map<string, JournalInputCard>) {}
   private base = 0
   clock = 0
 
@@ -82,8 +83,22 @@ export class JournalInputLineageOwner {
     this.base = lineage.clock
     this.clock = lineage.clock
     for (const card of lineage.cards) {
-      this.cards.set(card.messageId, { ...card })
+      this.cards.set(card.messageId, {
+        introduced: card.introduced,
+        ...(card.baseline ? { baseline: card.baseline } : {})
+      })
     }
+  }
+  restoreFrontier(sequence: number, entries: Iterable<JournalInputEntry>): void {
+    let frontier = 0
+    for (const entry of entries) {
+      frontier = Math.max(frontier, entry.context.cut)
+    }
+    for (const card of this.cards.values()) {
+      frontier = Math.max(frontier, card.introduced)
+    }
+    this.clock = frontier
+    this.base = frontier - sequence
   }
   at(sequence: number): number {
     return this.base + sequence
@@ -95,7 +110,6 @@ export class JournalInputLineageOwner {
   change(messageId: string, coordinate: AgentJournalCursor | null, sequence: number): void {
     if (!this.cards.has(messageId)) {
       this.cards.set(messageId, {
-        messageId,
         introduced: this.at(sequence),
         baseline: { coordinate }
       })
@@ -109,22 +123,5 @@ export class JournalInputLineageOwner {
         delete card.baseline
       }
     }
-  }
-  snapshot(
-    places: readonly { context: JournalInputContext }[],
-    ids: ReadonlySet<string>
-  ): JournalInputLineage {
-    const legacy = places.some((place) => place.context.basis === 'legacy')
-    const cards: JournalCardLineage[] = []
-    for (const card of this.cards.values()) {
-      if (ids.has(card.messageId)) {
-        cards.push({
-          messageId: card.messageId,
-          introduced: card.introduced,
-          ...(legacy && card.baseline ? { baseline: card.baseline } : {})
-        })
-      }
-    }
-    return { clock: this.clock, cards }
   }
 }

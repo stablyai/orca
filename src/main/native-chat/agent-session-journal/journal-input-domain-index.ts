@@ -1,6 +1,6 @@
 import {
   queryInputContext,
-  type JournalCardLineage,
+  type JournalInputCard,
   type JournalInputContext
 } from './journal-input-lineage'
 import {
@@ -20,7 +20,7 @@ export class JournalInputDomainIndex {
 
   set(
     card: QueuedMessageRow,
-    source: JournalCardLineage,
+    source: JournalInputCard,
     actionable: boolean,
     handoff: boolean
   ): void {

@@ -128,7 +128,10 @@ export function useNativeChatComposerKeyDown({
       // Why before Shift+Enter: that adds a newline, and this chord leaves the draft alone.
       if (modified && event.shiftKey) {
         event.preventDefault()
-        steerHead?.()
+        // A held chord would otherwise steer each card that becomes the head.
+        if (!event.repeat) {
+          steerHead?.()
+        }
         return
       }
       if (event.key === 'Enter' && !event.shiftKey) {

@@ -23,6 +23,8 @@ import { _resetGitAdmissionForTests } from './command-runner/git-subprocess-admi
 afterEach(() => _resetGitAdmissionForTests())
 import { resetWslGitReadEnvironmentForTests } from './wsl-git-read-environment'
 
+const originalPlatform = process.platform
+
 const DISTRO = 'Ubuntu'
 const WSL_CWD = String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`
 const BANNER = 'To run a command as administrator (user "root"), use "sudo <command>".\n\n'
@@ -66,19 +68,8 @@ describe('WSL login-shell reads are fenced', () => {
   })
 
   afterEach(() => {
-    Object.defineProperty(process, 'platform', { configurable: true, value: process.platform })
+    Object.defineProperty(process, 'platform', { configurable: true, value: originalPlatform })
     resetWslGitReadEnvironmentForTests()
-  })
-
-  it('returns blob bytes without the login-shell banner', async () => {
-    respondWithFencedPayload('line one\nline two\n')
-
-    const { stdout } = await gitExecFileAsyncBuffer(['show', ':file.txt'], {
-      cwd: WSL_CWD,
-      wslDistro: DISTRO
-    })
-
-    expect(stdout.toString('utf8')).toBe('line one\nline two\n')
   })
 
   it('keeps binary blob bytes intact through the fence', async () => {

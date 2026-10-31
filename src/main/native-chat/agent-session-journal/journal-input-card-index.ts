@@ -31,15 +31,17 @@ export class JournalInputCardIndex {
   >()
   private overlayRows: readonly QueuedMessageRow[] = []
   private overlays = new Map<string, QueuedMessageRow>()
-  overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): void {
+  overlay(state: JournalReducerState, rows: readonly QueuedMessageRow[]): readonly string[] {
     if (rows === this.overlayRows || (rows.length === 0 && this.overlays.size === 0)) {
-      return
+      return []
     }
     this.ensure(state)
+    const removed: string[] = []
     const next = new Map(rows.map((card) => [card.messageId, card]))
     for (const card of this.overlays.values()) {
       if (!next.has(card.messageId) && !state.queue.cards.has(card.messageId)) {
         this.indexCard(state, { ...card, state: 'withdrawn' })
+        removed.push(card.messageId)
       }
     }
     this.overlayRows = rows
@@ -50,12 +52,16 @@ export class JournalInputCardIndex {
         this.indexCard(state, card)
       }
     }
+    return removed
   }
   private pauseKey: readonly unknown[] = []
   private floor: { epoch: string; sequence: number } | null = null
   private pauses: readonly DerivedQueuePause[] = []
   private cleared = new Set<string>()
   constructor(private readonly lineage: JournalInputLineageOwner) {}
+  hasOverlay(id: string): boolean {
+    return this.overlays.has(id)
+  }
   command(): QueuedMessageRow | undefined {
     return this.currentCoordinates?.allPlaces().command
   }
@@ -97,7 +103,7 @@ export class JournalInputCardIndex {
           ? this.queryCurrent(place).command
           : this.query(place).command
     const witness = selected ? state.queue.cards.get(selected.messageId) : undefined
-    return { ...place, ...(witness ? { witness } : {}) }
+    return { ...place, ...(witness ? { witnessCardId: witness.messageId } : {}) }
   }
 
   queryCurrent(place: JournalInputPlace): InputPlaceQuery {
