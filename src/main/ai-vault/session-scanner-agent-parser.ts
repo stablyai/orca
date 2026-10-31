@@ -3,6 +3,10 @@ import { parseCodebuddySessionFile } from './session-scanner-codebuddy-parser'
 import type { AiVaultSession } from '../../shared/ai-vault-types'
 import { throwIfSignalAborted } from '../../shared/abort-signal-reason'
 import { parseDevinSessionFile } from './session-scanner-devin-parser'
+import {
+  parseDevinDbSession,
+  splitDevinDbSessionCandidate
+} from './session-scanner-devin-db-sessions'
 import { parseAntigravitySessionFile } from './session-scanner-antigravity-parser'
 import { parseDroidSessionFile } from './session-scanner-droid-parser'
 import { parseClineSessionFile } from './session-scanner-cline-parser'
@@ -135,8 +139,12 @@ export async function parseAgentSessionFile(
       return parseDroidSessionFile(candidate.file, platform, messages)
     case 'cline':
       return parseClineSessionFile(candidate.file, platform, messages, signal)
-    case 'devin':
-      return parseDevinSessionFile(candidate.file, platform, messages, signal)
+    case 'devin': {
+      const dbSession = splitDevinDbSessionCandidate(candidate.file.path)
+      return dbSession
+        ? parseDevinDbSession(dbSession, candidate.file, platform, messages)
+        : parseDevinSessionFile(candidate.file, platform, messages, signal)
+    }
     case 'kimi':
       return parseKimiSessionFile(candidate.file, platform, messages)
     case 'muse':

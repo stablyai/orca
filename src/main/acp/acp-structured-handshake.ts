@@ -87,11 +87,16 @@ export async function initializeAcpStructuredSession(
       attaching.translator.finishLoad()
     } catch (error) {
       assertStarting()
-      takeover = acpReopenTakeover(error, resume, {
-        over: connection.closed || input.abandoned(),
-        now: now(),
-        warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
-      })
+      takeover = acpReopenTakeover(
+        error,
+        resume,
+        {
+          over: connection.closed || input.abandoned(),
+          now: now(),
+          warn: (fields) => deps.logger?.warn(ACP_REOPEN_FAILED, { ...fields, sessionId })
+        },
+        spec.dialect
+      )
     }
   }
   if (!started || !liveLane) {

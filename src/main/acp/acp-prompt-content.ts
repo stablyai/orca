@@ -183,7 +183,8 @@ export async function acpPromptBlocks(
 function isWithheldCommand(body: AgentJournalMessageItem, withheld: readonly string[]): boolean {
   const [block, ...rest] = body.blocks
   const text = block?.type === 'text' && rest.length === 0 ? block.text.trim() : ''
-  return text.startsWith('/') && withheld.includes(text.slice(1))
+  // Match the name alone: e.g. Devin's `/bypass <prompt>` also runs the prompt.
+  return text.startsWith('/') && withheld.includes(text.slice(1).split(/\s/, 1)[0] ?? '')
 }
 
 export async function acpDispatchPrompt(

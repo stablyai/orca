@@ -7,36 +7,15 @@ import {
   type ManagedDataAccountService
 } from '../managed-data-accounts/service'
 import type { AcpAccountBinding } from '../acp/acp-account-binding'
+import {
+  definedEnvironment,
+  restoredManagedDataAccountEnvironment
+} from '../managed-data-accounts/managed-data-account-restored-environment'
 
 type AccountReader = Pick<
   ManagedDataAccountService,
   'list' | 'restoreOriginalEnvironment' | 'environmentForAccount'
 >
-
-function restoredEnvironment(
-  environment: NodeJS.ProcessEnv,
-  managedAccounts: Pick<AccountReader, 'restoreOriginalEnvironment'>
-): Record<string, string | undefined> {
-  const copy = { ...environment }
-  managedAccounts.restoreOriginalEnvironment(copy)
-  delete copy.ORCA_DATA_ACCOUNT_PROVIDER
-  delete copy.ORCA_DATA_ACCOUNT_DATA_HOME
-  delete copy.ORCA_DATA_ACCOUNT_STATE_HOME
-  delete copy.ORCA_DATA_ACCOUNT_ORIGINAL_ENV
-  return copy
-}
-
-function definedEnvironment(
-  environment: Record<string, string | undefined>
-): Record<string, string> {
-  const defined: Record<string, string> = {}
-  for (const [key, value] of Object.entries(environment)) {
-    if (value !== undefined) {
-      defined[key] = value
-    }
-  }
-  return defined
-}
 
 export function resolveStructuredOpenCodeAccountHome(input: {
   managedAccounts: AccountReader
@@ -57,7 +36,10 @@ export function environmentForStructuredOpenCodeAccountHome(
     baseEnvironment: NodeJS.ProcessEnv
   }
 ): Record<string, string> {
-  const environment = restoredEnvironment(input.baseEnvironment, input.managedAccounts)
+  const environment = restoredManagedDataAccountEnvironment(
+    input.baseEnvironment,
+    input.managedAccounts
+  )
   const locator = binding.locator
   if (locator.kind === 'unmanaged') {
     return definedEnvironment(environment)

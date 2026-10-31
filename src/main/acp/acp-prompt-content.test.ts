@@ -8,8 +8,10 @@ import type { NativeChatBlock } from '../../shared/native-chat-types'
 import {
   ACP_PROMPT_IMAGE_MAX_BYTES,
   AcpPromptContentError,
+  acpDispatchPrompt,
   acpPromptBlocks
 } from './acp-prompt-content'
+import { GENERIC_ACP_DIALECT } from './acp-dialects/acp-dialect'
 
 const PNG = Buffer.from('89504e470d0a1a0a', 'hex')
 const dir = mkdtempSync(join(tmpdir(), 'acp-prompt-content-'))
@@ -161,5 +163,28 @@ describe('ACP prompt content', () => {
     expect(await refusal(message(image, image))).toMatchObject({
       attachment: { reason: 'totalTooLarge', limit: ACP_PROMPT_IMAGE_MAX_BYTES }
     })
+  })
+})
+
+describe('withheld commands', () => {
+  const session = {
+    spec: {
+      agent: 'grok' as const,
+      dialect: { ...GENERIC_ACP_DIALECT, withheldCommands: ['logout', 'bypass'] }
+    },
+    connection: { initialize: async () => ({ protocolVersion: 1 }) }
+  }
+  const dispatch = (text: string) => acpDispatchPrompt(message({ type: 'text', text }), session)
+
+  it('refuses a withheld command, including one that runs a prompt given after it', async () => {
+    for (const text of ['/logout', '/bypass delete the build folder', ' /bypass\tgo ']) {
+      expect(Array.isArray(await dispatch(text))).toBe(false)
+    }
+  })
+
+  it('sends other commands and prose that only mention one', async () => {
+    for (const text of ['/help', '/bypassing nothing', 'run /bypass later']) {
+      expect(await dispatch(text)).toEqual([{ type: 'text', text }])
+    }
   })
 })

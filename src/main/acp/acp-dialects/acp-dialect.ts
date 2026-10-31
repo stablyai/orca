@@ -122,12 +122,14 @@ export type AcpDialect = {
     at: number
   ): Pick<AcpTurnEnding, 'stopReason' | 'usageLimit'> | undefined
   authenticationRequired?(error: AcpAgentError): boolean
-  /** The agent dropped this session; only a new child can reopen it. */
+  /** The agent no longer has this session; only a new child can reopen it, and a reopen reads it as ACP's -32002. */
   sessionLost?(error: AcpAgentError, sessionId: string): boolean
+  /** Another process holds the session; reopening must fail, not replace it. */
+  sessionInUse?(error: AcpAgentError): boolean
   hookBlock?(meta: unknown): AcpHookBlock | undefined
   failedTurnText?(stopReason: string): string
   compactionReply?(text: string): AcpCompactionReply | undefined
-  /** Hide these commands and reject command-only prompts before dispatch. */
+  /** Hide these commands and reject prompts that invoke them before dispatch. */
   withheldCommands?: readonly string[]
 }
 
