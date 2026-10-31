@@ -358,7 +358,6 @@ export function registerStructuredChatCliRetry(input: {
       await openChat(COORDINATOR)
       const chat = await openChat(PEER_CHAT)
       await fullAccess(PEER_CHAT)
-      vi.spyOn(runtime, 'isChatWorkerErrorEscalationEnabled').mockReturnValue(true)
       const { runId, taskId } = await coordinatorRunAndTask()
       const t = await running(PEER_CHAT, chat)
       const held = holdHiddenReply(chat)

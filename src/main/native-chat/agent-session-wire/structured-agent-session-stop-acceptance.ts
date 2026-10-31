@@ -23,12 +23,12 @@ import {
 } from './structured-agent-session-mutation-plans'
 import type {
   AgentSessionOperationReceipt,
-  AgentSessionTurnContext
+  AgentSessionTurnContext,
+  TurnOutcome
 } from './structured-agent-session-turns'
 
 import type { StructuredAgentSessionCaller } from './structured-agent-session-host-types'
 import type { ChatStopTarget } from './structured-agent-session-chat-stop-target'
-import type { TurnOutcome } from './structured-agent-session-turns'
 
 /** Preserve the first committed result, including no-op; later failures answer from that receipt. */
 export const STOP_COMMAND_RECEIPT: MutationCommandReceipt<AgentSessionCancelResult> = {

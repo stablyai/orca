@@ -164,7 +164,7 @@ export class StructuredAgentSessionRequestFailures {
     }
   }
 
-  private prune(baseline: Baseline, key: string): void {
+  prune(baseline: Baseline, key: string): void {
     baseline.marks.delete(key)
     if (
       baseline.deferred &&

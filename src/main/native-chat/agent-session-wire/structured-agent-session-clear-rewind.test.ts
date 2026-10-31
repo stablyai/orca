@@ -127,6 +127,7 @@ async function returnedCardAndWaitingCard() {
   const handoff = await rig.handoffId(returned.id)
   await providerTurn(handoff, 'returned-root', 'running')
   await rig.stop()
+  await rig.host.collaboratorsForTests().serialize(SESSION, async () => undefined)
   expect(
     journal()
       .snapshot()

@@ -96,11 +96,7 @@ export class StructuredAgentSessionProviderRetry {
       !retry.child.close
     )
   }
-  private stage(
-    id: string,
-    journal: AgentSessionJournal,
-    transition: ProducerTransition
-  ): () => void {
+  stage(id: string, journal: AgentSessionJournal, transition: ProducerTransition): () => void {
     let retry = this.retries.get(id)
     if (retry && !this.current(id, retry)) {
       this.retire(id)
@@ -156,7 +152,7 @@ export class StructuredAgentSessionProviderRetry {
   observe(id: string, journal: AgentSessionJournal, rows: readonly JournalRow[] = []): void {
     return observeProviderRetry.call(this, id, journal, rows)
   }
-  private disposeResult(id: string, retry: Retry, disposition: ProviderRetryDisposition): void {
+  disposeResult(id: string, retry: Retry, disposition: ProviderRetryDisposition): void {
     const result = retry.currentResult
     if (result) {
       this.deps.settleCompletion(
@@ -170,10 +166,10 @@ export class StructuredAgentSessionProviderRetry {
   private reconcile(id: string, retry: Retry, returned: string): void {
     return reconcileProviderRetry.call(this, id, retry, returned)
   }
-  private accept(id: string, retry: Retry): void {
+  accept(id: string, retry: Retry): void {
     return acceptProviderRetry.call(this, id, retry)
   }
-  private schedule(id: string, retry: Retry): void {
+  schedule(id: string, retry: Retry): void {
     const terminal = retry.currentResult
     if (!terminal || !this.current(id, retry)) {
       return

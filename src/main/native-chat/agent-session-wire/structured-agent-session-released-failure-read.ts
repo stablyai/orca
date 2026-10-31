@@ -138,4 +138,5 @@ export function forgetRequestFailureBaseline(
   }
   baseline?.releasedRead?.cancel()
   baselines.delete(sessionId)
+  return undefined
 }
