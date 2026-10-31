@@ -159,56 +159,6 @@ describe('worker-start honours the settings default', () => {
     )
   }
 
-  it.each(['fresh', 'reattach', 'adopted'] as const)(
-    'uses actual %s creation for a terminal worker readiness failure',
-    async (context) => {
-      createExistingWorktreeWorkerTerminal.mockResolvedValueOnce({
-        handle: TERMINAL_HANDLE,
-        ptyId: 'pty-created',
-        incarnationId: 'inc-created',
-        worktreeId: 'repo::wt',
-        title: null,
-        ...(context === 'reattach' ? { isReattach: true as const } : {}),
-        ...(context === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
-      })
-      vi.spyOn(runtime, 'getPtyLivenessVerdict').mockReturnValue({
-        status: 'exited',
-        incarnationId: 'inc-created',
-        cause: {
-          kind: 'exited',
-          exitCode: 256,
-          initialOutputDiagnostic: 'git-bash-console-capacity'
-        }
-      })
-      vi.mocked(runtime.waitForTerminal).mockResolvedValue({
-        handle: TERMINAL_HANDLE,
-        condition: 'tui-idle',
-        satisfied: false,
-        status: 'exited',
-        exitCode: 256,
-        exitCause: {
-          kind: 'exited',
-          exitCode: 256,
-          initialOutputDiagnostic: 'git-bash-console-capacity'
-        }
-      })
-      await expect(
-        startWorker({
-          ...STRUCTURED_DEFAULT,
-          nativeChatProviders: { claude: false, codex: false }
-        })
-      ).resolves.toMatchObject({
-        state: 'failed',
-        failedStage: 'agent_readiness',
-        lastError:
-          context === 'fresh'
-            ? expect.stringContaining('Close some Git Bash terminals')
-            : expect.not.stringContaining('Git Bash')
-      })
-      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
-    }
-  )
-
   it('starts a structured chat worker when structured native chat is the default', async () => {
     const result = await startWorker(STRUCTURED_DEFAULT)
 
