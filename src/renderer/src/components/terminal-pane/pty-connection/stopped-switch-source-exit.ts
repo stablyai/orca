@@ -16,8 +16,9 @@ import {
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 /**
- * Main's held screen replaces whatever this xterm shows (nothing after a reload, an older frame
- * after a park), at the grid it was captured on. Nothing attaches and no process is resized.
+ * Main's held screen replaces the visible frame of an xterm that didn't see the stop (nothing after
+ * a reload, an older frame after a park), at the grid it was captured on. Saved lines stay: ED 3
+ * would erase the conversation a viewer can still scroll. Nothing attaches; no process is resized.
  */
 function paintStoppedScreen(session: ConnectPanePtySession, screen: StoppedSwitchSourceScreen) {
   const { terminal } = session.pane
@@ -32,24 +33,31 @@ function paintStoppedScreen(session: ConnectPanePtySession, screen: StoppedSwitc
       session.suppressStructuralReplayPtyResize = false
     }
   }
-  session.writeReplayData(
-    `${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[3J\x1b[H`
-  )
+  session.writeReplayData(`${RELEASE_SYNCHRONIZED_OUTPUT}${RESET_GRAPHIC_RENDITION}\x1b[2J\x1b[H`)
   const paneOnAlternateScreen = session.isPaneOnAlternateScreen()
-  for (const chunk of buildMainModelSnapshotReplayWrites(screen, { paneOnAlternateScreen })) {
+  // Captured screen-only (no history rows), so nothing in it replaces the lines saved above.
+  for (const chunk of buildMainModelSnapshotReplayWrites(screen, {
+    paneOnAlternateScreen,
+    carriesHistory: false
+  })) {
     session.writeReplayData(chunk)
   }
 }
 
-/** The pane takes the stopped state: main's held screen, the overlay naming the agent, with Restart and Close. */
+/**
+ * The pane takes the stopped state: the overlay naming the agent, with Restart and Close. A pane
+ * that saw the stop already shows that process's output up to the hold; only one that didn't
+ * (`repaint`: a remount or a new viewer) takes main's held screen.
+ */
 export function showSwitchStoppedPane(
   session: ConnectPanePtySession,
   ptyId: string,
   exitCode: number,
-  stopped: { agent?: AiVaultAgent; screen?: StoppedSwitchSourceScreen } | undefined
+  stopped: { agent?: AiVaultAgent; screen?: StoppedSwitchSourceScreen } | undefined,
+  repaint: boolean
 ): void {
   const agent = stopped?.agent
-  if (stopped?.screen) {
+  if (repaint && stopped?.screen) {
     paintStoppedScreen(session, stopped.screen)
   }
   session.deps.onPaneProcessDied?.({
@@ -71,8 +79,11 @@ export function holdClosingExit(
   session: ConnectPanePtySession,
   ptyId: string,
   exitCode: number,
-  incarnationId: string | null = session.inputModeOwnerIncarnationId ?? null
+  remount?: { incarnationId: string | null }
 ): void {
+  const incarnationId = remount
+    ? remount.incarnationId
+    : (session.inputModeOwnerIncarnationId ?? null)
   session.stopWatchingStoppedSwitchSource?.()
   session.stopWatchingStoppedSwitchSource = watchStoppedSwitchSource(
     { tabId: session.deps.tabId, leafId: session.pane.leafId, ptyId, incarnationId, exitCode },
@@ -87,7 +98,7 @@ export function holdClosingExit(
       // one it replaces; otherwise main reattaches to it and finds its session killed.
       // Only a switch's stop is named as one; a close that stopped it exits as any pane does.
       if (notice.switched) {
-        showSwitchStoppedPane(session, ptyId, exitCode, notice.switched)
+        showSwitchStoppedPane(session, ptyId, exitCode, notice.switched, Boolean(remount))
       } else {
         session.deps.onPaneProcessDied?.({
           paneId: session.pane.id,
@@ -119,10 +130,10 @@ export function remountStoppedSwitchSource(
   const stopped = mirrored ? null : readStoppedSwitchSource(tabId, leafId, ptyId)
   if (mirrored) {
     session.handledExitPtyId = ptyId
-    showSwitchStoppedPane(session, ptyId, 0, mirrored)
+    showSwitchStoppedPane(session, ptyId, 0, mirrored, true)
   } else if (stopped) {
     session.handledExitPtyId = ptyId
-    holdClosingExit(session, ptyId, stopped.exitCode, stopped.incarnationId)
+    holdClosingExit(session, ptyId, stopped.exitCode, { incarnationId: stopped.incarnationId })
   }
   return Boolean(mirrored || stopped)
 }

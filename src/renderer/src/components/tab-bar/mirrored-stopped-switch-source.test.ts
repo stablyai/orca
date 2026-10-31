@@ -218,6 +218,8 @@ describe.each(['claude', 'codex'] as const)('a paired %s pane a switch stopped',
     expect(session.suppressStructuralReplayPtyResize).toBe(false)
     const painted = order.join('')
     expect(painted.indexOf('before the agent')).toBeLessThan(painted.indexOf('HELD-FRAME'))
+    // Screen-only: whatever this pane saved above it stays scrollable.
+    expect(painted).not.toContain('\x1b[3J')
     expect(order.at(-1)).toBe('overlay')
   })
 

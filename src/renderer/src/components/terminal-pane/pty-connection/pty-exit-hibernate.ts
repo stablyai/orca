@@ -216,7 +216,8 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         return
       }
       if (switchStopped && !reversibleExit) {
-        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped)
+        // This pane saw the process to its stop: its own screen and scrollback stay.
+        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped, false)
       } else if (preserveRendererBinding && !reversibleExit) {
         holdClosingExit(session, ptyId, exitCode)
       }

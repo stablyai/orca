@@ -199,21 +199,24 @@ it('shows the kept pane exited at its own code once main settles it, with no clo
   }
 })
 
-it('paints main\u2019s held screen on the mounted pane when main settles it', async () => {
+it('keeps a mounted pane\u2019s own screen and scrollback when main settles it', async () => {
   const kept = await keptStoppedPane()
   try {
     kept.stoppedForReplace()
     await flushAsyncTicks(5)
     kept.pane.terminal.write.mockClear()
-    vi.mocked(window.api.pty.resize).mockClear()
+    kept.pane.terminal.resize.mockClear()
     kept.modules.sources.noteStoppedSwitchSource({
       ...kept.source,
       switched: { agent: 'codex', screen: HELD_SCREEN }
     })
     await flushAsyncTicks(5)
-    expect(written(kept)).toContain('HELD-FRAME')
-    expect(kept.pane.terminal.resize).toHaveBeenCalledWith(100, 30)
-    expect(window.api.pty.resize).not.toHaveBeenCalled()
+    // It saw the process to its stop: nothing erases the conversation it can scroll back through.
+    const output = written(kept)
+    expect(output).not.toContain('HELD-FRAME')
+    expect(output).not.toContain('\x1b[2J')
+    expect(output).not.toContain('\x1b[3J')
+    expect(kept.pane.terminal.resize).not.toHaveBeenCalled()
     expect(kept.died).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ reason: 'switch-stopped', agent: 'codex' })
     )
@@ -509,8 +512,9 @@ it.each(['claude', 'codex'] as const)(
       await kept.reveal()
       expect(kept.spawn).not.toHaveBeenCalled()
       const painted = written(kept)
-      // Cleared first, so nothing of the older frame survives under the held one.
-      expect(painted.indexOf('\x1b[3J')).toBeLessThan(painted.indexOf('HELD-FRAME'))
+      // The older visible frame is cleared first; the lines saved above it stay scrollable.
+      expect(painted.indexOf('\x1b[2J')).toBeLessThan(painted.indexOf('HELD-FRAME'))
+      expect(painted).not.toContain('\x1b[3J')
       expect(kept.pane.terminal.resize).toHaveBeenCalledWith(100, 30)
       expect(window.api.pty.resize).not.toHaveBeenCalled()
       expect(kept.died).toHaveBeenCalledExactlyOnceWith(
