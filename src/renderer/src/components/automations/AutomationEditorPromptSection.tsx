@@ -54,7 +54,7 @@ export function AutomationEditorPromptSection({
               event.preventDefault()
             }
           }}
-          className="max-w-[calc(100%-2rem)] min-w-0 resize-none overflow-hidden border-0 bg-transparent px-0 py-0 text-[28px] font-semibold leading-tight text-foreground shadow-none outline-none ring-0 [field-sizing:content] placeholder:text-muted-foreground/50"
+          className="max-w-[calc(100%-2rem)] min-w-0 resize-none overflow-hidden border-0 bg-transparent px-0 py-0 text-[28px] font-semibold leading-tight text-foreground shadow-none outline-none ring-0 [field-sizing:content] placeholder:text-muted-foreground"
         />
         <Tooltip>
           <TooltipTrigger asChild>
