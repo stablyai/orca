@@ -55,7 +55,7 @@ export default function ImageViewer({
   preferenceKey,
   scrollCacheKey = null
 }: ImageViewerProps): JSX.Element {
-  const [loaded, setLoaded] = useState<{ src: string; size: PanZoomSize } | null>(null)
+  const [loaded, setLoaded] = useState<{ key: string | null; size: PanZoomSize } | null>(null)
   const [failedPreviewSrc, setFailedPreviewSrc] = useState<string | null>(null)
 
   const filename = useMemo(() => filePath.split(/[/\\]/).pop() || filePath, [filePath])
@@ -80,7 +80,9 @@ export default function ImageViewer({
   const imageError =
     (previewSrc === null && svgMarkup === null && cleanedContent.length > 0) ||
     (previewSrc !== null && failedPreviewSrc === previewSrc)
-  const imageSize = svgSize ?? (loaded && loaded.src === previewSrc ? loaded.size : null)
+  // A remint changes only the URL's revision; keep the size, and with it the zoom, across it.
+  const loadedKey = src && svgMarkup === null ? src.split('?')[0] : previewSrc
+  const imageSize = svgSize ?? (loaded && loaded.key === loadedKey ? loaded.size : null)
   const estimatedSize = useMemo(() => {
     if (svgMarkup !== null) {
       return formatByteSize(new Blob([svgMarkup]).size)
@@ -141,7 +143,7 @@ export default function ImageViewer({
   const onLoad = (event: SyntheticEvent<HTMLImageElement>): void => {
     const { naturalWidth: width, naturalHeight: height } = event.currentTarget
     if (width > 0 && height > 0) {
-      setLoaded({ src: previewSrc, size: { width, height } })
+      setLoaded({ key: loadedKey, size: { width, height } })
     }
     setFailedPreviewSrc(null)
   }

@@ -34,8 +34,13 @@ export function getMaxPanZoom(fitScale: number): number {
   return Math.max(MAX_IMAGE_VIEWER_ZOOM, 1 / fitScale)
 }
 
+export function getMinPanZoom(fitScale: number): number {
+  // Why: a vector fitted far above its natural size must still be able to reach actual size.
+  return Math.min(MIN_IMAGE_VIEWER_ZOOM, 1 / fitScale)
+}
+
 export function clampPanZoom(zoom: number, fitScale: number): number {
-  return Math.min(getMaxPanZoom(fitScale), Math.max(MIN_IMAGE_VIEWER_ZOOM, zoom))
+  return Math.min(getMaxPanZoom(fitScale), Math.max(getMinPanZoom(fitScale), zoom))
 }
 
 /** With `visible`, content stops at the viewport edges and stays centered while it fits. */

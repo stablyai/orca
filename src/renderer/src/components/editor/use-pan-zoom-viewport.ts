@@ -1,6 +1,6 @@
 import type React from 'react'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { MIN_IMAGE_VIEWER_ZOOM, getPinchZoomFactor, getWheelDeltaPixels } from './image-viewer-zoom'
+import { getPinchZoomFactor, getWheelDeltaPixels } from './image-viewer-zoom'
 import {
   type PanZoomPoint,
   type PanZoomSize,
@@ -8,11 +8,14 @@ import {
   containPanZoomView,
   getFittedPanZoomView,
   getMaxPanZoom,
+  getMinPanZoom,
   getPanZoomFitScale,
   getPanZoomViewOffset,
   panView,
   zoomViewAt
 } from './pan-zoom-view'
+
+type ZoomStep = (zoom: number, fitScale: number) => number
 
 type PanZoomGeometry = {
   content: PanZoomSize
@@ -86,6 +89,24 @@ export function usePanZoomViewport({
       contain
     }
   }, [content, viewport, upscale, contain])
+
+  // Zoom commands that arrive before the image has a size; diff sides must stay in step.
+  const [pendingZoom, setPendingZoom] = useState<ZoomStep[]>([])
+  if (geometry && pendingZoom.length > 0) {
+    setPendingZoom([])
+    setManualView((current) =>
+      pendingZoom.reduce(
+        (from, getNextZoom) =>
+          zoomViewAt({
+            ...geometry,
+            view: from,
+            nextZoom: getNextZoom(from.zoom, geometry.fitScale),
+            anchor: { x: geometry.viewport.width / 2, y: geometry.viewport.height / 2 }
+          }),
+        current ? settleView(current, geometry) : getFittedPanZoomView(geometry.content)
+      )
+    )
+  }
   const view =
     manualView && geometry
       ? settleView(manualView, geometry)
@@ -146,8 +167,9 @@ export function usePanZoomViewport({
   }, [canvas, geometry])
 
   const zoomTo = useCallback(
-    (getNextZoom: (zoom: number, fitScale: number) => number) => {
+    (getNextZoom: ZoomStep) => {
       if (!geometry) {
+        setPendingZoom((queued) => [...queued, getNextZoom])
         return
       }
       setManualView((current) => {
@@ -166,7 +188,10 @@ export function usePanZoomViewport({
   )
   const zoomBy = useCallback((factor: number) => zoomTo((zoom) => zoom * factor), [zoomTo])
   const showActualSize = useCallback(() => zoomTo((_, fitScale) => 1 / fitScale), [zoomTo])
-  const fit = useCallback(() => setManualView(null), [])
+  const fit = useCallback(() => {
+    setPendingZoom([])
+    setManualView(null)
+  }, [])
 
   const endDrag = useCallback(() => {
     dragRef.current = null
@@ -220,7 +245,7 @@ export function usePanZoomViewport({
     offset: geometry && view ? getPanZoomViewOffset(view, geometry.viewport, scale) : null,
     isFitted: manualView === null,
     canZoomIn: !!geometry && !!view && view.zoom < getMaxPanZoom(geometry.fitScale),
-    canZoomOut: !!view && view.zoom > MIN_IMAGE_VIEWER_ZOOM,
+    canZoomOut: !!geometry && !!view && view.zoom > getMinPanZoom(geometry.fitScale),
     zoomBy,
     fit,
     showActualSize
