@@ -615,6 +615,10 @@ module.exports = {
     // macOS 26 UNUserNotificationCenter aborts helpers launched from Resources; execute from Contents/MacOS (#7929).
     extraFiles: [
       {
+        from: 'native/speech-macos/.build/release/orca-speech',
+        to: 'MacOS/orca-speech'
+      },
+      {
         from: 'native/notification-status-macos/.build/release/orca-notification-status',
         to: 'MacOS/orca-notification-status'
       },
