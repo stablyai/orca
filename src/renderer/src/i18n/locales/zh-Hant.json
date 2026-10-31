@@ -19542,7 +19542,8 @@
         "stopped": "{{distro}} 已停止",
         "start": "啟動",
         "unverifiable": "Orca 無法確認 {{distro}} 是否正在執行",
-        "startToSend": "請啟動 {{distro}} 後再傳送。"
+        "startToSend": "請啟動 {{distro}} 後再傳送。",
+        "startDistro": "啟動 {{distro}}"
       },
       "interruptedContinue": {
         "continue": "繼續",

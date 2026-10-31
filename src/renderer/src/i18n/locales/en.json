@@ -19963,7 +19963,8 @@
         "start": "Start",
         "startFailed": "Couldn’t start {{distro}}. Check it in Settings → Remote Orca Servers.",
         "unverifiable": "Orca couldn't check whether {{distro}} is running",
-        "startToSend": "Start {{distro}} to send."
+        "startToSend": "Start {{distro}} to send.",
+        "startDistro": "Start {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Continue",

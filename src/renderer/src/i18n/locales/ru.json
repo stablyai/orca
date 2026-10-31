@@ -20517,7 +20517,8 @@
         "stopped": "{{distro}} остановлен",
         "start": "Запустить",
         "unverifiable": "Orca не удалось проверить, запущен ли {{distro}}",
-        "startToSend": "Запустите {{distro}}, чтобы отправить."
+        "startToSend": "Запустите {{distro}}, чтобы отправить.",
+        "startDistro": "Запустить {{distro}}"
       },
       "interruptedContinue": {
         "continue": "Продолжить",
