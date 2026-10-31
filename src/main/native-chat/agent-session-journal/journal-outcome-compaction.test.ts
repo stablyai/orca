@@ -283,15 +283,33 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
   const rig = projectionWriter(database, seedProjectionRows(database, prefix))
   rigs.push(rig)
   const historical = new Map<number, AgentJournalSnapshot>()
+  const capture = (snapshot: AgentJournalSnapshot) => {
+    historical.set(snapshot.cursor.sequence, structuredClone(snapshot))
+  }
   const initial = createJournalReducerState(sessionId, epoch)
-  historical.set(0, renderJournalState(initial))
+  capture(renderJournalState(initial))
   for (const row of prefix) {
     applyJournalRow(initial, row)
-    historical.set(row.seq, renderJournalState(initial))
+    capture(renderJournalState(initial))
   }
   const append = async (build: (seq: number) => JournalRow) => {
     await rig.writer.enqueue(build)
-    historical.set(rig.state().lastSequence, renderJournalState(rig.state()))
+    capture(renderJournalState(rig.state()))
+  }
+  const expectHistoricalDispatch = () => {
+    expect(historical.get(4)?.cursor).toEqual({ epoch, sequence: 4 })
+    expect(historical.get(4)?.submissions).toMatchObject([
+      { clientMessageId: 'sent', dispatchState: 'pending', providerItemId: null, resolvedAt: null }
+    ])
+    expect(historical.get(5)?.cursor).toEqual({ epoch, sequence: 5 })
+    expect(historical.get(5)?.submissions).toMatchObject([
+      {
+        clientMessageId: 'sent',
+        dispatchState: 'accepted',
+        providerItemId: 'echo',
+        resolvedAt: 1005
+      }
+    ])
   }
   await append((seq) => ({
     ...base(seq),
@@ -309,6 +327,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     providerItemId: 'echo',
     reason: null
   }))
+  expectHistoricalDispatch()
   await append((seq) => ({
     ...base(seq),
     kind: 'item',
@@ -409,6 +428,7 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
   expect(rig.state().removedTurnIds.has('removed-turn')).toBe(true)
   const reader = { ...CLIENT_HISTORY_READER, budgetBytes: 1_500 }
   const consumers = async () => {
+    expectHistoricalDispatch()
     const work = new StructuredAgentSessionCurrentWork(journal, 1)
     expect(work.actionablePromptIds()).toEqual(['approval', 'question'])
     workerHost.journal = journal
@@ -448,7 +468,11 @@ it('delivers cleaned storage through bounded history, desktop/phone reducers, re
     }
     expect(backwardPages).toBeGreaterThan(2)
     expect(backward.items).toEqual(snapshot.items)
-    const forward = []
+    const forward: {
+      cursor: AgentJournalSnapshot['cursor']
+      messages: ReturnType<typeof projectStructuredItemsToNativeChat>
+      submissions: AgentJournalSnapshot['submissions']
+    }[] = []
     let shrunk = false
     for (const [sequence, prior] of historical) {
       let desktop = EMPTY_STRUCTURED_AGENT_SESSION
