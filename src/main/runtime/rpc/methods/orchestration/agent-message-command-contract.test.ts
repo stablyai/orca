@@ -33,7 +33,10 @@ import {
   projectQueuedMessageCards,
   queuedMessageCardLine
 } from '../../../../../shared/structured-agent-session-queued-cards'
-import { projectStructuredAgentSessionStatusSummary } from '../../../../../shared/structured-agent-session-projection'
+import {
+  projectStructuredAgentSessionStatusSummary,
+  projectStructuredItemToNativeChat
+} from '../../../../../shared/structured-agent-session-projection'
 import { latestStructuredAgentSessionPrompt } from '../../../../../shared/structured-agent-session-latest-request'
 import { isOrcaDispatchPrompt } from '../../../../../shared/agent-row-primary-text'
 import * as placement from './worker/worker-start-agent-placement'
@@ -43,7 +46,6 @@ import {
   ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
   ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
 } from '../../../../../shared/protocol-version'
-import { projectStructuredItemToNativeChat } from '../../../../../shared/structured-agent-session-projection'
 import {
   agentSessionMessagePayload,
   agentSessionSendBodyFingerprint
