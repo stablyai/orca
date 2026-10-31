@@ -1,7 +1,11 @@
+import { completedDurationSeconds } from '../../../../shared/github/actions-duration'
+import { formatNativeChatDuration } from '../../../../shared/native-chat-turn-status'
+import { actionsUrl } from '../../../../shared/github/actions-web-url'
+import { ActionsStatus } from '../right-sidebar/ActionsStatus'
 import React from 'react'
 import { CheckCircle2, ChevronDown, CircleDashed, MinusCircle, XCircle } from 'lucide-react'
 import { CheckJobLogTail } from '@/components/right-sidebar/check-job-log-tail'
-import { translate } from '@/i18n/i18n'
+import { getIntlLocale, translate } from '@/i18n/i18n'
 import { cn } from '@/lib/utils'
 import type { PRCheckJob, PRCheckStep } from '../../../../shared/github/check-types'
 import {
@@ -31,11 +35,22 @@ function StepOutcomeIcon({ outcome }: { outcome: StepOutcome }): React.JSX.Eleme
   }
 }
 
-function StepRow({ step }: { step: PRCheckStep }): React.JSX.Element {
+function StepRow({
+  step,
+  actionsStatusColors
+}: {
+  step: PRCheckStep
+  actionsStatusColors: boolean
+}): React.JSX.Element {
+  const duration = completedDurationSeconds(step.startedAt, step.completedAt)
   const outcome = resolveStepOutcome(step)
   return (
     <div className="flex min-w-0 items-center gap-2 py-1 text-xs">
-      <StepOutcomeIcon outcome={outcome} />
+      {actionsStatusColors ? (
+        <ActionsStatus status={step.conclusion ?? step.status} iconOnly />
+      ) : (
+        <StepOutcomeIcon outcome={outcome} />
+      )}
       <span
         className={cn(
           'min-w-0 flex-1 truncate',
@@ -44,7 +59,14 @@ function StepRow({ step }: { step: PRCheckStep }): React.JSX.Element {
       >
         {step.name}
       </span>
-      <span className="shrink-0 text-muted-foreground">{step.conclusion ?? step.status}</span>
+      {duration !== null && (
+        <span className="shrink-0 text-muted-foreground">{formatNativeChatDuration(duration)}</span>
+      )}
+      {actionsStatusColors ? (
+        <ActionsStatus status={step.conclusion ?? step.status} showIcon={false} />
+      ) : (
+        <span className="shrink-0 text-muted-foreground">{step.conclusion ?? step.status}</span>
+      )}
     </div>
   )
 }
@@ -54,13 +76,15 @@ function OtherJobSteps({
   summary,
   failed,
   identity,
-  owner
+  owner,
+  actionsStatusColors
 }: {
   steps: PRCheckStep[]
   summary: string
   failed: boolean
   identity: string
   owner?: CheckDetailsReadingOwner
+  actionsStatusColors: boolean
 }): React.JSX.Element {
   const cacheKey = owner ? checkReadingStepsKey(owner.key, identity, failed) : undefined
   const [open, setOpen] = React.useState(() => {
@@ -96,7 +120,7 @@ function OtherJobSteps({
       <CollapsibleContent animation="height">
         <div className="mt-0.5 grid gap-0.5 pl-5">
           {steps.map((step) => (
-            <StepRow key={step.name} step={step} />
+            <StepRow key={step.name} step={step} actionsStatusColors={actionsStatusColors} />
           ))}
         </div>
       </CollapsibleContent>
@@ -106,13 +130,18 @@ function OtherJobSteps({
 
 function JobCard({
   job,
+  jobLinkLabel,
   identity,
-  owner
+  owner,
+  actionsStatusColors
 }: {
   job: PRCheckJob
+  jobLinkLabel: string
   identity: string
   owner?: CheckDetailsReadingOwner
+  actionsStatusColors: boolean
 }): React.JSX.Element {
+  const duration = completedDurationSeconds(job.startedAt, job.completedAt)
   const breakdown = summarizeJobSteps(job)
   const jobFailed = resolveStepOutcome(job) === 'failure'
   const collapsible = [...breakdown.succeeded, ...breakdown.skipped, ...breakdown.pending]
@@ -148,7 +177,9 @@ function JobCard({
   return (
     <div className="px-3 py-3">
       <div className="flex min-w-0 items-center gap-2">
-        {jobFailed ? (
+        {actionsStatusColors ? (
+          <ActionsStatus status={job.conclusion ?? job.status} iconOnly />
+        ) : jobFailed ? (
           <XCircle className="size-4 shrink-0 text-destructive" />
         ) : (
           <CheckCircle2 className="size-4 shrink-0 text-status-success" />
@@ -171,14 +202,35 @@ function JobCard({
         )}
       </div>
 
+      {actionsStatusColors && (job.runnerName || job.runnerLabels?.length) ? (
+        <p className="mt-1 break-words text-xs text-muted-foreground">
+          {translate('actions.runner', 'Runner')}:{' '}
+          {[job.runnerName, ...(job.runnerLabels ?? [])].filter(Boolean).join(' · ')}
+        </p>
+      ) : null}
+
       {breakdown.failed.length > 0 && (
         <div className="mt-2 grid gap-0.5">
           {breakdown.failed.map((step) => (
-            <StepRow key={step.name} step={step} />
+            <StepRow key={step.name} step={step} actionsStatusColors={actionsStatusColors} />
           ))}
         </div>
       )}
 
+      <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+        {actionsStatusColors ? (
+          <ActionsStatus status={job.conclusion ?? job.status} showIcon={false} />
+        ) : (
+          <span>{job.conclusion ?? job.status}</span>
+        )}
+        {job.startedAt && <span>{new Date(job.startedAt).toLocaleString(getIntlLocale())}</span>}
+        {duration !== null && <span>{formatNativeChatDuration(duration)}</span>}
+        {actionsUrl(job.url) && (
+          <Button variant="link" size="xs" onClick={() => window.api.shell.openUrl(job.url!)}>
+            {jobLinkLabel}
+          </Button>
+        )}
+      </div>
       <CheckJobLogTail
         job={job}
         surface="details"
@@ -193,6 +245,7 @@ function JobCard({
           failed={jobFailed}
           identity={identity}
           owner={owner}
+          actionsStatusColors={actionsStatusColors}
           summary={summaryParts.join(
             translate('auto.components.editor.CheckRunJobs.5a8e1d4f23', ' · ')
           )}
@@ -205,11 +258,15 @@ function JobCard({
 export function CheckRunJobs({
   jobs,
   hasFailedJobs,
-  positionOwner
+  positionOwner,
+  jobLinkLabel = translate('checkRun.openJob', 'Open job'),
+  actionsStatusColors = false
 }: {
   jobs: PRCheckJob[]
   hasFailedJobs: boolean
   positionOwner?: CheckDetailsReadingOwner
+  jobLinkLabel?: string
+  actionsStatusColors?: boolean
 }): React.JSX.Element {
   const entries = checkJobIdentities(jobs)
   const visible = hasFailedJobs
@@ -235,7 +292,14 @@ export function CheckRunJobs({
       </div>
       <div className="divide-y divide-border/50">
         {visible.map(({ job, identity }) => (
-          <JobCard key={identity} job={job} identity={identity} owner={positionOwner} />
+          <JobCard
+            key={identity}
+            job={job}
+            identity={identity}
+            owner={positionOwner}
+            jobLinkLabel={jobLinkLabel}
+            actionsStatusColors={actionsStatusColors}
+          />
         ))}
       </div>
     </section>

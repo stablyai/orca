@@ -1,3 +1,5 @@
+export { listActionsRuns, listActionsWorkflows } from './client/actions/list-actions-pages'
+export { getWorkflowRunDetails } from './client/actions/get-workflow-run-details'
 export {
   _getMergeQueueCacheSizeForTests,
   _resetMergeQueueCacheForTests

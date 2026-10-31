@@ -282,6 +282,12 @@ import {
   WorktreeSelector as WorktreeSelectorOfGitParams
 } from './git-params'
 import { BindableAccounts, ValidateAccountBinding } from './github-account-binding-params'
+import {
+  ActionsArtifactDownload,
+  ActionsArtifactTransfer,
+  ActionsArtifacts
+} from './github-actions-artifact-params'
+import { ActionsRunDetails, ActionsRuns, ActionsWorkflows } from './github-actions-params'
 import { CreateIssue, Issue, IssueComment, UpdateIssue } from './github-issue-params'
 import {
   ClearProjectItemField,
@@ -326,6 +332,7 @@ import { RepoIssueCommandRead, RepoSelector, RepoShow, SlugRepo } from './github
 import {
   IssuesList,
   RateLimit,
+  RepoSlug,
   WorkItem,
   WorkItemByOwnerRepo,
   WorkItemsCount,
@@ -1050,6 +1057,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'git.submoduleStatus': GitSubmoduleStatus,
   'git.unstage': GitFilePath,
   'git.upstreamStatus': GitTargetedRemote,
+  'github.actionsArtifacts': ActionsArtifacts,
+  'github.actionsRunDetails': ActionsRunDetails,
+  'github.actionsRuns': ActionsRuns,
+  'github.actionsWorkflows': ActionsWorkflows,
   'github.addIssueComment': IssueComment,
   'github.addPRReviewComment': PRReviewComment,
   'github.addPRReviewCommentReply': PRReviewCommentReply,
@@ -1085,8 +1096,10 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.project.viewTable': ProjectViewTable,
   'github.project.workItemDetailsBySlug': ProjectWorkItemDetailsBySlug,
   'github.rateLimit': RateLimit,
+  'github.readActionsArtifactChunk': ActionsArtifactTransfer,
+  'github.releaseActionsArtifactDownload': ActionsArtifactTransfer,
   'github.removePRReviewers': RemovePrReviewers,
-  'github.repoSlug': RepoSelector,
+  'github.repoSlug': RepoSlug,
   'github.repoUpstream': RepoSelector,
   'github.requestPRReviewers': RequestPrReviewers,
   'github.rerunPRChecks': RerunPullRequestChecks,
@@ -1094,6 +1107,7 @@ export const RPC_PARAMS_BY_METHOD = {
   'github.setPRAutoMerge': SetPrAutoMerge,
   'github.setPRCommentReaction': PRCommentReaction,
   'github.setPRFileViewed': PullRequestFileViewed,
+  'github.startActionsArtifactDownload': ActionsArtifactDownload,
   'github.updateIssue': UpdateIssue,
   'github.updatePR': UpdatePr,
   'github.updatePRState': UpdatePrState,

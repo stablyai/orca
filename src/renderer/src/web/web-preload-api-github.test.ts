@@ -54,6 +54,48 @@ describe('web GitHub preload API', () => {
       expectedParams: unknown
     }[] = [
       {
+        key: 'actionsArtifacts',
+        args: { repoPath, runId: 900, page: 2 },
+        expectedMethod: 'github.actionsArtifacts',
+        expectedParams: withRepo({ repoPath, runId: 900, page: 2 })
+      },
+      {
+        key: 'actionsRunDetails',
+        args: { repoPath, runId: 900 },
+        expectedMethod: 'github.actionsRunDetails',
+        expectedParams: withRepo({ repoPath, runId: 900 })
+      },
+      {
+        key: 'actionsRuns',
+        args: { repoPath, page: 2 },
+        expectedMethod: 'github.actionsRuns',
+        expectedParams: withRepo({ repoPath, page: 2 })
+      },
+      {
+        key: 'actionsWorkflows',
+        args: { repoPath, page: 2 },
+        expectedMethod: 'github.actionsWorkflows',
+        expectedParams: withRepo({ repoPath, page: 2 })
+      },
+      {
+        key: 'readActionsArtifactChunk',
+        args: { repoPath, transferId: 'transfer-1', offset: 256 },
+        expectedMethod: 'github.readActionsArtifactChunk',
+        expectedParams: withRepo({ repoPath, transferId: 'transfer-1', offset: 256 })
+      },
+      {
+        key: 'releaseActionsArtifactDownload',
+        args: { repoPath, transferId: 'transfer-1' },
+        expectedMethod: 'github.releaseActionsArtifactDownload',
+        expectedParams: withRepo({ repoPath, transferId: 'transfer-1' })
+      },
+      {
+        key: 'startActionsArtifactDownload',
+        args: { repoPath, runId: 900, artifactId: 7 },
+        expectedMethod: 'github.startActionsArtifactDownload',
+        expectedParams: withRepo({ repoPath, runId: 900, artifactId: 7 })
+      },
+      {
         key: 'repoSlug',
         args: { repoPath },
         expectedMethod: 'github.repoSlug',

@@ -10,6 +10,7 @@ export type RpcDispatchStreamingOptions = Pick<
   | 'authenticatedCallerFingerprint'
   | 'connectionId'
   | 'signal'
+  | 'retainConnectionLifetime'
   | 'clientId'
   | 'pairedDeviceId'
   | 'pairedDeviceParentId'
@@ -43,6 +44,7 @@ export function rpcContextFromTransport(
   return {
     runtime,
     signal: options?.signal,
+    retainConnectionLifetime: options?.retainConnectionLifetime,
     requestId: request.id,
     connectionId: options?.connectionId,
     // Session tabs always need this fence. COMPAT(terminal request-addressed unsubscribe): terminal only for phones without `requestId`.
