@@ -65,13 +65,14 @@ vi.mock('../components/feature-tips/feature-tip-telemetry', () => ({
 
 function Harness() {
   const gate = useOnboardingAndFeatureTips()
-  useAppStartupHydration(gate.applyStartupOnboardingState)
+  useAppStartupHydration(gate.applyStartupOnboardingState, gate.applyStartupOnboardingFailure)
   return <span>{String(gate.startupPromptsFinished)}</span>
 }
 
 let root: Root
 let container: HTMLDivElement
 let resolveOnboarding: (state: OnboardingState) => void
+let rejectOnboarding: (error: Error) => void
 const completedOnboarding: OnboardingState = {
   ...getDefaultOnboardingState(),
   closedAt: 1,
@@ -84,9 +85,15 @@ beforeEach(() => {
   vi.spyOn(console, 'error').mockImplementation(() => {})
   startup.fetchSettings.mockRejectedValue(new Error('Settings unavailable'))
   startup.reconnectPersistedTerminals.mockResolvedValue(undefined)
-  useAppStore.setState({ chatUiLaunchTipVariant: null, terminalStartupRestorationReady: false })
-  const onboarding = new Promise<OnboardingState>((resolve) => {
+  useAppStore.setState({
+    activeModal: 'none',
+    chatUiLaunchTipVariant: null,
+    terminalStartupRestorationReady: false
+  })
+  vi.mocked(useAppStore.getState().openModal).mockClear()
+  const onboarding = new Promise<OnboardingState>((resolve, reject) => {
     resolveOnboarding = resolve
+    rejectOnboarding = reject
   })
   Object.defineProperty(window, 'api', {
     configurable: true,
@@ -129,15 +136,65 @@ describe('onboarding delivery during degraded startup', () => {
     expect(container.textContent).toBe('true')
   })
 
-  it('does not deliver a pending read after unmount', async () => {
-    const onLoaded = vi.fn()
-    function DeliveryHarness() {
-      useAppStartupHydration(onLoaded)
-      return null
-    }
-    await act(async () => root.render(<DeliveryHarness />))
-    await act(async () => root.render(null))
-    await act(async () => resolveOnboarding(completedOnboarding))
-    expect(onLoaded).not.toHaveBeenCalled()
+  it('releases the prompt gate when onboarding rejects after recovery without opening education', async () => {
+    await act(async () =>
+      root.render(
+        <StrictMode>
+          <Harness />
+        </StrictMode>
+      )
+    )
+    expect(useAppStore.getState().terminalStartupRestorationReady).toBe(true)
+    expect(container.textContent).toBe('false')
+
+    await act(async () => rejectOnboarding(new Error('Onboarding unavailable')))
+    expect(container.textContent).toBe('true')
+    expect(useAppStore.getState().openModal).not.toHaveBeenCalled()
+
+    await act(async () => useAppStore.setState({ activeModal: 'add-repo' }))
+    expect(container.textContent).toBe('false')
+    await act(async () => useAppStore.setState({ activeModal: 'none' }))
+    expect(container.textContent).toBe('true')
   })
+
+  it('keeps the prompt gate closed until recovery finishes after onboarding rejects', async () => {
+    let finishRecovery: () => void = () => {}
+    startup.reconnectPersistedTerminals.mockImplementationOnce(
+      () =>
+        new Promise<void>((resolve) => {
+          finishRecovery = resolve
+        })
+    )
+    await act(async () => root.render(<Harness />))
+    await act(async () => rejectOnboarding(new Error('Onboarding unavailable')))
+    expect(useAppStore.getState().terminalStartupRestorationReady).toBe(false)
+    expect(container.textContent).toBe('false')
+
+    await act(async () => finishRecovery())
+    expect(container.textContent).toBe('true')
+    expect(useAppStore.getState().openModal).not.toHaveBeenCalled()
+  })
+
+  it.each(['resolve', 'reject'])(
+    'does not deliver a pending read after unmount (%s)',
+    async (outcome) => {
+      const onLoaded = vi.fn()
+      const onFailed = vi.fn()
+      function DeliveryHarness() {
+        useAppStartupHydration(onLoaded, onFailed)
+        return null
+      }
+      await act(async () => root.render(<DeliveryHarness />))
+      await act(async () => root.render(null))
+      await act(async () => {
+        if (outcome === 'resolve') {
+          resolveOnboarding(completedOnboarding)
+        } else {
+          rejectOnboarding(new Error('Onboarding unavailable'))
+        }
+      })
+      expect(onLoaded).not.toHaveBeenCalled()
+      expect(onFailed).not.toHaveBeenCalled()
+    }
+  )
 })

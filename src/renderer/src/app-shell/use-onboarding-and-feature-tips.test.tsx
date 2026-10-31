@@ -58,7 +58,13 @@ async function loadOnboarding() {
 describe('startup prompt completion', () => {
   beforeEach(async () => {
     Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
-    useAppStore.setState({ activeModal: 'none', chatUiLaunchTipVariant: null })
+    useAppStore.setState({
+      activeModal: 'none',
+      chatUiLaunchTipVariant: null,
+      persistedUIReady: true,
+      contextualToursAutoEligible: false
+    })
+    vi.mocked(useAppStore.getState().setContextualToursAutoEligible).mockClear()
     vi.mocked(useAppStore.getState().openModal).mockClear()
     Object.defineProperty(window, 'api', {
       configurable: true,
@@ -82,6 +88,39 @@ describe('startup prompt completion', () => {
   afterEach(async () => {
     await act(async () => root.unmount())
     container.remove()
+  })
+
+  it('preserves first-run tour eligibility when onboarding finishes before UI hydration', async () => {
+    await act(async () =>
+      useAppStore.setState({
+        persistedUIReady: false,
+        contextualToursAutoEligible: null
+      })
+    )
+    await act(async () => gate.applyStartupOnboardingState(getDefaultOnboardingState()))
+    await act(async () => gate.setOnboarding(completedOnboarding))
+    expect(useAppStore.getState().setContextualToursAutoEligible).not.toHaveBeenCalled()
+
+    await act(async () => useAppStore.setState({ persistedUIReady: true }))
+    expect(useAppStore.getState().setContextualToursAutoEligible).toHaveBeenCalledWith(true)
+  })
+
+  it('preserves saved tour eligibility over the initial onboarding classification', async () => {
+    await act(async () => gate.applyStartupOnboardingState(getDefaultOnboardingState()))
+    expect(useAppStore.getState().setContextualToursAutoEligible).not.toHaveBeenCalled()
+  })
+
+  it('does not classify an existing user as first-run when onboarding is reopened', async () => {
+    await act(async () =>
+      useAppStore.setState({
+        persistedUIReady: false,
+        contextualToursAutoEligible: null
+      })
+    )
+    await loadOnboarding()
+    await act(async () => gate.setOnboarding(getDefaultOnboardingState()))
+    await act(async () => useAppStore.setState({ persistedUIReady: true }))
+    expect(useAppStore.getState().setContextualToursAutoEligible).toHaveBeenCalledWith(false)
   })
 
   it('finishes immediately once eligibility is known and no tip is needed', async () => {

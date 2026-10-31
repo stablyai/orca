@@ -5,6 +5,7 @@ import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BundledSkillPlan } from '../../../../shared/bundled-skill-plan'
 import { bundledSkillNudgeKey } from '../../../../shared/bundled-skill-summary'
+import { installBodyOverlayAttributes } from '@/lib/body-overlay-attributes'
 import { SkillFreshnessNudge } from './SkillFreshnessNudge'
 import { planEntry, planOf, planOp, sharedEntry } from './bundled-skill-plan-fixtures.test-support'
 
@@ -64,6 +65,8 @@ vi.mock('@/store', () => {
   return { useAppStore }
 })
 
+let disposeOverlayObserver: () => void
+let overlay: HTMLDivElement | null = null
 let root: Root | null = null
 let container: HTMLDivElement | null = null
 
@@ -86,6 +89,7 @@ const DISMISSAL_KEY = bundledSkillNudgeKey('local', updatePlan()) ?? ''
 
 describe('SkillFreshnessNudge', () => {
   beforeEach(() => {
+    disposeOverlayObserver = installBodyOverlayAttributes()
     mocks.dismissed = []
     mocks.settingsLoaded = true
     mocks.canUseSkillFreshness = true
@@ -105,6 +109,9 @@ describe('SkillFreshnessNudge', () => {
       await act(async () => root?.unmount())
     }
     root = null
+    disposeOverlayObserver()
+    overlay?.remove()
+    overlay = null
     container?.remove()
     container = null
   })
@@ -125,6 +132,78 @@ describe('SkillFreshnessNudge', () => {
     mocks.plan = planOf([sharedEntry('orca-cli', 'keep')])
     await rerenderNudge(true)
     expect(mocks.toastInfo).not.toHaveBeenCalled()
+  })
+
+  it.each(['dialog-overlay', 'sheet-overlay', 'onboarding'])(
+    'waits for a body-level %s outside activeModal to close',
+    async (kind) => {
+      overlay = document.createElement('div')
+      if (kind === 'onboarding') {
+        overlay.setAttribute('data-onboarding-overlay', '')
+      } else {
+        overlay.dataset.slot = kind
+      }
+      document.body.appendChild(overlay)
+      await renderNudge()
+      expect(mocks.toastInfo).not.toHaveBeenCalled()
+
+      await act(async () => {
+        overlay?.remove()
+        await new Promise((resolve) => setTimeout(resolve, 0))
+      })
+      expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('retracts for an independently opened dialog and re-offers after the last dialog closes', async () => {
+    await renderNudge()
+    const original = mocks.toastInfo.mock.calls[0]?.[1]
+    overlay = document.createElement('div')
+    overlay.dataset.slot = 'dialog-overlay'
+    await act(async () => {
+      if (overlay) {
+        document.body.appendChild(overlay)
+      }
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(mocks.toastDismiss).toHaveBeenCalledWith('freshness-toast')
+    original.onDismiss()
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+
+    const secondOverlay = document.createElement('div')
+    secondOverlay.dataset.slot = 'sheet-overlay'
+    await act(async () => {
+      document.body.appendChild(secondOverlay)
+      overlay?.remove()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
+    await act(async () => {
+      secondOverlay.remove()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+    })
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(2)
+    mocks.toastInfo.mock.calls[1]?.[1].action.onClick()
+    expect(mocks.requestDialog).toHaveBeenCalledTimes(1)
+  })
+
+  it('re-offers after the startup gate closes temporarily, without persisting a dismissal', async () => {
+    await renderNudge()
+    const original = mocks.toastInfo.mock.calls[0]?.[1]
+    await rerenderNudge(false)
+    original.onDismiss()
+    expect(mocks.toastDismiss).toHaveBeenCalledWith('freshness-toast')
+    expect(mocks.updateSettings).not.toHaveBeenCalled()
+    await rerenderNudge(true)
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(2)
+  })
+
+  it('does not re-offer an explicitly dismissed nudge when the gate reopens', async () => {
+    await renderNudge()
+    mocks.toastInfo.mock.calls[0]?.[1].onDismiss()
+    await rerenderNudge(false)
+    await rerenderNudge(true)
+    expect(mocks.toastInfo).toHaveBeenCalledTimes(1)
   })
 
   it('lingers without an auto-close timer or auto-close dismissal write', async () => {

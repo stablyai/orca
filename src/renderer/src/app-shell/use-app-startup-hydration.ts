@@ -47,13 +47,16 @@ import {
 } from '../startup/startup-worktree-refresh'
 
 /** Hydrate settings/UI/catalog/session, reconnect and restore terminals before unlocking saves. Failure boots in degraded no-save mode to protect disk state. */
-export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
+export function useAppStartupHydration(
+  onOnboardingLoaded: (state: OnboardingState) => void,
+  onOnboardingFailed: () => void
+): void {
   const actions = useStartupActions()
   // Keep callback identity from restarting boot. Sync in the preceding effect so discarded renders cannot publish a callback.
-  const onOnboardingLoadedRef = useRef(onOnboardingLoaded)
+  const onboardingCallbacksRef = useRef({ onOnboardingLoaded, onOnboardingFailed })
   useEffect(() => {
-    onOnboardingLoadedRef.current = onOnboardingLoaded
-  }, [onOnboardingLoaded])
+    onboardingCallbacksRef.current = { onOnboardingLoaded, onOnboardingFailed }
+  }, [onOnboardingLoaded, onOnboardingFailed])
 
   useEffect(() => installCodexDetachedPaneRestartExecutor(), [])
 
@@ -74,11 +77,19 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
       // Deliver onboarding even if unrelated session restoration enters degraded recovery.
       const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
         window.api.onboarding.get()
-      ).then((state) => {
-        if (!cancelled) {
-          onOnboardingLoadedRef.current(state)
+      ).then(
+        (state) => {
+          if (!cancelled) {
+            onboardingCallbacksRef.current.onOnboardingLoaded(state)
+          }
+        },
+        (error) => {
+          if (!cancelled) {
+            onboardingCallbacksRef.current.onOnboardingFailed()
+          }
+          throw error
         }
-      })
+      )
       onboardingPromise.catch(() => {})
       try {
         // Profiles need no synchronous read here; overlap their IPC with settings.
