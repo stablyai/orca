@@ -1,6 +1,7 @@
 import { cancelScheduledHiddenOutputRestore } from '../hidden-output-restore-scheduler'
 import { skipOpenEscapeContinuation } from '../../../../../shared/terminal-partial-escape-tail'
 import { shouldWritePtyOutputForeground } from './foreground-output-scan'
+import { waitForTerminalOutputParsed } from '@/lib/pane-manager/pane-terminal-output-scheduler'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
@@ -113,5 +114,11 @@ export function bindAbandonHiddenOutputRestore(session: ConnectPanePtySession): 
     if (pendingData) {
       session.writePtyOutputToXterm(pendingData, true)
     }
+    // The drain above is the transaction's last write; present only once xterm parses it
+    // (FIFO parse barrier) so a reveal racing the render-pause latch cannot present a
+    // pre-parse buffer and swallow the late dirty-row refresh into stale pixels (#33684).
+    void waitForTerminalOutputParsed(session.pane.terminal).then(() => {
+      session.presentRestoredViewport()
+    })
   }
 }

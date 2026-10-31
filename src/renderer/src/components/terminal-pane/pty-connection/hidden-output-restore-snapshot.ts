@@ -39,6 +39,16 @@ export function bindHiddenOutputRestoreSnapshot(session: ConnectPanePtySession):
     )
   }
 
+  // Why after the last byte: reveal can beat the IntersectionObserver and xterm's paused
+  // render latch swallows ordinary dirty-row renders, so writes that land after the last
+  // present hold stale pixels until a selection or scroll forces a repaint (#33684).
+  session.presentRestoredViewport = function (): void {
+    if (session.disposed || !shouldWritePtyOutputForeground(session.deps.isVisibleRef.current)) {
+      return
+    }
+    presentPaneViewport(session.pane)
+  }
+
   session.writeRestoreUnavailableWarning = function (): void {
     // The reset must parse before both the warning and any foreground drain.
     session.writeAbandonedRestoreGap()
