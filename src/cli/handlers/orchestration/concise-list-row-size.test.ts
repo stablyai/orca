@@ -6,21 +6,22 @@ import { ORCHESTRATION_HANDLERS } from '../orchestration'
 import { orchestrationTestContext } from '../orchestration-handler-test-context'
 
 const HUGE = 'x'.repeat(10_000)
-// Message bodies and gate questions are what check, inbox, and gate-list exist to show.
+// check delivers mail and gate-list asks the question, so those bodies print whole; inbox previews them.
 const CONTENT = 'c'.repeat(10_000)
 const MAX_ROW_CHARS = 500
+const MAX_PREVIEW_CHARS = 250
 
 const message = {
   id: 'msg_1',
   from_handle: 'dispatch:ctx_1',
   to_handle: 'run:run_1',
   subject: 'Done',
-  body: CONTENT,
+  body: HUGE,
   type: 'worker_done',
   priority: 'normal',
   read: 0,
   thread_id: 'msg_1',
-  payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1' }),
+  payload: JSON.stringify({ taskId: 'task_1', dispatchId: 'ctx_1', notes: HUGE }),
   created_at: '2026-10-31T00:00:00Z'
 }
 
@@ -98,8 +99,20 @@ const LISTS: [string, [string, string][], string, unknown][] = [
       runId: 'run_1',
       deliveryId: 'delivery_1',
       deliveryAcknowledged: true,
-      messages: [message],
+      messages: [{ ...message, body: CONTENT, payload: CONTENT }],
       count: 1
+    }
+  ],
+  [
+    'request-show',
+    [['request', 'req_1']],
+    '',
+    {
+      requestId: 'req_1',
+      state: 'completed',
+      method: 'orchestration.taskCreate',
+      receipt: { task: { id: 'task_1', spec: HUGE }, run: { id: 'run_1', objective: HUGE } },
+      interpretation: 'Request req_1 already took effect.'
     }
   ]
 ]
@@ -131,11 +144,16 @@ describe('concise orchestration list output', () => {
     'keeps each %s row short when stored text is huge',
     async (command, flags, key, result) => {
       const text = await printed(command, flags, result, false)
-      const json: { result: Record<string, unknown[]> } = JSON.parse(
+      const json: { result: Record<string, { body?: string }[]> } = JSON.parse(
         await printed(command, flags, result, true)
       )
-      const rows = [...text.split('\n'), ...json.result[key].map((row) => JSON.stringify(row))]
+      // request-show is one receipt, not a list.
+      const items = key ? json.result[key] : [json.result]
+      const rows = [...text.split('\n'), ...items.map((row) => JSON.stringify(row))]
       expect(rows.length).toBeGreaterThan(1)
+      for (const item of items) {
+        expect(item.body?.length ?? 0).toBeLessThanOrEqual(MAX_PREVIEW_CHARS)
+      }
       for (const row of rows) {
         expect(row.length).toBeLessThan(MAX_ROW_CHARS)
       }
