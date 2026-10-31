@@ -5,6 +5,8 @@ import {
   isShellProcess
 } from './tui-agent-startup'
 import { resolveTuiAgentLaunchArgs } from '../../../shared/tui-agent-launch-defaults'
+import { recognizeAgentProcessFromCommandLine } from '../../../shared/agent-process-recognition'
+import { tokenizeCommandLine } from '../../../shared/agent-command-line-entrypoint'
 
 const emptyLaunchConfig = (agentCommand: string) => ({
   agentCommand,
@@ -23,11 +25,38 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'claude',
-      launchCommand: "claude 'Fix the bug'",
+      launchCommand: "claude -- 'Fix the bug'",
       expectedProcess: 'claude',
       followupPrompt: null,
       launchConfig: emptyLaunchConfig('claude')
     })
+  })
+
+  it('keeps a launched Claude recognizable when its prompt mentions -p', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'claude',
+      prompt: 'When done, run mkdir -p ~/orca/handoffs/x',
+      cmdOverrides: {},
+      platform: 'darwin'
+    })
+    // Why: the process table joins argv without quotes, so prompt words reach the headless-flag scan.
+    const processTableLine = tokenizeCommandLine(plan?.launchCommand ?? '').join(' ')
+    expect(recognizeAgentProcessFromCommandLine(processTableLine)?.agent).toBe('claude')
+  })
+
+  it('adds -- only when the Claude command does not already end option parsing', () => {
+    const launch = (claude: string) =>
+      buildAgentStartupPlan({
+        agent: 'claude',
+        prompt: 'Fix the bug',
+        cmdOverrides: { claude },
+        platform: 'darwin'
+      })?.launchCommand
+    expect(launch('claude-wrapper --')).toBe("claude-wrapper -- 'Fix the bug'")
+    // A required option's `--` value is not a terminator.
+    expect(launch("claude --system-prompt '--'")).toBe(
+      "claude --system-prompt '--' -- 'Fix the bug'"
+    )
   })
 
   // Native chat ignores a custom launch command; a terminal launch must still run it.
@@ -41,7 +70,7 @@ describe('buildAgentStartupPlan', () => {
       })
     ).toEqual({
       agent: 'claude',
-      launchCommand: "claude-wrapper 'Fix the bug'",
+      launchCommand: "claude-wrapper -- 'Fix the bug'",
       expectedProcess: 'claude',
       followupPrompt: null,
       launchConfig: emptyLaunchConfig('claude-wrapper')
