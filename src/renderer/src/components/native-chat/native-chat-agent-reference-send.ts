@@ -6,7 +6,10 @@ import {
   printableAgentLabel,
   type OrchestrationAgentReference
 } from '../../../../shared/orchestration-agent-reference'
-import { projectNativeChatPastedText } from './native-chat-composer-pasted-text-references'
+import {
+  projectNativeChatPastedText,
+  projectNativeChatPastedTextParts
+} from './native-chat-composer-pasted-text-references'
 
 type SelectedReference = {
   reference: OrchestrationAgentReference
@@ -105,27 +108,19 @@ export function serializeNativeChatAgentReferences(
     target.affected =
       target.labels.size > 1 || [...target.safeLabels].some((label) => owners.get(label)!.size > 1)
   }
-  // A delimiter longer than every source run cannot occur in authored text or expanded file paths.
-  let longest = 0
-  for (const value of [text, ...Object.values(files)]) {
-    for (const match of value.matchAll(/\0+/g)) {
-      longest = Math.max(longest, match[0].length)
+  const projected = projectNativeChatPastedTextParts(
+    occurrences.map((part) =>
+      typeof part === 'string'
+        ? part
+        : { opaque: part, tail: part.affected ? '' : (part.label.match(/\s+$/)?.[0] ?? '') }
+    ),
+    files
+  )
+  for (const part of projected) {
+    if (typeof part === 'string') {
+      reserve(part)
     }
   }
-  const delimiter = `@${'\0'.repeat(longest + 1)}:`
-  const slots: { target: SelectedReference; tail: string }[] = []
-  const template = occurrences
-    .map((part) => {
-      if (typeof part === 'string') {
-        return part
-      }
-      const tail = part.affected ? '' : (part.label.match(/\s+$/)?.[0] ?? '')
-      const index = slots.push({ target: part, tail }) - 1
-      return `${delimiter}${index}${delimiter}${tail}`
-    })
-    .join('')
-  const projected = projectNativeChatPastedText(template, files)
-  reserve(projected)
   let suffix = 0
   for (const target of selected.values()) {
     if (!target.affected) {
@@ -140,14 +135,7 @@ export function serializeNativeChatAgentReferences(
     spellings.add(target.label)
   }
   const body = projected
-    .split(delimiter)
-    .map((part, index) => {
-      if (index % 2 === 0) {
-        return part
-      }
-      const { target, tail } = slots[Number(part)]
-      return `@${tail ? target.label.slice(0, -tail.length) : target.label}`
-    })
+    .map((part) => (typeof part === 'string' ? part : `@${part.opaque.label}`))
     .join('')
   return `${body}\n\n${[...selected.values()]
     .map(
