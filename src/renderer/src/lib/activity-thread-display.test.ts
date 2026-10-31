@@ -106,6 +106,27 @@ describe('getActivityThreadTaskTitle', () => {
       })
     ).toBe('Investigate the flaky login test')
   })
+
+  it("does not fall back to a sibling pane's tab title for an unresolved split pane", () => {
+    const splitTab = { ...tab, generatedTitle: undefined, title: 'Build docs site' }
+    expect(
+      getActivityThreadTaskTitle({
+        entry: { prompt: '', stateHistory: [] },
+        tab: splitTab,
+        generatedTitlesEnabled: false,
+        paneLiveTitle: null
+      })
+    ).toBe('Claude')
+
+    // A single-pane tab's title is the pane's own title, so it still applies.
+    expect(
+      getActivityThreadTaskTitle({
+        entry: { prompt: '', stateHistory: [] },
+        tab: splitTab,
+        generatedTitlesEnabled: false
+      })
+    ).toBe('Build docs site')
+  })
 })
 
 describe('getActivityThreadStatusPreview', () => {
