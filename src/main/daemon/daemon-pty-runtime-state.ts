@@ -73,6 +73,7 @@ export type DaemonRespawnReason =
   | 'unhealthy_resolver'
   | 'stale_bundle'
   | 'severed_tcc_attribution'
+  | 'failed_health_check'
 
 export type DaemonIdentityChangeEvent = {
   previous: DaemonEndpointIdentity

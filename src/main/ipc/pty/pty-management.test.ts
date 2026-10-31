@@ -55,7 +55,11 @@ vi.mock('../../daemon/daemon-provider-restart', () => ({
 }))
 vi.mock('../../daemon/daemon-provider-state', () => ({
   getDaemonProvider: getDaemonProviderMock,
-  getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock
+  getCurrentDaemonMacTccAttributionHealth: getCurrentDaemonMacTccAttributionHealthMock,
+  // Only the degraded provider double routes fresh spawns to the local fallback.
+  freshSpawnsRunInProcess: () =>
+    (getDaemonProviderMock() as { routesFreshSpawnsToLocalProvider?: true } | null)
+      ?.routesFreshSpawnsToLocalProvider === true
 }))
 
 // Preserve instanceof routing without the real router constructor's event subscriptions.

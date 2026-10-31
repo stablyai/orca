@@ -15,7 +15,9 @@ export class DegradedDaemonFreshSpawnRouter {
     private readonly current: IPtyProvider,
     private readonly fallback: IPtyProvider,
     private readonly sessionProviders: Map<string, IPtyProvider>,
-    private readonly probeCurrent: (() => Promise<boolean>) | null
+    private readonly probeCurrent: (() => Promise<boolean>) | null,
+    /** Replaces the current daemon when nothing lives on it; true when it did. */
+    private readonly replaceIdleCurrent: (() => Promise<boolean>) | null = null
   ) {
     this.target = fallback
   }
@@ -49,8 +51,15 @@ export class DegradedDaemonFreshSpawnRouter {
     if (this.recovery) {
       return this.recovery
     }
-    const recovery = this.probeCurrent()
+    const probeCurrent = this.probeCurrent
+    const recovery = probeCurrent()
       .catch(() => false)
+      // Why: a daemon that stays unable to spawn is kept only for its sessions; once they are gone, replace it.
+      .then(async (healthy) =>
+        healthy || !this.replaceIdleCurrent || !(await this.replaceIdleCurrent().catch(() => false))
+          ? healthy
+          : await probeCurrent().catch(() => false)
+      )
       .then((healthy) => {
         if (healthy) {
           this.target = this.current

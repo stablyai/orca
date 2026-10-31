@@ -21819,6 +21819,11 @@
       "review": "Vérifier les options de redémarrage",
       "title": "Le service de terminal doit peut-être être redémarré"
     },
+    "degradedDaemonBanner": {
+      "body": "Le service de terminal garde vos terminaux précédents en cours d’exécution, mais ne peut pas en démarrer de nouveaux : les nouveaux terminaux s’exécutent donc dans Orca. Orca revient au service de lui-même une fois ces terminaux précédents fermés. Redémarrer le service de terminal maintenant les arrête.",
+      "review": "Voir les options de redémarrage",
+      "title": "Les nouveaux terminaux ne sont pas conservés à la fermeture d’Orca"
+    },
     "claudeDiffPanelNotice": {
       "gotIt": "J'ai compris",
       "title": "Claude Code peut ouvrir son propre panneau de différences à côté du chat dans les terminaux larges. Ce panneau appartient à Claude, pas à Orca.",

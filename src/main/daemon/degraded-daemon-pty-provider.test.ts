@@ -432,6 +432,62 @@ describe('DegradedDaemonPtyProvider', () => {
     }
   })
 
+  it('replaces an idle unhealthy daemon and routes fresh PTYs back to it without touching fallback terminals', async () => {
+    const current = Object.assign(createDaemonAdapter('daemon'), {
+      replaceIdleDaemonForFreshSpawns: vi.fn(async () => true)
+    })
+    const fallback = createProvider('fallback')
+    const probeCurrentDaemonSpawn = vi
+      .fn<() => Promise<boolean>>()
+      .mockResolvedValueOnce(false)
+      .mockResolvedValueOnce(true)
+    const provider = new DegradedDaemonPtyProvider({
+      current,
+      legacy: [],
+      fallback,
+      probeCurrentDaemonSpawn
+    })
+    const inProcess = await provider.spawn({ cols: 80, rows: 24 })
+
+    await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(true)
+
+    expect(current.replaceIdleDaemonForFreshSpawns).toHaveBeenCalledOnce()
+    expect(probeCurrentDaemonSpawn).toHaveBeenCalledTimes(2)
+    expect(provider.routesFreshSpawnsToLocalProvider).toBeUndefined()
+    expect(fallback.shutdown).not.toHaveBeenCalled()
+    expect(provider.hasPty(inProcess.id)).toBe(true)
+    await expect(provider.spawn({ cols: 80, rows: 24 })).resolves.toMatchObject({
+      id: 'daemon-new'
+    })
+  })
+
+  it('stays degraded while the unhealthy daemon still owns sessions or its replacement fails', async () => {
+    const replacements: (() => Promise<boolean>)[] = [
+      async () => false,
+      async () => {
+        throw new Error('launch failed')
+      }
+    ]
+    for (const replace of replacements) {
+      const current = Object.assign(createDaemonAdapter('daemon'), {
+        replaceIdleDaemonForFreshSpawns: vi.fn(replace)
+      })
+      const probeCurrentDaemonSpawn = vi.fn(async () => false)
+      const provider = new DegradedDaemonPtyProvider({
+        current,
+        legacy: [],
+        fallback: createProvider('fallback'),
+        probeCurrentDaemonSpawn
+      })
+
+      await expect(provider.recoverFreshSpawnRouting()).resolves.toBe(false)
+
+      expect(current.replaceIdleDaemonForFreshSpawns).toHaveBeenCalledOnce()
+      expect(probeCurrentDaemonSpawn).toHaveBeenCalledOnce()
+      expect(provider.routesFreshSpawnsToLocalProvider).toBe(true)
+    }
+  })
+
   it('coalesces concurrent fresh-spawn recovery probes', async () => {
     let resolveProbe: ((healthy: boolean) => void) | undefined
     const probeCurrentDaemonSpawn = vi.fn(

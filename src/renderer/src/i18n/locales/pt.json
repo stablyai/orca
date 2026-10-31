@@ -21642,6 +21642,11 @@
       "review": "Revisar opções de reinicialização",
       "title": "O serviço de terminais pode precisar ser reiniciado"
     },
+    "degradedDaemonBanner": {
+      "body": "O serviço de terminal mantém seus terminais anteriores em execução, mas não consegue iniciar novos, então os novos terminais são executados dentro do Orca. O Orca volta ao serviço sozinho quando esses terminais anteriores forem fechados. Reiniciar o serviço de terminal agora os encerra.",
+      "review": "Revisar opções de reinício",
+      "title": "Os novos terminais não são mantidos quando o Orca é fechado"
+    },
     "severedDaemonBanner": {
       "unknownCount": "seus terminais em execução",
       "unverifiable": "O Orca não conseguiu verificar o processo do serviço de terminais, então nada foi interrompido.",
