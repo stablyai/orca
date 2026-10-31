@@ -22879,6 +22879,30 @@
       "events_other": "{{count}} events",
       "sessions_other": "{{count}} sessions",
       "turns_other": "{{count}} turns"
+    },
+    "usage": {
+      "quota": {
+        "used": "{{percent}}% used",
+        "resetsAt": "Resets {{time}}",
+        "resetUnavailable": "Reset time unavailable",
+        "unavailable": "Quota data unavailable",
+        "refreshing": "Refreshing quota…",
+        "updatedAt": "Quota checked {{time}}",
+        "neverUpdated": "Quota has not been checked",
+        "lastKnown": "Last known quota; the latest check failed.",
+        "title": "Current account quotas",
+        "scope": "{{host}} · Account-wide subscription windows. History filters do not change these limits.",
+        "refresh": "Refresh account quotas",
+        "accountCoverage": "Claude and Codex show connected accounts reported by this host. Other providers show the current account only; unavailable windows do not mean zero usage.",
+        "partialAccounts": "The account list is unavailable or incomplete. Only reported accounts and current provider quota snapshots are shown.",
+        "noSources": "No account quota source is available. Manage provider accounts to check your subscription.",
+        "manage": "Manage accounts",
+        "ownerUnverifiable": "The account host cannot be verified.",
+        "defaultWsl": "WSL default",
+        "currentAccount": "Current account · identity unavailable"
+      },
+      "localHost": "This device",
+      "refresh": "Refresh"
     }
   },
   "github": {

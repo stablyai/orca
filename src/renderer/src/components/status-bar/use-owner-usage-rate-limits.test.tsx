@@ -75,6 +75,112 @@ describe('useOwnerUsageRateLimits', () => {
   })
   afterEach(() => cleanup())
 
+  it('uses the explicit Settings owner and exposes its account roster with no focused-host substitution', () => {
+    mocks.owner = { kind: 'environment', environmentId: 'focused-other-host' }
+    const selected: RuntimeClientTarget = { kind: 'environment', environmentId: 'mini' }
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local, selected, true))
+    expect(mocks.watchers[0].target).toEqual(selected)
+    const accounts = snapshot(createEmptyRateLimitState({ codex: provider('codex', 37) }))
+    act(() => mocks.watchers[0].handlers.onSnapshot(accounts))
+    expect(result.current.accounts).toBe(accounts)
+    expect(result.current.rateLimits.codex?.session?.usedPercent).toBe(37)
+    act(() => mocks.watchers[0].handlers.onError(new Error('closed')))
+    expect(result.current.accounts).toBe(accounts)
+    expect(result.current.accountsUnverifiable).toBe(true)
+  })
+
+  it('can read the local account roster without opening a remote usage stream', () => {
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local, { kind: 'local' }, true))
+    expect(mocks.watchers[0].target).toEqual({ kind: 'local' })
+    const accounts = snapshot(null)
+    act(() => mocks.watchers[0].handlers.onSnapshot(accounts))
+    expect(result.current.accounts).toBe(accounts)
+    expect(result.current.rateLimits).toBe(local)
+    expect(result.current.accountsUnverifiable).toBe(false)
+  })
+
+  it('marks retained local accounts unverifiable after a watcher failure and recovers on a fresh snapshot', () => {
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local, { kind: 'local' }, true))
+    const accounts = snapshot(null)
+    act(() => mocks.watchers[0].handlers.onSnapshot(accounts))
+    act(() => mocks.watchers[0].handlers.onError(new Error('account list unavailable')))
+    expect(result.current.accounts).toBe(accounts)
+    expect(result.current.accountsUnverifiable).toBe(true)
+    act(() => mocks.watchers[0].handlers.onSnapshot(snapshot(null)))
+    expect(result.current.accountsUnverifiable).toBe(false)
+  })
+
+  it('keeps newer streamed account identity and quotas when an older forced refresh completes', async () => {
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    let finish: (value: ProviderAccountsSnapshot) => void = () => {}
+    mocks.callRuntimeRpc.mockReturnValue(
+      new Promise<ProviderAccountsSnapshot>((resolve) => {
+        finish = resolve
+      })
+    )
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local, undefined, true))
+    const pending = result.current.refreshRemote?.()
+    const fresh = snapshot(createEmptyRateLimitState({ codex: provider('codex', 24) }))
+    fresh.codex.activeAccountId = 'new-account'
+    act(() => mocks.watchers[0].handlers.onSnapshot(fresh))
+    const old = snapshot(createEmptyRateLimitState({ codex: provider('codex', 90) }))
+    old.codex.activeAccountId = 'old-account'
+    await act(async () => {
+      finish(old)
+      await pending
+    })
+    expect(result.current.accounts).toBe(fresh)
+    expect(result.current.rateLimits.codex?.session?.usedPercent).toBe(24)
+  })
+
+  it('keeps a newer refresh when overlapping forced refreshes finish out of order', async () => {
+    mocks.owner = { kind: 'environment', environmentId: 'mini' }
+    const finishes: ((value: ProviderAccountsSnapshot) => void)[] = []
+    mocks.callRuntimeRpc.mockImplementation(
+      () =>
+        new Promise<ProviderAccountsSnapshot>((resolve) => {
+          finishes.push(resolve)
+        })
+    )
+    const { result } = renderHook(() => useOwnerUsageRateLimits(local))
+    const older = result.current.refreshRemote?.()
+    const newer = result.current.refreshRemote?.()
+    const fresh = snapshot(createEmptyRateLimitState({ codex: provider('codex', 24) }))
+    await act(async () => {
+      finishes[1](fresh)
+      await newer
+    })
+    await act(async () => {
+      finishes[0](snapshot(createEmptyRateLimitState({ codex: provider('codex', 90) })))
+      await older
+    })
+    expect(result.current.accounts).toBe(fresh)
+    expect(result.current.rateLimits.codex?.session?.usedPercent).toBe(24)
+  })
+
+  it('invalidates local account identity when its quota snapshot changes and ignores a delayed old roster', () => {
+    const { result, rerender } = renderHook(
+      ({ limits }) => useOwnerUsageRateLimits(limits, { kind: 'local' }, true),
+      {
+        initialProps: { limits: local }
+      }
+    )
+    const first = mocks.watchers[0]
+    const original = snapshot(null)
+    act(() => first.handlers.onSnapshot(original))
+    expect(result.current.accounts).toBe(original)
+    const next = createEmptyRateLimitState({ codex: provider('codex', 77) })
+    rerender({ limits: next })
+    expect(first.closed).toBe(true)
+    expect(result.current.accounts).toBeNull()
+    const fresh = snapshot(null)
+    fresh.codex.activeAccountId = 'new-account'
+    act(() => mocks.watchers[1].handlers.onSnapshot(fresh))
+    act(() => first.handlers.onSnapshot(original))
+    expect(result.current.accounts).toBe(fresh)
+    expect(result.current.rateLimits).toBe(next)
+  })
+
   it('reports an older host without published usage as unavailable, not loading', () => {
     mocks.owner = { kind: 'environment', environmentId: 'mini' }
     const { result } = renderHook(() => useOwnerUsageRateLimits(local))
