@@ -1,4 +1,5 @@
 import { AutomationRunMembership } from './automation-run-membership'
+import type { Repo } from '../../../shared/repo-types'
 import type { HostWorktreeTarget } from '../../../shared/worktree/host-qualified-identity'
 import type {
   Automation,
@@ -165,7 +166,7 @@ export class AutomationPersistence {
 
   createAutomation(
     input: AutomationCreateInput,
-    options?: { destination?: AutomationDestination }
+    options?: { destination?: AutomationDestination; resolvedRepo?: Repo }
   ): Automation {
     return createAutomationOperation(getAutomationDefinitionOperations(this), input, options)
   }
@@ -173,7 +174,11 @@ export class AutomationPersistence {
   updateAutomation(
     id: string,
     updates: AutomationUpdateInput,
-    options?: { expectedOwner?: AutomationOwnerPrecondition; destination?: AutomationDestination }
+    options?: {
+      expectedOwner?: AutomationOwnerPrecondition
+      destination?: AutomationDestination
+      resolvedRepo?: Repo
+    }
   ): Automation {
     return updateAutomationOperation(getAutomationDefinitionOperations(this), id, updates, options)
   }
@@ -296,23 +301,20 @@ export function getAutomationDefinitionOperations(
 }
 
 export function getAutomationRunOperations(owner: AutomationPersistence): AutomationRunOperations {
+  const context = owner[automationPersistenceContext]
   return {
-    state: owner[automationPersistenceContext].runtime.state,
+    state: context.runtime.state,
     flush: () => {
       markAutomationDomains(owner)
-      owner[automationPersistenceContext].flushBarriers.flush()
+      context.flushBarriers.flush()
     },
     recordAutomationRunsMutation: (runs) => {
-      owner[automationPersistenceContext].runtime.pendingAutomationRunsAfter = runs
-      owner[automationPersistenceContext].membership.sync()
+      context.runtime.pendingAutomationRunsAfter = runs
+      context.membership.sync()
     },
-    recordManualRun: () =>
-      owner[automationPersistenceContext].preferences.recordFeatureInteraction('automation-run'),
+    recordManualRun: () => context.preferences.recordFeatureInteraction('automation-run'),
     getWorkspaceDisplayName: (workspaceId) =>
-      getAutomationRunWorkspaceDisplayName(
-        owner[automationPersistenceContext].runtime.state,
-        workspaceId
-      )
+      getAutomationRunWorkspaceDisplayName(context.runtime.state, workspaceId)
   }
 }
 

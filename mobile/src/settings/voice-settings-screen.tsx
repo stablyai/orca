@@ -1,5 +1,5 @@
 import { useCallback, useRef, useState } from 'react'
-import { ActivityIndicator, Pressable, ScrollView, Switch, Text, View } from 'react-native'
+import { ActivityIndicator, Pressable, ScrollView, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import type { VoiceSettingsOperations } from './voice-settings-operations'
 import { voiceSettingsStyles as styles } from './voice-settings-styles'
@@ -17,6 +17,7 @@ import {
   type MobileSpeechModel,
   type MobileSpeechSetup
 } from '../dictation/mobile-dictation-setup'
+import { MobileSwitch } from '../components/MobileSwitch'
 
 const POLL_INTERVAL_MS = 1500
 
@@ -300,7 +301,7 @@ export default function VoiceSettingsScreen({
                   )}
                 </Text>
               </View>
-              <Switch
+              <MobileSwitch
                 testID="voice-enabled"
                 accessibilityLabel={t(
                   'settings.voiceSettingsScreen.enableDictation',
@@ -308,8 +309,6 @@ export default function VoiceSettingsScreen({
                 )}
                 value={enabled}
                 onValueChange={(enabled) => void configure({ enabled })}
-                trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-                thumbColor={colors.textPrimary}
               />
             </View>
 

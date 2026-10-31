@@ -1,3 +1,6 @@
+import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
+import { resolveWorktreeHostRouting } from '../worktree-launch-host-repo'
 import { resolveHostStructuredAgentLaunchEnvironment } from '../structured-agent-launch-support'
 import { resolveStructuredCodexAccountKind } from '../structured-agent-account-home'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -26,12 +29,7 @@ import {
   createStructuredAttentionMobileDelivery,
   readStructuredAttentionWorkspaceLabels
 } from '../structured-agent-session-mobile-attention'
-import {
-  createStructuredAgentSessionLogger,
-  neverThrowingStructuredAgentSessionLogger
-} from '../../native-chat/agent-session-wire/structured-agent-session-logger'
-import { openAgentSessionRecordStoreOnce } from '../agent-session-record-store-slot'
-import type { AgentSessionRecordStore } from '../agent-session-record-store'
+import { createStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { maybeAutoRenameWorkspaceOnFirstStructuredTurn } from '../../agent-hooks/first-work-structured-session-rename'
 import { firstWorkRenameDeps } from '../../agent-hooks/first-work-rename-runtime'
 import { createStructuredChatNamingHandler } from '../../native-chat/structured-chat-naming'
@@ -152,24 +150,30 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
     sourceDefaultsSupported = true
   ): ResolvedWorktreeSnapshot {
     const visibilitySettings = this.store?.getSettings()
-    const visibilitySourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
+    const sourceMatchersByRepoId = this.buildRuntimeVisibilitySourceMatchersByRepoId(
       snapshot.worktrees,
       sourceDefaultsSupported,
       visibilitySettings
     )
     const hiddenRepos = runtimeHiddenRepos(this.store)
+    const repos = this.store?.getRepos() ?? []
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     return {
       ...snapshot,
-      worktrees: snapshot.worktrees.filter(
-        (worktree) =>
-          !hiddenRepos.hasWorktree(worktree) &&
-          this.isRuntimeWorktreeVisible(
-            worktree,
-            visibilitySourceMatchersByRepoId.get(worktree.repoId),
-            sourceDefaultsSupported,
-            visibilitySettings
-          )
-      )
+      worktrees: snapshot.worktrees.filter((worktree) => {
+        const owner = resolveWorktreeHostRouting(repos, worktree, repoOwners)
+        if (owner.kind === 'ambiguous' || hiddenRepos.hasWorktree(worktree)) {
+          return false
+        }
+        return this.isRuntimeWorktreeVisible(
+          worktree,
+          owner.kind === 'resolved'
+            ? sourceMatchersByRepoId.get(getRepoHostIdentityForParts(worktree.repoId, owner.hostId))
+            : undefined,
+          sourceDefaultsSupported,
+          visibilitySettings
+        )
+      })
     }
   }
 
@@ -203,17 +207,6 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
         workspaceId
       )
     )
-  }
-
-  /** Admission needs only the ledger; a later chat host must reuse this store. */
-  async openAgentSessionRecordStore(): Promise<AgentSessionRecordStore> {
-    const { store } = await openAgentSessionRecordStoreOnce({
-      stateDirectory: getProfileUserDataPath(),
-      legacySessionTabIds: this.legacyStructuredSessionTabIds,
-      hostId: LOCAL_EXECUTION_HOST_ID,
-      logger: neverThrowingStructuredAgentSessionLogger(createStructuredAgentSessionLogger())
-    })
-    return store
   }
 
   /** Defer host creation until profile paths are final and chat is used; reuse an admission-opened record store. */

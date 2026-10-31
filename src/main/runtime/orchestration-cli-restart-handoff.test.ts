@@ -98,7 +98,8 @@ it("retains CLI work and mail across restart, refuses a worker's own Run, and co
         cliPath,
         'orchestration',
         ...args,
-        '--json'
+        '--json',
+        '--full'
       ],
       {
         cwd: home,

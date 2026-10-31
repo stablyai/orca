@@ -176,6 +176,9 @@
           "automationCount_one": "{{count}} automation",
           "automationCount_other": "{{count}} automations"
         },
+        "capturedOwner": {
+          "hostReselection": "Edit the automation and reselect its host before running it."
+        },
         "externalScope": {
           "uncheckedHostCount_one": "External automation managers on {{count}} host could not be checked.",
           "uncheckedHostCount_other": "External automation managers on {{count}} hosts could not be checked."

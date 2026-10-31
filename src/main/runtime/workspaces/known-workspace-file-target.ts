@@ -1,3 +1,5 @@
+import { getRepoHostIdentityForParts } from '../../../shared/repo-host-identity'
+import { createRepoRowExecutionHostLookup } from '../../../shared/worktree-execution-host-resolution'
 import type { RuntimeWorkspaceCatalog } from './workspace-catalog'
 import type { OrcaRuntimeWithListManagedWorktrees } from './managed-workspace-operations'
 import type { OrcaRuntimeWithTransitionGraphReloadToTerminalState } from '../session-graph/session-graph-authority'
@@ -70,21 +72,25 @@ export abstract class OrcaRuntimeWithResolveKnownWorkspaceFileTarget extends Orc
       { worktree: ResolvedWorktree; executionHostId: ExecutionHostId }
     >()
     const repos = this.store?.getRepos() ?? []
+    const repoOwners = createRepoRowExecutionHostLookup(repos)
     const resolvedWorktrees = await this.listResolvedWorktrees()
     const visibilitySourceMatchersByRepoId =
       this.buildRuntimeVisibilitySourceMatchersByRepoId(resolvedWorktrees)
     for (const worktree of resolvedWorktrees) {
+      const routing = resolveWorktreeHostRouting(repos, worktree, repoOwners)
+      if (routing.kind === 'ambiguous') {
+        continue
+      }
       if (
         !this.isRuntimeWorktreeVisible(
           worktree,
-          visibilitySourceMatchersByRepoId.get(worktree.repoId)
+          routing.kind === 'resolved'
+            ? visibilitySourceMatchersByRepoId.get(
+                getRepoHostIdentityForParts(worktree.repoId, routing.hostId)
+              )
+            : undefined
         )
       ) {
-        continue
-      }
-      // Host-blind repo ids can misroute SSH paths; drop candidates with no unambiguous filesystem owner.
-      const routing = resolveWorktreeHostRouting(repos, worktree)
-      if (routing.kind === 'ambiguous') {
         continue
       }
       const target = {

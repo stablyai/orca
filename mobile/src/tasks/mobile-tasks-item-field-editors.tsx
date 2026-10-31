@@ -14,6 +14,7 @@ import {
   Check
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
+import { SectionHeader } from '../components/list/SectionHeader'
 
 export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationModel) {
   const {
@@ -51,10 +52,8 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         (actionItem.source.type === 'issue' || actionItem.source.type === 'mr') &&
         detailPayload.provider === 'gitlab')) ? (
     <>
-      <View style={styles.detailSection}>
-        <Text style={styles.detailSectionTitle}>
-          {translate('tasks.itemFieldEditors.title', 'Title')}
-        </Text>
+      <SectionHeader title={translate('tasks.itemFieldEditors.title', 'Title')} />
+      <View style={styles.itemSectionBody}>
         <TextField
           value={itemTitleDraft}
           onChangeText={setItemTitleDraft}
@@ -93,15 +92,13 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         </Pressable>
       </View>
 
-      <View style={styles.detailSection}>
-        <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>
-            {translate('tasks.itemFieldEditors.labels', 'Labels')}
-          </Text>
-          <Text style={styles.detailSectionMeta}>
-            {detailPayload.labels.length || translate('tasks.itemFieldEditors.none', 'None')}
-          </Text>
-        </View>
+      <SectionHeader
+        title={translate('tasks.itemFieldEditors.labels', 'Labels')}
+        trailing={String(
+          detailPayload.labels.length || translate('tasks.itemFieldEditors.none', 'None')
+        )}
+      />
+      <View style={styles.itemSectionBody}>
         {actionItem.provider === 'github' ? (
           itemLabelsLoading ? (
             <View style={styles.detailLoadingInline}>
@@ -184,15 +181,13 @@ export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationM
         )}
       </View>
 
-      <View style={styles.detailSection}>
-        <View style={styles.detailSectionHeader}>
-          <Text style={styles.detailSectionTitle}>
-            {translate('tasks.itemFieldEditors.assignees', 'Assignees')}
-          </Text>
-          <Text style={styles.detailSectionMeta}>
-            {detailPayload.assignees.length || translate('tasks.itemFieldEditors.none', 'None')}
-          </Text>
-        </View>
+      <SectionHeader
+        title={translate('tasks.itemFieldEditors.assignees', 'Assignees')}
+        trailing={String(
+          detailPayload.assignees.length || translate('tasks.itemFieldEditors.none', 'None')
+        )}
+      />
+      <View style={styles.itemSectionBody}>
         {actionItem.provider === 'github' ? (
           itemAssignableUsersLoading ? (
             <View style={styles.detailLoadingInline}>
