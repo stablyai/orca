@@ -8,14 +8,16 @@ import {
   type OrchestrationAgentReference
 } from '../../../../shared/orchestration-agent-reference'
 import { serializeNativeChatAgentReferences } from './native-chat-agent-reference-send'
-import { nativeChatPastedTextToken } from './native-chat-pasted-text-reference'
+import {
+  nativeChatPastedTextToken,
+  nativeChatPastedTextOperations
+} from './native-chat-pasted-text-reference'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { resolveNativeChatPastedText } from './native-chat-composer-pasted-text-references'
 import {
   clearNativeChatComposerDraftsForTests,
   updateNativeChatComposerDraft
 } from './native-chat-composer-draft-store'
-import { nativeChatPastedTextOperations } from './native-chat-pasted-text-reference'
 
 const work = vi.hoisted(() => ({ plainCharacters: 0, opaqueVisits: 0, pathVisits: 0 }))
 vi.mock('./native-chat-composer-pasted-text-references', async (importOriginal) => {
