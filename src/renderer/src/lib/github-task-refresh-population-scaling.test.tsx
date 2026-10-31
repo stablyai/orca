@@ -134,7 +134,7 @@ it('bounds population delivery preparation across cold and published multi-domai
     let pages: (GitHubWorkItem[] | null)[] = initial
     let setter: React.Dispatch<React.SetStateAction<(GitHubWorkItem[] | null)[]>> | undefined
     function Owner() {
-      const [value, setValue] = useGitHubTaskDeliveryState<(GitHubWorkItem[] | null)[]>(initial)
+      const [value, setValue] = useGitHubTaskDeliveryState<GitHubWorkItem[] | null>(initial)
       React.useLayoutEffect(() => {
         pages = value
         setter = setValue

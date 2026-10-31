@@ -157,7 +157,7 @@ it.each([
     }: {
       mutation: ReturnType<typeof useTaskPageGitHubWorkItemMutation>
     }) {
-      const [items, setItems] = useGitHubTaskDeliveryState<GitHubWorkItem[]>([])
+      const [items, setItems] = useGitHubTaskDeliveryState<GitHubWorkItem>([])
       React.useLayoutEffect(() => {
         smartItems = items
         smartCommits += 1
@@ -180,7 +180,7 @@ it.each([
           setGithubItems: setSmart,
           setGithubLoading: noop,
           setCrossRepoPrompt: noop
-        } as Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'],
+        },
         sourceQueryWithinLimit: true,
         shouldQueryGithub: true
       })

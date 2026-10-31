@@ -1,3 +1,4 @@
+import type { TaskPageGitHubSearchPaginationInput } from './task-page-github-delivery-inputs'
 import { admitTaskPageGitHubListInputs } from './task-page-github-work-item-mutation-pages'
 
 import { beginGitHubTaskRead, type GitHubTaskRead } from '@/store/github/request-coordination'
@@ -31,7 +32,9 @@ import { useGitHubTaskSearchCommit } from '@/components/use-github-task-search-c
 
 import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 
-export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProjectionModel) {
+export function useTaskPageGitHubSearchPagination<T extends TaskPageGitHubSearchPaginationInput>(
+  model: T
+) {
   const {
     setTaskResumeState,
     selectedRepos,
@@ -283,5 +286,5 @@ export function useTaskPageGitHubSearchPagination(model: TaskPageGitHubListProje
   return nextModel
 }
 export type TaskPageGitHubSearchPaginationModel = ReturnType<
-  typeof useTaskPageGitHubSearchPagination
+  typeof useTaskPageGitHubSearchPagination<TaskPageGitHubListProjectionModel>
 >

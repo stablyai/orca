@@ -49,7 +49,7 @@ export const dependency = (row: ObservedGitHubWorkItem, family: string) =>
   `${rowKey(row)}\0${getGitHubTaskObservation(row)?.key ?? ''}\0${family}`
 
 export function applyGitHubTaskReadProgram(
-  items: readonly GitHubWorkItem[],
+  items: GitHubWorkItem[],
   current: readonly GitHubWorkItem[],
   program: readonly ReadBatch[],
   domains: ReadonlyMap<string, number>,
@@ -123,8 +123,8 @@ export function applyGitHubTaskReadProgram(
     })
   }
   if (!program.length) {
-    return { items: items as GitHubWorkItem[], adopted }
-  } // SAFETY: callers never mutate the unchanged readonly array.
+    return { items, adopted }
+  }
   const latest = new Map(current.map((row: ObservedGitHubWorkItem) => [rowKey(row), row]))
   let projection: ReturnType<typeof createTaskPageGitHubAuthorityProjection> | undefined
   const resultItems = items.map((row: ObservedGitHubWorkItem) => {

@@ -71,7 +71,7 @@ export function patchTaskPageGitHubWorkItemPages(
 }
 
 export function applyPendingTaskPageGitHubMutationsToItems(
-  items: readonly GitHubWorkItem[],
+  items: GitHubWorkItem[],
   context?: TaskPageGitHubProjectionContext
 ): GitHubWorkItem[] {
   const compose = createTaskPageGitHubAuthorityProjection()
@@ -175,7 +175,7 @@ export function overlayPendingOnTaskPagePages(
 export function materializeTaskPageGitHubRead(
   read: GitHubTaskRead,
   pages: readonly (GitHubWorkItem[] | null)[],
-  items: readonly GitHubWorkItem[],
+  items: GitHubWorkItem[],
   queryKey: string,
   context?: TaskPageGitHubProjectionContext
 ): GitHubWorkItem[] {
@@ -190,7 +190,7 @@ export function materializeTaskPageGitHubRead(
 export function restoreTaskPageGitHubReadPage(
   read: GitHubTaskRead,
   pages: readonly (GitHubWorkItem[] | null)[],
-  items: readonly GitHubWorkItem[],
+  items: GitHubWorkItem[],
   page: number,
   context?: TaskPageGitHubProjectionContext
 ): (GitHubWorkItem[] | null)[] {
@@ -215,7 +215,7 @@ export { transitionTaskPageGitHubMutationQuery } from './task-page-github-work-i
 
 export function deliverTaskPageGitHubRead(
   read: GitHubTaskRead,
-  items: readonly GitHubWorkItem[],
+  items: GitHubWorkItem[],
   setPages: Dispatch<SetStateAction<(GitHubWorkItem[] | null)[]>>,
   pagesRef: MutableRefObject<(GitHubWorkItem[] | null)[]>,
   context: TaskPageGitHubProjectionContext,

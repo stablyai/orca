@@ -24,7 +24,18 @@ function entry<T>(data: T): CacheEntry<T> {
 }
 
 function workItem(id: string, repoId: string): GitHubWorkItem {
-  return { id, repoId, title: id } as GitHubWorkItem
+  return {
+    id,
+    repoId,
+    title: id,
+    type: 'issue',
+    number: 1,
+    url: `https://github.com/o/${repoId}/issues/${encodeURIComponent(id)}`,
+    state: 'open',
+    labels: [],
+    updatedAt: '',
+    author: null
+  }
 }
 
 function linearIssue(id: string): LinearIssue {

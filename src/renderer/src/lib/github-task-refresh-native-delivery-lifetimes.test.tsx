@@ -143,7 +143,12 @@ it('keeps the accepted DIRECT title in the native smart row and its whole select
   const begin = coordination.beginGitHubTaskRead
   const beginSpy = vi.spyOn(coordination, 'beginGitHubTaskRead').mockImplementation((...args) => {
     const read = begin(...args),
-      record = { id: reads.length + 1, disposed: false, marks: 0, applications: [] as unknown[] }
+      record: (typeof reads)[number] = {
+        id: reads.length + 1,
+        disposed: false,
+        marks: 0,
+        applications: []
+      }
     reads.push(record)
     const apply = read.apply,
       mark = read.mark,
@@ -409,7 +414,7 @@ it('keeps two useful no-install returns in their own committed destinations afte
   const destinations: React.Dispatch<React.SetStateAction<GitHubWorkItem[]>>[] = []
   const rows: GitHubWorkItem[][] = []
   function Owner({ index }: { index: number }) {
-    const [items, setItems] = useGitHubTaskDeliveryState<GitHubWorkItem[]>([])
+    const [items, setItems] = useGitHubTaskDeliveryState<GitHubWorkItem>([])
     React.useLayoutEffect(() => {
       destinations[index] = setItems
       rows[index] = items

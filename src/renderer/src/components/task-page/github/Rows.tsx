@@ -1,6 +1,6 @@
+import type { TaskPageGitHubRowsInput } from './task-page-github-delivery-inputs'
 import { getGitHubRepoLookupIndex } from '@/store/slices/github-repo-lookup-index'
 import { taskPageWorkItemKey } from '../task-page-work-item-signatures'
-import type { TaskPageComposerActionsModel } from '../use-task-page-composer-actions'
 import { findGithubWorkItemWorkspaceAttachment } from '@/lib/github-work-item-workspace-attachment'
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { formatPRDelta } from '../task-page-pr-delta-summary'
@@ -48,7 +48,7 @@ import { openAppHttpLink } from '@/lib/app-http-link-open'
 export function TaskPageGitHubRows({
   model
 }: {
-  model: TaskPageComposerActionsModel
+  model: TaskPageGitHubRowsInput
 }): React.JSX.Element | null {
   const {
     repos,

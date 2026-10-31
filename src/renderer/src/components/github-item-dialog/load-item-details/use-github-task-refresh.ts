@@ -16,7 +16,15 @@ import {
 import { observeGitHubWorkItemWrites } from '@/lib/github-work-item-writes'
 import { publishGitHubTaskRefresh } from '@/lib/github-task-refresh-publication'
 import { captureTaskPageGitHubRefreshMasks } from '@/components/task-page/github/task-page-github-refresh-masks'
-import { useCallback, useEffect, useEffectEvent, useMemo, useRef, useState } from 'react'
+import {
+  useCallback,
+  useLayoutEffect,
+  useEffect,
+  useEffectEvent,
+  useMemo,
+  useRef,
+  useState
+} from 'react'
 import { useAppStore } from '@/store'
 import { lookupGitHubWorkItemDetailsForSource } from '@/lib/github-work-item-source-lookup'
 
@@ -111,7 +119,9 @@ export function useGitHubTaskRefresh({
   const [acceptedRefresh, setAcceptedRefresh] = useState(0)
   const mounted = useMountedRef()
   const onRefreshRef = useRef(onTaskRefresh)
-  onRefreshRef.current = onTaskRefresh
+  useLayoutEffect(() => {
+    onRefreshRef.current = onTaskRefresh
+  }, [onTaskRefresh])
   const intentRef = useRef<(() => void) | null>(null)
   useEffect(
     () => () => {

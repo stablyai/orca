@@ -114,18 +114,20 @@ export function adoptTaskPageGitHubMembershipFamilies(
     setTaskPageGitHubMembershipBasis({ ...basis, families })
   }
 }
-export function createTaskPageGitHubMembershipProjection(args: {
-  query: ParsedTaskQuery
-  queryKey: string
-  viewerLogin: string | null
-}) {
+export function createTaskPageGitHubMembershipProjection(
+  args: {
+    query: ParsedTaskQuery
+    queryKey: string
+    viewerLogin: string | null
+  },
+  compose = createTaskPageGitHubAuthorityProjection()
+) {
   const queryInput = { ...args.query, labels: [...args.query.labels] }
   const queryKey = args.queryKey
   const fallbackViewer = args.viewerLogin
   const bases = new Map(getTaskPageGitHubMembershipBases())
   const scalars = new Map(getLastConfirmedClientEntries())
   const pending = new Map(getTaskPageGitHubPendingEntries())
-  const compose = createTaskPageGitHubAuthorityProjection()
   const liveLists = new Map<string, { full: boolean; logins: Set<string> }>()
   const listCoordinate = (
     entry: {

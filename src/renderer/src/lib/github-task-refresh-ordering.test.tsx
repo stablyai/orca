@@ -1,3 +1,4 @@
+import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import {
   confirmListForTest,
   context,
@@ -46,8 +47,6 @@ import React, { act } from 'react'
 import { createRoot } from 'react-dom/client'
 
 import { expect, it, vi } from 'vitest'
-
-import type { AppState } from '@/store/types'
 
 import type { Repo } from '../../../shared/repo-types'
 
@@ -226,7 +225,11 @@ it('keeps drafts during acceptance, ignores unrelated store/host updates, and di
   const before = fieldsRenders
   await act(async () =>
     store.setState({
-      settings: { activeRuntimeEnvironmentId: 'unrelated' } as AppState['settings']
+      settings: {
+        ...createGlobalSettingsFixture(),
+        ...store.getState().settings,
+        activeRuntimeEnvironmentId: 'unrelated'
+      }
     })
   ) // SAFETY: this field is the only setting read by the inactive routing branch.
   expect(fieldsRenders).toBe(before)
@@ -458,8 +461,11 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
     sharedItems: GitHubWorkItem[] = []
   const pagesRef = { current: context.pages },
     noop = () => {}
-  const foundation = {
+  const foundation: Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'] = {
     debouncedQuery: '',
+    selectedRepo: undefined,
+    githubSourceContext: null,
+    crossRepoSwitchTarget: null,
     disabled: false,
     handledCrossRepoUrlRef: { current: '' },
     repoSlugCacheRef: { current: new Map() },
@@ -474,7 +480,7 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
   }
   function Consumers() {
     useSmartWorkspaceGithubSearch({
-      foundation: foundation as Parameters<typeof useSmartWorkspaceGithubSearch>[0]['foundation'],
+      foundation,
       sourceQueryWithinLimit: true,
       shouldQueryGithub: true
     }) // SAFETY: only list branch fields are consumed.
@@ -500,12 +506,20 @@ it('keeps page-N navigation and a shared workspace raw callback through acceptan
       setCurrentPage: (v: number) => {
         destination = v
       },
-      setPages: (change: (p: typeof context.pages) => typeof context.pages) => {
-        context.pages = change(context.pages)
+      setPages: (change: React.SetStateAction<typeof context.pages>) => {
+        context.pages = typeof change === 'function' ? change(context.pages) : change
         pagesRef.current = context.pages
       },
-      taskResumeApplied: false
-    } as Parameters<typeof useTaskPageGitHubSearchPagination>[0]) // SAFETY: complete page-click/list state; query persistence inactive.
+      taskResumeApplied: false,
+      taskSearchInput: '',
+      activeTaskPreset: null,
+      activeGithubTaskKind: 'issues',
+      setAppliedTaskSearch: noop,
+      setTasksFiltering: noop,
+      setCountedTotalPages: noop,
+      setProvenPageLimit: noop,
+      githubSearchPersistReadyRef: { current: false }
+    }) // SAFETY: complete page-click/list state; query persistence inactive.
     return <button onClick={() => void model.handleLoadNextPage(4)}>Load page five</button>
   }
   const node = document.createElement('div'),

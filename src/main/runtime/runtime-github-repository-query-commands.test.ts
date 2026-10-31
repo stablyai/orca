@@ -1,15 +1,17 @@
 import './rpc/unused-default-rpc-methods.test-fixture'
+import type * as GitHubClient from '../github/client'
 import { describe, expect, it, vi } from 'vitest'
 import { RpcDispatcher } from './rpc/dispatcher'
 import { GITHUB_REPO_WORK_ITEM_METHODS } from './rpc/methods/github-repo-work-item-methods'
 import { RuntimeGitHubRepositoryQueryCommands } from './runtime-github-repository-query-commands'
-import type { OrcaRuntimeService } from './orca-runtime'
+import { OrcaRuntimeService } from './orca-runtime'
 import type { Repo } from '../../shared/repo-types'
 import { WorkItemDetails, WorkItem } from '../../shared/rpc-contract/github-repo-work-item-params'
 import { RPC_PARAMS_BY_METHOD } from '../../shared/rpc-contract/rpc-params-catalog.generated'
 const { read } = vi.hoisted(() => ({ read: vi.fn().mockResolvedValue(null) }))
 vi.mock('../github/work-item-details', () => ({ getWorkItemDetails: read }))
-vi.mock('../github/client', () => ({
+vi.mock('../github/client', async (original) => ({
+  ...(await original<typeof GitHubClient>()),
   countWorkItems: vi.fn(),
   getWorkItem: vi.fn(),
   getWorkItemByOwnerRepo: vi.fn(),
@@ -51,14 +53,12 @@ describe('registered direct details transport', () => {
         },
         getLocalGitArgs: () => [options]
       })
-      const runtime = {
-        getRuntimeId: () => 'runtime',
-        getRepoWorkItemDetails: commands.getRepoWorkItemDetails.bind(commands)
-      }
-      const dispatcher = new RpcDispatcher({
-        runtime: runtime as unknown as OrcaRuntimeService,
-        methods: GITHUB_REPO_WORK_ITEM_METHODS
-      }) // SAFETY: only this registered method and getRuntimeId are invoked.
+      const runtime = new OrcaRuntimeService()
+      vi.spyOn(runtime, 'getRuntimeId').mockReturnValue('runtime')
+      vi.spyOn(runtime, 'getRepoWorkItemDetails').mockImplementation(
+        commands.getRepoWorkItemDetails.bind(commands)
+      )
+      const dispatcher = new RpcDispatcher({ runtime, methods: GITHUB_REPO_WORK_ITEM_METHODS })
       const payload = {
         repo: 'id:registered',
         number: 5,

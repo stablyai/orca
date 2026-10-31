@@ -183,7 +183,7 @@ export function useGitHubItemDialogDetails({
     issueRepository,
     refetchTick,
     cachedEntry?.fetchedAt,
-    target?.key
+    target
   ])
 
   const addressedWorkItem = useMemo(

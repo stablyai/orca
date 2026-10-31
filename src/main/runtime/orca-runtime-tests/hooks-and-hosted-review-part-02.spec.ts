@@ -192,6 +192,7 @@ describe('OrcaRuntimeService', () => {
       'pr',
       null,
       localGitOptions,
+      undefined,
       undefined
     )
     expect(getGitHubPRChecksMock).toHaveBeenCalledWith(

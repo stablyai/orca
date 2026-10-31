@@ -1,3 +1,4 @@
+import type { TaskPageGitHubMutationStateInput } from './task-page-github-delivery-inputs'
 import { dependsOnTaskPageGitHubListRetirement } from './task-page-github-work-item-mutation-composition'
 
 import { transitionTaskPageGitHubMutationQuery } from './task-page-github-work-item-mutation-pages'
@@ -45,7 +46,9 @@ import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWork
 
 import { getTaskPageRepoSourceContext } from '../task-page-source-context'
 
-export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStateModel) {
+export function useTaskPageGitHubMutationState<T extends TaskPageGitHubMutationStateInput>(
+  model: T
+) {
   const {
     pagesRef,
     setPages,
@@ -310,4 +313,6 @@ export function useTaskPageGitHubMutationState(model: TaskPageLinearCreationStat
   nextModel.selectedGitHubRepoExternalLink = selectedGitHubRepoExternalLink
   return nextModel
 }
-export type TaskPageGitHubMutationStateModel = ReturnType<typeof useTaskPageGitHubMutationState>
+export type TaskPageGitHubMutationStateModel = ReturnType<
+  typeof useTaskPageGitHubMutationState<TaskPageLinearCreationStateModel>
+>

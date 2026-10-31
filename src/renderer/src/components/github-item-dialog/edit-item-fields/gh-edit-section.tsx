@@ -1,5 +1,5 @@
 import { gitHubTaskFamilyOrigin } from '@/lib/github-task-observation'
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import React, { useCallback, useMemo, useRef, useState } from 'react'
 import { githubWorkItemWriteKey } from '@/lib/github-work-item-writes'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -61,7 +61,12 @@ function GHEditSectionItem({
   const [duplicatePickerOpen, setDuplicatePickerOpen] = useState(false)
   const [duplicateSearch, setDuplicateSearch] = useState('')
   const [duplicateError, setDuplicateError] = useState<string | null>(null)
-  const [localAssignees, setLocalAssignees] = useState<string[]>(assignees)
+  const [assigneeEdit, setAssigneeEdit] = useState<{
+    value: string[]
+    input: string[]
+    edited: boolean
+    acceptedRefresh: number
+  } | null>(null)
   const editedAssigneesItemKeyRef = useRef<string | null>(null)
   const mountedRef = useMountedRef()
   const assigneesItemKey = `${item.repoId}\0${item.id}`
@@ -160,23 +165,31 @@ function GHEditSectionItem({
     onUse(item)
   }, [item, onOpenOrUse, onUse])
 
-  const lastAcceptedRefresh = useRef(acceptedRefresh)
   const assigneePending = isPending('assignees')
-  useEffect(() => {
-    if (lastAcceptedRefresh.current !== acceptedRefresh && !assigneePending) {
-      lastAcceptedRefresh.current = acceptedRefresh
-      editedAssigneesItemKeyRef.current = null
-      setLocalAssignees(assignees)
-    }
-  }, [acceptedRefresh, assigneePending, assignees])
-
-  // Sync resolved assignees unless an optimistic edit for this item is still in flight.
-  useEffect(() => {
-    if (editedAssigneesItemKeyRef.current === assigneesItemKey) {
-      return
-    }
-    setLocalAssignees(assignees)
-  }, [assigneesItemKey, assignees])
+  const staleEdit =
+    assigneeEdit &&
+    !assigneePending &&
+    (assigneeEdit.acceptedRefresh !== acceptedRefresh ||
+      (!assigneeEdit.edited && assigneeEdit.input !== assignees))
+  if (staleEdit) {
+    setAssigneeEdit(null)
+  } else if (assigneeEdit && assigneeEdit.input !== assignees) {
+    setAssigneeEdit({ ...assigneeEdit, input: assignees })
+  }
+  const localAssignees = !staleEdit && assigneeEdit ? assigneeEdit.value : assignees
+  const setLocalAssignees = useCallback(
+    (value: string[]) => {
+      const edited = editedAssigneesItemKeyRef.current === assigneesItemKey
+      setAssigneeEdit((current) => ({
+        value,
+        input: current?.input ?? assignees,
+        edited,
+        acceptedRefresh: current?.acceptedRefresh ?? acceptedRefresh
+      }))
+    },
+    [assignees, assigneesItemKey, acceptedRefresh]
+  )
+  const previousStateOrigin = gitHubTaskFamilyOrigin(item, 'state')
 
   const handleStateChange = useCallback(
     (newState: 'open' | 'closed', closeAction?: TaskPageGitHubCloseAction) => {
@@ -184,7 +197,7 @@ function GHEditSectionItem({
         newState,
         closeAction,
         localState,
-        previousOrigin: gitHubTaskFamilyOrigin(item, 'state'),
+        previousOrigin: previousStateOrigin,
         itemId: item.id,
         itemNumber: item.number,
         itemRepoId: item.repoId,
@@ -208,6 +221,7 @@ function GHEditSectionItem({
       item.number,
       item.repoId,
       localState,
+      previousStateOrigin,
       repoPath,
       sourceContext,
       projectOrigin,
@@ -322,6 +336,7 @@ function GHEditSectionItem({
       projectOrigin,
       issueRepo,
       localAssignees,
+      setLocalAssignees,
       patchProjectRowIfNeeded,
       run,
       onMutated

@@ -1,4 +1,4 @@
-import { createTaskPageGitHubMembershipProjection } from './task-page-github-work-item-mutation-composition'
+import type { TaskPageGitHubListProjectionInput } from './task-page-github-delivery-inputs'
 import { createGitHubTaskObservationIndex } from '@/lib/github-task-observation'
 import { githubTaskSourceKey } from '@/lib/github-task-target'
 import { shouldSkipLocalViewerQualifiers } from '@/hooks/useTaskPageGitHubWorkItemMutation'
@@ -15,7 +15,10 @@ import {
   getTaskPageRepoSourceContext
 } from '../task-page-source-context'
 import { sameOptionalGitHubOwnerRepo } from './task-page-github-review-model'
-export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetadataModel) {
+
+export function useTaskPageGitHubListProjection<T extends TaskPageGitHubListProjectionInput>(
+  model: T
+) {
   const {
     repos,
     fetchPRChecks,
@@ -33,6 +36,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     activeGithubTaskKind,
     githubWorkItemMutation
   } = model
+  const { membershipProjection } = githubWorkItemMutation
   // Why: defense-in-depth — keep stale cache rows from leaking across the issue/PR split tabs.
   const applyTypeFilter = useCallback(
     (items: GitHubWorkItem[]) => {
@@ -51,7 +55,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
     const ownerOf = createGitHubTaskObservationIndex(repos, (repo) =>
       getTaskPageRepoSourceContext(repo, 'github')
     )
-    const project = createTaskPageGitHubMembershipProjection({
+    const project = membershipProjection({
       query: model.appliedTaskQuery,
       queryKey: model.githubWorkItemMutationQueryKey,
       viewerLogin: model.githubViewerLogin
@@ -67,7 +71,7 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
       return projected.hide ? [] : [projected.item]
     })
   }, [
-    githubWorkItemMutation.registryVersion,
+    membershipProjection,
     typeFilteredCurrentPageItems,
     repos,
     model.appliedTaskQuery,
@@ -217,4 +221,6 @@ export function useTaskPageGitHubListProjection(model: TaskPageJiraCreationMetad
   nextModel.totalPages = totalPages
   return nextModel
 }
-export type TaskPageGitHubListProjectionModel = ReturnType<typeof useTaskPageGitHubListProjection>
+export type TaskPageGitHubListProjectionModel = ReturnType<
+  typeof useTaskPageGitHubListProjection<TaskPageJiraCreationMetadataModel>
+>

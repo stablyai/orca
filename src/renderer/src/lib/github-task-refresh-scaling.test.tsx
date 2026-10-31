@@ -445,7 +445,7 @@ it('bounds real ordinary cache reapplication after accepted publication when app
       items: networkItems,
       sources: { issues: { owner: 'o', repo: 'r' }, prs: null }
     })
-    const pagesRef = { current: [null, null, rows] as (GitHubWorkItem[] | null)[] }
+    const pagesRef: { current: (GitHubWorkItem[] | null)[] } = { current: [null, null, rows] }
     const mounted = { current: true }
     const phase: { scans: number; writes: number }[] = []
     const originalBatch = store.getState().patchWorkItems
@@ -485,7 +485,7 @@ it('bounds real ordinary cache reapplication after accepted publication when app
         quietRevalidateMountedRef: mounted,
         quietRevalidateOwnerRef: { current: {} },
         quietRevalidateScopeRef: { current: { queryKey: 'qregistered', generation: 1 } }
-      } as Parameters<typeof runTaskPageGitHubQuietRefresh>[0]) // SAFETY: actual quiet owner, transport, population actions and final setter.
+      }) // SAFETY: actual quiet owner, transport, population actions and final setter.
       await committed.promise
     })
     cleanup?.()

@@ -59,10 +59,8 @@ import { taskPageGitHubResumeCache } from '@/components/task-page/github/task-pa
 import { buildProjectWorkItem } from '@/components/github-project/project-work-item'
 
 import { runTaskPageGitHubQuietRefresh } from '@/components/task-page/github/task-page-github-quiet-refresh-run'
-import type { TaskPageGitHubQuietRefreshPreludeModel } from '@/components/task-page/github/use-task-page-github-quiet-refresh'
 
 import { runTaskPageGitHubLandingRefresh } from '@/components/task-page/github/task-page-github-landing-refresh-run'
-import type { TaskPageGitHubSearchPaginationModel } from '@/components/task-page/github/use-task-page-github-search-pagination'
 
 const actual = await vi.importActual<typeof translations>('@/i18n/i18n')
 
@@ -280,7 +278,7 @@ it('reconciles a real aggregate held leaf at landing final commit against a newe
     })
   }
   const noop = () => {}
-  const model = {
+  const model: Parameters<typeof runTaskPageGitHubLandingRefresh>[0] = {
     ...store.getState(),
     selectedRepos: [repo, otherRepo],
     taskSource: 'github',
@@ -323,7 +321,7 @@ it('reconciles a real aggregate held leaf at landing final commit against a newe
   }
   let cleanup: (() => void) | undefined
   await act(async () => {
-    cleanup = runTaskPageGitHubLandingRefresh(model as TaskPageGitHubSearchPaginationModel)
+    cleanup = runTaskPageGitHubLandingRefresh(model)
   }) // SAFETY: supplied fields cover this production runner's complete path.
   direct.mockResolvedValue(returned)
   await click()
@@ -376,7 +374,7 @@ it('reconciles a real aggregate held leaf at landing final commit against a newe
     quietRevalidateMountedRef: { current: true },
     quietRevalidateOwnerRef: { current: owner },
     quietRevalidateScopeRef: { current: { queryKey: 'q', generation: 1 } }
-  } as TaskPageGitHubQuietRefreshPreludeModel) // SAFETY: complete runner state with actual slice fetch actions.
+  }) // SAFETY: complete runner state with actual slice fetch actions.
   currentPageRef.current = 2
   await act(async () => authority.resolve({ items: [seed], sources: { issues: null, prs: null } }))
   direct.mockResolvedValue({ ...returned, item: { ...returned.item, title: 'Second accepted' } })
@@ -428,7 +426,7 @@ it('reconciles a real aggregate held leaf at landing final commit against a newe
       setPages,
       githubResumeContextKey: 'cancellation-control',
       taskRefreshNonce: 3
-    } as TaskPageGitHubSearchPaginationModel)
+    })
     // SAFETY: reuse the complete real landing model with this owner's actual React pages/setter.
     return (
       <TooltipProvider>
@@ -694,4 +692,81 @@ it('translates the real Refresh header tooltip and one failed DIRECT alert while
     }
     translate.mockRestore()
   }
+})
+
+it.each([
+  { label: 'absent', members: undefined },
+  { label: 'empty', members: [] }
+])(
+  'preserves legacy $label membership through the real issue body, Use and Bob toggle',
+  async ({ members }) => {
+    context.openedItem = { ...seed, assignees: [user('bob')] }
+    direct.mockResolvedValue({
+      ...oldDetails,
+      item: { ...seed, assignees: members },
+      assignees: ['bob']
+    })
+    await mount(true)
+    expect(container.querySelector('[data-assignees]')?.textContent).toBe(members ? '' : 'bob')
+    await click('Start workspace from issue')
+    expect(useItem.mock.calls.at(-1)?.[0].assignees).toEqual(members ?? [user('bob')])
+    await click('Add Bob')
+    expect(update.mock.calls.at(-1)?.[0].updates).toEqual(
+      members ? { addAssignees: ['bob'] } : { removeAssignees: ['bob'] }
+    )
+  }
+)
+
+it('delivers held DIRECT acceptance to the committed callback, never an abandoned render, and uses the next committed callback', async () => {
+  const a = vi.fn(),
+    b = vi.fn(),
+    suspended = vi.fn()
+  const never = Promise.withResolvers<void>()
+  function Suspend({ abandon }: { abandon: boolean }) {
+    if (abandon) {
+      suspended()
+      throw never.promise
+    }
+    return null
+  }
+  function Owner({ abandon, callback }: { abandon: boolean; callback: typeof a }) {
+    return (
+      <TooltipProvider>
+        <React.Suspense fallback={null}>
+          <GitHubItemDialog
+            workItem={seed}
+            repoPath={repo.path}
+            sourceContext={source}
+            onUse={useItem}
+            onClose={() => {}}
+            onTaskRefresh={callback}
+          />
+          <Suspend abandon={abandon} />
+        </React.Suspense>
+      </TooltipProvider>
+    )
+  }
+  await act(async () => context.root.render(<Owner abandon={false} callback={a} />))
+  const held = Promise.withResolvers<GitHubWorkItemDetails | null>()
+  direct.mockReturnValueOnce(held.promise)
+  await click()
+  await act(async () => {
+    React.startTransition(() => context.root.render(<Owner abandon callback={b} />))
+  })
+  expect(suspended).toHaveBeenCalled()
+  await act(async () => held.resolve(returned))
+  expect(a).toHaveBeenCalledTimes(1)
+  expect(b).not.toHaveBeenCalled()
+  await act(async () => context.root.render(<Owner abandon={false} callback={b} />))
+  direct.mockResolvedValueOnce(returned)
+  await click()
+  expect(a).toHaveBeenCalledTimes(1)
+  expect(b).toHaveBeenCalledTimes(1)
+  const latest = Promise.withResolvers<GitHubWorkItemDetails | null>()
+  direct.mockReturnValueOnce(latest.promise)
+  await click()
+  await act(async () => context.root.render(<Owner abandon={false} callback={a} />))
+  await act(async () => latest.resolve(returned))
+  expect(a).toHaveBeenCalledTimes(2)
+  expect(b).toHaveBeenCalledTimes(1)
 })

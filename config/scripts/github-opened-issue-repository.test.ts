@@ -1,3 +1,7 @@
+import {
+  captureGitHubTaskObservation,
+  observeGitHubWorkItem
+} from '../../src/renderer/src/lib/github-task-observation'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
@@ -35,7 +39,7 @@ vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
       selector({ patchWorkItem: vi.fn(), patchProjectRowContent: vi.fn() }),
-    { getState: () => ({ recordFeatureInteraction: vi.fn() }) }
+    { getState: () => ({ repos: [registeredRepo], recordFeatureInteraction: vi.fn() }) }
   )
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -301,8 +305,12 @@ it.each([
     await pending
     expect(fixture.apiUpdate).toHaveBeenCalledWith(expect.objectContaining({ ownerRepo: target }))
     const displayed = materializeTaskPageItemList({
-      networkItems: [listItem],
-      previousItems: [listItem],
+      networkItems: [
+        observeGitHubWorkItem(listItem, captureGitHubTaskObservation(registeredRepo, sourceContext))
+      ],
+      previousItems: [
+        observeGitHubWorkItem(listItem, captureGitHubTaskObservation(registeredRepo, sourceContext))
+      ],
       queryKey: 'current-upstream-list'
     })
     expect(displayed[0]?.state).toBe(listItem.url === openedItem.url ? 'closed' : 'open')

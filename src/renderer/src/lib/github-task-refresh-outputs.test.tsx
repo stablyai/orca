@@ -339,7 +339,7 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
       pagesRef.current = next
       return next
     })
-  const model = {
+  const model: Parameters<typeof runTaskPageGitHubQuietRefresh>[0] = {
     ...store.getState(),
     selectedRepos: [repo, remote],
     taskSource: 'github',
@@ -373,9 +373,7 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
   })
   let cleanup: (() => void) | undefined
   await act(async () => {
-    cleanup = runTaskPageGitHubQuietRefresh(
-      model as Parameters<typeof runTaskPageGitHubQuietRefresh>[0]
-    )
+    cleanup = runTaskPageGitHubQuietRefresh(model)
   }) // SAFETY: complete quiet owner input; network/store/projection are production.
   cleanup?.()
   expect(context.pages[2]![0]).toBe(foreignRow)
@@ -385,9 +383,7 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
     sources
   }))
   await act(async () => {
-    cleanup = runTaskPageGitHubQuietRefresh({ ...model, pages: context.pages } as Parameters<
-      typeof runTaskPageGitHubQuietRefresh
-    >[0])
+    cleanup = runTaskPageGitHubQuietRefresh({ ...model, pages: context.pages })
   }) // SAFETY: same complete owner input.
   cleanup?.()
   expect(
@@ -432,7 +428,7 @@ it('keeps independently exited page-N rows through real partial/quiet admission,
       setLoadingTargetPage: noop,
       setCountedTotalPages: noop,
       setProvenPageLimit: noop
-    } as Parameters<typeof runTaskPageGitHubLandingRefresh>[0]) // SAFETY: complete landing/numbered-restore input, real slice fetch and final setters.
+    }) // SAFETY: complete landing/numbered-restore input, real slice fetch and final setters.
   })
   cleanup?.()
   mounted.current = false
@@ -452,8 +448,6 @@ import { useTaskPageGitHubListProjection } from '@/components/task-page/github/u
 import { useTaskPageGitHubSearchPagination } from '@/components/task-page/github/use-task-page-github-search-pagination'
 
 import { getRepoBackedTaskEmptyState } from '@/components/task-page/task-page-empty-state'
-
-import type { TaskPageComposerActionsModel } from '@/components/task-page/use-task-page-composer-actions'
 
 it('renders actual single-page empty and multipage exits, and navigates cached and unloaded numbered pages without changing a foreign row', async () => {
   vi.spyOn(i18n, 'translate').mockImplementation(actualI18n.translate)
@@ -486,8 +480,10 @@ it('renders actual single-page empty and multipage exits, and navigates cached a
     const [loadingTargetPage, setLoadingTargetPage] = useState<number | null>(null)
     const pagesRef = useRef(pages),
       currentPageRef = useRef(currentPage)
-    pagesRef.current = pages
-    currentPageRef.current = currentPage
+    React.useLayoutEffect(() => {
+      pagesRef.current = pages
+      currentPageRef.current = currentPage
+    }, [pages, currentPage])
     const noop = () => {}
     // SAFETY: complete fields consumed by these unchanged projection/navigation/list owners; peripheral workspace actions are idle.
     const input = {
@@ -527,6 +523,16 @@ it('renders actual single-page empty and multipage exits, and navigates cached a
       setCountedTotalPages: noop,
       setProvenPageLimit: noop,
       taskResumeApplied: false,
+      taskSearchInput: '',
+      activeTaskPreset: null,
+      setAppliedTaskSearch: noop,
+      setTasksFiltering: noop,
+      githubSearchPersistReadyRef: useRef(false),
+      patchTaskPageWorkItemRows: noop,
+      openGitHubDetailPage: noop,
+      handleUseWorkItem: noop,
+      handleOpenOrUseGitHubWorkItem: noop,
+      handleRetryIssuesFetch: noop,
       perRepoSourceState: [],
       unresolvedSourceRepos: [],
       retryingSourceKeys: new Set(),
@@ -537,7 +543,19 @@ it('renders actual single-page empty and multipage exits, and navigates cached a
       pendingGithubScrollRestoreRef: useRef<number | null>(null),
       githubListRestoreWriteRef: useRef(null),
       taskListPositionRef: useRef(null)
-    } as TaskPageComposerActionsModel
+    } satisfies Parameters<typeof useTaskPageGitHubListProjection>[0] &
+      Parameters<typeof useTaskPageGitHubSearchPagination>[0] &
+      Omit<
+        Parameters<typeof TaskPageGitHubList>[0]['model'],
+        | 'filteredWorkItems'
+        | 'softHiddenVisibleCount'
+        | 'showGitHubTaskSkeletons'
+        | 'showPRManagementColumns'
+        | 'githubTaskGridClass'
+        | 'totalPages'
+        | 'handleLoadNextPage'
+        | 'ensurePRChecksLoaded'
+      >
     const projected = useTaskPageGitHubListProjection(input)
     const navigable = useTaskPageGitHubSearchPagination(projected)
     return (
@@ -698,7 +716,7 @@ it.each([false, true])(
             quietRevalidateScopeRef: {
               current: { queryKey: `${queryKey}registered`, generation: 1 }
             }
-          } as Parameters<typeof runTaskPageGitHubQuietRefresh>[0]),
+          }),
         [nonce]
       ) // SAFETY: actual transport/actions/setter and quiet-owner lifetime; only external timer delivery is controlled.
       return null

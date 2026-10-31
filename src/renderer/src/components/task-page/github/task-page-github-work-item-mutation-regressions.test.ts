@@ -1,3 +1,5 @@
+import { captureGitHubTaskObservation, observeGitHubWorkItem } from '@/lib/github-task-observation'
+import { repo, source } from '@/lib/github-task-refresh-data.test-fixture'
 import { createTaskPageGitHubMembershipProjection } from './task-page-github-work-item-mutation-composition'
 import { afterEach, describe, expect, it } from 'vitest'
 import type { ParsedTaskQuery } from '../../../../../shared/task-query'
@@ -377,4 +379,94 @@ describe('TaskPage GitHub mutation regressions', () => {
     expect(patches.findLast((patch) => patch.state !== undefined)?.state).toBe('closed')
     expect(patches.at(-1)?.assignees).toBeUndefined()
   })
+})
+
+it('uses the resolved observed PR owner for omitted and explicit pending family overlap through settlement', () => {
+  const observation = captureGitHubTaskObservation(repo, source)!
+  const other = { ...observation, key: `${observation.key}:other` }
+  const base = observeGitHubWorkItem(
+    item({ type: 'pr', id: 'pr:1', url: 'https://github.com/o/r/pull/1', reviewRequests: [] }),
+    observation
+  )
+  const start = (
+    intent: Parameters<typeof beginTaskPageGitHubWorkItemMutation>[0]['intent'],
+    override = observation
+  ) =>
+    beginTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent,
+      observation: override,
+      query: query(),
+      queryKey: 'q',
+      viewerLogin: 'me',
+      patchWorkItem: () => {}
+    })
+  const reviewers = start({ type: 'addReviewers', logins: ['alice', 'bob'], candidates: [] })
+  expect(
+    canStartTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'removeReviewers', logins: ['alice'] }
+    })
+  ).toBe(false)
+  expect(
+    canStartTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'removeReviewers', logins: ['cora'] }
+    })
+  ).toBe(true)
+  expect(
+    canStartTaskPageGitHubWorkItemMutation({
+      item: base,
+      observation: other,
+      intent: { type: 'removeReviewers', logins: ['alice'] }
+    })
+  ).toBe(true)
+  confirmTaskPageGitHubWorkItemMutation(reviewers.key, reviewers.generation, {
+    item: base,
+    query: query(),
+    queryKey: 'q',
+    viewerLogin: 'me'
+  })
+  expect(
+    canStartTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'removeReviewers', logins: ['alice'] }
+    })
+  ).toBe(true)
+  const automatic = start({ type: 'setAutoMerge', enabled: true }, other)
+  expect(canStartTaskPageGitHubWorkItemMutation({ item: base, intent: { type: 'merge' } })).toBe(
+    true
+  )
+  expect(
+    canStartTaskPageGitHubWorkItemMutation({
+      item: base,
+      observation: other,
+      intent: { type: 'merge' }
+    })
+  ).toBe(false)
+  confirmTaskPageGitHubWorkItemMutation(automatic.key, automatic.generation, {
+    item: base,
+    query: query(),
+    queryKey: 'q',
+    viewerLogin: 'me'
+  })
+  const own = start({ type: 'setAutoMerge', enabled: true })
+  expect(
+    canStartTaskPageGitHubWorkItemMutation({
+      item: base,
+      intent: { type: 'setAutoMerge', enabled: true }
+    })
+  ).toBe(false)
+  expect(canStartTaskPageGitHubWorkItemMutation({ item: base, intent: { type: 'merge' } })).toBe(
+    false
+  )
+  confirmTaskPageGitHubWorkItemMutation(own.key, own.generation, {
+    item: base,
+    query: query(),
+    queryKey: 'q',
+    viewerLogin: 'me'
+  })
+  expect(canStartTaskPageGitHubWorkItemMutation({ item: base, intent: { type: 'merge' } })).toBe(
+    true
+  )
 })

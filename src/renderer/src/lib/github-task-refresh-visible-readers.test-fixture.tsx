@@ -8,7 +8,6 @@ import { useStore } from 'zustand'
 
 import { TaskPageGitHubRows } from '@/components/task-page/github/Rows'
 import { useTaskPageGitHubListProjection } from '@/components/task-page/github/use-task-page-github-list-projection'
-import type { TaskPageComposerActionsModel } from '@/components/task-page/use-task-page-composer-actions'
 import { ProjectAssigneesCell } from '@/components/github-project/ProjectCellRepositoryEditors'
 import ProjectBoardCard from '@/components/github-project/ProjectBoardCard'
 
@@ -48,14 +47,29 @@ export function VisibleReaders({
     appliedTaskQuery: parseTaskQuery(query),
     githubWorkItemMutationQueryKey: queryKey,
     githubViewerLogin: viewerLogin,
-    githubWorkItemMutation: mutation
-  } as TaskPageComposerActionsModel
+    githubWorkItemMutation: mutation,
+    countedTotalPages: null,
+    provenPageLimit: null,
+    fetchPRChecks: store.getState().fetchPRChecks,
+    patchTaskPageWorkItemRows: () => {},
+    openGitHubDetailPage: () => {},
+    handleUseWorkItem: () => {},
+    handleOpenOrUseGitHubWorkItem: () => {}
+  } satisfies Parameters<typeof useTaskPageGitHubListProjection>[0] &
+    Omit<
+      Parameters<typeof TaskPageGitHubRows>[0]['model'],
+      | 'filteredWorkItems'
+      | 'showGitHubTaskSkeletons'
+      | 'showPRManagementColumns'
+      | 'githubTaskGridClass'
+      | 'ensurePRChecksLoaded'
+    >
   const projection = useTaskPageGitHubListProjection(model)
   return (
     <>
       <output data-visible-count>{projection.filteredWorkItems.length}</output>
       <section data-tasks>
-        <TaskPageGitHubRows model={model} />
+        <TaskPageGitHubRows model={projection} />
       </section>
       {Object.entries(projects).map(([cacheKey, entry]) =>
         entry.data?.rows.map((row) => (

@@ -5,7 +5,10 @@ import { shouldSkipLocalViewerQualifiers } from '@/lib/task-repo-source-context'
 export { shouldSkipLocalViewerQualifiers } from '@/lib/task-repo-source-context'
 import type { Repo } from '../../../shared/repo-types'
 
-import { createTaskPageGitHubAuthorityProjection } from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
+import {
+  createTaskPageGitHubAuthorityProjection,
+  createTaskPageGitHubMembershipProjection
+} from '@/components/task-page/github/task-page-github-work-item-mutation-composition'
 
 import {
   captureGitHubTaskObservation,
@@ -79,6 +82,9 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
     sourceContext?: TaskSourceContext | null
   }) => boolean
   registryVersion: number
+  membershipProjection: (
+    args: Parameters<typeof createTaskPageGitHubMembershipProjection>[0]
+  ) => ReturnType<typeof createTaskPageGitHubMembershipProjection>
 } {
   const patchWorkItem = args.patchWorkItem
   const resolveCurrentListInput = args.resolveCurrentListInput
@@ -142,7 +148,17 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
     []
   )
 
-  const projection = useMemo(() => createTaskPageGitHubAuthorityProjection(), [registryVersion])
+  const snapshot = useMemo(() => {
+    const projection = createTaskPageGitHubAuthorityProjection()
+    return {
+      registryVersion,
+      projection,
+      membershipProjection: (
+        input: Parameters<typeof createTaskPageGitHubMembershipProjection>[0]
+      ) => createTaskPageGitHubMembershipProjection(input, projection)
+    }
+  }, [registryVersion])
+  const projection = snapshot.projection
   const isIntentPending = useCallback(
     (input: {
       item: GitHubWorkItem
@@ -283,5 +299,10 @@ export function useTaskPageGitHubWorkItemMutation(args: UseTaskPageGitHubWorkIte
     },
     [execute, observationForItem]
   )
-  return { run, isIntentPending, registryVersion }
+  return {
+    run,
+    isIntentPending,
+    registryVersion: snapshot.registryVersion,
+    membershipProjection: snapshot.membershipProjection
+  }
 }

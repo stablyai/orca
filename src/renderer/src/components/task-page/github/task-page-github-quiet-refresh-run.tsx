@@ -1,10 +1,9 @@
+import type { TaskPageGitHubQuietRefreshInput } from './task-page-github-delivery-inputs'
 import { admitTaskPageGitHubListInputs } from './task-page-github-work-item-mutation-pages'
 
 import { beginGitHubTaskRead } from '@/store/github/request-coordination'
 
 import { taskPageGitHubAuthorityKeysForObservation } from './task-page-github-work-item-mutation-keys'
-
-import type { TaskPageGitHubQuietRefreshPreludeModel } from './use-task-page-github-quiet-refresh'
 
 import {
   getOrCreateQuietRevalidateState,
@@ -50,7 +49,7 @@ import { taskPageToGitHubApiPage } from '../../../../../shared/work-items'
 
 import { useAppStore } from '@/store/index'
 
-export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshPreludeModel) {
+export function runTaskPageGitHubQuietRefresh(model: TaskPageGitHubQuietRefreshInput) {
   const {
     fetchWorkItemsAcrossRepos,
     selectedRepos,

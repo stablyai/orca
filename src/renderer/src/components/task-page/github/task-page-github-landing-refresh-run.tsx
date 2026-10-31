@@ -1,3 +1,4 @@
+import type { TaskPageGitHubLandingRefreshInput } from './task-page-github-delivery-inputs'
 import {
   countTaskPageGitHubLandingPages,
   readTaskPageGitHubLandingCache
@@ -15,8 +16,6 @@ import {
 import { clearDispatchedTaskSourceRetries } from '../task-page-work-item-pagination'
 
 import { beginGitHubTaskRead, type GitHubTaskRead } from '@/store/github/request-coordination'
-
-import type { TaskPageGitHubSearchPaginationModel } from './use-task-page-github-search-pagination'
 
 import { stripRepoQualifiers } from '../../../../../shared/task-query'
 
@@ -44,7 +43,7 @@ import {
   reconcileTaskPagePagesAfterLandingRefresh
 } from '@/components/task-page/task-page-cache-selectors'
 import { taskPageGitHubLoadError } from './task-page-github-load-error'
-export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubSearchPaginationModel) {
+export function runTaskPageGitHubLandingRefresh(model: TaskPageGitHubLandingRefreshInput) {
   const {
     fetchWorkItemsAcrossRepos,
     getCachedWorkItems,

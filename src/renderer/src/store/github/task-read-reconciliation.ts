@@ -136,7 +136,7 @@ export function beginGitHubTaskRead(
       )
     },
     deliver(
-      items: readonly GitHubWorkItem[],
+      items: GitHubWorkItem[],
       destination: NonNullable<typeof publish>,
       evaluated = applyGitHubTaskReadProgram(
         items,
@@ -195,10 +195,7 @@ export function beginGitHubTaskRead(
         .flatMap((batch) => batch.patches)
         .filter((p): p is ReadPatch => p.target.current())
     },
-    apply(
-      items: readonly GitHubWorkItem[],
-      current: readonly GitHubWorkItem[] = []
-    ): GitHubWorkItem[] {
+    apply(items: GitHubWorkItem[], current: readonly GitHubWorkItem[] = []): GitHubWorkItem[] {
       return applyGitHubTaskReadProgram(
         items,
         current,

@@ -27,8 +27,16 @@ export function githubTaskContent(
     'title' | 'state' | 'labels' | 'assignees' | 'author' | 'authorAvatarUrl' | 'updatedAt'
   >
 ): Partial<GitHubWorkItem> {
-  const { title, state, labels, assignees = [], author, authorAvatarUrl, updatedAt } = item
-  return { title, state, labels, assignees, author, authorAvatarUrl, updatedAt }
+  const { title, state, labels, assignees, author, authorAvatarUrl, updatedAt } = item
+  return {
+    title,
+    state,
+    labels,
+    ...(assignees === undefined ? {} : { assignees }),
+    author,
+    authorAvatarUrl,
+    updatedAt
+  }
 }
 export function addressedGitHubIssueItem(
   item: GitHubWorkItem,

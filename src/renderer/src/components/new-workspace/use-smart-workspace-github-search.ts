@@ -18,7 +18,24 @@ export function useSmartWorkspaceGithubSearch({
   sourceQueryWithinLimit,
   shouldQueryGithub
 }: {
-  foundation: Foundation
+  foundation: Pick<
+    Foundation,
+    | 'crossRepoSwitchTarget'
+    | 'debouncedQuery'
+    | 'disabled'
+    | 'fetchWorkItems'
+    | 'fetchWorkItemsAcrossRepos'
+    | 'getCachedWorkItems'
+    | 'githubSourceContext'
+    | 'handledCrossRepoUrlRef'
+    | 'repoBackedSearchTargets'
+    | 'repoSlugCacheRef'
+    | 'repos'
+    | 'selectedRepo'
+    | 'setCrossRepoPrompt'
+    | 'setGithubItems'
+    | 'setGithubLoading'
+  > & { githubItems?: Foundation['githubItems'] }
   sourceQueryWithinLimit: boolean
   shouldQueryGithub: boolean
 }): void {

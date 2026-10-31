@@ -28,9 +28,7 @@ import type { GitHubProjectTable, GitHubProjectRow } from '../../../shared/githu
 
 import GitHubItemDialog from '@/components/github-item-dialog/open-dialog/github-item-dialog'
 
-import { TaskPageContent } from '@/components/task-page/Content'
-
-import type { TaskPageComposerActionsModel } from '@/components/task-page/use-task-page-composer-actions'
+import { TaskPageGitHubIssueDialog } from '@/components/task-page/task-page-github-issue-dialog'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
 
@@ -51,7 +49,6 @@ import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-cl
 
 import { useTaskPageGitHubWorkItemMutation } from '@/hooks/useTaskPageGitHubWorkItemMutation'
 import { useTaskPageGitHubMutationState } from '@/components/task-page/github/use-task-page-github-mutation-state'
-import type { TaskPageLinearCreationStateModel } from '@/components/task-page/linear/use-task-page-linear-creation-state'
 import type { ListComposition } from '@/components/task-page/github/task-page-github-work-item-mutation-registry'
 
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
@@ -203,8 +200,7 @@ export function HarnessView({
     pages = localPages
     harnessSetPages = setPages
   }, [mutation, localPages, setPages])
-  const model = {
-    taskSource: 'github',
+  const model: Parameters<typeof TaskPageGitHubIssueDialog>[0]['model'] = {
     dialogWorkItem: openedItem,
     dialogRepoPath: repo.path,
     dialogSourceContext: openedSource,
@@ -213,6 +209,7 @@ export function HarnessView({
     appliedTaskQuery: parseTaskQuery(query),
     githubWorkItemMutationQueryKey: queryKey,
     githubViewerLogin: viewerLogin,
+    handleDialogReviewRequestsChange: undefined,
     setDialogWorkItem: vi.fn(),
     handleUseWorkItem: useItem,
     closeTaskDetailPage: vi.fn(),
@@ -234,7 +231,7 @@ export function HarnessView({
           onClose={() => {}}
         />
       ) : (
-        <TaskPageContent model={model as TaskPageComposerActionsModel} />
+        <TaskPageGitHubIssueDialog model={model} />
       )}
     </TooltipProvider>
   ) // SAFETY: this fixture deliberately renders only the issue branch with its production accepted callback.
@@ -268,14 +265,16 @@ export function ProductionHarness(props: HarnessProps) {
     }
   }, [])
   const pagesRef = useRef(localPages)
-  pagesRef.current = localPages
+  useLayoutEffect(() => {
+    pagesRef.current = localPages
+  }, [localPages])
   const [viewer, setViewer] = useState<string | null>(null)
   const [, setQuiet] = useState(0)
   // SAFETY: the actual mutation owner reads only this declared slice; no lifecycle is mocked.
   const input = {
     selectedRepos,
-    taskSource: 'github',
-    githubMode: 'items',
+    taskSource: 'github' as const,
+    githubMode: 'items' as const,
     appliedTaskSearch: props.query ?? 'is:open',
     activeTaskPreset: null,
     setQuietRefreshNonce: setQuiet,
@@ -294,7 +293,7 @@ export function ProductionHarness(props: HarnessProps) {
       setPages((current) =>
         patchTaskPageGitHubWorkItemPages(current, item, patch, matches, listComposition)
       )
-  } as TaskPageLinearCreationStateModel
+  }
   const owner = useTaskPageGitHubMutationState(input)
   return (
     <HarnessView

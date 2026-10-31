@@ -94,7 +94,7 @@ export function canStartTaskPageGitHubWorkItemMutation(args: {
   if (isTaskPageGitHubMutationPendingKey(key)) {
     return false
   }
-  const pending = projection.pending(args.item, sourceScope, args.observation)
+  const pending = projection.pending(args.item, sourceScope, key.observation)
   if (built.kind === 'list') {
     const affectedLogins = new Set(built.listOp.logins)
     return !pending.some(

@@ -89,7 +89,11 @@ export function GitHubItemDialogIssueBody({
               onStateChange={onStateChange}
               onLabelsChange={onLabelsChange}
               onMutated={onMutated}
-              assignees={details ? (details.item.assignees ?? []).map((user) => user.login) : []}
+              assignees={
+                details
+                  ? (details.item.assignees?.map((user) => user.login) ?? details.assignees ?? [])
+                  : []
+              }
               onUse={onUse}
               onOpenOrUse={onOpenOrUse}
               attachedWorkspaceLabel={attachedWorkspaceLabel}

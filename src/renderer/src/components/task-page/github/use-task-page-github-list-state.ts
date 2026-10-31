@@ -67,7 +67,7 @@ export function useTaskPageGitHubListState(model: TaskPageProviderStateModel) {
     pageSize: githubPageSize
   })
   // Null slots permit direct numbered-page loading without reading intermediate pages.
-  const [pages, setPages] = useGitHubTaskDeliveryState<(GitHubWorkItem[] | null)[]>(() => {
+  const [pages, setPages] = useGitHubTaskDeliveryState<GitHubWorkItem[] | null>(() => {
     const trimmed = initialTaskQuery.trim()
     const merged: GitHubWorkItem[] = []
     for (const r of selectedRepos) {
