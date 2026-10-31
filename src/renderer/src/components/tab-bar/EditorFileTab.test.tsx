@@ -1,6 +1,9 @@
 import type * as ReactModule from 'react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '../../store/slices/editor'
+import type * as LucideModule from 'lucide-react'
+import type * as FileTypeIconsModule from '@/lib/file-type-icons'
+import type { ActivePluginIconTheme } from '@/store/plugin-icon-themes'
 
 const reactHookRuntime = vi.hoisted(() => ({
   states: [] as unknown[],
@@ -64,7 +67,9 @@ vi.mock('@dnd-kit/sortable', () => ({
   })
 }))
 
-vi.mock('lucide-react', () => ({
+// Why: the real file-type-icons module (theme lookup) loads every icon in its tables.
+vi.mock('lucide-react', async (importOriginal) => ({
+  ...(await importOriginal<typeof LucideModule>()),
   ArrowDown: function ArrowDown(props: Record<string, unknown>) {
     return { type: 'ArrowDown', props }
   },
@@ -118,6 +123,9 @@ vi.mock('lucide-react', () => ({
   },
   ShieldAlert: function ShieldAlert(props: Record<string, unknown>) {
     return { type: 'ShieldAlert', props }
+  },
+  Smartphone: function Smartphone(props: Record<string, unknown>) {
+    return { type: 'Smartphone', props }
   },
   X: function X(props: Record<string, unknown>) {
     return { type: 'X', props }
@@ -192,11 +200,22 @@ vi.mock('@/lib/rename-file', () => ({
   renameFileOnDisk: renameFileOnDiskMock
 }))
 
-vi.mock('@/lib/file-type-icons', () => ({
+const activeIconTheme = vi.hoisted((): { theme: ActivePluginIconTheme | null } => ({ theme: null }))
+
+vi.mock('@/lib/file-type-icons', async (importOriginal) => ({
   getFileTypeIcon: () =>
     function FileIcon(props: Record<string, unknown>) {
       return { type: 'FileIcon', props }
-    }
+    },
+  getPluginFileTypeIconIndex: (await importOriginal<typeof FileTypeIconsModule>())
+    .getPluginFileTypeIconIndex
+}))
+
+vi.mock('@/store/plugin-icon-themes', () => ({
+  PLUGIN_ICON_ATTRIBUTE: 'data-plugin-icon',
+  useActivePluginIconTheme: (
+    selector: (state: { theme: ActivePluginIconTheme | null }) => unknown
+  ) => selector({ theme: activeIconTheme.theme })
 }))
 
 vi.mock('@/store/selectors', () => ({
@@ -523,5 +542,47 @@ describe('EditorFileTab rename menu', () => {
       (await renderEditorFileTab(file, onActivate, onMakePermanent)).element
     )
     expect(findElementsByType(secondRender, 'input')).toHaveLength(0)
+  })
+})
+
+describe('EditorFileTab icon', () => {
+  const theme: ActivePluginIconTheme = {
+    icons: { file: 3 },
+    fileNames: {},
+    fileExtensions: { md: 7 }
+  }
+
+  beforeEach(() => {
+    activeIconTheme.theme = theme
+  })
+
+  afterEach(() => {
+    activeIconTheme.theme = null
+  })
+
+  function themedIconIndexes(node: unknown): unknown[] {
+    return findElementsByType(node, 'span')
+      .map((span) => span.props['data-plugin-icon'])
+      .filter((index) => index !== undefined)
+  }
+
+  it('uses the active plugin file-icon theme like the explorer (#36326)', async () => {
+    const expanded = expandNode((await renderEditorFileTab(baseFile())).element)
+    expect(themedIconIndexes(expanded)).toContain(7)
+    expect(findElementsByType(expanded, 'FileIcon')).toHaveLength(0)
+  })
+
+  it('uses built-in icons when no icon theme is active', async () => {
+    activeIconTheme.theme = null
+    const expanded = expandNode((await renderEditorFileTab(baseFile())).element)
+    expect(themedIconIndexes(expanded)).toHaveLength(0)
+    expect(findElementsByType(expanded, 'FileIcon').length).toBeGreaterThan(0)
+  })
+
+  it('keeps the phone icon on simulator tabs when an icon theme is active', async () => {
+    const simulator = baseFile({ filePath: 'Mobile Emulator', language: 'simulator' })
+    const expanded = expandNode((await renderEditorFileTab(simulator)).element)
+    expect(themedIconIndexes(expanded)).toHaveLength(0)
+    expect(findElementsByType(expanded, 'Smartphone').length).toBeGreaterThan(0)
   })
 })

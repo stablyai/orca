@@ -1,6 +1,7 @@
+import { dispatchRemoteInterruptListeners } from './server-remote-interrupt-dispatch'
 import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-interrupt-reconciliation'
 import {
-  markClaudeLeadTurnInterrupted,
+  markClaudeLeadTurnDone,
   clearClaudeAnsweredQuestionWait
 } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
@@ -64,6 +65,9 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
   )
 
   observeClaudeTerminalEvidence(paneKey: string, evidence: ClaudeTerminalEvidence): void {
+    if (evidence.kind === 'input') {
+      this.programStatusFacets.noteInput(paneKey)
+    }
     this.claudeTerminalInterrupts.observe(paneKey, evidence)
   }
 
@@ -139,10 +143,65 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (payload.mainAgent ? payload.mainAgent.state !== 'working' : childWorkEvidenced) {
       return false
     }
+    const inferred = this.settleTurnWithoutStop(existing, launchToken, 'cancellation')
+    if (!inferred) {
+      return false
+    }
+    if (
+      agentType === 'claude' &&
+      request.intent === 'ctrl-c' &&
+      existing.connectionId &&
+      existing.hostTurnRevision &&
+      existing.providerSession
+    ) {
+      const command: RemoteAgentInterruptDispatch = {
+        connectionId: existing.connectionId,
+        request: {
+          paneKey: existing.paneKey,
+          hostTurnRevision: existing.hostTurnRevision,
+          launchToken,
+          providerSession: existing.providerSession,
+          intent: 'ctrl-c'
+        }
+      }
+      dispatchRemoteInterruptListeners(this.remoteInterruptListeners, command)
+    }
+    console.debug('[agent-hooks] inferred interrupted agent status', {
+      paneKey: inferred.paneKey,
+      agentType,
+      intent: request.intent
+    })
+    return true
+  }
+
+  /** A prompt hook blocked Claude's prompt (its claimed run rested with no result), so no Stop follows. */
+  protected settleClaudePromptBlocked(row: EnrichedAgentHookEventPayload): void {
+    if (
+      this.programStatusFacets.claimedRunRestedWithoutResult(row.paneKey, 'claude') &&
+      // Relayed interrupts are adjudicated on the relay, which sees the input this host does not.
+      !row.connectionId &&
+      this.state.lastStatusByPaneKey.get(row.paneKey) === row &&
+      row.payload.agentType === 'claude' &&
+      row.payload.mainAgent?.state === 'working' &&
+      !row.restoredUnconfirmed &&
+      !row.providerSessionOnly
+    ) {
+      this.settleTurnWithoutStop(row, this.projectLaunchAuthority(row).launchToken)
+    }
+  }
+
+  /** End a working main-agent turn whose Stop hook never comes; cancellation marks an interrupt. */
+  private settleTurnWithoutStop(
+    existing: EnrichedAgentHookEventPayload,
+    launchToken: string | undefined,
+    outcome?: 'cancellation'
+  ): EnrichedAgentHookEventPayload | undefined {
+    const { payload } = existing
+    const agentType = payload.agentType
     // Update local producer records too, or later child hooks revive stale work; remote records belong to the relay.
     const local =
       agentType === 'claude' && !existing.connectionId
-        ? markClaudeLeadTurnInterrupted(this.state, existing.paneKey)
+        ? markClaudeLeadTurnDone(this.state, existing.paneKey, outcome)
         : undefined
     const relayed =
       agentType === 'claude' && existing.connectionId
@@ -150,7 +209,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         : undefined
     const state = local?.state ?? relayed?.stateName ?? 'done'
     const workingMode = local?.workingMode ?? relayed?.workingMode
-    const inferred = this.applyDerivedStatus(existing, {
+    return this.applyDerivedStatus(existing, {
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
@@ -176,50 +235,16 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         agentType,
         ...(payload.model ? { model: payload.model } : {}),
         // Older readers use interrupted on done rows; monitoring rows keep cancellation on mainAgent.outcome.
-        ...(state === 'done' ? { interrupted: true } : {}),
+        ...(state === 'done' && outcome ? { interrupted: true } : {}),
         // Idle children remain display state across inferred cancellation.
         ...(payload.subagents ? { subagents: payload.subagents } : {}),
         mainAgent: local?.mainAgent ?? {
           state: 'done',
-          outcome: 'cancellation',
+          ...(outcome ? { outcome } : {}),
           stateStartedAt: Date.now()
         }
       }
     })
-    if (!inferred) {
-      return false
-    }
-    if (
-      agentType === 'claude' &&
-      request.intent === 'ctrl-c' &&
-      existing.connectionId &&
-      existing.hostTurnRevision &&
-      existing.providerSession
-    ) {
-      const command: RemoteAgentInterruptDispatch = {
-        connectionId: existing.connectionId,
-        request: {
-          paneKey: existing.paneKey,
-          hostTurnRevision: existing.hostTurnRevision,
-          launchToken,
-          providerSession: existing.providerSession,
-          intent: 'ctrl-c'
-        }
-      }
-      for (const listener of this.remoteInterruptListeners) {
-        try {
-          listener(command)
-        } catch (error) {
-          console.warn('[agent-hooks] remote interrupt dispatch failed', error)
-        }
-      }
-    }
-    console.debug('[agent-hooks] inferred interrupted agent status', {
-      paneKey: inferred.paneKey,
-      agentType,
-      intent: request.intent
-    })
-    return true
   }
 
   /** Claude can omit the final hook after AskUserQuestion is answered or dismissed. */

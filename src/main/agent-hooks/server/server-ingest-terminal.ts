@@ -1,3 +1,4 @@
+import { preserveTerminalStatusContext } from './server-terminal-status-context'
 import { track } from '../../telemetry/client'
 import { MAX_PANE_KEY_LEN } from '../../../shared/agent-hook-listener/listener-limits'
 import { parseLegacyNumericPaneKey, parsePaneKey } from '../../../shared/stable-pane-id'
@@ -196,7 +197,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     // Record ordering before removal, which also marks a program turn boundary.
     const workingSince =
       event.fromProgramStatus === true
-        ? this.programStatusFacets.noteState(paneKey, event.payload.state, now)
+        ? this.programStatusFacets.noteState(paneKey, event.payload, now)
         : undefined
     if (event.removesProgramStatusRow === true) {
       this.hookSilenceRechecks.cancel(paneKey)
@@ -250,6 +251,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
         this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
       }
+      if (hookOwnsAgent && previous) {
+        this.settleClaudePromptBlocked(previous)
+      }
       return
     }
     const preserveActiveTurnStamp =
@@ -277,29 +281,11 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       )
       return
     }
-    // Terminal status carries no provider session; retain eligible cached identity without treating unknown as a mismatch (#10630).
-    const claimedAgentType =
-      event.payload.agentType && event.payload.agentType !== 'unknown'
-        ? event.payload.agentType
-        : undefined
-    // A live agent's turn after `done` keeps its session (OSC 7501 reports hookless slash commands); a new run or an exited agent's resume-only row does not. Launch seeds are not completed turns.
-    const preservedProviderSession =
-      previous?.providerSession &&
-      (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType) &&
-      (previous.payload.state !== 'done' ||
-        event.payload.state === 'done' ||
-        previous.observation?.origin === 'launch' ||
-        (!newRun && previous.providerSessionOnly !== true))
-        ? previous.providerSession
-        : undefined
-    // Without a new main-agent fact, preserve it only while the row's state and agent still match.
-    const preservedMainAgent =
-      event.payload.mainAgent ??
-      (previous?.payload.mainAgent &&
-      previous.payload.state === event.payload.state &&
-      (claimedAgentType === undefined || claimedAgentType === previous.payload.agentType)
-        ? previous.payload.mainAgent
-        : undefined)
+    const { preservedProviderSession, preservedMainAgent } = preserveTerminalStatusContext(
+      event.payload,
+      previous,
+      newRun
+    )
     // Terminal observations cannot establish prompt-sent telemetry.
     this.applyNormalizedStatus(
       {

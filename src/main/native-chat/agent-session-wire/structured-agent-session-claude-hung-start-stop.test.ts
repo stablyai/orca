@@ -44,7 +44,7 @@ let answerInitialize: () => void = () => {}
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-claude-hung-start-stop-'))
   resetHostTestOperationIds()
-  claude = fakeClaude({ initProof: 'none', replayUuid: null })
+  claude = fakeClaude({ initProof: 'none', replayUuid: null, holdInit: true })
   const openConnection = claude.openConnection
   adapter = new ClaudeStructuredSessionAdapter({
     resolveLaunch: async () => ({
@@ -67,13 +67,8 @@ beforeEach(async () => {
     onDispatchSettledLate: (settlement) => void host.settleLateDispatch(settlement),
     openConnection: async (...args) => {
       const connection = await openConnection(...args)
-      const fake = claude.connections.at(-1)
-      connection.initializationResult = () => {
-        fake?.calls.push({ subtype: 'initialize' })
-        return new Promise((resolve) => {
-          answerInitialize = () => resolve({ models: [] })
-        })
-      }
+      const fake = claude.connections.find((candidate) => candidate === connection)
+      answerInitialize = () => fake?.initialization.resolve({ models: [] })
       return connection
     },
     readProcessStartTime: async () => 1_700_000_000_000,
@@ -100,6 +95,8 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  host.stopDelivery()
+  claude.dispose()
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
   await closeTestJournalHostDatabases()
