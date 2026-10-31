@@ -66,7 +66,7 @@ export function useMobileImageAttachment({
           terminal: activeHandle,
           deviceToken: deviceTokenRef.current,
           getConnectionId: getActiveWorktreeConnectionId,
-          pickImage: picker.pickImage,
+          pickImages: picker.pickImages,
           onUploadStart: () => setIsAttaching(true),
           beforeTerminalSend
         })
