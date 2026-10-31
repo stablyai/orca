@@ -59,8 +59,9 @@ export async function activateAiVaultStructuredSession(
   target?: RuntimeClientTarget,
   onFailure?: () => void
 ): Promise<boolean> {
-  await activateAiVaultStructuredSessionVerified(session, deps, target, onFailure)
-  return true
+  return (
+    (await activateAiVaultStructuredSessionVerified(session, deps, target, onFailure)) !== 'none'
+  )
 }
 
 /** `activated` only when the chat's tab is really active; `reported` means the click's toast said why
