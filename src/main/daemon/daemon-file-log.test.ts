@@ -99,5 +99,3 @@ describe('createDaemonFileLog', () => {
     expect(events).toEqual(['startup', 'daemon-log-closed'])
   })
 })
-
-describe('createNoopDaemonFileLog', () => {})
