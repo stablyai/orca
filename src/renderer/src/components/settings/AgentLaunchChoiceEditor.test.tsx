@@ -1,5 +1,5 @@
 // @vitest-environment happy-dom
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react'
 import { afterEach, expect, it, vi } from 'vitest'
 import userEvent from '@testing-library/user-event'
@@ -38,6 +38,11 @@ function Fixture({
   agent?: 'claude' | 'codex'
 }) {
   const [settings, setSettings] = useState(saved?.value ?? initial)
+  useEffect(() => {
+    if (saved) {
+      saved.value = settings
+    }
+  }, [saved, settings])
   const projected = projectAgentLaunchSettings(settings)
   return (
     <TooltipProvider>
@@ -64,9 +69,6 @@ function Fixture({
                 { type: 'launch-choices', agent, patch, userArgs },
                 'darwin'
               )
-            }
-            if (saved) {
-              saved.value = next
             }
             return next
           })
