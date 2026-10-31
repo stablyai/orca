@@ -667,6 +667,16 @@ describe('useTabAgent', () => {
     expect(clearTabLaunchAgent).toHaveBeenCalledWith('tab-1')
   })
 
+  it('does not clear launch identity from a task title that only mentions its own agent name', async () => {
+    // Why: no hook/process evidence anywhere else, so a mere name mention must not arm exit-clearing.
+    const root = await renderHookProbe(baseTab)
+    await rerenderHookProbe(root, { ...baseTab, title: '⠋ Fix the codex plugin launcher' })
+    await rerenderHookProbe(root, { ...baseTab, title: 'zsh' })
+
+    expect(latestHookAgent).toBe('codex')
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
+  })
+
   it('uses completed local hook status as launch lifecycle evidence after remount', async () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     useAppStore.setState({

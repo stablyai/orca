@@ -10,6 +10,8 @@ Terminals are just tabs — see [Tabs, panes & split layouts](/docs/model/tabs-p
 
 Agent terminal tabs show the agent identity plus live state: working, waiting for input, completed, or completed-but-unread. For Claude and Codex, tab titles can also show the **AI Vault conversation name** (custom title / thread name) when Orca can map the pane to that session — manual renames still win.
 
+A task title that mentions another agent does not change the pane's known agent identity. Only a title presenting that agent's identity can take ownership after newer activity. Native and wrapped agent titles use the same shared identity classifier as the sidebar.
+
 ## Resource Manager terminals
 
 The **Resources** view works in both the desktop app and the paired web client while its page is visible. The separate **PTYs** view manages local desktop terminals; a web client cannot end those terminals.
