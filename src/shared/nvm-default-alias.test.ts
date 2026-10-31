@@ -1,17 +1,24 @@
-import { chmodSync, mkdirSync, mkdtempSync, writeFileSync } from 'node:fs'
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, symlinkSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it } from 'vitest'
-import { getVersionManagerBinPaths, resolveCliCommand } from './node-cli-command-resolution'
+import {
+  getVersionManagerBinPaths,
+  installedCliCandidates,
+  resolveCliCommand
+} from './node-cli-command-resolution'
+import { runCliFsReadsAsync } from './cli-fs-reads'
 
 /** Default Node seeds fallback when login probing times out or omits nvm. Newest-first hid CLIs installed under the default (#10932). */
-function makeNvmHome(options: {
-  versions: string[]
-  defaultAlias?: string
-  aliases?: Record<string, string>
-  cliIn?: string
-}): string {
-  const home = mkdtempSync(join(tmpdir(), 'orca-nvm-'))
+function makeNvmHome(
+  options: {
+    versions: string[]
+    defaultAlias?: string
+    aliases?: Record<string, string>
+    cliIn?: string
+  },
+  home = mkdtempSync(join(tmpdir(), 'orca-nvm-'))
+): string {
   for (const version of options.versions) {
     const bin = join(home, '.nvm', 'versions', 'node', version, 'bin')
     mkdirSync(bin, { recursive: true })
@@ -66,14 +73,63 @@ describe('nvm default alias decides the seeded runtime', () => {
   // Real lts/* aliases cannot be materialized on Win32 (* is reserved). Keep faithful names and skip there; the resolver test targets darwin.
   it.skipIf(process.platform === 'win32')(
     'follows an alias chain (default -> lts/* -> lts/krypton -> version)',
-    () => {
-      const home = makeNvmHome({
+    async () => {
+      const parent = makeNvmHome({
         versions: ['v22.9.0', 'v26.7.0'],
-        defaultAlias: 'lts/*',
-        aliases: { 'lts/*': 'lts/krypton', 'lts/krypton': 'v22.9.0' },
-        cliIn: 'v22.9.0'
+        defaultAlias: 'v26.7.0'
       })
-      expect(seededNvmDir(home)).toBe(join(home, '.nvm', 'versions', 'node', 'v22.9.0', 'bin'))
+      try {
+        const home = makeNvmHome(
+          {
+            versions: ['v22.9.0', 'v26.7.0'],
+            defaultAlias: 'lts/*',
+            aliases: { 'lts/*': 'lts/krypton', 'lts/krypton': 'v22.9.0' },
+            cliIn: 'v22.9.0'
+          },
+          join(parent, 'actual')
+        )
+        mkdirSync(join(home, 'nested'))
+        symlinkSync(join(home, 'nested'), join(parent, 'link'))
+        const literalHome = `${parent}/link/..`
+        for (const root of [parent, home]) {
+          for (const version of ['v22.9.0', 'v26.7.0']) {
+            for (const command of ['codex', 'claude']) {
+              const program = join(root, '.nvm', 'versions', 'node', version, 'bin', command)
+              writeFileSync(program, '#!/bin/sh\n')
+              chmodSync(program, 0o755)
+            }
+          }
+        }
+        const defaultBin = join(home, '.nvm', 'versions', 'node', 'v22.9.0', 'bin')
+        const decoyBin = join(parent, '.nvm', 'versions', 'node', 'v26.7.0', 'bin')
+        expect(seededNvmDir(home)).toBe(defaultBin)
+        expect(seededNvmDir(parent)).toBe(decoyBin)
+        expect(seededNvmDir(literalHome)).toBe(decoyBin)
+        for (const command of ['codex', 'claude']) {
+          const canonical = await runCliFsReadsAsync(
+            installedCliCandidates(command, 'darwin', home, () => true)
+          )
+          expect(canonical.slice(0, 2)).toEqual([
+            `${home}/.nvm/versions/node/v22.9.0/bin/${command}`,
+            `${home}/.nvm/versions/node/v26.7.0/bin/${command}`
+          ])
+          expect(
+            resolveCliCommand(command, { platform: 'darwin', pathEnv: '', homePath: home })
+          ).toBe(`${defaultBin}/${command}`)
+          const literal = await runCliFsReadsAsync(
+            installedCliCandidates(command, 'darwin', literalHome, () => true)
+          )
+          expect(literal.slice(0, 2)).toEqual([
+            `${literalHome}/.nvm/versions/node/v22.9.0/bin/${command}`,
+            `${literalHome}/.nvm/versions/node/v26.7.0/bin/${command}`
+          ])
+          expect(
+            resolveCliCommand(command, { platform: 'darwin', pathEnv: '', homePath: literalHome })
+          ).toBe(`${decoyBin}/${command}`)
+        }
+      } finally {
+        rmSync(parent, { recursive: true, force: true })
+      }
     }
   )
 
