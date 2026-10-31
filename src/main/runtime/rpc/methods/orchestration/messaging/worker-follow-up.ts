@@ -1,4 +1,7 @@
-import { selectWorkerFollowUpPlan } from '../../../../orchestration/db/dispatch-context/worker-follow-up-plan'
+import {
+  planSemanticWorkerFollowUp,
+  workerFollowUpArguments
+} from '../worker/worker-follow-up-admission'
 /** A message to a worker that finished becomes its next Task: worker-start run for the sender, on that same worker.
  *  Open workers take it in place, closed ones reopen in their saved conversation, and agents that keep none start fresh. */
 
@@ -42,14 +45,14 @@ export function planWorkerFollowUp(
   dispatchId: string,
   type: MessageType
 ): WorkerFollowUpPlan | undefined {
-  const plan = selectWorkerFollowUpPlan(
+  return planSemanticWorkerFollowUp(
+    dispatchId,
     db.getDispatchContextById(dispatchId),
     () => resolveWorkerLineage(db, dispatchId),
     type,
     (id) => Boolean(db.getFederatedDispatch(id)),
     (id) => Boolean(db.getWorkerDispatch(id))
   )
-  return plan?.kind === 'start' ? { ...plan, addressed: dispatchId } : plan
 }
 
 export async function startWorkerFollowUp(args: {
@@ -80,9 +83,7 @@ export async function startWorkerFollowUp(args: {
       // The send's own receipt is already pending; the follow-up only names what it accepted.
       { ...ctx, orchestrationMutation: undefined },
       {
-        of: latest.id,
-        addressed: args.plan.addressed,
-        ...(resource ? { custodian: resource.owner_dispatch_id } : {}),
+        ...workerFollowUpArguments(args.plan),
         place: async (assertCreatorCurrent) => {
           const placement = await chooseWorkerFollowUpPlacement(ctx.runtime, db, latest, resource, {
             admit: assertCreatorCurrent,
