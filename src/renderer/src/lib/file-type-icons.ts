@@ -97,3 +97,21 @@ export function getPluginFileTypeIconIndex(
     ownIconIndex(theme.icons, 'file')
   )
 }
+
+/** The active plugin icon theme's icon index for a folder path's last segment: its expanded
+ *  icon when open, its name icon, then the generic folder slot. */
+export function getPluginFolderIconIndex(
+  theme: ActivePluginIconTheme | null,
+  folderPath: string | undefined,
+  open: boolean
+): number | null {
+  if (!theme) {
+    return null
+  }
+  const name = getFilename(folderPath).toLowerCase()
+  const named = name
+    ? ((open ? ownIconIndex(theme.folderNamesExpanded, name) : null) ??
+      ownIconIndex(theme.folderNames, name))
+    : null
+  return named ?? ownIconIndex(theme.icons, open ? 'folder-open' : 'folder')
+}

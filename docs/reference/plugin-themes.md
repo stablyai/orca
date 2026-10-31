@@ -82,3 +82,48 @@ later) in the same shape as a VS Code theme's, so most VS Code theme lists paste
 Colors are hex. A palette needs `background`, `foreground` and at least one ANSI color. When a
 user selects it, Orca saves a copy of the palette in settings so hosts, headless servers and
 relays answer terminal color queries without the plugin loaded.
+
+## Icon themes
+
+`contributes.iconThemes` points at a JSON file that maps files and folders to SVG icons. Paths
+are relative to the plugin root. The map names match VS Code's file icon themes, so you can
+port a Material-style theme by copying the entries you want. Large themes such as Material
+have far more than the 512-mapping limit, so pick the most common names.
+
+```json
+{
+  "schemaVersion": 1,
+  "icons": {
+    "file": "icons/file.svg",
+    "folder": "icons/folder.svg",
+    "folder-open": "icons/folder-open.svg"
+  },
+  "fileNames": { "readme.md": "icons/readme.svg" },
+  "fileExtensions": { "ts": "icons/typescript.svg", "d.ts": "icons/typescript-def.svg" },
+  "folderNames": { "src": "icons/folder-src.svg", "docs": "icons/folder-docs.svg" },
+  "folderNamesExpanded": {
+    "src": "icons/folder-src-open.svg",
+    "docs": "icons/folder-docs-open.svg"
+  }
+}
+```
+
+- `icons` holds the generic `file`, `folder` and `folder-open` icons.
+- For a file, Orca checks `fileNames`, then the longest matching `fileExtensions` key (so
+  `d.ts` beats `ts`), then `icons.file`.
+- For a folder, Orca checks `folderNames` against the folder's own name, not its path. An open
+  folder checks `folderNamesExpanded` first. If that has no entry, it falls back to the
+  folder's `folderNames` icon and then to `folder-open`. `folderNames` and
+  `folderNamesExpanded` need Orca releases after 1.4.245. Older releases ignore them and show
+  the generic folder icons.
+- Keys are case-insensitive. Two keys that differ only in case are refused. Name keys can't
+  contain `/` or `\`.
+- These icons appear in the file explorer, Source Control, diff and conflict file trees, tabs,
+  Quick Open, search results and the remote folder browser.
+- The theme file can be at most 64 KiB. A theme can have at most 512 mappings across all maps
+  and 512 distinct SVGs. Each SVG can be at most 64 KiB, and all of a theme's SVGs together at
+  most 4 MiB. An SVG painted only with `currentColor` takes the row's text color. Any other SVG
+  keeps its own colors.
+- `rootFolder`, `rootFolderNames`, `languageIds` and VS Code's font icons aren't supported.
+  Orca's explorer has no workspace-root row for a root icon. `pnpm validate:plugin` flags these
+  keys, and Orca skips them at runtime.

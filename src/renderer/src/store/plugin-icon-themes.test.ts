@@ -22,7 +22,9 @@ it('loads the selected icon theme and drops it when its plugin goes away', async
     ],
     icons: { folder: 0, file: 1 },
     fileNames: {},
-    fileExtensions: {}
+    fileExtensions: {},
+    folderNames: {},
+    folderNamesExpanded: {}
   }
   let listed = [metadata]
   const listeners: ((event: PluginChangeEvent) => void)[] = []
@@ -45,7 +47,9 @@ it('loads the selected icon theme and drops it when its plugin goes away', async
     expect(store.useActivePluginIconTheme.getState().theme).toEqual({
       icons: { folder: 0 },
       fileNames: {},
-      fileExtensions: {}
+      fileExtensions: {},
+      folderNames: {},
+      folderNamesExpanded: {}
     })
   )
 
@@ -68,7 +72,9 @@ it('drops the previous icons when the next selected theme fails to load', async 
               svgs: ['<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/></svg>'],
               icons: { file: 0 },
               fileNames: {},
-              fileExtensions: {}
+              fileExtensions: {},
+              folderNames: {},
+              folderNamesExpanded: {}
             }
           : null
       ),
@@ -97,7 +103,9 @@ it('reloads the active icon theme when a same-metadata update changes its conten
     svgs: ['<svg xmlns="http://www.w3.org/2000/svg"><path fill="currentColor"/></svg>'],
     icons: { file: 0 },
     fileNames: {},
-    fileExtensions: {}
+    fileExtensions: {},
+    folderNames: {},
+    folderNamesExpanded: {}
   }))
   vi.stubGlobal('api', {
     plugins: {
