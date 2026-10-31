@@ -6,9 +6,62 @@ import {
   required
 } from './push-occurrence-authority.test-fixture.js'
 import { pushDestination } from './push-occurrence-admission.js'
-import { integer, text, ownerCleanup, record } from './push-owner-integration.test-fixture.js'
+import { text, ownerCleanup, record } from './push-owner-integration.test-fixture.js'
 
 afterEach(cleanupDurablePushFixtures)
+
+function storedNonnegativeInteger(value: unknown): number {
+  const decoded =
+    typeof value === 'string' && /^(?:0|[1-9][0-9]*)$/.exec(value)?.[0] === value
+      ? Number(value)
+      : value
+  if (typeof decoded !== 'number' || !Number.isSafeInteger(decoded) || decoded < 0) {
+    throw new Error('Expected stored nonnegative safe integer')
+  }
+  return decoded
+}
+
+it('reads equivalent stored queue integers without certifying malformed or unsafe values', () => {
+  for (const value of [0, 1, 1001000, 1300000, Number.MAX_SAFE_INTEGER]) {
+    expect(storedNonnegativeInteger(value)).toBe(value)
+    expect(storedNonnegativeInteger(String(value))).toBe(value)
+  }
+  for (const value of [
+    null,
+    undefined,
+    '',
+    ' ',
+    '\t',
+    '\n',
+    '0\n',
+    '1\r\n',
+    ' 1',
+    '1 ',
+    '-0',
+    '+0',
+    '-1',
+    '00',
+    '01',
+    '1.0',
+    '1e3',
+    '1x',
+    true,
+    false,
+    {},
+    [],
+    NaN,
+    Infinity,
+    -Infinity,
+    -1,
+    0.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    '9007199254740992'
+  ]) {
+    expect(() => storedNonnegativeInteger(value)).toThrow(
+      'Expected stored nonnegative safe integer'
+    )
+  }
+})
 
 async function drainPopulations(
   f: Awaited<ReturnType<typeof authorityFixture>>,
@@ -135,20 +188,24 @@ async function drainPopulations(
                 entry.result === 'deferred'
             )
           ).toBe(true)
-          expect(saved).toEqual(
-            expect.objectContaining({
-              batch_id: event.queued.id,
-              due_at: Math.min(event.clock + 1000, event.queued.expiresAt - 1),
-              lease_token: null,
-              lease_until: 0,
-              attempts: event.queued.attempts - 1
-            })
-          )
-          expect(integer(saved.expires_at)).toBe(
-            integer(required(original.get(event.queued.id)).expires_at)
+          expect({
+            batch_id: saved.batch_id,
+            due_at: storedNonnegativeInteger(saved.due_at),
+            lease_token: saved.lease_token,
+            lease_until: storedNonnegativeInteger(saved.lease_until),
+            attempts: storedNonnegativeInteger(saved.attempts)
+          }).toEqual({
+            batch_id: event.queued.id,
+            due_at: Math.min(event.clock + 1000, event.queued.expiresAt - 1),
+            lease_token: null,
+            lease_until: 0,
+            attempts: event.queued.attempts - 1
+          })
+          expect(storedNonnegativeInteger(saved.expires_at)).toBe(
+            storedNonnegativeInteger(required(original.get(event.queued.id)).expires_at)
           )
           expect(event.completedAt).toBe(event.clock)
-          expect(integer(saved.due_at)).toBeGreaterThan(f.clock())
+          expect(storedNonnegativeInteger(saved.due_at)).toBeGreaterThan(f.clock())
           expect(current.get(event.queued.id)).toEqual(saved)
           if (!progressed.has(event.queued.id)) {
             progressed.add(event.queued.id)
@@ -159,11 +216,11 @@ async function drainPopulations(
           expect(original.has(text(row.batch_id))).toBe(true)
           expect(row.state).toBe('pending')
           expect(row.lease_token).toBeNull()
-          expect(integer(row.lease_until)).toBe(0)
-          expect(integer(row.expires_at)).toBe(
-            integer(required(original.get(text(row.batch_id))).expires_at)
+          expect(storedNonnegativeInteger(row.lease_until)).toBe(0)
+          expect(storedNonnegativeInteger(row.expires_at)).toBe(
+            storedNonnegativeInteger(required(original.get(text(row.batch_id))).expires_at)
           )
-          expect(integer(row.expires_at)).toBeGreaterThan(f.clock())
+          expect(storedNonnegativeInteger(row.expires_at)).toBeGreaterThan(f.clock())
         }
         if (residual.length === 0) {
           expect(holdRoute && !controlledPark).toBe(false)
@@ -171,7 +228,7 @@ async function drainPopulations(
           return
         }
         expect(progress).toBeGreaterThan(0)
-        if (residual.every((row) => integer(row.due_at) > f.clock())) {
+        if (residual.every((row) => storedNonnegativeInteger(row.due_at) > f.clock())) {
           break
         }
       }
@@ -211,11 +268,13 @@ async function drainPopulations(
       } else {
         expect(terminal.size).toBeGreaterThan(completedBefore)
       }
-      const wake = Math.min(...residual.map((row) => integer(row.due_at)))
+      const wake = Math.min(...residual.map((row) => storedNonnegativeInteger(row.due_at)))
       expect(wake).toBeGreaterThan(f.clock())
       expect(wake).toBeLessThan(
         Math.min(
-          ...residual.map((row) => integer(required(original.get(text(row.batch_id))).expires_at))
+          ...residual.map((row) =>
+            storedNonnegativeInteger(required(original.get(text(row.batch_id))).expires_at)
+          )
         )
       )
       f.advance(wake - f.clock())
