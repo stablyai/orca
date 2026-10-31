@@ -107,4 +107,17 @@ describe('orca repo add --kind', () => {
     expect(printed).toContain('--kind must be git or folder')
     expect(process.exitCode).toBe(1)
   })
+
+  it('refuses an explicitly empty --kind instead of defaulting to git', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
+    const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+
+    await main(['repo', 'add', '--path', '/tmp/repo-tree', '--kind=', '--json'], '/tmp')
+
+    expect(callMock).not.toHaveBeenCalled()
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain('Missing value for --kind')
+    expect(process.exitCode).toBe(1)
+  })
 })
