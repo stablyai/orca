@@ -32,6 +32,8 @@ const EXPECTED_LANES: Record<TuiAgent, LaunchedAgentReadinessLane> = {
   opencode2: 'composer-marker',
   // mimo-code shares OpenCode's signal by parity only; no mimo boot has been recorded.
   'mimo-code': 'tui-idle',
+  // gajae-code uses the same paste signal and has no captured boot.
+  'gajae-code': 'tui-idle',
   // Grok's inline mode never fires its marker; its marker is not proven at the box for every mode.
   grok: 'tui-idle',
   dsh: 'tui-idle',

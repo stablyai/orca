@@ -6,6 +6,14 @@ import {
   isExpectedAgentProcess
 } from '../../../shared/agent-process-recognition'
 import { isShellProcess } from '../../../shared/shell-process-detection'
+import { TUI_AGENT_CONFIG } from '../../../shared/tui-agent-config'
+
+function aliasesForExpectedProcess(expectedProcess: string): readonly string[] {
+  const config = Object.values(TUI_AGENT_CONFIG).find(
+    (entry) => entry.expectedProcess === expectedProcess || entry.detectCmd === expectedProcess
+  )
+  return config?.detectCmdAliases ?? []
+}
 
 export async function sendFollowupPromptWhenAgentReady(args: {
   ptyId: string
@@ -56,7 +64,11 @@ async function agentHoldsPty(
     const foreground = process.foregroundProcess?.toLowerCase() ?? ''
     // Wrapped agents may expose only python/node comm locally or over SSH; require a known wrapper plus a live non-shell child.
     return (
-      isExpectedAgentProcess(foreground, expectedProcess) ||
+      isExpectedAgentProcess(
+        foreground,
+        expectedProcess,
+        aliasesForExpectedProcess(expectedProcess)
+      ) ||
       (acceptWrapper &&
         isAgentForegroundWrapperProcess(foreground) &&
         !isShellProcess(foreground) &&

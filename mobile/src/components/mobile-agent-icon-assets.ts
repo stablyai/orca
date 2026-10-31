@@ -10,6 +10,7 @@ export const MOBILE_AGENT_ICON_ASSETS: Partial<Record<TuiAgent, ImageSourcePropT
   opencode: require('../../../src/shared/agent-icons/opencode.png'),
   opencode2: require('../../../src/shared/agent-icons/opencode.png'),
   'mimo-code': require('../../../src/shared/agent-icons/mimo-code.png'),
+  'gajae-code': require('../../../src/shared/agent-icons/gajae-code.png'),
   ante: require('../../../src/shared/agent-icons/ante.png'),
   trae: require('../../../src/shared/agent-icons/trae.png'),
   'prime-agent': require('../../../src/shared/agent-icons/prime-agent.png'),

@@ -6,7 +6,7 @@ import {
   buildShellCommandFromArgv,
   planAgentCliArgsSuffix
 } from './tui-agent-startup'
-import { TUI_AGENT_CONFIG } from './tui-agent-config'
+import { getTuiAgentDetectCommands, TUI_AGENT_CONFIG } from './tui-agent-config'
 import { normalizeTuiAgentArgsRecord, resolveTuiAgentLaunchArgs } from './tui-agent-launch-defaults'
 import { tokenizeStartupCommand } from './tui-agent-startup-shell'
 import {
@@ -631,7 +631,7 @@ describe('tui agent startup plans', () => {
     expect(plan?.launchCommand).toBe("opencode --prompt 'fix it'")
   })
 
-  it('keeps opencode and mimo-code on the cursor-gated paste draft route', () => {
+  it('keeps opencode, mimo-code, and gajae-code on the cursor-gated paste draft route', () => {
     expect(TUI_AGENT_CONFIG.opencode.draftPasteReadySignal).toBe(
       'render-cursor-after-bracketed-paste'
     )
@@ -642,6 +642,11 @@ describe('tui agent startup plans', () => {
     )
     expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptFlag).toBeUndefined()
     expect(TUI_AGENT_CONFIG['mimo-code'].draftPromptEnvVar).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPasteReadySignal).toBe(
+      'render-cursor-after-bracketed-paste'
+    )
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPromptFlag).toBeUndefined()
+    expect(TUI_AGENT_CONFIG['gajae-code'].draftPromptEnvVar).toBeUndefined()
     // Without native draft plans, these agents must use cursor-gated paste readiness.
     expect(
       buildAgentDraftLaunchPlan({
@@ -659,6 +664,43 @@ describe('tui agent startup plans', () => {
         platform: 'darwin'
       })
     ).toBeNull()
+    expect(
+      buildAgentDraftLaunchPlan({
+        agent: 'gajae-code',
+        draft: 'x',
+        cmdOverrides: {},
+        platform: 'darwin'
+      })
+    ).toBeNull()
+  })
+
+  it('launches Gajae Code as bare gjc and delivers the prompt after start', () => {
+    const plan = buildAgentStartupPlan({
+      agent: 'gajae-code',
+      prompt: 'fix it',
+      cmdOverrides: {},
+      platform: 'linux'
+    })
+
+    expect(plan).toEqual({
+      agent: 'gajae-code',
+      launchCommand: 'gjc',
+      expectedProcess: 'gjc',
+      followupPrompt: 'fix it',
+      launchConfig: { agentCommand: 'gjc', agentArgs: '', agentEnv: {} }
+    })
+  })
+
+  it('maps Gajae Code detection onto both gjc and gajae-code', () => {
+    expect(TUI_AGENT_CONFIG['gajae-code']).toMatchObject({
+      detectCmd: 'gjc',
+      detectCmdAliases: ['gajae-code'],
+      launchCmd: 'gjc',
+      expectedProcess: 'gjc',
+      promptInjectionMode: 'stdin-after-start',
+      draftPasteReadySignal: 'render-cursor-after-bracketed-paste'
+    })
+    expect(getTuiAgentDetectCommands(TUI_AGENT_CONFIG['gajae-code'])).toEqual(['gjc', 'gajae-code'])
   })
 
   it('keeps grok on the composer-glyph paste draft route', () => {
