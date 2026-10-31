@@ -1,6 +1,7 @@
 import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
 import type { reserveRequestFor } from './structured-agent-session-attach'
 import type { AgentSessionExecutionOptions } from '../../../shared/agent-session-execution-options'
+import type { SwitchStoppedCliTurn } from './structured-agent-session-switch-import'
 
 export type StructuredAgentSessionCreateOptions = {
   check?: () => void
@@ -9,6 +10,8 @@ export type StructuredAgentSessionCreateOptions = {
   catalogModels?: Parameters<typeof reserveRequestFor>[0]['models']
   /** Publish after durable creation, before agent delivery starts. */
   publishTab?: () => Promise<void>
+  /** The CLI turn a switch stopped with proof before this adoption. */
+  switchStop?: SwitchStoppedCliTurn
 }
 
 /** Opening messages retain creation-time model/effort choices like later sends. */

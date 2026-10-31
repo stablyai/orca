@@ -33,6 +33,7 @@ import {
 } from './structured-agent-session-codex-turns'
 import {
   isSyntheticInterruptedTurn,
+  isUnexplainedInterruptedTurn,
   turnRecordReplaceable
 } from './structured-agent-session-synthetic-turn'
 
@@ -44,6 +45,8 @@ type CodexTurn = {
   baseline: boolean
   /** The saved row that opened a baseline turn, so its record anchors to the real prompt. */
   opener?: string
+  /** A baseline turn's existing record that a later boundary may still replace or explain. */
+  recorded?: Extract<AgentJournalItemBody, { kind: 'turn' }>
   ended: boolean
 }
 
@@ -89,11 +92,14 @@ export async function catchUpStructuredSessionAtRest(input: {
     }
     items.push(item)
   }
-  const settled = (turnId: string) => {
+  // A known turn is settled unless Orca settled it or its interruption still lacks a verdict.
+  const revisited = (turnId: string) => {
     const current = journal.item(
       journal.canonicalItemId(agentJournalItemKey(lifecycleIdentity(threadId, turnId)))
-    )
-    return view.known.has(turnId) && !isSyntheticInterruptedTurn(current?.body)
+    )?.body
+    return isSyntheticInterruptedTurn(current) || isUnexplainedInterruptedTurn(current)
+      ? current
+      : undefined
   }
   let prompts: Map<string, string> | undefined
   let turn: CodexTurn | undefined
@@ -108,6 +114,10 @@ export async function catchUpStructuredSessionAtRest(input: {
     }
     if (target.messages) {
       retain({ ...item, body })
+    } else if (target.recorded) {
+      // Its record exists: the boundary replaces or explains it, keeping the record's anchor.
+      const anchor = target.recorded.userItemId
+      retain({ ...item, body: { ...body, ...(anchor ? { userItemId: anchor } : {}) } })
     } else if (target.baseline) {
       // No saved prompt row to anchor to: write nothing rather than a dangling opener.
       baseline = target.opener
@@ -166,11 +176,14 @@ export async function catchUpStructuredSessionAtRest(input: {
       if (imported) {
         baseline = undefined
       }
+      const recorded = revisited(id)
+      const open = Boolean(recorded) || !view.known.has(id)
       turn = id
         ? {
             id,
-            messages: !imported && !settled(id),
-            baseline: imported && !settled(id),
+            messages: !imported && open,
+            baseline: imported && open,
+            ...(imported && recorded ? { recorded } : {}),
             ended: false
           }
         : undefined

@@ -196,6 +196,9 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
   stopForSwitch = (
     ...args: Parameters<ReturnType<typeof structuredAgentSessionSwitchSource>['stopForSwitch']>
   ) => this.switchSource().stopForSwitch(...args)
+  commitSwitchStop = (
+    ...args: Parameters<ReturnType<typeof structuredAgentSessionSwitchSource>['commitSwitchStop']>
+  ) => this.switchSource().commitSwitchStop(...args)
   refreshSwitchTranscript = (
     ...args: Parameters<
       ReturnType<typeof structuredAgentSessionSwitchSource>['refreshSwitchTranscript']

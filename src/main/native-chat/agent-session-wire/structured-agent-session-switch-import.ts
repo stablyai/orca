@@ -15,12 +15,14 @@ import {
   type AgentJournalItemBody
 } from '../../../shared/agent-session-journal-types'
 import { agentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import type { AgentSessionWireRefusal } from '../../../shared/agent-session-wire'
 import type { AgentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
   isSyntheticInterruptedTurn,
+  isUnexplainedInterruptedTurn,
   turnRecordReplaceable
 } from './structured-agent-session-synthetic-turn'
 
@@ -32,10 +34,17 @@ export type SwitchTranscriptSource = {
   source?: AdoptedTranscriptSource
 }
 
+type AdoptedTranscriptRead =
+  | { ok: true; items: JournalReplacementItem[] | null }
+  | { ok: false; refusal: AgentSessionWireRefusal }
+
 export type SwitchStoppedCliTurn = {
+  agent: AgentType
   sessionId: string
   userItemKey: string
   turnId: string
+  /** The history read before the stop: a first adoption's if the file can't be read after it. */
+  baseline: readonly JournalReplacementItem[]
 }
 
 async function prepare(
@@ -85,10 +94,82 @@ export async function captureSwitchStoppedCliTurn(
   }
   const key = agentJournalItemKey(user.identity)
   return {
+    agent: source.agent,
     sessionId: source.sessionId,
     userItemKey: key,
-    turnId: prepared.latestTurn?.turnId ?? key
+    turnId: prepared.latestTurn?.turnId ?? key,
+    baseline: prepared.items
   }
+}
+
+/** The turn a switch stopped with proof of exit, as the turn record every later import keeps. */
+function stoppedTurnRecord(stopped: SwitchStoppedCliTurn, userItemId?: string) {
+  return lifecycleRecord(stopped, stopped.turnId, {
+    kind: 'turn',
+    turnId: stopped.turnId,
+    ...(userItemId ? { userItemId } : {}),
+    state: 'interrupted',
+    outcome: 'cancellation'
+  })
+}
+
+/**
+ * A first adoption after a proven stop founds the chat on its fresh read, or on what the switch read
+ * before the stop when the file can't be read now, and saves the stopped turn with that history.
+ */
+export function withSwitchStoppedTurn(
+  read: AdoptedTranscriptRead,
+  stopped: SwitchStoppedCliTurn
+): AdoptedTranscriptRead {
+  const items = read.ok ? read.items : [...stopped.baseline]
+  if (!items?.some((item) => agentJournalItemKey(item.identity) === stopped.userItemKey)) {
+    return read
+  }
+  return { ok: true, items: [...items, stoppedTurnRecord(stopped, stopped.userItemKey)] }
+}
+
+/**
+ * Record a proven stop on the chat that already holds the conversation, before any later read can
+ * fail. Its prompt anchors the record; a prompt not saved yet comes from the read before the stop,
+ * except Codex's, whose resting import scopes the turn's rows to this record when it reads them.
+ */
+export async function commitSwitchStoppedCliTurn(input: {
+  journal: AgentSessionJournal
+  stopped: SwitchStoppedCliTurn
+  fence: number
+}): Promise<void> {
+  const { journal, stopped } = input
+  const prompt = journal.canonicalItemId(stopped.userItemKey)
+  const saved = journal.item(prompt) !== null
+  const opener =
+    saved || stopped.agent === 'codex'
+      ? undefined
+      : stopped.baseline.find((item) => agentJournalItemKey(item.identity) === stopped.userItemKey)
+  const record = stoppedTurnRecord(stopped, saved ? prompt : opener && stopped.userItemKey)
+  await journal.appendPlannedLifecycleBatch({
+    settlementId: `switch-stop:${stopped.sessionId}:${stopped.turnId}`,
+    fence: input.fence,
+    plan: () => {
+      const current = journal.item(journal.canonicalItemId(agentJournalItemKey(record.identity)))
+      const body = current?.body
+      // An interruption saved without its verdict keeps its record and takes this one.
+      const turn = isUnexplainedInterruptedTurn(body)
+        ? { ...record, body: { ...body, outcome: 'cancellation' as const } }
+        : record
+      const items = [
+        ...(opener && !journal.item(journal.canonicalItemId(stopped.userItemKey)) ? [opener] : []),
+        ...(!current || turnRecordReplaceable(current.body, turn.body) ? [turn] : [])
+      ]
+      return {
+        dispatches: [],
+        mutations: items.map((item) => ({
+          kind: 'item' as const,
+          ...item,
+          turnScope: item.turnScope ?? AGENT_JOURNAL_THREAD_SCOPE
+        }))
+      }
+    }
+  })
 }
 
 /** Append through the existing journal owner: native submissions and imported identities survive. */
@@ -164,20 +245,22 @@ export async function catchUpSwitchedCliTranscript(input: {
       })
     )
   }
-  // An earlier turn Orca settled whose real boundary has since been recorded takes that boundary.
+  // An earlier turn Orca settled whose real boundary has since been recorded takes that boundary,
+  // and an interruption saved without its verdict takes the one its stop record carries.
   if (input.source.agent !== 'codex') {
+    const added = new Set(additions.map((item) => agentJournalItemKey(item.identity)))
     // Grok's latest turn comes from its sidecar, not the transcript rows.
     const states = new Map(prepared.turnStates)
     if (latest) {
       states.set(latest.turnId, latest)
     }
     for (const [id, state] of states) {
-      const body = input.journal.item(
-        input.journal.canonicalItemId(
-          agentJournalItemKey(lifecycleRecord(input.source, id).identity)
-        )
-      )?.body
-      if (id !== turnId && state.state !== 'working' && isSyntheticInterruptedTurn(body)) {
+      const key = agentJournalItemKey(lifecycleRecord(input.source, id).identity)
+      const body = input.journal.item(input.journal.canonicalItemId(key))?.body
+      const revisit =
+        isSyntheticInterruptedTurn(body) ||
+        (isUnexplainedInterruptedTurn(body) && state.outcome !== undefined)
+      if (state.state !== 'working' && revisit && !added.has(key)) {
         const outcome = state.outcome ?? (state.state === 'interrupted' ? body.outcome : undefined)
         additions.push(
           lifecycleRecord(input.source, id, {
@@ -219,7 +302,7 @@ export async function catchUpSwitchedCliTranscript(input: {
 }
 
 function lifecycleRecord(
-  source: SwitchTranscriptSource,
+  source: Pick<SwitchTranscriptSource, 'agent' | 'sessionId'>,
   turnId: string,
   body?: Extract<AgentJournalItemBody, { kind: 'turn' }>
 ): JournalReplacementItem {

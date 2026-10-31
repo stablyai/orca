@@ -197,8 +197,8 @@ async function switchToChat(
       agent: [create?.agent, host.deps.store.getRecord(sessionId)?.provider].find(isAiVaultAgent)
     })
   }
-  deadline.check()
   if (create) {
+    deadline.check()
     try {
       const preparedCreate = await prepareStructuredAgentSessionCreateForWorktree({
         ...create,
@@ -214,7 +214,8 @@ async function switchToChat(
         caller: structuredCallerFor(ctx),
         prepared: { ...preparedCreate, tab: null },
         activate: false,
-        check: deadline.check
+        check: deadline.check,
+        ...(adopt && stopped ? { switchStop: stopped } : {})
       })
       if (!created.ok) {
         throw new AgentSessionRefusalError(created.refusal)
@@ -228,6 +229,12 @@ async function switchToChat(
         providerSessionId
       )
     }
+  }
+  // The proven stop goes on the turn's own record now, so no later failure can lose it.
+  if (stopped) {
+    await host.commitSwitchStop(sessionId, stopped)
+  }
+  if (create) {
     await host.adoptSwitch(conversation?.commandKey ?? params.sessionId, sessionId)
   }
   const record = requireStructuredSwitchRecord(host, sessionId)

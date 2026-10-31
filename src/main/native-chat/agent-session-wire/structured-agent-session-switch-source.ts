@@ -10,10 +10,12 @@ import {
 } from '../../../shared/agent-session-wire-refusals'
 import {
   catchUpSwitchedCliTranscript,
+  commitSwitchStoppedCliTurn,
   type SwitchStoppedCliTurn,
   type SwitchTranscriptSource
 } from './structured-agent-session-switch-import'
 import { catchUpStructuredSessionAtRest } from './structured-agent-session-at-rest-catch-up'
+import { settleSwitchProvenChatStop } from './structured-agent-session-switch-proven-chat-stop'
 import type * as HostTypes from './structured-agent-session-host-types'
 import type { AgentSessionSwitchDeadline } from '../../../shared/agent-session-switch-execution'
 import type { StructuredAgentSessionHost } from './structured-agent-session-host'
@@ -194,6 +196,20 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
           }
         }
         proven = true
+        if (child && accepted) {
+          await settleSwitchProvenChatStop({
+            journal: conversation.journal,
+            fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0,
+            child,
+            pause: child.close?.stopOutcome?.pause
+          }).catch((error: unknown) =>
+            context.deps.logger.warn("settling a switched chat's Stop note failed", {
+              scope: 'session-switch',
+              sessionId,
+              error
+            })
+          )
+        }
         return () => workCurrent() && source.physical.current()
       } finally {
         try {
@@ -205,6 +221,24 @@ export function structuredAgentSessionSwitchSource(context: SwitchSourceContext)
             proven
           })
         }
+      }
+    },
+    commitSwitchStop: async (sessionId: string, stopped: SwitchStoppedCliTurn) => {
+      // The label is history: a write that fails leaves the switch to its own result.
+      try {
+        const session = await context.lifetime.conversation(sessionId)
+        await commitSwitchStoppedCliTurn({
+          journal: session.journal,
+          stopped,
+          fence: context.deps.store.getRecord(sessionId)?.lease.runtimeFence ?? 0
+        })
+        context.subscribers.publish(sessionId, session.journal)
+      } catch (error) {
+        context.deps.logger.warn("recording a switch's proven stop failed", {
+          scope: 'session-switch',
+          sessionId,
+          error
+        })
       }
     },
     refreshSwitchTranscript: async (

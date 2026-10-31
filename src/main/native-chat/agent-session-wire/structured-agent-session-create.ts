@@ -18,6 +18,7 @@ import {
   prepareCreateTranscript,
   importAdoptedTranscript
 } from './structured-agent-session-adopted-import'
+import { withSwitchStoppedTurn } from './structured-agent-session-switch-import'
 import {
   pinnedAgentSessionLaunchArgs,
   pinnedAgentSessionLaunchEnv
@@ -149,9 +150,11 @@ async function foundConversation(
             )
     }
   }
-  const prepared = replayed
+  const read = replayed
     ? { ok: true as const, items: null }
     : await prepareCreateTranscript(context, params)
+  const prepared =
+    options.switchStop && !replayed ? withSwitchStoppedTurn(read, options.switchStop) : read
   if (!prepared.ok) {
     const { refusal } = prepared
     return {

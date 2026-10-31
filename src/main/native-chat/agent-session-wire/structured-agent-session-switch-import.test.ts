@@ -214,11 +214,14 @@ it.each([
       const historyWithMarker = await imported('historical-interruption-marker')
       await refresh({ journal: historyWithMarker, source, fence: 1, deadline })
       const [historicalTurn] = turns(historyWithMarker)
-      expect(historicalTurn).toMatchObject({ state: 'interrupted', turnId: stopped!.turnId })
-      expect(historicalTurn!.outcome).toBeUndefined()
-      expect(agentTurnVerdict({ state: historicalTurn!.state, outcome: null })).toBe('interruption')
+      // Claude's own interruption notice is the user's Stop, with or without this switch's proof.
+      expect(historicalTurn).toMatchObject({
+        state: 'interrupted',
+        turnId: stopped!.turnId,
+        outcome: 'cancellation'
+      })
       const historyItems = historyWithMarker.snapshot().items
-      expect(withNativeChatCutTurnNotices(historyItems)).toHaveLength(historyItems.length + 1)
+      expect(withNativeChatCutTurnNotices(historyItems)).toBe(historyItems)
       const stoppedWithMarker = await imported('stopped-interruption-marker')
       await refresh({
         journal: stoppedWithMarker,
@@ -347,7 +350,18 @@ it.each([
           stopped
         })
         expect(retained.canonicalItemId(canonicalTurn)).toBe(canonicalTurn)
-        expect(retained.snapshot()).toEqual(snapshot)
+        if (personalStop) {
+          expect(retained.snapshot()).toEqual(snapshot)
+        } else {
+          // A proven stop explains the interruption an earlier import saved without a verdict.
+          expect(retained.item(canonicalTurn)?.body).toEqual({
+            ...firstEnd!.body,
+            outcome: 'cancellation'
+          })
+          expect(retained.snapshot().items.filter(({ body }) => body.kind !== 'turn')).toEqual(
+            snapshot.items.filter(({ body }) => body.kind !== 'turn')
+          )
+        }
       }
     }
     await install(true)

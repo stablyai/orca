@@ -153,6 +153,7 @@ export async function commitStructuredAgentSessionCreate(args: {
   placedByWindow?: boolean
   /** Where the creating client opens the chat, in this host's ids. */
   tabPlacement?: ChatTabPlacement
+  switchStop?: StructuredAgentSessionCreateOptions['switchStop']
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
   const { prepared } = args
   const tab = prepared.tab
@@ -164,6 +165,7 @@ export async function commitStructuredAgentSessionCreate(args: {
     return prepared.host.create(args.caller, prepared.attachParams, {
       ...prepared.atRest,
       check: args.check,
+      ...(args.switchStop ? { switchStop: args.switchStop } : {}),
       ...(prepared.catalogModels ? { catalogModels: prepared.catalogModels } : {}),
       ...(prepared.hostLaunchDirectory
         ? { hostLaunchDirectory: prepared.hostLaunchDirectory }

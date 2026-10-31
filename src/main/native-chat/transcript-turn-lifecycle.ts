@@ -59,6 +59,10 @@ export function decodeCodexTurnLifecycle(
         : 'completed'
   return {
     state,
+    // Only a user's interrupt is a Stop; replaced, review-ended and budget-limited aborts aren't.
+    ...(state === 'interrupted' && payload.reason === 'interrupted'
+      ? { outcome: 'cancellation' as const }
+      : {}),
     turnId: extractString(payload.turn_id) ?? fallbackId,
     timestamp: lifecycleTimestamp(record.timestamp)
   }
@@ -82,9 +86,15 @@ export function decodeClaudeTurnLifecycle(
   const message = asRecord(record.message)
   const timestamp = lifecycleTimestamp(record.timestamp)
   const interruptedMessageId = claudeInterruptedMessageId(record)
-  if (interruptedMessageId) {
-    // Injected interruption notices end the active generation; they never open a user turn.
-    return { state: 'interrupted', turnId: interruptedMessageId, timestamp }
+  if (interruptedMessageId || (record.type === 'user' && isClaudeInterruptionNotice(message))) {
+    // Injected interruption notices end the active generation as the user's Stop; they never open
+    // a user turn. Esc before any reply writes the notice without the interrupted message's id.
+    return {
+      state: 'interrupted',
+      outcome: 'cancellation',
+      turnId: interruptedMessageId ?? extractString(record.uuid) ?? fallbackId,
+      timestamp
+    }
   }
   if (record.type === 'assistant') {
     const stopReason = message?.stop_reason
@@ -117,6 +127,19 @@ export function decodeClaudeTurnLifecycle(
     return null
   }
   return { state: 'working', turnId: decoded.id, timestamp }
+}
+
+const CLAUDE_INTERRUPTION_NOTICE = /^\[Request interrupted by user( for tool use)?\]$/
+
+function isClaudeInterruptionNotice(message: Record<string, unknown> | null): boolean {
+  const content = message?.content
+  const text =
+    typeof content === 'string'
+      ? content
+      : Array.isArray(content) && content.length === 1
+        ? extractString(asRecord(content[0])?.text)
+        : null
+  return message?.role === 'user' && text != null && CLAUDE_INTERRUPTION_NOTICE.test(text)
 }
 
 // ! commands are not prompts; without a reply terminal, a working mark would stick.
@@ -200,7 +223,11 @@ export function decodePiTurnLifecycle(
   return state
     ? {
         state: state === 'failed' ? 'completed' : state,
-        ...(state === 'failed' ? { outcome: 'failure' as const } : {}),
+        ...(state === 'failed'
+          ? { outcome: 'failure' as const }
+          : state === 'interrupted'
+            ? { outcome: 'cancellation' as const }
+            : {}),
         turnId,
         timestamp
       }

@@ -29,6 +29,7 @@ import {
 } from './structured-agent-session-stop-wind-down'
 import { performCancel, type AcceptedChatStop } from './structured-agent-session-turns-cancel'
 import { contextStructuredAgentSessionCurrentWork } from './structured-agent-session-current-work'
+import { structuredAgentSessionChildStopFeedbackId } from './structured-agent-session-switch-proven-chat-stop'
 import type { AgentSessionTurnContext, TurnOutcome } from './structured-agent-session-turns'
 import type { AgentSessionCloseObserver } from './structured-agent-session-adapter-stop'
 import {
@@ -92,7 +93,7 @@ export function mutateWithChatStop<TValue>(
       return { ok: true, value: { ...named, cancelled: settled } }
     }
     const { child } = target
-    const feedbackId = `child:${child.fence}:${child.generation ?? 'unknown'}`
+    const feedbackId = structuredAgentSessionChildStopFeedbackId(child)
     let stopOutcome = child.close?.stopOutcome
     const observeClose: AgentSessionCloseObserver = (evidence) => {
       if (stopOutcome && evidence) {
