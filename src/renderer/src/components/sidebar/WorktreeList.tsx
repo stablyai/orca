@@ -28,6 +28,7 @@ import { useAgentSendTargetWorktreeId } from './worktree-list/listing/use-agent-
 import { useProjectGroupDialogs } from './worktree-list/rows/use-project-group-dialogs'
 import { useSidebarRevealRequests } from './worktree-list/navigation/use-reveal-requests'
 import { useSidebarWorktreeFilters } from './worktree-list/listing/use-filters'
+import { usePublishCollapsibleGroupKeys } from './worktree-list/listing/use-publish-collapsible-group-keys'
 import { useSidebarWorktreeSelection } from './worktree-list/navigation/use-selection'
 import { useWindowSidebarListModel } from './worktree-list/listing/use-window-list-model'
 import { useMainSidebarListModel } from './worktree-list/listing/use-main-list-model'
@@ -232,8 +233,10 @@ const WorktreeList = React.memo(function WorktreeList({
     placeholderRepoCount: rowModel.placeholderRepoIds.size,
     importedWorktreeCardCount: externalWorktreeCards.importedWorktreesByRepo.size
   })
+  const listHidden = rowModel.rows.length === 0 || filtersHideAllRows
+  usePublishCollapsibleGroupKeys(rowModel.sectionRows, listHidden)
   // Clear Filters must outrank empty project headers when filtering hides every workspace.
-  if (rowModel.rows.length === 0 || filtersHideAllRows) {
+  if (listHidden) {
     return <SidebarWorktreeListEmptyState hasFilters={hasFilters} onClearFilters={clearFilters} />
   }
 

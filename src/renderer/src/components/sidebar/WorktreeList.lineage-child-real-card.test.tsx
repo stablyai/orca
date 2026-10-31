@@ -334,6 +334,7 @@ function setLineageState(
     structuredChatSleptAtByPaneKey: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
+    setSidebarCollapsibleGroupKeys: vi.fn(),
     updateRepo: vi.fn(),
     updateWorktreeMeta: mockStore.updateWorktreeMeta,
     updateWorktreesMeta: vi.fn(),

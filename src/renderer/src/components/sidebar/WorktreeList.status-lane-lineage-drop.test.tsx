@@ -297,6 +297,7 @@ function setStatusLaneState(): void {
     structuredChatSleptAtByPaneKey: {},
     terminalLayoutsByTabId: {},
     toggleCollapsedGroup: vi.fn(),
+    setSidebarCollapsibleGroupKeys: vi.fn(),
     updateRepo: vi.fn(),
     updateWorktreeMeta: mockStore.updateWorktreeMeta,
     updateWorktreesMeta: mockStore.updateWorktreesMeta,
