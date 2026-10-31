@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { executeAgentLaunch, type AgentLaunchExecution } from './agent-launch-executor'
 import {
@@ -35,7 +36,7 @@ it.each(['chat', 'startup', 'refusal', 'recovery'] as const)(
     let selected: string | null = null
     let wrappedSetup: string | undefined
     const runtime = {
-      requireStore: () => ({ getSettings: () => ({ experimentalNativeChat: true }) }),
+      requireStore: () => ({ getSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }) }),
       getStructuredAgentSessionCreateSupport: async () => ({ supported: true })
     }
     const published = vi.fn<NonNullable<AgentLaunchExecution['onSurfacePublished']>>((surface) => {

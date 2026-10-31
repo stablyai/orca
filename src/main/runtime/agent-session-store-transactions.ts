@@ -197,6 +197,7 @@ export class AgentSessionStoreTransactions {
       this.journalDatabase.transaction(
         (db) => receipt.write(db),
         false,
+        undefined,
         receipt.transactionObservation
       )
       receipt.committed()

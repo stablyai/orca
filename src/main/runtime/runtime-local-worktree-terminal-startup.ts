@@ -1,3 +1,4 @@
+import type { WorktreeTerminalProvisioningArgs } from './runtime-worktree-terminal-provisioning'
 import {
   worktreeInitialSurfaceWorkspace,
   sequenceWorktreeSetupAgent,

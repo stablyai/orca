@@ -90,11 +90,3 @@ export function revealCreatedTerminal(args: {
       presentation !== 'background' ? dependencies.createTerminalRevealWarning(handle) : undefined
   }
 }
-
-export function prepareTerminalPresentation(opts: dependencies.TerminalCreateOptions) {
-  const colors = dependencies.normalizeColorQueryReplyColors(opts.terminalColorQueryReplies)
-  if (colors) {
-    dependencies.setPairedViewerColors(colors)
-  }
-  return dependencies.resolveTerminalPresentation(opts)
-}

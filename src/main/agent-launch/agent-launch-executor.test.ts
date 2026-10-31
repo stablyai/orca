@@ -75,10 +75,12 @@ function harness(options: {
       if (options.structuredCreateError) {
         throw options.structuredCreateError
       }
-      const promptDisposal: AgentLaunchPromptDisposal =
+      const promptDisposal: AgentLaunchPromptDisposal | undefined =
         args.firstMessage && options.deliveredMessageId !== null
           ? { outcome: 'journaled', messageId: options.deliveredMessageId ?? 'msg-1' }
-          : { outcome: 'not-delivered' }
+          : args.firstMessage
+            ? undefined
+            : { outcome: 'not-delivered' }
       return { sessionId: 'sess-1', handle: 'handle_structured', fence: 4, promptDisposal }
     }
   )

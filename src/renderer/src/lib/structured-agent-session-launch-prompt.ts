@@ -262,7 +262,7 @@ export function settleStructuredAgentLaunchPrompt(args: {
         }
         prompt.delivery = Promise.resolve(result)
         prompt.settleCreate(result)
-        unstage(prompt)
+        unstageStructuredLaunchPrompt(prompt)
         prompt.discarded = true
         return {
           ...result,

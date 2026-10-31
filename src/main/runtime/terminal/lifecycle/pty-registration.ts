@@ -1,3 +1,4 @@
+import { createSetupCompletionObservation } from '../../orchestration/setup-completion-signal'
 import { OrcaRuntimeWithPtyRegistrationClaims } from './pty-registration-claims'
 import { isValidTerminalTabId } from '../../../../shared/terminal-tab-id'
 import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'

@@ -1,4 +1,3 @@
-import { prepareTerminalPresentation } from './terminal-create-reveal'
 import type { TerminalWorkspaceCreationEvidence } from './terminal-workspace-scope'
 import {
   recordTerminalLaunchMetadata,
@@ -34,7 +33,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
       opts.terminalColorQueryReplies,
       opts.terminalViewAttributes
     )
-    const presentation = prepareTerminalPresentation(opts)
+    const presentation = dependencies.resolveTerminalPresentation(opts)
     // Why: this process starts every terminal it can place, so a slow window only delays showing
     // it; a window-made create that timed out here still ran later, and a retry duplicated it.
     if (selector !== undefined) {

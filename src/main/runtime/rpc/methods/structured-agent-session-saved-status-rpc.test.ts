@@ -1,3 +1,4 @@
+import { WorkspaceSetupAgentStartHolds } from '../../workspace-setup-agent-start-holds'
 import '../unused-default-rpc-methods.test-fixture'
 import { afterEach, expect, it, vi } from 'vitest'
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -37,6 +38,7 @@ it.each(['mobile', 'runtime'] as const)(
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this RPC reads only startup preparation and stream cleanup from the runtime.
     const runtime = {
       getRuntimeId: () => 'restarted-orcad',
+      workspaceSetupAgentStarts: new WorkspaceSetupAgentStartHolds(),
       getClientSettings: () => ({}),
       restoreStructuredAgentSessionTabs: () => host.seedSessionTabs(),
       registerSubscriptionCleanup: (_id: string, cleanup: () => void) => cleanups.push(cleanup),

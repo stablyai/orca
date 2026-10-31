@@ -3,7 +3,7 @@ import type { HostFoundingAttempt } from '../../agent-launch/host-founding-attem
 
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 
-import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
+import type { StructuredAgentSessionFirstMessage } from '../../../shared/structured-agent-session-create'
 
 import type { StructuredAgentSessionAttachContext } from './structured-agent-session-attach-context'
 import { reserveRequestFor, type AgentSessionAttachParams } from './structured-agent-session-attach'
@@ -14,7 +14,7 @@ import {
 } from './structured-agent-session-launch-env'
 
 export type StructuredAgentSessionCreateOptions = {
-  firstMessage?: { clientMessageId: string; body: AgentJournalMessageItem }
+  firstMessage?: StructuredAgentSessionFirstMessage
   /** Host launches keep a usable blank chat on proven message noncommit; clients stay strict. */
   hostFoundingAttempt?: HostFoundingAttempt
   hostLaunchDirectory?: string

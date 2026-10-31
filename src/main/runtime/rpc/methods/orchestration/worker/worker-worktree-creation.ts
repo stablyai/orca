@@ -116,6 +116,7 @@ export async function createWorkerWorktree(args: {
   const setupDecision = params.setup ?? 'run'
   let surfaceFailure: { error: unknown } | undefined
   let terminalCreation: RuntimeTerminalCreate | undefined
+  let worktreeEffect: WorkerEffect | undefined
   db.recordWorkerStage({ dispatchId, stage: 'worktree_creating', effects })
   const created = await runtime.createManagedWorktree({
     onStartupTerminalCreated: (terminal) => {
@@ -135,11 +136,12 @@ export async function createWorkerWorktree(args: {
     createdWithAgent: args.agent,
     ...(args.promisedAgentChat ? { promisedAgentChat: true } : {}),
     onWorkspaceCreated: (worktreeId) => {
-      effects.push({
+      worktreeEffect = {
         kind: 'worktree',
         action: requestedWorktree === 'new-child' ? 'created_child' : 'created_top_level',
         id: worktreeId
-      })
+      }
+      effects.push(worktreeEffect)
       db.recordWorkerStage({
         dispatchId,
         stage: 'worktree_created',
@@ -176,6 +178,9 @@ export async function createWorkerWorktree(args: {
       callerTerminalHandle: params.from
     }
   })
+  if (worktreeEffect) {
+    worktreeEffect.name = created.worktree.displayName
+  }
   const terminalHandle = created.startupTerminal?.handle
   const setupReceipt: WorkerSetupReceipt = {
     requested: setupDecision,

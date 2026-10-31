@@ -107,7 +107,7 @@ describe('a new Claude chat seeded from a remembered model the saved listing no 
       fetchedAt: 1,
       models: [{ id: 'opus', label: 'Opus', isDefault: true, efforts: levels }]
     }))
-    const host = { deps: { modelCatalog: { read } } }
+    const host = { deps: { store: { getOperationRow: () => null }, modelCatalog: { read } } }
     const prepared = await prepareStructuredAgentSessionCreateForWorktree({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create preparation uses only these runtime methods.
       runtime: {
@@ -120,7 +120,7 @@ describe('a new Claude chat seeded from a remembered model the saved listing no 
           options: { model: 'claude-gone', effort: 'max' }
         })
       } as never,
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create preparation reads only deps.modelCatalog on this host.
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: create preparation reads the empty ledger and deps.modelCatalog on this host.
       ensureHost: async () => host as never,
       envelope: {
         sessionId: 'sess_1',

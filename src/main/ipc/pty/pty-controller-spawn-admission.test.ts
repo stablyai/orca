@@ -256,6 +256,8 @@ describe('registerPtyHandlers', () => {
         expect(registerPty).not.toHaveBeenCalled()
         expect(begin).toHaveBeenCalledTimes(2)
         expect(cancel.mock.calls).toEqual([
+          [ptyId],
+          ['joiner-request'],
           [ptyId, incarnationId, begin.mock.results[0]?.value],
           ['joiner-request', undefined, begin.mock.results[1]?.value]
         ])

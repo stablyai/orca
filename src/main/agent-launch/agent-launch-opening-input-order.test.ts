@@ -30,7 +30,9 @@ import {
   loadTestJournal,
   openTestJournalHostDatabase
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import * as journalReducer from '../native-chat/agent-session-journal/journal-reducer'
+import { JournalWriteProjection } from '../native-chat/agent-session-journal/journal-write-projection'
+import * as journalTransition from '../native-chat/agent-session-journal/journal-reducer-transition'
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
 import type { AgentLaunchWorkspaceFactory } from './agent-launch-surface-factories'
 import {
@@ -88,7 +90,7 @@ function harness(
     terminalLayoutsByTabId: {}
   }
   const store = {
-    getSettings: () => ({ experimentalNativeChat: true }),
+    getSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     getRepos: () => [],
     getRepo: () => null,
     getWorkspaceSession: () => session,
@@ -113,7 +115,7 @@ function harness(
     throw new Error('unexpected terminal')
   })
   const runtimeOverrides = {
-    requireStore: () => ({ getSettings: () => ({ experimentalNativeChat: true }) }),
+    requireStore: () => ({ getSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }) }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     ensureStructuredAgentSessionHost: async () => {},
     openAgentSessionRecordStore: async () => rig.store,
@@ -282,7 +284,7 @@ it('admits the supplied opening input before another client sends during ancilla
 it('keeps a usable blank chat after a proven precommit message refusal without recovery or terminal fallback', async () => {
   const db = openTestJournalHostDatabase(rig.root).db
   db.exec(
-    `CREATE TRIGGER refuse_submission BEFORE INSERT ON journal_rows WHEN NEW.row_json LIKE '%"kind":"submission"%' BEGIN SELECT RAISE(ABORT, 'simulated append failure'); END`
+    `CREATE TRIGGER refuse_submission BEFORE INSERT ON journal_outcomes WHEN NEW.field = 'submissions' BEGIN SELECT RAISE(ABORT, 'simulated append failure'); END`
   )
   const open = vi.spyOn(AgentSessionJournal.prototype, 'open')
   const h = harness()
@@ -339,18 +341,23 @@ it('keeps a usable blank chat after a proven precommit message refusal without r
 it.each(['before-fold', 'after-fold'] as const)(
   'keeps committed proof truthful after %s and replays one opening row',
   async (failure) => {
-    const apply = journalReducer.applyJournalRow
+    const prepare = JournalWriteProjection.prototype.prepare
     let injected = false
-    vi.spyOn(journalReducer, 'applyJournalRow').mockImplementation((state, row, savedAt) => {
-      if (!injected && row.kind === 'submission') {
-        injected = true
-        if (failure === 'after-fold') {
-          apply(state, row, savedAt)
+    vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(
+      function (db, rows, at) {
+        const adopt = prepare.call(this, db, rows, at)
+        if (injected || !rows.some((row) => row.kind === 'submission')) {
+          return adopt
         }
-        throw new Error('simulated fold failure after COMMIT')
+        injected = true
+        return () => {
+          if (failure === 'after-fold') {
+            adopt()
+          }
+          throw new Error('simulated fold failure after COMMIT')
+        }
       }
-      apply(state, row, savedAt)
-    })
+    )
     const h = harness()
     h.ancillaryRelease.resolve()
     const result = await h.run()
@@ -388,7 +395,7 @@ it.each(['runtime', 'mobile'] as const)(
         sql === 'COMMIT' &&
         db
           .prepare(
-            `SELECT 1 FROM journal_rows WHERE session_id = ? AND row_json LIKE '%"kind":"submission"%' LIMIT 1`
+            `SELECT 1 FROM journal_outcomes o JOIN journal_outcome_epochs e ON e.generation = o.generation WHERE e.session_id = ? AND o.field = 'submissions' LIMIT 1`
           )
           .get(sessionId)
       const result = exec(sql)
@@ -477,7 +484,7 @@ it('keeps a no-prompt host create at rest', async () => {
 it('retains strict client firstMessage refusal without the host launch opt-in', async () => {
   const db = openTestJournalHostDatabase(rig.root).db
   db.exec(
-    `CREATE TRIGGER refuse_submission BEFORE INSERT ON journal_rows WHEN NEW.row_json LIKE '%"kind":"submission"%' BEGIN SELECT RAISE(ABORT, 'simulated append failure'); END`
+    `CREATE TRIGGER refuse_submission BEFORE INSERT ON journal_outcomes WHEN NEW.field = 'submissions' BEGIN SELECT RAISE(ABORT, 'simulated append failure'); END`
   )
   const firstMessage = {
     clientMessageId: hostTestOperationId(),
@@ -529,15 +536,20 @@ it.each(['before fold'] as const)(
     const close = vi.spyOn(AgentSessionJournal.prototype, 'close')
     const open = vi.spyOn(AgentSessionJournal.prototype, 'open')
     const publishTab = vi.fn(async () => {})
-    const apply = journalReducer.applyJournalRow
+    const prepare = JournalWriteProjection.prototype.prepare
     let injected = false
-    vi.spyOn(journalReducer, 'applyJournalRow').mockImplementation((state, row, savedAt) => {
-      if (!injected && row.kind === 'submission') {
+    vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(
+      function (db, rows, at) {
+        const adopt = prepare.call(this, db, rows, at)
+        if (injected || !rows.some((row) => row.kind === 'submission')) {
+          return adopt
+        }
         injected = true
-        throw new Error('fold skipped after COMMIT')
+        return () => {
+          throw new Error('fold skipped after COMMIT')
+        }
       }
-      apply(state, row, savedAt)
-    })
+    )
     const created = await rig.host.create(CALLER, params, { firstMessage, publishTab })
     expect(created).toMatchObject({
       ok: false,
@@ -567,16 +579,23 @@ it.each(['before fold'] as const)(
 )
 
 it('disposes a partial new fold, publishes the adopted tab before ancillary work, and opens saved A only for ordinary B', async () => {
-  const apply = journalReducer.applyJournalRow
+  const isolate = journalTransition.isolateJournalTransition
   let injected = false
-  vi.spyOn(journalReducer, 'applyJournalRow').mockImplementation((state, row, savedAt) => {
-    if (!injected && row.kind === 'submission') {
-      injected = true
-      vi.spyOn(state.items, 'set').mockImplementationOnce(() => {
-        throw new Error('item installation failed after cursor and submission mutation')
-      })
+  vi.spyOn(journalTransition, 'isolateJournalTransition').mockImplementation((state, fold) => {
+    const transition = isolate(state, fold)
+    return {
+      ...transition,
+      adopt: () => {
+        if (!injected && transition.state.submissions.size > state.submissions.size) {
+          injected = true
+          vi.spyOn(state.submissions, 'set').mockImplementationOnce(() => {
+            expect(state.lastSequence).toBeGreaterThan(0)
+            throw new Error('submission installation failed after cursor mutation')
+          })
+        }
+        return transition.adopt()
+      }
     }
-    apply(state, row, savedAt)
   })
   const open = vi.spyOn(AgentSessionJournal.prototype, 'open')
   const h = harness()
@@ -661,7 +680,7 @@ it('keeps an unresolved COMMIT owned through one void initialization and ordinar
       sql === 'COMMIT' &&
       db
         .prepare(
-          `SELECT 1 FROM journal_rows WHERE session_id = ? AND row_json LIKE '%"kind":"submission"%' LIMIT 1`
+          `SELECT 1 FROM journal_outcomes o JOIN journal_outcome_epochs e ON e.generation = o.generation WHERE e.session_id = ? AND o.field = 'submissions' LIMIT 1`
         )
         .get(SESSION)
     const result = exec(sql)

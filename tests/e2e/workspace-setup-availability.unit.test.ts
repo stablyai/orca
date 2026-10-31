@@ -1,46 +1,47 @@
+import { agentSessionConversationView } from '../../src/shared/agent-session-conversation-view'
 import type {
   AgentSessionStatusEvent,
   AgentSessionStatusSummary
-} from '../../shared/agent-session-wire'
+} from '../../src/shared/agent-session-wire'
 import { afterEach, expect, it, vi } from 'vitest'
-import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
-import { foldAgentSessionStatusEvent } from '../../shared/agent-session-status-snapshot-fold'
-import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
-import { recordStructuredAgentSessionHostInstallRefusal } from './structured-agent-session-host-refusal'
-import { OrcaRuntimeService } from './orca-runtime'
-import { WorkspaceSetupAgentStartHolds } from './workspace-setup-agent-start-holds'
+import { agentSessionRefusalError } from '../../src/shared/agent-session-wire-refusals'
+import { foldAgentSessionStatusEvent } from '../../src/shared/agent-session-status-snapshot-fold'
+import { setStructuredAgentSessionHost } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
+import { recordStructuredAgentSessionHostInstallRefusal } from '../../src/main/runtime/structured-agent-session-host-refusal'
+import { OrcaRuntimeService } from '../../src/main/runtime/orca-runtime'
+import { WorkspaceSetupAgentStartHolds } from '../../src/main/runtime/workspace-setup-agent-start-holds'
 import {
   dispatcher,
   SESSION,
   hostStub,
   STRUCTURED_CLIENT
-} from './rpc/methods/structured-agent-session-rpc.test-fixture'
-import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from './rpc/methods/structured-agent-session-status-stream'
+} from '../../src/main/runtime/rpc/methods/structured-agent-session-rpc.test-fixture'
+import { STRUCTURED_AGENT_SESSION_STATUS_METHODS } from '../../src/main/runtime/rpc/methods/structured-agent-session-status-stream'
 
-import type { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import type { Tab } from '../../shared/tab-types'
-import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
-import { structuredAgentSessionPaneKey } from '../../shared/structured-agent-session-projection'
-import { createStructuredChatNamingHandler } from '../native-chat/structured-chat-naming'
-import { StructuredAgentSessionStatusFeed } from '../native-chat/agent-session-wire/structured-agent-session-status-feed'
+import type { AgentSessionJournal } from '../../src/main/native-chat/agent-session-journal/journal-store'
+import type { Tab } from '../../src/shared/tab-types'
+import { agentSessionRecordFixture } from '../../src/shared/agent-session-record.test-fixture'
+import { structuredAgentSessionPaneKey } from '../../src/shared/structured-agent-session-projection'
+import { createStructuredChatNamingHandler } from '../../src/main/native-chat/structured-chat-naming'
+import { StructuredAgentSessionStatusFeed } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-status-feed'
 import {
   getStructuredAgentSessionStatusFeed,
   resetStructuredAgentSessionStatusFeedsForTests
-} from '../../renderer/src/runtime/structured-agent-session-status-feed'
-import { getWorktreeIdsWithStructuredChat } from '../../renderer/src/components/sidebar/visible-worktree-activity-inputs'
-import { hasSleepableWorkspaceActivity } from '../../renderer/src/components/sidebar/workspace-lineage-menu-actions'
-import { buildDesktopWorkspaceRowFactReader } from '../../renderer/src/components/sidebar/desktop-workspace-row-facts'
+} from '../../src/renderer/src/runtime/structured-agent-session-status-feed'
+import { getWorktreeIdsWithStructuredChat } from '../../src/renderer/src/components/sidebar/visible-worktree-activity-inputs'
+import { hasSleepableWorkspaceActivity } from '../../src/renderer/src/components/sidebar/workspace-lineage-menu-actions'
+import { buildDesktopWorkspaceRowFactReader } from '../../src/renderer/src/components/sidebar/desktop-workspace-row-facts'
 import {
   filterWorkspaceRows,
   NO_WORKSPACE_ROW_FILTERS
-} from '../../shared/workspace-view/workspace-row-filters'
-import { makeWorktree } from '../../renderer/src/components/sidebar/worktree-list-lineage-card-test-fixtures'
+} from '../../src/shared/workspace-view/workspace-row-filters'
+import { makeWorktree } from '../../src/renderer/src/components/sidebar/worktree-list-lineage-card-test-fixtures'
 
 const legacyTransport = vi.hoisted(() => ({ subscribe: vi.fn() }))
-vi.mock('../../renderer/src/runtime/structured-agent-session-client', () => ({
+vi.mock('../../src/renderer/src/runtime/structured-agent-session-client', () => ({
   subscribeStructuredAgentSessionStatus: legacyTransport.subscribe
 }))
-vi.mock('../../renderer/src/runtime/runtime-rpc-client', () => ({
+vi.mock('../../src/renderer/src/runtime/runtime-rpc-client', () => ({
   runtimeEnvironmentSupportsCapability: vi.fn(async () => true)
 }))
 
@@ -268,9 +269,17 @@ it('bounds actual hold publications by held workspaces/subscribers, not unrelate
     const getRecord = vi
       .spyOn(host.deps.store, 'getRecord')
       .mockImplementation((id) => records.get(id) ?? null)
+    vi.spyOn(host.deps.store, 'getConversation').mockImplementation((key) => {
+      const record = records.get(key)
+      return record ? agentSessionConversationView(record) : null
+    })
     const prompt = Promise.withResolvers<string>()
     const naming = createStructuredChatNamingHandler({
-      getStore: () => ({ getRecord, compareAndSetConversationName: vi.fn(async () => null) }),
+      getStore: () => ({
+        getRecord,
+        compareAndSetConversationName: vi.fn(async () => null),
+        setUserConversationName: vi.fn()
+      }),
       getSettings: () => ({}),
       workerTaskTitle: () => null,
       readFirstPrompt: () => prompt.promise,
@@ -286,6 +295,8 @@ it('bounds actual hold publications by held workspaces/subscribers, not unrelate
       naming.regenerate(id)
     }
     getRecord.mockClear()
+    const readConversation = vi.mocked(host.deps.store.getConversation)
+    readConversation.mockClear()
     const readNaming = vi.spyOn(naming, 'activeSessionIds')
     const topology = vi.spyOn(runtime, 'touchMobileSessionTabsForWorktree')
     const census = vi.spyOn(runtime, 'listAllMobileSessionTabs')
@@ -300,7 +311,7 @@ it('bounds actual hold publications by held workspaces/subscribers, not unrelate
     }
     expect(read).toHaveBeenCalledTimes(1 + 2 * population)
     expect(readNaming).toHaveBeenCalledTimes(1 + 2 * population)
-    expect(getRecord).toHaveBeenCalledTimes(namingIds.length * (1 + 2 * population))
+    expect(readConversation).toHaveBeenCalledTimes(namingIds.length * (1 + 2 * population))
     expect(stream.results).toEqual(
       [
         metadata([]),
@@ -336,8 +347,16 @@ it('keeps shipped Sleep visibility and menu unknown through real setup frames un
   const getRecord = vi
     .spyOn(host.deps.store, 'getRecord')
     .mockImplementation((key) => records.get(key) ?? null)
+  const getConversation = vi.spyOn(host.deps.store, 'getConversation').mockImplementation((key) => {
+    const record = records.get(key)
+    return record ? agentSessionConversationView(record) : null
+  })
   const naming = createStructuredChatNamingHandler({
-    getStore: () => ({ getRecord, compareAndSetConversationName: vi.fn(async () => null) }),
+    getStore: () => ({
+      getRecord,
+      compareAndSetConversationName: vi.fn(async () => null),
+      setUserConversationName: vi.fn()
+    }),
     getSettings: () => ({}),
     workerTaskTitle: () => null,
     readFirstPrompt: () => prompt.promise,
@@ -354,14 +373,15 @@ it('keeps shipped Sleep visibility and menu unknown through real setup frames un
     stopMarks: { latest: () => null, revision: () => 0 },
     snapshot: () => ({ items: [], submissions: [] }),
     itemFence: () => undefined,
-    runningTurn: () => null
+    runningTurn: () => null,
+    context: { floor: () => null }
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read-only journal double supplies all members used by the status projection, as in the existing RPC fixture.
   } as unknown as AgentSessionJournal
   const feed = new StructuredAgentSessionStatusFeed({
     sessions: new Map([
       [id, { journal, params: { location: record.location, provider: record.provider } }]
     ]),
-    getRecord,
+    getConversation,
     now: () => 1,
     logger: host.deps.logger,
     namingActiveSessionIds: naming.activeSessionIds

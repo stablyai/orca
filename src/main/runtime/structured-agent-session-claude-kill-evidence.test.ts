@@ -241,10 +241,16 @@ it.each(['prove-owner', 'journal-attach'] as const)(
     if (boundary === 'prove-owner') {
       vi.spyOn(fixture.host.deps.store, 'proveOwner').mockRejectedValueOnce(fault)
     } else {
-      vi.spyOn(
-        fixture.host.collaboratorsForTests().conversationDelivery,
-        'open'
-      ).mockRejectedValueOnce(fault)
+      const delivery = fixture.host.collaboratorsForTests().conversationDelivery
+      const open = delivery.open.bind(delivery)
+      let failed = false
+      vi.spyOn(delivery, 'open').mockImplementation((...args) => {
+        if (!failed && fixture.connections.length > 0) {
+          failed = true
+          return Promise.reject(fault)
+        }
+        return open(...args)
+      })
     }
     const events = vi.spyOn(fixture.host, 'handleAdapterEvent')
     fixture.permitKill.add(0)

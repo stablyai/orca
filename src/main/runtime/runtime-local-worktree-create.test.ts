@@ -1,3 +1,5 @@
+import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type * as RuntimeWorktreeCreateGit from './runtime-worktree-create-git'
 import {
   generatedNameCreateRequest,

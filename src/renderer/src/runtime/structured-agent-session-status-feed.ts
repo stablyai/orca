@@ -147,14 +147,10 @@ function createOwner(target: RuntimeClientTarget): OwnedStatusFeed {
     }
     generation += 1
     namingActiveSessionIds = null
-    const hadSetup = setupHeldWorkspaceIds !== null
     setupHeldWorkspaceIds = null
     confirmedSessions.clear()
-    const previous = snapshot
     revokeSnapshotOwnership()
-    if (hadSetup && previous === snapshot) {
-      emit()
-    }
+    emit()
     dropHandle()
     scheduleReconnect(generation)
   }

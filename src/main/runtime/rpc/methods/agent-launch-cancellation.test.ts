@@ -17,7 +17,7 @@ import {
 import { setStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { loadTestJournal } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { JournalRowWriter } from '../../../native-chat/agent-session-journal/journal-row-writer'
-import * as reducer from '../../../native-chat/agent-session-journal/journal-reducer'
+import { JournalWriteProjection } from '../../../native-chat/agent-session-journal/journal-write-projection'
 import { computeAgentSessionPayloadFingerprint } from '../../../../shared/agent-session-mutation-envelope'
 import { computeAgentLaunchFingerprint } from '../../../../shared/agent-launch-operation'
 import { AGENT_LAUNCH_CANCELLED_CODE } from '../../../../shared/agent-launch-cancellation'
@@ -235,14 +235,17 @@ it.each([
 
 it('keeps positive COMMIT through a failed fold and progress cancel, then ordinary B opens durable A', async () => {
   const h = harness()
-  const apply = reducer.applyJournalRow
+  const prepare = JournalWriteProjection.prototype.prepare
   let injected = false
-  vi.spyOn(reducer, 'applyJournalRow').mockImplementation((state, row, at) => {
-    if (!injected && row.kind === 'submission') {
-      injected = true
+  vi.spyOn(JournalWriteProjection.prototype, 'prepare').mockImplementation(function (db, rows, at) {
+    const adopt = prepare.call(this, db, rows, at)
+    if (injected || !rows.some((row) => row.kind === 'submission')) {
+      return adopt
+    }
+    injected = true
+    return () => {
       throw new Error('postcommit fold fault')
     }
-    return apply(state, row, at)
   })
   const launch = h.call('agent.launchReplay')
   await Promise.race([

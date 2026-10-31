@@ -169,7 +169,7 @@ it.each([
     expect(formatTerminalStartFailure(error) !== undefined).toBe(isNew)
     expect(result.isReattach).toBe(isNew ? undefined : true)
     expect(spawn).toHaveBeenCalledOnce()
-    expect(cancel.mock.calls).toEqual([[id, incarnationId, begin.mock.results[0]?.value]])
+    expect(cancel.mock.calls).toEqual([[id], [id, incarnationId, begin.mock.results[0]?.value]])
     expect(pending.size).toBe(0)
   }
 )

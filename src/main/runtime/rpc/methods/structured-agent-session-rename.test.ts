@@ -23,7 +23,7 @@ import {
   seedTestAgentSessionRecordStore
 } from '../../agent-session-record-store-test-harness'
 import {
-  call,
+  openStream,
   clearStructuredHostStub,
   STRUCTURED_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
@@ -120,7 +120,7 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
       work.reset()
       names.mockClear()
       flatten.mockClear()
-      const reply = await call('agentSession.subscribeStatus', null, STRUCTURED_CLIENT, {
+      const replies = await openStream('agentSession.subscribeStatus', null, STRUCTURED_CLIENT, {
         registerSubscriptionCleanup: (_id: string, cleanup: () => void) => {
           closeStream = cleanup
         }
@@ -182,7 +182,15 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
           }
         ]
       ])
-      expect(reply).toMatchObject({
+      expect(replies[0]).toMatchObject({
+        result: {
+          type: 'snapshot',
+          sessions: [],
+          namingActiveSessionIds: [],
+          setupHeldWorkspaceIds: []
+        }
+      })
+      expect(replies[1]).toMatchObject({
         result: {
           sessions: [],
           namingActiveSessionIds: [],

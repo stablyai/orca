@@ -1655,7 +1655,7 @@
         "orcaStopUnnamedServer": "the remote server",
         "orcaStopUpdate": "Orca on {{machine}} restarted for an update while this response was in progress.",
         "plan": "Plan",
-        "stoppedBeforeStart": "Stopped manually"
+        "stoppedBeforeStart": "Interrupted"
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",

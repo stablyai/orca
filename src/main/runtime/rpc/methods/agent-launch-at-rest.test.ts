@@ -130,7 +130,9 @@ function launchRuntime(folder = false) {
       options: { model: 'gpt-5.6-sol', effort: 'medium' },
       runtimeKind: 'native'
     })),
-    publishStructuredAgentSessionTab: publisher.publishStructuredAgentSessionTab.bind(publisher)
+    publishStructuredAgentSessionTab: vi.fn(
+      publisher.publishStructuredAgentSessionTab.bind(publisher)
+    )
   }
   return runtime
 }
@@ -282,7 +284,10 @@ it.each([
       clientKind: 'mobile',
       pairedDeviceId: 'phone-1',
       pairedDeviceParentId: 'parent-desktop',
-      clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
+      clientCapabilities: [
+        AGENT_LAUNCH_RUNTIME_CAPABILITY,
+        AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+      ]
     },
     creator: { kind: 'paired-device', deviceId: 'parent-desktop' }
   }
@@ -572,9 +577,11 @@ it.each(['before', 'after'] as const)(
         return resolve(input)
       })
     } else {
-      runtime.publishStructuredAgentSessionTab.mockImplementationOnce(async () =>
+      const publish = runtime.publishStructuredAgentSessionTab.getMockImplementation()!
+      runtime.publishStructuredAgentSessionTab.mockImplementationOnce(async (input) => {
+        await publish(input)
         controller.abort()
-      )
+      })
     }
     const running = executeAgentLaunch({
       runtime,

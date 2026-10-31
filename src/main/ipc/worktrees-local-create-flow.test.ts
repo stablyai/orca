@@ -719,7 +719,7 @@ describe('registerWorktreeHandlers', () => {
         command: `bash -lc 'eval "\${${SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV}:?missing}"'`
       })
     )
-    expect(result.setup?.command).toContain('printf')
+    expect(result.setup?.envVars[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain('printf')
     const holds = runtimeStub.workspaceSetupAgentStarts
     expect(holds.pending('repo-1::/workspace/improve-dashboard')).not.toBeNull()
     expect(result.setup?.envVars[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(

@@ -1,3 +1,4 @@
+import { SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV } from '../../shared/setup-agent-sequencing'
 import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../../shared/constants'
@@ -240,7 +241,9 @@ describe('host-created workspaces awaiting their agent chat', () => {
       }
       const held = runtime.workspaceSetupAgentStarts.pending(result.worktree.id)
       expect(held).not.toBeNull()
-      expect(spawn.mock.calls[1]?.[0].command).toContain('printf')
+      expect(spawn.mock.calls[1]?.[0].env?.[SETUP_AGENT_SEQUENCE_SETUP_SCRIPT_ENV]).toContain(
+        'printf'
+      )
       await vi.advanceTimersByTimeAsync(60_000)
       await held
       expect(runtime.workspaceSetupAgentStarts.pending(result.worktree.id)).toBeNull()

@@ -1,3 +1,4 @@
+import { subscribeToNativeChatComposerDraftAppend } from '../components/native-chat/native-chat-composer-draft-store'
 // @vitest-environment happy-dom
 
 import { replaceRuntimeEnvironmentRevisions } from './runtime-environment-revision'
@@ -26,8 +27,7 @@ import {
 import {
   readNativeChatDraftCache,
   writeNativeChatDraftCache,
-  clearNativeChatDraftCacheForTests,
-  subscribeToNativeChatDraftAppend
+  clearNativeChatDraftCacheForTests
 } from '../components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/native-chat-composer-draft-store'
 import { instrumentUnrelatedTerminalBindings } from './workspace-initial-terminal-census.test-fixture'
@@ -348,7 +348,7 @@ it('returns dismissed unknown input once at the accepted chat, preserving newer 
     expect(getStructuredAgentSessionPendingSends(SESSION)).toEqual([])
     dismissHostCreatedLaunchPrompt(SESSION)
   })
-  const stop = subscribeToNativeChatDraftAppend(scope, observe)
+  const stop = subscribeToNativeChatComposerDraftAppend(scope, observe)
   try {
     deliver(topology('chat'))
     expect(observe).toHaveBeenCalledOnce()
@@ -642,6 +642,7 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
     const reply = vi.fn()
     Object.assign(window.api, {
       ui: {
+        onLaunchRecipe: () => () => {},
         onCreateTerminal: (listener: typeof reveal) => {
           reveal = listener
           return () => {}

@@ -43,7 +43,7 @@ it.skipIf(process.platform === 'win32')(
           `${appendNativeSetupCompletion(wrapped.setupCommand, setup.envVars.ORCA_SETUP_COMPLETION_TOKEN, 'posix')}; printf 'parent-alive\\n'`
         ],
         cwd: checkout,
-        env: { ...process.env, ...setup.envVars, HOME: root },
+        env: { ...process.env, ...setup.envVars, ...wrapped.setupEnv, HOME: root },
         timeoutMs: 10_000
       })
       expect(result.code, result.stderr).toBe(0)

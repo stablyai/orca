@@ -79,10 +79,12 @@ export class JournalRowWriter {
           return adopt
         },
         streamed,
-        (adopt) => adopt?.(),
+        (adopt) => {
+          receipt?.committed()
+          adopt?.()
+        },
         receipt?.transactionObservation
       )
-      receipt?.committed()
       this.deps.commit([row], savedAt)
       return row
     })
@@ -127,10 +129,12 @@ export class JournalRowWriter {
         return adopt
       },
       streamed,
-      (adopt) => adopt?.(),
+      (adopt) => {
+        receipt?.committed()
+        adopt?.()
+      },
       receipt?.transactionObservation
     )
-    receipt?.committed()
     this.deps.commit(rows, ts)
     return rows
   }

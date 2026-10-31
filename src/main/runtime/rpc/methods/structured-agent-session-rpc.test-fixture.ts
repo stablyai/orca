@@ -278,10 +278,11 @@ export async function call(
 export async function openStream(
   method: string,
   params: unknown,
-  client: Parameters<typeof call>[2]
+  client: Parameters<typeof call>[2],
+  runtimeOverrides: Record<string, unknown> = {}
 ): Promise<RpcResponse[]> {
   const replies: RpcResponse[] = []
-  await dispatcher().dispatchStreaming(
+  await dispatcher(runtimeOverrides).dispatchStreaming(
     request(method, params),
     (raw) => replies.push(JSON.parse(raw) as RpcResponse),
     client

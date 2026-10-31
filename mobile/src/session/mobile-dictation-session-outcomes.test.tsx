@@ -145,6 +145,8 @@ function mount(
       commandFieldAnchorRef: useRef(null),
       activeHandleRef: useRef('t1'),
       flushPendingLiveInputBeforeExternalSend: async () => true,
+      setupInputHeld: false,
+      readSetupAgentStartHeld: () => false,
       canSend: true,
       canCompose: true,
       liveInputEnabled: options.liveInput,

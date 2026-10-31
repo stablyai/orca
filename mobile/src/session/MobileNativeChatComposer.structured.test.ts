@@ -18,6 +18,7 @@ vi.mock('react-native', async () => {
   const React = await import('react')
   return {
     ActivityIndicator: 'ActivityIndicator',
+    Platform: { OS: 'ios' },
     Image: 'Image',
     Keyboard: { dismiss: vi.fn() },
     Pressable: 'Pressable',

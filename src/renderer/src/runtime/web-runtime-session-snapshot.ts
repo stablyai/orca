@@ -148,7 +148,8 @@ export async function refreshWebRuntimeSessionTabsSnapshot(
       getRuntimeEnvironmentRevision(environmentId) !== expectedEnvironmentPairingRevision ||
       getRuntimeEnvironmentConnectionGeneration(environmentId) !==
         expectedEnvironmentConnectionGeneration ||
-      getWebSessionTabsTrackingGeneration(environmentId) !== expectedTrackingGeneration
+      trackingLifecycle.getWebSessionTabsTrackingGeneration(environmentId) !==
+        expectedTrackingGeneration
     ) {
       return
     }

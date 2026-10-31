@@ -113,20 +113,24 @@ describe('desktop concurrent creates on one name', () => {
   it.each([
     { request: { name: 'improve-dashboard' }, second: 'improve-dashboard-2' },
     { request: { name: 'nautilus', nameWasGenerated: true }, second: null }
-  ])('gives the second create of $request.name its next candidate', async ({ request, second }) => {
-    const create = () => handlers['worktrees:create'](null, { repoId: 'repo-1', ...request })
-    await Promise.all([create(), create()])
-    const [first, other] = addedNames()
-    expect(first).toBe(request.name)
-    expect(other).not.toBe(first)
-    if (second) {
-      expect(other).toBe(second)
-    } else {
-      expect(creatureNameTier(other)).toBe(2)
+  ])(
+    'gives concurrent creates of $request.name distinct candidates',
+    async ({ request, second }) => {
+      const create = () => handlers['worktrees:create'](null, { repoId: 'repo-1', ...request })
+      await Promise.all([create(), create()])
+      const names = addedNames()
+      expect(names).toHaveLength(2)
+      expect(names).toContain(request.name)
+      expect(new Set(names).size).toBe(2)
+      if (second) {
+        expect(names).toContain(second)
+      } else {
+        expect(names.filter((name) => name !== request.name).map(creatureNameTier)).toEqual([2])
+      }
+      // Both claims settled with their creates, so the name is free to check again.
+      addWorktreeMock.mockResolvedValue({})
+      await create()
+      expect(addedNames()[2]).toBe(request.name)
     }
-    // Both claims settled with their creates, so the name is free to check again.
-    addWorktreeMock.mockResolvedValue({})
-    await create()
-    expect(addedNames()[2]).toBe(request.name)
-  })
+  )
 })

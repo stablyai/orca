@@ -114,6 +114,8 @@ type SessionScope = Pick<
   | 'commandFieldAnchorRef'
   | 'activeHandleRef'
   | 'flushPendingLiveInputBeforeExternalSend'
+  | 'setupInputHeld'
+  | 'readSetupAgentStartHeld'
   | 'canSend'
   | 'canCompose'
   | 'liveInputEnabled'
@@ -178,6 +180,8 @@ function Probe({ client, tab, connState, dictationEnabled }: ProbeOptions): null
     commandFieldAnchorRef: useRef(null),
     activeHandleRef,
     flushPendingLiveInputBeforeExternalSend: async () => true,
+    setupInputHeld: false,
+    readSetupAgentStartHeld: () => false,
     canSend: gate.canSend,
     canCompose: gate.canCompose,
     liveInputEnabled: false,

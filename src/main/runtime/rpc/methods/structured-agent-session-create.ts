@@ -273,13 +273,11 @@ export async function createStructuredAgentSessionForWorktree(args: {
   hostFoundingAttempt?: HostFoundingAttempt
   signal?: AbortSignal
 }): Promise<AgentSessionMutationResult<AgentSessionAttachResult>> {
-  // An at-rest create's ledger row is keyed by its intent, as a client's create is.
-  const envelope = args.atRest
-    ? {
-        ...args.envelope,
-        payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
-      }
-    : args.envelope
+  // Setup can promote this in-process create to rest after host admission resolves.
+  const envelope = {
+    ...args.envelope,
+    payloadFingerprint: structuredAgentSessionCreateIntentFingerprint(args)
+  }
   const prepared = await resolveUncommittedStructuredCreate(() =>
     prepareStructuredAgentSessionCreateForWorktree({ ...args, envelope })
   )

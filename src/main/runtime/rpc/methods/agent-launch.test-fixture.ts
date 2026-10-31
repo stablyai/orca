@@ -1,3 +1,4 @@
+import { AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-create-capabilities'
 import { WORKTREE_META_PERSISTED_DEFAULTS } from '../../../../shared/worktree/meta-persisted-defaults'
 /** Use one runtime stub for RPC and replay tests so they exercise the same host surface. */
 
@@ -212,7 +213,10 @@ export function rpcContext(
 export const CAPABLE_CLIENT: Partial<RpcContext> = {
   clientKind: 'mobile',
   pairedDeviceId: 'device-1',
-  clientCapabilities: [AGENT_LAUNCH_RUNTIME_CAPABILITY]
+  clientCapabilities: [
+    AGENT_LAUNCH_RUNTIME_CAPABILITY,
+    AGENT_SESSION_CREATE_MESSAGE_RUNTIME_CAPABILITY
+  ]
 }
 
 export function metadataRow(instanceId: string) {

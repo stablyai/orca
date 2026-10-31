@@ -25,7 +25,7 @@ describe('host worktree creation while its renderer is unavailable', () => {
     const release = await holdInFlightWorktreeCreate('repo-1', TEST_WORKTREE_PATH)
     let completed = 0
     const calls = [`id:${TEST_WORKTREE_ID}`, `path:${TEST_WORKTREE_PATH}`].map((selector) =>
-      runtime['resolveWorktreeSelector'](selector).finally(() => {
+      runtime['resolveGitWorktreeSelector'](selector).finally(() => {
         completed++
       })
     )

@@ -225,7 +225,8 @@ describe('a throw after createWorktree succeeds no longer strands the creation s
         )
       }
       expect(store.removePendingWorktreeCreation).toHaveBeenCalledWith('creation-1', {
-        cleanupVm: false
+        cleanupVm: false,
+        reason: 'completed'
       })
     }
   )

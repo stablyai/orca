@@ -33,6 +33,16 @@ const mocks = vi.hoisted(() => {
   return Object.assign(captured, fns, { sendNativeChatTypedCommand: vi.fn() })
 })
 
+vi.mock('./use-native-chat-setup-hold', () => ({
+  useNativeChatSetupHold: () => ({
+    held: false,
+    inputHeld: false,
+    readHeld: () => false,
+    worktreeId: 'wt-1',
+    executionHostId: 'local'
+  })
+}))
+
 vi.mock('../../store', () => {
   const state = {
     dictationState: 'idle',

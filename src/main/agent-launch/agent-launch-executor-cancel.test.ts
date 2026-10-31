@@ -72,7 +72,6 @@ function harness(options: {
   const createSurfaces = () => ({
     createStructuredSession,
     createTerminalAgent,
-    deliverStructuredPrompt,
     deliverTerminalPrompt
   })
   return {

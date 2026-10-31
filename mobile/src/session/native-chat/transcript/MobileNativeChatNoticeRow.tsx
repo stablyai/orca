@@ -226,7 +226,7 @@ export function MobileNativeChatNoticeRow({
       return (
         <Text selectable={INLINE_TEXT_SELECTION} style={aside}>
           {notice.presentation === NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION
-            ? t('chat.notice.stoppedManually', 'Stopped manually')
+            ? t('worktree.agentRowDisplay.interrupted', 'Interrupted')
             : notice.text}
         </Text>
       )

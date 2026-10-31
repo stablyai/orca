@@ -16,25 +16,27 @@ describe('an operation whose agent start throws', () => {
   it('is refused as a failed restart, with the error only in the log', async () => {
     const log = recordingStructuredAgentSessionLogger()
     const cause = new Error('EACCES: permission denied, open /Users/me/.orca/leases.json')
+    const readRecord = () =>
+      foundAgentSessionRecord(
+        {
+          sessionId: SESSION,
+          provider: 'codex',
+          accountHome: { variable: 'CODEX_HOME', path: '/test/codex' },
+          location: {
+            workspaceId: 'workspace-1',
+            workspaceKind: 'git-worktree',
+            executionHostId: 'local',
+            wslDistro: null
+          }
+        },
+        { claimKeyId: 'test-key', now: 0 }
+      )
     const context = {
       deps: {
         logger: log.logger,
         store: {
-          requireWritableRecord: () =>
-            foundAgentSessionRecord(
-              {
-                sessionId: SESSION,
-                provider: 'codex',
-                accountHome: { variable: 'CODEX_HOME', path: '/test/codex' },
-                location: {
-                  workspaceId: 'workspace-1',
-                  workspaceKind: 'git-worktree',
-                  executionHostId: 'local',
-                  wslDistro: null
-                }
-              },
-              { claimKeyId: 'test-key', now: 0 }
-            )
+          getRecord: readRecord,
+          requireWritableRecord: readRecord
         }
       },
       sessions: new Map(),
