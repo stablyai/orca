@@ -1,10 +1,9 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { getDefaultWorkspaceSession } from '../shared/constants'
 import type { Repo } from '../shared/repo-types'
-import type { WorktreeMeta } from '../shared/worktree/meta-types'
 import type { GitWorktreeInfo } from '../shared/worktree/types'
 import type { Store } from './persistence/loading-store/store'
-import type { WorktreeRemovalRecord } from './worktree-removal-records'
+import { storeWorktreeMeta } from './runtime/runtime-store-partial-fixture'
 
 const { presenceMock, branchMock, headMock } = vi.hoisted(() => ({
   presenceMock: vi.fn(),
@@ -48,19 +47,18 @@ function storeWith(options: {
 }): { store: Store; forget: (id: string) => void } {
   const tabsFor = new Set(options.tabsFor ?? [])
   const metaFor = new Set(options.metaFor ?? [])
-  const store = {
-    getWorkspaceSession: () => {
-      options.onSessionRead?.()
-      return {
-        ...getDefaultWorkspaceSession(),
-        tabsByWorktree: Object.fromEntries([...tabsFor].map((id) => [id, []]))
-      }
-    },
-    getAllWorktreeMeta: () =>
-      Object.fromEntries([...metaFor].map((id) => [id, {} as WorktreeMeta])),
-    getAllWorktreeMetaForHost: () =>
-      Object.fromEntries([...metaFor].map((id) => [id, {} as WorktreeMeta]))
-  } as unknown as Store
+  const store: Store = Object.create(null)
+  store.getWorkspaceSession = () => {
+    options.onSessionRead?.()
+    return {
+      ...getDefaultWorkspaceSession(),
+      tabsByWorktree: Object.fromEntries([...tabsFor].map((id) => [id, []]))
+    }
+  }
+  store.getAllWorktreeMeta = () =>
+    Object.fromEntries([...metaFor].map((id) => [id, storeWorktreeMeta()]))
+  store.getAllWorktreeMetaForHost = () =>
+    Object.fromEntries([...metaFor].map((id) => [id, storeWorktreeMeta()]))
   return {
     store,
     forget: (id) => {
@@ -149,8 +147,14 @@ describe('retainKnownWorktreesInListing', () => {
     pendingWorktreeRemovals.set(`repo-1::${linkedWsl}`, {
       worktreeId: `repo-1::${linkedWsl}`,
       repoId: 'repo-1',
-      worktreePath: 'C:/work/feature'
-    } as WorktreeRemovalRecord)
+      repoPath: repo.path,
+      worktreePath: 'C:/work/feature',
+      branch: 'feature',
+      head: 'def',
+      deleteBranch: false,
+      force: false,
+      requestedAt: 1
+    })
 
     const listed = await retainKnownWorktreesInListing(store, repo, [row(mainWsl, true)])
 
@@ -162,7 +166,7 @@ describe('retainKnownWorktreesInListing', () => {
 
     const listed = await retainKnownWorktreesInListing(
       store,
-      { ...repo, executionHostId: 'ssh:box' } as Repo,
+      { ...repo, executionHostId: 'ssh:box' },
       []
     )
 
