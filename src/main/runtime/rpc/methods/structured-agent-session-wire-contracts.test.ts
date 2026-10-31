@@ -226,7 +226,7 @@ describe('options without a selected model across client versions', () => {
   }
 
   it.each(['runtime', 'mobile'] as const)(
-    'refuses the captured model-less report for an older %s client',
+    'labels the captured model-less report for an older %s client',
     async (clientKind) => {
       hostCalls.readOptions.mockResolvedValue(missingModelReport())
       const reply = await call(
@@ -238,10 +238,12 @@ describe('options without a selected model across client versions', () => {
         }
       )
       expect(reply).toMatchObject({
-        ok: false,
-        error: { message: 'structured_agent_session_unsupported' }
+        ok: true,
+        result: {
+          current: { model: '' },
+          models: [{ id: '', label: 'Model not reported', isDefault: false, efforts: [] }]
+        }
       })
-      expect(reply).not.toHaveProperty('result')
       expect(hostCalls.readOptions).toHaveBeenCalledTimes(1)
     }
   )
@@ -308,7 +310,8 @@ describe('options without a selected model across client versions', () => {
     expect(
       await call('agentSession.options', { sessionId: SESSION }, STRUCTURED_CLIENT)
     ).toMatchObject({
-      ok: false
+      ok: true,
+      result: { current: { model: '' } }
     })
     const report = { models: [], current: { model: 'later-model', effort: 'off' } }
     hostCalls.readOptions.mockResolvedValueOnce(report)

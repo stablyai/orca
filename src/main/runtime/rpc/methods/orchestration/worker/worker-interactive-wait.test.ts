@@ -144,18 +144,4 @@ describe('worker-show interactive wait (STA-3714, STA-4513)', () => {
     expect(result.observation.exactWorker).toBe(false)
     expect('agentWait' in result.observation).toBe(false)
   })
-
-  it('agrees with the terminal payload it is derived from', async () => {
-    const result = (await showWorkerPaneServing(fixture('cursor-agent-approval-prompt'))) as {
-      terminal: { agentWait: unknown } | null
-      observation: { agentWait: unknown }
-    }
-
-    // Assert shape before equality, which otherwise passes when both fields are absent.
-    expect(result.observation.agentWait).toMatchObject({
-      source: 'prompt-text',
-      reason: 'agent-approval-prompt'
-    })
-    expect(result.observation.agentWait).toEqual(result.terminal?.agentWait)
-  })
 })

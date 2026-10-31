@@ -1,7 +1,14 @@
+import { resolveAgentModelCatalogReadRecords } from './agent-model-catalog-running-account'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import { ClaudeProfileRouter } from '../../claude-accounts/claude-profile-router'
+import { installClaudeProfileRouter } from '../../claude-accounts/claude-profile-installed-router'
+import { resolveStructuredClaudeAccountHomePath } from '../../runtime/structured-agent-account-home'
 
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
@@ -465,6 +472,147 @@ describe('one account, one catalog key', () => {
     // …is what the next new chat reads for the same home: no cold start for this account.
     const read = await service.read({ agent: 'grok', waitForListing: true })
     expect(read.origin !== 'unknown' && read.models.map((model) => model.id)).toEqual(['gpt-live'])
+  })
+
+  it('a chat that moved accounts lists under the account it runs on, never its first one', async () => {
+    const store = new AgentModelCatalogStore()
+    const founded = record('/accounts/a')
+    let live: AgentSessionAccountHome | undefined = HOME('GROK_HOME', '/accounts/b')
+    const launchAccountHome = vi.fn(async (): Promise<AgentSessionAccountHome | null> =>
+      HOME('GROK_HOME', '/accounts/c')
+    )
+    const service = createAgentModelCatalogService({
+      store,
+      getConversation: () => agentSessionConversationView(founded),
+      getRecord: () => founded,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => HOME('GROK_HOME', '/accounts/c'),
+      liveAccountHome: () => live
+    })
+    service.recordLiveListing('session-1', { models: listing('on-b').models })
+    const keyOf = (path: string) => agentModelCatalogFingerprintForRecord(record(path))
+    expect(store.get(keyOf('/accounts/a'))).toBeNull()
+    expect(store.get(keyOf('/accounts/b'))?.models.map((model) => model.id)).toEqual(['on-b'])
+    const ids = async () => {
+      const params = { agent: 'grok', sessionId: 'session-1', savedOnly: true }
+      const operation = service.captureRead(params)
+      const records = await resolveAgentModelCatalogReadRecords(
+        {
+          getConversation: () => agentSessionConversationView(founded),
+          getRecord: () => founded,
+          drivesRecord: () => true,
+          liveAccountHome: () => live,
+          launchAccountHome
+        },
+        params
+      )
+      const read = await service.read({ ...params, records, operation })
+      return read.origin === 'unknown' ? null : read.models.map((model) => model.id)
+    }
+    expect(await ids()).toEqual(['on-b'])
+    expect(launchAccountHome).not.toHaveBeenCalled()
+    // At rest, the chat reads the account its next start launches under.
+    live = undefined
+    expect(await ids()).toBeNull()
+    store.recordSuccess(keyOf('/accounts/a'), 'grok', listing('on-a'), 'discovery')
+    launchAccountHome.mockResolvedValueOnce(null)
+    expect(await ids()).toEqual(['on-a'])
+  })
+
+  it('does not read A while selected B is missing, and recovers on the next read', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'chat-account-switch-catalog-'))
+    const router = new ClaudeProfileRouter({
+      dataRoot: root,
+      userHome: join(root, 'personal'),
+      env: {},
+      getSettings: () => ({
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: 'b',
+        activeClaudeManagedAccountIdsByRuntime: undefined,
+        agentStatusHooksEnabled: false,
+        disabledTuiAgents: []
+      })
+    })
+    installClaudeProfileRouter(router)
+    try {
+      const founded = {
+        ...record('/accounts/a'),
+        provider: 'claude',
+        accountHome: HOME('CLAUDE_CONFIG_DIR', '/accounts/a')
+      }
+      const store = new AgentModelCatalogStore()
+      const keyA = agentModelCatalogFingerprintForRecord(founded)
+      store.recordSuccess(keyA, 'claude', listing('only-a'), 'discovery')
+      const savedA = structuredClone(store.get(keyA))
+      const readEntry = vi.spyOn(store, 'get')
+      const readFailure = vi.spyOn(store, 'failure')
+      const probe = vi.fn(async () => listing('only-b'))
+      const recordWorkspacePath = vi.fn(async () => root)
+      const resolveAccountHome = vi.fn(async () => founded.accountHome)
+      const service = createAgentModelCatalogService({
+        store,
+        getConversation: () => agentSessionConversationView(founded),
+        getRecord: () => founded,
+        drivesRecord: () => true,
+        resolveAccountHome,
+        recordWorkspacePath,
+        probes: { claude: probe }
+      })
+      const launchAccountHome = async (record: AgentSessionRecord) =>
+        HOME(
+          'CLAUDE_CONFIG_DIR',
+          resolveStructuredClaudeAccountHomePath({
+            launchEnv: {},
+            wslDistro: record.location.wslDistro,
+            getClaudeConfigDirectory: () => router.systemDefaultHome()
+          })
+        )
+      const read = { agent: 'claude', sessionId: 'session-1', inSessionWorkspace: true as const }
+      const scopedRead = async (params: Parameters<typeof service.read>[0]) => {
+        const operation = service.captureRead(params)
+        const records = await resolveAgentModelCatalogReadRecords(
+          {
+            getConversation: () => agentSessionConversationView(founded),
+            getRecord: () => founded,
+            drivesRecord: () => true,
+            launchAccountHome
+          },
+          params
+        )
+        return service.read({ ...params, records, operation })
+      }
+      expect(router.systemDefaultLogin()).toBeNull()
+      for (const savedOnly of [true, false]) {
+        expect(await scopedRead({ ...read, savedOnly })).toEqual({ origin: 'unknown' })
+      }
+      expect(recordWorkspacePath).not.toHaveBeenCalled()
+      expect(resolveAccountHome).not.toHaveBeenCalled()
+      expect(probe).not.toHaveBeenCalled()
+      expect(readEntry).not.toHaveBeenCalled()
+      expect(readFailure).not.toHaveBeenCalled()
+      mkdirSync(router.accountHome('b'), { recursive: true })
+      expect(await scopedRead({ ...read, waitForListing: true })).toMatchObject({
+        origin: 'probe',
+        models: [{ id: 'only-b' }]
+      })
+      expect(probe).toHaveBeenCalledExactlyOnceWith(
+        HOME('CLAUDE_CONFIG_DIR', router.accountHome('b')),
+        expect.objectContaining({
+          signal: expect.any(AbortSignal),
+          workspacePath: root,
+          operation: expect.objectContaining({
+            current: expect.any(Function),
+            deadline: expect.any(Number),
+            signal: expect.any(AbortSignal)
+          })
+        })
+      )
+      expect(store.get(keyA)).toEqual(savedA)
+      expect(founded.accountHome).toEqual(HOME('CLAUDE_CONFIG_DIR', '/accounts/a'))
+    } finally {
+      installClaudeProfileRouter(undefined)
+      rmSync(root, { recursive: true, force: true })
+    }
   })
 })
 

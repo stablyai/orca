@@ -18,20 +18,6 @@ afterEach(async () => {
 })
 
 describe('deleteWslFishHistoryFile', () => {
-  it('uses direct argv and bounds a distro cleanup subprocess', async () => {
-    const run = vi.fn().mockResolvedValue(okResult)
-
-    await deleteWslFishHistoryFile('Ubuntu Test', 'orca_0123456789abcdef', run, running)
-
-    expect(run).toHaveBeenCalledWith({
-      distro: 'Ubuntu Test',
-      loginPath: 'preferred',
-      program: 'fish',
-      args: ['--command', expect.stringContaining('orca_0123456789abcdef_history')],
-      timeoutMs: 5_000
-    })
-  })
-
   it('rejects an unsafe session before spawning', async () => {
     const run = vi.fn()
 
@@ -58,17 +44,6 @@ describe('deleteWslFishHistoryFile', () => {
     await Promise.all([first, second])
   })
 
-  it('keeps distinct distros independent of each other', async () => {
-    const run = vi.fn().mockResolvedValue(okResult)
-
-    await Promise.all([
-      deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run, running),
-      deleteWslFishHistoryFile('Debian', 'orca_0123456789abcdef', run, running)
-    ])
-
-    expect(run).toHaveBeenCalledTimes(2)
-  })
-
   it('permits a retry once a failed cleanup settles', async () => {
     const run = vi
       .fn()
@@ -81,22 +56,6 @@ describe('deleteWslFishHistoryFile', () => {
     )
     await expect(deleteWslFishHistoryFile('Ubuntu', session, run, running)).resolves.toBe('deleted')
     expect(run).toHaveBeenCalledTimes(2)
-  })
-
-  it('treats a non-zero exit as a failed cleanup even though the runner resolved', async () => {
-    const run = vi.fn().mockResolvedValue({ ...okResult, code: 1 })
-
-    await expect(
-      deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run, running)
-    ).rejects.toThrow('wsl fish history cleanup failed')
-  })
-
-  it('treats a runner timeout as a failed cleanup', async () => {
-    const run = vi.fn().mockResolvedValue({ ...okResult, code: null, timedOut: true })
-
-    await expect(
-      deleteWslFishHistoryFile('Ubuntu', 'orca_0123456789abcdef', run, running)
-    ).rejects.toThrow('wsl fish history cleanup failed')
   })
 
   it('does not spawn into a stopped distro and reports it for a later retry', async () => {

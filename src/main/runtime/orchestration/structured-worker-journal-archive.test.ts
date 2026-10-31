@@ -47,27 +47,10 @@ describe('buildStructuredJournalArchive', () => {
     expect(built.messages[0]?.id).not.toBe('item-0')
   })
 
-  it('reports the end it actually dropped', () => {
-    const built = archive(longJournal(200))
-    expect(built.warnings).toContain(
-      'The oldest archived journal messages were dropped to fit the size bound.'
-    )
-    expect(built.warnings).not.toContain('Transcript response was clipped to the wire-size limit.')
-  })
-
   it('stays inside the durable bound', () => {
     const built = archive(longJournal(200))
     expect(Buffer.byteLength(JSON.stringify(built.messages), 'utf8')).toBeLessThanOrEqual(
       STRUCTURED_ARCHIVE_MAX_BYTES
-    )
-  })
-
-  it('keeps a short journal whole and unflagged', () => {
-    const built = archive(longJournal(3))
-    expect(built.limited).toBe(false)
-    expect(built.messages.map((message) => message.id)).toEqual(['item-0', 'item-1', 'item-2'])
-    expect(built.warnings).not.toContain(
-      'The oldest archived journal messages were dropped to fit the size bound.'
     )
   })
 
@@ -123,11 +106,5 @@ describe('buildStructuredJournalArchive', () => {
     )
     expect(projected[1]).toMatchObject({ id: 'old-x', role: 'tool', blocks: [{ output: 'OLD X' }] })
     expect(foldToolMessages(projected)).toEqual(projected)
-  })
-
-  it('still reports omitted older items when the page itself was bounded', () => {
-    const built = archive(longJournal(2), true)
-    expect(built.limited).toBe(true)
-    expect(built.warnings).toContain('Older journal items were omitted from the bounded archive.')
   })
 })

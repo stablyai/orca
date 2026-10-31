@@ -17271,7 +17271,7 @@
       "id": "native-chat-readability-local-repo",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17304,7 +17304,7 @@
       "id": "native-chat-readability-remote-repo",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17337,7 +17337,7 @@
       "id": "native-chat-readability-refused",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
