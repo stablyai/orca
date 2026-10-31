@@ -73,7 +73,7 @@ npm i @orca/expo-two-way-audio
 
 ## Notes
 
-Some audio features of expo-two-way-audio like Acoustic Echo Cancelling, noise reduction or microphone modes (iOS) don't work on simulator. Run the Orca mobile app on a real device to test these features.
+iOS Simulator initialization is disabled because CoreAudio RemoteIO voice-chat startup can abort the process on an RPC timeout. Run the Orca mobile app on a real device to use or test dictation.
 
 ```bash
 # iOS
