@@ -1,6 +1,7 @@
 import type {
   AgentSenderAssociation,
-  AgentSenderPublication
+  AgentSenderPublication,
+  AgentSenderRevision
 } from '../../shared/agent-sender-associations'
 import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import { parsePaneKey } from '../../shared/stable-pane-id'
@@ -15,7 +16,6 @@ import {
 } from './runtime-agent-sender-history'
 import type { OrchestrationDb } from './orchestration/db'
 import { AgentSenderPublisher, type AgentSenderScope } from './runtime-agent-sender-publication'
-import type { AgentSenderRevision } from '../../shared/agent-sender-associations'
 
 type Dependencies = RuntimeAgentOrchestrationDependencies & {
   peerFingerprint(): string | undefined

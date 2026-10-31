@@ -105,7 +105,8 @@ export function agentMessageSenderOpens(
         target.sender === 'chat' ||
         (target.sender === 'terminal' && GONE_TERMINAL_SENDER_CLICK === 'host-lookup')
       )
-    default:
+    case 'ambiguous':
+    case 'replaced':
       return false
   }
 }
