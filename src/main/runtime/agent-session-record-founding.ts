@@ -32,6 +32,7 @@ export function agentSessionRecordIdentityFields(
     location: identity.location,
     provider: identity.provider,
     accountHome: identity.accountHome,
+    accountHomeConfirmed: true as const,
     ...(Object.keys(options).length > 0 ? { options } : {}),
     ...(permissionMode ? { permissionMode } : {}),
     ...(identity.launchArgs ? { launchArgs: [...identity.launchArgs] } : {}),

@@ -12,6 +12,7 @@ import {
   type AgentSessionHostStatusPresentation
 } from '../../../../shared/agent-session-host-status-rows'
 import type { NativeChatTextBlock } from '../../../../shared/native-chat-types'
+import { AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION } from '../../../../shared/agent-session-account-switch-row'
 import {
   NATIVE_CHAT_NOTICE_COPY,
   nativeChatNoticeLook
@@ -110,6 +111,21 @@ export function NativeChatNoticeRow({
     return (
       <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
         {HOST_STATUS_WORDS[look.presentation]()}
+      </p>
+    )
+  }
+  if (block.presentation === AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION) {
+    return (
+      <p className="min-w-0 max-w-full select-text text-sm text-chat-foreground-faint [overflow-wrap:anywhere]">
+        {translate(
+          'components.native-chat.notices.accountSwitched',
+          'Now on {{account}} · same conversation',
+          {
+            account:
+              block.accountSwitch?.account ??
+              translate('accounts.claude.systemDefault', 'System default')
+          }
+        )}
       </p>
     )
   }

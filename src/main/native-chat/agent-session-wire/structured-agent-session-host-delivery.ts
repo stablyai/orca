@@ -1,7 +1,10 @@
 // Open conversations with queued sends always need delivery; opening also wakes leftover recovery.
 
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
-import { hostStructuredAgentSessionCurrentWork } from './structured-agent-session-host-current-work'
+import {
+  hostStructuredAgentSessionCurrentWork,
+  hostStructuredAgentSessionRetainedWork
+} from './structured-agent-session-host-current-work'
 import { holdClosedStructuredAgentSessionSends } from './structured-agent-session-host-lifetime'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import {
@@ -31,6 +34,7 @@ import {
   retireOutgrownStructuredAgentSessionChild,
   structuredAgentSessionChildOwesWork
 } from './structured-agent-session-outgrown-child'
+import { launchedOnOtherAccount } from './structured-agent-session-account-follow'
 import {
   structuredAgentSessionLaunchPermission,
   structuredAgentSessionInputCompilerPermission,
@@ -84,19 +88,14 @@ export function createStructuredAgentSessionConversationDelivery(input: {
   >
 }): StructuredAgentSessionConversationDelivery {
   const { deps, sessions } = input
-  const retainedWork = (sessionId: string, continuingId?: string) => ({
-    currentWork: () =>
-      hostStructuredAgentSessionCurrentWork({ store: deps.store, sessions }, sessionId),
-    childWork: () => input.clientDelivery.readChildWork(sessionId),
-    childWorkOpen: () => input.clientDelivery.childWorkOpen(sessionId),
-    hasOpenDispatch: () => {
-      const record = deps.store.getConversation(sessionId)
-      return record !== null && deps.hasOpenDispatch?.(record) === true
-    },
-    providerHoldsDispatch: () =>
-      deps.adapter.holdsDispatch?.(sessionId) === true ||
-      [...(sessions.get(sessionId)?.child?.heldSends?.() ?? [])].some((id) => id !== continuingId)
-  })
+  const retainedWork = (sessionId: string, continuingId?: string) =>
+    hostStructuredAgentSessionRetainedWork(
+      deps,
+      sessions,
+      input.clientDelivery,
+      sessionId,
+      continuingId
+    )
   const loop = new StructuredAgentSessionDeliveryLoop({
     sessions,
     adapter: deps.adapter,
@@ -126,6 +125,7 @@ export function createStructuredAgentSessionConversationDelivery(input: {
             (record ? structuredAgentSessionLaunchPermission(deps, record) : null)
           )
         },
+        launchedOnOtherAccount: () => launchedOnOtherAccount(deps, sessionId, session),
         permissionRequiresAcquisition: (mode) =>
           continuingId
             ? true

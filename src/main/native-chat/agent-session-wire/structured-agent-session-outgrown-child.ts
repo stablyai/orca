@@ -1,4 +1,4 @@
-// Replace an outgrown child only when its provider needs acquisition to apply the current choice.
+// Replace an outgrown child only when its provider needs acquisition to apply the current choice or account.
 
 import { readWholeAgentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { isRootAgentJournalItem } from '../../../shared/agent-session-journal-producer'
@@ -85,6 +85,13 @@ async function launchedWithOtherPermissionMode(
   )
 }
 
+async function launchedOnOtherAccount(
+  child: OutgrownChildReading['child'],
+  current: (() => Promise<boolean>) | undefined
+): Promise<boolean> {
+  return !!child && child.phase !== 'starting' && !child.close && !!current && (await current())
+}
+
 /** Orca mail notices are not the user's turn: they keep the running process and its choices. */
 function picksNewLaunchModel(
   session: OutgrownChildReading,
@@ -116,6 +123,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
     next?: AgentJournalSubmission
     requiresModelTransitionRestart?: (next: AgentJournalSubmission) => boolean
     permissionRequiresAcquisition?: (mode: AgentChatPermissionChoice) => boolean
+    /** The account picker now selects another account than the child launched on. */
+    launchedOnOtherAccount?: () => Promise<boolean>
     stopAgent: (sessionId: string) => Promise<void>
     logger: StructuredAgentSessionLogger
   }
@@ -129,7 +138,8 @@ export async function retireOutgrownStructuredAgentSessionChild(
         session.child,
         deps.launchPermission,
         deps.permissionRequiresAcquisition
-      ))
+      )) ||
+      (await launchedOnOtherAccount(session.child, deps.launchedOnOtherAccount))
     ) ||
     structuredAgentSessionChildOwesWork(session.journal, deps.work)
   ) {

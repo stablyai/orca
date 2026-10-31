@@ -1,6 +1,7 @@
 import { readWholeAgentSessionFailureFact } from './agent-session-failure'
 import type { AgentJournalStatusItem, AgentJournalTurnScope } from './agent-session-journal-types'
 import { readAgentSessionOrcaStop } from './agent-session-orca-stop'
+import { readAgentSessionAccountSwitch } from './agent-session-account-switch-row'
 import type { NativeChatTextBlock } from './native-chat-types'
 import {
   AGENT_SESSION_COMPACTION_SKIPPED_PRESENTATION,
@@ -15,6 +16,7 @@ export function structuredAgentSessionStatusBlock(
 ): NativeChatTextBlock {
   const failure = readWholeAgentSessionFailureFact(body.failure)
   const orcaStop = readAgentSessionOrcaStop(body.orcaStop)
+  const accountSwitch = readAgentSessionAccountSwitch(body.accountSwitch)
   const presentation =
     body.presentation ??
     (body.tone === 'warning' && itemId !== undefined && isAgentSessionLegacyCompactionResult(itemId)
@@ -28,6 +30,7 @@ export function structuredAgentSessionStatusBlock(
     ...(body.tone !== undefined ? { tone: body.tone } : {}),
     ...(body.providerFrame ? { providerFrame: body.providerFrame } : {}),
     ...(failure ? { failure } : {}),
+    ...(accountSwitch ? { accountSwitch } : {}),
     ...(failure?.kind === 'usageLimitReached' && turnScope?.kind === 'turn'
       ? { usageLimitTurnItemId: turnScope.turnItemId }
       : {}),

@@ -1,6 +1,4 @@
-import { createHash } from 'node:crypto'
-import { createReadStream } from 'node:fs'
-import { link, lstat, mkdir } from 'node:fs/promises'
+import { lstat } from 'node:fs/promises'
 import { dirname, join, resolve } from 'node:path'
 import type {
   AiVaultPrepareSessionResumeArgs,
@@ -14,10 +12,7 @@ import {
   appendCodexSessionHealAuditRecord,
   createCodexSessionBackfillAuditWriter
 } from './codex-session-backfill-audit'
-import {
-  copySessionFileWithoutOverwrite,
-  isAtomicNoReplaceUnsupportedError
-} from './codex-session-backfill-copy'
+import { installConversationFileWithoutOverwrite } from '../agent-conversation-file-install'
 import { resolveCodexSessionBackfillPaths } from './codex-session-backfill'
 import { codexDatedRolloutRelativePath } from './codex-session-resume-home'
 import { ManagedCodexHomeTemporarilyUnavailableError } from '../codex-accounts/host-codex-managed-home-ownership'
@@ -162,33 +157,7 @@ async function materializeLegacyRollout(
   targetPath: string,
   auditLogPath: string
 ): Promise<void> {
-  const sourceStat = await lstat(sourcePath)
-  if (!sourceStat.isFile() || sourceStat.isSymbolicLink()) {
-    throw new Error('Legacy rollout source is not a regular file.')
-  }
-  await mkdir(dirname(targetPath), { recursive: true })
-  try {
-    await link(sourcePath, targetPath)
-  } catch (linkError) {
-    if (isExistsError(linkError)) {
-      await assertMatchingExistingTarget(sourcePath, targetPath)
-    } else {
-      try {
-        await copySessionFileWithoutOverwrite(sourcePath, targetPath)
-      } catch (copyError) {
-        if (isExistsError(copyError)) {
-          await assertMatchingExistingTarget(sourcePath, targetPath)
-        } else {
-          if (isAtomicNoReplaceUnsupportedError(copyError)) {
-            throw new Error('The target filesystem cannot safely install this rollout.', {
-              cause: copyError
-            })
-          }
-          throw copyError
-        }
-      }
-    }
-  }
+  await installConversationFileWithoutOverwrite(sourcePath, targetPath)
 
   const summary = {
     stopped: false,
@@ -210,31 +179,6 @@ async function materializeLegacyRollout(
   )
 }
 
-async function assertMatchingExistingTarget(sourcePath: string, targetPath: string): Promise<void> {
-  const [sourceStat, targetStat] = await Promise.all([lstat(sourcePath), lstat(targetPath)])
-  if (
-    !targetStat.isFile() ||
-    targetStat.isSymbolicLink() ||
-    sourceStat.size !== targetStat.size ||
-    ((sourceStat.dev !== targetStat.dev || sourceStat.ino !== targetStat.ino) &&
-      (await fileDigest(sourcePath)) !== (await fileDigest(targetPath)))
-  ) {
-    throw new Error('A different rollout already occupies the real-home target path.')
-  }
-}
-
-async function fileDigest(filePath: string): Promise<string> {
-  const hash = createHash('sha256')
-  for await (const chunk of createReadStream(filePath)) {
-    hash.update(chunk as Buffer)
-  }
-  return hash.digest('hex')
-}
-
 function sameRuntimePath(left: string, right: string): boolean {
   return normalizeRuntimePathForComparison(left) === normalizeRuntimePathForComparison(right)
-}
-
-function isExistsError(error: unknown): boolean {
-  return (error as NodeJS.ErrnoException | null)?.code === 'EEXIST'
 }

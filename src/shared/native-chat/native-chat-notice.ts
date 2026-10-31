@@ -5,6 +5,7 @@ import {
   type AgentSessionHostStatusPresentation
 } from '../agent-session-host-status-rows'
 import { AGENT_SESSION_ORCA_STOP_PRESENTATION } from '../agent-session-orca-stop'
+import { AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION } from '../agent-session-account-switch-row'
 import { NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION } from './native-chat-stopped-before-start'
 import type { NativeChatBlock, NativeChatTextBlock } from '../native-chat-types'
 
@@ -62,7 +63,10 @@ export function nativeChatNoticeLook(block: NativeChatTextBlock): NativeChatNoti
   if (presentation === 'plan-document') {
     return { kind: 'plan' }
   }
-  if (presentation === NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION) {
+  if (
+    presentation === NATIVE_CHAT_STOPPED_BEFORE_START_PRESENTATION ||
+    presentation === AGENT_SESSION_ACCOUNT_SWITCH_PRESENTATION
+  ) {
     return { kind: 'aside' }
   }
   // Orca stopped the reply, not the agent: stored red for clients that predate it, read as a notice.

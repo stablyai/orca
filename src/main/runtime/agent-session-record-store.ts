@@ -24,6 +24,7 @@ import {
 } from './agent-session/ownership/agent-session-claim-key-retention'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import type { AgentSessionProviderHandleLink } from '../../shared/agent-session-provider-handle'
+import type { AgentSessionAccountHome } from '../../shared/agent-session-account-home'
 import {
   agentSessionScopeKey,
   type AgentSessionExecutionLocation,
@@ -169,6 +170,18 @@ export class AgentSessionRecordStore extends AgentSessionRecordTabs {
     this.mutate(sessionId, (record) =>
       pinAgentSessionRecordLaunchDirectory(record, launchDirectory, Date.now())
     )
+
+  /** Moves the chat to the selected account; written only by a start with no live owner. */
+  repinAccountHome = (
+    sessionId: string,
+    accountHome: AgentSessionAccountHome
+  ): Promise<AgentSessionRecord> =>
+    this.mutate(sessionId, (record) => ({
+      ...record,
+      accountHome,
+      accountHomeConfirmed: true,
+      updatedAt: Date.now()
+    }))
 
   /** Unreadable records still count as present and can never grant writers. */
   isSessionUnreadable = (sessionId: string): boolean => this.state.unreadableRecords.has(sessionId)

@@ -8,6 +8,7 @@ import type {
 } from './agent-session-background-task-wire'
 import type { AgentSessionTokenUsage } from './agent-session-context-usage'
 import type { AgentSessionOrcaStop } from './agent-session-orca-stop'
+import type { AgentSessionAccountSwitch } from './agent-session-account-switch-row'
 import type { AgentSessionFailureFact } from './agent-session-failure'
 import type {
   AgentJournalMessageSendMode,
@@ -60,6 +61,8 @@ export type NativeChatTextBlock = {
   orcaStop?: AgentSessionOrcaStop & { turnItemId?: string }
   /** On a usage-limit line: the turn the limit ended, which its Continue picks up. */
   usageLimitTurnItemId?: string
+  /** On the line recording a move to the selected account. */
+  accountSwitch?: AgentSessionAccountSwitch
 }
 
 /** Tool arguments remain unknown because provider shapes differ; renderers preview the serialized payload. */

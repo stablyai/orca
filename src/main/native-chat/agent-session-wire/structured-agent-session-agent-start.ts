@@ -33,6 +33,7 @@ import {
   releaseLeaseOfEndedStructuredAgentSessionChild
 } from './structured-agent-session-child-close'
 export { joinClosingStructuredAgentSessionChild }
+import { followSelectedAccountBeforeStart } from './structured-agent-session-account-follow'
 import {
   refusedStructuredAgentSessionStart,
   structuredAgentSessionStartParams
@@ -154,6 +155,7 @@ async function runStart(
     return { ok: false, refusal: unreconciled }
   }
   await lock.wait(context.runtimeState.resolveRecovery(sessionId))
+  await followSelectedAccountBeforeStart(context, sessionId, lock)
   const eligible = await lock.commit(async () => {
     // Re-derive release from this host’s exit proof when wind-down could not persist it.
     await releaseLeaseOfEndedStructuredAgentSessionChild(context, sessionId)
