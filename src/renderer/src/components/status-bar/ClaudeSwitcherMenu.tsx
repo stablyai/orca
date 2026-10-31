@@ -11,10 +11,7 @@ import type { ProviderRateLimits } from '../../../../shared/rate-limit-types'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
-import {
-  fetchProviderAccountsSnapshot,
-  selectClaudeProviderAccount
-} from '@/runtime/runtime-provider-accounts-client'
+import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
 import { toast } from 'sonner'
 import { getClaudeAccountErrorDescription } from '../settings/accounts-pane-action-errors'
 import { translate } from '@/i18n/i18n'
@@ -32,11 +29,10 @@ import {
 } from './status-bar-runtime-targets'
 import {
   buildClaudeStatusSwitchGroups,
-  getClaudeStatusActiveId,
   normalizeClaudeStatusRuntimeTarget,
   resolveClaudeStatusAccountState
 } from './status-bar-claude-accounts'
-import { handleRunningClaudeSessionsAfterSwitch } from '@/lib/claude-account-switch-sessions'
+import { selectClaudeAccountLikeStatusBar } from './provider-account-selection'
 import { AccountRuntimeToggle } from './StatusBarAccountControls'
 import {
   InlineUsageBars,
@@ -75,8 +71,6 @@ export function ClaudeSwitcherMenu({
   const mountedRef = useRef(true)
   const openSettingsPage = useAppStore((s) => s.openSettingsPage)
   const openSettingsTarget = useAppStore((s) => s.openSettingsTarget)
-  const fetchSettings = useAppStore((s) => s.fetchSettings)
-  const recordFeatureInteraction = useAppStore((s) => s.recordFeatureInteraction)
   const refreshClaudeRateLimitsForTarget = useAppStore((s) => s.refreshClaudeRateLimitsForTarget)
   const fetchInactiveClaudeAccountUsage = useAppStore((s) => s.fetchInactiveClaudeAccountUsage)
   const inactiveClaudeAccounts = useAppStore((s) => s.rateLimits.inactiveClaudeAccounts)
@@ -168,33 +162,17 @@ export function ClaudeSwitcherMenu({
     if (isSwitching) {
       return
     }
-    const previousActiveAccountId = getClaudeStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await selectClaudeProviderAccount(runtimeTarget, {
+      const next = await selectClaudeAccountLikeStatusBar({
+        owner: runtimeTarget,
+        accountState,
         accountId,
-        runtime: target.runtime,
-        wslDistro: target.wslDistro
+        target
       })
-      recordFeatureInteraction('claude-account-switching')
       if (mountedRef.current) {
         setAccounts(next)
-      }
-      // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
-      if (!hasActiveRuntimeEnvironment) {
-        await fetchSettings()
-      }
-      if (mountedRef.current) {
         setAccountsExpanded(false)
-      }
-      const nextActiveAccountId = getClaudeStatusActiveId(next, target)
-      if (previousActiveAccountId !== nextActiveAccountId) {
-        void handleRunningClaudeSessionsAfterSwitch({
-          owner: runtimeTarget,
-          target,
-          before: { state: accountState, accountId: previousActiveAccountId },
-          after: { state: next, accountId: nextActiveAccountId }
-        })
       }
     } catch (error) {
       console.error('Failed to switch Claude account from status bar:', error)

@@ -5,15 +5,9 @@ import { useAppStore } from '../../store'
 import { defaultScopeHost } from '@/lib/default-creation-host'
 import { useActiveAccountOwner } from '@/runtime/use-worktree-runtime-target'
 import { runtimeTargetEnvironmentId } from '@/runtime/runtime-client-target'
-import {
-  fetchProviderAccountsSnapshot,
-  selectCodexProviderAccount
-} from '@/runtime/runtime-provider-accounts-client'
+import { fetchProviderAccountsSnapshot } from '@/runtime/runtime-provider-accounts-client'
 import { translate } from '@/i18n/i18n'
-import {
-  markLiveCodexSessionsForRestart,
-  resolveCodexRestartPromptAccountLabel
-} from '@/lib/codex-session-restart'
+import { selectCodexAccountLikeStatusBar } from './provider-account-selection'
 import {
   getWindowsTerminalCapabilityOwnerKey,
   useWindowsTerminalCapabilities
@@ -131,41 +125,16 @@ export function useCodexSwitcherController(codex: ProviderRateLimits) {
     const previousActiveAccountId = getCodexStatusActiveId(accountState, target)
     setIsSwitching(true)
     try {
-      const next = await selectCodexProviderAccount(runtimeTarget, {
+      const next = await selectCodexAccountLikeStatusBar({
+        owner: runtimeTarget,
+        accountState,
         accountId,
-        runtime: target.runtime,
-        wslDistro: target.wslDistro
+        target
       })
-      recordFeatureInteraction('codex-account-switching')
       if (mountedRef.current) {
         setAccounts(next)
-      }
-      // Why: remote selections live on the server; local GlobalSettings are untouched, so refetching is pure churn.
-      if (!hasActiveRuntimeEnvironment) {
-        await fetchSettings()
-      }
-      const nextActiveAccountId = getCodexStatusActiveId(next, target)
-      if (previousActiveAccountId !== nextActiveAccountId) {
-        await markLiveCodexSessionsForRestart({
-          previousAccountLabel: resolveCodexRestartPromptAccountLabel(
-            accountState.accounts,
-            previousActiveAccountId
-          ),
-          nextAccountLabel: resolveCodexRestartPromptAccountLabel(
-            next.accounts,
-            nextActiveAccountId
-          ),
-          // Emails can coincide; IDs determine whether switching returns to the launch account.
-          previousAccountId: previousActiveAccountId ?? null,
-          nextAccountId: nextActiveAccountId ?? null,
-          // Only this owner/runtime slot changed; other lanes keep their current launch accounts.
-          owner: runtimeTarget,
-          target,
-          // Why: clearing a distro-less WSL row nulls every distro slot at once.
-          clearsEveryWslDistro: accountId === null
-        })
         // Why: collapse to the summary row (not close) so the follow-up "restart open tabs" prompt appears in the same flow.
-        if (mountedRef.current) {
+        if (previousActiveAccountId !== getCodexStatusActiveId(next, target)) {
           setAccountsExpanded(false)
         }
       }

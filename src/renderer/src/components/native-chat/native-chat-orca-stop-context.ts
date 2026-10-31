@@ -1,4 +1,5 @@
 import { createContext, useContext } from 'react'
+import type { NativeChatUsageLimitAccountOffer } from './use-native-chat-usage-limit-account-offer'
 
 /** Host stop details; only hosts known not to support continuation suppress Continue. */
 export type NativeChatOrcaStopView = {
@@ -12,6 +13,8 @@ export type NativeChatOrcaStopView = {
   usageLimitTurnItemId: string | null
   usageLimitContinueDisabled?: boolean
   continueUsageLimit: (hadFocus?: boolean) => void
+  /** Another account to continue on past the limit, or adding one; absent keeps the notice's words. */
+  usageLimitAccountOffer?: NativeChatUsageLimitAccountOffer | null
 }
 
 export const NativeChatOrcaStopContext = createContext<NativeChatOrcaStopView>({

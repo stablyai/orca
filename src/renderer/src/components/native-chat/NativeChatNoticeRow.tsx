@@ -19,6 +19,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-notice'
 import { useNativeChatOrcaStopView } from './native-chat-orca-stop-context'
 import { NativeChatInterruptedContinueButton } from './NativeChatInterruptedContinue'
+import { NativeChatUsageLimitAccountAction } from './NativeChatUsageLimitAccountAction'
 import { nativeChatOrcaStopRowText } from '../../../../shared/native-chat/native-chat-orca-stop-words'
 import { sayNativeChatOrcaStopTranslated } from './native-chat-orca-stop-words-text'
 import { NativeChatDetailsDisclosure, ProviderFrameRow } from './NativeChatTranscriptChrome'
@@ -192,6 +193,12 @@ export function NativeChatNoticeRow({
   const machine =
     hostLabel ?? (remoteHost ? sayNativeChatOrcaStopTranslated('unnamedServer') : null)
   const named = orcaStop !== undefined && machine !== null
+  // Only the latest limit, while Continue past it is still on offer.
+  const usageLimitOffer =
+    block.usageLimitTurnItemId !== undefined &&
+    block.usageLimitTurnItemId === orcaStopView.usageLimitTurnItemId
+      ? orcaStopView.usageLimitAccountOffer
+      : null
   const continueOffered =
     orcaStop?.turnItemId !== undefined && orcaStop.turnItemId === orcaStopView.offeredTurnItemId
   const failure = readWholeAgentSessionFailureFact(block.failure)
@@ -272,6 +279,7 @@ export function NativeChatNoticeRow({
           <NativeChatInterruptedContinueButton onContinue={orcaStopView.continueNow} />
         ) : null}
       </div>
+      {usageLimitOffer ? <NativeChatUsageLimitAccountAction offer={usageLimitOffer} /> : null}
       {claudeSignIn && isClaudeSignInFailureKind(block.failure?.kind) ? (
         <Button
           type="button"
