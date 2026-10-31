@@ -129,7 +129,7 @@ describe.skipIf(process.platform === 'win32')('PostCompact command execution', (
 })
 
 describe.skipIf(process.platform === 'win32')('ClaudeHookService PostCompact install', () => {
-  it('writes the short form, reports installed, and replaces an old full-wrapper entry', () => {
+  it('writes the short form, reports installed, and replaces an old full-wrapper entry', async () => {
     const home = mkdtempSync(join(tmpdir(), 'orca-post-compact-install-'))
     vi.stubEnv('HOME', home)
     try {
@@ -145,7 +145,7 @@ describe.skipIf(process.platform === 'win32')('ClaudeHookService PostCompact ins
         })
       )
 
-      const status = new ClaudeHookService().install(CURRENT_CLAUDE)
+      const status = await new ClaudeHookService().installSystem(CURRENT_CLAUDE)
 
       expect(status.state).toBe('installed')
       const written = JSON.parse(readFileSync(settingsPath, 'utf-8'))

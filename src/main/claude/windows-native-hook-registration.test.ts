@@ -180,29 +180,29 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     })
   }
 
-  it('copies the bundled exe and registers it, keeping the .cmd pair as the fallback', () => {
+  it('copies the bundled exe and registers it, keeping the .cmd pair as the fallback', async () => {
     const { hooksDir, settingsPath, bundle } = useTempHome()
     bundledHook.path = bundle
 
-    expect(new ClaudeHookService().install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await new ClaudeHookService().installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     expect(readFileSync(join(hooksDir, EXE), 'utf8')).toBe('MZ stand-in for the signed bundle')
     expect(existsSync(join(hooksDir, 'claude-hook.cmd'))).toBe(true)
     expect(existsSync(join(hooksDir, 'claude-hook-impl.cmd'))).toBe(true)
     expect(managedCommands(settingsPath, 'PreToolUse')).toEqual([exeCommand(hooksDir)])
   })
 
-  it('registers a spaced profile exe in exec form only for CLIs that accept it', () => {
+  it('registers a spaced profile exe in exec form only for CLIs that accept it', async () => {
     const { hooksDir, settingsPath, bundle } = useTempHome('orca claude native hook ')
     bundledHook.path = bundle
     const service = new ClaudeHookService()
 
-    expect(service.install({ claudeVersion: '2.1.138' }).state).toBe('installed')
+    expect((await service.installSystem({ claudeVersion: '2.1.138' })).state).toBe('installed')
     expect(managedHooks(settingsPath, 'Stop')).toEqual([
       expect.objectContaining({ command: expect.stringMatching(/-EncodedCommand /) })
     ])
 
     for (let attempt = 0; attempt < 2; attempt++) {
-      expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+      expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
       expect(managedHooks(settingsPath, 'Stop')).toEqual([
         {
           type: 'command',
@@ -215,44 +215,44 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     expect(service.getStatus().state).toBe('installed')
   })
 
-  it('leaves unchanged bytes unwritten', () => {
+  it('leaves unchanged bytes unwritten', async () => {
     const { hooksDir, bundle } = useTempHome()
     bundledHook.path = bundle
     const service = new ClaudeHookService()
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     const before = statSync(join(hooksDir, EXE), { bigint: true })
 
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     const after = statSync(join(hooksDir, EXE), { bigint: true })
     expect([after.ino, after.mtimeNs]).toEqual([before.ino, before.mtimeNs])
   })
 
-  it('registers the .cmd hook when no signed exe ships, and status accepts either form', () => {
+  it('registers the .cmd hook when no signed exe ships, and status accepts either form', async () => {
     const { hooksDir, settingsPath, bundle } = useTempHome()
     const service = new ClaudeHookService()
 
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     const cmdCommand = join(hooksDir, 'claude-hook.cmd').replaceAll('\\', '/')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([cmdCommand])
 
     bundledHook.path = bundle
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([exeCommand(hooksDir)])
 
     bundledHook.path = join(home, 'missing.exe')
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([exeCommand(hooksDir)])
 
     rmSync(join(hooksDir, EXE))
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     expect(managedCommands(settingsPath, 'Stop')).toEqual([cmdCommand])
   })
 
-  it('reports a registered exe that has gone missing as partial', () => {
+  it('reports a registered exe that has gone missing as partial', async () => {
     const { hooksDir, bundle } = useTempHome()
     bundledHook.path = bundle
     const service = new ClaudeHookService()
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
 
     rmSync(join(hooksDir, EXE))
     expect(service.getStatus(CURRENT_CLAUDE).state).toBe('partial')
@@ -265,7 +265,7 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
     await service.refreshManagedScripts()
     expect(existsSync(join(hooksDir, EXE))).toBe(false)
 
-    expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+    expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
     writeFileSync(bundle, 'MZ next build')
     await service.refreshManagedScripts()
     expect(readFileSync(join(hooksDir, EXE), 'utf8')).toBe('MZ next build')
@@ -286,7 +286,7 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
       const { hooksDir, settingsPath } = useTempHome()
       bundledHook.path = buildWindowsNativeHookExecutable()
       const service = new ClaudeHookService()
-      expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+      expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
       const installed = join(hooksDir, EXE)
       const built = readFileSync(installed)
       const nextBuild = (tag: string): Buffer => {
@@ -300,7 +300,7 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
       try {
         await once(held.stdout, 'data')
         const next = nextBuild('next')
-        expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+        expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
         expect(managedCommands(settingsPath, 'Stop')).toEqual([exeCommand(hooksDir)])
         expect(readFileSync(installed).equals(next)).toBe(true)
         expect(readFileSync(`${installed}.old`).equals(built)).toBe(true)
@@ -320,7 +320,7 @@ describe.skipIf(process.platform !== 'win32')('ClaudeHookService native hook ins
         await once(refreshing, 'close')
       }
 
-      expect(service.install(CURRENT_CLAUDE).state).toBe('installed')
+      expect((await service.installSystem(CURRENT_CLAUDE)).state).toBe('installed')
       expect(existsSync(`${installed}.old`)).toBe(false)
     }
   )

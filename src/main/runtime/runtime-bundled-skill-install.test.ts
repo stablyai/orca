@@ -24,10 +24,7 @@ vi.mock('../preflight/installed-agent-detection', () => ({
 
 import { localBundledSkillInput } from '../skills/bundled-skill-install/local-host'
 import { previewBundledSkillInstall } from '../skills/bundled-skill-install/service'
-import {
-  readUserClaudeConfigDir,
-  resolveClaudeDefaultHome
-} from '../claude-accounts/claude-profile-paths'
+import { readUserClaudeConfigDir, resolveClaudeDefaultHome } from '../../shared/claude-user-config'
 import type { RuntimeSkillCommandHost } from './runtime-skill-command-contract'
 import { planLocalBundledSkills } from './runtime-bundled-skill-install'
 

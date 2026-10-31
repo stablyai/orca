@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import type * as osModule from 'node:os'
@@ -6,6 +7,7 @@ import { join } from 'node:path'
 import * as refresh from '../agent-hooks/managed-hook-script-refresh'
 import { readHooksJson, writeHooksJson } from '../agent-hooks/installer-utils'
 import { ClaudeHookService } from './hook-service'
+import { withClaudeSystemScope } from './statusline-ownership'
 import { getWindowsManagedLifecycleHook } from './hook-settings'
 import { getWindowsClaudeHookEntry, getWindowsClaudeHookPayloadPath } from './windows-hook-files'
 import { codebuddyHookService } from '../codebuddy/hook-service'
@@ -26,11 +28,13 @@ let payload: string
 let settings: string
 const service = new ClaudeHookService()
 
-beforeEach(() => {
+beforeEach(async () => {
   home.path = mkdtempSync(join(tmpdir(), 'claude-windows-files-'))
   entry = join(home.path, '.orca', 'agent-hooks', 'claude-hook.cmd')
   payload = getWindowsClaudeHookPayloadPath(entry)
   settings = join(home.path, '.claude', 'settings.json')
+  // Capture real host/process ownership before simulating Windows launcher formatting.
+  await withClaudeSystemScope(home.path, AbortSignal.timeout(2000), async () => {})
   Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
 })
 
@@ -41,8 +45,8 @@ afterEach(() => {
 })
 
 describe('Windows Claude hook files', () => {
-  it('installs a delegating entry and a payload that answers before bounded delivery', () => {
-    expect(service.install().state).toBe('installed')
+  it('installs a delegating entry and a payload that answers before bounded delivery', async () => {
+    expect((await service.installSystem()).state).toBe('installed')
     expect(readFileSync(entry, 'utf8')).toBe(getWindowsClaudeHookEntry())
     const body = readFileSync(payload, 'utf8')
     expect(body.indexOf('echo {}')).toBeLessThan(body.indexOf('curl.exe'))
@@ -52,7 +56,7 @@ describe('Windows Claude hook files', () => {
   })
 
   it('repairs a missing payload from the surviving entry without touching settings', async () => {
-    service.install()
+    await service.installSystem()
     rmSync(payload)
     expect(service.getStatus().state).toBe('partial')
     const configBefore = readFileSync(settings, 'utf8')
@@ -64,7 +68,7 @@ describe('Windows Claude hook files', () => {
   })
 
   it.each(['entry', 'both'])('leaves a missing %s to install()', async (missing) => {
-    service.install()
+    await service.installSystem()
     rmSync(entry)
     if (missing === 'both') {
       rmSync(payload)
@@ -72,7 +76,7 @@ describe('Windows Claude hook files', () => {
     await service.refreshManagedScripts()
     expect(existsSync(entry)).toBe(false)
     expect(service.getStatus().state).toBe('partial')
-    expect(service.install().state).toBe('installed')
+    expect((await service.installSystem()).state).toBe('installed')
     expect(readFileSync(entry, 'utf8')).toBe(getWindowsClaudeHookEntry())
     expect(readFileSync(payload, 'utf8')).toContain('/hook/claude')
   })
@@ -105,8 +109,8 @@ describe('Windows Claude hook files', () => {
   })
 
   it('keeps inert scripts on uninstall and never creates an entry from an orphan payload', async () => {
-    service.install()
-    service.remove()
+    await service.installSystem()
+    await service.removeSystem()
     expect(JSON.stringify(readHooksJson(settings))).not.toContain('claude-hook.cmd')
     // Keep scripts callable for sessions still holding the old hook settings.
     expect(readFileSync(entry, 'utf8')).toBe(getWindowsClaudeHookEntry())
@@ -117,7 +121,7 @@ describe('Windows Claude hook files', () => {
     expect(readFileSync(payload, 'utf8')).toBe('orphan payload')
   })
 
-  it('migrates old command forms while preserving user hooks', () => {
+  it('migrates old command forms while preserving user hooks', async () => {
     const encoded = getWindowsManagedLifecycleHook(
       'C:\\Users\\%name%\\.orca\\agent-hooks\\claude-hook.cmd'
     )
@@ -133,7 +137,7 @@ describe('Windows Claude hook files', () => {
         ]
       }
     })
-    service.install()
+    await service.installSystem()
     const config = JSON.stringify(readHooksJson(settings))
     expect(config).not.toContain('|| echo {}')
     expect(config).not.toContain('C:/old/')

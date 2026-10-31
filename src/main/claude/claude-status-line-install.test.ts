@@ -44,44 +44,44 @@ describe('Claude statusLine by resolved version', () => {
 
   const readSettings = () => JSON.parse(readFileSync(settingsPath, 'utf-8'))
 
-  it('writes no statusLine for a Claude whose settings schema rejects it', () => {
-    new ClaudeHookService().install({ claudeVersion: '1.0.63' })
+  it('writes no statusLine for a Claude whose settings schema rejects it', async () => {
+    await new ClaudeHookService().installSystem({ claudeVersion: '1.0.63' })
     expect(readSettings().statusLine).toBeUndefined()
     expect(readSettings().hooks.SessionStart).toBeDefined()
   })
 
-  it('removes Orca statusLine on a downgrade and re-adds it after the upgrade', () => {
+  it('removes Orca statusLine on a downgrade and re-adds it after the upgrade', async () => {
     const service = new ClaudeHookService()
-    service.install({ claudeVersion: '2.1.261' })
+    await service.installSystem({ claudeVersion: '2.1.261' })
     expect(readSettings().statusLine?.command).toContain('claude-statusline')
 
-    service.install({ claudeVersion: '1.0.63' })
+    await service.installSystem({ claudeVersion: '1.0.63' })
     expect(readSettings().statusLine).toBeUndefined()
 
-    service.install({ claudeVersion: '1.0.64' })
+    await service.installSystem({ claudeVersion: '1.0.64' })
     expect(readSettings().statusLine?.command).toContain('claude-statusline')
   })
 
-  it('keeps the user opt-out across a downgrade and upgrade', () => {
+  it('keeps the user opt-out across a downgrade and upgrade', async () => {
     const service = new ClaudeHookService()
-    service.install({ claudeVersion: '2.1.261' })
+    await service.installSystem({ claudeVersion: '2.1.261' })
     const { statusLine: _optedOut, ...rest } = readSettings()
     writeFileSync(settingsPath, JSON.stringify(rest))
 
-    service.install({ claudeVersion: '1.0.63' })
-    service.install({ claudeVersion: '2.1.261' })
+    await service.installSystem({ claudeVersion: '1.0.63' })
+    await service.installSystem({ claudeVersion: '2.1.261' })
     expect(readSettings().statusLine).toBeUndefined()
   })
 
-  it('never removes a user statusLine for an old Claude', () => {
+  it('never removes a user statusLine for an old Claude', async () => {
     mkdirSync(join(tmpHome, '.claude'), { recursive: true })
     writeFileSync(settingsPath, JSON.stringify({ statusLine: USER_STATUS_LINE }))
-    new ClaudeHookService().install({ claudeVersion: '1.0.63' })
+    await new ClaudeHookService().installSystem({ claudeVersion: '1.0.63' })
     expect(readSettings().statusLine).toEqual(USER_STATUS_LINE)
   })
 
-  it('keeps installing the statusLine when the version is unresolved', () => {
-    new ClaudeHookService().install()
+  it('keeps installing the statusLine when the version is unresolved', async () => {
+    await new ClaudeHookService().installSystem()
     expect(readSettings().statusLine?.command).toContain('claude-statusline')
   })
 })
@@ -128,12 +128,12 @@ describe('Claude statusLine on Windows', () => {
   it.each([
     ['the runtime-home form', () => getManagedCommand(scriptPath)],
     ['a stale bare path', () => 'C:/Users/someone-else/.orca/agent-hooks/claude-statusline.cmd']
-  ])('replaces %s as Orca-owned', (_name, command) => {
+  ])('replaces %s as Orca-owned', async (_name, command) => {
     seedStatusLine(command())
     mkdirSync(join(tmpHome, '.orca', 'agent-hooks'), { recursive: true })
     writeFileSync(join(tmpHome, '.orca', 'agent-hooks', 'claude-statusline.installed'), '')
 
-    new ClaudeHookService().install(CURRENT_CLAUDE)
+    await new ClaudeHookService().installSystem(CURRENT_CLAUDE)
     expect(readSettings().statusLine).toEqual({
       type: 'command',
       command: getManagedStatusLineCommand(scriptPath)
@@ -142,11 +142,11 @@ describe('Claude statusLine on Windows', () => {
 
   it.each(['C:/tools/my-statusline.cmd', 'powershell -NoProfile -File C:\\tools\\statusline.ps1'])(
     'never overwrites or removes a user statusLine: %s',
-    (command) => {
+    async (command) => {
       seedStatusLine(command)
-      new ClaudeHookService().install(CURRENT_CLAUDE)
+      await new ClaudeHookService().installSystem(CURRENT_CLAUDE)
       expect(readSettings().statusLine).toEqual({ type: 'command', command })
-      new ClaudeHookService().remove()
+      await new ClaudeHookService().removeSystem()
       expect(readSettings().statusLine).toEqual({ type: 'command', command })
     }
   )

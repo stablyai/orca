@@ -1,10 +1,6 @@
 import { lstatSync, mkdirSync, readFileSync, realpathSync } from 'node:fs'
 import * as hostPath from 'node:path'
 import { basename, dirname, isAbsolute, join, relative, resolve, sep } from 'node:path'
-import {
-  CLAUDE_INJECTED_CONFIG_DIR_ENV,
-  CLAUDE_USER_CONFIG_DIR_ENV
-} from '../../shared/claude-profile-routing'
 import { isDefinitiveAbsence } from '../../shared/definitive-filesystem-absence'
 import type { ExecutionHostId } from '../../shared/execution-host'
 import { writeFileAtomically } from '../codex-accounts/fs-utils'
@@ -225,26 +221,4 @@ function assertOutsideDefaultClaudeHomes(
   if (userConfigDir !== undefined) {
     assertDistinctClaudeProfile(profileHome, userConfigDir)
   }
-}
-
-export function readUserClaudeConfigDir(env: NodeJS.ProcessEnv): string | undefined {
-  const user = readUserClaudeConfigDirAsSet(env)
-  return user === undefined ? undefined : resolve(user.trim())
-}
-
-/** Preserve literal spelling for Keychain identity and shell rc comparisons. */
-export function readUserClaudeConfigDirAsSet(env: NodeJS.ProcessEnv): string | undefined {
-  const configDir = env.CLAUDE_CONFIG_DIR
-  const injected = env[CLAUDE_INJECTED_CONFIG_DIR_ENV]?.trim()
-  if (!configDir?.trim()) {
-    return undefined
-  }
-  if (injected && resolve(injected) === resolve(configDir.trim())) {
-    return env[CLAUDE_USER_CONFIG_DIR_ENV]?.trim() ? env[CLAUDE_USER_CONFIG_DIR_ENV] : undefined
-  }
-  return configDir
-}
-
-export function resolveClaudeDefaultHome(userHome: string, userConfigDir?: string): string {
-  return userConfigDir ?? join(userHome, '.claude')
 }

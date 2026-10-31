@@ -32,12 +32,15 @@ const caseInsensitive = (() => {
 })()
 const roots: string[] = []
 afterEach(() => {
+  vi.unstubAllEnvs()
   for (const root of roots.splice(0)) {
     rmSync(root, { recursive: true, force: true })
   }
 })
 const CURRENT = { claudeVersion: '2.1.261' }
 function fixture() {
+  vi.stubEnv('CLAUDE_CONFIG_DIR', '')
+  vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
   state.home = mkdtempSync(join(tmpdir(), 'claude-profile-hooks-'))
   roots.push(state.home)
   const defaultDir = join(state.home, '.claude')
@@ -52,7 +55,8 @@ function fixture() {
     writeFileSync(join(dir, 'settings.json'), JSON.stringify(value))
   }
   const service = new ClaudeHookService()
-  const installProfile = () => service.install({ ...CURRENT, configDir: profile })
+  const installProfile = () =>
+    service.installProfile({ ...CURRENT, target: { kind: 'profile', configDir: profile } })
   const provision = () =>
     provisionClaudeProfile({ profileHome: profile, userHome: state.home, platform: 'linux' })
   return { defaultDir, profile, settings, edit, service, installProfile, provision }
@@ -86,11 +90,11 @@ const sync = async (f: ReturnType<typeof fixture>) => {
 const itLinks = it.skipIf(process.platform === 'win32')
 
 describe('Claude hooks at an explicit profile', () => {
-  it('installs managed hooks at a profile without editing default settings or adding a statusline', () => {
+  it('installs managed hooks at a profile without editing default settings or adding a statusline', async () => {
     const f = fixture()
     writeFileSync(join(f.defaultDir, 'settings.json'), '{"model":"default"}')
     writeFileSync(join(f.profile, 'settings.json'), '{"model":"profile"}')
-    expect(f.service.install(CURRENT).state).toBe('installed')
+    expect((await f.service.installSystem(CURRENT)).state).toBe('installed')
     const before = readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')
     const result = f.installProfile()
     expect(result.configPath).toBe(join(f.profile, 'settings.json'))
@@ -101,7 +105,7 @@ describe('Claude hooks at an explicit profile', () => {
   it("shares the user's hooks, Orca's hooks and statusline as plain keys that installs leave in sync", async () => {
     const f = fixture()
     const { hook, setStop, stop, orcaCount } = stopHooks(f)
-    f.service.install(CURRENT)
+    await f.service.installSystem(CURRENT)
     setStop(f.defaultDir, ['notify-me'])
     await sync(f)
     expect(f.settings(f.profile).hooks).toEqual(f.settings(f.defaultDir).hooks)
@@ -123,7 +127,7 @@ describe('Claude hooks at an explicit profile', () => {
       const f = fixture()
       writeFileSync(join(f.defaultDir, 'settings.json'), JSON.stringify({ model: 'opus' }))
       if (variant === 'with') {
-        f.service.install(CURRENT)
+        await f.service.installSystem(CURRENT)
       }
       await sync(f)
       const file = join(f.profile, 'settings.json')
@@ -137,37 +141,101 @@ describe('Claude hooks at an explicit profile', () => {
   )
   it('carries a default-home statusline opt-out and an old-Claude retire to the profile', async () => {
     const f = fixture()
-    f.service.install(CURRENT)
+    await f.service.installSystem(CURRENT)
     await sync(f)
     expect(f.settings(f.profile).statusLine).toBeDefined()
     f.edit(f.defaultDir, (value) => delete value.statusLine)
     await sync(f)
     expect(f.settings(f.profile).statusLine).toBeUndefined()
     const old = fixture()
-    old.service.install(CURRENT)
+    await old.service.installSystem(CURRENT)
     await sync(old)
-    old.service.install({ claudeVersion: '1.0.0' })
+    await old.service.installSystem({ claudeVersion: '1.0.0' })
     await old.provision()
-    old.service.install({ claudeVersion: '1.0.0', configDir: old.profile })
+    old.service.installProfile({
+      claudeVersion: '1.0.0',
+      target: { kind: 'profile', configDir: old.profile }
+    })
     expect(old.settings(old.defaultDir).statusLine).toBeUndefined()
     expect(old.settings(old.profile).statusLine).toBeUndefined()
   })
-  itLinks('refuses a profile destination that is or links into the default home', () => {
+  itLinks('refuses a profile destination that is or links into the default home', async () => {
     const f = fixture()
-    f.service.install(CURRENT)
+    await f.service.installSystem(CURRENT)
     const defaults = readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')
     rmSync(join(f.profile, 'settings.json'), { force: true })
     symlinkSync(join(f.defaultDir, 'settings.json'), join(f.profile, 'settings.json'))
     expect(f.installProfile().state).toBe('error')
-    expect(f.service.install({ ...CURRENT, configDir: f.defaultDir }).state).toBe('error')
+    expect(
+      f.service.installProfile({ ...CURRENT, target: { kind: 'profile', configDir: f.defaultDir } })
+        .state
+    ).toBe('error')
     expect(readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')).toBe(defaults)
   })
-  it.runIf(caseInsensitive)('refuses a case-only alias of the default home', () => {
+  it.runIf(caseInsensitive)('refuses a case-only alias of the default home', async () => {
     const f = fixture()
-    f.service.install(CURRENT)
+    await f.service.installSystem(CURRENT)
     const defaults = readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')
     const alias = join(state.home, '.CLAUDE')
-    expect(f.service.install({ ...CURRENT, configDir: alias }).state).toBe('error')
+    expect(
+      f.service.installProfile({ ...CURRENT, target: { kind: 'profile', configDir: alias } }).state
+    ).toBe('error')
     expect(readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')).toBe(defaults)
+  })
+})
+
+describe('Claude System default custom configuration', () => {
+  it('restores the callback at a fresh System root without changing conventional managed settings', async () => {
+    const f = fixture()
+    await f.service.installSystem(CURRENT)
+    const marker = join(state.home, '.orca', 'agent-hooks', 'claude-statusline.installed')
+    writeFileSync(marker, '')
+    const conventional = readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')
+    expect(JSON.parse(conventional).statusLine).toBeDefined()
+    for (let repeat = 0; repeat < 2; repeat++) {
+      const result = await f.service.installSystem({
+        ...CURRENT,
+        target: { kind: 'system-default', configDir: f.profile }
+      })
+      expect(result.state).toBe('installed')
+      expect(f.settings(f.profile).hooks).toEqual(JSON.parse(conventional).hooks)
+      expect(readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')).toBe(conventional)
+      expect(f.settings(f.profile).statusLine).toBeDefined()
+      expect(readFileSync(marker, 'utf8')).toBe('')
+    }
+  })
+  it('uses the launch root through install/status/remove and cleans only managed legacy entries', async () => {
+    const f = fixture()
+    vi.stubEnv('CLAUDE_CONFIG_DIR', f.profile)
+    vi.stubEnv('ORCA_CLAUDE_INJECTED_CONFIG_DIR', '')
+    const user = {
+      model: 'user-model',
+      hooks: { Stop: [{ hooks: [{ type: 'command', command: 'notify-me' }] }] }
+    }
+    writeFileSync(join(f.defaultDir, 'settings.json'), JSON.stringify(user))
+    writeFileSync(join(f.profile, 'settings.json'), JSON.stringify(user))
+    const before = readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')
+    const installed = await f.service.installSystem(CURRENT)
+    expect(installed.configPath).toBe(join(f.profile, 'settings.json'))
+    expect(installed.state).toBe('installed')
+    expect(f.service.getStatus(CURRENT).configPath).toBe(installed.configPath)
+    expect(f.settings(f.profile).statusLine).toBeDefined()
+    expect(
+      f.service.installProfile({ ...CURRENT, target: { kind: 'profile', configDir: f.profile } })
+        .state
+    ).toBe('error')
+    expect(readFileSync(join(f.defaultDir, 'settings.json'), 'utf8')).toBe(before)
+    // Older builds registered their callbacks in the conventional folder.
+    writeFileSync(join(f.defaultDir, 'settings.json'), JSON.stringify(f.settings(f.profile)))
+    expect((await f.service.removeSystem()).state).toBe('not_installed')
+    expect(f.settings(f.profile)).toEqual(user)
+    expect(f.settings(f.defaultDir)).toEqual(user)
+    await f.service.installSystem(CURRENT)
+    writeFileSync(join(f.defaultDir, 'settings.json'), '{invalid')
+    expect((await f.service.removeSystem()).state).toBe('error')
+    expect(f.settings(f.profile)).toEqual(user)
+    rmSync(join(f.defaultDir, 'settings.json'))
+    await f.service.removeSystem()
+    expect(existsSync(join(f.defaultDir, 'settings.json'))).toBe(false)
   })
 })

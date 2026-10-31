@@ -5,6 +5,7 @@ import { mkdtempSync, readFileSync, readdirSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as osModule from 'node:os'
+import { withClaudeSystemScope } from '../claude/statusline-ownership'
 
 let isolatedUserDataDir = ''
 let previousUserDataPath: string | undefined
@@ -45,7 +46,7 @@ import { openClaudeHookService } from '../openclaude/hook-service'
 
 // Only batch scripts belong here; PowerShell-native hooks use their interpreter directly.
 const BATCH_SCRIPT_INSTALLERS = [
-  { agent: 'claude', install: () => new ClaudeHookService().install() },
+  { agent: 'claude', install: async () => await new ClaudeHookService().installSystem() },
   { agent: 'openclaude', install: () => openClaudeHookService.install() },
   { agent: 'codex', install: () => new CodexHookService().install() },
   { agent: 'command-code', install: () => new CommandCodeHookService().install() },
@@ -59,6 +60,8 @@ const BATCH_SCRIPT_INSTALLERS = [
 // Keep the platform override pinned across asynchronous installers.
 async function withPlatform<T>(platform: NodeJS.Platform, run: () => T | Promise<T>): Promise<T> {
   const originalPlatform = Object.getOwnPropertyDescriptor(process, 'platform')
+  // Capture real ownership before the generated-script platform override.
+  await withClaudeSystemScope(homedirMock(), AbortSignal.timeout(2000), async () => {})
   Object.defineProperty(process, 'platform', { configurable: true, value: platform })
   try {
     return await run()
@@ -96,7 +99,8 @@ describe('Windows managed hook post interpreter', () => {
   it('posts through curl.exe from every managed batch script, spawning no interpreter', async () => {
     const scripts = await withPlatform('win32', async () => {
       for (const entry of BATCH_SCRIPT_INSTALLERS) {
-        expect((await entry.install()).state, `${entry.agent} install status`).toBe('installed')
+        const status = await entry.install()
+        expect(status.state, `${entry.agent} install status: ${status.detail}`).toBe('installed')
       }
       const hooksDir = join(home, '.orca', 'agent-hooks')
       return readdirSync(hooksDir)
