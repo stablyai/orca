@@ -44,6 +44,14 @@ export async function retainViteCache(cacheRoot) {
   await withViteCacheLock(cacheRoot, async (verify) => {
     await mkdir(dirname(owner), { recursive: true })
     verify()
+    // Oxc skips configs without allowJs for cached JS, then searches enclosing checkouts.
+    await writeFile(join(cacheRoot, 'tsconfig.json'), '{"compilerOptions":{"allowJs":true}}\n', {
+      flag: 'wx'
+    }).catch((error) => {
+      if (error.code !== 'EEXIST') {
+        throw error
+      }
+    })
     await writeFile(owner, '', { flag: 'wx' })
     await utimes(usage, new Date(), new Date())
   })
