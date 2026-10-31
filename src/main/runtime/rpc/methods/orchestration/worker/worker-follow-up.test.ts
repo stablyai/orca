@@ -2,6 +2,7 @@ import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES } from '../../../../../../shared/orchestration-worker-start-prompt-budget'
 import { getWorkerTerminalAutoReleaseScheduler } from '../../../../orchestration/worker-terminal-auto-release-scheduler'
 import {
   getFollowUpDispatch,
@@ -219,6 +220,28 @@ describe('a follow-up to a finished terminal worker', () => {
     await vi.waitFor(() =>
       expect(h.db.getUnreadMessages(`dispatch:${failed}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
     )
+  })
+
+  it('starts a follow-up from the first of a backlog too large for one Task and keeps the rest as its mail', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    const large = 'x'.repeat(Math.floor(ORCHESTRATION_WORKER_START_TASK_SPEC_MAX_BYTES * 0.4))
+    for (const marker of ['first', 'second', 'third']) {
+      await send(dispatchId, `${marker} ${large}`)
+    }
+    h.settle(taskId, dispatchId, 'succeeded')
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+
+    await vi.waitFor(() =>
+      expect(h.db.getDispatchContextById(dispatchId)?.follow_up_mail_at).toBeNull()
+    )
+    const followUp = getFollowUpDispatch(h.db, dispatchId)!
+    expect(h.db.getTask(followUp.task_id)?.spec).toContain('first ')
+    expect(h.db.getTask(followUp.task_id)?.spec).not.toContain('second ')
+    expect(
+      h.db.getUnreadMessages(`dispatch:${followUp.id}`).map((message) => message.body?.slice(0, 6))
+    ).toEqual(['second', 'third '])
   })
 
   it('keeps the mail a failed follow-up took, says so, and delivers it with the retry', async () => {

@@ -41,11 +41,16 @@ export function resolveWorkerLineage(
     return undefined
   }
   let latest = addressed
+  let resource: WorkerTerminalResourceRow | undefined
+  // The resource already in hand names every Dispatch it passed through, so only an unknown one costs a scan.
   const resourceOf = (id: string) =>
-    db.getWorkerTerminalResourceByOwner(id) ?? db.getWorkerTerminalResourceFormerlyOwnedBy(id)
+    db.getWorkerTerminalResourceByOwner(id) ??
+    (resource?.prior_owner_dispatch_ids.includes(`"${id}"`)
+      ? resource
+      : db.getWorkerTerminalResourceFormerlyOwnedBy(id))
   const seen = new Set([latest.id])
   // A follow-up that never got a worker continues the nearest one before it that did.
-  let resource = resourceOf(latest.id)
+  resource = resourceOf(latest.id)
   for (let back = addressed; !resource && back.follow_up_of_dispatch_id;) {
     const prior = db.getDispatchContextById(back.follow_up_of_dispatch_id)
     if (!prior || seen.has(prior.id)) {
@@ -166,8 +171,27 @@ export function restoreFollowUpMail(db: OrchestrationDb, messageIds: readonly st
 
 export function clearFollowUpMail(db: OrchestrationDb, dispatchId: string): void {
   db.db
-    .prepare('UPDATE dispatch_contexts SET follow_up_mail_at = NULL WHERE id = ?')
+    .prepare(
+      'UPDATE dispatch_contexts SET follow_up_mail_at = NULL WHERE id = ? AND follow_up_mail_at IS NOT NULL'
+    )
     .run(dispatchId)
+}
+
+/** The Dispatches before this one in its follow-up chain that hold unread mail, nearest first. */
+export function listMarkedFollowUpAncestors(db: OrchestrationDb, dispatchId: string): string[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this projection selects exactly the id column.
+  const rows = db.db
+    .prepare(
+      `WITH RECURSIVE chain(id) AS (
+         SELECT follow_up_of_dispatch_id FROM dispatch_contexts WHERE id = ?
+         UNION
+         SELECT d.follow_up_of_dispatch_id FROM dispatch_contexts d JOIN chain ON d.id = chain.id
+       )
+       SELECT d.id FROM chain JOIN dispatch_contexts d ON d.id = chain.id
+        WHERE d.follow_up_mail_at IS NOT NULL`
+    )
+    .all(dispatchId) as { id: string }[]
+  return rows.map((row) => row.id)
 }
 
 export function listDispatchesWithFollowUpMail(db: OrchestrationDb): string[] {
