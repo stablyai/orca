@@ -9,18 +9,21 @@ import {
   type KeybindingMatchOptions
 } from '../../shared/keybindings'
 import {
-  getWindowShortcutActionId,
   matchesRecentTabSwitcherChord,
   nativeZoomCommandMatchesKeybindings,
   resolveWindowShortcutAction,
-  windowShortcutActionCapturesTerminal,
   type WindowShortcutAction
 } from '../../shared/window-shortcut-policy'
+import {
+  getWindowShortcutActionId,
+  windowShortcutActionCapturesTerminal
+} from '../../shared/window-shortcut-action-ids'
 import type { Store } from '../persistence'
 import type { CreateMainWindowOptions } from './main-window-contracts'
 import type { MainWindowFocusLifecycle } from './main-window-focus-lifecycle'
 import { sendResolvedWindowShortcutAction } from './main-window-shortcut-actions'
 import { isMacAppPasteInput } from './mac-app-paste-input'
+import { hasOpenableNotification } from '../ipc/openable-notifications'
 
 export function installMainWindowShortcutRouting(args: {
   focus: MainWindowFocusLifecycle
@@ -91,8 +94,15 @@ export function installMainWindowShortcutRouting(args: {
       return true
     }
 
+    // Nothing to open: the chord stays with the focused terminal or page.
+    if (action.type === 'openLatestNotification' && !hasOpenableNotification()) {
+      return false
+    }
+
     if (
-      (action.type === 'toggleQuickCommandsMenu' || action.type === 'deleteCurrentWorkspace') &&
+      (action.type === 'toggleQuickCommandsMenu' ||
+        action.type === 'deleteCurrentWorkspace' ||
+        action.type === 'openLatestNotification') &&
       isAutoRepeat
     ) {
       event.preventDefault()

@@ -1,5 +1,6 @@
 import type { BrowserWindow } from 'electron'
 import type { WindowShortcutAction } from '../../shared/window-shortcut-policy'
+import { openLatestNotification } from '../ipc/openable-notifications'
 
 export function sendResolvedWindowShortcutAction(
   mainWindow: BrowserWindow,
@@ -53,6 +54,9 @@ export function sendResolvedWindowShortcutAction(
       return
     case 'toggleAgentDashboard':
       mainWindow.webContents.send('ui:toggleAgentDashboard')
+      return
+    case 'openLatestNotification':
+      openLatestNotification()
       return
     case 'switchRecentTab':
       mainWindow.webContents.send('ui:switchRecentTab')

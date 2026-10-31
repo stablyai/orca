@@ -43,6 +43,27 @@ export const KEYBINDING_DEFINITION_CORE_4: readonly KeybindingDefinition[] = [
     defaultBindings: platformBindings([])
   },
   {
+    id: 'notifications.openLatest',
+    title: 'Open latest notification',
+    group: 'Global',
+    scope: 'global',
+    searchKeywords: [
+      'shortcut',
+      'global',
+      'notification',
+      'notifications',
+      'latest',
+      'recent',
+      'jump',
+      'agent',
+      'attention',
+      'open'
+    ],
+    defaultBindings: platformBindings(['Mod+Alt+Enter']),
+    // Why: notifications usually arrive while a terminal is focused; with nothing to open the key still reaches it.
+    allowInTerminal: true
+  },
+  {
     id: 'terminal.clearPaneTitle',
     title: 'Clear Pane Title',
     group: 'Terminal Panes',

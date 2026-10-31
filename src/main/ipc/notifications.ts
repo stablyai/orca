@@ -15,6 +15,10 @@ import { setTrayAttention } from '../tray/system-tray'
 import { isMainWindowVisible } from '../window/main-window-visibility'
 import { activeNotificationsById } from './native-notification-lifecycle'
 import { deliverNativeNotification } from './native-notification-delivery'
+import {
+  forgetOpenableNotifications,
+  type OpenableNotificationPaneRead
+} from './openable-notifications'
 import { removeReadMacosNotifications } from './macos-notification-center'
 import { createNotificationDeliveryService } from '../notifications/notification-delivery-service'
 import { createAnnouncedNotificationRegistry } from '../notifications/announced-notification-registry'
@@ -111,12 +115,14 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
         )
       )
       const genericMobileIds = new Set(uniqueIds)
+      const paneReads: OpenableNotificationPaneRead[] = []
       // Positioned structured alerts need the journal boundary; pane-wide reads retire the rest.
       for (const paneKey of Array.isArray(paneKeys) ? paneKeys : []) {
         if (typeof paneKey === 'string') {
           const read = Array.isArray(reads)
             ? reads.find((item) => isStructuredAttentionRead(item) && item.paneKey === paneKey)
             : undefined
+          paneReads.push({ paneKey, read })
           const retired = announced.take(paneKey, read)
           for (const entry of retired) {
             uniqueIds.add(entry.id)
@@ -130,6 +136,7 @@ export function registerNotificationHandlers(store: Store, runtime?: OrcaRuntime
           }
         }
       }
+      forgetOpenableNotifications(uniqueIds, paneReads)
       let dismissed = 0
       for (const id of uniqueIds) {
         const entry = activeNotificationsById.get(id)
