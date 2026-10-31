@@ -35,7 +35,11 @@ export type StructuredAgentSessionSendInput = {
 export type StructuredAgentSessionSendRequest = Pick<
   StructuredAgentSessionSendInput,
   'callerKeepsText' | 'usageLimitContinuationOfTurnItemId' | 'skills'
-> & { onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void }
+> & {
+  onSettled?: (outcome: StructuredAgentSessionSendOutcome) => void
+  /** Do the other thing than the follow-up setting: Cmd/Ctrl+Enter, or the phone's hold menu. */
+  alternate?: true
+}
 
 /** Reserve the chat’s single unanswered-send slot; return null while occupied. */
 export function takeStructuredAgentSessionSendSlot(

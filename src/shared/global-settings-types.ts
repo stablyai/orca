@@ -208,7 +208,7 @@ export type GlobalSettings = GlobalSettingsBase & {
   terminalUrlMiddleClickBehavior?: 'open' | 'actions' | 'none'
   /** Opt-in resume of working structured chats after restart; off still lists them for review before token spending. */
   nativeChatResumeWorkOnRestart?: boolean
-  /** Queue editable mid-turn follow-ups until turn end on capable hosts. Absent means on; off sends immediately. */
+  /** Queue follow-ups while the agent works on capable hosts; absent means on. */
   nativeChatQueueFollowUps?: boolean
   /** Teach newly started native chats to create inline visuals; absent means on. */
   nativeChatInlineVisuals?: boolean

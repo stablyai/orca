@@ -19801,7 +19801,6 @@
         "editMessage": "Nachricht bearbeiten",
         "showFullMessage": "Vollständige Nachricht anzeigen",
         "showLess": "Weniger anzeigen",
-        "turnOffQueueing": "Warteschlange deaktivieren",
         "listLabel": "Nachrichten in der Warteschlange",
         "alreadySent": "Diese Nachricht wurde bereits gesendet.",
         "withdrawnHold": "Vor dem Senden gestoppt",
@@ -20386,12 +20385,11 @@
         }
       },
       "nativeChat": {
-        "queueFollowUpsTitle": "Folgenachrichten einreihen",
+        "followUpBehaviorTitle": "Folgenachrichten einreihen",
         "inlineVisualsTitle": "Eingebettete Grafiken",
         "inlineVisualsCopy": "Dem Agenten erlauben, Diagramme, Schaubilder und Mockups in seinen Antworten anzuzeigen. Gilt für neu gestartete Chats.",
         "inlineVisualsToggleLabel": "Eingebettete Grafiken umschalten",
-        "queueFollowUpsCopy": "Während der Agent arbeitet, warten gesendete Nachrichten als Karten und lassen sich zur Steuerung sofort senden, bearbeiten oder löschen. Nachrichten mit Bildern werden sofort gesendet.",
-        "queueFollowUpsToggleLabel": "Einreihen von Folgenachrichten umschalten",
+        "followUpBehaviorCopy": "Nachrichten während der Arbeit des Agenten warten als Karten, bis der Durchgang endet, statt in den laufenden Durchgang zu gehen. Cmd/Strg+Enter macht für eine Nachricht das Gegenteil.",
         "behaviorTitle": "Verhalten",
         "resumeSearchUpdate": "Aktualisieren",
         "resumeSearchRelaunch": "Neu starten",
