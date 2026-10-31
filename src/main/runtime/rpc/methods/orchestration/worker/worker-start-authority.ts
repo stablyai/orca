@@ -9,8 +9,7 @@ import type { OrcaRuntimeService } from '../../../../orca-runtime'
 import { resolveDispatchCreator } from '../runs/dispatch-creator'
 import { createBoundRun } from '../runs/runs'
 import { ROOT_DISPATCH_DEPTH } from '../../../../../../shared/nested-worker-depth'
-import { parseWorkerTerminalPriorOwnerIds } from '../../../../orchestration/db/pane-key-match'
-import { externalHolderLookup } from '../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
+import { previousCustodianLookup } from '../../../../orchestration/db/worker-terminal/worker-terminal-transfer'
 import type { WorkerFollowUp } from './worker-follow-up-placement'
 
 export type WorkerStartRunBinding = { run: RunRow; created: boolean }
@@ -146,15 +145,15 @@ function creationRoot(
 }
 
 /** Whether `ancestorId` is `from` or an earlier Dispatch of the same worker in its Run: one it continued with a
- *  follow-up, or whose exact pane and process it took over. Each hop is read, so another Run in between ends the walk. */
+ *  follow-up, or whose exact process it took over (its saved custody, or for the user's own pane the pane's previous
+ *  assignment). Each hop is read, so another Run in between ends the walk. */
 function continuesDispatch(
   db: OrchestrationDb,
   from: DispatchContextRow,
   ancestorId: string
 ): boolean {
   const seen = new Set<string>()
-  // Pane histories read for this check only; they prove order, never permission, and go when it returns.
-  const externalHolder = externalHolderLookup(db)
+  const previousCustodian = previousCustodianLookup(db)
   const pending: (DispatchContextRow | undefined)[] = [from]
   while (pending.length > 0) {
     const row = pending.pop()
@@ -165,40 +164,13 @@ function continuesDispatch(
       return true
     }
     seen.add(row.id)
-    for (const id of new Set([
-      row.follow_up_of_dispatch_id,
-      previousCustodian(db, row.id, externalHolder)
-    ])) {
+    for (const id of new Set([row.follow_up_of_dispatch_id, previousCustodian(row)])) {
       if (id && !seen.has(id)) {
         pending.push(db.getDispatchContextById(id))
       }
     }
   }
   return false
-}
-
-/** The holder right before this Dispatch of its terminal's exact process: from the owned row's ordered custody history,
- *  or for an external pane its previous assignment. */
-function previousCustodian(
-  db: OrchestrationDb,
-  dispatchId: string,
-  externalHolder: ReturnType<typeof externalHolderLookup>
-): string | undefined {
-  const resource =
-    db.getWorkerTerminalResourceByOwner(dispatchId) ??
-    db.getWorkerTerminalResourceFormerlyOwnedBy(dispatchId)
-  if (!resource) {
-    return undefined
-  }
-  // Unreadable history proves no takeover.
-  const prior = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
-  const owners = prior ? [...prior, resource.owner_dispatch_id] : []
-  const at = owners.indexOf(dispatchId)
-  if (at > 0) {
-    return owners[at - 1]
-  }
-  // An external pane is never transferred; each holder gets a row of its own.
-  return at === 0 ? externalHolder(resource) : undefined
 }
 
 function fenced(message: string): OrchestrationError {

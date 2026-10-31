@@ -3,8 +3,10 @@ import { OrchestrationError } from '../../orchestration-error'
 import {
   DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL,
   isEquivalentPaneKey,
-  paneKeyMatchSuffix
+  paneKeyMatchSuffix,
+  parseWorkerTerminalPriorOwnerIds
 } from '../pane-key-match'
+import type { DispatchContextRow } from '../../types'
 import type { OrchestrationDb } from '../orchestration-db'
 import { parsePaneKey } from '../../../../../shared/stable-pane-id'
 
@@ -189,13 +191,29 @@ const PANE_HOLDERS_SQL = `WITH holders AS (
          r.prior_owner_dispatch_ids AS prior, r.retained_reason AS provenance
     FROM holders h LEFT JOIN worker_terminal_resources r ON r.owner_dispatch_id = h.id`
 
-/** For one caller check: the settled Dispatch that held an external pane's same process right before a resource's owner.
- *  Each pane's history is read and ordered once per lookup; the previous holder is never skipped for an older one. */
-export function externalHolderLookup(
+const IDENTITY_COHORT_SQL =
+  'SELECT * FROM worker_terminal_resources WHERE process_incarnation = ? AND host_scope IS ?'
+
+/** For one caller check: who held a Dispatch's exact terminal process right before it. Each custody cohort, history and
+ *  pane order is read and decoded at most once per check; it is evidence, never permission, and goes when the check does. */
+export function previousCustodianLookup(
   db: OrchestrationDb
-): (resource: WorkerTerminalResourceRow) => string | undefined {
-  const histories = new Map<string, Map<string, PaneHolder | undefined> | null>()
-  return (resource) => {
+): (dispatch: DispatchContextRow) => string | undefined {
+  const cohorts = new Map<string, WorkerTerminalResourceRow[]>()
+  const histories = new Map<string, Map<string, string | undefined> | null>()
+  const panes = new Map<string, Map<string, PaneHolder | undefined> | null>()
+  // Each holder's predecessor in the row's ordered owners; unreadable or repeating history proves nothing.
+  const historyOf = (resource: WorkerTerminalResourceRow) => {
+    if (!histories.has(resource.id)) {
+      const prior = parseWorkerTerminalPriorOwnerIds(resource.prior_owner_dispatch_ids)
+      const owners = prior && [...prior, resource.owner_dispatch_id]
+      const previous = owners && new Map(owners.map((owner, index) => [owner, owners[index - 1]]))
+      histories.set(resource.id, previous?.size === owners?.length ? previous : null)
+    }
+    return histories.get(resource.id)
+  }
+  // An external pane is never transferred, so its earlier holder is the pane's previous assignment.
+  const externalHolder = (resource: WorkerTerminalResourceRow) => {
     const { pane_key: paneKey, process_incarnation: incarnation, host_scope: host } = resource
     const owner = resource.owner_dispatch_id
     if (resource.ownership_state !== 'external' || resource.origin_dispatch_id !== owner) {
@@ -206,14 +224,36 @@ export function externalHolderLookup(
       return undefined
     }
     const key = JSON.stringify([parsePaneKey(paneKey)?.leafId ?? paneKey, host])
-    if (!histories.has(key)) {
-      histories.set(key, orderPaneHolders(db, paneKey, host))
+    if (!panes.has(key)) {
+      panes.set(key, orderPaneHolders(db, paneKey, host))
     }
-    const previous = histories.get(key)?.get(owner)
+    const previous = panes.get(key)?.get(owner)
     return previous?.incarnation === incarnation &&
       !['pending', 'dispatched'].includes(previous.status)
       ? previous.id
       : undefined
+  }
+  return (dispatch) => {
+    let resource = db.getWorkerTerminalResourceByOwner(dispatch.id)
+    if (!resource && dispatch.process_incarnation) {
+      // A former holder: its exact process's custody rows, kept only if their ordered owners name it.
+      const key = JSON.stringify([dispatch.process_incarnation, dispatch.host_scope])
+      let cohort = cohorts.get(key)
+      if (!cohort) {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+        cohort = db.db
+          .prepare(IDENTITY_COHORT_SQL)
+          .all(dispatch.process_incarnation, dispatch.host_scope) as WorkerTerminalResourceRow[]
+        cohorts.set(key, cohort)
+      }
+      const held = cohort.filter((row) => historyOf(row)?.has(dispatch.id))
+      resource = held.length === 1 ? held[0] : undefined
+    }
+    const history = resource && historyOf(resource)
+    if (!resource || !history?.has(dispatch.id)) {
+      return undefined
+    }
+    return history.get(dispatch.id) ?? externalHolder(resource)
   }
 }
 

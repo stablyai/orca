@@ -6,6 +6,8 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../../../../shared/agent-sessi
 import { activeProviderContext } from '../../../../../../shared/agent-session-provider-context'
 import { HOST_TEST_THREAD } from '../../../../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import { receipt, useHelperFollowUpCli } from './helper-follow-up-cli.test-support'
+import { seedUnrelatedHistory, traceCallerReads } from './helper-follow-up-sql-trace.test-support'
+import * as paneKeys from '../../../../orchestration/db/pane-key-match'
 
 describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
   const f = useHelperFollowUpCli()
@@ -20,6 +22,8 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     report,
     pair,
     follow,
+    takeOver,
+    continues,
     placeNextWorkerInChat,
     otherRun,
     effects
@@ -338,34 +342,73 @@ describe('helper follow-ups through CLI argv, RPC and SQLite', () => {
     }
   )
 
-  it('bounds ownership reads by sender ancestry at N and 10N', async () => {
-    const counts: number[] = []
-    for (const depth of [3, 30]) {
-      const sender = `term_sender_${depth}`
-      const child = `term_child_${depth}`
+  it('reads the same custody evidence for a chain of recoveries however much unrelated work is stored', async () => {
+    const counts: unknown[] = []
+    for (const unrelated of [40, 400]) {
+      const terminal = `term_worker_${unrelated}`
+      const first = await start('term_coord', terminal)
+      const helper = await start(terminal, `${terminal}_helper`)
+      await report(`${terminal}_helper`, helper, `dispatch:${first.dispatchId}`)
+      await report(terminal, first, 'term_coord')
+      // Four recoveries of the same agent; only the last is still at work.
+      let caller = first
+      for (let step = 0; step < 4; step++) {
+        caller = await takeOver('term_coord', terminal)
+        if (step < 3) {
+          await report(terminal, caller, 'term_coord')
+        }
+      }
+      const { process_incarnation: incarnation, host_scope: host } = h.db.getDispatchContextById(
+        first.dispatchId
+      )!
+      seedUnrelatedHistory(h.db, h.activeRunId, unrelated, {
+        pane: h.runtime.getTerminalPaneKey(terminal)!,
+        incarnation: incarnation!,
+        host
+      })
+      const trace = traceCallerReads(h.db)
+      await continues(terminal, helper, caller)
+      expect(trace.expectIndexedPlans()).toEqual(['identity'])
+      counts.push(trace.counts())
+      trace.restore()
+    }
+    // One indexed read of the agent's custody, visiting its one row, at both sizes; no former-owner scan.
+    expect(counts).toEqual(
+      Array(2).fill({
+        history: { executions: 0, visited: 0 },
+        identity: { executions: 1, visited: 1 },
+        formerOwner: { executions: 0, visited: 0 }
+      })
+    )
+  })
+
+  it('decodes each custody history once however long the follow-up chain', async () => {
+    const decoded: number[] = []
+    for (const length of [3, 30]) {
+      const sender = `term_sender_${length}`
+      const child = `term_child_${length}`
       let worker = await start('term_coord', sender)
       const helper = await start(sender, child)
       await report(child, helper, `dispatch:${worker.dispatchId}`)
       await success('worker-release', '--dispatch', helper.dispatchId)
-      // Each in-place follow-up is also a takeover of the same pane, so both kinds of ancestry grow.
-      for (let step = 0; step < depth; step++) {
+      // Each in-place follow-up also takes over the same pane, so the walk enters every ancestor by its follow-up.
+      for (let step = 0; step < length; step++) {
         await report(sender, worker, 'term_coord')
         worker = receipt.parse((await follow('term_coord', worker.dispatchId)).result)
       }
-      const reads = [
-        vi.spyOn(h.db, 'getDispatchContextById'),
-        vi.spyOn(h.db, 'getWorkerTerminalResourceByOwner'),
-        vi.spyOn(h.db, 'getWorkerTerminalResourceFormerlyOwnedBy')
-      ]
+      const trace = traceCallerReads(h.db)
+      const parse = vi.spyOn(paneKeys, 'parseWorkerTerminalPriorOwnerIds')
       f.nextTerminal = `${child}_continued`
       expect((await follow(sender, helper.dispatchId)).error).toBeUndefined()
-      const total = reads.reduce((sum, read) => sum + read.mock.calls.length, 0)
-      counts.push(total)
-      expect(total).toBeLessThanOrEqual(3 * depth + 60)
-      for (const read of reads) {
-        read.mockRestore()
-      }
+      expect(trace.counts()).toMatchObject({
+        identity: { executions: 1, visited: 1 },
+        formerOwner: { executions: 0 }
+      })
+      decoded.push(parse.mock.calls.length)
+      parse.mockRestore()
+      trace.restore()
     }
-    expect(counts[1] - counts[0]).toBeLessThanOrEqual(3 * (30 - 3))
+    expect(decoded[0]).toBeGreaterThan(0)
+    expect(decoded[1]).toBe(decoded[0])
   })
 })
