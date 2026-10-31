@@ -42,6 +42,7 @@ vi.mock('./native-chat-shortcut', async (importOriginal) => ({
   ...(await importOriginal<object>()),
   isMacPlatform: () => true
 }))
+vi.mock('@/lib/shortcut-platform', () => ({ getShortcutPlatform: () => 'darwin' }))
 vi.mock('./use-native-chat-skills', () => ({
   useNativeChatSkills: () => ({ status: 'ready', skills: [], error: null, retry: () => {} })
 }))
@@ -156,6 +157,43 @@ describe('mid-turn send keys on a host that queues', () => {
       await type('by enter')
       await type('by cmd enter', { metaKey: true })
       expect(sends().map((params) => params.delivery)).toEqual([enter, alternate])
+    }
+  )
+
+  it.each([
+    {
+      queueFollowUps: true,
+      hint: '⌘ Enter to steer',
+      enter: 'queue-if-active',
+      alternate: undefined
+    },
+    {
+      queueFollowUps: false,
+      hint: '⌘ Enter to queue',
+      enter: undefined,
+      alternate: 'queue-if-active'
+    }
+  ])(
+    'with queueing $queueFollowUps, a typed draft turns Stop into Send, which sends like Enter and names what Cmd+Enter does',
+    async ({ queueFollowUps, hint, enter, alternate }) => {
+      render(
+        <TooltipProvider>
+          <Chat queueFollowUps={queueFollowUps} />
+        </TooltipProvider>
+      )
+      expect(screen.queryByRole('button', { name: 'Send' })).toBeNull()
+      changePrompt(screen.getByRole('textbox'), 'by click')
+      expect(screen.queryByRole('button', { name: 'Stop the agent' })).toBeNull()
+      const send = screen.getByRole('button', { name: 'Send' })
+      act(() => send.focus())
+      expect((await screen.findByRole('tooltip')).textContent).toBe(hint)
+      await act(async () => {
+        fireEvent.click(send)
+      })
+      // The hint names what Cmd+Enter then actually asks of the host.
+      await type('by cmd enter', { metaKey: true })
+      expect(sends().map((params) => params.delivery)).toEqual([enter, alternate])
+      expect(screen.getByRole('button', { name: 'Stop the agent' })).toBeTruthy()
     }
   )
 })

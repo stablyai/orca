@@ -11,7 +11,7 @@ import { useNativeChatComposerRecall } from './use-native-chat-composer-recall'
 import { useNativeChatLaunchDraftAdoption } from './use-native-chat-launch-draft-adoption'
 import { NativeChatComposerField } from './NativeChatComposerField'
 import { useNativeChatComposerAttachments } from './use-native-chat-composer-attachments'
-import { nativeChatImageSendBlock } from './native-chat-image-reattach'
+import { nativeChatComposerSendState } from './native-chat-composer-send-state'
 import { useNativeChatComposerHandle } from './use-native-chat-composer-handle'
 import { useNativeChatFileDrops } from './use-native-chat-file-drops'
 import { useNativeChatComposerKeyDown } from './use-native-chat-composer-keydown'
@@ -161,19 +161,17 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
     })
     const { imageAttachments, attachResolvedPaths, clearImageAttachments, removeImageAttachment } =
       attachments
-    const imageBlock = nativeChatImageSendBlock(imageAttachments)
-    const sendBlockedReason = imageBlock.reason ?? structuredTransport?.sendBlockedReason ?? null
-    const sendHeld =
-      attachments.pastedTextSaving ||
-      disabled ||
-      structuredTransport?.sendOut === true ||
-      imageBlock.holdsSend ||
-      structuredTransport?.sendBlockedReason !== undefined
-    const sendButtonDisabled = editSession
-      ? sendHeld || !editSession.canSave
-      : isWorking
-        ? !hasPty || !onStop
-        : sendHeld || (draft.trim() === '' && imageAttachments.length === 0)
+    const { sendBlockedReason, sendHeld, hasDraft, sendButtonDisabled, alternateSend } =
+      nativeChatComposerSendState({
+        draft,
+        imageAttachments,
+        pastedTextSaving: attachments.pastedTextSaving,
+        disabled,
+        structuredTransport,
+        editSession,
+        isWorking,
+        canStop: hasPty && onStop !== undefined
+      })
 
     const {
       pickAttachments,
@@ -386,6 +384,8 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           sendButtonDisabled={sendButtonDisabled}
           sendBlockedReason={sendBlockedReason}
           isWorking={isWorking}
+          hasDraft={hasDraft}
+          alternateSend={alternateSend}
           isStopping={isStopping}
           afterStop={afterStop}
           attachDisabled={attachDisabled}
