@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { buildWorktreePurgeState } from './worktrees/teardown/worktree-purge-state'
 import type * as AppStoreModule from '../index'
 import { act, cleanup, renderHook, waitFor } from '@testing-library/react'
 import type { StoreApi } from 'zustand'
