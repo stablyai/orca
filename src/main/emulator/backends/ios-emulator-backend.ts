@@ -270,11 +270,16 @@ export class IosEmulatorBackend implements EmulatorBackend {
   }
 
   private async hasHelperForSession(info: EmulatorSessionInfo): Promise<boolean> {
-    const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
-      helperPid: info.helperPid,
-      includeOrphaned: true
-    }).catch(() => [])
-    return helpers.length > 0
+    try {
+      const helpers = await listServeSimHelperProcessesForDevice(info.deviceUdid, {
+        helperPid: info.helperPid,
+        includeOrphaned: info.helperPid === undefined
+      })
+      return helpers.length > 0
+    } catch {
+      // Endpoint readiness already proves the helper is serving; never recycle it on a failed ps read.
+      return true
+    }
   }
 
   private async execServeSim(

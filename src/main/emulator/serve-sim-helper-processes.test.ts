@@ -1,5 +1,18 @@
+import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
-import { parseServeSimHelperProcesses } from './serve-sim-helper-processes'
+
+const { execFileMock, spawnMock } = vi.hoisted(() => ({
+  execFileMock: vi.fn(),
+  spawnMock: vi.fn()
+}))
+
+vi.mock('node:child_process', () => ({ execFile: execFileMock, spawn: spawnMock }))
+vi.mock('node:os', () => ({ platform: () => 'darwin' }))
+
+import {
+  listServeSimHelperProcessesForDevice,
+  parseServeSimHelperProcesses
+} from './serve-sim-helper-processes'
 
 describe('parseServeSimHelperProcesses', () => {
   it('returns legacy serve-sim-bin helper processes from ps output', () => {
@@ -63,5 +76,98 @@ describe('parseServeSimHelperProcesses', () => {
     } finally {
       splitSpy.mockRestore()
     }
+  })
+})
+
+describe('listServeSimHelperProcessesForDevice', () => {
+  it('uses the known helper PID instead of capturing the whole process table', async () => {
+    execFileMock.mockImplementationOnce((_command, args, _options, callback) => {
+      expect(args).toEqual(['-p', '123', '-o', 'pid=,command='])
+      callback(
+        null,
+        Buffer.from(' 123 /Applications/serve-sim/bin/serve-sim-bin UDID-1 --port 3100\n'),
+        Buffer.from('')
+      )
+    })
+
+    await expect(
+      listServeSimHelperProcessesForDevice('UDID-1', {
+        helperPid: 123
+      })
+    ).resolves.toEqual([
+      {
+        pid: 123,
+        command: '/Applications/serve-sim/bin/serve-sim-bin UDID-1 --port 3100'
+      }
+    ])
+  })
+
+  it('merges known and orphaned helpers when cleanup requests both', async () => {
+    execFileMock.mockImplementationOnce((_command, args, _options, callback) => {
+      expect(args).toEqual(['-p', '123', '-o', 'pid=,command='])
+      callback(null, Buffer.from(' 123 /Applications/serve-sim/bin/serve-sim-bin UDID-1\n'), '')
+    })
+    class MockStdout extends EventEmitter {
+      setEncoding(_encoding: string): this {
+        return this
+      }
+    }
+    class MockChild extends EventEmitter {
+      readonly stdout = new MockStdout()
+      readonly kill = vi.fn()
+    }
+    const child = new MockChild()
+    const stdout = child.stdout
+    spawnMock.mockImplementationOnce(() => {
+      queueMicrotask(() => {
+        stdout.emit('data', ' 456 /Applications/serve-sim/bin/serve-sim-bin UDID-1\n')
+        child.emit('close', 0)
+      })
+      return child
+    })
+
+    await expect(
+      listServeSimHelperProcessesForDevice('UDID-1', {
+        helperPid: 123,
+        includeOrphaned: true
+      })
+    ).resolves.toEqual([
+      { pid: 123, command: '/Applications/serve-sim/bin/serve-sim-bin UDID-1' },
+      { pid: 456, command: '/Applications/serve-sim/bin/serve-sim-bin UDID-1' }
+    ])
+  })
+
+  it('treats a missing known PID as an absent helper', async () => {
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      callback(Object.assign(new Error('ps exited with code 1'), { code: 1 }), Buffer.from(''), '')
+    })
+
+    await expect(
+      listServeSimHelperProcessesForDevice('UDID-1', { helperPid: 123 })
+    ).resolves.toEqual([])
+  })
+
+  it('does not treat a failed known-PID query as an absent helper', async () => {
+    const error = Object.assign(new Error('ps failed'), { code: 1 })
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      callback(error, Buffer.from(''), 'ps: permission denied')
+    })
+
+    await expect(listServeSimHelperProcessesForDevice('UDID-1', { helperPid: 123 })).rejects.toBe(
+      error
+    )
+  })
+
+  it('propagates process enumeration failures instead of treating them as no helper', async () => {
+    const error = Object.assign(new Error('stdout maxBuffer length exceeded'), {
+      code: 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER'
+    })
+    execFileMock.mockImplementationOnce((_command, _args, _options, callback) => {
+      callback(error, Buffer.from(''), Buffer.from(''))
+    })
+
+    await expect(listServeSimHelperProcessesForDevice('UDID-1', { helperPid: 123 })).rejects.toBe(
+      error
+    )
   })
 })

@@ -342,7 +342,7 @@ describe('EmulatorBridge helper ownership', () => {
     expect(waitForEndpointReady).toHaveBeenCalledWith('http://127.0.0.1:3100/device-1')
     expect(listServeSimHelperProcessesForDeviceMock).toHaveBeenCalledWith('device-1', {
       helperPid: 1234,
-      includeOrphaned: true
+      includeOrphaned: false
     })
     expect(execServeSimCommandMock).not.toHaveBeenCalled()
     expect(killServeSimHelperProcessesForDeviceMock).not.toHaveBeenCalled()
