@@ -147,11 +147,12 @@ export class OpenAiTranscriptionSession {
     // controller, so combine both signals.
     const timeoutSignal = AbortSignal.timeout(TRANSCRIPTION_TIMEOUT_MS)
     const signal = AbortSignal.any([this.abortController.signal, timeoutSignal])
+    const apiKey = target.readApiKey()
     let response: Response
     try {
       response = await fetch(target.url, {
         method: 'POST',
-        headers: target.apiKey ? { Authorization: `Bearer ${target.apiKey}` } : {},
+        headers: apiKey ? { Authorization: `Bearer ${apiKey}` } : {},
         body: form,
         signal
       })
