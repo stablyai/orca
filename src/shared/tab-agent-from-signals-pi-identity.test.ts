@@ -310,11 +310,14 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
   })
 
   it('does not flash the exited agent before a hookless reuse title reclaims on mount', () => {
-    // Completed hooks prove prior activity immediately, before observed-signal state commits; reuse titles must reclaim without a one-frame idle-owner flash.
+    // hasObservedAgentSignal starts false for one mount commit; a completed hook
+    // is itself activity evidence, so an anchored reuse title reclaims immediately
+    // instead of flashing the prior agent's idle identity. (claude ran+idled,
+    // then a hookless codex reused the pane and emits its own title.)
     const onMount = resolveTabAgentFromSignals({
       hasObservedAgentSignal: false,
       isRemote: false,
-      title: '⠋ Codex',
+      title: '⠋ fix the parser - Codex',
       hookAgent: null,
       focusedCompletedHookAgent: 'claude',
       launchAgent: undefined
@@ -322,12 +325,36 @@ describe('resolveTabAgentFromSignals — identity vs liveness', () => {
     const afterObserved = resolveTabAgentFromSignals({
       hasObservedAgentSignal: true,
       isRemote: false,
-      title: '⠋ Codex',
+      title: '⠋ fix the parser - Codex',
       hookAgent: null,
       focusedCompletedHookAgent: 'claude',
       launchAgent: undefined
     })
     expect(onMount).toBe('codex')
     expect(afterObserved).toBe('codex')
+  })
+
+  it('does not let a task-text mention reclaim a pane from its completed hook (#24854)', () => {
+    // A Codex mention in task text is not an identity claim. A title that is only the agent name is.
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ Review Codex behavior',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'claude',
+        launchAgent: undefined
+      })
+    ).toBe('claude')
+    expect(
+      resolveTabAgentFromSignals({
+        hasObservedAgentSignal: true,
+        isRemote: false,
+        title: '⠋ Codex',
+        hookAgent: null,
+        focusedCompletedHookAgent: 'claude',
+        launchAgent: undefined
+      })
+    ).toBe('codex')
   })
 })

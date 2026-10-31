@@ -81,7 +81,6 @@ describe('agent pane authority', () => {
     const before = store.getState()
 
     store.getState().retireAgentPaneAuthority(TARGET)
-
     const after = store.getState()
     expect(after.recentlyRetiredAgentStatusPaneKeys[TARGET]).not.toBe(
       before.recentlyRetiredAgentStatusPaneKeys[TARGET]

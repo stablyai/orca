@@ -2,15 +2,14 @@ import { describe, expect, it } from 'vitest'
 import { applyAgentRowLineage } from '@/components/dashboard/agent-row-lineage'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../../../shared/terminal-tab-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { buildWorktreeAgentRows } from './worktree-agent-rows'
-import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
-import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
 import {
   resolveTitleDerivedAgentType,
   type TitleDerivedPaneForeground
 } from './title-derived-pane-agent-identity'
-
+import { makePaneKey } from '../../../../shared/stable-pane-id'
+import { buildWorktreeAgentRows } from './worktree-agent-rows'
+import { createTerminalTitleTracker } from '../../../../shared/terminal-output-side-effects'
+import { resolveTabAgentFromSignalSnapshot } from '../../../../shared/tab-agent-from-signals'
 import { resolveExplicitTerminalTitleAgentType } from '../../../../shared/terminal-title-agent-type'
 
 const LEAF_ID_1 = '77777777-7777-4777-8777-777777777777'
@@ -406,14 +405,14 @@ describe('buildTitleDerivedAgentRows', () => {
     ).toEqual([['codex', 'working', 'Codex', '⠼ demo-repo']])
   })
 
-  it('keeps explicit title identity over the launched agent', () => {
+  it('keeps an anchored title identity over the launched agent', () => {
     const launchAgent: TuiAgent = 'claude'
     const rows = buildWorktreeAgentRows({
       tabs: [makeTab('tab-1', { launchAgent })],
       entries: [],
       retained: [],
       runtimePaneTitlesByTabId: {
-        'tab-1': { 1: '⠋ Codex' }
+        'tab-1': { 1: '⠋ fix the parser - Codex' }
       },
       ptyIdsByTabId: { 'tab-1': ['pty-explicit'] },
       terminalLayoutsByTabId: { 'tab-1': makeSingleLayout(LEAF_ID_1) },

@@ -30,6 +30,7 @@ import {
   tabFromWorktreeAttributedStatusEntry
 } from './worktree-agent-row-fallback-tab'
 import { resolveRowAgentType } from './worktree-agent-row-type'
+import { shouldRetireFinishedHarnessSnapshot } from './retire-stale-harness-snapshot'
 import { entryWithRuntimeOrchestration } from './worktree-agent-row-orchestration'
 
 function countTerminalLayoutLeaves(node: TerminalPaneLayoutNode | null | undefined): number {
@@ -138,6 +139,22 @@ function markCompletedWorkerParentPaneKeysSeen(args: {
   }
 }
 
+function isSupersededFinishedRow(
+  entry: AgentStatusEntry,
+  tab: TerminalTab,
+  hasLivePty: boolean,
+  foreground: TitleDerivedPaneForeground | undefined
+): boolean {
+  return (
+    hasLivePty &&
+    shouldRetireFinishedHarnessSnapshot({
+      finishedAgent: resolveRowAgentType(entry, tab),
+      finishedState: entry.state,
+      occupantAgent: foreground?.agentEvidence === 'process-read' ? foreground.agent : null
+    })
+  )
+}
+
 export function buildWorktreeAgentRows(args: {
   tabs: TerminalTab[]
   representedTabs?: ReadonlyMap<string, Tab>
@@ -152,6 +169,7 @@ export function buildWorktreeAgentRows(args: {
 }): DashboardAgentRow[] {
   const rows: DashboardAgentRow[] = []
   const seenPaneKeys = new Set<string>()
+  const supersededPaneKeys = new Set<string>()
   const currentTabsById = new Map(args.tabs.map((tab) => [tab.id, tab] as const))
 
   const entriesByTabId = new Map<string, AgentStatusEntry[]>()
@@ -172,12 +190,18 @@ export function buildWorktreeAgentRows(args: {
   }
 
   const ptyIdsByTabId = args.ptyIdsByTabId ?? {}
-
+  // Why: a different live process invalidates a finished snapshot even when
+  // its shell/default title cannot produce a replacement row.
   for (const tab of args.tabs) {
     const explicitEntries = entriesByTabId.get(tab.id) ?? []
     const hasLivePty = tabHasLivePty(ptyIdsByTabId, tab.id)
     for (const entry of explicitEntries) {
       const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
+      const foreground = args.paneForegroundAgentByPaneKey?.[rowEntry.paneKey]
+      if (isSupersededFinishedRow(rowEntry, tab, hasLivePty, foreground)) {
+        supersededPaneKeys.add(rowEntry.paneKey)
+        continue
+      }
       const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
       const shouldDecay =
         !isFresh &&
@@ -212,7 +236,7 @@ export function buildWorktreeAgentRows(args: {
 
   // Main can attribute workers before tabs hydrate; keep them visible without waiting for local membership.
   for (const entry of args.entries) {
-    if (seenPaneKeys.has(entry.paneKey)) {
+    if (seenPaneKeys.has(entry.paneKey) || supersededPaneKeys.has(entry.paneKey)) {
       continue
     }
     const rowEntry = entryWithRuntimeOrchestration(entry, args.runtimeAgentOrchestrationByPaneKey)
@@ -223,6 +247,17 @@ export function buildWorktreeAgentRows(args: {
       args.representedTabs?.get(rowEntry.paneKey)
     )
     if (!tab) {
+      continue
+    }
+    if (
+      isSupersededFinishedRow(
+        rowEntry,
+        tab,
+        tabHasLivePty(ptyIdsByTabId, tab.id),
+        args.paneForegroundAgentByPaneKey?.[rowEntry.paneKey]
+      )
+    ) {
+      supersededPaneKeys.add(rowEntry.paneKey)
       continue
     }
     const isFresh = isExplicitAgentStatusFresh(rowEntry, args.now, AGENT_STATUS_STALE_AFTER_MS)
@@ -246,7 +281,7 @@ export function buildWorktreeAgentRows(args: {
   }
 
   for (const ra of args.retained) {
-    if (seenPaneKeys.has(ra.entry.paneKey)) {
+    if (seenPaneKeys.has(ra.entry.paneKey) || supersededPaneKeys.has(ra.entry.paneKey)) {
       continue
     }
     if (
@@ -263,6 +298,16 @@ export function buildWorktreeAgentRows(args: {
       args.runtimeAgentOrchestrationByPaneKey
     )
     const tab = currentTabsById.get(ra.tab.id) ?? ra.tab
+    if (
+      isSupersededFinishedRow(
+        rowEntry,
+        tab,
+        tabHasLivePty(ptyIdsByTabId, tab.id),
+        args.paneForegroundAgentByPaneKey?.[rowEntry.paneKey]
+      )
+    ) {
+      continue
+    }
     rows.push({
       paneKey: rowEntry.paneKey,
       entry: rowEntry,
