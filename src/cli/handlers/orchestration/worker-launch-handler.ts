@@ -17,7 +17,7 @@ import {
   reportOrchestrationFailure
 } from './agent-view'
 import { explainOlderRuntimeRunRequired } from './older-runtime-run-binding'
-import { renderResolvedOrchestrationCommand } from '../../orchestration-mutation-recovery'
+import { withResolvedNextCommands } from '../../orchestration-mutation-recovery'
 import { readTextOrFileFlag } from '../../command-body-input'
 
 export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler> = {
@@ -93,15 +93,8 @@ export const ORCHESTRATION_WORKER_LAUNCH_HANDLER: Record<string, CommandHandler>
     const renderedResult = {
       ...result,
       result: {
-        ...result.result,
-        ...(keepOpenState === 'retained' ? { keptOpen: true as const } : {}),
-        ...(result.result.nextCommands
-          ? {
-              nextCommands: result.result.nextCommands.map((command) =>
-                renderResolvedOrchestrationCommand(command)
-              )
-            }
-          : {})
+        ...withResolvedNextCommands(result.result),
+        ...(keepOpenState === 'retained' ? { keptOpen: true as const } : {})
       }
     }
     if (flags.has('full')) {

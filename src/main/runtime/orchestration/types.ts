@@ -318,6 +318,10 @@ export type DispatchContextRow = {
   completed_at: string | null
   created_at: string
   last_heartbeat_at: string | null
+  /** The settled Dispatch whose worker this follow-up continues. */
+  follow_up_of_dispatch_id: string | null
+  /** When its worker reported with coordinator mail unread, until that mail continues it. */
+  follow_up_mail_at: string | null
 }
 
 export type DecisionGateRow = {

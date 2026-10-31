@@ -6509,13 +6509,15 @@
           "distro": "배포판",
           "loading": "WSL 배포판 찾는 중…",
           "placeholder": "배포판 선택",
-          "none": "WSL 배포판을 찾을 수 없습니다. 다음 명령으로 설치하세요: wsl --install",
           "stoppedHint": "{{value0}}이(가) 중지되어 있습니다. 추가하면 시작됩니다.",
           "addingHint": "배포판에 Orca 서버를 설치하고 시작하는 중입니다. 처음에는 1분 정도 걸릴 수 있습니다.",
           "adding": "설정 중…",
           "startAndAdd": "시작 및 추가",
           "add": "호스트 추가",
-          "refresh": "새로고침"
+          "refresh": "새로고침",
+          "wsl1Reason": "WSL 1에서는 Orca 호스트를 실행할 수 없습니다. {{command}}(으)로 변환하세요",
+          "noWsl2Title": "WSL 2 배포판을 찾을 수 없음",
+          "noWsl2Install": "Windows 터미널에서 {{command}}(으)로 설치한 다음 새로 고침을 선택하세요."
         },
         "wslHostRowStatus": {
           "connecting": "시작 중",
@@ -20216,6 +20218,11 @@
     },
     "cardProperties": {
       "agentModel": "에이전트 모델"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}}을(를) 호스트로 실행(권장)",
+      "why": "Git, 파일, 터미널이 Windows 파일 공유를 거치지 않고 Linux에서 기본으로 실행됩니다.",
+      "accept": "호스트로 실행"
     }
   },
   "editor": {

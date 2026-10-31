@@ -148,8 +148,7 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
   protected now = (): number => this.deps.now?.() ?? Date.now()
 
   hasSession = (sessionId: string): boolean => this.sessions.has(sessionId)
-  loadedSessionIds = (): string[] =>
-    [...this.sessions].flatMap(([sessionId, { child }]) => (child ? [sessionId] : []))
+  loadedSessionIds = this.sessions.loadedSessionIds
   hasLoadedProviders = (): boolean => this.loadedSessionIds().length > 0
   sessionAgent = (sessionId: string) => this.deps.store.getConversation(sessionId)?.provider ?? null
 

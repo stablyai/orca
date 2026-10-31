@@ -210,6 +210,11 @@
     },
     "cardProperties": {
       "agentModel": "Aracı modeli"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}} dağıtımını ana makine olarak çalıştır (önerilir)",
+      "why": "Git, dosyalar ve terminaller Windows dosya paylaşımı yerine doğrudan Linux'ta çalışır.",
+      "accept": "Ana makine olarak çalıştır"
     }
   },
   "app": {
@@ -7115,13 +7120,15 @@
           "distro": "Dağıtım",
           "loading": "WSL dağıtımları aranıyor…",
           "placeholder": "Dağıtım seçin",
-          "none": "WSL dağıtımı bulunamadı. Yüklemek için: wsl --install",
           "stoppedHint": "{{value0}} durdurulmuş. Eklemek onu başlatır.",
           "addingHint": "Orca sunucusu dağıtıma yüklenip başlatılıyor. İlk seferinde bir dakika sürebilir.",
           "adding": "Kuruluyor…",
           "startAndAdd": "Başlat ve ekle",
           "add": "Ana makine ekle",
-          "refresh": "Yenile"
+          "refresh": "Yenile",
+          "wsl1Reason": "WSL 1 bir Orca ana makinesi çalıştıramaz; {{command}} ile dönüştürün",
+          "noWsl2Title": "WSL 2 dağıtımı bulunamadı",
+          "noWsl2Install": "Bir Windows terminalinde {{command}} ile bir dağıtım yükleyin, ardından Yenile'yi seçin."
         },
         "wslHostRowStatus": {
           "connecting": "Başlatılıyor",

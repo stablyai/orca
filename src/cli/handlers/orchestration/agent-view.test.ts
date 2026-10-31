@@ -191,6 +191,36 @@ describe('orchestration agent views', () => {
     )
   })
 
+  it('prints a follow-up as where it went, naming the launch mode only for a fresh start', async () => {
+    const followUp = (delivery: string) =>
+      run(
+        'send',
+        [
+          ['to', 'dispatch:ctx_1'],
+          ['subject', 'More']
+        ],
+        {
+          ...OLDER_RUNTIME_START,
+          dispatchId: 'ctx_2',
+          delivery,
+          followUpOf: 'ctx_1',
+          turnStart: 'queued',
+          mode: {
+            mode: 'terminal',
+            preferred: 'terminal',
+            detail: 'Started a terminal agent worker.'
+          },
+          next: 'Orca wakes you when workers report; end your turn.'
+        }
+      )
+
+    expect((await followUp('reopened')).stdout).toBe(
+      'delivery=reopened followUpOf=ctx_1 dispatchId=ctx_2 taskId=task_1 runId=run_1 state=ready terminal=term_agent workspace=wt_1::/repo queued=true\n' +
+        'Next: Orca wakes you when workers report; end your turn.'
+    )
+    expect((await followUp('started_fresh')).stdout).toContain('mode=terminal')
+  })
+
   it('lists each worker with its agent terminal and a runnable next action', async () => {
     const { stdout } = await run('worker-list', [['run', 'run_1']], {
       workers: [

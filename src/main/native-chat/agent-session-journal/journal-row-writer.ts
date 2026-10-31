@@ -47,6 +47,7 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
+  prepare?: (db: Database.Database, rows: readonly JournalRow[], savedAt: number) => () => void
   commit: (rows: readonly JournalRow[], savedAt: number) => void
   /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
@@ -65,14 +66,19 @@ export class JournalRowWriter {
       const row = build(this.deps.nextSequence(), savedAt)
       assertJournalFence(row.fence, this.deps.highestFence())
       const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
+      const streamed = !receipt && this.streamed([row])
       this.deps.database().transaction(
         (db) => {
-          insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          if (!this.deps.prepare) {
+            insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          }
+          const adopt = this.deps.prepare?.(db, [row], savedAt)
           receipt?.write(db, row)
+          return adopt
         },
-        !receipt && this.streamed([row])
+        streamed,
+        (adopt) => adopt?.()
       )
-      // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
       receipt?.committed()
       this.deps.commit([row], savedAt)
       return row
@@ -105,14 +111,20 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
     }
     const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
+    const streamed = !receipt && this.streamed(rows)
     this.deps.database().transaction(
       (db) => {
-        for (const row of rows) {
-          insertJournalRow(db, this.deps.sessionId, row, ts)
+        if (!this.deps.prepare) {
+          for (const row of rows) {
+            insertJournalRow(db, this.deps.sessionId, row, ts)
+          }
         }
+        const adopt = this.deps.prepare?.(db, rows, ts)
         receipt?.write(db, receiptRow?.(rows))
+        return adopt
       },
-      !receipt && this.streamed(rows)
+      streamed,
+      (adopt) => adopt?.()
     )
     receipt?.committed()
     this.deps.commit(rows, ts)

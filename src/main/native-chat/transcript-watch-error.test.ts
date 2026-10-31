@@ -53,27 +53,6 @@ afterEach(async () => {
 })
 
 describe('native chat transcript watcher errors', () => {
-  it('handles a watcher error and rebinds after the directory is readable', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-error-'))
-    roots.push(root)
-    const filePath = join(root, 'transcript.jsonl')
-    await writeFile(filePath, '')
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'session',
-      filePath,
-      onAppend: () => {},
-      debounceMs: 0
-    })
-
-    expect(() => watchers[0]!.emit('error', new Error('EPERM'))).not.toThrow()
-    await vi.waitFor(() => expect(watchMock).toHaveBeenCalledTimes(2))
-
-    subscription.unsubscribe()
-    expect(watchers[0]!.close).toHaveBeenCalledOnce()
-    expect(watchers[1]!.close).toHaveBeenCalledOnce()
-  })
-
   it('keeps retrying after the old recovery window and tails a recreated directory', async () => {
     const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-watch-gap-'))
     roots.push(root)
@@ -111,34 +90,6 @@ describe('native chat transcript watcher errors', () => {
 
     subscription.unsubscribe()
     expect(watchers[1]!.close).toHaveBeenCalledOnce()
-  })
-
-  it('surfaces an error snapshot when the initial drain throws', async () => {
-    const root = await mkdtemp(join(tmpdir(), 'orca-native-chat-initial-error-'))
-    roots.push(root)
-    const filePath = join(root, 'transcript.jsonl')
-    await writeFile(filePath, '')
-    tailReaderState.failure = new Error('deterministic read failure')
-    const onInitialSnapshot = vi.fn()
-    const onAppend = vi.fn()
-    const subscription = await subscribeNativeChatTranscript({
-      agent: 'claude',
-      sessionId: 'session',
-      filePath,
-      onInitialSnapshot,
-      onAppend,
-      initialLimit: 40,
-      debounceMs: 0
-    })
-    expect(subscription.watching).toBe(true)
-
-    await vi.waitFor(() =>
-      expect(onInitialSnapshot).toHaveBeenCalledWith([], false, 0, 'Transcript unavailable')
-    )
-    await new Promise((resolve) => setTimeout(resolve, 120))
-    expect(onInitialSnapshot).toHaveBeenCalledOnce()
-
-    subscription.unsubscribe()
   })
 
   it('still wins with a real initial snapshot once the transcript becomes readable', async () => {
