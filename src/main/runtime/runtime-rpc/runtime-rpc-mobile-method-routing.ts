@@ -13,6 +13,13 @@ export const EXECUTION_HOST_METHODS = [
   'agent.launchReplay',
   'agentTeams.prepareLaunch',
   'agentTeams.tmuxCompat',
+  'automation.list',
+  'automation.show',
+  'automation.create',
+  'automation.update',
+  'automation.delete',
+  'automation.runNow',
+  'automation.runs',
   'browser.back',
   'browser.dialogAccept',
   'browser.dialogDismiss',
@@ -150,9 +157,14 @@ export const EXECUTION_HOST_METHODS = [
   'nativeChat.unsubscribe',
   // Sender cards resolve on the host that owns the orchestration records.
   'orchestration.partyLocation',
-  // Mobile reports takeover out of band, matching desktop renderer signaling.
+  // The worker's own host keeps it open and owns its countdown; older phones still report typing and viewing.
   'orchestration.workerTerminalUserInput',
+  'orchestration.workerChatTouch',
+  'orchestration.workerAutoClose',
+  'orchestration.workerKeepOpen',
   'projectGroup.list',
+  'project.list',
+  'projectHostSetup.list',
   'repo.baseRefDefault',
   'repo.gitAvailable',
   'repo.hooks',
@@ -161,6 +173,7 @@ export const EXECUTION_HOST_METHODS = [
   'repo.searchRefs',
   'repo.sparsePresets',
   'repo.update',
+  'settings.getAgentLaunch',
   // The host that owns the workspace scans its skills.
   'skills.discover',
   // SSH targets belong to the host that holds them; untargeted calls stay the Mac's own, as on the desktop.
@@ -208,6 +221,7 @@ export const EXECUTION_HOST_METHODS = [
   'worktree.activate',
   'worktree.create',
   'worktree.forceDeleteBranch',
+  'worktree.list',
   'worktree.listRetiredNames',
   'worktree.prefetchCreateBase',
   'worktree.ps',

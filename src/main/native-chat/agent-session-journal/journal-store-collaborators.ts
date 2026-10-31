@@ -37,6 +37,7 @@ export type JournalStoreHost = {
   readOnly: () => boolean
   cursor: () => AgentJournalCursor
   adopt: (loaded: JournalLoad) => void
+  prepare: NonNullable<ConstructorParameters<typeof JournalRowWriter>[0]['prepare']>
   commit: (rows: readonly JournalRow[], savedAt: number) => void
   journal: () => AgentSessionJournal
   enqueue: JournalRowWriter['enqueue']
@@ -99,6 +100,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     readOnly: host.readOnly,
     highestFence: () => host.state().highestFence,
     nextSequence: () => host.state().lastSequence + 1,
+    prepare: host.prepare,
     commit: host.commit,
     streamedTextRevision: (row) => isJournalStreamedTextRevision(host.state(), row)
   })
@@ -137,6 +139,7 @@ export function createJournalStoreCollaborators(host: JournalStoreHost): Journal
     rowWriter,
     submissionWriter: new JournalSubmissionWriter({
       state: host.state,
+      reopenFloor: () => host.journal().reopenFloor(),
       identity: host.identity,
       rowWriter,
       queuedMessages,

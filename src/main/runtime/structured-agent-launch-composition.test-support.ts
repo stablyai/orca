@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../shared/agent-session-acquired-account'
 // Build agent launch resolvers with production composition over test doubles so tests exercise the shared path.
 
 import type { AgentSessionRecordStore } from './agent-session-record-store'
@@ -107,6 +108,7 @@ function withTestSpawnToken<L>(
     identity: AgentSessionJournalIdentity
     spawnToken?: string | null
     permissionMode?: AgentChatPermissionChoice
+    accountRecipe?: ClaudeAccountRecipe
   }) => {
     const spawnToken = input.spawnToken === undefined ? defaultToken : input.spawnToken
     return spawnToken === null
@@ -114,6 +116,7 @@ function withTestSpawnToken<L>(
       : resolve({
           identity: input.identity,
           spawnToken,
+          ...(input.accountRecipe ? { accountRecipe: input.accountRecipe } : {}),
           ...(input.permissionMode ? { permissionMode: input.permissionMode } : {})
         })
   }

@@ -62,6 +62,7 @@ describe('legacy terminal close acknowledgments', () => {
     const subscribe = vi.fn()
     const tabTombstones = new Map<string, number>()
     const setSessionTabs = vi.fn()
+    const setActiveSessionTabId = vi.fn()
     const tabSelection: Pick<
       MobileSessionContentCreateActionsModel,
       'sessionTabsRef' | 'activeSessionTabIdRef' | 'selectedSessionTabIdRef' | 'pendingSelectionRef'
@@ -101,7 +102,7 @@ describe('legacy terminal close acknowledgments', () => {
         reconcileBufferedDraftsRef: { current: vi.fn() },
         closedTabTombstonesRef: { current: tabTombstones },
         clearTerminalLiveInputDefault: vi.fn(),
-        setActiveSessionTabId: vi.fn(),
+        setActiveSessionTabId,
         renameTarget: null,
         setRenameTarget: vi.fn(),
         terminalRefs: { current: new Map() },
@@ -145,6 +146,7 @@ describe('legacy terminal close acknowledgments', () => {
       subscribe,
       tabTombstones,
       setSessionTabs,
+      setActiveSessionTabId,
       tabSelection,
       requests: client.sendRequest,
       async acknowledge(
@@ -364,7 +366,6 @@ describe('legacy terminal close acknowledgments', () => {
   it.each([
     ['refused', { closed: true, refused: true, refusalReason: 'unknown-liveness' }],
     ['refused receipt', { closed: true, refused: true, retirementConfirmed: true }],
-    ['delegated', { closed: true }],
     ['legacy', {}],
     ['invalid receipt', { closed: false, retirementConfirmed: true }]
   ] as const)('preserves every draft owner for a %s close reply', async (kind, result) => {
@@ -392,6 +393,73 @@ describe('legacy terminal close acknowledgments', () => {
       expect(harness.setSessionTabs).not.toHaveBeenCalled()
     }
   })
+
+  it.each(['closed', 'survivor-active', 'newer-selection'] as const)(
+    'removes the listed native row on an unconfirmed close, retaining draft and %s selection safety',
+    async (selection) => {
+      const harness = await mount()
+      const refs = harness.tabSelection
+      const closed: MobileSessionTab = {
+        type: 'agent-session',
+        id: 'uncertain',
+        sessionId: 'native-session',
+        agent: 'codex',
+        title: 'Uncertain',
+        isActive: true
+      }
+      const survivor: MobileSessionTab = {
+        ...closed,
+        id: 'survivor',
+        sessionId: 'surviving-session',
+        isActive: false
+      }
+      refs.sessionTabsRef.current = [closed, survivor]
+      refs.activeSessionTabIdRef.current = closed.id
+      refs.selectedSessionTabIdRef.current = closed.id
+      refs.pendingSelectionRef.current = { kind: 'tab', tabId: closed.id }
+      const key = 'host\0workspace\0uncertain'
+      const destination = mobileNativeChatDraftDestination(key)
+      updateMobileNativeChatDraftInputs(destination, (current) => ({ ...current, pending: 1 }))
+      const inputs = readMobileNativeChatDraftInputs(key)
+      setMobileNativeChatDraftText(key, 'keep this draft')
+      mobileNativeChatLaunchDraftSeeds.set(key, { text: 'owned seed', createdAt: 1 })
+      const operation = harness.read().actions.handleCloseSessionTab(closed)
+      expect(harness.requests).toHaveBeenCalledExactlyOnceWith('session.tabs.close', {
+        worktree: 'id:workspace',
+        tabId: closed.id,
+        reason: 'user'
+      })
+      if (selection !== 'closed') {
+        refs.activeSessionTabIdRef.current = survivor.id
+      }
+      if (selection === 'newer-selection') {
+        refs.selectedSessionTabIdRef.current = survivor.id
+        refs.pendingSelectionRef.current = { kind: 'tab', tabId: survivor.id }
+      }
+      // Refused-journal runtime closes the presentation without confirming durable retirement.
+      await harness.acknowledge(closed.id, operation, true, { closed: true })
+      expect(refs.sessionTabsRef.current).toEqual([survivor])
+      expect(harness.setSessionTabs).toHaveBeenCalledExactlyOnceWith([survivor])
+      expect(harness.tabTombstones.has(closed.id)).toBe(true)
+      expect(refs.activeSessionTabIdRef.current).toBe(selection === 'closed' ? null : survivor.id)
+      expect(refs.selectedSessionTabIdRef.current).toBe(selection === 'closed' ? null : survivor.id)
+      expect(refs.pendingSelectionRef.current).toEqual(
+        selection === 'newer-selection' ? { kind: 'tab', tabId: survivor.id } : null
+      )
+      if (selection === 'closed') {
+        expect(harness.setActiveSessionTabId).toHaveBeenCalledExactlyOnceWith(null)
+      } else {
+        expect(harness.setActiveSessionTabId).not.toHaveBeenCalled()
+      }
+      expect(destination.active).toBe(true)
+      expect(readMobileNativeChatDraftInputs(key)).toBe(inputs)
+      expect(readMobileNativeChatDraftEditGeneration(key)).toBe(1)
+      expect(mobileNativeChatLaunchDraftSeeds.get(key)).toEqual({
+        text: 'owned seed',
+        createdAt: 1
+      })
+    }
+  )
 
   it('retires uploads handed back from a queued editor when their destination tab closes', async () => {
     const harness = await mount()

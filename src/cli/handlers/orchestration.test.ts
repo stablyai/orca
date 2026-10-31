@@ -16,6 +16,7 @@ import { ORCHESTRATION_HANDLERS } from './orchestration'
 import { RuntimeClientError } from '../runtime-client'
 import { printResult } from '../format'
 import { okFixture } from '../test-fixtures'
+import { ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY } from '../../shared/protocol-version'
 
 beforeEach(() => {
   callMock.mockReset()
@@ -443,7 +444,12 @@ describe('orchestration timeout flag validation', () => {
         formatted: 'banners built from all rows'
       }
     })
-    await invokeCheck(new Map<string, string | boolean>([['peek', true]]))
+    await invokeCheck(
+      new Map<string, string | boolean>([
+        ['peek', true],
+        ['full', true]
+      ])
+    )
 
     expect(printResult).toHaveBeenCalledOnce()
     const response = vi.mocked(printResult).mock.calls[0]?.[0]
@@ -601,6 +607,7 @@ describe('orchestration timeout flag validation', () => {
       }
     })
     const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await invokePlainAsk(
       new Map<string, string | boolean>([
@@ -610,13 +617,38 @@ describe('orchestration timeout flag validation', () => {
       ])
     )
 
+    expect(logSpy).toHaveBeenCalledWith(
+      'Question msg_question is still pending after 30000ms.\n' +
+        'Next: Resume waiting; do not ask again: ' +
+        'orca-dev orchestration ask --from term_worker --dispatch-capability dcap_secret ' +
+        '--resume msg_question --timeout-ms 30000'
+    )
     expect(errorSpy).toHaveBeenCalledWith(
-      'ask timeout after 30000ms; question is still pending (messageId: msg_question). ' +
-        'Resume waiting; do not ask again:\n' +
+      'error: ask_timeout: ask timeout after 30000ms; question msg_question is still pending. ' +
+        'Resume waiting; do not ask again: ' +
         'orca-dev orchestration ask --from term_worker --dispatch-capability dcap_secret ' +
         '--resume msg_question --timeout-ms 30000'
     )
     expect(process.exitCode).toBe(1)
+  })
+
+  it('asks without waiting only when the Orca it talks to advertises it', async () => {
+    process.env.ORCA_TERMINAL_HANDLE = 'term_worker'
+    const askedWith = async (capabilities: string[]) => {
+      callMock.mockReset()
+      callMock.mockImplementation(async (method: string) =>
+        method === 'status.get'
+          ? { result: { capabilities } }
+          : { result: { answer: null, messageId: 'msg_q', threadId: 'msg_q', timedOut: false } }
+      )
+      await invokeAsk(new Map<string, string | boolean>([['question', 'Proceed?']]))
+      return callMock.mock.calls.find(([method]) => method === 'orchestration.ask')?.[1]
+    }
+
+    expect(await askedWith([ORCHESTRATION_ASK_RETURNS_AT_ONCE_RUNTIME_CAPABILITY])).toMatchObject({
+      wait: false
+    })
+    expect(await askedWith([])).not.toHaveProperty('wait')
   })
 
   it('uses the parsed ask timeout for both runtime wait and client timeout', async () => {
@@ -670,7 +702,8 @@ describe('orchestration timeout flag validation', () => {
     await invokeAsk(
       new Map<string, string | boolean>([
         ['to', 'term_coord'],
-        ['question', 'Proceed?']
+        ['question', 'Proceed?'],
+        ['full', true]
       ])
     )
 

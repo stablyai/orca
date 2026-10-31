@@ -1,3 +1,4 @@
+import type { ClaudeAccountRecipe } from '../../../shared/agent-session-acquired-account'
 import type { StructuredAgentSessionAdmitFreshInput } from './structured-agent-session-input-admission'
 import type { AiVaultConversationCopy } from '../../../shared/ai-vault-resume-preparation'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
@@ -24,7 +25,7 @@ import type {
 } from '../../../shared/agent-session-record'
 import type { StructuredAgentSessionAtRestCommands } from './structured-agent-session-at-rest-commands'
 import type { AgentSessionSlashCommand } from '../../../shared/agent-session-wire'
-import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session-thread-goal-wire'
+import type { AgentSessionThreadGoalChange } from '../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { SubmissionRejectionFact } from '../../../shared/agent-session-failure'
 import type {
   AgentSessionCloseObserver,
@@ -71,11 +72,14 @@ export {
 } from './structured-agent-session-acquisition-errors'
 
 export type AgentSessionAcquisition = {
+  accountRecipe?: ClaudeAccountRecipe
   process: AgentSessionProcessIdentity
   /** Spawn-time handles only; protocol handles come from open. */
   link?: AgentSessionProviderHandleLink
   /** Exact host-local child identity, even when acquisitions reuse a durable fence. */
   acquisitionGeneration: string
+  /** The account home this child launched under, when its launch follows the selection. */
+  accountHome?: AgentSessionAccountHome
 }
 
 /** The host creates the command’s running turn; the child translator ends it and writes its result. */
@@ -309,6 +313,21 @@ export type StructuredAgentSessionAdapter = StructuredAgentSessionAdapterStop & 
     providerSessionId: string
     accountHome: AgentSessionAccountHome
   }): Promise<AiVaultConversationCopy>
+  /** Give the agent's own conversation the user's chat name, as the agent's own rename would:
+   *  through the live child holding that conversation, otherwise at rest. Best effort. */
+  renameProviderSession?(input: {
+    record: AgentSessionRecord
+    providerSessionId: string
+    name: string
+  }): Promise<void>
+  /** Capture native invocation inputs at the committed explicit occurrence. */
+  nameProviderConversation?(input: {
+    record: AgentSessionRecord
+    name: string
+    sequence: number
+    inheritance?: boolean
+  }): Promise<void> | undefined
+  stopProviderNaming?(): void
   /** True proves child exit; root/processless verdicts throw only after finalization (stopAgentSessionProviderRoot). */
   closeSession?(sessionId: string, observeClose?: AgentSessionCloseObserver): Promise<boolean>
   /** Sink-failure shutdown leaves exit recovery unexpected. */

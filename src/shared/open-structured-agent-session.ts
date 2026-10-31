@@ -1,4 +1,4 @@
-import { formatAgentTypeLabel } from './agent-type-label'
+import type { AgentMessageSender } from './agent-session/agent-session-message-source'
 import type { OrchestrationPartyLocationResult } from './orchestration-caller-status'
 
 export type StructuredSessionOpenTarget = { sessionId: string; worktreeId: string; agent?: string }
@@ -11,14 +11,16 @@ export type StructuredSessionOpenSource =
   | ({ kind: 'notification' } & StructuredSessionOpenTarget)
   | {
       kind: 'sender'
-      address: string
+      party: AgentMessageSender['party']
       messageIds: readonly string[]
       fallback?: StructuredSessionOpenTarget
-      agent?: string
+      displayName?: string
     }
 export type StructuredSessionOpenFailure = {
-  reason: 'gone' | 'unknown' | 'unsupported' | 'unreachable'
+  reason: 'gone' | 'workspace-missing' | 'unknown' | 'unsupported' | 'unreachable'
   beforeEffects: boolean
+  code?: string
+  surface?: 'terminal'
 }
 export type StructuredSessionOpenTab = { id: string; sessionId: string; agent?: string }
 export type StructuredSessionOpenResult =
@@ -49,28 +51,18 @@ export function structuredSessionOpenFailure(error: unknown): StructuredSessionO
     code === 'invalid_argument' ||
     code === 'method_not_found' ||
     code === 'forbidden' ||
-    code === 'structured_agent_session_unsupported'
+    code === 'structured_agent_session_unsupported' ||
+    code === 'runtime_compat_block'
   ) {
-    return { reason: 'unsupported', beforeEffects: true }
+    return { reason: 'unsupported', beforeEffects: true, code }
+  }
+  if (code === 'agent_session_workspace_removed') {
+    return { reason: 'workspace-missing', beforeEffects: true }
   }
   if (code === 'agent_session_identity_required') {
     return { reason: 'gone', beforeEffects: true }
   }
   return { reason: 'unreachable', beforeEffects: false }
-}
-
-export function structuredSessionOpenMessage(
-  reason: StructuredSessionOpenFailure['reason'],
-  agent: string
-): string {
-  const chat = `${formatAgentTypeLabel(agent)}'s chat`
-  const messages = {
-    gone: `${chat} is no longer on this host, so it cannot be reopened here.`,
-    unknown: `${chat} could not be found on this host. Reconnect to its computer and try again.`,
-    unsupported: `${chat} can't be reopened until Orca is updated.`,
-    unreachable: `${chat} is not available yet. Retry in a moment.`
-  }
-  return messages[reason]
 }
 
 export async function resolveStructuredSessionOpenSource(
@@ -87,7 +79,8 @@ export async function resolveStructuredSessionOpenSource(
       : source.kind === 'notification'
         ? source
         : source.fallback
-  const address = source.kind === 'sender' ? source.address : `orca_session_id:${seed?.sessionId}`
+  const address =
+    source.kind === 'sender' ? source.party.address : `orca_session_id:${seed?.sessionId}`
   let found: Located
   try {
     found = await locate(address, source.kind === 'sender' ? source.messageIds : [])
@@ -95,7 +88,7 @@ export async function resolveStructuredSessionOpenSource(
     found = structuredSessionOpenFailure(error)
   }
   if ('reason' in found) {
-    if (found.reason === 'unsupported' && seed) {
+    if (source.kind !== 'sender' && found.reason === 'unsupported' && seed) {
       return seed
     }
     return { kind: 'failed', failure: found }
@@ -103,7 +96,11 @@ export async function resolveStructuredSessionOpenSource(
   if (!found.location) {
     return {
       kind: 'failed',
-      failure: { reason: found.lost ? 'gone' : 'unknown', beforeEffects: true }
+      failure: {
+        reason: found.lost ? 'gone' : 'unknown',
+        beforeEffects: true,
+        ...(found.lost === 'terminal' ? { surface: 'terminal' as const } : {})
+      }
     }
   }
   if (found.location.kind === 'terminal') {
@@ -115,7 +112,7 @@ export async function resolveStructuredSessionOpenSource(
   return {
     sessionId: found.location.sessionId,
     worktreeId: found.location.worktreeId,
-    agent: source.agent
+    ...(source.kind !== 'sender' ? { agent: source.agent } : {})
   }
 }
 
@@ -125,11 +122,82 @@ export async function openStructuredAgentSession(
   deps: StructuredSessionOpenDeps
 ): Promise<StructuredSessionOpenResult> {
   const current = () => deps.current?.() !== false
+  const seed =
+    source.kind === 'history'
+      ? {
+          sessionId: source.structuredSession.sessionId,
+          worktreeId: source.structuredSession.workspaceId,
+          agent: source.agent
+        }
+      : null
+  const known = async (target: StructuredSessionOpenTarget) => {
+    if (!current()) {
+      return null
+    }
+    const tab = deps.tabs(target).find((row) => row.sessionId === target.sessionId)
+    if (!tab || !(await deps.activate(tab, target)) || !current()) {
+      return null
+    }
+    return { kind: 'opened' as const, target: { ...target, agent: tab.agent ?? target.agent }, tab }
+  }
+  const refreshKnown = async (target: StructuredSessionOpenTarget) => {
+    try {
+      await deps.refresh(target)
+    } catch {
+      /* Inventory reads are advisory. */
+    }
+  }
+  if (seed) {
+    try {
+      const direct = await known(seed)
+      if (direct) {
+        return direct
+      }
+      await refreshKnown(seed)
+      const refreshed = await known(seed)
+      if (refreshed) {
+        return refreshed
+      }
+    } catch (error) {
+      return { kind: 'failed', failure: structuredSessionOpenFailure(error) }
+    }
+  }
   const resolved = await resolveStructuredSessionOpenSource(source, deps.locate)
   if (!current()) {
     return { kind: 'superseded' }
   }
   if ('kind' in resolved) {
+    if (
+      source.kind === 'sender' &&
+      resolved.kind === 'failed' &&
+      (resolved.failure.code === 'method_not_found' || resolved.failure.code === 'forbidden')
+    ) {
+      const root = source.party.orcaSessionId
+      if (root) {
+        const fallback = source.fallback
+        if (fallback?.sessionId === root) {
+          try {
+            if (!deps.tabs(fallback).some((row) => row.sessionId === root)) {
+              await refreshKnown(fallback)
+            }
+            const opened = await known(fallback)
+            if (!current()) {
+              return { kind: 'superseded' }
+            }
+            if (opened) {
+              return opened
+            }
+          } catch (error) {
+            return { kind: 'failed', failure: structuredSessionOpenFailure(error) }
+          }
+        }
+      } else {
+        const handle = source.party.terminalHandle
+        if (handle && !handle.startsWith('dispatch:') && !handle.startsWith('run:')) {
+          return { kind: 'terminal', handle }
+        }
+      }
+    }
     return resolved
   }
   let target: StructuredSessionOpenTarget = resolved
@@ -155,7 +223,9 @@ export async function openStructuredAgentSession(
   try {
     let tab = await activate()
     if (!tab) {
-      await refresh()
+      if (!seed || seed.sessionId !== target.sessionId || seed.worktreeId !== target.worktreeId) {
+        await refresh()
+      }
       tab = await activate()
       if (!tab && current()) {
         const reply = await deps.reveal(target)
@@ -175,7 +245,7 @@ export async function openStructuredAgentSession(
       return { kind: 'superseded' }
     }
     return tab
-      ? { kind: 'opened', target, tab }
+      ? { kind: 'opened', target: { ...target, agent: tab.agent ?? target.agent }, tab }
       : { kind: 'failed', failure: { reason: 'unreachable', beforeEffects: false } }
   } catch (error) {
     return current()

@@ -1,4 +1,16 @@
+import type {
+  RuntimeMobileSessionTabsSnapshot,
+  RuntimeMobileSessionAgentTab,
+  RuntimeSessionTabCloseReason
+} from '../../../shared/runtime-types'
+import { closeRenderedStructuredSessionTab } from '../agent-session/structured-session-renderer-close'
+import {
+  captureInstalledStructuredSessionSurface,
+  closeCapturedStructuredSession,
+  type StructuredSessionSurfaceRuntime
+} from '../agent-session/structured-agent-session-close'
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
+import { structuredAgentSessionTabCloseCause } from '../agent-session/structured-agent-session-tab-close-cause'
 import { isReopenedChatTabId } from '../agent-session/agent-session-tab-identity'
 import type { WorkspaceSessionState } from '../../../shared/workspace-session-state-types'
 import { savedSessionId } from '../saved-structured-agent-session-restoration'
@@ -76,4 +88,49 @@ export function windowlessStructuredSessionTabSaveEligible(
   }
   const saved = session?.unifiedTabs?.[worktreeId]?.find((tab) => savedSessionId(tab) === sessionId)
   return !saved || !isReopenedChatTabId(saved.id)
+}
+
+/** Renderer acceptance retires only the admitted raw identity; unknown journal state proves no durable hide. */
+export async function closeMobileStructuredSessionPresentation(input: {
+  tab: RuntimeMobileSessionAgentTab
+  worktreeId: string
+  reason?: RuntimeSessionTabCloseReason
+  local: () => boolean
+  rows: () => RuntimeMobileSessionTabsSnapshot['tabs'] | undefined
+  notifier: Parameters<typeof closeRenderedStructuredSessionTab>[0]
+  runtime: StructuredSessionSurfaceRuntime
+}): Promise<boolean> {
+  const host = getStructuredAgentSessionHost()
+  const hostlessRaw =
+    !host && (input.reason === undefined || input.reason === 'user') && input.local()
+  const surface = captureInstalledStructuredSessionSurface(input.tab.sessionId, input.runtime)
+  await closeRenderedStructuredSessionTab(input.notifier, input.tab.id, input.worktreeId)
+  if (hostlessRaw) {
+    if (!getStructuredAgentSessionHost() && input.local()) {
+      const rows = input.rows()
+      const current = rows?.find(
+        (row) => row.type === 'agent-session' && row.sessionId === input.tab.sessionId
+      )
+      if (rows && (!current || current.id === input.tab.id)) {
+        input.runtime.retireStructuredAgentSessionTabFromSnapshot(
+          input.tab.sessionId,
+          input.tab.id,
+          input.worktreeId
+        )
+      }
+    }
+    return false
+  }
+  if (getStructuredAgentSessionHost() !== host) {
+    return false
+  }
+  return host
+    ? closeCapturedStructuredSession(
+        host,
+        input.tab.sessionId,
+        structuredAgentSessionTabCloseCause(input.reason),
+        surface,
+        input.runtime
+      )
+    : false
 }

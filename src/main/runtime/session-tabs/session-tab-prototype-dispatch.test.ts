@@ -359,7 +359,12 @@ describe('session runtime reentry', () => {
     await runtime.publishStructuredAgentSessionTab(input)
 
     expect(list).toHaveBeenCalledExactlyOnceWith('client')
-    expect(project).toHaveBeenCalledExactlyOnceWith(input)
+    expect(project).toHaveBeenCalledExactlyOnceWith({
+      ...input,
+      tabId: 'structured-agent-session-session',
+      eligible: expect.any(Function)
+    })
+    expect(project.mock.calls[0]?.[0].eligible?.()).toBe(true)
   })
 
   it('re-enters the protected graph reload override', () => {

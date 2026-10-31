@@ -1,4 +1,5 @@
 import { GLOBAL_FLAGS, type CommandSpec } from '../args'
+import { ORCHESTRATION_GATE_COMMAND_SPECS } from './orchestration-gate-specs'
 import { ORCHESTRATION_WORKER_COMMAND_SPECS } from './orchestration-worker-specs'
 
 export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
@@ -10,7 +11,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     allowedFlags: [...GLOBAL_FLAGS, 'objective', 'from', 'retry-request'],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'A Run is a namespace and home inbox. It never schedules or places workers.',
+      'A Run is a namespace and home inbox. It never schedules or places workers. worker-start --spec creates one when none is bound; use run-create for Task graphs or a new goal.',
       '--retry-request is only for exact recovery after an unknown mutation result.'
     ]
   },
@@ -89,10 +90,10 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     summary: "Check this agent's messages",
     usage:
       'orca orchestration check [--terminal <handle>] [--run <run_id>] [--ack <delivery_id>] [--unread | --peek | --all] [--types <type,...>] [--format] [--wait] [--timeout-ms <n>] [--retry-request <id>] [--json]\n' +
-      "  default: return the bound Run's oldest unacknowledged FIFO batch.\n" +
-      '  --ack: acknowledge the prior whole batch before checking/waiting.\n' +
+      "  default: return the bound Run's oldest unread FIFO batch and mark it handled.\n" +
+      '  --ack: optional; acknowledges a batch from an older Orca that does not mark it.\n' +
       '  --peek: return only unread messages without marking them read.\n' +
-      '  --all: return every message for the handle; does not mark read.\n' +
+      '  --all: return recent messages for the handle; does not mark read.\n' +
       '  --wait: block until a matching message arrives or --timeout-ms expires.\n' +
       '          Emits JSON keepalive lines to stderr every 15s so the caller can\n' +
       '          tell the process is alive. `_keepalive` is unrelated to heartbeat\n' +
@@ -117,7 +118,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'On Windows PowerShell, quote comma-separated type filters, e.g. --types "worker_done,escalation".',
       '--types is the wake condition for --wait; a returned Delivery is always the whole FIFO batch, so it is never filtered by type. Without --wait it has no effect on consuming checks. Only --peek and --all filter their rows.',
       '--format renders the returned rows as local text only; it never writes to another terminal.',
-      'A bound Run replays the same Delivery until --ack or all its messages are marked read, even with --types; process every message before acknowledging. Several --wait calls may wait on one Run inbox; waiting reserves nothing, listeners woken together get the same Delivery, and a repeated --ack is a no-op. --peek and --all return no deliveryId, so they do not drain a mailbox on their own; --all and a Run --peek show at most 100 rows. To drain, repeat plain check with --ack <previous deliveryId> until deliveryId is null.'
+      "A consuming check marks the batch it returns as handled, so the next check returns newer mail; no --ack is needed. Several --wait calls may wait on one inbox; waiting reserves nothing, listeners woken by the same arrival get the same Delivery, and --ack of a handled Delivery is a no-op. Consuming checks belong to the agent itself. A script that only watches the inbox must use --peek (including --peek --wait) and must never --ack, or it takes mail the agent never sees. If a check response was lost, rerun it with the --retry-request it printed to get the same batch. To find mail after losing context, run orca orchestration inbox --terminal <mailbox> --limit <n> --full and name the mailbox: run:<run_id> for a coordinator's bound Run, or dispatch:<dispatch_id> for a worker, including mail it read before it bound a helper Run."
     ]
   },
   {
@@ -139,10 +140,11 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
     path: ['orchestration', 'task-create'],
     summary: 'Create an orchestration task',
     usage:
-      'orca orchestration task-create --spec <text> [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration task-create (--spec <text> | --spec-file <path|->) [--task-title <text>] [--display-name <text>] [--deps <json_array>] [--parent <task_id>] [--run <run_id>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'spec',
+      'spec-file',
       'task-title',
       'display-name',
       'deps',
@@ -160,7 +162,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'orca orchestration task-list [--status <status>] [--ready] [--brief] [--run <run_id>] [--from <handle>] [--json]',
     allowedFlags: [...GLOBAL_FLAGS, 'status', 'ready', 'brief', 'run', 'from'],
     identityFlagRoles: { from: 'caller' },
-    notes: ['--brief collapses whitespace and caps each spec at 160 characters.']
+    notes: [
+      'Rows show id, status, and title; --full adds each spec and result, where --brief collapses whitespace and caps each spec at 160 characters.'
+    ]
   },
   {
     path: ['orchestration', 'task-update'],
@@ -214,9 +218,9 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
   },
   {
     path: ['orchestration', 'ask'],
-    summary: 'Ask the coordinator a question and block until answered',
+    summary: 'Ask the coordinator a question; Orca wakes you with the answer',
     usage:
-      'orca orchestration ask (--question <text> | --resume <message_id>) [--to <run:id>] [--run <run_id>] [--options <csv>] [--timeout-ms <n>] [--from <handle>] [--retry-request <id>] [--json]',
+      'orca orchestration ask (--question <text> | --resume <message_id>) [--to <run:id>] [--run <run_id>] [--options <csv>] [--wait] [--timeout-ms <n>] [--from <handle>] [--retry-request <id>] [--json]',
     allowedFlags: [
       ...GLOBAL_FLAGS,
       'to',
@@ -225,14 +229,14 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'resume',
       'dispatch-capability',
       'options',
+      'wait',
       'timeout-ms',
       'from',
       'retry-request'
     ],
     identityFlagRoles: { from: 'caller' },
     notes: [
-      'From an active Dispatch, a new question defaults to its owning Run mailbox.',
-      '--timeout-ms accepts 1 to 1800000 ms per wait (default 600000 = 10 minutes, max 30 minutes); larger values are rejected. Timeout leaves the question pending; resume with the original message ID.'
+      'From an active Dispatch, a new question goes to its owning Run mailbox and ask returns at once: end your turn, and Orca wakes you with the answer as mail. --wait and --resume block until the answer instead; --timeout-ms accepts 1 to 1800000 ms per wait (default 600000 = 10 minutes, max 30 minutes), and a timeout leaves the question pending.'
     ]
   },
   {
@@ -265,31 +269,7 @@ export const ORCHESTRATION_COMMAND_SPECS: CommandSpec[] = [
       'This command performs no effects and returns the exact `skills get orchestration --full` recovery action.'
     ]
   },
-  {
-    path: ['orchestration', 'gate-create'],
-    summary: 'Create a decision gate blocking a task',
-    usage:
-      'orca orchestration gate-create --task <task_id> --question <text> [--options <json_array>] [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'question', 'options', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' }
-  },
-  {
-    path: ['orchestration', 'gate-resolve'],
-    summary: 'Resolve a pending decision gate',
-    usage:
-      'orca orchestration gate-resolve --id <gate_id> --resolution <text> [--from <handle>] [--retry-request <id>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'id', 'resolution', 'from', 'retry-request'],
-    identityFlagRoles: { from: 'caller' }
-  },
-  {
-    path: ['orchestration', 'gate-list'],
-    summary: 'List decision gates',
-    usage:
-      'orca orchestration gate-list [--task <task_id>] [--status <status>] [--run <run_id>] [--from <handle>] [--json]',
-    allowedFlags: [...GLOBAL_FLAGS, 'task', 'status', 'run', 'from'],
-    identityFlagRoles: { from: 'caller' },
-    notes: ['--run inspects a named Run without binding; otherwise gates are scoped to the caller.']
-  },
+  ...ORCHESTRATION_GATE_COMMAND_SPECS,
   {
     path: ['orchestration', 'reset'],
     destructive: true,

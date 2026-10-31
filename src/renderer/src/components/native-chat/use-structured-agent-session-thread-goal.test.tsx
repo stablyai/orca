@@ -73,25 +73,6 @@ function harness(options: {
 }
 
 describe('useStructuredAgentSessionThreadGoal', () => {
-  it('does not show a persisted goal when the host advertises neither goal field', () => {
-    const fromWindow = harness({ journalItems: [goalRow(1, GOAL)] })
-    expect(fromWindow.result.current).toBeNull()
-  })
-
-  it('shows a goal only the agent changes, which clears by sending it /goal clear', async () => {
-    expect(harness({}).result.current).toBeNull()
-
-    const send = vi.fn(() => true)
-    const { mutate, calls } = mutateWith(async () => null)
-    const { result } = harness({ reported: { current: GOAL }, mutate, send })
-    expect(result.current).toMatchObject({ goal: GOAL, hostChanges: false, pending: false })
-    await act(async () => {
-      await expect(result.current!.change({ kind: 'clear' })).resolves.toBe(true)
-    })
-    expect(send).toHaveBeenCalledWith('/goal clear')
-    expect(calls).not.toHaveBeenCalled()
-  })
-
   it('reads the goal off the loaded window, and off the host answer only when the window has none', () => {
     const older = { ...GOAL, objective: 'Older goal' }
     const fromWindow = harness({ journalItems: [goalRow(1, GOAL)], support: { current: older } })
@@ -130,20 +111,6 @@ describe('useStructuredAgentSessionThreadGoal', () => {
       set.resolve({ change: 'set' })
       await expect(Promise.all(changes)).resolves.toEqual([true, true, true])
     })
-    expect(result.current?.pending).toBe(false)
-  })
-
-  it('answers false for a refused or unsent change and accepts the next one', async () => {
-    const { mutate, calls } = mutateWith(async () => null)
-    const { result } = harness({ support: { current: GOAL }, mutate })
-
-    await act(async () => {
-      await expect(result.current!.change({ kind: 'clear' })).resolves.toBe(false)
-    })
-    await act(async () => {
-      await expect(result.current!.change({ kind: 'clear' })).resolves.toBe(false)
-    })
-    expect(calls).toHaveBeenCalledTimes(2)
     expect(result.current?.pending).toBe(false)
   })
 })

@@ -104,6 +104,13 @@ describe('a split of a pane the window draws, in a layout-owner build', () => {
       tabId: TAB_ID,
       leafId: split.leafId,
       cwd: '/repo/src',
+      resolvedWorkspace: {
+        id: TEST_WORKTREE_ID,
+        path: TEST_WORKTREE_PATH,
+        connectionId: null,
+        repo: null,
+        folderWorkspace: null
+      },
       command: 'make test',
       cols: 120,
       rows: 40

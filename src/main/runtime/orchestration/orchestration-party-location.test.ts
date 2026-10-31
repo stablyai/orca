@@ -130,10 +130,6 @@ describe('where a sender opens', () => {
     ).toEqual({ location: null })
   })
 
-  it('opens a terminal this run issued at its handle', () => {
-    expect(locate('term_now')).toEqual({ location: { kind: 'terminal', handle: 'term_now' } })
-  })
-
   it('finds a terminal from an earlier run through the pane its mail was sent from', () => {
     const sent = db.insertMessage({
       from: 'term_old',

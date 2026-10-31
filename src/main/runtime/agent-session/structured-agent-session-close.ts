@@ -32,6 +32,8 @@ export type StructuredAgentSessionCloseOptions = {
   runtime?: StructuredSessionSurfaceRuntime
   surface?: StructuredSessionSurface | null
   afterClose?: () => void
+  // Last word in the session lane before Stop.
+  admitClose?: () => boolean
 }
 
 export async function closeStructuredAgentSessionChild(
@@ -50,24 +52,34 @@ export async function closeStructuredAgentSessionChild(
     options.surface === undefined
       ? captureStructuredSessionSurface(host, sessionId, options.runtime)
       : options.surface
+  const admitClose = options.admitClose
+  let admitted = admitClose === undefined
+  let closeFailure: string | undefined
   try {
-    await host.close(sessionId, 'evict')
+    await host.close(
+      sessionId,
+      'evict',
+      admitClose
+        ? () => {
+            admitted = admitClose()
+            return admitted
+          }
+        : undefined
+    )
   } catch (error) {
-    if (!structuredSessionCloseSettled(sessionId)) {
-      return {
-        stopped: false,
-        closeAttempted: true,
-        reason: error instanceof Error ? error.message : String(error)
-      }
-    }
+    closeFailure = error instanceof Error ? error.message : String(error)
   } finally {
-    options.afterClose?.()
+    // A refused close leaves the live worker's ownership and retry edges intact.
+    if (admitted) {
+      options.afterClose?.()
+    }
   }
-  if (!structuredSessionCloseSettled(sessionId)) {
+  if (!admitted || !structuredSessionCloseSettled(sessionId)) {
     return {
       stopped: false,
       closeAttempted: true,
       reason:
+        closeFailure ??
         observeStructuredSession(sessionId).reason ??
         'The structured session is still attached after close.'
     }
@@ -90,7 +102,11 @@ export function captureStructuredSessionSurface(
         : {})
     }
   } catch (error) {
-    host.deps.logger.warn('reading the closing chat surface failed', { sessionId, error })
+    host.deps.logger.warn('reading the closing chat surface failed', {
+      scope: 'tab-close-capture',
+      sessionId,
+      error
+    })
     return null
   }
 }
@@ -156,7 +172,11 @@ export async function retireCapturedStructuredSessionSurface(
       return { committed: false }
     }
     failure = error
-    host.deps.logger.warn('recording a closed chat tab failed', { sessionId, error })
+    host.deps.logger.warn('recording a closed chat tab failed', {
+      scope: 'tab-close-hide',
+      sessionId,
+      error
+    })
   }
   if (!current(committed)) {
     return { committed: false }
@@ -177,7 +197,11 @@ export async function retireCapturedStructuredSessionSurface(
       host.notifySessionTabHidden?.(sessionId)
     }
   } catch (error) {
-    host.deps.logger.warn('cleaning up a closed chat presentation failed', { sessionId, error })
+    host.deps.logger.warn('cleaning up a closed chat presentation failed', {
+      scope: 'tab-close-presentation-cleanup',
+      sessionId,
+      error
+    })
   }
   return { committed, ...(failure === undefined ? {} : { error: failure }) }
 }

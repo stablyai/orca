@@ -1,20 +1,7 @@
 import { spacing } from '../theme/mobile-theme'
 
-// Host split geometry; a detail pane narrower than the narrowest iPhone cramps chat and terminals.
-export const HOST_SIDEBAR_MIN_WIDTH = 280
-export const SPLIT_DETAIL_MIN_WIDTH = 375
-const HOST_SIDEBAR_DEFAULT_MAX_WIDTH = 340
-
-// 30% of the window until the user drags it: room for workspace names, the rest goes to the session.
-export function defaultHostSidebarWidth(windowWidth: number): number {
-  return Math.min(
-    HOST_SIDEBAR_DEFAULT_MAX_WIDTH,
-    Math.max(HOST_SIDEBAR_MIN_WIDTH, Math.round(windowWidth * 0.3))
-  )
-}
-
-// Use actual window size so narrow iPad splits keep phone-like layouts; unfolded foldables split in both orientations.
-const WIDE_LAYOUT_MIN_WIDTH = HOST_SIDEBAR_MIN_WIDTH + SPLIT_DETAIL_MIN_WIDTH
+// Use actual window size so narrow iPad splits keep phone-like layouts.
+const WIDE_LAYOUT_MIN_WIDTH = 700
 
 // Require room in both dimensions so rotating a landscape phone cannot switch it to tablet UI.
 const TABLET_LAYOUT_MIN_SHORT_SIDE = 600

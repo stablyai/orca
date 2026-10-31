@@ -2,7 +2,7 @@ import type { GitHistoryItem, GitHistoryItemRef } from './git-history-types'
 import { iterateNulDelimitedFields } from './nul-delimited-fields'
 
 const GIT_HISTORY_DECORATION_SEPARATOR = '\x1f'
-const GIT_HISTORY_LEGACY_DECORATION_SEPARATOR = ','
+const GIT_HISTORY_LEGACY_DECORATION_SEPARATOR = ', '
 
 // Git <2.43 echoes %(decorate:...) with exit 0, requiring %D fallback. Both need --decorate=full for parseable refs.
 export const GIT_HISTORY_COMMIT_FORMAT =

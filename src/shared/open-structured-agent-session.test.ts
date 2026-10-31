@@ -1,7 +1,6 @@
 import { expect, it, vi } from 'vitest'
 import {
   openStructuredAgentSession,
-  structuredSessionOpenMessage,
   type StructuredSessionOpenDeps,
   type StructuredSessionOpenSource,
   type StructuredSessionOpenTab
@@ -21,13 +20,17 @@ const sources: StructuredSessionOpenSource[] = [
     agent: 'codex'
   },
   { kind: 'notification', sessionId: 'historical', worktreeId: 'old' },
-  { kind: 'sender', address: 'dispatch:worker', messageIds: ['mail-1'] }
+  {
+    kind: 'sender',
+    party: { address: 'dispatch:worker', terminalHandle: null, orcaSessionId: null },
+    messageIds: ['mail-1']
+  }
 ]
 function rig() {
   let rows: StructuredSessionOpenTab[] = []
   const events: string[] = []
   const deps: StructuredSessionOpenDeps = {
-    locate: vi.fn(async () => ({ location: { kind: 'chat', ...target } })),
+    locate: vi.fn(async () => ({ location: { kind: 'chat' as const, ...target } })),
     tabs: () => rows,
     refresh: vi.fn(async () => {
       events.push('refresh')
@@ -59,10 +62,14 @@ it.each(sources)(
       target,
       tab: row
     })
-    expect(events).toEqual(['refresh', 'reveal', 'refresh', 'activate'])
+    expect(events).toEqual(
+      source.kind === 'history'
+        ? ['refresh', 'refresh', 'reveal', 'refresh', 'activate']
+        : ['refresh', 'reveal', 'refresh', 'activate']
+    )
     expect(deps.activate).toHaveBeenCalledWith(row, target)
     expect(deps.locate).toHaveBeenCalledWith(
-      source.kind === 'sender' ? source.address : 'orca_session_id:historical',
+      source.kind === 'sender' ? source.party.address : 'orca_session_id:historical',
       source.kind === 'sender' ? ['mail-1'] : []
     )
   }
@@ -70,7 +77,12 @@ it.each(sources)(
 it('selects an existing chat without reveal and treats refresh as advisory', async () => {
   const r = rig()
   r.rows([row])
-  expect(await openStructuredAgentSession(sources[0]!, r.deps)).toMatchObject({ kind: 'opened' })
+  expect(
+    await openStructuredAgentSession(
+      { kind: 'history', structuredSession: { sessionId: 'current', workspaceId: 'owner' } },
+      r.deps
+    )
+  ).toMatchObject({ kind: 'opened' })
   expect(r.events).toEqual(['activate'])
   r.rows([])
   r.deps.refresh = vi.fn(async () => {
@@ -130,7 +142,7 @@ it('does not activate or reveal after the source loses ownership', async () => {
   expect(deps.activate).not.toHaveBeenCalled()
   expect(deps.reveal).not.toHaveBeenCalled()
 })
-it('round-trips only canonical notification identities and names the agent in one remedy', () => {
+it('round-trips only canonical notification identities', () => {
   const sessionId = 'root-123'
   const key = structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId)
   expect(structuredSessionIdFromNotificationPane(key)).toBe(sessionId)
@@ -144,5 +156,4 @@ it('round-trips only canonical notification identities and names the agent in on
   ]) {
     expect(structuredSessionIdFromNotificationPane(invalid)).toBeNull()
   }
-  expect(structuredSessionOpenMessage('unknown', 'codex')).toContain("Codex's chat")
 })

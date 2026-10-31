@@ -4,7 +4,6 @@ import type { RpcClient } from '../transport/rpc-client'
 import { isRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
 import { isLogicalClientCutoverError } from '../transport/stable-logical-rpc-client'
 import { nativeChatTerminalWrite } from './mobile-session-write-operations'
-import { reportWorkerTerminalUserInput } from '../terminal/worker-terminal-takeover-report'
 import { openMobileNativeChatSendBudget } from './native-chat/mobile-native-chat-send'
 import { nativeChatStopSendsSecondEscape } from '../../../src/shared/native-chat-agent-support'
 import { NATIVE_CHAT_QUESTION_STEP_MS } from '../../../src/shared/native-chat/input/native-chat-answer-stepping'
@@ -130,8 +129,6 @@ export function useMobileNativeChatStop(args: {
         .then((response) => {
           if (nativeChatTerminalWrite.interpret(response) === true) {
             sawAccepted = true
-            // A deliberate Stop is human input; it takes the worker over like any other key.
-            reportWorkerTerminalUserInput(client, handle)
           } else {
             sawRejected = true
           }

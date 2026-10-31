@@ -1,3 +1,4 @@
+import { hostRouteWithNotice } from '../host-route-notice'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
@@ -5,17 +6,27 @@ import {
   openMobileStructuredSession,
   mobileStructuredSessionHref
 } from './open-mobile-structured-session'
-import {
-  structuredSessionOpenMessage,
-  type StructuredSessionOpenSource
-} from '../../../src/shared/open-structured-agent-session'
+import type { StructuredSessionOpenSource } from '../../../src/shared/open-structured-agent-session'
+import { mobileStructuredSessionOpenMessage } from './mobile-structured-session-open-message'
 import { isStructuredAgentId } from '../../../src/shared/agent-session-provider-handle'
 import type { MobileSessionTab } from './mobile-session-route-types'
 import type { useMobileSessionTabSwitching } from './use-mobile-session-tab-switching'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
 
 export function useMobileStructuredSessionOpening(
-  scope: MobileSessionKeyboardStateModel & ReturnType<typeof useMobileSessionTabSwitching>
+  scope: Pick<
+    MobileSessionKeyboardStateModel & ReturnType<typeof useMobileSessionTabSwitching>,
+    | 'hostId'
+    | 'worktreeId'
+    | 'client'
+    | 'connState'
+    | 'showToast'
+    | 'switchSessionTab'
+    | 'activeSessionTabIdRef'
+    | 'selectedSessionTabIdRef'
+    | 'pendingSelectionRef'
+    | 'sessionTabsRef'
+  >
 ) {
   const executionHost = useWorkspaceExecutionHost()
   const router = useWorkspaceRouteHandoff()
@@ -51,7 +62,19 @@ export function useMobileStructuredSessionOpening(
       if (!client || connState !== 'connected') {
         return
       }
-      const result = await openMobileStructuredSession({ client, source, current })
+      const result = await openMobileStructuredSession({
+        client,
+        source,
+        current,
+        inventory: {
+          worktreeId,
+          tabs: scope.sessionTabsRef.current.flatMap((tab) =>
+            tab.type === 'agent-session'
+              ? [{ id: tab.id, sessionId: tab.sessionId, agent: tab.agent }]
+              : []
+          )
+        }
+      })
       if (!current()) {
         return
       }
@@ -70,8 +93,16 @@ export function useMobileStructuredSessionOpening(
           }
           switchSessionTab(tab, { activate: false })
         }
+      } else if (result.kind === 'failed' && result.failure.reason === 'workspace-missing') {
+        router.replace(hostRouteWithNotice(hostId, 'worktree-missing'))
       } else if (result.kind === 'failed') {
-        showToast(structuredSessionOpenMessage(result.failure.reason, source.agent ?? ''), 3_000)
+        showToast(
+          mobileStructuredSessionOpenMessage(
+            result.failure.reason,
+            source.kind === 'sender' ? (source.displayName ?? '') : (source.agent ?? '')
+          ),
+          3_000
+        )
       }
     },
     [

@@ -1,14 +1,11 @@
 // Open the sender through chat or terminal-handle routes; choose feedback from the answering host’s evidence, never the sender’s address shape.
 
-import { toast } from 'sonner'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import { structuredSessionOpenMessage } from '../../../shared/open-structured-agent-session'
-import type {
-  OrchestrationPartyLocation,
-  OrchestrationPartyLocationResult
-} from '../../../shared/orchestration-caller-status'
+import {
+  structuredSessionOpenFeedback,
+  openDesktopStructuredSession
+} from './activate-ai-vault-structured-session'
 import { useAppStore } from '@/store'
-import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { isRuntimeCompatBlockError } from '@/runtime/runtime-protocol-compat'
@@ -17,7 +14,6 @@ import {
   focusRuntimeTerminalHandle
 } from '@/components/terminal-pane/terminal-handle-links'
 import { showAgentPaneUnavailable } from '@/components/terminal-pane/stale-agent-row'
-import { openDesktopStructuredSession } from './activate-ai-vault-structured-session'
 import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
 import {
   executionHostIdForStructuredTarget,
@@ -29,7 +25,6 @@ import {
 type Sender = AgentMessageSource['senders'][number]
 /** older-host identifies the chat host; update may mean either side, and unreachable proves nothing. */
 type LookupFailure = 'older-host' | 'update' | 'unreachable'
-type Lookup = OrchestrationPartyLocationResult | LookupFailure
 
 /** The answers that prove the terminal is gone; anything else proves nothing about it. */
 const TERMINAL_GONE_CODES = new Set([
@@ -87,20 +82,28 @@ async function openSender(
   const messageIds = mail
     .filter((message) => message.from === party.address)
     .map((message) => message.messageId)
-  const found = await lookUpSender(party, messageIds, host)
-  if (typeof found === 'string') {
-    showLookupFailure(found, name ?? '')
-    return
-  }
-  if (!found.location && found.lost === 'terminal') {
-    showAgentPaneUnavailable()
-    return
-  }
+  const state = useAppStore.getState()
+  const root = party.orcaSessionId
+  const known = root
+    ? Object.entries(state.unifiedTabsByWorktree).flatMap(([worktreeId, tabs]) =>
+        tabs.flatMap((tab) =>
+          tab.contentType === 'agent-session' &&
+          tab.entityId === root &&
+          structuredAgentSessionOwnerForTab(state, tab) === executionHostIdForStructuredTarget(host)
+            ? [{ sessionId: root, worktreeId, agent: tab.agentSessionAgent }]
+            : []
+        )
+      )[0]
+    : undefined
   const result = await openDesktopStructuredSession(
-    { kind: 'sender', address: party.address, messageIds, agent: name ?? undefined },
-    host,
-    undefined,
-    async () => found
+    {
+      kind: 'sender',
+      party,
+      messageIds,
+      displayName: name ?? undefined,
+      ...(known ? { fallback: known } : {})
+    },
+    host
   )
   if (result.kind === 'terminal') {
     await focusTerminal(result.handle, environmentId, name ?? '')
@@ -126,58 +129,10 @@ async function focusTerminal(
   }
 }
 
-async function lookUpSender(
-  party: Sender['party'],
-  messageIds: readonly string[],
-  host: RuntimeClientTarget
-): Promise<Lookup> {
-  try {
-    return await callRuntimeRpc<OrchestrationPartyLocationResult>(
-      host,
-      'orchestration.partyLocation',
-      { address: party.address, ...(messageIds.length > 0 ? { messageIds } : {}) }
-    )
-  } catch (error) {
-    if (error instanceof RuntimeRpcCallError && error.code === 'method_not_found') {
-      return lookUpOnOlderHost(party, host)
-    }
-    return isRuntimeCompatBlockError(error) ? 'update' : 'unreachable'
-  }
-}
-
-/** Older hosts allow root-ID chats and terminal-handle opens; other identities require updating that host. */
-function lookUpOnOlderHost(party: Sender['party'], host: RuntimeClientTarget): Lookup {
-  const sessionId = party.orcaSessionId
-  if (sessionId) {
-    const state = useAppStore.getState()
-    const tabsByWorktree = state.unifiedTabsByWorktree
-    for (const [worktreeId, tabs] of Object.entries(tabsByWorktree)) {
-      if (
-        tabs.some(
-          (tab) =>
-            tab.contentType === 'agent-session' &&
-            tab.entityId === sessionId &&
-            structuredAgentSessionOwnerForTab(state, tab) ===
-              executionHostIdForStructuredTarget(host)
-        )
-      ) {
-        return located({ kind: 'chat', sessionId, worktreeId })
-      }
-    }
-    return 'older-host'
-  }
-  const handle = party.terminalHandle
-  return handle && !handle.startsWith('dispatch:') && !handle.startsWith('run:')
-    ? located({ kind: 'terminal', handle })
-    : 'older-host'
-}
-
-function located(location: OrchestrationPartyLocation): OrchestrationPartyLocationResult {
-  return { location }
-}
-
 function showLookupFailure(failure: LookupFailure, agent: string): void {
-  toast.error(
-    structuredSessionOpenMessage(failure === 'unreachable' ? 'unreachable' : 'unsupported', agent)
-  )
+  if (failure === 'unreachable') {
+    structuredSessionOpenFeedback.unavailable(agent)
+  } else {
+    structuredSessionOpenFeedback.hostCannotOpen(agent)
+  }
 }

@@ -20,8 +20,10 @@ export async function openMobileStructuredSession(args: {
   client: RpcClient
   source: StructuredSessionOpenSource
   current: () => boolean
+  inventory?: { worktreeId: string; tabs: readonly StructuredSessionOpenTab[] }
 }) {
-  if (args.source.agent && !isStructuredAgentId(args.source.agent)) {
+  const agent = args.source.kind === 'sender' ? args.source.fallback?.agent : args.source.agent
+  if (agent && !isStructuredAgentId(agent)) {
     return {
       kind: 'failed',
       failure: { reason: 'unsupported', beforeEffects: true }
@@ -57,7 +59,9 @@ export async function openMobileStructuredSession(args: {
       clearTimeout(timer)
     }
   }
-  const tabs = new Map<string, StructuredSessionOpenTab[]>()
+  const tabs = new Map<string, readonly StructuredSessionOpenTab[]>(
+    args.inventory ? [[args.inventory.worktreeId, args.inventory.tabs]] : []
+  )
   return openStructuredAgentSession(args.source, {
     current: () =>
       args.current() &&
@@ -67,7 +71,7 @@ export async function openMobileStructuredSession(args: {
       const reply = await stage((options) =>
         structuredOpenLocation.request(
           args.client,
-          { address, ...(messageIds.length ? { messageIds } : {}) },
+          { address, ...(messageIds.length ? { messageIds: [...messageIds] } : {}) },
           options
         )
       )

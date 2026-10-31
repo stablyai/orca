@@ -1,3 +1,10 @@
+import { resolveLocalWindowsAgentStartupShell } from './windows-terminal-shell'
+import { resolveStartupShell } from './tui-agent-startup-shell'
+import { agentPermissionHostPlatform } from './agent-permission-env'
+import { isTuiAgent } from './tui-agent-config'
+import { agentLaunchChoiceUpdates } from './agent-launch-choice-updates'
+import { projectAgentLaunchProfile } from './agent-launch-profile'
+import type { AgentLaunchChoices, AgentChoicePatch } from './agent-launch-choices'
 import { agentEnvironmentMutationUpdates, choiceUpdate } from './agent-launch-environment-updates'
 import type { GlobalSettings } from './global-settings-types'
 import type { TuiAgent } from './tui-agent'
@@ -37,11 +44,13 @@ export type AgentLaunchSettingsSource = Partial<
     | 'newWorkspaceSetupOnly'
     | 'disabledTuiAgents'
     | 'agentCmdOverrides'
+    | 'agentLaunchChoices'
     | 'agentDefaultArgs'
     | 'agentDefaultEnv'
     | 'agentPermissionDefault'
     | 'agentPermissionOverrides'
     | 'nativeChatPermissionMode'
+    | 'terminalWindowsShell'
   >
 >
 
@@ -57,6 +66,7 @@ export type AgentLaunchSettings = {
   /** With Auto on: the combined mode of agents Auto doesn't cover. Absent from older hosts. */
   nonAutoPermissionMode?: 'manual' | 'yolo' | 'mixed'
   /** Stored permission and user Arguments exclude Orca flags; agentDefaultArgs retains them for older clients. Absent on hosts storing permissions as text. */
+  agentChoices?: { defaults: AgentLaunchChoices; userArgs: Partial<Record<TuiAgent, string>> }
   agentPermission?: {
     default: AgentPermissionChoice
     overrides: Partial<Record<TuiAgent, AgentPermissionChoice>>
@@ -88,6 +98,7 @@ export type AgentLaunchSettingsMutation =
   | { type: 'arguments'; agent: TuiAgent; value: string }
   /** Only the user's own text; a permission flag Orca recognizes in it becomes the choice. */
   | { type: 'user-arguments'; agent: TuiAgent; value: string }
+  | { type: 'launch-choices'; agent: TuiAgent; patch?: AgentChoicePatch; userArgs?: string }
   | { type: 'environment-set'; agent: TuiAgent; name: string; value: string }
   | { type: 'environment-remove'; agent: TuiAgent; name: string }
 
@@ -95,7 +106,16 @@ export function projectAgentLaunchSettings(
   settings: AgentLaunchSettingsSource,
   platform?: NodeJS.Platform
 ): AgentLaunchSettings {
-  const composed = composeAgentLaunchProfile(settings, platform)
+  const hostPlatform = platform ?? agentPermissionHostPlatform()
+  const shell = resolveStartupShell(
+    hostPlatform,
+    resolveLocalWindowsAgentStartupShell({
+      platform: hostPlatform,
+      isRemote: false,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
+  )
+  const composed = composeAgentLaunchProfile(settings, hostPlatform)
   const permissionMode = resolveAgentPermissionModeSummary(composed)
   return {
     defaultTuiAgent: settings.defaultTuiAgent ?? null,
@@ -117,12 +137,28 @@ export function projectAgentLaunchSettings(
           nonAutoPermissionMode: resolveNonAutoAgentPermissionMode(composed)
         }
       : {}),
+    ...(settings.agentLaunchChoices !== undefined
+      ? {
+          agentChoices: {
+            defaults: settings.agentLaunchChoices,
+            userArgs: normalizeTuiAgentArgsRecord(settings.agentDefaultArgs)
+          }
+        }
+      : {}),
     ...(hasTypedAgentPermission(settings)
       ? {
           agentPermission: {
             default: settings.agentPermissionDefault ?? 'own',
             overrides: { ...settings.agentPermissionOverrides },
-            userArgs: normalizeTuiAgentArgsRecord(settings.agentDefaultArgs)
+            userArgs: Object.fromEntries(
+              Object.keys(composed.agentDefaultArgs)
+                .filter(isTuiAgent)
+                .map((agent) => [
+                  agent,
+                  projectAgentLaunchProfile(agent, settings, { target: 'legacy-permission', shell })
+                    .args
+                ])
+            )
           }
         }
       : {})
@@ -134,6 +170,14 @@ export function agentLaunchSettingsMutationUpdates(
   mutation: AgentLaunchSettingsMutation,
   platform: NodeJS.Platform
 ): AgentLaunchSettingsSource {
+  const shell = resolveStartupShell(
+    platform,
+    resolveLocalWindowsAgentStartupShell({
+      platform,
+      isRemote: false,
+      terminalWindowsShell: settings.terminalWindowsShell
+    })
+  )
   switch (mutation.type) {
     case 'default':
       return buildDefaultAgentSettingsUpdate(mutation.agent)
@@ -193,9 +237,19 @@ export function agentLaunchSettingsMutationUpdates(
       }
       return { agentCmdOverrides: commands }
     }
+    case 'launch-choices':
+      return agentLaunchChoiceUpdates(settings, mutation.agent, mutation)
     case 'arguments':
+      if (settings.agentLaunchChoices !== undefined) {
+        return agentLaunchChoiceUpdates(
+          settings,
+          mutation.agent,
+          { userArgs: mutation.value },
+          { target: 'terminal', shell }
+        )
+      }
       if (hasTypedAgentPermission(settings)) {
-        return legacyArgumentsUpdates(settings, mutation.agent, mutation.value)
+        return legacyArgumentsUpdates(settings, mutation.agent, mutation.value, platform)
       }
       return {
         agentDefaultArgs: normalizeTuiAgentArgsRecord({
@@ -204,6 +258,14 @@ export function agentLaunchSettingsMutationUpdates(
         })
       }
     case 'user-arguments': {
+      if (settings.agentLaunchChoices !== undefined) {
+        return agentLaunchChoiceUpdates(
+          settings,
+          mutation.agent,
+          { userArgs: mutation.value },
+          { target: 'legacy-permission', shell }
+        )
+      }
       if (!hasTypedAgentPermission(settings)) {
         throw new Error('This host stores permissions in launch arguments')
       }

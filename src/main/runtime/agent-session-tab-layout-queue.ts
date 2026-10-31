@@ -99,6 +99,7 @@ export function createChatTabLayoutQueue(deps: {
         }
       }
     })
+    return queue
   }
   return Object.assign(enqueue, { pendingOpens: () => [...pending] })
 }

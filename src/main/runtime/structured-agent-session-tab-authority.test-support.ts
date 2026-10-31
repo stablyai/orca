@@ -42,7 +42,7 @@ afterEach(async () => {
   await chatTabCommandsSettled()
   await stopStructuredAgentSessionRuntime()
   await closeTestStores()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
@@ -61,9 +61,9 @@ export class AuthorityRuntime extends OrcaRuntimeService {
 
 export async function authorityProfile(
   ids: string[] = [B],
-  options: { visible?: string[]; records?: string[] } = {}
+  options: { visible?: string[]; records?: string[] } = {},
+  profile = createStore()
 ) {
-  const profile = createStore()
   initOrcaProfilePaths()
   const group = profile.createProjectGroup({
     name: 'Chats',
@@ -77,7 +77,7 @@ export async function authorityProfile(
     folderPath: root,
     name: 'Chat owner'
   })
-  const workspace = folderWorkspaceKey(folder.id)
+  const workspace: string = folderWorkspaceKey(folder.id)
   const records = (options.records ?? ids.filter((id) => id !== G)).map((id) => {
     const record = agentSessionRecordFixture(
       agentSessionLeaseFixture({
@@ -111,7 +111,7 @@ export async function authorityProfile(
   if (saved) {
     profile.setWorkspaceSession(saved)
   }
-  profile.flushOrThrow()
+  await profile.flushPendingOrThrowAsync()
   return { profile, workspace, groupId: group.id, folderId: folder.id }
 }
 
@@ -246,7 +246,7 @@ export async function physicalReload(rig: AuthorityRig) {
   await stopStructuredAgentSessionRuntime()
   rig.profile.flushOrThrow()
   await closeTestStores()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   const profile = createStore()
   const fresh = await openAuthorityRuntime({ ...rig, profile }, new AuthorityRuntime(profile))
   await fresh.runtime.restoreStructuredAgentSessionTabs()

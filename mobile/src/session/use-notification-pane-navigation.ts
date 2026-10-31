@@ -11,12 +11,14 @@ import { notificationPaneTab } from './notification-pane-tab'
 export function useNotificationPaneNavigation({
   sessionTabs,
   terminalsLoaded,
+  connState,
   switchSessionTab,
   worktreeId,
   openNativeSession
 }: {
   sessionTabs: MobileSessionTab[]
   terminalsLoaded: boolean
+  connState?: string
   switchSessionTab: (tab: MobileSessionTab) => void
   worktreeId?: string
   openNativeSession?: (source: StructuredSessionOpenSource) => Promise<void>
@@ -56,8 +58,16 @@ export function useNotificationPaneNavigation({
     if (paneKey === null || paneKey === '' || !terminalsLoaded) {
       return
     }
-    applied.current = paneKey
     const tab = notificationPaneTab(sessionTabs, paneKey)
+    if (
+      openNativeSession &&
+      connState !== undefined &&
+      connState !== 'connected' &&
+      (tab?.type === 'agent-session' || structuredSessionIdFromNotificationPane(paneKey))
+    ) {
+      return
+    }
+    applied.current = paneKey
     // A pre-reconnect inventory can predate the pane named by the push.
     if (tab) {
       pending.current = null
@@ -78,5 +88,13 @@ export function useNotificationPaneNavigation({
         void openNativeSession({ kind: 'notification', sessionId, worktreeId })
       }
     }
-  }, [asked, sessionTabs, switchSessionTab, terminalsLoaded, worktreeId, openNativeSession])
+  }, [
+    asked,
+    connState,
+    sessionTabs,
+    switchSessionTab,
+    terminalsLoaded,
+    worktreeId,
+    openNativeSession
+  ])
 }

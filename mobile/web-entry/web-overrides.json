@@ -86,6 +86,10 @@
       "reason": "The shell renders this page for the accounts screen, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and one throwing route module takes the whole bundle down because the manifest imports them all."
     },
     {
+      "file": "app/h/[hostId]/automations.web.tsx",
+      "reason": "The served automation route renders its screen directly; the native sibling mounts the shell and imports a native view manager unavailable in the page."
+    },
+    {
       "file": "app/h/[hostId]/source-control/[worktreeId].web.tsx",
       "reason": "The shell renders this page for the source-control hub, so the page has no shell to mount inside itself. Its native file reaches OrcaMobileWebShellView, whose module calls requireNativeViewManager at import and throws in a browser, and the route manifest imports every route, so one throwing module takes the whole bundle down. The tab, name and origin params are parsed here exactly as the native sibling parses them, because the page reads them back out of its own URL the way the native screen reads them out of the router."
     },
@@ -188,6 +192,18 @@
     {
       "file": "src/app-update/use-wall-app-update.web.ts",
       "reason": "The update checker runs in the app, not the page. The native file hands the compatibility wall the release that check found; this one offers none, so the wall inside the page keeps its store or releases link and the page bundle never carries the checker."
+    },
+    {
+      "file": "src/layout/use-fold-split.web.ts",
+      "reason": "The fold is a native reserved region the WebView cannot see: WebKit exposes no viewport segments, and the native file reads an Expo module the page does not have. This one reads the fold the shell measured over the page from `init`, already in the page's px."
+    },
+    {
+      "file": "src/session/shell-terminal-key-rail.web.ts",
+      "reason": "The iPhone Duo key rail is drawn by the shell in a side inset strip the page cannot reach. The native file has no shell around it and answers no rail; this one reads whether the shell shows one from `init` and takes its presses from the bridge."
+    },
+    {
+      "file": "src/platform/shell-storage.web.ts",
+      "reason": "Native settings screens can cover a still-mounted page. Observe same-session storage snapshots so preference readers refresh on return without remounting the terminal."
     }
   ]
 }

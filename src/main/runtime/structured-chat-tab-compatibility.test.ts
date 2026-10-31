@@ -125,6 +125,7 @@ it.each(['stop', 'discard', 'sweep'] as const)(
       await import('./rpc/methods/orchestration-structured-worker-lifecycle')
     const { closeStructuredSessionsForWorktree, createStructuredSweepProgress } =
       await import('./structured-session-worktree-teardown')
+    vi.spyOn(Date, 'now').mockReturnValue(1_800_000_000_000)
     const progress = createStructuredSweepProgress([{ sessionId: B, agent: 'claude' }])
     const stopping =
       consumer === 'stop'
@@ -138,12 +139,11 @@ it.each(['stop', 'discard', 'sweep'] as const)(
               worktreeId: rig.workspace,
               hostScope: { kind: 'local', hostId: 'local' }
             },
-            'lifetime-dispatch',
             rig.runtime
           )
         : consumer === 'discard'
           ? discardStructuredWorkerSession(B, rig.runtime)
-          : closeStructuredSessionsForWorktree(progress, Date.now() + 60_000, {
+          : closeStructuredSessionsForWorktree(progress, 1_800_000_060_000, {
               runtime: rig.runtime
             })
     await entered.promise
@@ -376,3 +376,73 @@ it('captures an admitted but unsaved failed-SHOW open, then removes exactly that
     allow()
   }
 })
+
+it.each([
+  [false, false],
+  [false, true],
+  [true, false],
+  [true, true]
+] as const)(
+  'a successful SHOW retired before publication stays obsolete and a new explicit open completes; main=%s caller=%s',
+  async (main, caller) => {
+    layoutOwner.main = main
+    const { STRUCTURED_AGENT_SESSION_CLOSE_METHOD } =
+      await import('./rpc/methods/structured-agent-session-close-method')
+    const rig = await openAuthorityRuntime(
+      await authorityProfile([], { records: [B], visible: [] })
+    )
+    await rig.runtime.restoreStructuredAgentSessionTabs()
+    const rpc = new RpcDispatcher({
+      runtime: rig.runtime,
+      methods: [...STRUCTURED_AGENT_SESSION_REVEAL_METHODS, STRUCTURED_AGENT_SESSION_CLOSE_METHOD]
+    })
+    const options = {
+      pairedDeviceId: 'p',
+      clientKind: 'mobile' as const,
+      clientCapabilities: [STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY]
+    }
+    let closing: Promise<unknown> | undefined
+    const visibility = rig.host.setSessionTabVisibility.bind(rig.host)
+    const spy = vi
+      .spyOn(rig.host, 'setSessionTabVisibility')
+      .mockImplementation((id, visible, ...args) => {
+        const result = visibility(id, visible, ...args)
+        if (visible && !closing) {
+          void result.then(() => {
+            closing = STRUCTURED_AGENT_SESSION_CLOSE_METHOD.handler(
+              { sessionId: B },
+              {
+                runtime: rig.runtime,
+                clientKind: 'mobile',
+                clientCapabilities: options.clientCapabilities
+              }
+            )
+          })
+        }
+        return result
+      })
+    const reveal = () =>
+      rpc.dispatch(
+        {
+          id: 'race',
+          authToken: 'token',
+          method: 'agentSession.reveal',
+          params: { sessionId: B, ...(caller ? { navigation: 'caller' as const } : {}) }
+        },
+        options
+      )
+    expect(await reveal()).toMatchObject({ ok: false })
+    expect(closing).toBeDefined()
+    expect(await closing).toMatchObject({ ok: true })
+    await chatTabCommandsSettled()
+    expect(rig.store.getSessionTabId(B)).toBeNull()
+    expect(rig.runtime.live(B)).toBe(false)
+    expect(savedIds(rig)).toEqual([])
+    spy.mockRestore()
+    expect(await reveal()).toMatchObject({ ok: true, result: { ok: true } })
+    await chatTabCommandsSettled()
+    expect(rig.runtime.live(B)).toBe(true)
+    expect(savedIds(rig)).toEqual([B])
+    expect(rig.acquire).not.toHaveBeenCalled()
+  }
+)

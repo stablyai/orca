@@ -48,12 +48,10 @@
       "untitledSession": "无标题会话"
     },
     "sessionHistoryList": {
-      "assistantRole": "助手",
       "currentWorktree": "当前工作树",
       "messages_one": "{{count}} 条消息",
       "messages_other": "{{count}} 条消息",
-      "resumeSession": "恢复智能体会话",
-      "userRole": "用户"
+      "resumeSession": "恢复智能体会话"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "无法连接到主机",
@@ -188,7 +186,11 @@
       "cancelEditing": "取消编辑",
       "placeholder": "随心输入，@ 引用文件，/ 使用命令",
       "saveEditedMessage": "保存编辑后的消息",
-      "sendMessage": "发送消息"
+      "sendMessage": "发送消息",
+      "sendQueue": "加入队列",
+      "sendSteer": "立即发送",
+      "sendQueueHint": "在当前回合结束后运行",
+      "sendSteerHint": "加入智能体当前正在进行的工作"
     },
     "composerAttachments": {
       "attachedImage": "已添加的图片",
@@ -279,7 +281,10 @@
       "compaction": "上下文压缩",
       "contextCleared": "上下文已清除",
       "plan": "计划",
-      "stoppedManually": "已手动停止"
+      "stoppedManually": "已手动停止",
+      "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+      "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
+      "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。"
     },
     "orcaStop": {
       "canContinue": "您可以在此对话中继续。",
@@ -359,7 +364,6 @@
     "sessionOptionPickers": {
       "agentWorking": "智能体正在工作",
       "backToModels": "返回模型列表",
-      "closePicker": "关闭选择器",
       "dispatchUnconfirmed": "已发送给智能体 — 尚未确认",
       "modelFullAccessLabel": "模型，{{value}}，完全访问权限",
       "modelLabel": "模型，{{value}}",
@@ -657,7 +661,6 @@
       "tryDifferentFilter": "请尝试其他评审筛选条件。"
     },
     "diffReviewDrawers": {
-      "actionsTitle": "评审操作",
       "addNote": "添加备注",
       "cancelNote": "取消备注编辑",
       "clearSentNotes": "清除已发送的备注",
@@ -764,11 +767,6 @@
       "moveUp": "上移",
       "reorderHint": "使用“上移”和“下移”操作调整顺序，无需拖动"
     },
-    "homeQuickActions": {
-      "newWorkspace": "新工作区",
-      "pairDesktop": "配对桌面",
-      "title": "快捷操作"
-    },
     "hostCard": {
       "hostActions": "{{title}} 的操作",
       "openHost": "打开 {{title}}",
@@ -809,9 +807,6 @@
     "mountedBottomDrawer": {
       "dismissDrawer": "关闭抽屉"
     },
-    "newWorkspaceFab": {
-      "newWorkspace": "新工作区"
-    },
     "newWorkspaceSetupScriptField": {
       "hooks": "钩子",
       "label": "设置脚本",
@@ -829,12 +824,10 @@
       "blankTerminal": "空白终端"
     },
     "newWorktreeFormSheet": {
-      "advanced": "高级",
       "agent": "智能体",
       "connectTarget": "连接目标主机",
       "connectTargetFirst": "请先连接目标主机",
       "createWorktree": "创建工作树",
-      "nameOrCreateFrom": "名称或“创建来源”",
       "noProjectsFound": "未找到项目",
       "note": "备注",
       "notePlaceholder": "写备注",
@@ -925,12 +918,10 @@
       "noResults": "未找到结果。",
       "searchPlaceholder": "输入名称或搜索来源",
       "switchRepo": "切换到 {{repoName}}",
-      "title": "名称或“创建来源”",
       "typeWorkspaceName": "请在下方输入框中输入工作区名称。"
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "打开所选来源",
-      "optional": "[可选]",
       "searchPlaceholder": "输入名称或搜索来源"
     },
     "smartWorkspaceSourceRow": {
@@ -957,7 +948,13 @@
       "empty": "尚未设置自定义快捷键。",
       "removeShortcut": "移除 {{label}}",
       "resetDefaults": "恢复默认设置",
-      "resetDescription": "按原始顺序显示所有内置快捷键"
+      "resetDescription": "按原始顺序显示所有内置快捷键",
+      "moreKeys": "更多按键",
+      "moreKeysDescription": "这些按键位于终端按键栏的 ⋯ 下。切换按键以显示或隐藏，按住拖动柄可调整顺序。已在按键栏中的按键（如 Esc 或方向键）不会显示在 ⋯ 下。",
+      "directionPad": "方向键盘",
+      "showDirectionPad": "显示方向键盘",
+      "showDirectionPadDescription": "将方向键盘固定在侧边栏。关闭后，侧边栏会列出各个方向键。",
+      "showShortcut": "显示 {{label}} 快捷键"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "使用一次速率限制重置额度？",
@@ -1296,17 +1293,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "账户使用情况",
-      "sessionWindow": "5小时",
-      "systemDefault": "系统默认",
-      "weeklyWindow": "7天"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "关闭 Orca {{version}} 更新提示",
       "title": "Orca {{version}} 已可用",
-      "updateAccessibilityLabel": "Orca {{version}} 已可用，点按更新",
-      "updateHint": "点按更新"
+      "updateAccessibilityLabel": "Orca {{version}} 已可用，点按更新"
     },
     "emptyState": {
       "connectedDescription": "桌面将显示在这里。所有数据均采用端到端加密。",
@@ -1314,26 +1304,16 @@
       "description": "与电脑上的 Orca 配对，即可在手机上查看智能体、进入任意终端并推进工作。",
       "openDesktopDescription": "前往“设置” → “移动端”，生成配对二维码。",
       "openDesktopTitle": "打开 Orca 桌面应用",
-      "pairDesktop": "配对桌面",
-      "scanCodeDescription": "点按上方按钮打开扫码器，然后对准屏幕上的二维码。",
       "scanCodeTitle": "扫描二维码",
-      "stepsHeading": "使用方法",
       "title": "连接桌面"
     },
     "listFooter": {
       "hostPickerTitle": "选择打开任务的主机",
-      "resumeHeading": "继续",
-      "tasksHeading": "任务"
+      "automationsHeading": "自动化",
+      "automationsHostPickerTitle": "选择主机以打开自动化"
     },
     "listHeader": {
-      "agentTime": "智能体时间",
-      "agentsSpawned": "已启动智能体",
-      "daysHours": "{{days}} 天 {{hours}} 小时",
-      "desktopsHeading": "台式机",
-      "hoursMinutes": "{{hours}} 小时 {{minutes}} 分钟",
-      "minutes": "{{minutes}} 分钟",
-      "prsCreated": "已创建 PR",
-      "title": "欢迎回来"
+      "desktopsHeading": "台式机"
     },
     "screen": {
       "pairingCheckFailed": "无法检查配对状态",
@@ -1341,11 +1321,6 @@
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "removeHostTitle": "移除主机",
       "tryAgain": "请重试。"
-    },
-    "tasksCard": {
-      "noSources": "未连接任务来源",
-      "openProviderTasks": "打开 {{provider}} 任务",
-      "title": "任务"
     }
   },
   "hooks": {
@@ -1388,26 +1363,14 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "正在创建工作区…"
     },
-    "hostRailActions": {
-      "accounts": "账户",
-      "closeSearch": "关闭搜索",
-      "floatingWorkspace": "浮动工作区",
-      "newWorkspace": "新工作区",
-      "searchWorkspaces": "搜索工作区",
-      "tasks": "任务"
-    },
     "hostScreenHeader": {
       "accounts": "账户",
-      "activeFilters_one": "工作区选项（已启用 {{count}} 个筛选条件）",
-      "activeFilters_other": "工作区选项（已启用 {{count}} 个筛选条件）",
       "backToHosts": "返回主机列表",
-      "closeSearch": "关闭搜索",
       "floatingWorkspace": "浮动工作区",
       "hideSidebar": "隐藏侧边栏",
       "reconnect": "重新连接",
-      "searchWorkspaces": "搜索工作区",
       "tasks": "任务",
-      "workspaceOptions": "工作区选项"
+      "automations": "自动化"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "要删除“{{name}}”（{{branch}}）吗？",
@@ -1418,10 +1381,6 @@
       "removeHostMessage": "要移除“{{name}}”吗？之后可重新配对。",
       "sleep": "休眠",
       "unpin": "取消固定"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "搜索工作区…",
-      "searchWorkspaces": "搜索工作区"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "检查项：未通过",
@@ -1480,7 +1439,6 @@
       "backToOptions": "返回工作区选项",
       "cardDisplay": "卡片显示",
       "cardLayout": "卡片布局",
-      "clearFilters": "清除筛选",
       "exceptDefaultBranch": "默认分支除外",
       "filters": "筛选条件",
       "groupBy": "分组依据",
@@ -1517,7 +1475,8 @@
       "sourceControl": "源代码控制",
       "tasks": "任务",
       "terminal": "终端",
-      "workspace": "工作区"
+      "workspace": "工作区",
+      "automations": "自动化"
     }
   },
   "newWorkspace": {
@@ -1835,7 +1794,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "关闭键盘",
-      "sendKey": "发送 {{label}}"
+      "sendKey": "发送 {{label}}",
+      "modifierHint": "应用于下一个按键。双击可保持启用。",
+      "typeCharacter": "输入 {{character}}",
+      "interrupt": "中断终端",
+      "keysModeLabel": "按键模式：输入内容直接发送到终端。切换到消息模式",
+      "messageModeLabel": "消息模式：输入后发送。切换到按键模式",
+      "keysMode": "按键",
+      "messageMode": "消息",
+      "moreKeys": "更多按键和操作",
+      "showKeyboard": "显示键盘"
     },
     "activeContent": {
       "createTab": "创建标签页",
@@ -1947,7 +1915,10 @@
     "commandDock": {
       "liveInputHint": "输入的文本会直接发送到当前终端",
       "liveInputLabel": "终端实时输入",
-      "sendCommand": "发送命令"
+      "sendCommand": "发送命令",
+      "messageAgentPlaceholder": "向 {{agent}} 发送消息",
+      "writeCommandPlaceholder": "输入命令后发送",
+      "theAgent": "智能体"
     },
     "contentRow": {
       "dismissCreationWarning": "关闭工作区创建警告"
@@ -2121,13 +2092,18 @@
       "requestFailed": "请求失败：{{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "显示工作区的完整名称及其所在位置",
       "backToWorktrees": "返回工作树",
       "moreActions": "更多会话操作",
-      "openFileExplorer": "打开文件资源管理器",
       "openSourceControl": "打开源代码控制",
       "reconnectToDesktop": "重新连接到桌面",
       "showSidebar": "显示侧边栏",
-      "terminalTitle": "终端"
+      "terminalTitle": "终端",
+      "terminalLayout": "终端布局",
+      "fileExplorer": "文件资源管理器",
+      "sourceControl": "源代码管理",
+      "newTab": "新标签页",
+      "quickCommands": "快捷命令"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "智能体历史记录",
@@ -2285,9 +2261,6 @@
       "title": "快捷命令",
       "untitled": "无题"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "快捷命令"
-    },
     "routeHelpers": {
       "connected": "已连接",
       "connecting": "连接中",
@@ -2327,10 +2300,8 @@
       "terminal": "终端",
       "terminalName": "终端名称",
       "unsavedMarkdown": "未保存的 Markdown 更改",
-      "urlPrompt": "输入 URL，或留空以新建标签页。"
-    },
-    "sideRail": {
-      "backToWorktrees": "返回工作树列表"
+      "urlPrompt": "输入 URL，或留空以新建标签页。",
+      "allowAutoClose": "允许自动关闭"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "此工作区主机上未检测到已启用的 AI 智能体。",
@@ -2609,6 +2580,56 @@
       "waitForStart": "请等待智能体完成启动。",
       "waitForTurn": "请等待智能体完成回复，或将其停止。",
       "waitMoment": "请稍候。"
+    },
+    "workerAutoClose": {
+      "running": "临时协作工作者 · 完成 2 分钟后关闭",
+      "finished": "临时协作工作者已完成 · 将在 {{countdown}} 后关闭",
+      "keepOpen": "保持打开"
+    },
+    "terminalLayoutSheet": {
+      "title": "终端布局",
+      "oneTerminal": "一个终端",
+      "selected": "已选择",
+      "auto": "自动",
+      "autoHint": "根据可用空间分割",
+      "sideBySide": "并排",
+      "sideBySideHint": "即使侧边栏打开也显示为两列",
+      "stacked": "上下排列",
+      "stackedHint": "任意屏幕方向下均显示为两行",
+      "selectedHint": "已选择 · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "无法保存布局",
+      "saveFailedMessage": "此布局暂时生效。请再次选择以重试保存。"
+    },
+    "terminalArrowPad": {
+      "label": "方向键",
+      "hint": "点击一侧可按一次方向键，或按住并拖动以重复",
+      "up": "上",
+      "down": "下",
+      "left": "左",
+      "right": "右"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "发送 {{label}}",
+      "paste": "粘贴",
+      "sending": "发送中…",
+      "photo": "照片",
+      "file": "文件",
+      "desktopWidth": "桌面宽度",
+      "phoneWidth": "手机宽度",
+      "keys": "按键",
+      "combos": "组合键",
+      "yourKeys": "你的按键",
+      "deleteKeyHint": "长按以删除此按键",
+      "addCustomKey": "添加自定义按键",
+      "addKey": "添加按键"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}，已聚焦",
+      "terminal": "终端",
+      "tapToFocusPane": "{{title}}，点按以聚焦",
+      "inputPane": "{{title}} · 输入"
     }
   },
   "settings": {
@@ -2800,7 +2821,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "合并",
       "rebaseState": "变基",
-      "stagedCount": "已暂存 {{count}} 个文件"
+      "stagedCount": "已暂存 {{count}} 个文件",
+      "completingMerge": "正在完成…",
+      "completeMerge": "完成合并"
     },
     "branchCompare": {
       "commits_one": "{{count}} 次提交",
@@ -2964,7 +2987,8 @@
       "openNumberedPrWeb": "在网页上打开 PR #{{number}}",
       "openPrWeb": "在网页上打开 PR",
       "refresh": "刷新源代码控制",
-      "title": "源代码控制"
+      "title": "源代码控制",
+      "moreActions": "更多源代码控制操作"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3239,6 +3263,13 @@
       "branchUnavailable": "无法获取分支状态",
       "commitFailed": "提交失败",
       "waitingForDesktop": "正在等待桌面…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "请更新运行此工作区的电脑上的 Orca，以便通过手机解决合并冲突。",
+      "markResolved": "标记为已解决",
+      "keepFile": "保留文件",
+      "keepDeletion": "保留删除",
+      "completeMergeFailed": "无法完成合并"
     }
   },
   "tasks": {
@@ -3313,23 +3344,18 @@
       "recent": "最近的",
       "retryHint": "点按重试。",
       "searchProjects": "搜索项目",
-      "sort": "项目排序",
       "subtitle": "为“任务”页面选择项目视图。",
       "title": "GitHub 项目",
       "unsupportedLayout": "Orca 暂不支持此 GitHub 项目布局。",
       "view": "项目视图"
     },
     "githubViewControls": {
-      "fields": "字段：{{fields}}",
-      "openView": "在 GitHub 中打开视图",
-      "sort": "排序：{{sort}}",
-      "source": "来源：{{source}}"
+      "openView": "在 GitHub 中打开视图"
     },
     "itemActions": {
       "changeStatus": "更改状态",
       "copyGitHubLink": "复制 GitHub 链接",
       "copyLinearLink": "复制 Linear 链接",
-      "createWorkspace": "创建工作区",
       "creating": "创建中…",
       "mergeConflicts": "GitHub 报告存在合并冲突。",
       "mergeMergeRequest": "合并合并请求",
@@ -3337,8 +3363,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "添加子议题",
-      "assignee": "负责人",
-      "assignees": "负责人",
       "checks": "检查项",
       "description": "描述",
       "discussion": "讨论",
@@ -3350,13 +3374,10 @@
       "pipeline": "管道",
       "pipelineJobs_one": "{{count}} 个作业",
       "pipelineJobs_other": "{{count}} 个作业",
-      "project": "项目",
       "rerunAll": "重新运行全部",
       "rerunFailed": "重新运行失败项",
-      "status": "状态",
       "subIssueTitle": "子议题标题",
-      "subIssues": "子议题",
-      "type": "类型"
+      "subIssues": "子议题"
     },
     "itemDetailDrawer": {
       "refreshDetails": "刷新详情"
@@ -3413,17 +3434,8 @@
     "linearList": {
       "changeStatusFrom": "更改状态，当前为 {{status}}"
     },
-    "linearViewControls": {
-      "displayButton": "显示",
-      "groupLabel": "分组：{{group}}",
-      "orderLabel": "排序：{{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "显示属性",
-      "linearGroupTitle": "Linear 议题分组",
-      "linearOrderTitle": "Linear 议题排序",
-      "linearViewTitle": "Linear 视图",
-      "sortTasksTitle": "任务排序"
+      "displayPropertiesTitle": "显示属性"
     },
     "listSurface": {
       "connectLinearButton": "连接 Linear",
@@ -3492,8 +3504,6 @@
       "allSites": "所有站点",
       "currentlyAscending": "当前升序 · 点按切换为降序",
       "currentlyDescending": "当前降序 · 点按切换为升序",
-      "fieldAscending": "{{field}} 升序",
-      "fieldDescending": "{{field}} 降序",
       "fields": "字段",
       "repos_one": "{{count}} 个仓库",
       "repos_other": "{{count}} 个仓库",
@@ -3602,8 +3612,7 @@
     },
     "providerControls": {
       "myTodos": "我的待办",
-      "projectMergeRequests": "项目 MR",
-      "sort": "排序：{{sortLabel}}"
+      "projectMergeRequests": "项目 MR"
     },
     "providerItemList": {
       "intoBranch": "合并到 {{base}}",
@@ -3631,7 +3640,6 @@
       "queryingSource": "正在查询 {{source}}",
       "repoDescription": "选择要查询的仓库。",
       "repos": "仓库",
-      "taskSource": "任务来源",
       "upstream": "上游"
     },
     "providerViewProjection": {
@@ -3643,10 +3651,7 @@
       "default": "默认",
       "defaultSubtitle": "{{subtitle}} · 默认",
       "issues": "议题",
-      "list": "列表",
-      "noGrouping": "没有分组",
       "openState": "开放",
-      "priority": "优先级",
       "projects": "项目",
       "pullRequests": "PR",
       "teams_one": "{{count}} 个团队",
@@ -3658,7 +3663,6 @@
       "unassigned": "未分配"
     },
     "screenChrome": {
-      "connectLinear": "连接 Linear",
       "newGitHubIssue": "新的 GitHub 议题",
       "newLinearIssue": "新建 Linear 议题",
       "refreshGitHub": "刷新 GitHub 工作",
@@ -3726,19 +3730,14 @@
       "addRepository": "创建 Linear 工作区前，请先添加 Git 仓库。",
       "advanced": "高级",
       "agent": "智能体",
-      "connect": "连接",
       "connectFirst": "请先连接仓库",
       "connectRepository": "连接仓库",
-      "connecting": "连接中…",
-      "createFrom": "基于 {{branch}} 创建",
       "defaultBranch": "默认分支",
       "detectingAgents": "正在检测智能体…",
-      "optional": "[可选]",
       "remoteRepository": "远程仓库",
       "repository": "仓库",
       "repositoryNotFound": "未找到仓库。",
       "selectRepository": "选择仓库",
-      "sshConnection": "SSH 连接",
       "startFrom": "创建起点",
       "title": "创建工作区",
       "workspaceName": "工作区名称"
@@ -3861,7 +3860,6 @@
       "existing": "现有分支",
       "existingHint": "新提交将添加到此分支。",
       "hostUpdateRequired": "请更新工作区主机上的 Orca，以复用分支或明确选择创建独立分支。",
-      "new": "新分支",
       "newHint": "创建新的本地分支",
       "newName": "新分支名称",
       "title": "此工作树使用的分支"
@@ -3905,6 +3903,222 @@
       "inProgress": "进行中",
       "inReview": "评审中",
       "pinned": "已固定"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "方向键盘上",
+      "left": "方向键盘左",
+      "right": "方向键盘右",
+      "down": "方向键盘下",
+      "hint": "发送方向键。按住可重复。"
+    }
+  },
+  "automations": {
+    "mobile": {
+      "extraAgentArguments": "额外的智能体参数",
+      "allAutomations": "全部自动化",
+      "schedule": "日程",
+      "nextRun": "下次运行",
+      "agent": "智能体",
+      "project": "项目",
+      "unavailable": "不可用",
+      "workspace": "工作区",
+      "edit": "编辑",
+      "deleteAutomation": "删除自动化",
+      "editAutomation": "编辑自动化",
+      "cancel": "取消",
+      "name": "名称",
+      "back": "返回",
+      "continue": "继续",
+      "createAutomation": "创建自动化",
+      "automations": "自动化",
+      "runs": "执行",
+      "refresh": "刷新",
+      "automation": "自动化",
+      "inProgress": "进行中",
+      "completed": "已完成",
+      "skipped": "已跳过",
+      "started": "开始",
+      "trigger": "触发",
+      "run": "执行",
+      "output": "输出",
+      "noOutput": "没有可用的输出内容。",
+      "loadingRuns": "正在加载运行…",
+      "loading": "加载中…",
+      "hourly": "每小时",
+      "daily": "每天",
+      "weekdays": "工作日",
+      "weekly": "每周",
+      "cadence": "节奏",
+      "day": "日",
+      "host": "主机",
+      "pending": "待处理",
+      "starting": "正在启动",
+      "baseBranchOptional": "基础分支（可选）",
+      "workspaceSetupScript": "工作区设置脚本",
+      "useProjectSettings": "使用项目设置",
+      "runSetupScript": "运行设置脚本",
+      "skipSetupScript": "跳过设置脚本",
+      "reuseAgentSession": "复用代理会话",
+      "precheckCommandOptional": "预检查命令（可选）",
+      "precheckTimeoutSeconds": "预检查超时（秒）",
+      "missedRunGraceMinutes": "错过运行的宽限时间（分钟）",
+      "choose": "选择…",
+      "runOnSchedule": "按计划运行 {{name}}",
+      "noNextScheduledRun": "没有下次计划运行",
+      "newWorkspacePerRun": "每次运行新建工作区",
+      "instructions": "指令",
+      "runNow": "立即运行",
+      "viewAllRuns": "查看所有运行",
+      "savedAgent": "{{agent}}（已保存）",
+      "chooseAProjectSetUpOnThisHost": "请选择此主机上已配置的项目。",
+      "newAutomation": "新建自动化",
+      "editorStep": "第 {{step}} 步，共 3 步 · {{section}}",
+      "retryProjectLoading": "重试加载项目",
+      "loadingProjects": "正在加载项目…",
+      "projectAndHostSetup": "项目和主机配置",
+      "savedTarget": "已保存的目标",
+      "useAnExistingWorkspace": "使用现有工作区",
+      "existingWorkspace": "现有工作区",
+      "savedWorkspace": "已保存的工作区",
+      "loadMoreWorkspaces": "加载更多工作区",
+      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "此主机的工作区清单不完整。请刷新或加载更多工作区。",
+      "agentDetecting": "代理 · 正在检测…",
+      "installAndEnableAnAgentOnThisHostThenRetry": "请在此主机上安装并启用代理，然后重试。",
+      "hideAdvancedOptions": "隐藏高级选项",
+      "advancedOptions": "高级选项",
+      "chooseAnAgent": "选择代理",
+      "saveChanges": "保存更改",
+      "loadingAutomations": "正在加载自动化…",
+      "letYourAgentsWorkOnASchedule": "让代理按计划工作",
+      "createAnAutomationToRunATaskOnThisHost": "创建自动化以在此主机上运行任务。",
+      "nextDate": "下次：{{date}}",
+      "lastResult": "上次：{{status}} · {{date}}",
+      "latestResultNotReported": "未报告最新结果",
+      "sshTarget": " · SSH {{target}}",
+      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "请重新连接此主机以刷新或更改。已保存的信息仍可在下方查看。",
+      "recentRuns": "最近运行",
+      "outcome": "结果",
+      "allOutcomes": "所有结果",
+      "couldNotStart": "无法启动",
+      "deleteAutomationTitle": "删除自动化？",
+      "deleteRetained": "删除“{{name}}”及其保留的运行？",
+      "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "无法验证原始代理窗格。请重新连接后重试。",
+      "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "原始代理窗格已无法打开。已保存的输出仍保留在此处。",
+      "allRuns": "所有运行",
+      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "此运行已不在主机保留的历史记录中。最后保存的信息仍保留在下方。",
+      "scheduledFor": "计划时间",
+      "notCreated": "未创建",
+      "projectHost": "项目主机",
+      "notRecorded": "未记录",
+      "capturedTruncated": "捕获于 {{date}} · 输出已被主机截断",
+      "capturedDate": "捕获于 {{date}}",
+      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "原始代理窗格不可用。已保存的输出仍保留在此处。",
+      "openAgent": "打开代理",
+      "retryHistory": "重试历史记录",
+      "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "已加载的历史记录中没有匹配的运行。请加载更多以继续。",
+      "noMatchingRunsYet": "暂无匹配的运行。",
+      "runSummary": "{{title}}，{{status}}，{{date}}",
+      "scheduled": "已计划",
+      "loadMoreRuns": "加载更多运行",
+      "customCronOrRRULE": "自定义 Cron 或 RRULE",
+      "cronOrRRULE": "Cron 或 RRULE",
+      "minuteFromHHMM": "分钟（来自 HH:MM）",
+      "timeHHMM24Hour": "时间（HH:MM，24 小时制）",
+      "useATimeSuchAs0900": "请使用 09:00 这样的时间。",
+      "timeZone": "时区",
+      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "在所选主机上运行。请确保该主机在计划时间可用。",
+      "pairedHost": "已配对主机",
+      "selectedServerUnavailable": "所选服务器（不可用）",
+      "addANameInstructionsAndAnAgent": "请添加名称、指令和代理。",
+      "chooseAnExistingWorkspace": "请选择现有工作区。",
+      "checkTheExtraAgentArguments": "请检查额外的代理参数。",
+      "enterAValidCronOrRRULESchedule": "请输入有效的 Cron 或 RRULE 计划。",
+      "enterAValidTimeZoneSuchAsAmericaLosAngeles": "请输入有效的时区，例如 America/Los_Angeles。",
+      "missedRunGraceMustBeZeroOrAPositiveNumberOfMinutes": "宽限时间必须为零或正数分钟。",
+      "precheckTimeoutRange": "预检查超时必须在 1 到 {{maximum}} 秒之间。",
+      "outcomeUnknown": "主机可能已应用此操作。请先刷新确认，再重试。",
+      "ownerChanged": "此自动化的主机已更改。请重新加载后继续。",
+      "targetRemoved": "此自动化的 SSH 主机已移除，因此无法运行。请删除自动化或重新添加该主机。",
+      "fencingRequired": "此自动化已固定到 SSH 主机，因此请求必须指定预期的主机。",
+      "invalidDestination": "此管理端不再提供该主机。请选择主机后重试。",
+      "agentDiscoveryUnavailable": "此项目主机不支持代理发现。已保存的代理选择将保留。",
+      "agentVerificationUnavailable": "此主机无法验证此项目的代理。请更新主机后重试。",
+      "hostUnavailable": "此主机不支持自动化。请更新该主机上的 Orca 后重新连接。",
+      "hostUnreachable": "无法连接此主机。请重新连接并刷新以检查其当前状态。",
+      "actionFailed": "无法在主机上完成此操作。请刷新后重试。",
+      "dispatched": "已调度",
+      "skippedPrecheck": "已跳过 · 预检查",
+      "skippedMissedSchedule": "已跳过 · 错过计划",
+      "skippedHostUnavailable": "已跳过 · 主机不可用",
+      "skippedSignInNeeded": "已跳过 · 需要登录",
+      "unknownResult": "未知结果",
+      "notReported": "未报告",
+      "searchOptions": "搜索选项",
+      "scheduleAgentWorkAndViewRuns": "安排代理工作并查看运行",
+      "task": "任务",
+      "review": "检查"
+    },
+    "orphanIssues": {
+      "hostReselection": "运行此自动化之前，请先编辑它并重新选择主机。",
+      "malformed": "其保存的主机记录不完整。",
+      "projectMissing": "其项目已不存在，因此无法确定其主机。",
+      "projectUnverified": "无法从此处检查其项目，因此其主机尚未确认。",
+      "scheduledElsewhere": "它存储在此处，但计划在远程运行时执行。",
+      "targetMissing": "其 SSH 主机已不再注册。",
+      "targetReplaced": "其 SSH 主机已被移除并重新添加，因此需要重新接管此自动化。",
+      "workspaceHostAmbiguous": "其工作区跨越多个主机，因此没有唯一的所有者。"
+    },
+    "runFailures": {
+      "noDispatchHost": "没有可用于启动自动化的 Orca 窗口。",
+      "unevaluableSchedule": "Orca 无法评估此自动化，已跳过此次执行。",
+      "noRunnableHost": "此自动化没有可运行的主机。",
+      "wslMoveInProgress": "此自动化的项目正在移到其 WSL 主机，因此 Orca 跳过了此次运行。移动完成后将恢复运行。",
+      "wslMoveOwnedByHost": "此自动化的项目现在在其 WSL 主机上运行，自动化本身也由该主机运行。Orca 不再运行此本地副本。",
+      "missedGraceWindow": "Orca 再次检查时，此次运行的补跑宽限期已过。",
+      "targetMissing": "自动化主机已不在注册列表中，因此此自动化已无处运行。",
+      "targetReplaced": "自动化主机已被移除并重新注册，因此必须重新关联此自动化后才能运行。",
+      "workspaceHostAmbiguous": "自动化工作区跨越多个主机，因此 Orca 无法确定应在哪个主机上运行。",
+      "legacyTwinHosts": "此自动化保存于 Orca 开始记录运行主机之前，且其项目位于多个主机上。请打开自动化，选择应运行它的主机。",
+      "targetUnavailable": "自动化运行目标已不可用。",
+      "remoteSchedulingUnavailable": "此 Orca 客户端尚不支持远程服务器上的自动化调度。请在远程服务器上运行此自动化，或等持久化远程调度可用后更新 Orca。",
+      "projectSetupMissing": "所选自动化主机上已没有此项目的配置。",
+      "targetSetupMismatch": "自动化运行目标与项目所选主机的配置已不匹配。",
+      "repoUnavailable": "所选自动化主机的仓库已不可用。",
+      "repoDetached": "仓库已不再关联到所选自动化主机。",
+      "projectPathChanged": "所选自动化主机上的项目路径已更改。",
+      "automationChanged": "此次运行启动前，自动化已更改。",
+      "destinationChanged": "此次运行启动前，自动化的目标位置已更改。",
+      "hooksReviewBlocked": "智能体正在等待有人审查新增或更改的钩子（“Hooks need review”）。请打开此次运行，信任这些钩子或将其移除。计划运行会继续进行，待没有需要审查的内容后即可成功。",
+      "agentNeverStarted": "提交提示词后，自动化智能体始终未启动。",
+      "agentNoCompletion": "自动化智能体未报告完成。",
+      "watchTimedOut": "6 小时内未收到完成信号，Orca 已停止监视此次运行。",
+      "projectSetupState": {
+        "notSetUp": "项目尚未在所选自动化主机上完成设置。",
+        "settingUp": "项目仍在所选自动化主机上进行设置。",
+        "error": "项目在所选自动化主机上设置失败。",
+        "unsupported": "所选自动化主机不支持此项目。"
+      },
+      "wslDistroStopped": "WSL 发行版 {{distro}} 已停止，因此本次计划运行没有启动它。请启动该发行版或使用“立即运行”；它运行期间，后续运行会照常进行。"
+    }
+  },
+  "auto": {
+    "components": {
+      "automations": {
+        "automation": {
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "无效日程",
+              "ba20c92073": "自定义日程",
+              "a95afb7483": "每小时 :{{minute}}",
+              "280ccd2701": "每天 {{time}}",
+              "3f1422adc1": "工作日 {{time}}",
+              "cc71e252ba": "每{{day}} {{time}}"
+            }
+          }
+        }
+      }
     }
   }
 }

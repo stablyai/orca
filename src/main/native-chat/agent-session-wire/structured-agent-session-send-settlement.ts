@@ -10,6 +10,7 @@ import { isStructuredAgentSessionCommandTurnId } from './structured-agent-sessio
 /** Scope active turns to the live generation so ended commands cannot hold delivery waits. */
 export type SendSettlementJournal = Pick<AgentSessionJournal, 'submissions' | 'cursor'> & {
   activeTurnId: () => string | null
+  behindCommand?: (clientMessageId: string) => boolean
 }
 
 type SettledSend = {
@@ -59,7 +60,10 @@ function settledSend(
     until === 'answered'
       ? submission.dispatchState === 'pending'
       : isQueuedAgentJournalSubmission(submission) &&
-        !(until === 'handed-over-or-behind-command' && runningCommand(journal))
+        !(
+          until === 'handed-over-or-behind-command' &&
+          (runningCommand(journal) || journal.behindCommand?.(clientMessageId))
+        )
   return waiting ? 'pending' : { cursor: journal.cursor(), value: { clientMessageId, submission } }
 }
 

@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto'
 import type { CliStatusResult, RuntimeStatus } from '../../shared/runtime-types'
 import { runtimeHostConnectionState } from '../../shared/runtime-host-connection-state'
-import type { RuntimeOrchestrationEnvelope } from '../../shared/runtime-rpc-envelope'
 import {
   isDurableMutation,
   isOrchestrationMutation,
@@ -18,7 +17,12 @@ import {
   projectRemoteAppStatus
 } from './status'
 import { sendRequest } from './transport'
-import { RuntimeClientError, RuntimeRpcFailureError, type RuntimeRpcSuccess } from './types'
+import {
+  RuntimeClientError,
+  RuntimeRpcFailureError,
+  type RuntimeRpcSuccess,
+  type RuntimeCallOptions
+} from './types'
 import {
   attachDurableMutationRecovery,
   attachLegacyTerminalPromptRecovery,
@@ -52,7 +56,6 @@ const loadWebSocketTransport = async () => await import('./websocket-transport.j
 
 export class RuntimeClient {
   readonly userDataPath: string
-  private readonly requestTimeoutMs: number
   private readonly remote: PairedRuntimeConnection | null
   readonly environmentSelector: string | null
   private readonly cliExecutable: string
@@ -67,14 +70,13 @@ export class RuntimeClient {
   // Browser session cold starts can take 15–30 seconds; allow time for initialization.
   constructor(
     userDataPath = getDefaultUserDataPath(),
-    requestTimeoutMs = 60_000,
+    private readonly requestTimeoutMs = 60_000,
     remotePairingCode = process.env.ORCA_PAIRING_CODE ?? process.env.ORCA_REMOTE_PAIRING ?? null,
     environmentSelector = process.env.ORCA_ENVIRONMENT ?? null,
     cliExecutable = resolveOrchestrationCliExecutable(),
     originalArgs?: readonly string[]
   ) {
     this.userDataPath = userDataPath
-    this.requestTimeoutMs = requestTimeoutMs
     this.environmentSelector = environmentSelector
     this.cliExecutable = cliExecutable
     this.originalArgs = originalArgs ? [...originalArgs] : undefined
@@ -90,11 +92,7 @@ export class RuntimeClient {
   async call<TResult>(
     method: string,
     params?: unknown,
-    options?: {
-      timeoutMs?: number
-      legacyTerminalPrompt?: true
-      terminalPromptPreflight?: { runtimeId: string | null }
-    } & RuntimeOrchestrationEnvelope
+    options?: RuntimeCallOptions
   ): Promise<RuntimeRpcSuccess<TResult>> {
     const effectiveTimeoutMs = options?.timeoutMs ?? this.resolveMethodTimeoutMs(method, params)
     const orchestrationMutation = isOrchestrationMutation(method, params)
@@ -152,7 +150,8 @@ export class RuntimeClient {
           method,
           params,
           timeoutMs: effectiveTimeoutMs,
-          envelope
+          envelope,
+          requestSelection: options?.requestSelection
         })
       } catch (error) {
         throw recover(error, null)
@@ -178,7 +177,8 @@ export class RuntimeClient {
         params,
         effectiveTimeoutMs,
         envelope,
-        expectedRuntimeSource
+        expectedRuntimeSource,
+        options?.requestSelection ? { requestSelection: options.requestSelection } : undefined
       )
     } catch (error) {
       throw recover(error, metadata.runtimeId ?? null)
@@ -202,6 +202,10 @@ export class RuntimeClient {
       }
       const readiness = resolveWorkerStartReadinessTimeoutMs(requested)
       return Math.max(resolveWorkerStartClientTimeoutMs(readiness), this.requestTimeoutMs)
+    }
+    // A send to a finished worker starts its follow-up, which waits as worker-start does.
+    if (method === 'orchestration.send') {
+      return Math.max(resolveWorkerStartClientTimeoutMs(), this.requestTimeoutMs)
     }
     if (
       (method === 'orchestration.check' && isWaitingCheck(params)) ||

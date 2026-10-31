@@ -7,11 +7,10 @@ import { projectStructuredAgentStartItem } from '../../../src/shared/structured-
 import { withNativeChatCutTurnNotices } from '../../../src/shared/native-chat/transcript/native-chat-cut-turn-notice'
 import { agentSessionTranscriptRows } from '../../../src/shared/agent-session-context-clear'
 import { tuiAgentDisplayName } from '../../../src/shared/tui-agent-display-names'
-import { isStructuredAgentSessionMainAgentWorking } from '../../../src/shared/structured-agent-session-main-agent-working'
+import { mobileStructuredAgentSessionWorking } from './mobile-structured-agent-session-working'
 import { isFinalAgentSessionReadRefusal } from '../../../src/shared/structured-agent-session-read-refusal'
 import {
   runningStructuredAgentSessionTurnId,
-  structuredAgentSessionHostSaysWorking,
   structuredAgentSessionQueueSendsNext
 } from '../../../src/shared/structured-agent-session-live-turn'
 import {
@@ -154,9 +153,7 @@ export function useMobileStructuredAgentSession(
     { ...state, items: transcriptItems },
     turnId
   )
-  const isWorking = structuredAgentSessionHostSaysWorking(state.working, () =>
-    isStructuredAgentSessionMainAgentWorking(turnId, state.submissions, state.fence)
-  )
+  const isWorking = mobileStructuredAgentSessionWorking(state)
   const queueSendsNext = structuredAgentSessionQueueSendsNext(state.nextQueuedMessageId, isWorking)
   const backgroundTasks = useMobileStructuredBackgroundTasks({
     sessionKey,
@@ -185,7 +182,8 @@ export function useMobileStructuredAgentSession(
     hostStopping,
     stopPressed: stopPress.pressed,
     queueCapable,
-    queueFollowUps
+    queueFollowUps,
+    queueSendsNext
   })
   const { stopping } = turnIndicator
   const sendWithOutcome = useMobileStructuredSendWithOutcome({
@@ -291,6 +289,7 @@ export function useMobileStructuredAgentSession(
     },
     isWorking: isWorking || queueSendsNext,
     canStop,
+    sendFollowUp: turnIndicator.sendFollowUp ?? null,
     turnId,
     turnIndicator,
     ...turnTiming,

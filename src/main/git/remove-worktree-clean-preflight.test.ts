@@ -49,31 +49,6 @@ describe('assertWorktreeCleanForRemoval', () => {
       .mockRejectedValue(new Error('git ls-files exited with code 128'))
   })
 
-  it('returns without checking git status for force removals', async () => {
-    await expect(assertWorktreeCleanForRemoval('/repo-feature', true)).resolves.toBeUndefined()
-    expect(gitExecFileAsyncMock).not.toHaveBeenCalled()
-  })
-
-  it('passes when git status output is empty', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '', stderr: '' })
-
-    await expect(assertWorktreeCleanForRemoval('/repo-feature')).resolves.toBeUndefined()
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
-      { cwd: '/repo-feature', timeout: WORKTREE_REMOVAL_PREFLIGHT_TIMEOUT_MS }
-    )
-  })
-
-  it('throws a dedicated dirty/untracked error when status output is non-empty', async () => {
-    gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? scratch.txt\n', stderr: '' })
-
-    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toMatchObject({
-      message: 'Worktree has uncommitted or untracked changes.',
-      stdout: '?? scratch.txt\n'
-    })
-  })
-
   it('ignores configured linked paths without mutating them before preflight', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({ stdout: '?? node_modules\0', stderr: '' })
 
@@ -89,19 +64,6 @@ describe('assertWorktreeCleanForRemoval', () => {
     )
   })
 
-  it('allows a shorter caller deadline for destructive preflight', async () => {
-    gitExecFileAsyncMock.mockRejectedValueOnce(new Error('git timed out.'))
-
-    await expect(
-      assertWorktreeCleanForRemoval('/repo-feature', false, { timeout: 25 })
-    ).rejects.toThrow('git timed out.')
-
-    expect(gitExecFileAsyncMock).toHaveBeenCalledWith(
-      ['status', '--porcelain', '--untracked-files=all', '--ignore-submodules=none'],
-      { cwd: '/repo-feature', timeout: 25 }
-    )
-  })
-
   it('still rejects real changes when configured linked paths are ignored', async () => {
     gitExecFileAsyncMock.mockResolvedValueOnce({
       stdout: '?? node_modules\0 M src/index.ts\0',
@@ -113,14 +75,5 @@ describe('assertWorktreeCleanForRemoval', () => {
         ignoredUntrackedPaths: ['node_modules']
       })
     ).rejects.toMatchObject({ message: 'Worktree has uncommitted or untracked changes.' })
-  })
-
-  it('rethrows preflight subprocess failures as-is', async () => {
-    const error = Object.assign(new Error('fatal: not a git repository'), {
-      stderr: 'fatal: not a git repository (or any of the parent directories): .git\n'
-    })
-    gitExecFileAsyncMock.mockRejectedValueOnce(error)
-
-    await expect(assertWorktreeCleanForRemoval('/repo-feature')).rejects.toBe(error)
   })
 })

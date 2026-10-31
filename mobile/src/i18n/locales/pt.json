@@ -49,13 +49,11 @@
       "untitledSession": "Sessão sem título"
     },
     "sessionHistoryList": {
-      "assistantRole": "assistente",
       "currentWorktree": "worktree atual",
       "messages_many": "{{count}} mensagens",
       "messages_one": "{{count}} mensagem",
       "messages_other": "{{count}} mensagens",
-      "resumeSession": "Retomar sessão de agente",
-      "userRole": "usuário"
+      "resumeSession": "Retomar sessão de agente"
     },
     "useAgentHistoryState": {
       "hostUnreachable": "Não foi possível acessar o host",
@@ -192,7 +190,11 @@
       "cancelEditing": "Cancelar edição",
       "placeholder": "Pergunte o que quiser, @ para mencionar arquivos, / para comandos",
       "saveEditedMessage": "Salvar mensagem editada",
-      "sendMessage": "Enviar mensagem"
+      "sendMessage": "Enviar mensagem",
+      "sendQueue": "Colocar na fila",
+      "sendSteer": "Orientar",
+      "sendQueueHint": "Executa depois do turno atual",
+      "sendSteerHint": "Entra no que o agente está fazendo agora"
     },
     "composerAttachments": {
       "attachedImage": "Imagem anexada",
@@ -283,7 +285,10 @@
       "compaction": "Contexto compactado",
       "contextCleared": "Contexto limpo",
       "plan": "Plano",
-      "stoppedManually": "Interrompido manualmente"
+      "stoppedManually": "Interrompido manualmente",
+      "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
+      "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
+      "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes)."
     },
     "orcaStop": {
       "canContinue": "Você pode continuar nesta conversa.",
@@ -363,7 +368,6 @@
     "sessionOptionPickers": {
       "agentWorking": "O agente está trabalhando",
       "backToModels": "Voltar aos modelos",
-      "closePicker": "Fechar seletor",
       "dispatchUnconfirmed": "Enviado ao agente — não confirmado",
       "modelFullAccessLabel": "Modelo, {{value}}, acesso total",
       "modelLabel": "Modelo, {{value}}",
@@ -697,7 +701,6 @@
       "tryDifferentFilter": "Tente outro filtro de revisão."
     },
     "diffReviewDrawers": {
-      "actionsTitle": "Ações de revisão",
       "addNote": "Adicionar nota",
       "cancelNote": "Cancelar nota",
       "clearSentNotes": "Limpar notas enviadas",
@@ -810,11 +813,6 @@
       "moveUp": "Mover para cima",
       "reorderHint": "Use as ações mover para cima e mover para baixo para reordenar sem arrastar"
     },
-    "homeQuickActions": {
-      "newWorkspace": "Novo Espaço de Trabalho",
-      "pairDesktop": "Parear Desktop",
-      "title": "Ações Rápidas"
-    },
     "hostCard": {
       "hostActions": "Ações para {{title}}",
       "openHost": "Abrir {{title}}",
@@ -855,9 +853,6 @@
     "mountedBottomDrawer": {
       "dismissDrawer": "Fechar painel inferior"
     },
-    "newWorkspaceFab": {
-      "newWorkspace": "Novo espaço de trabalho"
-    },
     "newWorkspaceSetupScriptField": {
       "hooks": "HOOKS",
       "label": "Script de configuração",
@@ -875,12 +870,10 @@
       "blankTerminal": "Terminal em Branco"
     },
     "newWorktreeFormSheet": {
-      "advanced": "Avançado",
       "agent": "Agente",
       "connectTarget": "Conectar destino",
       "connectTargetFirst": "Conecte o destino primeiro",
       "createWorktree": "Criar worktree",
-      "nameOrCreateFrom": "Nome ou 'Criar A Partir De'",
       "noProjectsFound": "Nenhum projeto encontrado",
       "note": "Nota",
       "notePlaceholder": "Escreva uma nota",
@@ -971,12 +964,10 @@
       "noResults": "Nenhum resultado encontrado.",
       "searchPlaceholder": "Digite um nome ou busque uma origem",
       "switchRepo": "Mudar para {{repoName}}",
-      "title": "Nome ou 'Criar A Partir De'",
       "typeWorkspaceName": "Digite um nome para o espaço de trabalho no campo abaixo."
     },
     "smartWorkspaceSourceField": {
       "openSelectedSource": "Abrir origem selecionada",
-      "optional": "[Opcional]",
       "searchPlaceholder": "Digite um nome ou busque uma origem"
     },
     "smartWorkspaceSourceRow": {
@@ -1003,7 +994,13 @@
       "empty": "Nenhum atalho personalizado definido ainda.",
       "removeShortcut": "Remover {{label}}",
       "resetDefaults": "Restaurar Padrões",
-      "resetDescription": "Mostrar todas as teclas de atalho integradas na ordem original"
+      "resetDescription": "Mostrar todas as teclas de atalho integradas na ordem original",
+      "moreKeys": "MAIS TECLAS",
+      "moreKeysDescription": "Estas teclas ficam em ⋯ na linha de teclas do terminal. Ative ou desative as teclas para mostrá-las ou ocultá-las e segure a alça para arrastá-las até a ordem desejada. Uma tecla que já esteja na linha, como Esc ou as setas, não aparece em ⋯.",
+      "directionPad": "DIRECIONAL",
+      "showDirectionPad": "Mostrar direcional",
+      "showDirectionPadDescription": "Fixe o direcional de setas na barra lateral. Sem ele, a barra lista as teclas de seta.",
+      "showShortcut": "Mostrar atalho {{label}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Usar uma redefinição de limite de taxa?",
@@ -1343,17 +1340,10 @@
     }
   },
   "home": {
-    "accountUsageCards": {
-      "sectionHeading": "Uso da conta",
-      "sessionWindow": "5h",
-      "systemDefault": "Padrão do sistema",
-      "weeklyWindow": "7d"
-    },
     "appUpdateCard": {
       "dismissAccessibilityLabel": "Descartar atualização do Orca {{version}}",
       "title": "Orca {{version}} está disponível",
-      "updateAccessibilityLabel": "Orca {{version}} está disponível, toque para atualizar",
-      "updateHint": "Toque para atualizar"
+      "updateAccessibilityLabel": "Orca {{version}} está disponível, toque para atualizar"
     },
     "emptyState": {
       "connectedDescription": "Seu desktop aparecerá aqui. Tudo é criptografado de ponta a ponta.",
@@ -1361,26 +1351,16 @@
       "description": "Pareie com o Orca no seu computador para acompanhar seus agentes, acessar qualquer terminal e gerenciar o trabalho pelo celular.",
       "openDesktopDescription": "Vá para Configurações → Mobile e gere um código QR de pareamento.",
       "openDesktopTitle": "Abra o Orca no desktop",
-      "pairDesktop": "Parear Desktop",
-      "scanCodeDescription": "Toque no botão acima para abrir o leitor. Aponte a câmera para o código QR na tela.",
       "scanCodeTitle": "Escaneie o código",
-      "stepsHeading": "Como funciona",
       "title": "Conecte seu desktop"
     },
     "listFooter": {
       "hostPickerTitle": "Abrir tarefas em",
-      "resumeHeading": "Retomar",
-      "tasksHeading": "Tarefas"
+      "automationsHeading": "Automações",
+      "automationsHostPickerTitle": "Abrir automações em"
     },
     "listHeader": {
-      "agentTime": "Tempo de agente",
-      "agentsSpawned": "Agentes iniciados",
-      "daysHours": "{{days}}d {{hours}}h",
-      "desktopsHeading": "Desktops",
-      "hoursMinutes": "{{hours}}h {{minutes}}min",
-      "minutes": "{{minutes}}min",
-      "prsCreated": "PRs criados",
-      "title": "Bem-vindo de volta"
+      "desktopsHeading": "Desktops"
     },
     "screen": {
       "pairingCheckFailed": "Não foi possível verificar o pareamento",
@@ -1388,11 +1368,6 @@
       "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
       "removeHostTitle": "Remover host",
       "tryAgain": "Tente novamente."
-    },
-    "tasksCard": {
-      "noSources": "Nenhuma origem de tarefas conectada",
-      "openProviderTasks": "Abrir tarefas do {{provider}}",
-      "title": "Tarefas"
     }
   },
   "hooks": {
@@ -1435,27 +1410,14 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Criando espaço de trabalho…"
     },
-    "hostRailActions": {
-      "accounts": "Contas",
-      "closeSearch": "Fechar busca",
-      "floatingWorkspace": "Espaço de Trabalho Flutuante",
-      "newWorkspace": "Novo espaço de trabalho",
-      "searchWorkspaces": "Buscar espaços de trabalho",
-      "tasks": "Tarefas"
-    },
     "hostScreenHeader": {
       "accounts": "Contas",
-      "activeFilters_many": "Opções do espaço de trabalho ({{count}} filtros ativos)",
-      "activeFilters_one": "Opções do espaço de trabalho ({{count}} filtro ativo)",
-      "activeFilters_other": "Opções do espaço de trabalho ({{count}} filtros ativos)",
       "backToHosts": "Voltar aos hosts",
-      "closeSearch": "Fechar busca",
       "floatingWorkspace": "Espaço de Trabalho Flutuante",
       "hideSidebar": "Ocultar barra lateral",
       "reconnect": "Reconectar",
-      "searchWorkspaces": "Buscar espaços de trabalho",
       "tasks": "Tarefas",
-      "workspaceOptions": "Opções do espaço de trabalho"
+      "automations": "Automações"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Excluir \"{{name}}\" ({{branch}})?",
@@ -1466,10 +1428,6 @@
       "removeHostMessage": "Remover \"{{name}}\"? Você pode parear novamente mais tarde.",
       "sleep": "Suspender",
       "unpin": "Desafixar"
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Buscar espaços de trabalho…",
-      "searchWorkspaces": "Buscar espaços de trabalho"
     },
     "workspaceDetailsSheet": {
       "checksFailing": "Verificações: com falha",
@@ -1528,7 +1486,6 @@
       "backToOptions": "Voltar às opções do espaço de trabalho",
       "cardDisplay": "Exibição do cartão",
       "cardLayout": "Layout do cartão",
-      "clearFilters": "Limpar filtros",
       "exceptDefaultBranch": "Exceto a branch padrão",
       "filters": "Filtros",
       "groupBy": "Agrupar por",
@@ -1565,7 +1522,8 @@
       "sourceControl": "Controle de Código-Fonte",
       "tasks": "Tarefas",
       "terminal": "Terminal",
-      "workspace": "Espaço de Trabalho"
+      "workspace": "Espaço de Trabalho",
+      "automations": "Automações"
     }
   },
   "newWorkspace": {
@@ -1896,7 +1854,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Ocultar teclado",
-      "sendKey": "Enviar {{label}}"
+      "sendKey": "Enviar {{label}}",
+      "modifierHint": "Aplica-se à próxima tecla. Toque duas vezes para mantê-la ativa.",
+      "typeCharacter": "Digitar {{character}}",
+      "interrupt": "Interromper terminal",
+      "keysModeLabel": "Modo de teclas: a digitação vai direto para o terminal. Mudar para o modo de mensagem",
+      "messageModeLabel": "Modo de mensagem: escreva e depois envie. Mudar para o modo de teclas",
+      "keysMode": "Teclas",
+      "messageMode": "Mensagem",
+      "moreKeys": "Mais teclas e ações",
+      "showKeyboard": "Mostrar teclado"
     },
     "activeContent": {
       "createTab": "Criar Aba",
@@ -2024,7 +1991,10 @@
     "commandDock": {
       "liveInputHint": "O texto digitado é enviado diretamente ao terminal ativo.",
       "liveInputLabel": "Entrada em tempo real no terminal",
-      "sendCommand": "Enviar comando"
+      "sendCommand": "Enviar comando",
+      "messageAgentPlaceholder": "Mensagem para {{agent}}",
+      "writeCommandPlaceholder": "Escreva um comando e envie",
+      "theAgent": "o agente"
     },
     "contentRow": {
       "dismissCreationWarning": "Dispensar aviso de criação do espaço de trabalho"
@@ -2199,13 +2169,18 @@
       "requestFailed": "Falha na solicitação: {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Mostra o nome completo do espaço de trabalho e onde ele está",
       "backToWorktrees": "Voltar às worktrees",
       "moreActions": "Mais ações da sessão",
-      "openFileExplorer": "Abrir explorador de arquivos",
       "openSourceControl": "Abrir controle de versão",
       "reconnectToDesktop": "Reconectar ao desktop",
       "showSidebar": "Mostrar barra lateral",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Layout do terminal",
+      "fileExplorer": "Explorador de arquivos",
+      "sourceControl": "Controle de código-fonte",
+      "newTab": "Nova aba",
+      "quickCommands": "Comandos rápidos"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Histórico de Agentes",
@@ -2364,9 +2339,6 @@
       "title": "Comandos Rápidos",
       "untitled": "Sem título"
     },
-    "quickCommandsTabButton": {
-      "quickCommands": "Comandos rápidos"
-    },
     "routeHelpers": {
       "connected": "Conectado",
       "connecting": "Conectando",
@@ -2406,10 +2378,8 @@
       "terminal": "Terminal",
       "terminalName": "Nome do terminal",
       "unsavedMarkdown": "Alterações em Markdown não salvas",
-      "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba."
-    },
-    "sideRail": {
-      "backToWorktrees": "Voltar para as worktrees"
+      "urlPrompt": "Digite uma URL ou deixe em branco para abrir uma nova aba.",
+      "allowAutoClose": "Permitir fechamento automático"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Nenhum agente de IA ativado foi detectado neste host do espaço de trabalho.",
@@ -2689,6 +2659,56 @@
       "waitForStart": "Aguarde o agente terminar de iniciar.",
       "waitForTurn": "Aguarde o agente terminar de responder ou interrompa-o.",
       "waitMoment": "Aguarde um momento."
+    },
+    "workerAutoClose": {
+      "running": "Agente de orquestração temporário · Fecha 2 minutos após terminar",
+      "finished": "Agente de orquestração temporário concluído · Fecha em {{countdown}}",
+      "keepOpen": "Manter aberto"
+    },
+    "terminalLayoutSheet": {
+      "title": "Layout do terminal",
+      "oneTerminal": "Um terminal",
+      "selected": "Selecionado",
+      "auto": "Automático",
+      "autoHint": "Dividir conforme o espaço disponível",
+      "sideBySide": "Lado a lado",
+      "sideBySideHint": "Duas colunas, mesmo com a barra lateral aberta",
+      "stacked": "Empilhados",
+      "stackedHint": "Duas linhas em qualquer orientação",
+      "selectedHint": "Selecionado · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Não foi possível salvar o layout",
+      "saveFailedMessage": "Este layout está aplicado por enquanto. Selecione-o novamente para tentar salvar."
+    },
+    "terminalArrowPad": {
+      "label": "Teclas de direção",
+      "hint": "Toque em um lado para pressionar uma seta ou mantenha pressionado e arraste para repetir",
+      "up": "Para cima",
+      "down": "Para baixo",
+      "left": "Esquerda",
+      "right": "Direita"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Enviar {{label}}",
+      "paste": "Colar",
+      "sending": "Enviando…",
+      "photo": "Foto",
+      "file": "Arquivo",
+      "desktopWidth": "Largura de desktop",
+      "phoneWidth": "Largura de celular",
+      "keys": "Teclas",
+      "combos": "Combinações",
+      "yourKeys": "Suas teclas",
+      "deleteKeyHint": "Mantenha pressionado para excluir esta tecla",
+      "addCustomKey": "Adicionar tecla personalizada",
+      "addKey": "Adicionar tecla"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, em foco",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, toque para focar",
+      "inputPane": "{{title}} · Entrada"
     }
   },
   "settings": {
@@ -2886,7 +2906,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "No stage: {{count}}"
+      "stagedCount": "No stage: {{count}}",
+      "completingMerge": "Concluindo…",
+      "completeMerge": "Concluir mesclagem"
     },
     "branchCompare": {
       "commits_many": "{{count}} commits",
@@ -3064,7 +3086,8 @@
       "openNumberedPrWeb": "Abrir pull request #{{number}} na web",
       "openPrWeb": "Abrir pull request na web",
       "refresh": "Atualizar controle de código-fonte",
-      "title": "Controle de Código-Fonte"
+      "title": "Controle de Código-Fonte",
+      "moreActions": "Mais ações do controle de código-fonte"
     },
     "hostedReview": {
       "mrCopy": {
@@ -3340,6 +3363,13 @@
       "branchUnavailable": "Status da branch indisponível",
       "commitFailed": "Falha no commit",
       "waitingForDesktop": "Aguardando o desktop…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Atualize o Orca no computador que executa este espaço de trabalho para resolver conflitos de mesclagem pelo celular.",
+      "markResolved": "Marcar como resolvido",
+      "keepFile": "Manter arquivo",
+      "keepDeletion": "Manter exclusão",
+      "completeMergeFailed": "Não foi possível concluir a mesclagem"
     }
   },
   "tasks": {
@@ -3417,23 +3447,18 @@
       "recent": "Recentes",
       "retryHint": "Toque para tentar novamente.",
       "searchProjects": "Buscar projetos",
-      "sort": "Ordenação do projeto",
       "subtitle": "Selecione uma visualização de projeto para a página Tarefas.",
       "title": "GitHub Projects",
       "unsupportedLayout": "O Orca ainda não oferece suporte a este layout de projeto do GitHub.",
       "view": "Visualização do projeto"
     },
     "githubViewControls": {
-      "fields": "Campos: {{fields}}",
-      "openView": "Abrir visualização no GitHub",
-      "sort": "Ordenação: {{sort}}",
-      "source": "Origem: {{source}}"
+      "openView": "Abrir visualização no GitHub"
     },
     "itemActions": {
       "changeStatus": "Alterar status",
       "copyGitHubLink": "Copiar link do GitHub",
       "copyLinearLink": "Copiar link do Linear",
-      "createWorkspace": "Criar espaço de trabalho",
       "creating": "Criando…",
       "mergeConflicts": "O GitHub informa conflitos de merge.",
       "mergeMergeRequest": "Fazer merge do merge request",
@@ -3441,8 +3466,6 @@
     },
     "itemDetailContent": {
       "addSubIssue": "Adicionar sub-issue",
-      "assignee": "Responsável",
-      "assignees": "Responsáveis",
       "checks": "Verificações",
       "description": "Descrição",
       "discussion": "Discussão",
@@ -3455,13 +3478,10 @@
       "pipelineJobs_many": "{{count}} jobs",
       "pipelineJobs_one": "{{count}} job",
       "pipelineJobs_other": "{{count}} jobs",
-      "project": "Projeto",
       "rerunAll": "Reexecutar todas",
       "rerunFailed": "Reexecutar as que falharam",
-      "status": "Status",
       "subIssueTitle": "Título da sub-issue",
-      "subIssues": "Sub-issues",
-      "type": "Tipo"
+      "subIssues": "Sub-issues"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Atualizar detalhes"
@@ -3518,17 +3538,8 @@
     "linearList": {
       "changeStatusFrom": "Alterar status de {{status}}"
     },
-    "linearViewControls": {
-      "displayButton": "Exibição",
-      "groupLabel": "Agrupar por: {{group}}",
-      "orderLabel": "Ordem: {{order}}"
-    },
     "listDisplayPickers": {
-      "displayPropertiesTitle": "Propriedades de exibição",
-      "linearGroupTitle": "Agrupar issues do Linear",
-      "linearOrderTitle": "Ordenar issues do Linear",
-      "linearViewTitle": "Visualização do Linear",
-      "sortTasksTitle": "Ordenar tarefas"
+      "displayPropertiesTitle": "Propriedades de exibição"
     },
     "listSurface": {
       "connectLinearButton": "Conectar Linear",
@@ -3597,8 +3608,6 @@
       "allSites": "Todos os sites",
       "currentlyAscending": "Crescente · toque para inverter",
       "currentlyDescending": "Decrescente · toque para inverter",
-      "fieldAscending": "{{field}} cresc.",
-      "fieldDescending": "{{field}} decresc.",
       "fields": "Campos",
       "repos_many": "{{count}} repositórios",
       "repos_one": "{{count}} repositório",
@@ -3710,8 +3719,7 @@
     },
     "providerControls": {
       "myTodos": "Minhas pendências",
-      "projectMergeRequests": "MRs do projeto",
-      "sort": "Ordenar por: {{sortLabel}}"
+      "projectMergeRequests": "MRs do projeto"
     },
     "providerItemList": {
       "intoBranch": "para {{base}}",
@@ -3739,7 +3747,6 @@
       "queryingSource": "Consultando {{source}}",
       "repoDescription": "Escolha quais repositórios consultar.",
       "repos": "Repositórios",
-      "taskSource": "Origem de tarefas",
       "upstream": "Upstream"
     },
     "providerViewProjection": {
@@ -3751,10 +3758,7 @@
       "default": "Padrão",
       "defaultSubtitle": "{{subtitle}} · Padrão",
       "issues": "Issues",
-      "list": "Lista",
-      "noGrouping": "Sem agrupamento",
       "openState": "Em aberto",
-      "priority": "Prioridade",
       "projects": "Projetos",
       "pullRequests": "PRs",
       "teams_many": "{{count}} equipes",
@@ -3767,7 +3771,6 @@
       "unassigned": "Não atribuído"
     },
     "screenChrome": {
-      "connectLinear": "Conectar Linear",
       "newGitHubIssue": "Nova issue do GitHub",
       "newLinearIssue": "Nova issue do Linear",
       "refreshGitHub": "Atualizar trabalho do GitHub",
@@ -3835,19 +3838,14 @@
       "addRepository": "Adicione um repositório Git antes de criar um espaço de trabalho do Linear.",
       "advanced": "Avançado",
       "agent": "Agente",
-      "connect": "Conectar",
       "connectFirst": "Conecte o repositório primeiro",
       "connectRepository": "Conectar Repositório",
-      "connecting": "Conectando…",
-      "createFrom": "Criar a partir de {{branch}}",
       "defaultBranch": "Branch padrão",
       "detectingAgents": "Detectando agentes…",
-      "optional": "[Opcional]",
       "remoteRepository": "Repositório remoto",
       "repository": "Repositório",
       "repositoryNotFound": "Repositório não encontrado.",
       "selectRepository": "Selecione um repositório",
-      "sshConnection": "Conexão SSH",
       "startFrom": "Iniciar a partir de",
       "title": "Criar Espaço de Trabalho",
       "workspaceName": "Nome do Espaço de Trabalho"
@@ -3971,7 +3969,6 @@
       "existing": "Branch existente",
       "existingHint": "Novos commits são adicionados a esta branch.",
       "hostUpdateRequired": "Atualize o Orca no host do espaço de trabalho para reutilizar uma branch ou criar explicitamente uma branch separada.",
-      "new": "Nova branch",
       "newHint": "Criar uma nova branch local",
       "newName": "Nome da nova branch",
       "title": "Branch para esta árvore de trabalho"
@@ -4018,6 +4015,222 @@
       "inProgress": "Em andamento",
       "inReview": "Em revisão",
       "pinned": "Fixados"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Direcional para cima",
+      "left": "Direcional para a esquerda",
+      "right": "Direcional para a direita",
+      "down": "Direcional para baixo",
+      "hint": "Envia uma tecla de direção. Mantenha pressionado para repetir."
+    }
+  },
+  "automations": {
+    "mobile": {
+      "extraAgentArguments": "Argumentos extras do agente",
+      "allAutomations": "Todas as automações",
+      "schedule": "Programação",
+      "nextRun": "Próxima execução",
+      "agent": "Agente",
+      "project": "Projeto",
+      "unavailable": "Indisponível",
+      "workspace": "Espaço de Trabalho",
+      "edit": "Editar",
+      "deleteAutomation": "Excluir automação",
+      "editAutomation": "Editar automação",
+      "cancel": "Cancelar",
+      "name": "Nome",
+      "back": "Voltar",
+      "continue": "Continuar",
+      "createAutomation": "Criar automação",
+      "automations": "Automações",
+      "runs": "Execuções",
+      "refresh": "Atualizar",
+      "automation": "Automação",
+      "inProgress": "Em andamento",
+      "completed": "Concluído",
+      "skipped": "Ignorada",
+      "started": "Iniciado",
+      "trigger": "Acionador",
+      "run": "Execução",
+      "output": "Saída",
+      "noOutput": "Nenhum conteúdo de saída disponível.",
+      "loadingRuns": "Carregando execuções…",
+      "loading": "Carregando…",
+      "hourly": "De hora em hora",
+      "daily": "Diariamente",
+      "weekdays": "Dias de semana",
+      "weekly": "Semanal",
+      "cadence": "Frequência",
+      "day": "Dia",
+      "pending": "Pendentes",
+      "starting": "Iniciando",
+      "baseBranchOptional": "Branch base (opcional)",
+      "workspaceSetupScript": "Script de configuração do espaço de trabalho",
+      "useProjectSettings": "Usar configurações do projeto",
+      "runSetupScript": "Executar script de configuração",
+      "skipSetupScript": "Pular script de configuração",
+      "reuseAgentSession": "Reutilizar sessão do agente",
+      "precheckCommandOptional": "Comando de pré-verificação (opcional)",
+      "precheckTimeoutSeconds": "Tempo limite da pré-verificação (segundos)",
+      "missedRunGraceMinutes": "Tolerância para execuções perdidas (minutos)",
+      "choose": "Escolher…",
+      "runOnSchedule": "Executar {{name}} conforme agendamento",
+      "noNextScheduledRun": "Nenhuma próxima execução agendada",
+      "newWorkspacePerRun": "Novo espaço de trabalho por execução",
+      "instructions": "Instruções",
+      "runNow": "Executar agora",
+      "viewAllRuns": "Ver todas as execuções",
+      "savedAgent": "{{agent}} (salvo)",
+      "chooseAProjectSetUpOnThisHost": "Escolha um projeto configurado neste host.",
+      "newAutomation": "Nova automação",
+      "editorStep": "{{step}} de 3 · {{section}}",
+      "retryProjectLoading": "Tentar carregar projetos novamente",
+      "loadingProjects": "Carregando projetos…",
+      "projectAndHostSetup": "Configuração do projeto e host",
+      "savedTarget": "Destino salvo",
+      "useAnExistingWorkspace": "Usar um espaço de trabalho existente",
+      "existingWorkspace": "Espaço de trabalho existente",
+      "savedWorkspace": "Espaço de trabalho salvo",
+      "loadMoreWorkspaces": "Carregar mais espaços de trabalho",
+      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "O inventário de espaços de trabalho deste host está incompleto. Atualize ou carregue mais espaços de trabalho.",
+      "agentDetecting": "Agente · detectando…",
+      "installAndEnableAnAgentOnThisHostThenRetry": "Instale e ative um agente neste host e tente novamente.",
+      "hideAdvancedOptions": "Ocultar opções avançadas",
+      "advancedOptions": "Opções avançadas",
+      "chooseAnAgent": "Escolha um agente",
+      "saveChanges": "Salvar alterações",
+      "loadingAutomations": "Carregando automações…",
+      "letYourAgentsWorkOnASchedule": "Deixe seus agentes trabalharem em horários programados",
+      "createAnAutomationToRunATaskOnThisHost": "Crie uma automação para executar uma tarefa neste host.",
+      "nextDate": "Próxima: {{date}}",
+      "lastResult": "Última: {{status}} · {{date}}",
+      "latestResultNotReported": "Último resultado não informado",
+      "sshTarget": " · SSH {{target}}",
+      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconecte a este host para atualizar ou fazer alterações. As informações salvas continuam disponíveis abaixo.",
+      "recentRuns": "Execuções recentes",
+      "outcome": "Resultado",
+      "allOutcomes": "Todos os resultados",
+      "couldNotStart": "Não foi possível iniciar",
+      "deleteAutomationTitle": "Excluir automação?",
+      "deleteRetained": "Excluir “{{name}}” e suas execuções retidas?",
+      "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Não foi possível verificar o painel original do agente. Reconecte e tente novamente.",
+      "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "O painel original do agente não pode mais ser aberto. A saída salva permanece aqui.",
+      "allRuns": "Todas as execuções",
+      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "Esta execução não está mais no histórico retido do host. As últimas informações salvas permanecem abaixo.",
+      "scheduledFor": "Agendada para",
+      "notCreated": "Não criado",
+      "projectHost": "Host do projeto",
+      "notRecorded": "Não registrado",
+      "capturedTruncated": "Capturado em {{date}} · Saída truncada pelo host",
+      "capturedDate": "Capturado em {{date}}",
+      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "O painel original do agente está indisponível. A saída salva permanece aqui.",
+      "openAgent": "Abrir agente",
+      "retryHistory": "Tentar histórico novamente",
+      "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "Nenhuma execução correspondente no histórico carregado. Carregue mais para continuar.",
+      "noMatchingRunsYet": "Ainda não há execuções correspondentes.",
+      "runSummary": "{{title}}, {{status}}, {{date}}",
+      "scheduled": "Agendada",
+      "loadMoreRuns": "Carregar mais execuções",
+      "customCronOrRRULE": "Cron ou RRULE personalizado",
+      "cronOrRRULE": "Cron ou RRULE",
+      "minuteFromHHMM": "Minuto (de HH:MM)",
+      "timeHHMM24Hour": "Hora (HH:MM, 24 horas)",
+      "useATimeSuchAs0900": "Use um horário como 09:00.",
+      "timeZone": "Fuso horário",
+      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Executa no host selecionado. Mantenha esse host disponível no horário agendado.",
+      "host": "Host",
+      "pairedHost": "Host pareado",
+      "selectedServerUnavailable": "Servidor selecionado (indisponível)",
+      "addANameInstructionsAndAnAgent": "Adicione um nome, instruções e um agente.",
+      "chooseAnExistingWorkspace": "Escolha um espaço de trabalho existente.",
+      "checkTheExtraAgentArguments": "Verifique os argumentos adicionais do agente.",
+      "enterAValidCronOrRRULESchedule": "Insira um agendamento cron ou RRULE válido.",
+      "enterAValidTimeZoneSuchAsAmericaLosAngeles": "Insira um fuso horário válido, como America/Los_Angeles.",
+      "missedRunGraceMustBeZeroOrAPositiveNumberOfMinutes": "A tolerância deve ser zero ou um número positivo de minutos.",
+      "precheckTimeoutRange": "O tempo limite da pré-verificação deve ser entre 1 e {{maximum}} segundos.",
+      "outcomeUnknown": "O host pode ter aplicado esta ação. Atualize para verificar antes de tentar novamente.",
+      "ownerChanged": "O host desta automação mudou. Recarregue-a antes de continuar.",
+      "targetRemoved": "O host SSH desta automação foi removido, então ela não pode executar. Exclua-a ou adicione o host novamente.",
+      "fencingRequired": "Esta automação está fixada a um host SSH, então a solicitação deve informar o host esperado.",
+      "invalidDestination": "Esse host não está mais disponível nesta instância. Escolha um host e tente novamente.",
+      "agentDiscoveryUnavailable": "A descoberta de agentes está indisponível para o host deste projeto. As escolhas salvas são preservadas.",
+      "agentVerificationUnavailable": "Este host não pode verificar os agentes deste projeto. Atualize o host e tente novamente.",
+      "hostUnavailable": "As automações estão indisponíveis neste host. Atualize o Orca nesse host e reconecte.",
+      "hostUnreachable": "Não foi possível acessar este host. Reconecte e atualize para verificar o estado atual.",
+      "actionFailed": "Não foi possível concluir esta ação no host. Atualize e tente novamente.",
+      "dispatched": "Enviada",
+      "skippedPrecheck": "Ignorada · pré-verificação",
+      "skippedMissedSchedule": "Ignorada · horário perdido",
+      "skippedHostUnavailable": "Ignorada · host indisponível",
+      "skippedSignInNeeded": "Ignorada · login necessário",
+      "unknownResult": "Resultado desconhecido",
+      "notReported": "Não informado",
+      "searchOptions": "Buscar opções",
+      "scheduleAgentWorkAndViewRuns": "Agende o trabalho dos agentes e veja as execuções",
+      "task": "Tarefa",
+      "review": "Revisar"
+    },
+    "orphanIssues": {
+      "hostReselection": "Edite esta automação e selecione novamente seu host antes de executá-la.",
+      "malformed": "O registro salvo do seu host está incompleto.",
+      "projectMissing": "Seu projeto não existe mais, portanto não é possível determinar seu host.",
+      "projectUnverified": "Não foi possível verificar seu projeto daqui, portanto seu host não está confirmado.",
+      "scheduledElsewhere": "Ela está armazenada aqui, mas está agendada para execução em um ambiente de execução remoto.",
+      "targetMissing": "Seu host SSH não está mais registrado.",
+      "targetReplaced": "Seu host SSH foi removido e adicionado novamente, por isso é necessário adotar a automação novamente.",
+      "workspaceHostAmbiguous": "Seu espaço de trabalho abrange mais de um host, portanto não tem um único proprietário."
+    },
+    "runFailures": {
+      "noDispatchHost": "Nenhuma janela do Orca estava disponível para iniciar a automação.",
+      "unevaluableSchedule": "O Orca não conseguiu avaliar esta automação e ignorou esta execução.",
+      "noRunnableHost": "Esta automação não tem host onde ser executada.",
+      "wslMoveInProgress": "O projeto desta automação está sendo movido para seu host WSL, por isso o Orca ignorou esta execução. As execuções serão retomadas quando a movimentação terminar.",
+      "wslMoveOwnedByHost": "O projeto desta automação agora é executado em seu host WSL, que também executa esta automação. O Orca não executa mais esta cópia local.",
+      "missedGraceWindow": "Quando o Orca verificou novamente, o período de tolerância para recuperar esta execução perdida já havia expirado.",
+      "targetMissing": "O host da automação não está mais registrado, então esta automação não tem onde ser executada.",
+      "targetReplaced": "O host da automação foi removido e registrado novamente, então esta automação precisa ser vinculada novamente antes de poder ser executada.",
+      "workspaceHostAmbiguous": "O espaço de trabalho da automação abrange mais de um host, então o Orca não consegue determinar em qual deles executá-la.",
+      "legacyTwinHosts": "Esta automação foi salva antes de o Orca registrar em qual host ela é executada, e seu projeto está em mais de um host. Abra a automação e escolha o host em que ela deve ser executada.",
+      "targetUnavailable": "O destino de execução da automação não está mais disponível.",
+      "remoteSchedulingUnavailable": "O agendamento de automações em servidores remotos ainda não está disponível neste cliente do Orca. Execute esta automação no servidor remoto ou atualize o Orca quando o agendamento remoto persistente estiver disponível.",
+      "projectSetupMissing": "O projeto não está mais configurado no host selecionado para a automação.",
+      "targetSetupMismatch": "O destino de execução da automação não corresponde mais à configuração do host selecionado para o projeto.",
+      "repoUnavailable": "O repositório do host selecionado para a automação não está mais disponível.",
+      "repoDetached": "O repositório não está mais vinculado ao host selecionado para a automação.",
+      "projectPathChanged": "O caminho do projeto no host selecionado para a automação mudou.",
+      "automationChanged": "A automação mudou antes que esta execução pudesse ser iniciada.",
+      "destinationChanged": "O destino da automação mudou antes que esta execução pudesse ser iniciada.",
+      "hooksReviewBlocked": "O agente está aguardando alguém revisar os hooks novos ou alterados (“Hooks need review”). Abra esta execução e confie neles ou remova-os. As execuções agendadas continuam e serão bem-sucedidas assim que não houver mais nada para revisar.",
+      "agentNeverStarted": "O agente da automação nunca foi iniciado após o envio do prompt.",
+      "agentNoCompletion": "O agente da automação não informou a conclusão.",
+      "watchTimedOut": "O Orca parou de monitorar esta execução após 6 horas sem um sinal de conclusão.",
+      "projectSetupState": {
+        "notSetUp": "O projeto não está configurado no host selecionado para a automação.",
+        "settingUp": "O projeto ainda está sendo configurado no host selecionado para a automação.",
+        "error": "A configuração do projeto falhou no host selecionado para a automação.",
+        "unsupported": "O host selecionado para a automação não oferece suporte a este projeto."
+      },
+      "wslDistroStopped": "A distribuição WSL {{distro}} está parada, então esta execução agendada não a iniciou. Inicie a distribuição ou use Executar agora; as próximas execuções acontecem enquanto ela estiver em execução."
+    }
+  },
+  "auto": {
+    "components": {
+      "automations": {
+        "automation": {
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "Programação inválida",
+              "ba20c92073": "Programação personalizada",
+              "a95afb7483": "De hora em hora aos :{{minute}}",
+              "280ccd2701": "Diariamente às {{time}}",
+              "3f1422adc1": "Dias de semana às {{time}}",
+              "cc71e252ba": "Toda semana: {{day}}, às {{time}}"
+            }
+          }
+        }
+      }
     }
   }
 }

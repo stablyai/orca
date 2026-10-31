@@ -169,7 +169,13 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     await this.accounts.prepareHostAgentLaunch(input.agent)
     const settings = this.requireStore().getSettings()
     const launchEnv = this.structuredAgentLaunchEnv(input.agent, settings)
-    const options = this.structuredAgentSessionLaunchSeedOptions(input.agent)
+    const options = structuredLaunchSeedOptions(
+      {
+        ...settings,
+        agentLaunchChoices: input.resumeFrom ? undefined : settings.agentLaunchChoices
+      },
+      input.agent
+    )
     const location = await this.resolveStructuredAgentSessionLocation(input.worktree)
     const definition = this.requireRegisteredStructuredAgent(input.agent)
     const host = getStructuredAgentSessionHost()

@@ -3,7 +3,7 @@ import { SESSION_TAB_NOT_FOUND_ERROR } from '../../../shared/session-tab-close'
 /** A renderer that already removed the captured tab has acknowledged the close. */
 export async function closeRenderedStructuredSessionTab(
   notifier:
-    | { closeSessionTab?: (tabId: string, worktreeId: string) => Promise<unknown> }
+    | { closeSessionTab?: (tabId: string, worktreeId: string) => void | Promise<unknown> }
     | null
     | undefined,
   tabId: string,

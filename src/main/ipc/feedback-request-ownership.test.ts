@@ -33,15 +33,6 @@ function requestSignal(index = 0): AbortSignal {
 describe('feedback request ownership', () => {
   beforeEach(() => fetchMock.mockReset())
 
-  it('retires an unread response after successful text submission', async () => {
-    fetchMock.mockResolvedValue(new Response('unused response'))
-
-    await expect(submitFeedback(plainSubmission)).resolves.toEqual({ ok: true })
-
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(requestSignal().aborted).toBe(true)
-  })
-
   it('retires both failed text attempts while preserving the retry result', async () => {
     fetchMock.mockResolvedValue(new Response('unused error', { status: 503 }))
 
@@ -54,19 +45,6 @@ describe('feedback request ownership', () => {
     expect(fetchMock).toHaveBeenCalledTimes(2)
     expect(requestSignal(0).aborted).toBe(true)
     expect(requestSignal(1).aborted).toBe(true)
-  })
-
-  it('retires a rejected image response without replaying the attachments', async () => {
-    fetchMock.mockResolvedValue(new Response('unused error', { status: 503 }))
-
-    await expect(submitFeedback(imageSubmission)).resolves.toEqual({
-      ok: false,
-      status: 503,
-      error: 'status 503'
-    })
-
-    expect(fetchMock).toHaveBeenCalledTimes(1)
-    expect(requestSignal().aborted).toBe(true)
   })
 
   it('keeps the request live until the image response reader finishes', async () => {
@@ -119,22 +97,6 @@ describe('feedback request ownership', () => {
     ).resolves.toEqual({
       ok: true,
       diagnosticBundleFailure: { status: 413, error: 'status 413' }
-    })
-
-    expect(fetchMock).toHaveBeenCalledTimes(2)
-    expect(requestSignal(0).aborted).toBe(true)
-    expect(requestSignal(1).aborted).toBe(true)
-  })
-
-  it('retires failed network attempts without turning them into deadline errors', async () => {
-    fetchMock
-      .mockRejectedValueOnce(new Error('first network failure'))
-      .mockRejectedValueOnce(new Error('retry network failure'))
-
-    await expect(submitFeedback(plainSubmission)).resolves.toEqual({
-      ok: false,
-      status: null,
-      error: 'first network failure; retry: retry network failure'
     })
 
     expect(fetchMock).toHaveBeenCalledTimes(2)

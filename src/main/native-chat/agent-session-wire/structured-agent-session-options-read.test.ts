@@ -1,3 +1,10 @@
+import {
+  hostTestCatalogReadOperation,
+  hostTestRestingOptionsRecord as restingRecord,
+  HOST_TEST_RESTING_OPTIONS_CREATED_LINKS as created,
+  hostTestRestingOptionsJournal as restingJournal,
+  hostTestOptionsReadStore
+} from './structured-agent-session-host-test-data'
 import { CODEX_SESSION_OPTION_CATALOG } from '../../../shared/agent-session-option-catalog-claude-codex'
 import {
   structuredAgentSessionMessageSelection,
@@ -26,12 +33,6 @@ import {
 import type { StructuredAgentSessionLiveOptions } from './structured-agent-session-adapter'
 import { describe, expect, it, vi } from 'vitest'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
-import {
-  hostTestRestingOptionsRecord as restingRecord,
-  HOST_TEST_RESTING_OPTIONS_CREATED_LINKS as created,
-  hostTestRestingOptionsJournal as restingJournal,
-  hostTestOptionsReadStore
-} from './structured-agent-session-host-test-data'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionModelOption } from '../../../shared/agent-session-wire'
@@ -39,18 +40,12 @@ import {
   createAgentModelCatalogService,
   type AgentModelCatalogService
 } from '../agent-model-catalog/agent-model-catalog-service'
-import {
-  AgentModelCatalogStore,
-  type AgentModelCatalogSuccess
-} from '../agent-model-catalog/agent-model-catalog-store'
+import { AgentModelCatalogStore } from '../agent-model-catalog/agent-model-catalog-store'
 import type { StructuredAgentSessionMutationContext } from './structured-agent-session-host-mutations'
 import {
   readStructuredAgentSessionOptions,
   recordStructuredAgentSessionOptionIntent
 } from './structured-agent-session-options-read'
-import { AcpStructuredOptions } from '../../acp/acp-structured-options'
-import { GROK_CONFIG_OPTIONS } from '../../acp/acp-structured-adapter.test-support'
-import { SessionConfigOptionSchema } from '../../acp/generated/acp-protocol.generated'
 import { withLiveCatalogListing } from '../agent-model-catalog/agent-model-catalog-entry'
 import { StructuredAgentSessionTaskQueue } from './structured-agent-session-task-queue'
 import { agentModelCatalogFingerprintForRecord } from '../agent-model-catalog/agent-model-catalog-fingerprint'
@@ -71,178 +66,6 @@ type RestingFacts = Pick<
   'options' | 'provider' | 'providerHandleChain' | 'rewind'
 >
 
-describe('options at rest', () => {
-  it('keeps the account model for an older client when the starting child has no folder default', async () => {
-    const record = restingRecord()
-    const read = vi.fn(async (params: { inSessionWorkspace?: true }) => ({
-      origin: 'probe' as const,
-      models: [
-        {
-          id: params.inSessionWorkspace ? 'gpt-folder' : 'gpt-account',
-          label: 'Model',
-          isDefault: !params.inSessionWorkspace,
-          efforts: []
-        }
-      ],
-      fetchedAt: 1
-    }))
-    const starting = {
-      child: { phase: 'starting' },
-      params: { provider: 'codex' },
-      journal: restingJournal()
-    }
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
-    const context = {
-      deps: {
-        adapter: {},
-        agents: NO_STRUCTURED_AGENTS,
-        store: hostTestOptionsReadStore(() => record),
-        modelCatalog: { read }
-      },
-      serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-      openConversation: async () => starting,
-      conversation: async () => starting
-    } as unknown as StructuredAgentSessionMutationContext
-
-    const current = await readStructuredAgentSessionOptions(context, SESSION, {
-      readsWithoutModel: true
-    })
-    expect(current.current).toMatchObject({
-      defaulted: [],
-      permissionMode: 'ask',
-      acceptedInputSources: {}
-    })
-    expect(read).toHaveBeenCalledTimes(2)
-    const older = await readStructuredAgentSessionOptions(context, SESSION, {
-      readsWithoutModel: false
-    })
-    expect(older.current).toMatchObject({
-      acceptedInputSources: { model: 'policy' },
-      model: 'gpt-account',
-      defaulted: [],
-      permissionMode: 'ask'
-    })
-    expect(read).toHaveBeenCalledWith({
-      agent: 'codex',
-      sessionId: SESSION,
-      savedOnly: true,
-      legacyOptionsDisplay: true,
-      workspacePath: null
-    })
-  })
-
-  it('keeps a saved Codex model when the host listing drops it', async () => {
-    const record = { ...restingRecord(), options: { model: 'gpt-unlisted', effort: 'high' } }
-    const listed = { id: 'gpt-5.5', label: 'GPT-5.5', isDefault: true, efforts: [] }
-    let live = false
-    const conversation = () => ({
-      child: live ? { fence: 7 } : null,
-      params: { provider: 'codex' },
-      journal: restingJournal()
-    })
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this read touches only the declared context fields.
-    const context = {
-      deps: {
-        adapter: {
-          readOptions: async () => ({
-            models: [listed, { ...listed, id: 'gpt-unlisted', isDefault: false }],
-            current: { model: 'gpt-5.5', effort: 'high', defaulted: ['model'] }
-          })
-        },
-        agents: NO_STRUCTURED_AGENTS,
-        store: hostTestOptionsReadStore(() => record),
-        modelCatalog: { read: async () => ({ origin: 'probe', models: [listed], fetchedAt: 1 }) }
-      },
-      serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-      openConversation: async () => conversation(),
-      conversation: async () => conversation()
-    } as unknown as StructuredAgentSessionMutationContext
-    const read = () =>
-      readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
-    const resting = await read()
-    live = true
-    const running = await read()
-    expect(running.listedModelIds).toEqual(resting.listedModelIds)
-    expect(resting.listedModelIds).toEqual(['gpt-5.5'])
-    expect(resting.current).toMatchObject({ model: 'gpt-unlisted', defaulted: [] })
-    expect(running.current).toMatchObject({ model: 'gpt-unlisted', defaulted: [] })
-    for (const answer of [resting, running]) {
-      expect(answer.current.acceptedInputSources).toMatchObject({ model: 'saved', effort: 'saved' })
-    }
-  })
-
-  it.each(['omp', 'grok', 'opencode'] as const)(
-    '%s keeps an unknown model and learns menus from qualified reports',
-    async (provider) => {
-      const record = { ...restingRecord(), provider }
-      const probe = vi.fn(() => new Promise<AgentModelCatalogSuccess>(() => {}))
-      const modelCatalog = createAgentModelCatalogService({
-        store: new AgentModelCatalogStore(),
-        ...hostTestOptionsReadStore(() => record),
-        drivesRecord: () => true,
-        resolveAccountHome: async () => ({ variable: 'CODEX_HOME', path: '/homes/a' }),
-        probes: { codex: probe }
-      })
-      let live = false
-      const reader = new AcpStructuredOptions()
-      const configOptions = SessionConfigOptionSchema.array().parse(GROK_CONFIG_OPTIONS)
-      const resting = {
-        child: null,
-        params: { provider: 'codex' },
-        journal: restingJournal()
-      }
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: options reads touch only these context members.
-      const context = {
-        deps: {
-          adapter: { readOptions: async () => withLiveCatalogListing(reader.read()) },
-          agents: NO_STRUCTURED_AGENTS,
-          store: hostTestOptionsReadStore(() => record),
-          modelCatalog
-        },
-        serialize: (_sessionId: string, task: () => Promise<unknown>) => task(),
-        openConversation: async () => (live ? { ...resting, child: { fence: 7 } } : resting),
-        conversation: async () => resting
-      } as unknown as StructuredAgentSessionMutationContext
-
-      const read = () =>
-        readStructuredAgentSessionOptions(context, SESSION, { readsWithoutModel: true })
-      const result = await read()
-      expect(probe).not.toHaveBeenCalled()
-      expect(result.models).toEqual([])
-      expect(result.current).not.toHaveProperty('model')
-      record.options = { model: 'later-model', effort: 'off' }
-      // Unregistered agents must not report a permission mode.
-      expect((await read()).current).toMatchObject({
-        model: 'later-model',
-        effort: 'off',
-        acceptedInputSources: { model: 'saved', effort: 'saved' },
-        defaulted: []
-      })
-      for (const emptyStart of [false, true]) {
-        modelCatalog.recordLiveListing(SESSION, {
-          models: [{ id: 'old', label: 'Old', isDefault: true, efforts: [] }]
-        })
-        reader.adoptSession(emptyStart ? {} : { configOptions })
-        modelCatalog.recordLiveListing(SESSION, reader.startListing())
-        reader.adoptConfigOptions(
-          configOptions.map((option) =>
-            option.type === 'select' && option.category === 'model'
-              ? { ...option, currentValue: 'grok-4.6' }
-              : option
-          )
-        )
-        record.options = { model: 'grok-4.6', effort: 'high' }
-        live = true
-        await read()
-        modelCatalog.recordLiveListing(SESSION, { models: reader.read().models })
-        live = false
-        const answer = await read()
-        expect(answer.models).toEqual(reader.read().models)
-      }
-    }
-  )
-})
-
 describe('a chat at rest, read by the host', () => {
   const turn: AgentJournalItemBody = { kind: 'turn', turnId: 'turn-1', state: 'completed' }
   const fast = [{ value: 'priority', label: 'Fast' }]
@@ -252,6 +75,7 @@ describe('a chat at rest, read by the host', () => {
     { id: 'gpt-flex', label: 'Flex', isDefault: false, efforts: [], serviceTiers: flex }
   ]
   const catalog = (models: AgentSessionModelOption[] | null = listed, verified = true) => ({
+    captureRead: hostTestCatalogReadOperation,
     read: async (params?: { verifiedOnly?: boolean }) =>
       models === null || (!verified && params?.verifiedOnly)
         ? { origin: 'unknown' as const }
@@ -264,7 +88,7 @@ describe('a chat at rest, read by the host', () => {
     models: AgentSessionModelOption[] | null = listed,
     verified = true,
     liveOptions?: StructuredAgentSessionLiveOptions,
-    modelCatalog: Pick<AgentModelCatalogService, 'read'> = catalog(models, verified)
+    modelCatalog: Pick<AgentModelCatalogService, 'read' | 'captureRead'> = catalog(models, verified)
   ) {
     const record = { ...restingRecord(), ...facts }
     const resting = {
@@ -501,7 +325,7 @@ describe('a chat at rest, read by the host', () => {
       [{ id: 'opus[1m]', label: 'Opus', isDefault: true, efforts: [] }],
       'opus[1m]'
     ],
-    ['unknown list', null, 'sonnet'],
+    ['unknown list', null, undefined],
     ['known empty', [], undefined],
     [
       'known without default',
@@ -574,10 +398,11 @@ describe('a chat at rest, read by the host', () => {
         efforts: [{ value: 'high', label: 'High' }]
       }
     ]
-    for (const [reported, saved, shown] of [
-      ['claude-opus-current', {}, 'opus[1m]'],
-      ['unknown-model', {}, 'unknown-model'],
-      ['claude-opus-current', { model: 'claude-opus-current' }, 'claude-opus-current']
+    const currentModel = 'claude-opus-current'
+    for (const [reported, saved, shown, label] of [
+      [currentModel, {}, 'opus[1m]', 'Installed Opus'],
+      ['unknown-model', {}, 'unknown-model', 'Unknown Model'],
+      [currentModel, { model: currentModel }, currentModel, 'Claude Opus Current']
     ] as const) {
       const result = await readAtRest(
         { provider: 'claude', options: saved },
@@ -591,7 +416,7 @@ describe('a chat at rest, read by the host', () => {
       expect(result.models.find((row) => row.id === shown)).toMatchObject(
         shown === 'opus[1m]'
           ? { label: 'Installed Opus', efforts: installed[0]!.efforts }
-          : { label: shown, efforts: [] }
+          : { label, description: shown, efforts: [] }
       )
     }
   })

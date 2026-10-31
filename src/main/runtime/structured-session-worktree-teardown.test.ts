@@ -338,8 +338,9 @@ describe('worktree teardown and structured agent sessions', () => {
   it('takes the proof when a failed close is re-observed as exited', async () => {
     // Later exit evidence can prove a child gone after close threw or restored its tab.
     const retired: string[] = []
-    const runtime = {
+    const runtime: TeardownRuntime = {
       ...presentationRuntime(),
+      getPtyLivenessVerdict: () => null,
       stopTerminalsForWorktree: async () => ({ stopped: 0 }),
       retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
         if (!retired.includes(sessionId)) {
@@ -347,7 +348,7 @@ describe('worktree teardown and structured agent sessions', () => {
         }
         return true
       }
-    } as never
+    }
     installHost({ records: [record('s1', WORKTREE)], settledThenThrows: new Set(['s1']) })
     await expect(
       killAllProcessesForWorktree(WORKTREE, { ...destructiveDeps(), runtime })
@@ -453,12 +454,13 @@ describe('worktree teardown and structured agent sessions', () => {
     // close that already ran, so the count has to survive that return or the removal log claims
     // `structured=0` for chats it just ended.
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
-    const runtime = {
+    const runtime: TeardownRuntime = {
       ...presentationRuntime(),
+      getPtyLivenessVerdict: () => null,
       stopTerminalsForWorktree: async () => {
         throw new Error('the terminal sweep died')
       }
-    } as never
+    }
     const host = installHost({ records: [record('s1', WORKTREE)] })
     const result = await killAllProcessesForWorktree(WORKTREE, {
       ...destructiveDeps({ allowUnverifiedStop: true }),
@@ -613,13 +615,14 @@ describe('worktree teardown and structured agent sessions', () => {
     // PTY sweeps run concurrently to share the deadline: structured refusal can follow already-stopped PTYs.
     // Serializing again would starve terminal stops and let force-delete remove files with open PTY handles.
     let terminalSweeps = 0
-    const runtime = {
+    const runtime: TeardownRuntime = {
       ...presentationRuntime(),
+      getPtyLivenessVerdict: () => null,
       stopTerminalsForWorktree: async () => {
         terminalSweeps += 1
         return { stopped: 2 }
       }
-    } as never
+    }
     installHost({ records: [record('s1', WORKTREE)], stuck: new Set(['s1']) })
     await expect(
       killAllProcessesForWorktree(WORKTREE, { ...destructiveDeps(), runtime })
@@ -635,13 +638,14 @@ describe('worktree teardown and structured agent sessions', () => {
     })
     installHost({ records: [record('s1', WORKTREE)], closeGate })
     let terminalSweepStarted = false
-    const runtime = {
+    const runtime: TeardownRuntime = {
       ...presentationRuntime(),
+      getPtyLivenessVerdict: () => null,
       stopTerminalsForWorktree: async () => {
         terminalSweepStarted = true
         return { stopped: 0 }
       }
-    } as never
+    }
     const removal = killAllProcessesForWorktree(WORKTREE, { ...destructiveDeps(), runtime })
     await vi.waitFor(() => {
       expect(terminalSweepStarted).toBe(true)
@@ -667,8 +671,9 @@ describe('worktree teardown and structured agent sessions', () => {
   it('retires it from the live tab snapshot as well as the durable index', async () => {
     // Durable index hiding alone leaves the live snapshot tab able to reattach this session.
     const retired: string[] = []
-    const runtime = {
+    const runtime: TeardownRuntime = {
       ...presentationRuntime(),
+      getPtyLivenessVerdict: () => null,
       stopTerminalsForWorktree: async () => ({ stopped: 0 }),
       retireStructuredAgentSessionTabFromSnapshot: (sessionId: string) => {
         if (!retired.includes(sessionId)) {
@@ -676,7 +681,7 @@ describe('worktree teardown and structured agent sessions', () => {
         }
         return true
       }
-    } as never
+    }
     installHost({
       records: [record('s1', WORKTREE)],
       detached: new Set(['s1']),

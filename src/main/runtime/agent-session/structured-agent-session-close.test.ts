@@ -6,6 +6,7 @@ import { agentSessionConversationView } from '../../../shared/agent-session-conv
 // Child exit proof precedes advisory tab cleanup; failed stops retain the original surface.
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { StructuredAgentSessionCloseCause } from '../../native-chat/agent-session-wire/structured-agent-session-host-lifetime'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { recordingStructuredAgentSessionLogger } from '../../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 
@@ -29,6 +30,8 @@ function record(sessionId: string): AgentSessionRecord {
 }
 
 type HostOptions = {
+  alreadyReleased?: boolean
+  skipAdmission?: boolean
   /** Sessions the host keeps holding through a close, so the post-close observation is `live`. */
   stuck?: boolean
   /** Rejects the close, without the child going. */
@@ -53,7 +56,11 @@ const HIDE_PROVED_CLOSE = [
 
 function installHost(options: HostOptions = {}) {
   const entry = record(SESSION)
-  const held = new Set([SESSION])
+  if (options.alreadyReleased) {
+    entry.lease.claimStatus = 'released'
+    entry.lease.deathEvidence = { kind: 'exit-observed', detail: 'natural exit', observedAt: 1 }
+  }
+  const held = new Set(options.alreadyReleased ? [] : [SESSION])
   const visible = new Set(options.visible ?? [SESSION])
   const setSessionTabVisibility = vi.fn(async (sessionId: string, isVisible: boolean) => {
     if (options.visibilityThrows) {
@@ -66,20 +73,25 @@ function installHost(options: HostOptions = {}) {
     }
   })
   const notifySessionTabHidden = vi.fn()
-  const close = vi.fn(async (sessionId: string) => {
-    if (options.closeThrows) {
-      throw options.closeThrows
+  const close = vi.fn(
+    async (sessionId: string, _cause: StructuredAgentSessionCloseCause, admit?: () => boolean) => {
+      if (!options.skipAdmission && admit && !admit()) {
+        throw new Error('The user kept this chat open.')
+      }
+      if (options.closeThrows) {
+        throw options.closeThrows
+      }
+      if (options.stuck) {
+        return
+      }
+      held.delete(sessionId)
+      entry.lease.claimStatus = 'released'
+      entry.lease.deathEvidence = { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
+      if (options.settledThenThrows) {
+        throw new Error('the event sink could not be flushed')
+      }
     }
-    if (options.stuck) {
-      return
-    }
-    held.delete(sessionId)
-    entry.lease.claimStatus = 'released'
-    entry.lease.deathEvidence = { kind: 'exit-observed', detail: 'closed', observedAt: 1 }
-    if (options.settledThenThrows) {
-      throw new Error('the event sink could not be flushed')
-    }
-  })
+  )
   const log = recordingStructuredAgentSessionLogger()
   hostRef.current = {
     deps: {
@@ -131,6 +143,33 @@ describe('closeStructuredAgentSessionChild admitted surface', () => {
     hostRef.current = null
     vi.restoreAllMocks()
   })
+
+  it.each(['false', 'throws', 'unreached'] as const)(
+    'does not turn %s admission into success from independent exit proof',
+    async (mode) => {
+      const host = installHost({ alreadyReleased: true, skipAdmission: mode === 'unreached' })
+      const runtime = runtimeFor()
+      const afterClose = vi.fn()
+      const admitClose = vi.fn(() => {
+        if (mode === 'throws') {
+          throw new Error('Admission failed')
+        }
+        return false
+      })
+      expect(
+        await closeStructuredAgentSessionChild(SESSION, { runtime, afterClose, admitClose })
+      ).toMatchObject({
+        stopped: false,
+        closeAttempted: true
+      })
+      expect(admitClose).toHaveBeenCalledTimes(mode === 'unreached' ? 0 : 1)
+      expect(afterClose).not.toHaveBeenCalled()
+      expect(host.visible.has(SESSION)).toBe(true)
+      expect(host.setSessionTabVisibility).not.toHaveBeenCalled()
+      expect(runtime.currentLocalStructuredSessionPresentation()).not.toBeNull()
+      expect(runtime.removeCapturedStructuredSessionSavedTabs).not.toHaveBeenCalled()
+    }
+  )
 
   it('proves stop before hiding and retires only the captured raw surface', async () => {
     const host = installHost()

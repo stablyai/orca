@@ -150,12 +150,13 @@ it('closes the captured row that an earlier queued open has not saved yet; missi
     }
   })
   expect(store.getWorkspaceSession().unifiedTabs?.[workspace]).toBeUndefined()
-  queue(() => [
+  queue([
     {
       worktreeId: workspace,
       change: { open: { sessionId: 'a', agent: 'codex', tabId: 'agent-chat-tab-v1-captured' } }
     }
   ])
+  expect(queue.pendingOpens()).toHaveLength(1)
   queue(() => [
     { worktreeId: workspace, change: { close: 'a', tabId: 'agent-chat-tab-v1-captured' } }
   ])
@@ -237,3 +238,80 @@ it('refuses a captured close when another actual holder now uses that id for a d
     'replacement'
   )
 })
+
+it.each([10, 100])(
+  'releases %i concrete descriptors across success/refusal/throw and permits a real next write',
+  async (p) => {
+    const { fixture } =
+      await import('../persistence/loading-store/profile-state-delayed-authority-fixture')
+    const { applyWindowLayoutCommand } = await import('./runtime-layout-apply')
+    const { store, authority } = await fixture()
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    for (const mode of ['success', 'superseded', 'eligibility-error', 'apply-error'] as const) {
+      const workspace = `pending-${mode}`,
+        gate = authority.pause()
+      const holding = store.runDurableMutation(() => {
+        store.updateSettings({ theme: 'dark' })
+        return { value: undefined }
+      })
+      await gate.started.promise
+      const done = Promise.withResolvers<void>()
+      let released = false
+      const queue = createChatTabLayoutQueue({
+        sessionOf: () => store.getWorkspaceSession(),
+        hostIdOf: () => 'local',
+        apply: async (command, run) => {
+          try {
+            if (
+              mode === 'apply-error' &&
+              command.type === 'openAgentSessionTab' &&
+              command.sessionId === 's1'
+            ) {
+              throw new Error('apply failed')
+            }
+            return await applyWindowLayoutCommand(store, () => ['local'], command, undefined, run)
+          } finally {
+            if (command.type === 'openAgentSessionTab' && command.sessionId === 'valid') {
+              done.resolve()
+            }
+          }
+        }
+      })
+      try {
+        queue(
+          Array.from({ length: p }, (_, i) => ({
+            worktreeId: workspace,
+            change: { open: { sessionId: `s${i}`, tabId: `tab-${i}`, agent: 'codex' } },
+            eligible: () => {
+              if (released && mode === 'eligibility-error') {
+                throw new Error('eligibility failed')
+              }
+              return !released || mode !== 'superseded'
+            }
+          }))
+        )
+        expect(queue.pendingOpens()).toHaveLength(p)
+        const captured = queue.pendingOpens()
+        released = true
+        gate.finish.resolve()
+        await holding
+        queue([
+          {
+            worktreeId: workspace,
+            change: { open: { sessionId: 'valid', tabId: 'valid', agent: 'codex' } }
+          }
+        ])
+        await done.promise
+        await vi.waitFor(() => expect(queue.pendingOpens()).toHaveLength(0))
+        expect(captured).toHaveLength(p)
+        const rows = store.getWorkspaceSession().unifiedTabs?.[workspace] ?? []
+        expect(rows.map((row) => row.entityId)).toContain('valid')
+        expect(rows).toHaveLength(mode === 'success' ? p + 1 : mode === 'apply-error' ? p : 1)
+      } finally {
+        gate.finish.resolve()
+        await holding
+      }
+    }
+    warn.mockRestore()
+  }
+)

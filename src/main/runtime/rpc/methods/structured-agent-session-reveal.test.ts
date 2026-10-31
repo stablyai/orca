@@ -1,3 +1,6 @@
+import { agentSessionRecordFixture } from '../../../../shared/agent-session-record.test-fixture'
+import { agentSessionConversationView } from '../../../../shared/agent-session-conversation-view'
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { defineMethod } from '../core'
 import { OptionsParams } from './structured-agent-session-schemas'
@@ -11,11 +14,30 @@ import {
   STRUCTURED_CLIENT,
   STRUCTURED_MOBILE_CLIENT
 } from './structured-agent-session-rpc.test-fixture'
-beforeEach(() => installStructuredHostStub())
+function conversation(workspaceId = 'workspace-1', agent: 'claude' | 'codex' = 'codex') {
+  const host = getStructuredAgentSessionHost()
+  if (!host) {
+    throw new Error('Host fixture must be installed')
+  }
+  const record = agentSessionRecordFixture()
+  vi.spyOn(host.deps.store, 'getConversation').mockReturnValue(
+    agentSessionConversationView({
+      ...record,
+      sessionId: SESSION,
+      provider: agent,
+      location: { ...record.location, workspaceId }
+    })
+  )
+}
+beforeEach(() => {
+  installStructuredHostStub()
+  conversation()
+})
 afterEach(() => clearStructuredHostStub())
 
 describe('agentSession.reveal', () => {
   it.each(['codex', 'claude'] as const)('republishes a persisted %s chat tab', async (agent) => {
+    conversation('workspace-1', agent)
     hostCalls.revealSession.mockResolvedValueOnce({
       sessionId: SESSION,
       workspaceId: 'workspace-1',
@@ -35,6 +57,7 @@ describe('agentSession.reveal', () => {
   it('publishes the workspace the host reported, not one the client could assert', async () => {
     // The client sends only a session id, so a stale or forged one cannot aim the publish at
     // another workspace.
+    conversation('workspace-from-record', 'claude')
     hostCalls.revealSession.mockResolvedValueOnce({
       sessionId: SESSION,
       workspaceId: 'workspace-from-record',
@@ -48,7 +71,14 @@ describe('agentSession.reveal', () => {
       workspaceId: 'workspace-from-record',
       sessionId: SESSION,
       agent: 'claude',
-      activate: true
+      activate: true,
+      capture: expect.any(Function),
+      workspaceAuthority: expect.objectContaining({
+        check: expect.any(Function),
+        current: expect.any(Function),
+        committed: expect.any(Function),
+        saving: expect.any(Function)
+      })
     })
   })
 

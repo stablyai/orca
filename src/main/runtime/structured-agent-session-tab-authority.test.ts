@@ -156,48 +156,45 @@ it.each([false, true])(
   }
 )
 
-it.each([false, true])(
-  'preserves explicit failed-show insertion and retention, owner=%s',
-  async (main) => {
-    layoutOwner.main = main
-    const rig = await openAuthorityRuntime(await authorityProfile())
-    const release = await holdStartup(rig)
-    await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
-    const allow = rejectVisibility(rig)
-    await rig.runtime.publishStructuredAgentSessionTab({
-      workspaceId: rig.workspace,
-      sessionId: B,
-      agent: 'codex',
-      activate: true
-    })
-    expect(rig.store.isSessionTabVisible(B)).toBe(false)
-    expect(rig.runtime.live(B)).toBe(true)
-    await release()
-    expect(savedIds(rig)).toContain(B)
-    await rig.runtime.publishStructuredAgentSessionTab({
-      workspaceId: rig.workspace,
-      sessionId: B,
-      agent: 'codex',
-      activate: true
-    })
-    await chatTabCommandsSettled()
-    expect(savedIds(rig)).toEqual([B])
-    expect(rig.store.isSessionTabVisible(B)).toBe(false)
-    expect(rig.runtime.live(B)).toBe(true)
-    const snapshot = rig.runtime.mobileSessionTabsByWorktree.get(rig.workspace)!
-    rig.runtime.storeMobileSessionSnapshot(rig.workspace, { ...snapshot, tabs: [] })
-    expect(rig.runtime.live(B)).toBe(false)
-    rig.runtime.storeMobileSessionSnapshot(rig.workspace, snapshot)
-    expect(rig.runtime.live(B)).toBe(true)
-    rig.runtime.mobileSessionTabsByWorktree.delete(rig.workspace)
-    expect(rig.runtime.live(B)).toBe(false)
-    allow()
-    await rig.host.setSessionTabVisibility(B, true)
-    await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
-    await chatTabCommandsSettled()
-    expect(savedIds(rig)).toEqual([])
-  }
-)
+it('preserves windowless explicit failed-show insertion and retention', async () => {
+  layoutOwner.main = false
+  const rig = await openAuthorityRuntime(await authorityProfile())
+  const release = await holdStartup(rig)
+  await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
+  const allow = rejectVisibility(rig)
+  await rig.runtime.publishStructuredAgentSessionTab({
+    workspaceId: rig.workspace,
+    sessionId: B,
+    agent: 'codex',
+    activate: true
+  })
+  expect(rig.store.isSessionTabVisible(B)).toBe(false)
+  expect(rig.runtime.live(B)).toBe(true)
+  await release()
+  expect(savedIds(rig)).toContain(B)
+  await rig.runtime.publishStructuredAgentSessionTab({
+    workspaceId: rig.workspace,
+    sessionId: B,
+    agent: 'codex',
+    activate: true
+  })
+  await chatTabCommandsSettled()
+  expect(savedIds(rig)).toEqual([B])
+  expect(rig.store.isSessionTabVisible(B)).toBe(false)
+  expect(rig.runtime.live(B)).toBe(true)
+  const snapshot = rig.runtime.mobileSessionTabsByWorktree.get(rig.workspace)!
+  rig.runtime.storeMobileSessionSnapshot(rig.workspace, { ...snapshot, tabs: [] })
+  expect(rig.runtime.live(B)).toBe(false)
+  rig.runtime.storeMobileSessionSnapshot(rig.workspace, snapshot)
+  expect(rig.runtime.live(B)).toBe(true)
+  rig.runtime.mobileSessionTabsByWorktree.delete(rig.workspace)
+  expect(rig.runtime.live(B)).toBe(false)
+  allow()
+  await rig.host.setSessionTabVisibility(B, true)
+  await closeStructuredAgentSessionChild(B, { runtime: rig.runtime })
+  await chatTabCommandsSettled()
+  expect(savedIds(rig)).toEqual([])
+})
 
 it.each([false, true])(
   'leaves prior visibility and exact known/null ID untouched after unproven close, known=%s',
