@@ -31,6 +31,7 @@ function makeRuntime(): {
     }
   )
   const runtime = {
+    getClientSettings: () => ({ nativeChatQueueFollowUps: false }),
     onClientEvent,
     registerSubscriptionCleanup: (_id: string, cleanup: () => void) => {
       cleanups.push(cleanup)

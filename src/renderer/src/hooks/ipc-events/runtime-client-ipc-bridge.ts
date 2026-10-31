@@ -90,9 +90,7 @@ export function registerRuntimeClientIpcBridge(
         )
       ])
     },
-    onError: (error) => {
-      console.error('Failed to refresh runtime projects:', error)
-    }
+    onError: (error) => console.error('Failed to refresh runtime projects:', error)
   })
   const requestProjectRefresh = (environmentId: string): void => {
     invalidateRemoteWorktreeLineage(useAppStore.getState, environmentId)
@@ -191,6 +189,9 @@ export function registerRuntimeClientIpcBridge(
     }
     // This window builds its sidebar from its own store, never from a host's phone feed.
     if (event.type === 'sidebarInputsChanged') {
+      return
+    }
+    if (event.type !== 'activateWorktree') {
       return
     }
     // Older hosts broadcast local/CLI activation without an address; that is not this viewer's intent.

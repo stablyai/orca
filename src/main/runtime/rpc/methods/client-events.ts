@@ -58,6 +58,7 @@ export const CLIENT_EVENT_METHODS = [
                 subscriptionId,
                 snapshot: {
                   sshStates,
+                  nativeChatQueueFollowUps: runtime.getClientSettings().nativeChatQueueFollowUps,
                   ...(terminalState
                     ? { terminalSideEffects: runtime.getTerminalSideEffectClientEventSnapshot() }
                     : {})
