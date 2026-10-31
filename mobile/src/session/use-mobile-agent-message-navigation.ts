@@ -97,7 +97,7 @@ export function useMobileAgentMessageNavigation(
         )
         const result = await openMobileStructuredSession({
           client,
-          current,
+          current: () => current() && Date.now() < deadline,
           source: {
             kind: 'sender',
             party: sender.party,
