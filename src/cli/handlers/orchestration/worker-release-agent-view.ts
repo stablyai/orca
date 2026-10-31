@@ -1,8 +1,4 @@
-import {
-  resolveOrcaCommandsInText,
-  type OrchestrationAgentView,
-  type OrchestrationFailure
-} from './agent-view'
+import type { OrchestrationAgentView, OrchestrationFailure } from './agent-view'
 import type { WorkerReleaseReceipt } from './worker-output'
 
 type WorkerReleaseFields = {
@@ -28,7 +24,7 @@ export const WORKER_RELEASE_VIEW: OrchestrationAgentView<
       ? `${value.archive.source} [${value.archive.status ?? 'unknown'}]`
       : undefined,
     lastError: value.lastError,
-    next: value.recovery && resolveOrcaCommandsInText(value.recovery)
+    next: value.recovery
   }),
   // Retained, pending, and already-released are settled outcomes; only release_unknown fails.
   failure: (value) =>

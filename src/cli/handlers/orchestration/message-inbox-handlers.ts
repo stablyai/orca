@@ -13,7 +13,7 @@ import {
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
 import { withReceiptNext } from './receipt-next-text'
-import { printOrchestrationResult, resolveOrcaCommandsInText } from './agent-view'
+import { printOrchestrationResult } from './agent-view'
 import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
@@ -34,7 +34,7 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
       printOrchestrationResult(result, json, {
         fields: (value) => ({
           messageId: value.message.id,
-          next: value.next && resolveOrcaCommandsInText(value.next)
+          next: value.next
         })
       })
       return

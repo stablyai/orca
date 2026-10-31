@@ -14,7 +14,8 @@ import {
 import type { LegacyCompatibilityResult } from '../../../shared/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { withReceiptNext } from './receipt-next-text'
-import { printConciseAskResult } from './ask-agent-view'
+import { askView, type AskResult } from './ask-agent-view'
+import { printOrchestrationResult } from './agent-view'
 import { getOptionalPositiveIntegerValueFlag } from './numeric-flags'
 import {
   flushOrchestrationStdout,
@@ -93,13 +94,16 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
       }
     )
     if (!flags.has('full')) {
-      await printConciseAskResult(result, {
-        client,
+      printOrchestrationResult(
+        result,
         json,
-        from,
-        dispatchCapability: getOptionalStringFlag(flags, 'dispatch-capability'),
-        timeoutMs
-      })
+        askView({
+          from,
+          dispatchCapability: getOptionalStringFlag(flags, 'dispatch-capability'),
+          timeoutMs
+        })
+      )
+      await finishLegacyAsk(client, from, result.result)
       return
     }
     if (json) {
@@ -164,5 +168,25 @@ export const ORCHESTRATION_QUESTION_HANDLER: Record<string, CommandHandler> = {
       }
       process.exitCode = 1
     }
+  }
+}
+
+// Legacy hosts need stdout flushed before exit 75, and the answer acknowledged once printed.
+async function finishLegacyAsk(
+  client: RuntimeClient,
+  from: string | undefined,
+  value: AskResult
+): Promise<void> {
+  const legacy = value.legacyCompatibility
+  const answerAck =
+    !legacy?.resumeRequired && value.answer !== null ? legacy?.answerAcknowledgement : undefined
+  if (legacy?.resumeRequired || answerAck) {
+    await flushOrchestrationStdout()
+  }
+  if (answerAck) {
+    await client.call('orchestration.check', {
+      terminal: from,
+      compatibilityQuestionAck: JSON.stringify(answerAck)
+    })
   }
 }

@@ -41,14 +41,19 @@ export function printOrchestrationResult<TResult, TFields extends AgentViewField
   }
 }
 
-export function printOrchestrationFields<TFields extends AgentViewFields>(
+function printOrchestrationFields<TFields extends AgentViewFields>(
   json: boolean,
   fields: TFields,
   text: (fields: TFields) => string,
   // A failed outcome reads ok:false even though its fields still describe what happened.
   ok = true
 ): void {
-  console.log(json ? JSON.stringify({ ok, result: withNextLast(fields) }) : text(fields))
+  // Runtime next steps name `orca`; this is the one place they get the executable in use.
+  const resolved: TFields =
+    typeof fields.next === 'string'
+      ? { ...fields, next: resolveOrcaCommandsInText(fields.next) }
+      : fields
+  console.log(json ? JSON.stringify({ ok, result: withNextLast(resolved) }) : text(resolved))
 }
 
 /** Receipts whose text is the same in both modes; --full is today's printResult, unchanged. */
@@ -127,8 +132,7 @@ function withNextLast(fields: AgentViewFields): AgentViewFields {
   return { ...rest, next }
 }
 
-/** Commands printed by the runtime name `orca`; show the executable this agent actually runs. */
-export function resolveOrcaCommandsInText(text: string): string {
+function resolveOrcaCommandsInText(text: string): string {
   const executable = resolveOrchestrationCliExecutable()
   if (executable === 'orca') {
     return text

@@ -1,6 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
-import { printOrchestrationResult, resolveOrcaCommandsInText } from './agent-view'
+import { printOrchestrationResult } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 import { getOptionalStringFlag, getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
@@ -178,7 +178,7 @@ function sendFields(value: OrchestrationSendResult): SendFields {
     lifecycle: lifecycle?.action,
     autoReleaseAt: lifecycle && 'autoReleaseAt' in lifecycle ? lifecycle.autoReleaseAt : undefined,
     warnings: value.warnings?.length ? value.warnings.map((warning) => warning.message) : undefined,
-    next: value.next && resolveOrcaCommandsInText(value.next)
+    next: value.next
   }
   if ('message' in value) {
     return { messageId: value.message.id, ...common }

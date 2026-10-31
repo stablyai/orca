@@ -1,8 +1,4 @@
-import {
-  renderOrchestrationArgv,
-  resolveOrcaCommandsInText,
-  type OrchestrationAgentView
-} from './agent-view'
+import { renderOrchestrationArgv, type OrchestrationAgentView } from './agent-view'
 import type { WorkerStartReceipt } from './worker-output'
 
 type LaunchChoice = {
@@ -83,8 +79,8 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
         next: unobserved
           ? `Task typed in but the worker hasn't been seen starting; don't resend or abandon it. End your turn; Orca wakes you when it reports. If nothing arrives, run ${renderOrchestrationArgv(['orca', 'orchestration', 'worker-show', '--dispatch', value.dispatchId])}.`
           : value.recovery
-            ? resolveOrcaCommandsInText(value.recovery)
-            : value.next && resolveOrcaCommandsInText(value.next)
+            ? value.recovery
+            : value.next
       }
     },
     failure: (value) =>

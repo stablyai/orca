@@ -6,12 +6,7 @@ import {
   type OrchestrationMessageSummary
 } from '../../../shared/orchestration-check-output'
 import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
-import {
-  formatFieldPairs,
-  orchestrationCliName,
-  resolveOrcaCommandsInText,
-  type OrchestrationAgentView
-} from './agent-view'
+import { formatFieldPairs, orchestrationCliName, type OrchestrationAgentView } from './agent-view'
 import { withReceiptNext } from './receipt-next-text'
 
 /** A message as the agent acts on it: storage columns dropped, the payload parsed but kept apart. */
@@ -60,7 +55,12 @@ function payloadView(message: OrchestrationMessageSummary): Pick<MessageView, 'p
   }
   try {
     const parsed: unknown = JSON.parse(message.payload)
-    if (parsed === null || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    if (
+      parsed === null ||
+      typeof parsed !== 'object' ||
+      Array.isArray(parsed) ||
+      nestsDeeperThan(parsed, MAX_PAYLOAD_DEPTH)
+    ) {
       return { payload: message.payload }
     }
     const entries = Object.entries(parsed).filter(
@@ -70,6 +70,16 @@ function payloadView(message: OrchestrationMessageSummary): Pick<MessageView, 'p
   } catch {
     return { payload: message.payload }
   }
+}
+
+// Rendering recurses per level; a sender-built deep payload stays the string it was sent as.
+const MAX_PAYLOAD_DEPTH = 8
+
+function nestsDeeperThan(value: unknown, depth: number): boolean {
+  if (value === null || typeof value !== 'object') {
+    return false
+  }
+  return depth === 0 || Object.values(value).some((child) => nestsDeeperThan(child, depth - 1))
 }
 
 export function formatMessageViewText(view: MessageView, replyCommand?: string): string {
@@ -153,7 +163,7 @@ export function checkView(
         cancelled: value.cancelled ? true : undefined,
         connectionLost: value.connectionLost ? true : undefined,
         legacyCompatibility: value.legacyCompatibility,
-        next: value.next && resolveOrcaCommandsInText(value.next)
+        next: value.next
       }
     },
     text: (fields, value) => {

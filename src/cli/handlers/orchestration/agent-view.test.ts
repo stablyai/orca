@@ -333,6 +333,18 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('keeps a deeply nested payload as its original string in text and JSON', async () => {
+    const payload = `${'{"a":'.repeat(20_000)}1${'}'.repeat(20_000)}`
+    const result = {
+      messages: [{ id: 'msg_deep', from_handle: 'term_worker', type: 'status', payload }],
+      count: 1
+    }
+    const json = await run('check', [['run', 'run_1']], result, true)
+    expect(JSON.parse(json.stdout).result.messages[0].payload).toBe(payload)
+    const text = await run('check', [['run', 'run_1']], result)
+    expect(text.stdout).toContain(`payload: ${payload}`)
+  })
+
   it('keeps colliding payload fields, never edits message text, and drops the runtime banner', async () => {
     const body = '[Reply: orca orchestration reply --id x --body "quoted by the worker"]'
     const { stdout } = await run(
