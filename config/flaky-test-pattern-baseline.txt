@@ -50,7 +50,6 @@
 5 test-no-in-test-import-actual:src/renderer/src/components/right-sidebar/useGitStatusPolling.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/components/sidebar/SidebarFeedbackDialog.test.tsx
 1 test-no-in-test-import-actual:src/renderer/src/components/sidebar/WorktreeCardAgents.activation.test.tsx
-1 test-no-in-test-import-actual:src/renderer/src/components/sidebar/worktree-list/listing/use-visible-worktrees.test.tsx
 1 test-no-in-test-import-actual:src/renderer/src/components/terminal-pane/pty-connection-hook-idle-arbitration.test.ts
 3 test-no-in-test-import-actual:src/renderer/src/components/terminal-pane/remote-snapshot-alt-screen-host-chain.test.ts
 1 test-no-in-test-import-actual:src/renderer/src/hooks/useAutomationDispatchEvents.test.ts
@@ -434,7 +433,6 @@
 1 test-no-real-time-wait:src/main/runtime/structured-chat-coordinator-mail.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-chat-worker-error-escalation.test.ts
 1 test-no-real-time-wait:src/main/runtime/structured-session-worktree-teardown.test.ts
-1 test-no-real-time-wait:src/main/runtime/terminal-focus-navigation-coalescer.test.ts
 2 test-no-real-time-wait:src/main/runtime/tui-idle-name-only-real-pty.integration.test.ts
 1 test-no-real-time-wait:src/main/runtime/workspaces/persisted-surfaces/restored-terminal-placement.test.ts
 4 test-no-real-time-wait:src/main/runtime/worktree-teardown-unstopped-pty.test.ts
@@ -971,7 +969,7 @@
 3 test-no-wall-clock:src/main/runtime/orchestration-cli-subprocess.test.ts
 2 test-no-wall-clock:src/main/runtime/orchestration-codex-real-pty.integration.test.ts
 1 test-no-wall-clock:src/main/runtime/orchestration/structured-pointer-operation-id.test.ts
-6 test-no-wall-clock:src/main/runtime/orchestration/worker-output-archive.test.ts
+2 test-no-wall-clock:src/main/runtime/orchestration/worker-output-archive.test.ts
 1 test-no-wall-clock:src/main/runtime/owned-session-teardown-policy.test.ts
 2 test-no-wall-clock:src/main/runtime/project-removal-structured-sessions.test.ts
 1 test-no-wall-clock:src/main/runtime/push/push-device-registration-persistence.test.ts
@@ -1042,7 +1040,6 @@
 4 test-no-wall-clock:src/main/ssh/ssh-remote-commands.test.ts
 2 test-no-wall-clock:src/main/star-nag/service-direct-star.test.ts
 1 test-no-wall-clock:src/main/star-nag/service-force-show-races.test.ts
-3 test-no-wall-clock:src/main/star-nag/service-outcome-telemetry.test.ts
 1 test-no-wall-clock:src/main/star-nag/service-prompt-moments.test.ts
 3 test-no-wall-clock:src/main/star-nag/service-threshold-prompt.test.ts
 2 test-no-wall-clock:src/main/startup/gpu-lifecycle-install-dir-acl-guard.test.ts
@@ -1130,7 +1127,6 @@
 1 test-no-wall-clock:src/renderer/src/lib/workspace-activation-path-gate.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace-session.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/workspace-terminal-host-authority.test.ts
-1 test-no-wall-clock:src/renderer/src/lib/worktree-activation-default-tabs.test.ts
 1 test-no-wall-clock:src/renderer/src/lib/worktree-activation-emptied-workspace-reseed.test.ts
 2 test-no-wall-clock:src/renderer/src/lib/worktree-initial-terminal-close-records.test.ts
 4 test-no-wall-clock:src/renderer/src/runtime/close-mirrored-editor-tab.test.ts
