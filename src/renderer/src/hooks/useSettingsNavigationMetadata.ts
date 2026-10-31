@@ -43,6 +43,7 @@ export function buildSettingsNavigationMetadata({
   isLocalWindowsHost = isWindows,
   isWindowsTerminalHost = isWindows,
   isWebClient,
+  showWindowsCodexTar = !isWebClient && isWindows && isLocalWindowsHost && isWindowsTerminalHost,
   hostQueuesMessages = false,
   typedChatPermissions = false,
   managedBrowserCreationEnabled = !isWebClient,
@@ -56,6 +57,7 @@ export function buildSettingsNavigationMetadata({
   isWindows: boolean
   isLocalWindowsHost?: boolean
   isWindowsTerminalHost?: boolean
+  showWindowsCodexTar?: boolean
   isWebClient: boolean
   hostQueuesMessages?: boolean
   typedChatPermissions?: boolean
@@ -68,7 +70,9 @@ export function buildSettingsNavigationMetadata({
 }): SettingsNavSection[] {
   const terminalPaneSearchEntries = getTerminalPaneSearchEntries({
     isWindows,
+    isLocalWindowsHost,
     isWindowsTerminalHost,
+    showWindowsCodexTar,
     isMac
   })
   const runtimeEnvironmentsSearchEntry = isWebClient
@@ -154,6 +158,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
     target: runtimeTarget,
     hostPlatform: windowsTerminalCapabilities.hostPlatform
   })
+  const showWindowsCodexTar = !isWebClient && runtimeTarget.kind === 'local' && isLocalWindowsHost
 
   return useMemo(
     () =>
@@ -162,6 +167,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
         isWindows,
         isLocalWindowsHost,
         isWindowsTerminalHost,
+        showWindowsCodexTar,
         isWebClient,
         hostQueuesMessages,
         typedChatPermissions,
@@ -181,6 +187,7 @@ export function useSettingsNavigationMetadata(): SettingsNavSection[] {
       isWindows,
       isLocalWindowsHost,
       isWindowsTerminalHost,
+      showWindowsCodexTar,
       isWebClient,
       hostQueuesMessages,
       typedChatPermissions,

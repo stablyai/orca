@@ -19,6 +19,8 @@ export const CODEX_COMMAND_IDENTITY_ENV_KEYS = [
   'ORCA_USER_DATA_PATH'
 ] as const
 
+export const CODEX_WINDOWS_TAR_SHIM_DIR_ENV = 'ORCA_CODEX_WINDOWS_TAR_SHIM_DIR'
+
 // Skip apostrophes: TOML literals cannot hold them and Codex parse fallback may truncate paths; missing identity is safer than wrong identity.
 const identitySetArg = (key: string, value: string): string =>
   `shell_environment_policy.set.${key}='${value}'`
@@ -35,7 +37,7 @@ if [[ -n "\${__orca_codex_binary:-}" && -x "\${__orca_codex_binary}" ]]; then
   # which otherwise rewrites this header at parse time and aborts the whole file.
   function codex {
     # Why local: zsh's warn_create_global warns for each global a function creates.
-    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}"
+    local __orca_codex_arg __orca_codex_isolate="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_identity="\${ORCA_CODEX_ISOLATE:-1}" __orca_codex_tar_path
     if [[ "\${${REMOTE_VIEWER_CLIPBOARD_ENV}:-}" == 1 && -z "\${SSH_CONNECTION+x}" && -z "\${SSH_TTY+x}" ]]; then
       local -x SSH_CONNECTION='${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
     fi
@@ -55,7 +57,15 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      [[ -z "\${${key}:-}" || "\
     if [[ "$__orca_codex_isolate" != 0 ]]; then
       case "$(command codex --help 2>/dev/null </dev/null)" in *--no-daemon*) set -- --no-daemon "$@" ;; esac
     fi
-    command codex "$@"
+    if [[ -n "\${${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}:-}" ]]; then
+      __orca_codex_tar_path="\${${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}}"
+      if command -v cygpath >/dev/null 2>&1; then
+        __orca_codex_tar_path="$(cygpath -u "$__orca_codex_tar_path" 2>/dev/null || printf '%s' "$__orca_codex_tar_path")"
+      fi
+      PATH="$__orca_codex_tar_path:$PATH" command codex "$@"
+    else
+      command codex "$@"
+    fi
   }
 fi
 unset __orca_codex_binary
@@ -77,6 +87,15 @@ ${CODEX_COMMAND_IDENTITY_ENV_KEYS.map((key) => `      test -n "$${key}"; and not
     end
     if test "$ORCA_CODEX_ISOLATE" != 0; and not string match -qr -- '${CODEX_NO_DAEMON_SKIP_ARG_PATTERN}' $argv; and command codex --help 2>/dev/null </dev/null | string match -q -- '*--no-daemon*'
       set argv --no-daemon $argv
+    end
+    # Why function scope: fish drops a set -l made inside the if block at its end.
+    set -lx PATH $PATH
+    if test -n "$${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}"
+      set -l __orca_codex_tar_path "$${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}"
+      if type -q cygpath
+        set __orca_codex_tar_path (cygpath -u "$__orca_codex_tar_path" 2>/dev/null; or echo "$__orca_codex_tar_path")
+      end
+      set PATH $__orca_codex_tar_path $PATH
     end
     if test "$${REMOTE_VIEWER_CLIPBOARD_ENV}" = 1; and not set -q SSH_CONNECTION; and not set -q SSH_TTY
       set -lx SSH_CONNECTION '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}'
@@ -124,17 +143,24 @@ if ($orcaCodexCommand -and
         $orcaCodexArgs = @(__OrcaEscapeNativeArgs $orcaCodexExecutable.Source (@($orcaCodexIdentity) + @($args)))
         $orcaCodexRemoteClipboard = $env:${REMOTE_VIEWER_CLIPBOARD_ENV} -eq '1' -and -not (Test-Path Env:SSH_CONNECTION) -and -not (Test-Path Env:SSH_TTY)
         if ($orcaCodexRemoteClipboard) { $env:SSH_CONNECTION = '${CODEX_REMOTE_VIEWER_SSH_CONNECTION}' }
-        # Why: a native command inside a function never sees the function's pipeline input on its own.
+        $orcaCodexOriginalPath = $env:Path
+        $orcaCodexExitCode = 1
         try {
+            if ($env:${CODEX_WINDOWS_TAR_SHIM_DIR_ENV}) {
+                $env:Path = "$env:${CODEX_WINDOWS_TAR_SHIM_DIR_ENV};$env:Path"
+            }
+            # Why: a native command inside a function never sees the function's pipeline input on its own.
             if ($MyInvocation.ExpectingInput) {
                 $input | & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
             } else {
                 & $orcaCodexExecutable.Source @orcaCodexFlags @orcaCodexArgs
             }
+            $orcaCodexExitCode = $LASTEXITCODE
         } finally {
+            $env:Path = $orcaCodexOriginalPath
             if ($orcaCodexRemoteClipboard) { Remove-Item Env:SSH_CONNECTION }
         }
-        $global:LASTEXITCODE = $LASTEXITCODE
+        $global:LASTEXITCODE = $orcaCodexExitCode
     }
 }
 Remove-Variable orcaCodexCommand -ErrorAction SilentlyContinue`

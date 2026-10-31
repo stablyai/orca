@@ -8,4 +8,8 @@ describe('getDefaultSettings', () => {
       'C:\\Users\\alice\\orca\\workspaces'
     )
   })
+
+  it('inherits the Codex tar command by default', () => {
+    expect(getDefaultSettings('/tmp').terminalWindowsCodexTar).toBe('inherit')
+  })
 })

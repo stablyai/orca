@@ -115,6 +115,7 @@ if (a.length === 1 && a[0] === '--help') {
 let out = ['ARGV', ...a].join('|')
 if (process.env.FAKE_CODEX_READ_CLIPBOARD_ENV === '1') out += '|ssh=' + (process.env.SSH_CONNECTION ?? '<unset>')
 if (process.env.FAKE_CODEX_READ_STDIN === '1') out += '|stdin=' + fs.readFileSync(0, 'utf8').trim()
+if (process.env.FAKE_CODEX_PRINT_PATH === '1') out += '|path=' + process.env.PATH
 console.log(out)
 process.exit(Number(process.env.FAKE_CODEX_EXIT || 0))
 `
@@ -132,6 +133,7 @@ out=ARGV
 for a in "$@"; do out="$out|$a"; done
 [ "\${FAKE_CODEX_READ_CLIPBOARD_ENV:-}" = 1 ] && out="$out|ssh=\${SSH_CONNECTION-<unset>}"
 [ "\${FAKE_CODEX_READ_STDIN:-}" = 1 ] && out="$out|stdin=$(cat)"
+[ "\${FAKE_CODEX_PRINT_PATH:-}" = 1 ] && out="$out|path=$PATH"
 printf '%s\\n' "$out"
 exit "\${FAKE_CODEX_EXIT:-0}"
 `
@@ -328,6 +330,29 @@ describe('codex wrapper --no-daemon rule', () => {
         })
 
         expect(lines(result.stdout)).toEqual(['ARGV|--no-daemon|exec|-|stdin=piped', 'status=3'])
+      })
+
+      it('scopes the Windows system tar path to the Codex process', () => {
+        const sandbox = makeSandbox(HELP_WITH_FLAG)
+        const shimDir = join(sandbox.bin, '..', 'system tar')
+        mkdirSync(shimDir)
+        const originalPath = `${sandbox.bin}${delimiter}${process.env.PATH ?? ''}`
+        const showPath = isPowerShell(shell)
+          ? '"after=$env:Path"'
+          : shell === 'fish'
+            ? 'echo after=(string join : $PATH)'
+            : 'printf \'after=%s\\n\' "$PATH"'
+        const result = run(shell, `codex --remote ws://host\n${showPath}`, sandbox, {
+          FAKE_CODEX_PRINT_PATH: '1',
+          ORCA_CODEX_WINDOWS_TAR_SHIM_DIR: shimDir
+        })
+        const [launchLine, afterLine] = lines(result.stdout)
+        const childDelimiter = isPowerShell(shell) ? ';' : ':'
+
+        expect(result.stderr).toBe('')
+        expect(launchLine).toContain(`|path=${shimDir}${childDelimiter}`)
+        expect(afterLine).toBe(`after=${originalPath}`)
+        expect(helpProbes(sandbox)).toBe(0)
       })
     })
   }

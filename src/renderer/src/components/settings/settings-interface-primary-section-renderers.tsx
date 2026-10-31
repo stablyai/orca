@@ -32,6 +32,7 @@ export function renderTerminalSettingsSection(context: SettingsRenderContext): R
           pwshAvailable={terminal.windowsTerminalCapabilities.pwshAvailable}
           gitBashAvailable={terminal.windowsTerminalCapabilities.gitBashAvailable}
           isWindowsTerminalHost={terminal.isWindowsTerminalHost}
+          showWindowsCodexTar={terminal.showWindowsCodexTar}
         />
       ) : null}
     </SettingsSection>

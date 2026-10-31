@@ -289,7 +289,9 @@ describe('TerminalPane PowerShell version setting', () => {
       gitBashAvailable: false
     })
 
-    expect(collectText(element)).toContain('Auto uses Windows PowerShell now')
+    const text = collectText(element)
+    expect(text).toContain('Auto uses Windows PowerShell now')
+    expect(text).toContain('Choose the tar command for Orca-managed Codex launches in new local Windows')
     const link = findAnchorByText(element, 'Download PowerShell 7+')
     expect(link).not.toBeNull()
     expect(link?.props.href).toBe('https://github.com/PowerShell/PowerShell/releases/latest')
@@ -333,12 +335,15 @@ describe('TerminalPane PowerShell version setting', () => {
       wslDistros: ['Ubuntu'],
       pwshAvailable: false,
       gitBashAvailable: false,
-      isWindowsTerminalHost: true
+      isWindowsTerminalHost: true,
+      showWindowsCodexTar: false
     })
 
     const text = collectText(element)
     expect(text).toContain('Default shell for new terminal panes on Windows')
     expect(text).toContain('Command Prompt')
+    expect(text).not.toContain('Choose the tar command for Orca-managed Codex launches in new local Windows')
+    expect(text).not.toContain('Windows system tar')
     expect(text).not.toContain('WSL')
   })
 

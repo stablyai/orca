@@ -9,6 +9,7 @@ import { TERMINAL_DEFAULT_WORD_SEPARATOR } from '../../../../shared/terminal-wor
 import { TerminalAdvancedSection } from './TerminalAdvancedSection'
 
 vi.mock('@/i18n/i18n', () => ({
+  i18n: { language: 'en' },
   translate: (_key: string, defaultValue: string) => defaultValue
 }))
 
@@ -28,7 +29,11 @@ describe('TerminalAdvancedSection', () => {
     document.body.replaceChildren()
   })
 
-  function renderSection(updateSettings = vi.fn(), overrides: Partial<GlobalSettings> = {}): void {
+  function renderSection(
+    updateSettings = vi.fn(),
+    overrides: Partial<GlobalSettings> = {},
+    showWindowsCodexTar = false
+  ): void {
     act(() => {
       root.render(
         <TerminalAdvancedSection
@@ -38,6 +43,7 @@ describe('TerminalAdvancedSection', () => {
           setScrollbackMode={vi.fn()}
           searchQuery=""
           showWindowsPowerShellImplementation={false}
+          showWindowsCodexTar={showWindowsCodexTar}
           isMac={false}
         />
       )
@@ -123,5 +129,27 @@ describe('TerminalAdvancedSection', () => {
     expect([...container.querySelectorAll('button')].some((b) => b.textContent === 'Reset')).toBe(
       false
     )
+  })
+
+  it('writes the Windows system tar policy for Codex', () => {
+    const updateSettings = vi.fn()
+    renderSection(updateSettings, { terminalWindowsCodexTar: 'inherit' }, true)
+
+    const radios = [...container.querySelectorAll<HTMLButtonElement>('[role="radio"]')]
+    const inheritPath = radios.find((button) => button.textContent === 'Inherit PATH')
+    const systemTar = radios.find((button) => button.textContent === 'Windows system tar')
+    expect(inheritPath?.getAttribute('aria-checked')).toBe('true')
+    expect(systemTar).toBeDefined()
+
+    act(() => systemTar?.click())
+
+    expect(updateSettings).toHaveBeenCalledWith({ terminalWindowsCodexTar: 'system' })
+  })
+
+  it('hides the Codex tar policy for non-Windows hosts', () => {
+    renderSection(vi.fn(), { terminalWindowsCodexTar: 'inherit' })
+
+    expect(container.textContent).not.toContain('Codex tar command')
+    expect(container.textContent).not.toContain('Windows system tar')
   })
 })

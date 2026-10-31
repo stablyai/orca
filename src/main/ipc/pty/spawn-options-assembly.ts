@@ -11,6 +11,7 @@ import { LEGACY_TERMINAL_SHIM_REMOTE_ENV_KEYS } from '../../pty/legacy-terminal-
 import { PI_PROCESS_OWNER_ENV_KEYS } from '../../pty/pi-process-owner-env'
 import { planCodexNoDaemonLaunch } from '../../pty/codex-no-daemon-launch-command'
 import { applyAgentWorkspaceTrustToSpawn } from '../../agent-workspace-trust-spawn'
+import { applyCodexWindowsSystemTarShimEnv } from '../../codex/codex-windows-system-tar'
 import type { PtySpawnOptions } from '../../providers/pty-provider-contract'
 import type { CodexAccountSelectionTarget } from '../../codex-accounts/runtime-selection'
 import { getStartupTerminalIngressIntent } from '../terminal-startup-color-query-replies'
@@ -138,7 +139,15 @@ export async function assemblePtySpawnLaunchOptions(input: PtySpawnLaunchOptions
       ? { wsl: { distro: input.expectedWslDistro ?? undefined } }
       : {})
   })
-  const env = openCodeLaunch.env
+  let env = openCodeLaunch.env
+  if (!connectionId && input.codexRuntime !== 'wsl' && process.platform === 'win32') {
+    env = { ...env }
+    applyCodexWindowsSystemTarShimEnv(env, {
+      mode: input.getSettings?.()?.terminalWindowsCodexTar,
+      isWsl: false,
+      userDataPath: getAppEnvironment().getPath('userData')
+    })
+  }
   const pluginDir = !connectionId ? env?.ORCA_CLAUDE_AGENT_VIEW_PLUGIN_DIR : undefined
   const launchCommand =
     pluginDir && openCodeLaunch.command

@@ -23,6 +23,7 @@ import {
 } from './terminal-typography-search'
 import {
   getTerminalRightClickToPasteSearchEntry,
+  getTerminalWindowsCodexTarSearchEntry,
   getTerminalWindowsPowershellImplementationSearchEntry,
   getTerminalWindowsShellSearchEntry,
   getTerminalWindowsAdministratorSearchEntry
@@ -99,10 +100,14 @@ export function getTerminalAppearanceSearchEntries(
 
 export function getTerminalPaneSearchEntries(platform: {
   isWindows: boolean
+  isLocalWindowsHost?: boolean
   isWindowsTerminalHost?: boolean
+  showWindowsCodexTar?: boolean
   isMac: boolean
 }): SettingsSearchEntry[] {
   const isWindowsTerminalHost = platform.isWindowsTerminalHost ?? platform.isWindows
+  const showWindowsCodexTar =
+    platform.showWindowsCodexTar ?? platform.isLocalWindowsHost ?? platform.isWindows
   // Mirror visible platform controls so search cannot link to hidden options.
   return [
     ...getTerminalRenderingSearchEntries(),
@@ -174,6 +179,7 @@ export function getTerminalPaneSearchEntries(platform: {
           ...getTerminalWindowsPowershellImplementationSearchEntry()
         ]
       : []),
+    ...(showWindowsCodexTar ? getTerminalWindowsCodexTarSearchEntry() : []),
     ...getTerminalRightClickToPasteSearchEntry(),
     ...getManageSessionsSearchEntries(),
     ...getTerminalAdvancedSearchEntries(),

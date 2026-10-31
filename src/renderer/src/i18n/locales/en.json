@@ -573,6 +573,18 @@
         "restartingAdministrator": "Restarting…",
         "openManageSessions": "Open Manage Sessions",
         "administratorSearchDescription": "See Orca’s Windows permissions or restart with administrator approval.",
+        "codexTar": {
+          "title": "Codex tar command",
+          "description": "Choose the tar command for Orca-managed Codex launches in new local Windows terminal panes. Manually typed cmd.exe commands still inherit PATH.",
+          "keywordTar": "tar",
+          "keywordCodex": "codex",
+          "keywordArchive": "archive",
+          "keywordUpdate": "update",
+          "keywordPath": "path",
+          "keywordSystem": "system",
+          "inheritPath": "Inherit PATH",
+          "windowsSystemTar": "Windows system tar"
+        },
         "administratorApproval": "Windows will ask for approval. Use your usual account."
       },
       "limit": {

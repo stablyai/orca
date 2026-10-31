@@ -31,6 +31,7 @@ import type { PtySubprocessOptions } from '../pty-subprocess'
 import { ORCAD_MANAGED_ACTIVATION_ROOT_ENV } from '../../../shared/orcad-managed-launch-env'
 import { REMOTE_VIEWER_CLIPBOARD_ENV } from '../../../shared/remote-viewer-clipboard-env'
 import { ORCAD_IDLE_TIMEOUT_ENV } from '../../../shared/orcad-idle-exit'
+import { CODEX_WINDOWS_TAR_SHIM_DIR_ENV } from '../../../shared/codex-shell-function'
 
 const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_PANE_KEY',
@@ -39,6 +40,7 @@ const PANE_IDENTITY_ENV_KEYS = [
   'ORCA_AGENT_LAUNCH_TOKEN',
   // Not identity but equally per-spawn: an inherited copy names another launch's CLI.
   'ORCA_WSL_CLI_DIR',
+  CODEX_WINDOWS_TAR_SHIM_DIR_ENV,
   'JCODE_RUNTIME_DIR',
   // Per-viewer: an Orca started from a remote viewer's pane must not mark its own local panes.
   REMOTE_VIEWER_CLIPBOARD_ENV,
@@ -106,6 +108,17 @@ function removeUnspecifiedPaneIdentityEnv(
   env: Record<string, string>,
   explicitEnv: Record<string, string> | undefined
 ): void {
+  if (process.platform === 'win32') {
+    const markerKey = CODEX_WINDOWS_TAR_SHIM_DIR_ENV.toLowerCase()
+    const explicitMarkerKey = Object.keys(explicitEnv ?? {}).find(
+      (key) => key.toLowerCase() === markerKey
+    )
+    for (const key of Object.keys(env)) {
+      if (key.toLowerCase() === markerKey && key !== explicitMarkerKey) {
+        delete env[key]
+      }
+    }
+  }
   for (const key of PANE_IDENTITY_ENV_KEYS) {
     if (!explicitEnv || !Object.hasOwn(explicitEnv, key)) {
       delete env[key]

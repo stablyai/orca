@@ -172,6 +172,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   localWindowsRuntimeDefault: GlobalWindowsRuntimeDefault
   /** 'auto' resolves to PowerShell 7+ when present, else falls back to inbox Windows PowerShell. */
   terminalWindowsPowerShellImplementation: 'auto' | 'powershell.exe' | 'pwsh.exe'
+  /** Windows-only: controls which tar Windows-native Codex child processes resolve. */
+  terminalWindowsCodexTar: 'inherit' | 'system'
   terminalFocusFollowsMouse: boolean
   /** X11/gnome-terminal "copy on select": selecting text auto-copies to the clipboard; default off. */
   terminalClipboardOnSelect: boolean

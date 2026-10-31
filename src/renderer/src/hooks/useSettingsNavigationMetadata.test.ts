@@ -303,11 +303,13 @@ describe('settings navigation metadata', () => {
     })
 
     const general = sections.find((section) => section.id === 'general')
+    const terminal = sections.find((section) => section.id === 'terminal')
     const repoSection = sections.find((section) => section.id === 'repo-repo-1')
 
     expect(general?.searchEntries.some((entry) => entry.title === 'Default Project Runtime')).toBe(
       true
     )
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Codex tar command')).toBe(true)
     expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
   })
 
@@ -324,6 +326,7 @@ describe('settings navigation metadata', () => {
 
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
     expect(terminal?.searchEntries.some((entry) => entry.title === 'PowerShell Version')).toBe(true)
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
     // Right-click paste is indexed on every client platform, including clients of Windows terminal hosts.
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Right-click to paste')).toBe(
       true
@@ -350,7 +353,22 @@ describe('settings navigation metadata', () => {
       false
     )
     expect(terminal?.searchEntries.some((entry) => entry.title === 'Default Shell')).toBe(true)
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
     expect(repoSection?.searchEntries.some((entry) => entry.title === 'Project Runtime')).toBe(true)
+  })
+
+  it('keeps the local Codex tar setting out of a Windows web host search', () => {
+    const sections = buildSettingsNavigationMetadata({
+      isMac: false,
+      isWindows: false,
+      isLocalWindowsHost: true,
+      isWindowsTerminalHost: true,
+      isWebClient: true,
+      repos: [repo]
+    })
+
+    const terminal = sections.find((section) => section.id === 'terminal')
+    expect(terminal?.searchEntries.some((entry) => entry.title === 'Codex tar command')).toBe(false)
   })
 
   it('keeps local runtime settings but hides remote Linux entries on a Windows desktop', () => {

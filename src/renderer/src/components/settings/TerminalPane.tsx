@@ -19,6 +19,7 @@ import {
 } from './terminal-search'
 import {
   getTerminalRightClickToPasteSearchEntry,
+  getTerminalWindowsCodexTarSearchEntry,
   getTerminalWindowsPowershellImplementationSearchEntry,
   getTerminalWindowsShellSearchEntry,
   getTerminalWindowsAdministratorSearchEntry
@@ -52,6 +53,8 @@ type TerminalPaneProps = {
   gitBashAvailable?: boolean
   /** Whether the active terminal host is Windows, even if the client is not. */
   isWindowsTerminalHost?: boolean
+  /** Local desktop Windows only; remote and web settings do not own this host policy. */
+  showWindowsCodexTar?: boolean
 }
 
 export function TerminalPane({
@@ -62,11 +65,13 @@ export function TerminalPane({
   setScrollbackMode,
   pwshAvailable,
   gitBashAvailable = false,
-  isWindowsTerminalHost
+  isWindowsTerminalHost,
+  showWindowsCodexTar
 }: TerminalPaneProps): React.JSX.Element {
   const searchQuery = useAppStore((state) => state.settingsSearchQuery)
   const isWindows = isWindowsUserAgent()
   const showWindowsHostSettings = isWindowsTerminalHost ?? isWindows
+  const shouldShowWindowsCodexTar = showWindowsCodexTar ?? isWindows
   const isMac = isMacUserAgent()
   const windowsShell = settings.terminalWindowsShell ?? 'powershell.exe'
   const showWindowsPowerShellImplementation =
@@ -341,6 +346,8 @@ export function TerminalPane({
         searchQuery,
         getTerminalWindowsPowershellImplementationSearchEntry()
       )) ||
+    (shouldShowWindowsCodexTar &&
+      matchesSettingsSearch(searchQuery, getTerminalWindowsCodexTarSearchEntry())) ||
     (isMac &&
       (matchesSettingsSearch(searchQuery, getTerminalMacOptionSearchEntries()) ||
         matchesSettingsSearch(searchQuery, getTerminalMacYenSearchEntries()))) ? (
@@ -353,6 +360,7 @@ export function TerminalPane({
         setScrollbackMode={setScrollbackMode}
         searchQuery={searchQuery}
         showWindowsPowerShellImplementation={showWindowsPowerShellImplementation}
+        showWindowsCodexTar={shouldShowWindowsCodexTar}
         pwshAvailable={pwshAvailable}
         isMac={isMac}
       />
