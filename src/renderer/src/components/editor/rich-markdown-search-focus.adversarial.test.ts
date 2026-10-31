@@ -145,7 +145,11 @@ describe('Find focus with editor-owned selection', () => {
             : []
         ),
         dispatch: vi.spyOn(editor.view, 'dispatch'),
-        scroll: vi.spyOn(editor.view, 'scrollToSelection')
+        scroll: vi.spyOn(
+          // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The pinned view implements this internal method; the spy calls through to its real scrolling path.
+          editor.view as Editor['view'] & { scrollToSelection(): void },
+          'scrollToSelection'
+        )
       }))
       // between counts parser/fallback factories; near counts the separate comparator, not all allocations.
       const constructors = vi.spyOn(TextSelection, 'between')

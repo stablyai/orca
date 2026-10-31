@@ -125,8 +125,7 @@ describe('drag selection guard listener lifetime', () => {
     if (!host || !text || !native) {
       throw new Error('Expected live mounted editor')
     }
-    // SAFETY: Count the actual pinned engine mapper; do not replace the live observer.
-    // oxlint-disable-next-line typescript/consistent-type-assertions
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Count the actual pinned engine mapper; do not replace the live observer.
     const engine = view as typeof view & { docView: { posFromDOM: typeof view.posAtDOM } }
     const mapping = vi.spyOn(engine.docView, 'posFromDOM')
     const publication = vi.fn()

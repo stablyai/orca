@@ -125,8 +125,7 @@ it('copies genuine cache-equal held input after the engine tracker has finished'
   const text = textNode(editor, 'p')
   vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 })
   fireEvent.mouseDown(editor.view.dom, { button: 0, buttons: 1, shiftKey: true })
-  // SAFETY: Use the actual inherited suppression seam while the actual tracker owns held input.
-  // oxlint-disable-next-line typescript/consistent-type-assertions
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Use the actual inherited suppression seam while the actual tracker owns held input.
   const observer = editor.view as Editor['view'] & {
     domObserver: { suppressSelectionUpdates(): void }
   }
@@ -253,8 +252,7 @@ function heldRange(editor: Editor, text: Node) {
     buttons: 1,
     shiftKey: true
   })
-  // SAFETY: Read the pinned engine's real tracker; never replace its lifetime or delayed writer.
-  // oxlint-disable-next-line typescript/consistent-type-assertions
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Read the pinned engine's real tracker; never replace its lifetime or delayed writer.
   const engine = editor.view as Editor['view'] & {
     input: {
       mouseDown: { allowDefault: boolean; delayedSelectionSync: boolean; done(): void } | null
@@ -350,8 +348,7 @@ it('observes incoming focus before synchronous custom redirect and preserves new
   })
   // A reset already present at core focus must be classified before the custom callback reads it.
   selectNative(textNode(editor, 'h1'), 0, 0)
-  // SAFETY: Schedule the pinned engine's actual inherited observer work, without replacing it.
-  // oxlint-disable-next-line typescript/consistent-type-assertions
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Schedule the pinned engine's actual inherited observer work, without replacing it.
   const scheduled = editor.view as Editor['view'] & { domObserver: { flushSoon(): void } }
   scheduled.domObserver.flushSoon()
   editor.view.dom.focus()
@@ -446,8 +443,7 @@ it.each([true, false])(
     const accepted = editor.state.selection
     const publication = vi.fn()
     editor.on('selectionUpdate', publication)
-    // SAFETY: Exercise the pinned observer's inherited suppression policy, not a replacement flag/timer.
-    // oxlint-disable-next-line typescript/consistent-type-assertions
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Exercise the pinned observer's inherited suppression policy, not a replacement flag/timer.
     const engine = editor.view as Editor['view'] & {
       domObserver: { suppressSelectionUpdates(): void }
     }
