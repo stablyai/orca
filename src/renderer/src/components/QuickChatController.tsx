@@ -11,7 +11,7 @@ import { useAgentLaunchPickerInventory } from './agent/use-agent-launch-picker-i
 import { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } from './ui/dropdown-menu'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
-import { QUICK_CHAT_EVENT } from './QuickChatButton'
+import { QUICK_CHAT_EVENT, QUICK_CHAT_FINISHED_EVENT } from './QuickChatButton'
 
 function useQuickChatDestination(worktreeId: string, open: boolean) {
   const detection = useAgentDetectionTargetForWorktree(worktreeId)
@@ -94,6 +94,8 @@ export function QuickChatController() {
       void startQuickChat().then((worktreeId) => {
         if (worktreeId) {
           setRequests((current) => [...current, { id, worktreeId, anchor, control }])
+        } else {
+          control.dispatchEvent(new Event(QUICK_CHAT_FINISHED_EVENT))
         }
       })
     }
@@ -110,6 +112,7 @@ export function QuickChatController() {
             if (pickerWorktreeId) {
               setMenu({ worktreeId: pickerWorktreeId, anchor, control })
             } else {
+              control.dispatchEvent(new Event(QUICK_CHAT_FINISHED_EVENT))
               setMenu(null)
             }
             setRequests((current) => current.filter((request) => request.id !== id))
@@ -120,6 +123,7 @@ export function QuickChatController() {
         open={menu !== null}
         onOpenChange={(open) => {
           if (!open) {
+            menu?.control.dispatchEvent(new Event(QUICK_CHAT_FINISHED_EVENT))
             setMenu(null)
           }
         }}

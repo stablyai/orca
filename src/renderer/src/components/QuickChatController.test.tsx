@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => {
     launch: vi.fn(),
     activate: vi.fn(),
     error: vi.fn(),
+    hasProjects: false,
     model: initialModel()
   }
 })
@@ -18,7 +19,7 @@ vi.mock('@/store', () => ({
   useAppStore: (select: (state: unknown) => unknown) =>
     select({
       activeGroupIdByWorktree: {},
-      repos: []
+      repos: mocks.hasProjects ? [{}] : []
     })
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -57,6 +58,7 @@ import { TooltipProvider } from './ui/tooltip'
 afterEach(cleanup)
 beforeEach(() => {
   vi.clearAllMocks()
+  mocks.hasProjects = false
   mocks.start.mockResolvedValue('folder-chats')
   mocks.activate.mockReturnValue({ primaryTabId: null })
   mocks.model = {
@@ -150,4 +152,22 @@ it('waits for the folder fetch and agent rows before launching', async () => {
   )
   expect(mocks.launch).not.toHaveBeenCalled()
   expect(screen.getByRole('button', { name: 'Choose Codex' })).toBeTruthy()
+})
+
+it('retires the zero-project control after the fallback picker is dismissed', async () => {
+  if (mocks.model.state === 'settled') {
+    mocks.model.defaultTuiAgent = 'blank'
+  }
+  const view = mount()
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'New chat' })))
+  mocks.hasProjects = true
+  view.rerender(
+    <TooltipProvider>
+      <QuickChatController />
+      <QuickChatButton landing />
+    </TooltipProvider>
+  )
+  expect(document.querySelector('[data-quick-chat="landing"]')).toBeTruthy()
+  fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+  expect(screen.queryByRole('button', { name: 'New chat' })).toBeNull()
 })
