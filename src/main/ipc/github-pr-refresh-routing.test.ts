@@ -18,6 +18,7 @@ import { registerGitHubHandlers } from './github'
 import { createGitHubIpcHarness } from './github-ipc-test-harness'
 
 const {
+  refreshPRNow: refreshPRNowMock,
   enqueuePRRefresh: enqueuePRRefreshMock,
   reportVisiblePRRefreshCandidates: reportVisiblePRRefreshCandidatesMock
 } = mocks.prRefresh
@@ -100,6 +101,50 @@ describe('registerGitHubHandlers', () => {
     // A re-added project gets a new id; queued work keyed by path and host must still run.
     const isRegistered = mocks.prRefresh.setPRRefreshRegistrationCheck.mock.lastCall?.[0]
     expect(isRegistered?.({ ...candidate, repoId: 're-added-repo' })).toBe(true)
+  })
+
+  it('forwards explicit intent on the invocation, never the reusable candidate', async () => {
+    registerGitHubHandlers(store as never, stats as never)
+    refreshPRNowMock.mockResolvedValue({ kind: 'no-pr', fetchedAt: 1 })
+    await handlers['gh:refreshPRNow'](null, {
+      candidate: {
+        cacheKey: 'click',
+        repoPath: '/workspace/repo',
+        repoId: 'repo-1',
+        branch: 'main',
+        repoKind: 'git'
+      },
+      reason: 'manual',
+      userRefresh: true
+    })
+    expect(refreshPRNowMock).toHaveBeenCalledWith(
+      expect.not.objectContaining({ userRefresh: true }),
+      'manual',
+      { userRefresh: true }
+    )
+    await handlers['gh:prForBranch'](null, {
+      repoPath: '/workspace/repo',
+      branch: 'main',
+      userRefresh: true
+    })
+    expect(mocks.client.getPRForBranch).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'main',
+      null,
+      null,
+      null,
+      expect.objectContaining({ userRefresh: true })
+    )
+    await handlers['gh:prChecks'](null, {
+      repoPath: '/workspace/repo',
+      prNumber: 12,
+      noCache: true,
+      userRefresh: true
+    })
+    expect(mocks.client.getPRChecks.mock.calls[0]?.[4]).toEqual({
+      noCache: true,
+      userRefresh: true
+    })
   })
 
   it('skips stale visible PR refresh candidates without rejecting the batch', async () => {
