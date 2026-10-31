@@ -7,7 +7,12 @@ import { getPosixOmpShellWrapper } from '../pty/omp-shell-wrapper'
 import { getPosixCodexShellLaunchPreflight } from '../../shared/codex-shell-function'
 import { getPosixClaudeShellFunction } from '../../shared/claude-shell-function'
 import { getBashStartupCommandPromptBlock } from '../pty/posix-shell-startup-command'
-import { BASH_FEATURE_CHANNEL_BLOCK, SHELL_STARTUP_IDENTITY_MARKER_BLOCK } from '../shell-templates'
+import {
+  BASH_FEATURE_CHANNEL_BLOCK,
+  BASH_LOGIN_PROFILE_ZSH_HANDOFF_CLOSE_BLOCK,
+  BASH_LOGIN_PROFILE_ZSH_HANDOFF_OPEN_BLOCK,
+  SHELL_STARTUP_IDENTITY_MARKER_BLOCK
+} from '../shell-templates'
 import { SHELL_READY_MARKER_ESCAPED } from './local-pty-shell-ready-marker'
 import { BASH_WSL_CWD_REPORT_BLOCK } from '../wsl-shell-cwd-report'
 
@@ -20,6 +25,7 @@ __orca_ready_marker=""
 __orca_has_feature ready && __orca_ready_marker=1
 unset _orca_shell_features
 unset -f __orca_has_feature
+${BASH_LOGIN_PROFILE_ZSH_HANDOFF_OPEN_BLOCK}
 [[ -f /etc/profile ]] && source /etc/profile
 if [[ -f "$HOME/.bash_profile" ]]; then
   source "$HOME/.bash_profile"
@@ -28,6 +34,7 @@ elif [[ -f "$HOME/.bash_login" ]]; then
 elif [[ -f "$HOME/.profile" ]]; then
   source "$HOME/.profile"
 fi
+${BASH_LOGIN_PROFILE_ZSH_HANDOFF_CLOSE_BLOCK}
 # Older readline needs explicit bracketed paste so multiline prompts do not submit each newline.
 [[ $- == *i* ]] && bind 'set enable-bracketed-paste on' 2>/dev/null
 # Login profiles may already source .bashrc; sourcing it again would duplicate PATH, hooks and prompt setup.
