@@ -14,7 +14,10 @@ const doubles = vi.hoisted((): Doubles => ({ failures: [], hosts: [] }))
 vi.mock('react-native', () => ({ Text: 'Text', View: 'View' }))
 vi.mock('expo-file-system', () => ({ Directory: class {}, File: class {}, Paths: { cache: '' } }))
 vi.mock('../mobile-web-shell/generation-store', () => ({
-  createGenerationStore: () => ({ readUpdateFailures: async () => doubles.failures })
+  createGenerationStore: () => ({
+    readUpdateFailures: async () => doubles.failures,
+    deleteUnpairedHostCaches: async () => undefined
+  })
 }))
 vi.mock('../mobile-web-shell/generation-store-file-system', () => ({
   createExpoGenerationFileSystem: () => ({})

@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 import { createFakeGenerationFileSystem } from './generation-file-system-fake'
-import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
+import { createGenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import type { MobileWebShellUpdateFailure } from './mobile-web-shell-update-failure'
 import {
@@ -52,17 +52,6 @@ describe('appendUpdateFailure', () => {
     )
     expect(kept).toHaveLength(MAX_UPDATE_FAILURES)
     expect(kept[0]?.at).toBe(10)
-  })
-
-  it('keeps a full per-host history for every cached host', () => {
-    const entries = Array.from({ length: MAX_CACHED_HOSTS }, (_, host) =>
-      Array.from({ length: MAX_UPDATE_FAILURES_PER_HOST }, (_, offset) =>
-        failure(`host-${host}`, host * MAX_UPDATE_FAILURES_PER_HOST + offset)
-      )
-    ).flat()
-    expect(appendAll(entries)).toEqual(entries)
-    const extra = failure('host-0', entries.length)
-    expect(appendAll([...entries, extra])).toEqual([...entries.slice(1), extra])
   })
 
   it('drops a build id that is not a digest rather than keep host text', () => {
@@ -156,6 +145,7 @@ describe('the generation store keeps the log', () => {
     const store = createGenerationStore({ fileSystem })
     await store.recordUpdateFailure(failure('host-1', 1))
     await store.sweepStagedGenerations()
+    await store.deleteUnpairedHostCaches(async () => new Set())
     expect(fileSystem.text(LOG)).not.toBeNull()
   })
 })

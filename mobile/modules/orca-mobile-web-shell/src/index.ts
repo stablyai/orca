@@ -48,6 +48,14 @@ export function presentPdf(uri: string): Promise<void> {
   ).presentPdf(uri)
 }
 
+// iOS only; Android backups are off and older binaries lack the call, so both skip it.
+export async function excludeFromBackup(path: string): Promise<void> {
+  const shell = requireNativeModule<{ excludeFromBackup?: (path: string) => Promise<void> }>(
+    'OrcaMobileWebShell'
+  )
+  await shell.excludeFromBackup?.(path)
+}
+
 export {
   MOBILE_WEB_SHELL_FAILURE_REASONS,
   parseMobileWebShellLoadState,

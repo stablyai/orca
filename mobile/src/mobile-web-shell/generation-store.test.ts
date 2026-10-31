@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { createGenerationStore, MAX_CACHED_HOSTS } from './generation-store'
+import { createGenerationStore } from './generation-store'
 import { deriveHostCacheKey } from './host-cache-key'
 import type { MobileWebBundleFetchResult } from '../transport/mobile-web-bundle-fetch'
 import { computeMobileWebBundleId } from '../../../src/shared/mobile-web-bundle/manifest-contract'
@@ -80,13 +80,11 @@ describe('generation store', () => {
       `${HOST}/generations/${build}/assets/app.js`,
       `${HOST}/generations/${build}/index.html`,
       `${HOST}/generations/${build}/manifest.json`,
-      `${HOST}/tmp`,
-      'hosts.json'
+      `${HOST}/tmp`
     ])
     const staged = fs.writes.filter((path) => path.includes('/tmp/'))
     expect(staged.at(-1)).toBe(`${HOST}/tmp/${build}/manifest.json`)
     expect(staged).toHaveLength(3)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST]))
   })
 
   it('reads back the activation it committed', async () => {
@@ -199,142 +197,32 @@ describe('generation store', () => {
     }
   })
 
-  it('evicts the least recently activated host past the ceiling', async () => {
+  it('keeps every host it has activated, however many are paired', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
-    const hosts = hostKeys(MAX_CACHED_HOSTS + 1)
+    const hosts = hostKeys(12)
 
     for (const host of hosts) {
       await activate(store, host)
     }
 
-    expect(await store.readActiveGeneration(hosts[0])).toBeNull()
-    expect(fs.paths().some((path) => path.startsWith(hosts[0]))).toBe(false)
-    for (const host of hosts.slice(1)) {
+    for (const host of hosts) {
       expect((await store.readActiveGeneration(host))?.buildId).toBe(BUILD)
     }
-    expect(fs.text('hosts.json')).toBe(JSON.stringify(hosts.slice(1)))
   })
 
-  it('evicts a host with no index entry before the least recently activated one', async () => {
+  it('sweeps the trees of hosts that are no longer paired and keeps the paired ones', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
-    const [oldest, ...rest] = hostKeys(MAX_CACHED_HOSTS - 1)
-    const orphan = deriveHostCacheKey('orphan')
-    for (const host of [oldest, ...rest]) {
-      await activate(store, host)
-    }
-    await activate(store, orphan)
-    const order = [oldest, ...rest]
-    fs.seed('hosts.json', { kind: 'file', bytes: new TextEncoder().encode(JSON.stringify(order)) })
+    const [paired, unpaired, downloading] = hostKeys(3)
+    await activate(store, paired)
+    await activate(store, unpaired)
+    await store.stageGeneration(downloading, buildResult({}))
 
-    await activate(store, deriveHostCacheKey('one-too-many'))
+    await store.deleteUnpairedHostCaches(async () => new Set([paired]))
 
-    expect(fs.paths().some((path) => path.startsWith(orphan))).toBe(false)
-    expect((await store.readActiveGeneration(oldest))?.buildId).toBe(BUILD)
-  })
-
-  it('counts a recommit of the build a host already has as use of that host', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const hosts = hostKeys(MAX_CACHED_HOSTS)
-    const [kept, evicted] = hosts
-    for (const host of hosts) {
-      await activate(store, host)
-    }
-    await activate(store, kept)
-
-    await activate(store, deriveHostCacheKey('one-too-many'))
-
-    expect(fs.paths().some((path) => path.startsWith(evicted))).toBe(false)
-    expect((await store.readActiveGeneration(kept))?.buildId).toBe(BUILD)
-  })
-
-  it('counts opening a cached generation as use of that host', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const hosts = hostKeys(MAX_CACHED_HOSTS)
-    for (const host of hosts) {
-      await activate(store, host)
-    }
-    expect((await store.readActiveGeneration(hosts[0]))?.buildId).toBe(BUILD)
-
-    await activate(store, deriveHostCacheKey('one-too-many'))
-
-    expect((await store.readActiveGeneration(hosts[0]))?.buildId).toBe(BUILD)
-    expect(fs.paths().some((path) => path.startsWith(hosts[1]))).toBe(false)
-  })
-
-  it('writes nothing when a read finds no active generation', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    await activate(store, HOST)
-    const writesBefore = fs.writes.length
-
-    expect(await store.readActiveGeneration(deriveHostCacheKey('never-opened'))).toBeNull()
-
-    expect(fs.writes).toHaveLength(writesBefore)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST]))
-  })
-
-  it('returns the generation when an open cannot write the index', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const other = deriveHostCacheKey('other')
-    await activate(store, HOST)
-    await activate(store, other)
-    fs.failWritesAt('hosts.json')
-
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST, other]))
-  })
-
-  it('rewrites the index on an open only when the host is not already the newest', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const [older, newest] = hostKeys(2)
-    await activate(store, older)
-    await activate(store, newest)
-    const before = { text: fs.text('hosts.json'), writes: fs.writes.length }
-
-    expect((await store.readActiveGeneration(newest))?.buildId).toBe(BUILD)
-    expect({ text: fs.text('hosts.json'), writes: fs.writes.length }).toEqual(before)
-
-    expect((await store.readActiveGeneration(older))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([newest, older]))
-  })
-
-  it('reads the timestamp record earlier builds wrote as an empty order', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const other = deriveHostCacheKey('other')
-    fs.seed('hosts.json', {
-      kind: 'file',
-      bytes: new TextEncoder().encode(JSON.stringify({ [HOST]: 1, [other]: 2 }))
-    })
-    await activate(store, other)
-
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([other]))
-  })
-
-  it('never counts or evicts a host that is only mid-download', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const hosts = hostKeys(MAX_CACHED_HOSTS)
-    const oldest = hosts[0]
-    const downloading = deriveHostCacheKey('downloading')
-    for (const host of hosts) {
-      await activate(store, host)
-    }
-    const staged = await store.stageGeneration(downloading, buildResult({}))
-
-    await activate(store, deriveHostCacheKey('one-too-many'))
-
-    // Count activations only; eviction must leave staged downloads intact.
-    expect(fs.paths().some((path) => path.startsWith(oldest))).toBe(false)
-    expect(fs.text(`${staged.directory.slice(ROOT.length + 1)}/manifest.json`)).not.toBeNull()
-    await store.commitGeneration(staged)
-    expect((await store.readActiveGeneration(downloading))?.buildId).toBe(BUILD)
+    expect((await store.readActiveGeneration(paired))?.buildId).toBe(BUILD)
+    expect(fs.paths().filter((path) => !path.startsWith(paired))).toEqual([])
   })
 
   it('serializes two stage calls for one host and build', async () => {
@@ -412,7 +300,6 @@ describe('generation store', () => {
 
     expect(await store.readActiveGeneration(HOST)).toBeNull()
     expect((await store.readActiveGeneration(other))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([other]))
   })
 
   it('refuses a rename that did not carry the tree, as Android below API 26 can', async () => {
@@ -442,17 +329,6 @@ describe('generation store', () => {
     await fs.delete(`${ROOT}/${manifest}`)
     expect(await store.readActiveGeneration(HOST)).toBeNull()
     expect(fs.paths().some((path) => path.startsWith(HOST))).toBe(false)
-  })
-
-  it('activates normally when the recency index cannot be read', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    fs.seed('hosts.json', { kind: 'file', bytes: new TextEncoder().encode('[]') })
-    fs.failReadsAt('hosts.json')
-
-    await activate(store, HOST)
-
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
   })
 
   it('replaces an entry named for the build id that is not a readable generation', async () => {
@@ -485,19 +361,6 @@ describe('generation store', () => {
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
   })
 
-  it('returns the activation even when the recency index cannot be written', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    fs.failWritesAt('hosts.json')
-
-    const staged = await store.stageGeneration(HOST, buildResult({}))
-    const active = await store.commitGeneration(staged)
-
-    expect(active.buildId).toBe(BUILD)
-    expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
-    expect(fs.text('hosts.json')).toBeNull()
-  })
-
   it('refuses a handle whose staged tree is gone without touching the activation', async () => {
     const fs = createFakeFileSystem()
     const store = createGenerationStore({ fileSystem: fs })
@@ -508,20 +371,6 @@ describe('generation store', () => {
 
     await expect(store.commitGeneration(staged)).rejects.toThrow('no longer on disk')
     expect((await store.readActiveGeneration(HOST))?.buildId).toBe(BUILD)
-  })
-
-  it('prunes an index entry whose host tree is gone', async () => {
-    const fs = createFakeFileSystem()
-    const store = createGenerationStore({ fileSystem: fs })
-    const stale = deriveHostCacheKey('uninstalled')
-    fs.seed('hosts.json', {
-      kind: 'file',
-      bytes: new TextEncoder().encode(JSON.stringify([stale]))
-    })
-
-    await activate(store, HOST)
-
-    expect(fs.text('hosts.json')).toBe(JSON.stringify([HOST]))
   })
 
   it('refuses a staged handle it did not issue', async () => {
@@ -552,6 +401,7 @@ describe('generation store', () => {
       await activate(store, host)
     }
     await store.sweepStagedGenerations()
+    await store.deleteUnpairedHostCaches(async () => new Set(hosts))
 
     expect(fs.paths()).toContain('not-a-host-key/stray.txt')
     for (const host of hosts) {
