@@ -1,9 +1,9 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 const KEY_HEIGHT = 32
-const KEY_RADIUS = 9
+const KEY_RADIUS = radii.control
 
 const key = {
   height: KEY_HEIGHT,
@@ -49,31 +49,9 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     borderTopColor: colors.borderSubtle,
     backgroundColor: colors.bgPanel
   },
-  // The Duo's side rail is 84pt wide; keys span it less 4pt each side.
-  keyRail: {
-    flex: 1,
-    minHeight: 0,
-    gap: spacing.sm,
-    paddingHorizontal: spacing.xs,
-    paddingVertical: spacing.xs
-  },
   keyScroll: {
     flex: 1,
     minWidth: 0
-  },
-  keyScrollVertical: {
-    flex: 1,
-    minHeight: 0
-  },
-  keyScrollContentVertical: {
-    alignItems: 'stretch',
-    gap: spacing.sm
-  },
-  keyVertical: {
-    width: 'auto',
-    height: 44,
-    alignSelf: 'stretch',
-    paddingHorizontal: 2
   },
   keyScrollContent: {
     alignItems: 'center',
@@ -139,7 +117,7 @@ export const terminalDockStyles = themedStyleSheet(() => ({
   arrowPad: {
     width: 66,
     height: KEY_HEIGHT,
-    borderRadius: KEY_HEIGHT / 2,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   arrowPadDragging: {
@@ -200,6 +178,9 @@ export const terminalDockStyles = themedStyleSheet(() => ({
     fontWeight: '600',
     letterSpacing: 0.4,
     textTransform: 'uppercase'
+  },
+  sheetKey: {
+    backgroundColor: colors.sheetGroup
   },
   sheetGrid: {
     flexDirection: 'row',

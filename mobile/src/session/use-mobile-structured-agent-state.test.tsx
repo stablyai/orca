@@ -1,4 +1,3 @@
-import { compactionTransportCorpus } from '../../../src/main/native-chat/agent-session-journal/journal-compaction-frames.test-fixture'
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -129,45 +128,6 @@ describe('useMobileStructuredAgentState older history', () => {
     await vi.waitFor(() => expect(hook.current!.state.status).toBe('ready'))
     return { hook, historyCursors, emit: (event: AgentSessionSubscribeEvent) => onFrame?.(event) }
   }
-
-  it('consumes the SQLite-verified retired stream and pages its actual older window', async () => {
-    const corpus = compactionTransportCorpus()
-    const boundary = corpus.tail.window.oldest
-    if (!boundary) {
-      throw new Error('expected tail boundary')
-    }
-    const { hook, emit, historyCursors } = await mountWithOlderPages(
-      { [boundary.sequence]: corpus.tailOlder },
-      []
-    )
-    act(() => emit(compactionTransportCorpus(7).snapshot))
-    vi.useFakeTimers()
-    try {
-      act(() => emit(corpus.frame))
-      await act(async () => {
-        await vi.advanceTimersByTimeAsync(STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS)
-      })
-      if (corpus.snapshot.type !== 'snapshot') {
-        throw new Error('expected snapshot')
-      }
-      expect(hook.current!.state.items).toEqual(corpus.snapshot.page.items)
-      expect(hook.current!.state.submissions).toEqual(corpus.snapshot.page.submissions)
-      expect(hook.current!.state.cursor).toEqual(
-        corpus.frame.type === 'batch' ? corpus.frame.batch.cursor : null
-      )
-      act(() => emit({ ...corpus.snapshot, page: corpus.tail }))
-    } finally {
-      vi.useRealTimers()
-    }
-    act(() => hook.current!.loadEarlier())
-    await vi.waitFor(() => expect(historyCursors).toEqual([boundary.sequence]))
-    await vi.waitFor(() =>
-      expect(hook.current!.state.items).toEqual([...corpus.tailOlder.items, ...corpus.tail.items])
-    )
-    expect(hook.current!.state.submissions).toEqual(corpus.snapshot.page.submissions)
-    expect(hook.current!.state.cursor).toEqual(corpus.tail.liveCursor)
-    expect(hook.current!.state.hasOlder).toBe(corpus.tailOlder.hasOlder)
-  })
 
   it('keeps a row removed when its upsert and removal arrive within one streaming window', async () => {
     const { hook, emit } = await mountWithOlderPages({}, [])

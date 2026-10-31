@@ -302,6 +302,14 @@ export function isAdmissibleAgentJournalItemBody(value: unknown): value is Agent
   return AgentJournalItemBodySchema.safeParse(value).success
 }
 
+/** The wire's known arms, in order; saved-outcome storage declares them in full
+ *  (journal-storage-schema.ts). */
+export const AgentJournalKnownSchemas = {
+  blocks: Block.options[0].options,
+  bodies: KnownItemBody.options,
+  resolution: Resolution
+}
+
 /** Submission rows may only carry a user-authored message body. */
 export function isAdmissibleAgentJournalMessageBody(
   value: unknown

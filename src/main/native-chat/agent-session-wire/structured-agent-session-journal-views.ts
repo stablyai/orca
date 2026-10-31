@@ -4,11 +4,6 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
 
-export type AgentSessionHistoryJournal = Pick<
-  AgentSessionJournal,
-  'publicRead' | 'snapshot' | 'readSince' | 'canonicalItemId'
->
-
 export type StructuredAgentSessionLifecycleJournal = Pick<
   AgentSessionJournal,
   'epoch' | 'visitItems'

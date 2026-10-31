@@ -9,7 +9,7 @@ import type {
   PluginMarketplaceHostListing,
   PluginMarketplaceHostSourceState
 } from '../../../../../preload/api-types'
-import { requestPluginPreview } from '@/store/plugin-preview-request'
+import { requestPluginPreview, requestPluginUpdateReview } from '@/store/plugin-preview-request'
 import { PluginManager } from './PluginManager'
 import { usePluginPageNavigation } from '../state/use-plugin-page-navigation'
 
@@ -376,6 +376,39 @@ describe('PluginManager catalog', () => {
     expect(button('Update').disabled).toBe(true)
   })
 
+  it('shows public install counts on the card and page only for community catalog plugins', async () => {
+    const getInstallCounts = vi.fn().mockResolvedValue({ [listing.pluginKey]: 1234 })
+    installApi({
+      getInstallCounts,
+      onInstallCountsChanged: vi.fn(() => () => undefined),
+      listMarketplaces: vi.fn().mockResolvedValue([
+        {
+          ...source,
+          source: { ...source.source, url: 'https://github.com/stablyai/orca-community-plugins' }
+        }
+      ])
+    })
+    await render()
+    expect(getInstallCounts).toHaveBeenCalled()
+    expect(document.querySelector('[data-plugin-install-count]')?.textContent).toContain(
+      '1.2k installs'
+    )
+    await act(async () =>
+      requestPluginPreview({ marketplaceSourceId: SOURCE_ID, pluginKey: listing.pluginKey })
+    )
+    expect(document.body.textContent).toContain('Installs1.2k')
+  })
+
+  it('hides install counts for a private catalog plugin', async () => {
+    installApi({
+      getInstallCounts: vi.fn().mockResolvedValue({ [listing.pluginKey]: 1234 }),
+      onInstallCountsChanged: vi.fn(() => () => undefined)
+    })
+    await render()
+    expect(document.querySelector('[data-plugin-install-count]')).toBeNull()
+    expect(document.body.textContent).not.toContain('installs')
+  })
+
   it('opens the plugin page for a plugin asked for from outside Settings, with no dialog', async () => {
     await render()
     await act(async () =>
@@ -403,5 +436,34 @@ describe('PluginManager catalog', () => {
     expect(document.body.textContent).not.toContain('See all access')
     await act(async () => button('Update').click())
     expect(onInstalled).toHaveBeenCalledWith([listing.pluginKey])
+  })
+
+  it('opens a held update’s own review from the toast and approves nothing', async () => {
+    installApi({
+      listMarketplacePlugins: vi.fn().mockResolvedValue([{ ...listing, version: '2.0.0' }])
+    })
+    await render([installedPlugin()])
+    await act(async () => requestPluginUpdateReview({ pluginKey: listing.pluginKey }))
+
+    // Why re-read: the update pass refreshed main's catalogs after this pane loaded them.
+    expect(window.api.plugins.listMarketplacePlugins).toHaveBeenCalledTimes(2)
+    expect(document.body.textContent).toContain('Review update to Worktree Notes')
+    expect(buttons('Approve & update')).toHaveLength(1)
+    expect(window.api.plugins.installMarketplacePlugin).not.toHaveBeenCalled()
+    expect(window.api.plugins.consent).not.toHaveBeenCalled()
+  })
+
+  it('shows the Updates list for a grouped review, with nothing opened or approved', async () => {
+    installApi({
+      listMarketplacePlugins: vi.fn().mockResolvedValue([{ ...listing, version: '2.0.0' }])
+    })
+    await render([installedPlugin()])
+    await act(async () => requestPluginUpdateReview({ pluginKey: null }))
+
+    expect(buttons('Update all…')).toHaveLength(1)
+    expect(document.body.textContent).not.toContain('Review update to')
+    expect(window.api.plugins.previewMarketplaceUpdate).not.toHaveBeenCalled()
+    expect(window.api.plugins.installMarketplacePlugin).not.toHaveBeenCalled()
+    expect(window.api.plugins.consent).not.toHaveBeenCalled()
   })
 })

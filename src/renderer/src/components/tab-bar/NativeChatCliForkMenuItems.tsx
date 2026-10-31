@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import { useAppStore } from '@/store'
 import { AI_VAULT_AGENTS } from '../../../../shared/ai-vault-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
@@ -34,10 +34,10 @@ export function NativeChatCliForkMenuItems({
   }
   return (
     <>
-      {leadingSeparator ? <DropdownMenuSeparator /> : null}
+      {leadingSeparator ? <ContextMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
         action="switch"
-        menuKind="dropdown"
+        menuKind="context"
         tooltipSide="right"
         cliPending={pending}
         onResumeInNewCli={(event) => {

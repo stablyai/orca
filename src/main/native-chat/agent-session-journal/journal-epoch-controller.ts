@@ -36,8 +36,9 @@ export class JournalEpochController {
     }
   ) {}
 
-  start(reason: AgentJournalEpochReason, fence: number): void {
+  start(reason: AgentJournalEpochReason, fence: number, expectedEpoch: string | null): void {
     publishNewEpoch({
+      expectedEpoch,
       database: this.deps.database(),
       identity: this.deps.identity,
       epoch: this.deps.mintEpoch(),
@@ -53,7 +54,7 @@ export class JournalEpochController {
   roll(reason: AgentJournalEpochReason, fence: number): Promise<AgentJournalCursor> {
     return this.deps.serialize(() => {
       assertJournalWritable(this.deps.readOnly(), this.deps.identity.sessionId)
-      this.start(reason, fence)
+      this.start(reason, fence, this.deps.state().epoch)
       return this.deps.cursor()
     })
   }

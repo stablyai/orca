@@ -22,7 +22,6 @@ import {
   type AgentSessionSubagentRosterEntry
 } from '../../../shared/agent-session-wire'
 import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
-import type { AgentSessionHistoryJournal } from './structured-agent-session-journal-views'
 import { projectJournalBatch } from './agent-session-journal-batch'
 import { CLIENT_HISTORY_READER } from './agent-session-item-wire-form'
 import {
@@ -66,7 +65,7 @@ function isSubagentRow(item: AgentJournalRenderItem): boolean {
 }
 
 export function readAgentSessionHistory(
-  journal: AgentSessionHistoryJournal,
+  journal: AgentSessionJournal,
   request: AgentSessionHistoryRequest,
   {
     view = journal.publicRead(),
@@ -150,7 +149,7 @@ export function createAgentSessionCatchUpReader(
 }
 
 export function readAgentSessionHydrationPage(
-  journal: AgentSessionHistoryJournal,
+  journal: AgentSessionJournal,
   fence?: number,
   reader: HistoryReader = CLIENT_HISTORY_READER,
   snapshot: AgentJournalSnapshot = journal.snapshot()
@@ -199,7 +198,7 @@ function historyReset(
 }
 
 function readForward(
-  journal: AgentSessionHistoryJournal,
+  journal: AgentSessionJournal,
   snapshot: AgentJournalSnapshot,
   cursor: AgentJournalCursor | undefined,
   limit: number,

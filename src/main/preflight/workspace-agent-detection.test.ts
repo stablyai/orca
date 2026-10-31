@@ -269,7 +269,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       context: wslContext('Ubuntu-24.04', 'r1', 'project-override')
     })
   })
-  it("keeps a folder's repo runtime when only its group names another host", () => {
+  it("keeps an explicitly local folder's repo runtime when its group names another host", () => {
     _setWslCachesForTests({ available: true, distros: ['Ubuntu'] })
     const s = store({
       repos: [
@@ -277,7 +277,7 @@ describe('resolveWorkspaceAgentDetectionHost on a Windows host', () => {
       ],
       projects: [project('p1', ['r1'], { kind: 'wsl', distro: 'Ubuntu' })],
       projectGroups: [{ ...GROUP, executionHostId: 'runtime:paired' }],
-      folderWorkspaces: [{ ...FOLDER, folderPath: 'C:\\work' }]
+      folderWorkspaces: [{ ...FOLDER, folderPath: 'C:\\work', executionHostId: 'local' }]
     })
     expect(resolveFor(s, folderWorkspaceKey('f1'))).toMatchObject({
       kind: 'local',

@@ -35,12 +35,13 @@ import {
   type StructuredAgentSessionState
 } from '../../src/shared/structured-agent-session-reducer'
 import { selectStructuredAgentSettledTurns } from '../../src/shared/structured-agent-session-turn-timing'
-import {
-  insertTestJournalRow,
-  openTestJournalHostDatabase
-} from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
-import { readJournalSavedState } from '../../src/main/native-chat/agent-session-journal/journal-saved-state'
+import { openTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import { restoreJournal } from '../../src/main/native-chat/agent-session-journal/journal-open'
+import { journalOutcomeSource } from '../../src/main/native-chat/agent-session-journal/journal-outcome-format'
+import { prepareJournalOutcomeWrite } from '../../src/main/native-chat/agent-session-journal/journal-outcome-write'
+import type { JournalRow } from '../../src/main/native-chat/agent-session-journal/journal-row-schema'
 import { hostTestAttachParams } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import { seedQueuedRigLegacyJournal } from '../../src/main/native-chat/agent-session-wire/structured-agent-session-queued-legacy-journal.test-fixture'
 import {
   createRestTestRig,
   REST_TEST_CALLER,
@@ -96,6 +97,14 @@ const clients = [
   ['current paired desktop', currentDesktop, false, true],
   ['legacy paired desktop', STRUCTURED_CLIENT, false, false]
 ] as const
+// A new chat holds only records; an existing (mixed) chat holds old input rows up to the restart
+// and records after its marker, so catch-up from a cursor inside the old rows crosses into records.
+const cases = (['new', 'mixed'] as const).flatMap((kind) =>
+  clients.map(
+    ([name, client, bounded, snapshotCatchUp]) =>
+      [kind, name, client, bounded, snapshotCatchUp] as const
+  )
+)
 const message = (
   text: string,
   role: 'user' | 'assistant' = 'assistant'
@@ -186,21 +195,50 @@ function phone(state: StructuredAgentSessionState): void {
   expect(displayed.some((row) => row.text === STALE || row.text === REMOVED)).toBe(false)
 }
 
-it.each(clients)(
-  'draws restored prefix and tail through %s history and subscriber delivery',
-  async (_name, client, bounded, snapshotCatchUp) => {
+it.each(cases)(
+  'draws a restored %s chat, prefix and tail, through %s history and subscriber delivery',
+  async (kind, _name, client, bounded, snapshotCatchUp) => {
     const active = await createRestTestRig({ idleSweep: { intervalMs: MAX_TIMER_DELAY_MS } })
     rig = active
     setStructuredAgentSessionHost(active.host)
+    const pinInputs = kind === 'mixed' ? seedQueuedRigLegacyJournal(active.root, SESSION) : null
     const attached = await active.host.attach(REST_TEST_CALLER, hostTestAttachParams(null))
     if (!attached.ok) {
       throw new Error('Fixture attach refused')
     }
+    pinInputs?.(active.host)
     const journal = active.host.collaboratorsForTests().sessions.get(SESSION)?.journal
     if (!journal) {
       throw new Error('Fixture journal absent')
     }
     const options = { fence: attached.fence, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+    const dispatcher = new RpcDispatcher({
+      runtime: new OrcaRuntimeService(),
+      methods: STRUCTURED_AGENT_SESSION_METHODS
+    })
+    let requestId = 0
+    async function history(request: Omit<AgentSessionHistoryRequest, 'sessionId'>) {
+      const frame: RuntimeRpcResponse<AgentSessionHistoryResult> = JSON.parse(
+        JSON.stringify(
+          await dispatcher.dispatch(
+            {
+              id: `history-${++requestId}`,
+              authToken: 'token',
+              method: 'agentSession.history',
+              params: { sessionId: SESSION, ...request }
+            },
+            client
+          )
+        )
+      )
+      if (!frame.ok) {
+        throw new Error(`History RPC failed: ${frame.error.code}`)
+      }
+      if (!frame.result.ok) {
+        throw new Error(`History reset: ${frame.result.reset}`)
+      }
+      return frame.result.page
+    }
     const append = journal.appendItem.bind(journal)
     async function completedTurn(id: string, prompt: string, answer: string) {
       const user = await append(
@@ -237,90 +275,75 @@ it.each(clients)(
         options
       )
     }
+    // The mixed reader resumes from here, inside the old rows.
+    const crossing = kind === 'mixed' ? await history({ direction: 'tail' }) : null
     const { response, turnScope } = await completedTurn('current', PROMPT, STALE)
     const disposable = await journal.appendItem(
       { provider: 'orca', clientMessageId: 'disposable' },
       { kind: 'status', text: REMOVED },
       options
     )
-    const dispatcher = new RpcDispatcher({
-      runtime: new OrcaRuntimeService(),
-      methods: STRUCTURED_AGENT_SESSION_METHODS
-    })
-    let requestId = 0
-    async function history(request: Omit<AgentSessionHistoryRequest, 'sessionId'>) {
-      const frame: RuntimeRpcResponse<AgentSessionHistoryResult> = JSON.parse(
-        JSON.stringify(
-          await dispatcher.dispatch(
-            {
-              id: `history-${++requestId}`,
-              authToken: 'token',
-              method: 'agentSession.history',
-              params: { sessionId: SESSION, ...request }
-            },
-            client
-          )
-        )
-      )
-      if (!frame.ok) {
-        throw new Error(`History RPC failed: ${frame.error.code}`)
-      }
-      if (!frame.result.ok) {
-        throw new Error(`History reset: ${frame.result.reset}`)
-      }
-      return frame.result.page
-    }
     const prefixPage = await history({ direction: 'tail' })
     expect(prefixPage.hasOlder).toBe(true)
     expect(JSON.stringify(prefixPage.items)).toContain(STALE)
     expect(JSON.stringify(prefixPage.items)).toContain(REMOVED)
     expect(JSON.stringify(prefixPage.items)).not.toContain(OLDER)
-    const resumeCursor = prefixPage.liveCursor
+    const resumeFrom = crossing ?? prefixPage
+    const resumeCursor = resumeFrom.liveCursor
     if (!resumeCursor) {
       throw new Error('Missing pre-close history cursor')
     }
     await active.host.close(SESSION, 'evict')
     expect(active.host.hasSession(SESSION)).toBe(false)
     const database = openTestJournalHostDatabase(active.root)
-    const saved = readJournalSavedState(database.db, SESSION, resumeCursor.epoch)
+    const saved = restoreJournal(database.db, SESSION)?.state
     if (!saved) {
-      throw new Error('Close did not publish a usable checkpoint')
+      throw new Error('Missing usable projection before tail append')
     }
     const prefix = { epoch: saved.epoch, sequence: saved.lastSequence }
     expect(prefix.sequence).toBeGreaterThanOrEqual(resumeCursor.sequence)
-    database.transaction((db) => {
-      for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
-        insertTestJournalRow(db, SESSION, {
+    database.transaction(
+      (db) => {
+        const rows: JournalRow[] = []
+        for (let offset = 1; offset <= AGENT_SESSION_HISTORY_MAX_LIMIT; offset += 1) {
+          rows.push({
+            v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+            epoch: prefix.epoch,
+            seq: prefix.sequence + offset,
+            fence: attached.fence,
+            ts: active.clock.now + offset,
+            kind: 'item',
+            itemId: response.itemId,
+            revision: response.revision + offset,
+            body: message(
+              offset === AGENT_SESSION_HISTORY_MAX_LIMIT ? ANSWER : `Answer revision ${offset}`
+            ),
+            turnScope
+          })
+        }
+        rows.push({
           v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
           epoch: prefix.epoch,
-          seq: prefix.sequence + offset,
+          seq: prefix.sequence + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
           fence: attached.fence,
-          ts: active.clock.now + offset,
-          kind: 'item',
-          itemId: response.itemId,
-          revision: response.revision + offset,
-          body: message(
-            offset === AGENT_SESSION_HISTORY_MAX_LIMIT ? ANSWER : `Answer revision ${offset}`
-          ),
-          turnScope
+          ts: active.clock.now + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
+          kind: 'tombstone',
+          itemId: disposable.itemId,
+          revision: disposable.revision + 1
         })
+        return prepareJournalOutcomeWrite(db, saved, rows, active.clock.now)
+      },
+      false,
+      (result) => {
+        result.adopt()
       }
-      insertTestJournalRow(db, SESSION, {
-        v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
-        epoch: prefix.epoch,
-        seq: prefix.sequence + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
-        fence: attached.fence,
-        ts: active.clock.now + AGENT_SESSION_HISTORY_MAX_LIMIT + 1,
-        kind: 'tombstone',
-        itemId: disposable.itemId,
-        revision: disposable.revision + 1
-      })
-    })
+    )
+    // Anti-vacuous: the mixed chat's rows end at the restart and its records follow the marker.
+    expect(journalOutcomeSource(database.db, SESSION, prefix.epoch)?.prefix).toBe(
+      kind === 'mixed' ? prefix.sequence : 0
+    )
     const restoredPage = await history({ direction: 'tail' })
     expect(restoredPage.liveCursor?.sequence).toBeGreaterThan(prefix.sequence)
-    expect(readJournalSavedState(database.db, SESSION, prefix.epoch)?.lastSequence).toBe(
-      prefix.sequence
-    )
     expect(active.adapter.acquire).toHaveBeenCalledTimes(1)
     const subscribe = vi.spyOn(active.host, 'subscribe')
     async function stream(cursor?: AgentJournalCursor) {
@@ -359,6 +382,14 @@ it.each(clients)(
     const resumed = await stream(resumeCursor)
     if (snapshotCatchUp) {
       expect(resumed.events.some((event) => event.type === 'snapshot')).toBe(true)
+    } else if (kind === 'mixed') {
+      expect(resumed.events.every((event) => event.type === 'batch')).toBe(true)
+      // Old rows after the cursor, then records after the marker.
+      const batches = resumed.events.flatMap((event) =>
+        event.type === 'batch' ? [event.batch] : []
+      )
+      expect(batches.some((batch) => JSON.stringify(batch.items).includes(PROMPT))).toBe(true)
+      expect(batches.some((batch) => batch.removedItemIds.includes(disposable.itemId))).toBe(true)
     } else {
       expect(resumed.events.every((event) => event.type === 'batch')).toBe(true)
       expect(
@@ -409,7 +440,7 @@ it.each(clients)(
         resumed,
         reduceStructuredAgentSession(
           EMPTY_STRUCTURED_AGENT_SESSION,
-          { type: 'history-page', page: prefixPage },
+          { type: 'history-page', page: resumeFrom },
           1_000
         )
       ]

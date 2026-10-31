@@ -3,6 +3,7 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import {
+  forgetWslCliRegistration,
   getWslCliRegistrationCandidates,
   recordWslCliRegistrationObservations,
   recordWslCliRegistrationRemoved
@@ -123,6 +124,29 @@ describe('WSL CLI registration registry', () => {
     await recordWslCliRegistrationRemoved(userDataPath, 'ubuntu')
 
     await expect(getWslCliRegistrationCandidates(userDataPath, ['Ubuntu'])).resolves.toEqual([])
+  })
+
+  it('forgets every entry of a deleted distro and leaves the others', async () => {
+    const reconciled = { target: 'C:\\Orca\\resources\\bin\\orca.exe', appVersion: '1.4.244' }
+    await recordWslCliRegistrationObservations(
+      userDataPath,
+      [
+        { distro: 'orca-uqa-1029', inspected: true, managed: true, reconciled },
+        { distro: 'Ubuntu', inspected: true, managed: true, reconciled }
+      ],
+      { now: 1_000 }
+    )
+
+    await forgetWslCliRegistration(userDataPath, 'ORCA-UQA-1029')
+
+    expect(
+      JSON.parse(await readFile(join(userDataPath, 'wsl-cli-registrations.json'), 'utf8'))
+    ).toEqual({
+      schemaVersion: 2,
+      registeredDistros: ['Ubuntu'],
+      inspectionTimes: { ubuntu: 1_000 },
+      reconciliations: { ubuntu: reconciled }
+    })
   })
 
   it('periodically re-inspects a negative entry so restored distros are discovered', async () => {

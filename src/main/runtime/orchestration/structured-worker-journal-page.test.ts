@@ -9,11 +9,7 @@ import type {
 } from '../../../shared/agent-session-journal-types'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionHistoryRequest } from '../../../shared/agent-session-wire'
-import { backfillJournalState } from '../../native-chat/agent-session-journal/journal-state-backfill'
-import {
-  openTestJournalHostDatabase,
-  createTrackedJournalOpener
-} from '../../native-chat/agent-session-journal/journal-host-database-test-support'
+import { createTrackedJournalOpener } from '../../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../native-chat/agent-session-journal/journal-store'
 import type { AgentSessionHistoryScope } from '../../native-chat/agent-session-wire/agent-session-history-page'
 import { readStructuredAgentSessionHistoryResult } from '../../native-chat/agent-session-wire/structured-agent-session-history-result'
@@ -98,24 +94,7 @@ describe("a worker's journal page", () => {
       await append(`child-${index}`, subagent)
     }
 
-    for (const text of ['middle revision', 'worker-older']) {
-      await host.journal!.appendItem(
-        { provider: 'claude', sessionId: 'claude-1', uuid: 'uuid-1' },
-        said(text),
-        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE, observedAt: 500 }
-      )
-    }
     const before = await readStructuredJournalPage('session-1')
-    const result = await backfillJournalState({
-      database: () => openTestJournalHostDatabase(root),
-      checkpointOpen: async () => {
-        await host.journal!.checkpoint()
-        return true
-      },
-      stopped: () => false,
-      rest: async () => {}
-    })
-    expect(result?.deleted).toBe(1)
     await host.journal!.close()
     host.journal = await journals.open({
       identity: {

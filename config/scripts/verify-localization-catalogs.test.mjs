@@ -24,6 +24,11 @@ async function fixture() {
     JSON.stringify({ hello: 'Hello', ready: 'Ready', dynamic: 'Required' })
   )
   await writeFile(join(root, runtimePath), JSON.stringify({ dynamic: 'Required' }))
+  await mkdir(join(root, 'src/shared/plugins/languages'), { recursive: true })
+  await writeFile(
+    join(root, 'src/shared/plugins/languages/protected-copy-keys.json'),
+    `${JSON.stringify({ keys: [], prefixes: [] }, null, 2)}\n`
+  )
   return root
 }
 

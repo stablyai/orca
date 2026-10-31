@@ -47,7 +47,8 @@ export type JournalRowWriterDeps = {
   readOnly: () => boolean
   highestFence: () => number
   nextSequence: () => number
-  commit: (rows: readonly JournalRow[], savedAt: number, streamed?: boolean) => void
+  prepare?: (db: Database.Database, rows: readonly JournalRow[], savedAt: number) => () => void
+  commit: (rows: readonly JournalRow[], savedAt: number) => void
   /** Streamed-text-only revisions may skip per-commit fsync; settlement makes them durable. */
   streamedTextRevision?: (row: JournalRow) => boolean
 }
@@ -66,13 +67,20 @@ export class JournalRowWriter {
       assertJournalFence(row.fence, this.deps.highestFence())
       const receipt = typeof prepareReceipt === 'function' ? prepareReceipt([row]) : prepareReceipt
       const streamed = !receipt && this.streamed([row])
-      this.deps.database().transaction((db) => {
-        insertJournalRow(db, this.deps.sessionId, row, savedAt)
-        receipt?.write(db, row)
-      }, streamed)
-      // Adopt durable sequence state before fallible work: nonthrowing receipt ledger, then fold.
+      this.deps.database().transaction(
+        (db) => {
+          if (!this.deps.prepare) {
+            insertJournalRow(db, this.deps.sessionId, row, savedAt)
+          }
+          const adopt = this.deps.prepare?.(db, [row], savedAt)
+          receipt?.write(db, row)
+          return adopt
+        },
+        streamed,
+        (adopt) => adopt?.()
+      )
       receipt?.committed()
-      this.deps.commit([row], savedAt, streamed)
+      this.deps.commit([row], savedAt)
       return row
     })
   }
@@ -104,14 +112,22 @@ export class JournalRowWriter {
     }
     const receipt = typeof prepareReceipt === 'function' ? prepareReceipt(rows) : prepareReceipt
     const streamed = !receipt && this.streamed(rows)
-    this.deps.database().transaction((db) => {
-      for (const row of rows) {
-        insertJournalRow(db, this.deps.sessionId, row, ts)
-      }
-      receipt?.write(db, receiptRow?.(rows))
-    }, streamed)
+    this.deps.database().transaction(
+      (db) => {
+        if (!this.deps.prepare) {
+          for (const row of rows) {
+            insertJournalRow(db, this.deps.sessionId, row, ts)
+          }
+        }
+        const adopt = this.deps.prepare?.(db, rows, ts)
+        receipt?.write(db, receiptRow?.(rows))
+        return adopt
+      },
+      streamed,
+      (adopt) => adopt?.()
+    )
     receipt?.committed()
-    this.deps.commit(rows, ts, streamed)
+    this.deps.commit(rows, ts)
     return rows
   }
 

@@ -66,7 +66,8 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
         Platform: { OS: 'ios' },
         AppState: { currentState: 'active', addEventListener: silentNativeSubscription },
         BackHandler: { addEventListener: silentNativeSubscription },
-        Keyboard: { dismiss: () => {} },
+        Keyboard: { dismiss: () => {}, addListener: silentNativeSubscription },
+        Dimensions: { get: () => ({ width: 390, height: 844 }) },
         useWindowDimensions: () => ({ width: 390, height: 844 }),
         ...reactNativeScreenMembers()
       })
@@ -98,6 +99,11 @@ export function nativeMountingSubstitutes(): Map<string, unknown> {
         activateKeepAwakeAsync: () => Promise.resolve(),
         deactivateKeepAwake: () => {}
       })
+    ],
+    // Without the reserved-regions module: no fold, and the keyboard reports through Keyboard alone.
+    [
+      'expo-modules-core',
+      partialNativeModule('expo-modules-core', { requireOptionalNativeModule: () => null })
     ],
     ...screenNativeSubstitutes(),
     [

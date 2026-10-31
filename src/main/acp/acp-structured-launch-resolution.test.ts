@@ -11,8 +11,6 @@ import {
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { replayJournal, restoreJournal } from '../native-chat/agent-session-journal/journal-open'
-import { compactJournalSession } from '../native-chat/agent-session-journal/journal-compaction'
-import { saveJournalState } from '../native-chat/agent-session-journal/journal-saved-state'
 import {
   openTestJournalHostDatabase,
   closeTestJournalHostDatabase,
@@ -21,6 +19,8 @@ import {
   insertTestJournalRowJson
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import type { JournalLoad } from '../native-chat/agent-session-journal/journal-open'
+import { publishJournalOutcomeEpoch } from '../native-chat/agent-session-journal/journal-outcome-write'
+import type { JournalRow } from '../native-chat/agent-session-journal/journal-row-schema'
 import { createJournalReducerState } from '../native-chat/agent-session-journal/journal-reducer'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import {
@@ -88,7 +88,7 @@ function resolver(record: AgentSessionRecord, readJournal: () => JournalLoad | n
 }
 
 describe('ACP launch resolution', () => {
-  it('preserves resume and loss-warning decisions through a checkpoint and an unreadable tail', async () => {
+  it('preserves resume and loss-warning decisions through a restore and an unreadable tail', async () => {
     const root = mkdtempSync(join(tmpdir(), 'orca-acp-saved-read-'))
     const database = openTestJournalHostDatabase(root)
     try {
@@ -142,27 +142,6 @@ describe('ACP launch resolution', () => {
         revision: 1,
         body: turn.body
       })
-      for (const [seq, revision] of [
-        [3, 2],
-        [4, 3]
-      ] as const) {
-        insertTestJournalRow(database.db, identity.sessionId, {
-          v: 4,
-          epoch: 'epoch-1',
-          seq,
-          fence: 1,
-          ts: seq,
-          kind: 'item',
-          itemId: agentJournalItemKey(turnIdentity),
-          revision,
-          body: turn.body
-        })
-      }
-      const load = replayJournal(database.db, identity.sessionId)
-      if (!load) {
-        throw new Error('missing replay')
-      }
-      expect(saveJournalState(database, load.state)).toBe(true)
       const readDecisions = async (readJournal: () => JournalLoad | null) => {
         const launch = await resolver(record, readJournal).resolve({ identity })
         return {
@@ -171,19 +150,87 @@ describe('ACP launch resolution', () => {
         }
       }
       const full = () => replayJournal(database.db, identity.sessionId)
-      const baseline = await readDecisions(full)
-      expect(
-        await compactJournalSession(database, identity.sessionId, 'epoch-1', async () => database)
-      ).toBe(1)
-      closeTestJournalHostDatabase(root)
-      const reopened = openTestJournalHostDatabase(root)
-      const afterRetirement = () => restoreJournal(reopened.db, identity.sessionId)
-      expect(await readDecisions(afterRetirement)).toStrictEqual(baseline)
-      expect(await readDecisions(afterRetirement)).toEqual({ unsaved: false, losses: [lostKey] })
-      insertTestJournalRowJson(reopened.db, identity.sessionId, 5, '{damaged')
-      expect(await readDecisions(afterRetirement)).toEqual({ unsaved: false, losses: [] })
+      const restored = () => restoreJournal(database.db, identity.sessionId)
+      expect(await readDecisions(restored)).toStrictEqual(await readDecisions(full))
+      expect(await readDecisions(restored)).toEqual({ unsaved: false, losses: [lostKey] })
+      insertTestJournalRowJson(database.db, identity.sessionId, 3, '{damaged')
+      expect(await readDecisions(restored)).toStrictEqual(await readDecisions(full))
+      expect(await readDecisions(restored)).toEqual({ unsaved: false, losses: [] })
     } finally {
-      closeTestJournalHostDatabase(root)
+      await closeTestJournalHostDatabase(root)
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('reads an outcome chat from its records, and a newer one as unreadable', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'orca-acp-outcome-read-'))
+    const database = openTestJournalHostDatabase(root)
+    try {
+      const handle: AgentSessionProviderHandle = {
+        transport: 'acp',
+        agent: 'grok',
+        nativeId: 'acp-1'
+      }
+      const lostKey = agentSessionProviderHandleKey({ ...handle, nativeId: 'acp-lost' })
+      const record = grokRecord({
+        providerHandleChain: [
+          {
+            linkId: 'head',
+            origin: 'created',
+            mintedAtFence: 1,
+            observedAt: 1,
+            handle,
+            replaces: { key: lostKey, reason: 'restore-failed', replacedAt: 1 }
+          }
+        ]
+      })
+      const turn = [...journalWithTurns('acp-1').state.items.values()][0]!
+      const rows: JournalRow[] = [
+        {
+          v: 4,
+          epoch: 'epoch-1',
+          seq: 1,
+          fence: 1,
+          ts: 1,
+          kind: 'epoch',
+          reason: 'session_created',
+          providerHandle: { kind: 'opaque', agent: 'grok', value: 'acp-1' }
+        },
+        {
+          v: 4,
+          epoch: 'epoch-1',
+          seq: 2,
+          fence: 1,
+          ts: 2,
+          kind: 'item',
+          itemId: 'turn',
+          revision: 1,
+          body: turn.body
+        }
+      ]
+      // A chat this build created holds only records.
+      database.transaction((db) => {
+        publishTestJournalEpoch(db, identity.sessionId, 'epoch-1')
+        publishJournalOutcomeEpoch(db, identity.sessionId, 'epoch-1', rows)
+      })
+      const readDecisions = async () => {
+        const launch = await resolver(record, () =>
+          restoreJournal(database.db, identity.sessionId)
+        ).resolve({ identity })
+        return {
+          unsaved: launch.resume?.mayBeUnsaved(),
+          losses: launch.resume?.unannouncedLosses()
+        }
+      }
+      expect(restoreJournal(database.db, identity.sessionId)?.state.items.has('turn')).toBe(true)
+      // The turn on acp-1 is found, so the exchange is saved; the loss has no warning yet.
+      expect(await readDecisions()).toEqual({ unsaved: false, losses: [lostKey] })
+      // A newer build's records are unreadable here, never a missing chat.
+      database.db.prepare('UPDATE journal_outcome_epochs SET format = 2').run()
+      expect(restoreJournal(database.db, identity.sessionId)?.newer).toBeTruthy()
+      expect(await readDecisions()).toEqual({ unsaved: false, losses: [] })
+    } finally {
+      await closeTestJournalHostDatabase(root)
       rmSync(root, { recursive: true, force: true })
     }
   })

@@ -105,7 +105,9 @@ export function createAgentModelCatalogLiveListings(
     if (saved && configuredDefault !== undefined) {
       // In report order, so the latest chat's resolution is the one kept.
       const recording = (recordingDefaults.get(fingerprint) ?? Promise.resolve())
-        .then(() => recordConfiguredDefault(deps, record, fingerprint, configuredDefault, current))
+        .then(() =>
+          recordConfiguredDefault(deps, record, fingerprint, configuredDefault, current, saved.live)
+        )
         .catch(() => {})
         .then(() => {
           if (recordingDefaults.get(fingerprint) === recording) {
@@ -141,7 +143,12 @@ export function createAgentModelCatalogLiveListings(
       source?: () => boolean
     ) {
       const record = deps.getRecord(sessionId)
-      if (!record || !deps.drivesRecord(record) || independentAgentModelCatalog(record.provider)) {
+      if (
+        !record ||
+        !deps.drivesRecord(record) ||
+        record.provider === 'pi' ||
+        independentAgentModelCatalog(record.provider)
+      ) {
         return
       }
       const receipt = leaseWorkspace(record.location.workspaceId)

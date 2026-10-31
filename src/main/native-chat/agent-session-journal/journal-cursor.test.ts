@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { resolveJournalResume, type JournalCursorRange } from './journal-cursor'
+import { findSequenceGap, resolveJournalResume, type JournalCursorRange } from './journal-cursor'
 
 const RANGE: JournalCursorRange = { epoch: 'e1', lastSequence: 40, oldestSequence: 11 }
 
@@ -30,5 +30,23 @@ describe('resolveJournalResume', () => {
       ok: false,
       reset: 'cursor_compacted'
     })
+  })
+})
+
+describe('findSequenceGap', () => {
+  it('accepts a contiguous run', () => {
+    expect(findSequenceGap([7, 8, 9], 7)).toBeNull()
+  })
+
+  it('reports the first missing sequence', () => {
+    expect(findSequenceGap([7, 8, 10], 7)).toEqual({ gapAt: 9 })
+  })
+
+  it('reports a run that starts above the expected first sequence', () => {
+    expect(findSequenceGap([8, 9], 7)).toEqual({ gapAt: 7 })
+  })
+
+  it('reports a reused sequence', () => {
+    expect(findSequenceGap([7, 7, 8], 7)).toEqual({ gapAt: 8 })
   })
 })

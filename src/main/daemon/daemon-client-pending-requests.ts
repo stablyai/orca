@@ -1,3 +1,4 @@
+import { parseTerminalStartFailure, terminalStartError } from '../../shared/terminal-start-failure'
 import { DaemonConnectionLostError, DaemonProtocolError } from './types'
 import type { RpcResponse } from './types'
 import { addNodePtyRecoveryHint } from './node-pty-error-hints'
@@ -33,7 +34,10 @@ export class DaemonPendingRequests {
         if (response.ok) {
           pending.resolve(response.payload)
         } else {
-          const decoded = decodeDaemonResponseError(response.error)
+          const failure = parseTerminalStartFailure(response.terminalStartFailure)
+          const decoded = failure
+            ? terminalStartError(response.error, failure.cause, failure.incarnationId)
+            : decodeDaemonResponseError(response.error)
           pending.reject(
             decoded instanceof DaemonProtocolError
               ? new DaemonProtocolError(addNodePtyRecoveryHint(response.error))

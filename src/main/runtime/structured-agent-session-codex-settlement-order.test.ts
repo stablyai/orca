@@ -13,7 +13,8 @@ import { codexTurnLifecycleFake } from '../codex/codex-turn-lifecycle-fake'
 import { computeAgentSessionPayloadFingerprint } from '../../shared/agent-session-mutation-envelope'
 import type {
   AgentJournalDispatchState,
-  AgentJournalTurnItem
+  AgentJournalTurnItem,
+  AgentJournalItemBody
 } from '../../shared/agent-session-journal-types'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -23,14 +24,11 @@ import {
 } from '../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 import type { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import {
-  liveTestJournalRows,
+  closeTestJournalHostDatabases,
+  readTestJournalOutcomes,
   openTestJournalHostDatabase
 } from '../native-chat/agent-session-journal/journal-host-database-test-support'
-import {
-  parseJournalRow,
-  type JournalLifecycleMutation,
-  type JournalRow
-} from '../native-chat/agent-session-journal/journal-row-schema'
+import { fields } from '../native-chat/agent-session-journal/journal-state-schema'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import {
   ensureStructuredAgentSessionHost,
@@ -82,20 +80,27 @@ async function send(text: string): Promise<string> {
 }
 
 /** A stored row, or one mutation of a lifecycle batch: what a settlement or a frame lands as. */
-type JournalEntry = JournalRow | JournalLifecycleMutation
+type JournalEntry =
+  | { kind: 'item'; body: AgentJournalItemBody }
+  | { kind: 'dispatch'; clientMessageId: string; state: AgentJournalDispatchState }
 
-/** The sequence of the first row that `matches`, or of the lifecycle batch carrying it. */
+/** Outcomes preserve the sequence at which a verdict or whole item committed. */
 function seqOf(matches: (entry: JournalEntry) => boolean): number | undefined {
-  return liveTestJournalRows(openTestJournalHostDatabase(root).db, SESSION).find((stored) => {
-    const parsed = parseJournalRow(stored.rowJson)
-    if (!parsed.ok) {
+  return readTestJournalOutcomes(openTestJournalHostDatabase(root).db, SESSION).find((value) => {
+    if (value.deleted) {
       return false
     }
-    const { row } = parsed
-    return (
-      matches(row) ||
-      (row.kind === 'lifecycle-batch' && row.mutations.some((mutation) => matches(mutation)))
-    )
+    if (value.field === 'items') {
+      return matches({
+        kind: 'item',
+        body: fields.items.element.parse(JSON.parse(value.json)).body
+      })
+    }
+    if (value.field === 'submissions') {
+      const [id, submission] = fields.submissions.element.parse(JSON.parse(value.json))
+      return matches({ kind: 'dispatch', clientMessageId: id, state: submission.dispatchState })
+    }
+    return false
   })?.seq
 }
 
@@ -175,6 +180,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await stopStructuredAgentSessionRuntime()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
