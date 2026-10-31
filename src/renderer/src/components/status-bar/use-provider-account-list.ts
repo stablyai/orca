@@ -24,7 +24,7 @@ export function useProviderAccountList<Provider extends 'claude' | 'codex'>(
     [environmentId]
   )
   const ownerKey = `${getProviderAccountsOwnerKey(ownerTarget)}:${provider}`
-  const mountedRef = useMemo(() => ({ current: true }), [ownerKey])
+  const mountedRef = useMemo(() => ({ current: true, ownerKey }), [ownerKey])
   useEffect(() => {
     mountedRef.current = true
     return () => {

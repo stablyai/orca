@@ -15,7 +15,7 @@ import type { RateLimitState } from '../../../shared/rate-limit-types'
 import type { ProviderAccountsSnapshot } from './runtime-provider-accounts-client'
 
 export function accountHost() {
-  const snapshot: ProviderAccountsSnapshot = {
+  const snapshot: ProviderAccountsSnapshot & { rateLimits: RateLimitState } = {
     claude: {
       accounts: ['a', 'b'].map((id) => ({
         id,
@@ -35,20 +35,23 @@ export function accountHost() {
   const listeners = new Set<(state: RateLimitState) => void>()
   const claudeList = vi.fn(() => structuredClone(snapshot.claude))
   const codexList = vi.fn(() => structuredClone(snapshot.codex))
+  const ClaudeAccounts = vi.fn<new () => RuntimeAccountServices['claudeAccounts']>()
+  const CodexAccounts = vi.fn<new () => RuntimeAccountServices['codexAccounts']>()
+  const RateLimits = vi.fn<new () => RuntimeAccountServices['rateLimits']>()
   const services = {
-    claudeAccounts: { listAccounts: claudeList },
-    codexAccounts: { listAccounts: codexList },
-    rateLimits: {
-      getState: () => snapshot.rateLimits,
-      onStateChange: (listener: (state: RateLimitState) => void) => {
-        listeners.add(listener)
-        return () => listeners.delete(listener)
-      }
-    }
+    claudeAccounts: new ClaudeAccounts(),
+    codexAccounts: new CodexAccounts(),
+    rateLimits: new RateLimits()
+  }
+  services.claudeAccounts.listAccounts = claudeList
+  services.codexAccounts.listAccounts = codexList
+  services.rateLimits.getState = () => snapshot.rateLimits
+  services.rateLimits.onStateChange = (listener) => {
+    listeners.add(listener)
+    return () => listeners.delete(listener)
   }
   const controller = new RuntimeAccountController()
-  // SAFETY: this controller fixture exercises only getStreamSnapshot/onChanged and provides every service method those paths call.
-  controller.setServices(services as RuntimeAccountServices)
+  controller.setServices(services)
   return {
     snapshot,
     controller,

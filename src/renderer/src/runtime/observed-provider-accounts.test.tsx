@@ -35,6 +35,7 @@ it.each([10, 100])(
       codexRenders += 1
       return null
     }
+    const readerIds = Array.from({ length: count }, (_, id) => id)
     const states: ReturnType<typeof useProviderAccountList<'claude'>>[] = []
     function Reader({ id, owner = target }: { id: number; owner?: RuntimeClientTarget }) {
       const value = useProviderAccountList('claude', owner, '', emptyClaudeAccountsState(), true)
@@ -47,7 +48,7 @@ it.each([10, 100])(
     const view = render(
       <>
         <CodexReader />
-        {Array.from({ length: count }, (_, id) => (
+        {readerIds.map((id) => (
           <Reader key={id} id={id} />
         ))}
         <Reader id={count} owner={{ kind: 'environment', environmentId: 'b' }} />
@@ -100,8 +101,8 @@ it.each([10, 100])(
     view.rerender(
       <>
         <CodexReader />
-        {Array.from({ length: count - 1 }, (_, index) => (
-          <Reader key={index + 1} id={index + 1} />
+        {readerIds.slice(1).map((id) => (
+          <Reader key={id} id={id} />
         ))}
         <Reader id={count} owner={{ kind: 'environment', environmentId: 'b' }} />
       </>
