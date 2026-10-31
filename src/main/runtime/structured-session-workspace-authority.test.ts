@@ -3,6 +3,8 @@ import { makeWorkspaceLineage } from '../persistence/persistence-test-harness'
 import * as folderTeardown from './folder-workspace-pty-teardown'
 import * as pathPresence from '../local-worktree-path-presence'
 import { mkdir } from 'node:fs/promises'
+import { basename } from 'node:path'
+import * as worktreePaths from '../git/worktree-path-comparison'
 import * as gitRemoval from '../git/worktree-removal'
 import * as pushTargetCleanup from '../ipc/worktree-remote'
 import { finishRuntimeLocalWorktreeRemoval } from './runtime-registered-local-worktree-removal'
@@ -437,62 +439,109 @@ async function inWorkspace(
   return { ...input, workspace }
 }
 
-it('keeps failed-scan affirmative metadata behind actual Git finalization, then refuses until fresh registration', async () => {
-  const repo = storeRepo({ id: 'removal-owner', path: root })
-  const path = `${root}/topic`,
-    workspace = `${repo.id}::${path}`
-  const input = await inWorkspace(workspace)
-  input.profile.addRepo(repo)
-  input.profile.setWorktreeMeta(hostWorktreeTarget({ id: workspace, hostId: 'local' }), {})
-  const runtime = new ScannedWorkspaceRuntime(input.profile)
-  const rig = await openAuthorityRuntime(input, runtime)
-  const gate = acquireWatcherRemovalGate(path)
-  await gate.ready
-  const events: string[] = []
-  vi.spyOn(gitRemoval, 'removeWorktree').mockResolvedValue({})
-  vi.spyOn(pushTargetCleanup, 'cleanupUnusedWorktreePushTargetRemote').mockImplementationOnce(
-    async () => {
-      events.push('cleanup')
-      expect(input.profile.getWorktreeMetaForHost(workspace, 'local')).toBeDefined()
-      expect(await reveal(rig)).toMatchObject({ ok: false })
-      expect(rig.store.getSessionTabId(B)).toBeNull()
+it.each([false, true])(
+  'keeps failed-scan affirmative metadata behind actual Git finalization, accepted aliases=%s',
+  async (aliases) => {
+    const repo = storeRepo({ id: 'removal-owner', path: root })
+    const path = aliases ? `/tmp/${basename(root)}/topic` : `${root}/topic`,
+      registeredPath = aliases ? `/private${path}` : path,
+      workspace = `${repo.id}::${path}`
+    if (aliases) {
+      expect(worktreePaths.areWorktreePathsEqual(path, registeredPath, 'darwin')).toBe(true)
+      const canonical = worktreePaths.canonicalWorktreePath
+      vi.spyOn(worktreePaths, 'canonicalWorktreePath').mockImplementation((value) =>
+        canonical(value, 'darwin')
+      )
     }
-  )
-  await finishRuntimeLocalWorktreeRemoval(
-    {
-      repo,
-      target: { id: workspace },
-      store: input.profile,
-      removedPushTarget: undefined,
-      localOptions: {},
-      force: false,
-      deleteBranch: false,
-      closeWatchers: async () => {},
-      preserveBranchHead: (result) => result ?? {},
-      finishRemoval: () => {
-        events.push('purge')
-        expect(() => beginWatcherInstall(path)).toThrow()
-        runtime.removeWorktreeMetadataAndHistory(input.profile, workspace, 'local')
+    const input = await inWorkspace(workspace)
+    input.profile.addRepo(repo)
+    input.profile.setWorktreeMeta(hostWorktreeTarget({ id: workspace, hostId: 'local' }), {})
+    const runtime = new ScannedWorkspaceRuntime(input.profile)
+    const rig = await openAuthorityRuntime(input, runtime)
+    const record = structuredClone(rig.store.getRecord(B))
+    const show = vi.spyOn(rig.host, 'setSessionTabVisibility')
+    const raw = vi.spyOn(runtime, 'storeMobileSessionSnapshot')
+    const gate = acquireWatcherRemovalGate(registeredPath)
+    await gate.ready
+    const events: string[] = []
+    vi.spyOn(gitRemoval, 'removeWorktree').mockResolvedValue({})
+    vi.spyOn(pushTargetCleanup, 'cleanupUnusedWorktreePushTargetRemote').mockImplementationOnce(
+      async () => {
+        events.push('cleanup')
+        expect(input.profile.getWorktreeMetaForHost(workspace, 'local')).toBeDefined()
+        expect.soft(await reveal(rig)).toMatchObject({ ok: false })
+        await chatTabCommandsSettled()
+        expect(rig.store.getSessionTabId(B)).toBeNull()
+        expect(runtime.captureStructuredAgentSessionPresentation(B)).toEqual({
+          raw: null,
+          saved: []
+        })
+        expect(show).not.toHaveBeenCalled()
+        expect(raw).not.toHaveBeenCalled()
       }
-    },
-    { path, branch: 'topic', head: 'abc1234', isBare: false, isMainWorktree: false },
-    {
-      finish: async (removed) => {
-        expect(removed).toBe(true)
-        events.push('release')
-        gate.release()
-      }
+    )
+    try {
+      await finishRuntimeLocalWorktreeRemoval(
+        {
+          repo,
+          target: { id: workspace },
+          store: input.profile,
+          removedPushTarget: undefined,
+          localOptions: {},
+          force: false,
+          deleteBranch: false,
+          closeWatchers: async () => {},
+          preserveBranchHead: (result) => result ?? {},
+          finishRemoval: () => {
+            events.push('purge')
+            expect
+              .soft(() => {
+                const finishInstall = beginWatcherInstall(path)
+                finishInstall()
+              })
+              .toThrow()
+            runtime.removeWorktreeMetadataAndHistory(input.profile, workspace, 'local')
+          }
+        },
+        {
+          path: registeredPath,
+          branch: 'topic',
+          head: 'abc1234',
+          isBare: false,
+          isMainWorktree: false
+        },
+        {
+          finish: async (removed) => {
+            expect(removed).toBe(true)
+            events.push('release')
+            gate.release()
+          }
+        }
+      )
+    } finally {
+      gate.release()
     }
-  )
-  expect(events).toEqual(['cleanup', 'purge', 'release'])
-  expect(await reveal(rig)).toMatchObject({
-    ok: true,
-    result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
-  })
-  expect(runtime.mobileSessionTabsByWorktree.has(workspace)).toBe(false)
-  input.profile.setWorktreeMeta(hostWorktreeTarget({ id: workspace, hostId: 'local' }), {})
-  expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: true } })
-})
+    expect(events).toEqual(['cleanup', 'purge', 'release'])
+    expect(await reveal(rig)).toMatchObject({
+      ok: true,
+      result: { ok: false, refusal: { code: 'agent_session_operation_unknown' } }
+    })
+    expect(runtime.mobileSessionTabsByWorktree.has(workspace)).toBe(false)
+    await chatTabCommandsSettled()
+    expect(runtime.captureStructuredAgentSessionPresentation(B)).toEqual({ raw: null, saved: [] })
+    expect(savedIds(rig)).toEqual([])
+    expect(rig.store.getRecord(B)).toEqual(record)
+    input.profile.setWorktreeMeta(hostWorktreeTarget({ id: workspace, hostId: 'local' }), {})
+    expect(await reveal(rig)).toMatchObject({ ok: true, result: { ok: true } })
+    await chatTabCommandsSettled()
+    expect(rig.store.getSessionTabId(B)).not.toBeNull()
+    expect(runtime.captureStructuredAgentSessionPresentation(B).raw?.worktreeId).toBe(workspace)
+    expect(savedIds(rig)).toEqual([B])
+    expect(show).toHaveBeenCalledOnce()
+    expect(raw).toHaveBeenCalledOnce()
+    expect(rig.store.getRecord(B)?.providerHandleChain).toEqual(record?.providerHandleChain)
+  }
+)
 
 it('fences actual folder-extra teardown through forget without denying its surviving root or fresh instance', async () => {
   const repo = storeRepo({ id: 'folder-owner', path: root, kind: 'folder' })

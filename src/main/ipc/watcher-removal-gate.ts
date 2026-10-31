@@ -1,3 +1,4 @@
+import { canonicalWorktreePath } from '../git/worktree-path-comparison'
 import {
   isPathInsideOrEqual,
   normalizeRuntimePathForComparison
@@ -72,7 +73,7 @@ function beginRemovalSensitiveInstall(
   connectionId: string | undefined,
   createRemovalError: () => Error
 ): RemovalSensitiveInstall {
-  const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
+  const normalizedRoot = removalRootComparisonKey(rootPath, connectionId)
   // PTY worktree and cwd roots may overlap; both must respect active removal fences.
   if (
     matchingHostStates(connectionId).some(
@@ -102,7 +103,7 @@ export function acquireWatcherRemovalGate(
   rootPath: string,
   connectionId?: string
 ): WatcherRemovalGate {
-  const normalizedRoot = normalizeRuntimePathForComparison(rootPath)
+  const normalizedRoot = removalRootComparisonKey(rootPath, connectionId)
   const hostStates = matchingHostStates(connectionId)
   if (
     hostStates.some(
@@ -158,6 +159,13 @@ export function isWatcherRemovalInProgressError(
   error: unknown
 ): error is WatcherRemovalInProgressError {
   return error instanceof WatcherRemovalInProgressError
+}
+
+function removalRootComparisonKey(rootPath: string, connectionId?: string): string {
+  // Remote roots keep the owning host's path semantics.
+  return normalizeRuntimePathForComparison(
+    connectionId === undefined ? canonicalWorktreePath(rootPath) : rootPath
+  )
 }
 
 function watcherRemovalGateKey(normalizedRoot: string, connectionId?: string): string {
