@@ -107,7 +107,7 @@ function picksNewLaunchModel(
 }
 
 /** Loop-free while a start launches under the account `current` reads; a read that throws is no
- *  answer, so an account still being set up replaces nothing. */
+ *  answer, so unreadable account evidence replaces nothing. */
 async function launchedUnderOtherAccount(
   child: OutgrownChildReading['child'],
   current: (() => Promise<AgentSessionAccountHome | null>) | undefined

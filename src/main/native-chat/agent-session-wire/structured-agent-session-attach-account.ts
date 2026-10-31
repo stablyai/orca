@@ -14,7 +14,13 @@ export function structuredAgentSessionAttachAccount(
       const session = context.sessions.get(record.sessionId)
       const next = startedFor ? session?.journal.submission(startedFor) : undefined
       return {
-        account: structuredAgentSessionReceivingAccount(context.deps, current, session, next)
+        account: structuredAgentSessionReceivingAccount(
+          context.deps,
+          current,
+          session,
+          next,
+          'identity'
+        )
       }
     })
     return (await lock.wait(account)).recipe

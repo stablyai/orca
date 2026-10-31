@@ -6,7 +6,10 @@ import { afterEach, expect, it, vi } from 'vitest'
 import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import type { AgentSessionRewindRecord } from '../../shared/agent-session-rewind'
-import { CLAUDE_PROFILE_SETUP_FAILED_MESSAGE } from '../../shared/claude-profile-routing'
+import {
+  CLAUDE_PROFILE_MISSING_MESSAGE,
+  CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
+} from '../../shared/claude-profile-routing'
 import {
   ClaudeProfileRouter,
   type ClaudeProfileRouterSettings
@@ -31,14 +34,15 @@ it('launches each acquisition under the current selection, not the account it wa
     agentStatusHooksEnabled: false,
     disabledTuiAgents: []
   }
+  const runSetup = vi.fn(async () => {
+    throw new Error('setup refused')
+  })
   const router = new ClaudeProfileRouter({
     getSettings: () => settings,
     dataRoot: root,
     userHome: join(root, 'personal'),
     env: { CLAUDE_CONFIG_DIR: resolvePath('/user/own') },
-    runSetup: async () => {
-      throw new Error('setup refused')
-    }
+    runSetup
   })
   const follows = () => structuredAgentRuntimeMetadata('claude')?.launchFollowsSelection?.()
   // Without a router a launch keeps the record's home, so a running chat is never compared.
@@ -47,12 +51,18 @@ it('launches each acquisition under the current selection, not the account it wa
   expect(follows()).toBe(true)
   // What a running chat is compared against is the folder a launch runs under, so a switch
   // replaces it once and no route replaces it before every message.
-  const read = () =>
+  const read = (purpose?: 'identity') =>
     resolveStructuredClaudeAccountHomePath({
       launchEnv: {},
       wslDistro: null,
+      ...(purpose ? { purpose } : {}),
       getClaudeConfigDirectory: () => router.systemDefaultHome()
     })
+  const home = join(root, 'claude-profiles', 'a', 'home')
+  // Dispatch identity names the selected account before its folder exists; availability reads refuse.
+  expect(read('identity')).toBe(home)
+  expect(() => read()).toThrow(CLAUDE_PROFILE_MISSING_MESSAGE)
+  expect(runSetup).not.toHaveBeenCalled()
   const record = {
     ...agentSessionRecordFixture(),
     providerHandleChain: [],
@@ -79,13 +89,14 @@ it('launches each acquisition under the current selection, not the account it wa
     reason: 'claudeAccountSetupFailed',
     message: CLAUDE_PROFILE_SETUP_FAILED_MESSAGE
   })
+  expect(runSetup).toHaveBeenCalled()
 
-  const home = join(root, 'claude-profiles', 'a', 'home')
   mkdirSync(home, { recursive: true })
   writeFileSync(join(root, 'claude-profiles', 'a', 'profile.json'), '{}')
   const routed = await resolve({ identity })
   expect(routed.claudeConfigDir).toBe(home)
   expect(read()).toBe(home)
+  expect(read('identity')).toBe(home)
   expect(routed.env).toMatchObject({
     CLAUDE_CONFIG_DIR: home,
     ORCA_CLAUDE_INJECTED_CONFIG_DIR: home

@@ -9,6 +9,7 @@ import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
 } from '../../shared/agent-session-record.test-fixture'
+import { withAcquiredAgentSessionAccount } from '../../shared/agent-session-acquired-account'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import {
   assertLegacyAiVaultResumeAllowed,
@@ -119,6 +120,31 @@ describe('structured AI Vault ownership', () => {
       expect(parseAiVaultListResult(result).sessions[0]?.accountHome).toBeUndefined()
     }
   )
+
+  it('shows the account a Claude chat was last launched under, else its founding home', () => {
+    const founding = { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/founding' } as const
+    const launched = { variable: 'CLAUDE_CONFIG_DIR', path: '/accounts/launched/home' }
+    const { acquiredAccount } = withAcquiredAgentSessionAccount(
+      { ...agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId: 'session-alpha' })) },
+      { generation: 'g-1', recipe: { route: 'managed', accountId: 'b', home: launched.path } }
+    )
+    expect(acquiredAccount).toBeDefined()
+    const result = listResult()
+    result.sessions[0]!.agent = 'claude'
+    const shown = () =>
+      projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]?.accountHome
+    installOwnership({ provider: 'claude', accountHome: founding, acquiredAccount })
+    expect(shown()).toEqual(launched)
+    // A receipt the current process generation did not write no longer describes this chat.
+    installOwnership({
+      provider: 'claude',
+      accountHome: founding,
+      acquiredAccount: { ...(acquiredAccount as object), observedThroughFence: 1 }
+    })
+    expect(shown()).toEqual(founding)
+    installOwnership({ provider: 'claude', accountHome: founding })
+    expect(shown()).toEqual(founding)
+  })
 
   it('keeps the legacy shared Codex home unknown and redacts account homes over relay search', () => {
     installOwnership({

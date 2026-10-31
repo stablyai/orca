@@ -44,8 +44,9 @@ export type StructuredAgentAccountHomeRequest = {
   launchEnv: NodeJS.ProcessEnv
   /** Where the chat runs; null for a read with no workspace (the model catalog). */
   location: AgentSessionExecutionLocation | null
-  /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection. */
-  purpose: 'launch' | 'read'
+  /** A `read` has no side effects: it syncs no home, starts no bridge, clears no selection.
+   *  `identity` is a read that names the selected account before its folder exists. */
+  purpose: 'launch' | 'read' | 'identity'
   /** The launch's workspace directory on this host; a read has none. */
   workspacePath: (() => Promise<string>) | null
 }

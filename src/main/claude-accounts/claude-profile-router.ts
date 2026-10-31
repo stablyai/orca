@@ -122,10 +122,11 @@ export class ClaudeProfileRouter {
     return resolveClaudeDefaultHome(this.userHome, this.userConfigDir())
   }
 
-  /** Never fall back from a missing folder: that would run the wrong account. */
-  routedHome(): string | null {
+  /** Never fall back from a missing folder: that would run the wrong account. `identity` names
+   *  the selected route before its folder exists; launches and reads still check availability. */
+  routedHome(availability: 'checked' | 'identity' = 'checked'): string | null {
     const home = this.routedProfile()?.home ?? null
-    if (home !== null && !isDirectory(home)) {
+    if (availability === 'checked' && home !== null && !isDirectory(home)) {
       throw claudeProfileMissing()
     }
     return home

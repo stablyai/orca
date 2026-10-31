@@ -24,9 +24,10 @@ export async function structuredAgentSessionReceivingAccount(
   deps: StructuredAgentSessionHostDeps,
   record: AgentSessionRecord,
   session: StructuredAgentSessionHostSession | undefined,
-  next?: AgentJournalSubmission
+  next?: AgentJournalSubmission,
+  purpose?: 'read' | 'identity'
 ): Promise<{ home: AgentSessionAccountHome | null; recipe?: ClaudeAccountRecipe }> {
-  const selected = () => deps.launchAccountHome?.(record) ?? Promise.resolve(null)
+  const selected = () => deps.launchAccountHome?.(record, purpose) ?? Promise.resolve(null)
   if (record.provider !== 'claude' || !deps.launchAccountHome) {
     return { home: await selected() }
   }

@@ -271,7 +271,8 @@ export abstract class OrcaRuntimeWithGetWorktreePs extends OrcaRuntimeWithWorktr
       resolveCodexAccountKind: (home) =>
         resolveStructuredCodexAccountKind(home, this.requireStore().getSettings()),
       resolveAgentAccountHome: (agent) => this.resolveStructuredAgentAccountHome(agent),
-      launchAccountHome: (record) => this.resolveStructuredAgentLaunchAccountHome(record),
+      launchAccountHome: (record, purpose) =>
+        this.resolveStructuredAgentLaunchAccountHome(record, purpose),
       ...(this.prepareCodexCatalogProbeHomeFn
         ? { prepareCodexCatalogProbeHome: this.prepareCodexCatalogProbeHomeFn }
         : {}),

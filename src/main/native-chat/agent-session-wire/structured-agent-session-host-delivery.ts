@@ -140,7 +140,15 @@ export function createStructuredAgentSessionConversationDelivery(input: {
         launchAccountHome: async () => {
           const record = deps.store.getRecord(sessionId)
           return record
-            ? (await structuredAgentSessionReceivingAccount(deps, record, session, next)).home
+            ? (
+                await structuredAgentSessionReceivingAccount(
+                  deps,
+                  record,
+                  session,
+                  next,
+                  'identity'
+                )
+              ).home
             : null
         },
         logger: deps.logger

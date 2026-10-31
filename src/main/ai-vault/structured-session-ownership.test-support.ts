@@ -20,9 +20,10 @@ export function installOwnership(
   overrides: Partial<Omit<StructuredProviderSessionOwnership, 'role' | 'key'>> & {
     handle?: AgentSessionProviderHandle
     accountHome?: AgentSessionRecord['accountHome']
+    acquiredAccount?: AgentSessionRecord['acquiredAccount']
   } = {}
 ): void {
-  const { handle, accountHome, ...ownershipOverrides } = overrides
+  const { handle, accountHome, acquiredAccount, ...ownershipOverrides } = overrides
   const ownership: Omit<StructuredProviderSessionOwnership, 'role' | 'key'> = {
     sessionId: 'session-alpha',
     workspaceId: 'workspace-1',
@@ -32,40 +33,41 @@ export function installOwnership(
     ownerObservation: agentSessionConversationView(agentSessionRecordFixture()).ownerObservation,
     ...ownershipOverrides
   }
-  const record = agentSessionRecordFixture(
+  const fixture = agentSessionRecordFixture(
     agentSessionLeaseFixture({ sessionId: ownership.sessionId })
   )
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`; the rest of the host is never reached.
+  const record: AgentSessionRecord = {
+    ...fixture,
+    sessionId: ownership.sessionId,
+    accountHome: accountHome ?? fixture.accountHome,
+    location: {
+      ...fixture.location,
+      workspaceId: ownership.workspaceId,
+      wslDistro: ownership.wslDistro
+    },
+    provider: ownership.provider,
+    providerHandleChain: [
+      {
+        ...fixture.providerHandleChain[0]!,
+        handle:
+          handle ??
+          (ownership.provider === 'claude'
+            ? claudeProviderHandle(ownership.providerSessionId, null)
+            : codexProviderHandle(ownership.providerSessionId))
+      }
+    ],
+    ...(ownership.conversationName ? { conversationName: ownership.conversationName } : {}),
+    ...(acquiredAccount === undefined ? {} : { acquiredAccount })
+  }
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
   setStructuredAgentSessionHost({
     deps: {
       store: {
+        hostId: record.lease.ownerProcess?.hostId ?? 'local',
+        getRecord: (sessionId: string) => (sessionId === record.sessionId ? record : null),
         listConversations: () => [
           {
-            ...agentSessionConversationView({
-              ...record,
-              sessionId: ownership.sessionId,
-              accountHome: accountHome ?? record.accountHome,
-              location: {
-                ...record.location,
-                workspaceId: ownership.workspaceId,
-                wslDistro: ownership.wslDistro
-              },
-              provider: ownership.provider,
-              providerHandleChain: [
-                {
-                  ...record.providerHandleChain[0]!,
-                  handle:
-                    handle ??
-                    (ownership.provider === 'claude'
-                      ? claudeProviderHandle(ownership.providerSessionId, null)
-                      : codexProviderHandle(ownership.providerSessionId))
-                }
-              ],
-              lease: record.lease,
-              ...(ownership.conversationName
-                ? { conversationName: ownership.conversationName }
-                : {})
-            }),
+            ...agentSessionConversationView(record),
             ownerObservation: ownership.ownerObservation
           }
         ]
@@ -122,9 +124,16 @@ export function codexChatHolding(sessionId: string, threadIds: string[]): AgentS
 }
 
 export function installChats(records: AgentSessionRecord[]): void {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`; the rest of the host is never reached.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the ownership read touches only `deps.store.listConversations`, `getRecord` and `hostId`; the rest of the host is never reached.
   setStructuredAgentSessionHost({
-    deps: { store: { listConversations: () => records.map(agentSessionConversationView) } }
+    deps: {
+      store: {
+        hostId: 'local',
+        getRecord: (sessionId: string) =>
+          records.find((record) => record.sessionId === sessionId) ?? null,
+        listConversations: () => records.map(agentSessionConversationView)
+      }
+    }
   } as never)
 }
 
