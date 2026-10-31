@@ -442,3 +442,23 @@ it('recovers from a failed automatic wake without leaving another timer', async 
   await h.worker.stop()
   expect(vi.getTimerCount()).toBe(0)
 })
+
+it('does not count admission deferrals as retries or inflate the next provider backoff', async () => {
+  const h = await fixture()
+  await h.accept(note(1))
+  const sendOnce = vi.spyOn(h.dispatcher, 'sendOnce').mockResolvedValue({ status: 'deferred' })
+  for (let index = 0; index < 5; index++) {
+    await h.worker.runDue()
+    h.advance(1000)
+  }
+  expect(h.onRetry).not.toHaveBeenCalled()
+  sendOnce.mockResolvedValue({ status: 'error', reason: 'provider_busy', retryable: true })
+  await h.worker.runDue()
+  expect(h.onRetry).not.toHaveBeenCalled()
+  const [pending] = await h.db.query('SELECT attempts, due_at FROM push_delivery_batches')
+  if (!pending) {
+    throw new Error('Expected parked delivery')
+  }
+  expect(Number(pending.attempts)).toBe(1)
+  expect(Number(pending.due_at)).toBe(h.now() + 2000)
+})

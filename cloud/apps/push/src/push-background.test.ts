@@ -117,11 +117,14 @@ it('keeps a delivery claim behind one statement while a backlog drains back to b
       await new Promise((resolve) => setTimeout(resolve, 4_000))
       finishedDeletes++
       // Only deliveries hold a backlog, so each sweep spends its whole budget there and returns.
-      if (!backlog || !sql.includes('push_delivery_batches')) return [{ changes: 0 }]
+      if (!backlog || !sql.startsWith('DELETE FROM push_delivery_batches WHERE ')) {
+        return [{ changes: 0 }]
+      }
       return [{ changes: PRUNE_BATCH_ROWS }]
     },
     transaction: (operation) => operation(database),
     lockQuotaScope: async () => {},
+    lockScope: async () => {},
     tryLockScope: async () => true,
     tryLockSharedScope: async () => true,
     close: async () => {}

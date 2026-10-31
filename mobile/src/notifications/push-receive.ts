@@ -92,15 +92,19 @@ async function shouldSuppressForegroundPush(
     }
     return true
   }
-  const hostId = await resolvePushHostId(payload)
+  let hostId = await resolvePushHostId(payload)
+  if (!hostId && payload.origin) {
+    const hosts = await loadHostCatalog().catch(() => [])
+    hostId = resolveHostIdForFingerprint(payload.origin, hosts)
+  }
   // Suppress removed-host pushes: stale gateway registrations cannot route a useful tap and the phone can no longer disable them per host.
-  if (!hostId) {
+  if (!hostId && !payload.origin) {
     return true
   }
   if (!(await loadPushNotificationsEnabled())) {
     return true
   }
-  if (shouldSuppressNotificationWhileViewing(payload, hostId, suppressWhileViewing)) {
+  if (hostId && shouldSuppressNotificationWhileViewing(payload, hostId, suppressWhileViewing)) {
     return true
   }
   // Keep this last: a socket/native dismissal may land during any preference or host read.
@@ -128,7 +132,11 @@ export function pushNotificationRouteData(
   }
   const hostId = resolveHostIdForFingerprint(payload.hostFingerprint, hosts)
   if (!hostId) {
-    return null
+    if (!payload.origin) {
+      return null
+    }
+    const originHostId = resolveHostIdForFingerprint(payload.origin, hosts)
+    return originHostId ? { hostId: originHostId } : { home: true }
   }
   return {
     hostId,

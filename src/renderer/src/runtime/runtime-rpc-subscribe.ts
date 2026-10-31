@@ -1,11 +1,14 @@
-import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeSubscriptionContext,
+  RuntimeRpcResponse
+} from '../../../shared/runtime-rpc-envelope'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { subscribeRuntimeEnvironment } from './runtime-environment-pairing-refresh'
 import { getRuntimeEnvironmentRevision } from './runtime-environment-revision'
 
 export type RuntimeRpcSubscriptionHandlers = {
   /** Each successful frame's result. */
-  onEvent: (result: unknown) => void
+  onEvent: (result: unknown, context?: RuntimeSubscriptionContext) => void
   onError: (error: unknown) => void
   /** Only a remote transport reports its own close; the local stream ends with a frame. */
   onClose: () => void
@@ -18,12 +21,19 @@ export async function subscribeRuntimeRpc(
   params: unknown,
   handlers: RuntimeRpcSubscriptionHandlers
 ): Promise<{ unsubscribe: () => void }> {
-  const onResponse = (response: RuntimeRpcResponse<unknown>): void => {
+  const onResponse = (
+    response: RuntimeRpcResponse<unknown>,
+    context?: RuntimeSubscriptionContext
+  ): void => {
     if (!response.ok) {
       handlers.onError(response.error)
       return
     }
-    handlers.onEvent(response.result)
+    if (context) {
+      handlers.onEvent(response.result, context)
+    } else {
+      handlers.onEvent(response.result)
+    }
   }
   if (target.kind === 'local') {
     return window.api.runtime.subscribe({ method, params }, onResponse)

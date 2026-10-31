@@ -6,6 +6,7 @@ import {
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { BrowserWindow } from 'electron'
 import { createNotificationDeliveryService } from './notification-delivery-service'
+import { RuntimeMobileNotificationController } from '../runtime/runtime-mobile-notification-controller'
 import { toWebTerminalSurfaceTabId } from '../../shared/terminal-surface-id'
 import type { NotificationDeliveryDependencies } from './notification-delivery-service'
 import type {
@@ -90,6 +91,30 @@ beforeEach(() => {
 })
 
 describe('createNotificationDeliveryService', () => {
+  it('lets a prompt re-raise reach the gateway inside the five-second cooldown', async () => {
+    const push = createPushHarness({
+      devices: [{ deviceId: 'phone', pushRegistration: registration() }]
+    })
+    const runtime = new RuntimeMobileNotificationController()
+    runtime.onDispatched((event) => push.dispatcher.enqueue(event))
+    const harness = makeHarness(makeSettings())
+    harness.deps.dispatchMobileNotification = (event) => runtime.dispatch(event)
+    const service = createNotificationDeliveryService(harness.deps)
+    for (const occurrence of ['first', 'reraised', 'reraised']) {
+      service.dispatch(
+        makeRequest({
+          notificationId: 'prompt',
+          attentionKey: 'prompt',
+          agentState: 'blocked',
+          origin: 'o'.repeat(16),
+          occurrence
+        })
+      )
+      await flush()
+    }
+    expect(push.sends.map((send) => send.notification.occurrence)).toEqual(['first', 'reraised'])
+  })
+
   it('lights the tray dot before the enabled/cooldown gates can reject the event', () => {
     const harness = makeHarness(makeSettings({ enabled: false }))
     const result = createNotificationDeliveryService(harness.deps).dispatch(makeRequest())

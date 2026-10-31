@@ -836,3 +836,18 @@ describe('a request that settles while the user is asked something', () => {
     })
   })
 })
+
+it('publishes reads only to opted-in subscribers, independently of delivery and without echoing application', () => {
+  const h = harness()
+  h.listen({ includePrompts: true })
+  const reads: AgentSessionTurnCompletionEvent[] = []
+  h.feed.subscribe({ id: 'read-client', includeReads: true, emit: (event) => reads.push(event) })
+  const read = {
+    scope: LOCATION,
+    sessionId: 'session-1',
+    observedCursor: { epoch: 'epoch-1', sequence: 7 }
+  }
+  h.feed.publishRead(read)
+  expect(reads).toEqual([{ type: 'read', read }])
+  expect(h.events).toEqual([])
+})

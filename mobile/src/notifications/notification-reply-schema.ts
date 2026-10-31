@@ -43,6 +43,7 @@ export const pushRouteRegistrationSchema = z
   .looseObject({
     registered: salvagedOptional('registered', z.boolean()),
     registrationId: salvagedOptional('registrationId', z.string()),
+    gatewayOrigin: salvagedOptional('gatewayOrigin', z.string()),
     reason: salvagedOptional('reason', z.enum(PUSH_REGISTER_REFUSAL_REASONS))
   })
   .nullish()

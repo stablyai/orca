@@ -2,6 +2,7 @@
 export type OrcaPushPayload = {
   readonly kind?: 'alert' | 'dismiss'
   readonly hostFingerprint: string
+  readonly origin?: string
   readonly notificationId?: string
   readonly notificationSeq?: number
   readonly notificationEpoch?: string
@@ -32,6 +33,9 @@ export function readOrcaPushPayload(data: unknown): OrcaPushPayload | null {
   }
   return {
     hostFingerprint,
+    ...(typeof record.origin === 'string' && /^[A-Za-z0-9_-]{16}$/.test(record.origin)
+      ? { origin: record.origin }
+      : {}),
     ...(record.kind === 'dismiss' || record.kind === 'alert' ? { kind: record.kind } : {}),
     notificationId: readString(record.notificationId),
     notificationSeq: readSeq(record.notificationSeq),

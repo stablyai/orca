@@ -1,4 +1,4 @@
-import type { RuntimeRpcResponse } from '../shared/runtime-rpc-envelope'
+import type { RuntimeRpcResponse, RuntimeSubscriptionContext } from '../shared/runtime-rpc-envelope'
 
 type RuntimeEnvironmentSubscribeArgs = {
   subscriptionId?: string
@@ -11,7 +11,7 @@ type RuntimeEnvironmentSubscribeArgs = {
 }
 
 type RuntimeEnvironmentSubscriptionCallbacks = {
-  onResponse: (response: RuntimeRpcResponse<unknown>) => void
+  onResponse: (response: RuntimeRpcResponse<unknown>, context?: RuntimeSubscriptionContext) => void
   onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
   onError?: (error: { code: string; message: string }) => void
   onClose?: () => void
@@ -91,7 +91,10 @@ function getOrCreateDispatcher(
       return
     }
     if (event.type === 'response') {
-      subscriptionCallbacks.onResponse(event.response)
+      subscriptionCallbacks.onResponse(
+        event.response,
+        Object.freeze({ subscriptionId: event.subscriptionId, requestId: event.response.id })
+      )
     } else if (event.type === 'binary') {
       subscriptionCallbacks.onBinary?.(event.bytes)
     } else if (event.type === 'error') {

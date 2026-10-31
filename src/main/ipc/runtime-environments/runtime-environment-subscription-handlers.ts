@@ -1,3 +1,11 @@
+import {
+  bindSubscriptionSource,
+  captureSubscriptionSource,
+  invalidateSubscriptionSource,
+  retainRuntimeSubscription,
+  type PendingRuntimeSubscription,
+  type RetainedRemoteRuntimeSubscription
+} from './runtime-environment-subscription-source'
 import { ipcMain } from 'electron'
 import { randomUUID } from 'node:crypto'
 import { abortWhenRendererGone } from '../renderer-lifetime-abort'
@@ -7,19 +15,6 @@ import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
 import { isRuntimeEnvironmentManuallyDisconnected } from './runtime-environment-connectivity-handlers'
 import { getRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
 import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
-
-export type RetainedRemoteRuntimeSubscription = RemoteRuntimeSubscription & {
-  setupController: AbortController
-  environmentId: string
-  ownerWebContentsId: number
-  disposeRendererLifetime: () => void
-  notifyClosed: () => void
-}
-export type PendingRuntimeSubscription = {
-  ownerWebContentsId: number
-  environmentId: string
-  close: () => void
-}
 
 export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
   getUserDataPath: () => string
@@ -66,7 +61,8 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       ) {
         throw new Error('Runtime environment subscription id already exists')
       }
-      const environment = resolveEnvironment(getUserDataPath(), args.selector)
+      const subscriptionRoot = getUserDataPath()
+      const environment = resolveEnvironment(subscriptionRoot, args.selector)
       if (isRuntimeEnvironmentManuallyDisconnected(environment.id)) {
         throw new Error('runtime_manually_disconnected')
       }
@@ -109,6 +105,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       }
       const closeSubscription = (): void => {
         rendererGone = true
+        invalidateSubscriptionSource(pending)
         setupController.abort()
         if (pendingSubscriptions.get(subscriptionId) === pending) {
           pendingSubscriptions.delete(subscriptionId)
@@ -136,7 +133,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
           // The renderer is gone; there is no one left to tell.
         }
       }
-      const pending = {
+      const pending: PendingRuntimeSubscription = {
         ownerWebContentsId,
         environmentId: environment.id,
         close: closeSubscription
@@ -146,12 +143,25 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
       rendererLifetime.signal.addEventListener('abort', closeSubscription, { once: true })
       try {
         subscription = await subscribeRuntimeEnvironment(
-          getUserDataPath(),
+          subscriptionRoot,
           environment.id,
           args.method,
           args.params,
           args.timeoutMs,
           {
+            onSource: (selected, connection) => {
+              captureSubscriptionSource(
+                pending,
+                subscriptionRoot,
+                args.method,
+                selected,
+                connection,
+                !transportClosed &&
+                  transportIsCurrent() &&
+                  !rendererGone &&
+                  !setupController.signal.aborted
+              )
+            },
             onEvent: (payload) => {
               if (
                 rendererGone ||
@@ -162,9 +172,13 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
                 return
               }
               if (payload.type === 'close') {
+                invalidateSubscriptionSource(pending)
                 // Retirement advances generation before close; the old generation still needs its terminal notification.
                 notifyClosed()
                 return
+              }
+              if (payload.type === 'response') {
+                bindSubscriptionSource(pending, payload.response.id)
               }
               if (transportIsCurrent() && !sender.isDestroyed()) {
                 sender.send('runtimeEnvironments:subscriptionEvent', {
@@ -186,6 +200,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
             },
             onClose: () => {
               transportClosed = true
+              invalidateSubscriptionSource(pending)
               if (rendererGone) {
                 return
               }
@@ -200,6 +215,7 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
           setupController.signal
         )
       } catch (error) {
+        invalidateSubscriptionSource(pending)
         if (pendingSubscriptions.get(subscriptionId) === pending) {
           pendingSubscriptions.delete(subscriptionId)
         }
@@ -227,19 +243,16 @@ export function registerRuntimeEnvironmentSubscriptionHandlers(args: {
         subscription.close()
         return { subscriptionId, requestId: subscription.requestId }
       }
-      remoteRuntimeSubscriptions.set(subscriptionId, {
-        setupController,
-        requestId: subscription.requestId,
-        environmentId: environment.id,
-        ownerWebContentsId,
-        disposeRendererLifetime,
-        notifyClosed,
-        sendBinary: (bytes) => subscription?.sendBinary(bytes) ?? false,
-        close: () => {
-          disposeRendererLifetime()
-          subscription?.close()
-        }
-      })
+      remoteRuntimeSubscriptions.set(
+        subscriptionId,
+        retainRuntimeSubscription(
+          pending,
+          subscription,
+          setupController,
+          disposeRendererLifetime,
+          notifyClosed
+        )
+      )
       return { subscriptionId, requestId: subscription.requestId }
     }
   )

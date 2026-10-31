@@ -1,5 +1,9 @@
+import type { PairedRuntimeConnection } from '../../../shared/paired-runtime-connection'
 import { getRuntimeEnvironmentStatus } from './runtime-environment-status-probe'
-import { getPreferredPairedRuntimeConnection } from '../../../shared/runtime-environments'
+import {
+  getPreferredPairedRuntimeConnection,
+  type KnownRuntimeEnvironment
+} from '../../../shared/runtime-environments'
 import { ELECTRON_REMOTE_RUNTIME_CLIENT_CAPABILITIES } from '../../../shared/electron-remote-runtime-client-capabilities'
 import { resolveEnvironment, markEnvironmentUsed } from '../../../shared/runtime-environment-store'
 import {
@@ -175,6 +179,7 @@ export async function subscribeRuntimeEnvironment(
         | { type: 'close' }
     ) => void
     onClose: () => void
+    onSource?: (environment: KnownRuntimeEnvironment, connection: PairedRuntimeConnection) => void
   },
   isCurrent: () => boolean = () => true,
   signal?: AbortSignal,
@@ -225,10 +230,12 @@ export async function subscribeRuntimeEnvironment(
         params,
         timeoutMs: effectiveTimeoutMs,
         callbacks,
+        onSource: rawCallbacks.onSource,
         isCurrent,
         signal
       })
     }
+    rawCallbacks.onSource?.(environment, pairedConnection)
     return await subscribeRemoteRuntimeRequest(
       pairedConnection,
       method,

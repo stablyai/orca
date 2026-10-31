@@ -36,6 +36,8 @@ export type PushSendResult = z.infer<typeof SendResponseSchema>['results'][numbe
 
 export type PushSendNotification = {
   kind?: 'alert' | 'dismiss'
+  origin?: string
+  occurrence?: string
   expiresAt?: number
   sound?: boolean
   notificationId?: string
@@ -75,23 +77,45 @@ export class PushGatewayClient {
     })
   }
 
+  get gatewayOrigin(): string {
+    return this.origin
+  }
+
   async registerDevice(input: {
+    routeKey?: string
     deviceId: string
     platform: MobilePushPlatform
     token: string
     apnsEnvironment?: MobilePushApnsEnvironment
   }): Promise<PushGatewayResult<{ registrationId: string }>> {
+    const session = await this.session.ensure(null)
+    if (!session.ok) {
+      return session
+    }
+    const routeKey = this.session.supportsOriginClaims ? input.routeKey : undefined
+    const body = {
+      v: 1,
+      deviceId: input.deviceId,
+      platform: input.platform,
+      token: input.token,
+      ...(input.apnsEnvironment ? { apnsEnvironment: input.apnsEnvironment } : {}),
+      ...(routeKey ? { routeKey } : {})
+    }
     const response = await this.authorized('/v1/devices', {
       method: 'POST',
-      body: {
-        v: 1,
-        deviceId: input.deviceId,
-        platform: input.platform,
-        token: input.token,
-        ...(input.apnsEnvironment ? { apnsEnvironment: input.apnsEnvironment } : {})
-      }
+      body
     })
-    const parsed = await readPushGatewayJson(response, RegisterResponseSchema)
+    let parsed = await readPushGatewayJson(response, RegisterResponseSchema)
+    if (routeKey && this.refusedFields(parsed)) {
+      const { routeKey: _key, ...stripped } = body
+      parsed = await readPushGatewayJson(
+        await this.authorized('/v1/devices', { method: 'POST', body: stripped }),
+        RegisterResponseSchema
+      )
+      if (parsed.ok) {
+        this.session.supportsOriginClaims = false
+      }
+    }
     return parsed.ok ? { ok: true, registrationId: parsed.value.registrationId } : parsed
   }
 
@@ -111,16 +135,53 @@ export class PushGatewayClient {
     registrationIds: readonly string[]
     notification: PushSendNotification
   }): Promise<PushGatewayResult<{ results: readonly PushSendResult[] }>> {
+    const session = await this.session.ensure(null)
+    if (!session.ok) {
+      return session
+    }
+    const { origin, occurrence, ...legacy } = input.notification
+    const stamped = { ...legacy, origin, occurrence }
+    const notification =
+      this.session.supportsOriginClaims &&
+      origin &&
+      occurrence &&
+      Buffer.byteLength(JSON.stringify(stamped)) <= 3000
+        ? stamped
+        : legacy
     const response = await this.authorized('/v1/send', {
       method: 'POST',
       body: {
         v: 1,
         registrationIds: [...input.registrationIds],
-        notification: input.notification
+        notification
       }
     })
-    const parsed = await readPushGatewayJson(response, SendResponseSchema)
+    let parsed = await readPushGatewayJson(response, SendResponseSchema)
+    if ('origin' in notification && this.refusedFields(parsed)) {
+      parsed = await readPushGatewayJson(
+        await this.authorized('/v1/send', {
+          method: 'POST',
+          body: { v: 1, registrationIds: [...input.registrationIds], notification: legacy }
+        }),
+        SendResponseSchema
+      )
+      if (parsed.ok) {
+        this.session.supportsOriginClaims = false
+      }
+    }
     return parsed.ok ? { ok: true, results: parsed.value.results } : parsed
+  }
+
+  private refusedFields(result: PushGatewayFailure | { ok: true }): boolean {
+    return (
+      !result.ok &&
+      result.reason === 'rejected' &&
+      result.status !== undefined &&
+      result.status >= 400 &&
+      result.status < 500 &&
+      result.status !== 401 &&
+      result.status !== 429
+    )
   }
 
   private async authorized(

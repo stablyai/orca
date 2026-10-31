@@ -1,3 +1,4 @@
+import type { RuntimeSubscriptionContext } from '../../../shared/runtime-rpc-envelope'
 import type {
   AgentJournalCursor,
   AgentJournalRenderItem
@@ -195,13 +196,16 @@ async function subscribeStructuredAgentSessionMethod<TEvent>(
   target: RuntimeClientTarget,
   method: string,
   params: unknown,
-  onEvent: (event: TEvent) => void,
+  onEvent: (event: TEvent, context?: RuntimeSubscriptionContext) => void,
   onError: (error: unknown) => void,
   onClose: () => void
 ): Promise<{ unsubscribe: () => void }> {
   return subscribeRuntimeRpc(target, method, params, {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: each caller names the method whose frames are TEvent; unchecked as before.
-    onEvent: (result) => onEvent(result as TEvent),
+    onEvent: (result, context) => {
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: all three private callers pair a fixed method with its declared event type; compatible peer frames intentionally remain unfiltered.
+      const event = result as TEvent
+      return context ? onEvent(event, context) : onEvent(event)
+    },
     onError,
     onClose
   })
@@ -309,9 +313,9 @@ export async function acknowledgeStructuredAgentSessionAttention(
 
 /** Turns that settle, and prompts raised, from now on. The host sends no snapshot and replays
  *  nothing, so a subscriber that reconnects has missed whatever happened while it was away. */
-export function subscribeStructuredAgentSessionTurnCompletions(
+export async function subscribeStructuredAgentSessionTurnCompletions(
   target: RuntimeClientTarget,
-  onEvent: (event: AgentSessionTurnCompletionEvent) => void,
+  onEvent: (event: AgentSessionTurnCompletionEvent, context?: RuntimeSubscriptionContext) => void,
   onError: (error: unknown) => void,
   onClose: () => void
 ): Promise<{ unsubscribe: () => void }> {
@@ -319,7 +323,12 @@ export function subscribeStructuredAgentSessionTurnCompletions(
     target,
     'agentSession.subscribeTurnCompletions',
     // An older host ignores this and sends completions only: it raises no prompt alert, as before.
-    { includePrompts: true },
+    {
+      includePrompts: true,
+      ...((await structuredAgentSessionHostSupports(target, 'agent-session.attention-read.v1'))
+        ? { includeReads: true }
+        : {})
+    },
     onEvent,
     onError,
     onClose

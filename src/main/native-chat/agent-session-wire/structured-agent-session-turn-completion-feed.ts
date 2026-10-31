@@ -19,6 +19,7 @@ export type StructuredAgentSessionTurnCompletionSubscriber = {
   emit: (event: AgentSessionTurnCompletionEvent) => void
   /** Older clients misread prompt arms, so delivery requires opt-in. */
   includePrompts?: boolean
+  includeReads?: boolean
   /** In-process reconciliation on restore and prompt removal. */
   onState?: (state: StructuredAttentionState) => void
 }
@@ -190,6 +191,18 @@ export class StructuredAgentSessionTurnCompletionFeed {
       completedAt: this.deps.now(),
       // Include attention here: remote clients receive status and completion streams unordered.
       ...(state.summary.status === 'attention' ? { awaitingUser: true as const } : {})
+    }
+  }
+
+  publishRead(read: Extract<AgentSessionTurnCompletionEvent, { type: 'read' }>['read']): void {
+    for (const subscriber of this.subscribers.values()) {
+      if (subscriber.includeReads) {
+        try {
+          subscriber.emit({ type: 'read', read })
+        } catch {
+          this.subscribers.delete(subscriber.id)
+        }
+      }
     }
   }
 

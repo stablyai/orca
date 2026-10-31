@@ -1,3 +1,4 @@
+import { ForwardedStructuredReadFeeds } from '../runtime/ForwardedStructuredReadFeeds'
 import { Suspense } from 'react'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AgentHibernationGate } from '../components/AgentHibernationGate'
@@ -39,6 +40,7 @@ export function AppBackgroundServices(): React.JSX.Element {
       <StructuredAgentSessionStatusBridge />
       {/* Background chats have no mounted pane but still need completion attention. */}
       <StructuredAgentSessionAttentionBridge />
+      <ForwardedStructuredReadFeeds />
     </>
   )
 }

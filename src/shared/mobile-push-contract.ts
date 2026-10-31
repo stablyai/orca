@@ -21,11 +21,13 @@ export type MobilePushFilter = {
 /** Persisted on the paired DeviceEntry so a host restart can push without the phone re-registering. */
 export type MobilePushRegistration = {
   registrationId: string
+  routeKey?: string
   filter: MobilePushFilter
   expiresAt: number
 }
 
 export type MobilePushRegisterInput = {
+  routeKey?: string
   deviceId: string
   platform: MobilePushPlatform
   token: string
@@ -34,7 +36,7 @@ export type MobilePushRegisterInput = {
 }
 
 export type MobilePushRegisterResult =
-  | { registered: true; registrationId: string }
+  | { registered: true; registrationId: string; gatewayOrigin?: string }
   | {
       registered: false
       // Storage failures require registration to be retried; throttling leaves the prior route intact.
@@ -83,6 +85,10 @@ export function parseMobilePushRegistration(value: unknown): MobilePushRegistrat
   }
   return {
     registrationId: registration.registrationId,
+    ...(typeof registration.routeKey === 'string' &&
+    /^[A-Za-z0-9_-]{43}$/.test(registration.routeKey)
+      ? { routeKey: registration.routeKey }
+      : {}),
     filter,
     expiresAt: registration.expiresAt
   }

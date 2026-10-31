@@ -35,4 +35,12 @@ export type AgentSessionTurnCompletionEvent =
   | { type: 'completion'; completion: AgentSessionTurnCompletion }
   /** Sent only to a subscriber that asked with `includePrompts`, so an older client never sees it. */
   | { type: 'prompt'; prompt: AgentSessionPromptAttention }
+  | {
+      type: 'read'
+      read: {
+        scope: AgentSessionExecutionLocation
+        sessionId: string
+        observedCursor: AgentJournalCursor
+      }
+    }
   | { type: 'end' }

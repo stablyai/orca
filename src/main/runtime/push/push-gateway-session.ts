@@ -52,6 +52,7 @@ export class PushGatewaySession {
   private readonly keypair: E2EEKeypair
   private readonly fetchImpl: typeof globalThis.fetch
   private readonly now: () => number
+  supportsOriginClaims = false
   readonly hostFingerprint: string
   private session: PushSession | null = null
   private pending: Promise<PushSessionOutcome> | null = null
@@ -116,6 +117,21 @@ export class PushGatewaySession {
       // The gateway answered for some other host; that token is never usable here.
       return this.remember({ ok: false, reason: 'rejected' })
     }
+    this.supportsOriginClaims = false
+    try {
+      const response = await this.fetchImpl(`${this.origin}/health`, {
+        redirect: 'error',
+        signal: AbortSignal.timeout(15_000)
+      })
+      const health: unknown = response.ok ? await response.json() : null
+      this.supportsOriginClaims =
+        !!health &&
+        typeof health === 'object' &&
+        'features' in health &&
+        Array.isArray(health.features) &&
+        health.features.includes('origin-claim-v1')
+      await cancelUnreadResponseBody(response)
+    } catch {}
     this.session = { token: parsed.value.sessionToken, expiresAt: parsed.value.expiresAt }
     this.negative = null
     return { ok: true, session: this.session }

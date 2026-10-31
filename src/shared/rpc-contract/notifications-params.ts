@@ -33,6 +33,10 @@ export const NotificationPushFilterParams = z.object({
 
 export const NotificationRegisterPushParams = z
   .object({
+    routeKey: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/)
+      .optional(),
     platform: z.enum(MOBILE_PUSH_PLATFORMS),
     token: z.string().min(1).max(4096),
     apnsEnvironment: z.enum(MOBILE_PUSH_APNS_ENVIRONMENTS).optional(),

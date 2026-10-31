@@ -91,12 +91,16 @@ describe('subscribeRuntimeEnvironmentFromPreload', () => {
         _meta: { runtimeId: 'rt' }
       }
     })
-    expect(onResponse).toHaveBeenCalledWith({
-      id: 'rpc-1',
-      ok: true,
-      result: { type: 'subscribed' },
-      _meta: { runtimeId: 'rt' }
-    })
+    expect(onResponse).toHaveBeenCalledWith(
+      {
+        id: 'rpc-1',
+        ok: true,
+        result: { type: 'subscribed' },
+        _meta: { runtimeId: 'rt' }
+      },
+      { subscriptionId: 'sub-1', requestId: 'rpc-1' }
+    )
+    expect(Object.isFrozen(onResponse.mock.calls[0]?.[1])).toBe(true)
     const inboundBytes = new Uint8Array([4, 5, 6])
     dispatch(ipc, {
       subscriptionId: 'sub-1',

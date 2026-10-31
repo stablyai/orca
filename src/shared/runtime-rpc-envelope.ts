@@ -106,6 +106,9 @@ export type RuntimeRpcDispatchObservation = {
   responseExpiresAt?: number
 }
 
+/** Local callback attribution; never sent to a remote host. */
+export type RuntimeSubscriptionContext = Readonly<{ subscriptionId: string; requestId: string }>
+
 /** Select request params from the status of the socket that will send them. */
 export type RuntimeRequestSelection = {
   paramsForStatus: (status: unknown) => unknown

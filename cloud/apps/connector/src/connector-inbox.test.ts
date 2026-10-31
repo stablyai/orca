@@ -27,6 +27,7 @@ function failOnce(database: CloudDatabase, prefix: string) {
     },
     transaction: (run) => inner.transaction((transaction) => run(wrap(transaction))),
     lockQuotaScope: (key) => inner.lockQuotaScope(key),
+    lockScope: (key) => inner.lockScope(key),
     tryLockScope: (key) => inner.tryLockScope(key),
     tryLockSharedScope: (key) => inner.tryLockSharedScope(key),
     close: () => inner.close()

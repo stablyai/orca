@@ -1,6 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
+  createNotificationStore,
+  createNotificationRuntime,
   getAllWindowsMock,
   getDismissHandler,
   getDispatchHandler,
@@ -40,17 +42,16 @@ describe('registerNotificationHandlers', () => {
     notificationIsSupportedMock.mockReturnValue(false)
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: false,
-            suppressWhenFocused: true
-          }
-        })
-      } as never,
-      { dispatchMobileNotification } as never
+      createNotificationStore({
+        enabled: true,
+        agentTaskComplete: true,
+        terminalBell: false,
+        suppressWhenFocused: true
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dispatchMobileNotification
+      })
     )
 
     const handler = getDispatchHandler()
@@ -84,17 +85,16 @@ describe('registerNotificationHandlers', () => {
   it('offers disabled desktop events to independently configured phones', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: false,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: false
-          }
-        })
-      } as never,
-      { dispatchMobileNotification } as never
+      createNotificationStore({
+        enabled: false,
+        agentTaskComplete: true,
+        terminalBell: true,
+        suppressWhenFocused: false
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dispatchMobileNotification
+      })
     )
 
     const handler = getDispatchHandler()
@@ -111,17 +111,16 @@ describe('registerNotificationHandlers', () => {
   it('marks a disabled desktop source for phones following desktop settings', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: false,
-            terminalBell: true,
-            suppressWhenFocused: false
-          }
-        })
-      } as never,
-      { dispatchMobileNotification } as never
+      createNotificationStore({
+        enabled: true,
+        agentTaskComplete: false,
+        terminalBell: true,
+        suppressWhenFocused: false
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dispatchMobileNotification
+      })
     )
 
     const handler = getDispatchHandler()
@@ -139,22 +138,23 @@ describe('registerNotificationHandlers', () => {
     getAllWindowsMock.mockReturnValue([
       {
         isDestroyed: () => false,
-        isFocused: () => true
-      } as never
+        isFocused: () => true,
+        isVisible: () => true,
+        webContents: { send: vi.fn() }
+      }
     ])
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: true
-          }
-        })
-      } as never,
-      { dispatchMobileNotification } as never
+      createNotificationStore({
+        enabled: true,
+        agentTaskComplete: true,
+        terminalBell: true,
+        suppressWhenFocused: true
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dispatchMobileNotification
+      })
     )
 
     const handler = getDispatchHandler()
@@ -182,17 +182,16 @@ describe('registerNotificationHandlers', () => {
   it('preserves different mobile event categories before per-phone burst suppression', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: false
-          }
-        })
-      } as never,
-      { dispatchMobileNotification } as never
+      createNotificationStore({
+        enabled: true,
+        agentTaskComplete: true,
+        terminalBell: true,
+        suppressWhenFocused: false
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dispatchMobileNotification
+      })
     )
 
     const handler = getDispatchHandler()
@@ -213,17 +212,16 @@ describe('registerNotificationHandlers', () => {
   it('does not forward explicit desktop test notifications to mobile clients', async () => {
     const dispatchMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: false
-          }
-        })
-      } as never,
-      { dispatchMobileNotification } as never
+      createNotificationStore({
+        enabled: true,
+        agentTaskComplete: true,
+        terminalBell: true,
+        suppressWhenFocused: false
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dispatchMobileNotification
+      })
     )
 
     const handler = getDispatchHandler()
@@ -236,17 +234,17 @@ describe('registerNotificationHandlers', () => {
     const dispatchMobileNotification = vi.fn()
     const dismissMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: false
-          }
-        })
-      } as never,
-      { dispatchMobileNotification, dismissMobileNotification } as never
+      createNotificationStore({
+        enabled: true,
+        agentTaskComplete: true,
+        terminalBell: true,
+        suppressWhenFocused: false
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dispatchMobileNotification,
+        dismissMobileNotification
+      })
     )
 
     const dispatchHandler = getDispatchHandler()
@@ -266,17 +264,16 @@ describe('registerNotificationHandlers', () => {
   it('fans out mobile dismissal even when there is no active native notification', async () => {
     const dismissMobileNotification = vi.fn()
     registerNotificationHandlers(
-      {
-        getSettings: () => ({
-          notifications: {
-            enabled: true,
-            agentTaskComplete: true,
-            terminalBell: true,
-            suppressWhenFocused: false
-          }
-        })
-      } as never,
-      { dismissMobileNotification } as never
+      createNotificationStore({
+        enabled: true,
+        agentTaskComplete: true,
+        terminalBell: true,
+        suppressWhenFocused: false
+      }),
+      createNotificationRuntime({
+        onForwardedNotificationEnvironmentsChanged: () => () => {},
+        dismissMobileNotification
+      })
     )
 
     const dismissHandler = getDismissHandler()

@@ -1,6 +1,10 @@
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { KnownRuntimeEnvironment } from '../../../shared/runtime-environments'
+import {
+  createEnvironmentFromPairingOffer,
+  getPreferredPairedRuntimeConnection,
+  type KnownRuntimeEnvironment
+} from '../../../shared/runtime-environments'
 import {
   advanceRuntimeEnvironmentCapabilityIncarnation,
   applyRuntimeEnvironmentCapabilityVerdict,
@@ -13,12 +17,14 @@ const {
   supportsMock,
   clearSupportMock,
   resolveEnvironmentMock,
+  resolveManagedMock,
   subscribeSharedMock,
   subscribeLegacyMock
 } = vi.hoisted(() => ({
   supportsMock: vi.fn(),
   clearSupportMock: vi.fn(),
   resolveEnvironmentMock: vi.fn(),
+  resolveManagedMock: vi.fn(),
   subscribeSharedMock: vi.fn(),
   subscribeLegacyMock: vi.fn()
 }))
@@ -31,6 +37,10 @@ vi.mock('../../../shared/runtime-environment-store', async (importOriginal) => (
   ...(await importOriginal()),
   resolveEnvironment: resolveEnvironmentMock
 }))
+vi.mock('./runtime-environment-managed-tunnel', () => ({
+  resolveManagedRuntimeEnvironment: resolveManagedMock
+}))
+vi.mock('./runtime-environment-usage-record', () => ({ recordRuntimeEnvironmentUsage: vi.fn() }))
 
 vi.mock('./runtime-environment-request-connections', async (importOriginal) => ({
   ...(await importOriginal()),
@@ -42,6 +52,7 @@ vi.mock('../../../shared/remote-runtime/remote-runtime-client', async (importOri
 }))
 import type { subscribeRemoteRuntimeSharedControlRequest } from './runtime-environment-request-connections'
 import type { subscribeRemoteRuntimeRequest } from '../../../shared/remote-runtime/remote-runtime-client'
+import { subscribeRuntimeEnvironment } from './runtime-environment-transport-routing'
 
 import {
   subscribeSupportRoutedRuntimeEnvironment,
@@ -56,6 +67,7 @@ beforeEach(() => {
   subscribeSharedMock.mockReset()
   subscribeLegacyMock.mockReset()
   resolveEnvironmentMock.mockReset()
+  resolveManagedMock.mockReset()
   resolveEnvironmentMock.mockReturnValue(environment())
 })
 
@@ -268,12 +280,16 @@ it.each(['capable', 'absent'] as const)(
   'forwards consumer cancellation into the %s subscription setup',
   async (verdict) => {
     supportsMock.mockResolvedValue(acceptedOutcome(verdict))
-    const setup = vi.fn(
-      (signal?: AbortSignal) =>
-        new Promise<never>((_resolve, reject) => {
-          signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
-        })
-    )
+    const onSource = vi.fn()
+    const setup = vi.fn((signal?: AbortSignal) => {
+      expect(onSource).toHaveBeenCalledExactlyOnceWith(
+        environment(),
+        getPreferredPairedRuntimeConnection(environment())
+      )
+      return new Promise<never>((_resolve, reject) => {
+        signal?.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
     subscribeSharedMock.mockImplementation(
       (...args: Parameters<typeof subscribeRemoteRuntimeSharedControlRequest>) => setup(args[6])
     )
@@ -288,6 +304,7 @@ it.each(['capable', 'absent'] as const)(
       params: {},
       timeoutMs: 1000,
       callbacks: { onEvent: vi.fn(), onClose: vi.fn() },
+      onSource,
       isCurrent: () => true,
       signal: controller.signal
     })
@@ -298,3 +315,54 @@ it.each(['capable', 'absent'] as const)(
     expect(setup).toHaveBeenCalledOnce()
   }
 )
+
+it('captures the selected prepared route before a synchronous authenticated first completion frame', async () => {
+  const selected = createEnvironmentFromPairingOffer({
+    id: 'prepared',
+    name: 'Prepared',
+    now: 2,
+    runtimeId: null,
+    offer: {
+      v: 2,
+      endpoint: 'ws://127.0.0.1:41000/runtime',
+      publicKeyB64: Buffer.alloc(32, 2).toString('base64'),
+      deviceToken: 'prepared-token'
+    }
+  })
+  const preparation = Promise.withResolvers<typeof selected>()
+  resolveManagedMock.mockReturnValueOnce(preparation.promise)
+  const onSource = vi.fn()
+  const onEvent = vi.fn()
+  subscribeLegacyMock.mockImplementationOnce(
+    (...parameters: Parameters<typeof subscribeRemoteRuntimeRequest>) => {
+      expect(onSource).toHaveBeenCalledExactlyOnceWith(
+        selected,
+        getPreferredPairedRuntimeConnection(selected)
+      )
+      parameters[4].onResponse({
+        id: 'first',
+        ok: true,
+        result: {},
+        _meta: { runtimeId: 'prepared-runtime' }
+      })
+      return Promise.resolve({ requestId: 'first', close: () => {}, sendBinary: () => true })
+    }
+  )
+  const opening = subscribeRuntimeEnvironment(
+    '/profile',
+    'original-selector',
+    'agentSession.subscribeTurnCompletions',
+    {},
+    1000,
+    { onSource, onEvent, onClose: () => {} }
+  )
+  expect(onSource).not.toHaveBeenCalled()
+  preparation.resolve(selected)
+  await opening
+  expect(onEvent).toHaveBeenCalledWith(
+    expect.objectContaining({
+      type: 'response',
+      response: expect.objectContaining({ id: 'first' })
+    })
+  )
+})

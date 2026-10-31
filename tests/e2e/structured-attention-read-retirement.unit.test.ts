@@ -193,7 +193,7 @@ describe('Explicit desktop read acknowledgements', () => {
       id: 'other',
       includePrompts: true,
       emit: (event) => {
-        if (event.type !== 'end') {
+        if (event.type === 'completion' || event.type === 'prompt') {
           delivery.deliver(event, undefined)
           fixture.completion?.({
             id: 'completion',

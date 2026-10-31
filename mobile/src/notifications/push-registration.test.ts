@@ -1,3 +1,26 @@
+vi.mock('../transport/pairing-keychain', () => {
+  const items = new Map<string, string>()
+  return {
+    readPairingKeychainItem: async (key: string) => items.get(key) ?? null,
+    writePairingKeychainItemIfCurrent: async (
+      key: string,
+      value: string,
+      isCurrent: () => boolean
+    ) => {
+      if (!isCurrent()) {
+        return 'retired' as const
+      }
+      items.set(key, value)
+      return 'written' as const
+    },
+    writePairingKeychainItem: async (key: string, value: string) => {
+      items.set(key, value)
+    },
+    deletePairingKeychainItem: async (key: string) => {
+      items.delete(key)
+    }
+  }
+})
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: vi.fn(async () => null) }
 }))
@@ -5,11 +28,11 @@ vi.mock('./desktop-notification-channel', () => ({
   ensureDesktopNotificationChannel: vi.fn(async () => {})
 }))
 import { AppState } from 'react-native'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient, SendRequestOptions } from '../transport/rpc-client'
 import type { RpcResponse } from '../transport/types'
 import {
-  loadPushNotificationsEnabled,
+  readPushNotificationsPreference,
   loadRemotePushHostRegistrations,
   savePushNotificationsEnabled,
   saveRemotePushHostRegistrations,
@@ -26,7 +49,7 @@ import {
 } from './push-registration'
 
 vi.mock('../storage/preferences', () => ({
-  loadPushNotificationsEnabled: vi.fn(),
+  readPushNotificationsPreference: vi.fn(),
   savePushNotificationsEnabled: vi.fn(),
   loadRemotePushHostRegistrations: vi.fn(),
   saveRemotePushHostRegistrations: vi.fn()
@@ -38,7 +61,7 @@ vi.mock('react-native', () => ({
 
 vi.mock('./push-token', () => ({
   getDevicePushToken: vi.fn(),
-  addPushTokenListener: vi.fn()
+  addPushTokenListener: vi.fn(() => () => {})
 }))
 
 const IOS_TOKEN: MobilePushToken = {
@@ -61,6 +84,10 @@ function makeClient(capabilities: readonly string[]): {
   client: Pick<RpcClient, 'sendRequest'>
   sent: SentRequest[]
 } {
+  if (!rootStarted) {
+    rootStarted = true
+    startPushTokenSync()
+  }
   const sent: SentRequest[] = []
   const client = {
     sendRequest: vi.fn(async (method: string, params?: unknown, options?: SendRequestOptions) => {
@@ -84,6 +111,7 @@ function methodsIn(sent: SentRequest[]): string[] {
   return sent.map((request) => request.method)
 }
 
+let rootStarted = false
 let enabled = false
 let stored: RemotePushHostRegistrations
 
@@ -91,10 +119,14 @@ beforeEach(() => {
   vi.clearAllMocks()
   AppState.currentState = 'active'
   resetPushRegistrationForTests()
+  rootStarted = false
   enabled = false
   stored = { registeredHostIds: [], pendingUnregisterHostIds: [] }
 
-  vi.mocked(loadPushNotificationsEnabled).mockImplementation(async () => enabled)
+  vi.mocked(readPushNotificationsPreference).mockImplementation(async () => ({
+    value: enabled,
+    loaded: true
+  }))
   vi.mocked(savePushNotificationsEnabled).mockImplementation(async (value) => {
     enabled = value
   })
@@ -104,6 +136,7 @@ beforeEach(() => {
   })
   vi.mocked(getDevicePushToken).mockResolvedValue(IOS_TOKEN)
 })
+afterEach(resetPushRegistrationForTests)
 
 describe('push registration capability gating', () => {
   it('registers a connected host that advertises remote push', async () => {
@@ -196,6 +229,7 @@ describe('push registration capability gating', () => {
       })
     }
     await setRemotePushEnabled(true)
+    startPushTokenSync()
     attachPushRegistration('host-1', client)
     await vi.advanceTimersByTimeAsync(0)
     expect(sent).toEqual(['status.get'])
@@ -403,6 +437,7 @@ describe('push unregistration', () => {
       })
     }
     await setRemotePushEnabled(true)
+    startPushTokenSync()
     attachPushRegistration('host-1', client)
     await flush()
 

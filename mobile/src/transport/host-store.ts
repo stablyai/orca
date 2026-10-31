@@ -1,3 +1,4 @@
+import { refreshPushRoutes } from '../notifications/push-route-declaration'
 import type { MobileRelayEndpoint } from '../../../src/shared/mobile-relay-credential-contract'
 import { HostProfileSchema } from './types'
 import type { HostCatalogEntry, HostProfile, StoredHostProfile } from './types'
@@ -205,7 +206,7 @@ export async function savePairedHost(host: HostProfile): Promise<void> {
         tokenCommittedBeforeMetadata = true
       }
       return next
-    })
+    }, refreshPushRoutes)
   } catch (error) {
     await cancelCleanupForDurablyStoredHosts(duplicateHostIds)
     if (cleanupIntentRecordedBeforeMetadata) {
@@ -256,7 +257,7 @@ export async function removeHost(hostId: string): Promise<void> {
         // Removal remains authoritative when cleanup intent storage is unavailable.
       }
       return hosts.filter((h) => h.id !== hostId)
-    })
+    }, refreshPushRoutes)
   } catch (error) {
     if (cleanupIntentRecorded) {
       await cancelCleanupForDurablyStoredHosts([hostId])

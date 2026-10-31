@@ -5,7 +5,10 @@ import {
 } from '../../shared/runtime-host-status'
 import type { VerifyAndAddRuntimeEnvironmentResult } from '../../shared/remote-pairing-verification'
 import type { RuntimeStatus } from '../../shared/runtime-types'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeRpcResponse,
+  RuntimeSubscriptionContext
+} from '../../shared/runtime-rpc-envelope'
 import type {
   PublicKnownRuntimeEnvironment,
   RuntimeEnvironmentRemoval
@@ -133,7 +136,10 @@ export const runtimeEnvironmentsApi = {
       expectedEnvironmentRuntimeId?: string
     },
     callbacks: {
-      onResponse: (response: RuntimeRpcResponse<unknown>) => void
+      onResponse: (
+        response: RuntimeRpcResponse<unknown>,
+        context?: RuntimeSubscriptionContext
+      ) => void
       onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
       onError?: (error: { code: string; message: string }) => void
       onClose?: () => void

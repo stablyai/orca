@@ -48,6 +48,7 @@ jobs:
               ['release-javascript-comparison', 'release-javascript-benchmark.yml'],
               ['ci-cache-warmup-platforms', 'ci-cache-warmup-platforms.yml'],
               ['pi-owner-runtime', 'pi-owner-runtime.yml'],
+              ['push-owner', 'push-owner-integration.yml'],
               ['git-command-termination', 'git-command-termination-runtime.yml'],
               ['ci-cache-warmup', 'ci-cache-warmup.yml']
             ]

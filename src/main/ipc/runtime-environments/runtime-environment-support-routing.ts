@@ -136,6 +136,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
   params: unknown
   timeoutMs: number
   callbacks: SubscriptionCallbacks
+  onSource?: (environment: KnownRuntimeEnvironment, connection: PairedRuntimeConnection) => void
   isCurrent: () => boolean
   signal?: AbortSignal
 }): Promise<RemoteRuntimeSubscription> {
@@ -160,6 +161,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     signal: args.signal,
     supported: (route) => {
       supportOutcome = route.outcome
+      args.onSource?.(route.environment, route.connection)
       return subscribeRemoteRuntimeSharedControlRequest(
         args.environment.id,
         route.connection,
@@ -172,6 +174,7 @@ export async function subscribeSupportRoutedRuntimeEnvironment(args: {
     },
     unsupported: (route) => {
       supportOutcome = route.outcome
+      args.onSource?.(route.environment, route.connection)
       return subscribeRemoteRuntimeRequest(
         route.connection,
         args.method,

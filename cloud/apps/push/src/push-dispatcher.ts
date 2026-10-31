@@ -1,3 +1,5 @@
+import { collapseIdFor } from './push-delivery-message.js'
+import type { OccurrenceAdmissionPort } from './push-occurrence-admission.js'
 import type { ApnsClient } from './apns-client.js'
 import type { PushDeviceRegistryStore } from './device-registry-store.js'
 import type { FcmClient } from './fcm-client.js'
@@ -16,9 +18,22 @@ export type PushDispatcherOptions = {
 export class PushDispatcher {
   constructor(private readonly options: PushDispatcherOptions) {}
 
-  async sendOnce(delivery: PushDelivery): Promise<PushProviderOutcome> {
+  async sendOnce(
+    delivery: PushDelivery,
+    admission?: OccurrenceAdmissionPort
+  ): Promise<PushProviderOutcome | { status: 'superseded' | 'deferred' }> {
     const device = await this.options.devices.findById(delivery.registrationId)
     if (!device || device.dead) return { status: 'dead', reason: 'registration_unavailable' }
+    const decision = admission ? await admission.acquire(device) : 'skipped'
+    if (decision === 'superseded' || decision === 'deferred') {
+      return { status: decision }
+    }
+    if (decision === 'admitted') {
+      delivery.collapseId = collapseIdFor(delivery.orca, delivery.hostFingerprint, true)
+    } else {
+      delete delivery.orca.origin
+      delete delivery.orca.occurrence
+    }
     let outcome: PushProviderOutcome
     if (device.platform === 'ios') {
       outcome = this.options.apns
@@ -32,6 +47,7 @@ export class PushDispatcher {
         ? await this.options.fcm.send(delivery, { token: device.token })
         : { status: 'error', reason: 'fcm_not_configured' }
     }
+    await admission?.finalize(outcome.status === 'sent')
     this.options.onOutcome?.(outcome.status)
     if (outcome.status === 'dead') {
       await this.options.devices.markDead(device)

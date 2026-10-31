@@ -19,7 +19,11 @@ export default defineConfig({
     // Web renderer tests must resolve the SVG/icon libraries through the same host aliases.
     server: {
       deps: {
-        inline: ['lucide-react-native', 'react-native-svg'],
+        inline: [
+          'lucide-react-native',
+          'react-native-svg',
+          '@react-native-async-storage/async-storage'
+        ],
         external: [/\/config\/scripts\/build-mobile-web-app-bundle\.mjs$/]
       }
     },

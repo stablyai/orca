@@ -10,11 +10,11 @@ vi.mock('./runtime-environment-transport-routing', () => ({
   subscribeRuntimeEnvironment: mocks.subscribe
 }))
 import { advanceRuntimeEnvironmentTransportGeneration } from './runtime-environment-transport-generation'
-import {
-  registerRuntimeEnvironmentSubscriptionHandlers,
-  type PendingRuntimeSubscription,
-  type RetainedRemoteRuntimeSubscription
-} from './runtime-environment-subscription-handlers'
+import { registerRuntimeEnvironmentSubscriptionHandlers } from './runtime-environment-subscription-handlers'
+import type {
+  PendingRuntimeSubscription,
+  RetainedRemoteRuntimeSubscription
+} from './runtime-environment-subscription-source'
 
 type Callbacks = Parameters<typeof subscribeRuntimeEnvironment>[5]
 

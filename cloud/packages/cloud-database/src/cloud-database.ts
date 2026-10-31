@@ -21,6 +21,7 @@ export type CloudDatabase = {
   // Serializes every transaction that reads then writes the same identity's
   // quota rows. Must be called inside a transaction; it releases at commit.
   lockQuotaScope(key: string): Promise<void>
+  lockScope(key: string): Promise<void>
   // Non-blocking variant: false means another transaction holds the scope.
   tryLockScope(key: string): Promise<boolean>
   // Shared try-lock: holders of one key coexist, and an exclusive holder excludes them all.
@@ -58,6 +59,8 @@ class SqliteTransaction implements CloudDatabase {
 
   // BEGIN IMMEDIATE already holds SQLite’s single writer lock.
   async lockQuotaScope(): Promise<void> {}
+
+  async lockScope(): Promise<void> {}
 
   async tryLockScope(): Promise<boolean> {
     return true
@@ -126,10 +129,15 @@ class PostgresTransaction implements CloudDatabase {
     await this.query('SELECT pg_advisory_xact_lock(hashtext(?::text))', [key])
   }
 
+  async lockScope(key: string): Promise<void> {
+    await this.lockQuotaScope(key)
+  }
+
   async tryLockScope(key: string): Promise<boolean> {
-    const [row] = await this.query('SELECT pg_try_advisory_xact_lock(hashtext(?::text)) AS locked', [
-      key
-    ])
+    const [row] = await this.query(
+      'SELECT pg_try_advisory_xact_lock(hashtext(?::text)) AS locked',
+      [key]
+    )
     return row?.locked === true
   }
 
@@ -221,6 +229,10 @@ class PostgresDatabase implements CloudDatabase {
   // Outside an explicit transaction, implicit commit releases the advisory lock before any protected read.
   async lockQuotaScope(): Promise<void> {
     throw new Error('lock_quota_scope_requires_transaction')
+  }
+
+  async lockScope(): Promise<void> {
+    throw new Error('lock_scope_requires_transaction')
   }
 
   async tryLockScope(): Promise<boolean> {

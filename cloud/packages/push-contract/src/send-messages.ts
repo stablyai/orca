@@ -15,6 +15,14 @@ export const PushNotificationSchema = z
       .max(2048)
       .regex(/^[\x20-\x7e]+$/)
       .optional(),
+    origin: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{16}$/)
+      .optional(),
+    occurrence: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/)
+      .optional(),
     notificationSeq: SequenceSchema,
     notificationEpoch: OpaqueIdSchema,
     source: PushNotificationSourceSchema,
@@ -34,6 +42,12 @@ export const PushNotificationSchema = z
       .optional()
   })
   .strict()
+  .refine(
+    (n) =>
+      (n.origin === undefined) === (n.occurrence === undefined) &&
+      (n.origin === undefined || n.kind !== 'dismiss'),
+    { message: 'origin and occurrence must appear together on alerts' }
+  )
   .refine(
     (notification) => notification.kind !== 'dismiss' || Boolean(notification.notificationId),
     { message: 'dismiss requires notificationId' }

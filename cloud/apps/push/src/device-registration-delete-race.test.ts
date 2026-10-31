@@ -25,6 +25,7 @@ it.skipIf(!databaseUrl)(
       query: database.query.bind(database),
       close: database.close.bind(database),
       lockQuotaScope: database.lockQuotaScope.bind(database),
+      lockScope: database.lockScope.bind(database),
       tryLockScope: database.tryLockScope.bind(database),
       tryLockSharedScope: database.tryLockSharedScope.bind(database),
       transaction: (run) =>
@@ -34,6 +35,7 @@ it.skipIf(!databaseUrl)(
             close: tx.close.bind(tx),
             transaction: tx.transaction.bind(tx),
             lockQuotaScope: tx.lockQuotaScope.bind(tx),
+            lockScope: tx.lockScope.bind(tx),
             tryLockScope: tx.tryLockScope.bind(tx),
             tryLockSharedScope: tx.tryLockSharedScope.bind(tx),
             query: async (sql, params) => {

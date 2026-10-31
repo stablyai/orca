@@ -58,3 +58,39 @@ it('keeps Vitest full-run triggers out of the related set and runs their colocat
     ]
   })
 })
+
+it('selects Node for its exact cloud support dependency without routing unrelated cloud sources', () => {
+  expect(
+    plan(['cloud/apps/push/src/push-owner-integration.test-fixture.ts']).typecheckProjects
+  ).toEqual(['config/tsconfig.node.json'])
+  for (const file of [
+    'cloud/apps/push/src/push-owner-live.test-fixture.ts',
+    'cloud/apps/push/src/push-owner-integration.test-fixture.tsx',
+    'cloud/apps/push/src/index.ts'
+  ]) {
+    expect(plan([file]).typecheckProjects).toEqual([])
+  }
+})
+
+it('selects runner drift verification for each dedicated entry, config and launch source', () => {
+  for (const file of [
+    'src/main/runtime/push/push-owner-live.test-fixture.ts',
+    'mobile/src/notifications/push-owner-live.test-fixture.ts',
+    'cloud/apps/push/src/push-owner-live.test-fixture.ts',
+    'src/main/runtime/push/push-owner-companions.test-fixture.ts',
+    '.github/workflows/push-owner-integration.yml',
+    'config/push-owner-root.vitest.config.mjs',
+    'config/push-owner-mobile.vitest.config.mjs',
+    'config/push-owner-cloud.vitest.config.mjs',
+    'mobile/vitest.config.ts',
+    'src/main/cli/keyed-promise-queue.ts',
+    'src/main/lib/unread-response-body.ts',
+    'src/main/persistence/atomic-snapshot-writer.ts',
+    'src/main/durable-file-write.ts',
+    'src/main/codex-accounts/fs-utils.ts',
+    'src/main/win32-utils.ts',
+    'mobile/src/terminal/terminal-text-scales.ts'
+  ]) {
+    expect(checkNames([file]), file).toContain('test file runners')
+  }
+})

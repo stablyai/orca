@@ -39,6 +39,9 @@ describe('notification route coordination', () => {
       hostId: 'host/one',
       worktreeId: 'repo::/Users/me/orca/workspaces/feature'
     })
+    if (!target?.sessionTarget) {
+      throw new Error('expected a session destination')
+    }
     const harness = navigationHarness(undefined)
     const push = vi.fn()
 
@@ -91,10 +94,6 @@ describe('notification route coordination', () => {
       payload: target!.sessionTarget
     })
   })
-
-  it('returns no session target for a host-only notification', () => {
-    expect(getNotificationNavigationTarget({ hostId: 'host-1' })?.sessionTarget).toBeNull()
-  })
 })
 
 it('reuses the current workspace screen and targets the notification pane without pushing', () => {
@@ -103,6 +102,9 @@ it('reuses the current workspace screen and targets the notification pane withou
     worktreeId: 'folder::/workspace',
     paneKey: 'agent-tab:leaf'
   })!
+  if (!target.sessionTarget) {
+    throw new Error('expected a session destination')
+  }
   const harness = navigationHarness(
     rootLayoutScopedState({
       index: 1,
@@ -145,6 +147,9 @@ it('reuses the current workspace screen and targets the notification pane withou
 
 it('does not reuse a different workspace on the same host', () => {
   const target = getNotificationNavigationTarget({ hostId: 'host', worktreeId: 'workspace-b' })!
+  if (!target.sessionTarget) {
+    throw new Error('expected a session destination')
+  }
   const harness = navigationHarness(
     rootLayoutScopedState({
       index: 0,

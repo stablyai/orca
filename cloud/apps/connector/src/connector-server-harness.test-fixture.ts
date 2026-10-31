@@ -44,6 +44,7 @@ function schemaLocks(inner: CloudDatabase, schema: string): CloudDatabase {
     query: (sql, params) => inner.query(sql, params),
     transaction: (run) => inner.transaction((transaction) => run(schemaLocks(transaction, schema))),
     lockQuotaScope: (key) => inner.lockQuotaScope(scoped(key)),
+    lockScope: (key) => inner.lockScope(scoped(key)),
     tryLockScope: (key) => inner.tryLockScope(scoped(key)),
     tryLockSharedScope: (key) => inner.tryLockSharedScope(scoped(key)),
     close: () => inner.close()
@@ -116,6 +117,7 @@ export function pauseBefore(database: CloudDatabase, prefix: string, skip = 0) {
     },
     transaction: (run) => inner.transaction((transaction) => run(wrap(transaction))),
     lockQuotaScope: (key) => inner.lockQuotaScope(key),
+    lockScope: (key) => inner.lockScope(key),
     tryLockScope: (key) => inner.tryLockScope(key),
     tryLockSharedScope: (key) => inner.tryLockSharedScope(key),
     close: () => inner.close()

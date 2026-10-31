@@ -15,6 +15,7 @@ export type PushDeviceRegistration = {
   deviceId: string
   platform: PushPlatform
   token: string
+  routeKey?: string
   apnsEnvironment?: ApnsEnvironment
   dead: boolean
 }
@@ -28,6 +29,7 @@ export type PushDeviceUpsert = {
   deviceId: string
   platform: PushPlatform
   token: string
+  routeKey?: string
   apnsEnvironment?: ApnsEnvironment
 }
 
@@ -42,6 +44,7 @@ function toRegistration(row: SqlRow): PushDeviceRegistration {
     ...(apnsEnvironment === null || apnsEnvironment === undefined
       ? {}
       : { apnsEnvironment: String(apnsEnvironment) as ApnsEnvironment }),
+    ...(typeof row.route_key === 'string' ? { routeKey: row.route_key } : {}),
     dead: row.dead_at !== null && row.dead_at !== undefined
   }
 }
@@ -67,10 +70,17 @@ export class PushDeviceRegistryStore {
         const registrationId = String(existing.registration_id)
         await transaction.query(
           `UPDATE push_devices
-           SET platform = ?, token = ?, apns_environment = ?,
+           SET platform = ?, token = ?, apns_environment = ?, route_key = ?,
                dead_at = NULL, updated_at = ?
            WHERE registration_id = ?`,
-          [input.platform, input.token, input.apnsEnvironment ?? null, now, registrationId]
+          [
+            input.platform,
+            input.token,
+            input.apnsEnvironment ?? null,
+            input.routeKey ?? null,
+            now,
+            registrationId
+          ]
         )
         return { ok: true, registrationId }
       }
@@ -85,8 +95,8 @@ export class PushDeviceRegistryStore {
       await transaction.query(
         `INSERT INTO push_devices
          (registration_id, host_fingerprint, device_id, platform, token, apns_environment,
-          dead_at, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
+          route_key, dead_at, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)`,
         [
           registrationId,
           input.hostFingerprint,
@@ -94,6 +104,7 @@ export class PushDeviceRegistryStore {
           input.platform,
           input.token,
           input.apnsEnvironment ?? null,
+          input.routeKey ?? null,
           now,
           now
         ]
@@ -137,7 +148,7 @@ export class PushDeviceRegistryStore {
     const placeholders = registrationIds.map(() => '?').join(', ')
     const rows = await this.database.query(
       `SELECT registration_id, host_fingerprint, device_id, platform, token, apns_environment,
-              dead_at
+              dead_at, route_key
        FROM push_devices
        WHERE host_fingerprint = ? AND registration_id IN (${placeholders})`,
       [hostFingerprint, ...registrationIds]
@@ -153,7 +164,7 @@ export class PushDeviceRegistryStore {
   async findById(registrationId: string): Promise<PushDeviceRegistration | null> {
     const [row] = await this.database.query(
       `SELECT registration_id, host_fingerprint, device_id, platform, token, apns_environment,
-              dead_at
+              dead_at, route_key
        FROM push_devices WHERE registration_id = ?`,
       [registrationId]
     )

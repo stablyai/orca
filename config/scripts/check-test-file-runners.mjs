@@ -110,6 +110,57 @@ export const TEST_RUNNERS = [
     sources: ['.github/workflows/pr.yml', '.github/workflows/unit-tests.yml'],
     mirrors: DEDICATED_UNIT_FILES.map((glob) => glob.replace(/\*\*$/, ''))
   },
+  {
+    name: 'push owner parent',
+    include: ['src/main/runtime/push/push-owner-live.test-fixture.ts'],
+    sourceMirrors: {
+      'config/push-owner-root.vitest.config.mjs': [
+        "import original from './vitest.config.ts'",
+        '...original.test',
+        'projects: undefined',
+        "include: ['src/main/runtime/push/push-owner-live.test-fixture.ts']"
+      ],
+      '.github/workflows/push-owner-integration.yml': [
+        'run: pnpm exec vitest run --config config/push-owner-root.vitest.config.mjs',
+        '- src/main/cli/keyed-promise-queue.ts',
+        '- src/main/lib/unread-response-body.ts',
+        '- src/main/persistence/atomic-snapshot-writer.ts',
+        '- src/main/durable-file-write.ts',
+        '- src/main/codex-accounts/fs-utils.ts',
+        '- src/main/win32-utils.ts',
+        '- mobile/src/terminal/terminal-text-scales.ts'
+      ],
+      'src/main/runtime/push/push-owner-companions.test-fixture.ts': [
+        "return ['cloud', 'mobile'].map(async (role) => {",
+        "const cwd = role === 'cloud' ? join(root, 'cloud/apps/push') : join(root, 'mobile')",
+        "const require = createRequire(join(cwd, 'package.json'))",
+        "args: [cli, 'run', '--config', join(root, `config/push-owner-${role}.vitest.config.mjs`)]",
+        '      cwd,'
+      ]
+    }
+  },
+  {
+    name: 'push owner mobile',
+    include: ['mobile/src/notifications/push-owner-live.test-fixture.ts'],
+    sourceMirrors: {
+      'config/push-owner-mobile.vitest.config.mjs': [
+        "import original from '../mobile/vitest.config.ts'",
+        '...original.test',
+        "include: ['src/notifications/push-owner-live.test-fixture.ts']"
+      ],
+      'mobile/vitest.config.ts': ['root: import.meta.dirname']
+    }
+  },
+  {
+    name: 'push owner cloud',
+    include: ['cloud/apps/push/src/push-owner-live.test-fixture.ts'],
+    sourceMirrors: {
+      'config/push-owner-cloud.vitest.config.mjs': [
+        "root: fileURLToPath(new URL('../cloud/apps/push', import.meta.url))",
+        "include: ['src/push-owner-live.test-fixture.ts']"
+      ]
+    }
+  },
   ...NON_UNIT_TEST_RUNNERS
 ]
 
@@ -127,11 +178,19 @@ export function isTestLike(file, source) {
 
 export function findRunnerDrift(runners, readSource) {
   const problems = []
-  for (const { name, sources = [], mirrors = [] } of runners) {
-    const texts = sources.map((source) => [source, readSource(source)])
+  for (const { name, sources = [], mirrors = [], sourceMirrors = {} } of runners) {
+    const texts = [...new Set([...sources, ...Object.keys(sourceMirrors)])].map((source) => [
+      source,
+      readSource(source)
+    ])
     for (const [source, text] of texts) {
       if (text === null) {
         problems.push(`${name}: ${source} is missing`)
+      }
+      for (const literal of sourceMirrors[source] ?? []) {
+        if (!(text ?? '').includes(literal)) {
+          problems.push(`${name}: ${source} does not contain ${JSON.stringify(literal)}`)
+        }
       }
     }
     const combined = texts.map(([, text]) => text ?? '').join('\n')

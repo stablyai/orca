@@ -4,7 +4,7 @@ import { cancelUnreadResponseBody } from '../../lib/unread-response-body'
 
 export const PUSH_REQUEST_DEADLINE_MS = 15_000
 
-export type PushGatewayFailure = { ok: false; reason: 'unreachable' | 'rejected' }
+export type PushGatewayFailure = { ok: false; reason: 'unreachable' | 'rejected'; status?: number }
 export type PushGatewayResult<T> = ({ ok: true } & T) | PushGatewayFailure
 export type PushGatewayResponse = { ok: true; response: Response } | PushGatewayFailure
 
@@ -44,6 +44,7 @@ export async function readPushGatewayJson<TSchema extends z.ZodType>(
     // refusing this request as written.
     return {
       ok: false,
+      ...(response.status < 500 && response.status !== 429 ? { status: response.status } : {}),
       reason: response.status >= 500 || response.status === 429 ? 'unreachable' : 'rejected'
     }
   }

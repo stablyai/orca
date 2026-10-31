@@ -72,6 +72,7 @@ function register(
     } as never,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the notification handlers call only these four runtime methods.
     {
+      onForwardedNotificationEnvironmentsChanged: () => () => {},
       dispatchMobileNotification,
       dismissMobileNotification,
       retireStructuredAttention,

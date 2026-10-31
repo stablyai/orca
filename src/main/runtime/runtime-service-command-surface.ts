@@ -38,6 +38,10 @@ export type RuntimeServiceCommandSurface = {
   reconcileDismissedPushes: RuntimeMobileNotificationController['reconcileDismissedPushes']
   getMobileNotificationEpoch: RuntimeMobileNotificationController['getEpoch']
   dismissMobileNotification: RuntimeMobileNotificationController['dismiss']
+  getForwardedNotificationEnvironments: RuntimeMobileNotificationController['getForwardedEnvironments']
+  onForwardedNotificationEnvironmentsChanged: RuntimeMobileNotificationController['onForwardedEnvironmentsChanged']
+  refreshForwardedNotificationEnvironments: RuntimeMobileNotificationController['refreshForwardedEnvironments']
+  setMobilePushOrigin: RuntimeMobileNotificationController['setPushOrigin']
   retireStructuredAttention: RuntimeMobileNotificationController['retireStructuredAttention']
   reconcileStructuredPromptAttention: RuntimeMobileNotificationController['reconcileStructuredPromptAttention']
   dispatchPluginNotification: RuntimeMobileNotificationController['dispatchPlugin']
@@ -149,6 +153,13 @@ export function installRuntimeServiceCommandSurface(
     reconcileDismissedPushes: notifications.reconcileDismissedPushes.bind(notifications),
     getMobileNotificationEpoch: notifications.getEpoch.bind(notifications),
     dismissMobileNotification: notifications.dismiss.bind(notifications),
+    getForwardedNotificationEnvironments:
+      notifications.getForwardedEnvironments.bind(notifications),
+    onForwardedNotificationEnvironmentsChanged:
+      notifications.onForwardedEnvironmentsChanged.bind(notifications),
+    refreshForwardedNotificationEnvironments:
+      notifications.refreshForwardedEnvironments.bind(notifications),
+    setMobilePushOrigin: notifications.setPushOrigin.bind(notifications),
     retireStructuredAttention: notifications.retireStructuredAttention.bind(notifications),
     reconcileStructuredPromptAttention:
       notifications.reconcileStructuredPromptAttention.bind(notifications),

@@ -3,10 +3,7 @@ import type { MountAdapter } from '../recording-scenario'
 
 // Expose private senders to record wire behavior without inventing keychain and device-token storage in substitutes.
 export const pushRegistrationMountExposures: readonly OperationExposure[] = [
-  [
-    'notifications/push-registration.ts',
-    '\nexports.sendRegister = sendRegister;\nexports.sendUnregister = sendUnregister;'
-  ]
+  ['notifications/push-registration.ts', '\nexports.sendUnregister = sendUnregister;']
 ]
 
 const REGISTER_TIMEOUT_MS = 5_000
@@ -17,9 +14,11 @@ export function pushRegistrationMountAdapters(
   return {
     'notifications.push-registration': ({ client }) => {
       const push = modules.load<{
-        sendRegister: (client: unknown, token: unknown, filter: unknown) => Promise<boolean>
         sendUnregister: (client: unknown, timeoutMs: number) => Promise<boolean>
       }>('mobile/src/notifications/push-registration.ts')
+      const { sendRegister } = modules.load<{
+        sendRegister: (client: unknown, params: unknown) => Promise<{ status: string }>
+      }>('mobile/src/notifications/mobile-push-registration-operations.ts')
       const results: Record<string, unknown> = {}
       return {
         action(name, args) {
@@ -29,15 +28,12 @@ export function pushRegistrationMountAdapters(
           const request =
             name === 'unregister'
               ? push.sendUnregister(client, Number(args.timeoutMs ?? REGISTER_TIMEOUT_MS))
-              : push.sendRegister(
-                  client,
-                  {
-                    platform: 'ios',
-                    token: 'apns-token-1',
-                    apnsEnvironment: args.sandbox === true ? 'sandbox' : 'production'
-                  },
-                  { onlyWhenDesktopAway: true, sound: args.sound !== false }
-                )
+              : sendRegister(client, {
+                  platform: 'ios',
+                  token: 'apns-token-1',
+                  apnsEnvironment: args.sandbox === true ? 'sandbox' : 'production',
+                  filter: { onlyWhenDesktopAway: true, sound: args.sound !== false }
+                }).then((observation) => observation.status === 'registered')
           return request.then((value: unknown) => {
             results[name] = value
             return value

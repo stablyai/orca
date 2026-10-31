@@ -85,6 +85,15 @@ function parseRecord(raw: unknown): PersistedRuntimeEnvironment | undefined {
   return parsed.success ? parsed.data : undefined
 }
 
+export type EnvironmentStoreContentReader = <T>(
+  path: string,
+  limit: number,
+  decode: (buffer: Buffer) => T
+) => T
+
+export const readEnvironmentStoreContent: EnvironmentStoreContentReader = (path, limit, decode) =>
+  decode(readNodeFileSyncWithinLimit(path, limit).buffer)
+
 export type EnvironmentStoreRecordsReadOptions = {
   requireStoreFile?: boolean
   /**
@@ -98,28 +107,37 @@ export type EnvironmentStoreRecordsReadOptions = {
 /** The envelope must be valid; individual records that are not are set aside, not rejected. */
 export function readEnvironmentStoreRecords(
   userDataPath: string,
-  options: EnvironmentStoreRecordsReadOptions = {}
+  options: EnvironmentStoreRecordsReadOptions = {},
+  readContent: EnvironmentStoreContentReader = readEnvironmentStoreContent
 ): EnvironmentStoreRecords {
   const path = getEnvironmentStorePath(userDataPath)
   if (!options.requireStoreFile && !existsSync(path)) {
     return { environments: [], unreadable: [] }
   }
-  let records: unknown[]
   try {
     hardenExistingSecureFile(path)
-    const text = readNodeFileSyncWithinLimit(
-      path,
-      MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES
-    ).buffer.toString('utf8')
-    if (options.recoverBlankStore && /^[\s\0]*$/.test(text)) {
-      return { environments: [], unreadable: [], blankFile: true }
-    }
-    records = StoreEnvelopeSchema.parse(JSON.parse(text)).environments
+    return readContent(path, MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES, (buffer) =>
+      decodeEnvironmentStoreRecords(buffer, options)
+    )
   } catch {
     throw new RuntimeEnvironmentStoreError(
       'runtime_error',
       `Could not read Orca environments at ${path}; the file is invalid.`
     )
+  }
+}
+
+function decodeEnvironmentStoreRecords(
+  buffer: Buffer,
+  options: EnvironmentStoreRecordsReadOptions
+): EnvironmentStoreRecords {
+  let records: unknown[]
+  {
+    const text = buffer.toString('utf8')
+    if (options.recoverBlankStore && /^[\s\0]*$/.test(text)) {
+      return { environments: [], unreadable: [], blankFile: true }
+    }
+    records = StoreEnvelopeSchema.parse(JSON.parse(text)).environments
   }
   const result: EnvironmentStoreRecords = { environments: [], unreadable: [] }
   for (const raw of records) {

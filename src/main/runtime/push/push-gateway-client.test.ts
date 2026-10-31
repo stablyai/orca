@@ -26,7 +26,14 @@ function jsonResponse(status: number, body: unknown): Response {
 }
 
 function createFakeGateway(
-  options: { sessionTtlMs?: number; devicesStatus?: number; rejectBearer?: boolean } = {}
+  options: {
+    sessionTtlMs?: number
+    devicesStatus?: number
+    rejectBearer?: boolean
+    originClaims?: boolean
+    refuseFields?: boolean
+    refuseLegacy?: boolean
+  } = {}
 ): {
   client: PushGatewayClient
   calls: Recorded[]
@@ -42,16 +49,19 @@ function createFakeGateway(
   let issued = 0
   let pendingProof: string | null = null
 
-  const fetchImpl = (async (input: string, init?: RequestInit): Promise<Response> => {
-    const url = String(input)
-    const headers = new Headers(init?.headers)
-    const body: unknown = init?.body ? JSON.parse(String(init.body)) : undefined
+  const fetchImpl: typeof globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init)
+    const url = request.url
+    const method = request.method
+    const headers = request.headers
+    const contents = await request.text()
+    const body: unknown = contents ? JSON.parse(contents) : undefined
     calls.push({
       url,
-      method: init?.method ?? 'GET',
+      method,
       authorization: headers.get('authorization'),
       body,
-      redirect: init?.redirect
+      redirect: init?.redirect ?? (input instanceof Request ? input.redirect : undefined)
     })
     if (url.endsWith('/v1/host/challenge')) {
       const built = buildPushChallengeFixture({
@@ -77,6 +87,23 @@ function createFakeGateway(
         hostFingerprint
       })
     }
+    if (url.endsWith('/health')) {
+      return jsonResponse(200, { features: options.originClaims ? ['origin-claim-v1'] : [] })
+    }
+    const fields =
+      body &&
+      typeof body === 'object' &&
+      ('routeKey' in body ||
+        ('notification' in body &&
+          !!body.notification &&
+          typeof body.notification === 'object' &&
+          'origin' in body.notification))
+    if (
+      (options.refuseFields && fields) ||
+      (options.refuseLegacy && !fields && !url.endsWith('/health'))
+    ) {
+      return jsonResponse(400, {})
+    }
     const bearer = headers.get('authorization')?.replace('Bearer ', '') ?? ''
     if (options.rejectBearer || !liveTokens.has(bearer)) {
       return jsonResponse(401, { error: 'session_expired' })
@@ -94,12 +121,12 @@ function createFakeGateway(
     // Why explicit: a catch-all 204 would report every delete as accepted and
     // leave the 404 branch of deleteDevice untested.
     const deleted = /\/v1\/devices\/([^/]+)$/.exec(url)
-    if (deleted && init?.method === 'DELETE') {
+    if (deleted && method === 'DELETE') {
       const registrationId = decodeURIComponent(deleted[1] ?? '')
       return new Response(null, { status: knownRegistrations.has(registrationId) ? 204 : 404 })
     }
-    throw new Error(`unexpected request: ${init?.method ?? 'GET'} ${url}`)
-  }) as unknown as typeof globalThis.fetch
+    throw new Error(`unexpected request: ${method} ${url}`)
+  }
 
   return {
     client: new PushGatewayClient({
@@ -199,7 +226,8 @@ describe('PushGatewayClient', () => {
     const gateway = createFakeGateway({ devicesStatus: 400 })
     expect(await gateway.client.registerDevice(REGISTER_INPUT)).toEqual({
       ok: false,
-      reason: 'rejected'
+      reason: 'rejected',
+      status: 400
     })
   })
 
@@ -252,4 +280,72 @@ describe('PushGatewayClient', () => {
 
     expect(await gateway.client.deleteDevice('reg-1')).toEqual(false)
   })
+})
+
+describe('origin-claim rollback', () => {
+  const notification = {
+    origin: 'o'.repeat(16),
+    occurrence: 'c'.repeat(43),
+    notificationId: 'subject',
+    notificationSeq: 1,
+    notificationEpoch: 'epoch',
+    source: 'agent-task-complete' as const,
+    agentState: 'finished' as const,
+    title: 'Done',
+    body: ''
+  }
+  it('omits admission fields when only the legacy payload fits the size limit', async () => {
+    const gateway = createFakeGateway({ originClaims: true })
+    const { origin: _origin, occurrence: _occurrence, ...legacy } = notification
+    const body = 'x'.repeat(3000 - Buffer.byteLength(JSON.stringify(legacy)))
+    expect(Buffer.byteLength(JSON.stringify({ ...legacy, body }))).toBe(3000)
+    await gateway.client.send({
+      registrationIds: ['reg-1'],
+      notification: { ...notification, body }
+    })
+    const sends = gateway.calls.filter((call) => call.url.endsWith('/v1/send'))
+    expect(sends).toHaveLength(1)
+    expect(sends[0].body).toEqual({
+      v: 1,
+      registrationIds: ['reg-1'],
+      notification: { ...legacy, body }
+    })
+  })
+
+  it.each([false, true])(
+    'strips a refused send once; clears support only after acceptance (legacy refused=%s)',
+    async (refuseLegacy) => {
+      const gateway = createFakeGateway({ originClaims: true, refuseFields: true, refuseLegacy })
+      await gateway.client.send({ registrationIds: ['reg-1'], notification })
+      await gateway.client.send({
+        registrationIds: ['reg-1'],
+        notification: { ...notification, notificationSeq: 2 }
+      })
+      const bodies = gateway.calls
+        .filter((call) => call.url.endsWith('/v1/send'))
+        .map((call) => call.body)
+      expect(bodies).toHaveLength(refuseLegacy ? 4 : 3)
+      expect(bodies[0]).toMatchObject({ notification })
+      expect(bodies[1]).toMatchObject({
+        notification: { notificationSeq: 1, notificationEpoch: 'epoch' }
+      })
+      expect(JSON.stringify(bodies[1])).not.toContain('occurrence')
+      expect(JSON.stringify(bodies[2]).includes('occurrence')).toBe(refuseLegacy)
+    }
+  )
+  it.each([false, true])(
+    'strips a refused registration once; clears support only after acceptance (legacy refused=%s)',
+    async (refuseLegacy) => {
+      const gateway = createFakeGateway({ originClaims: true, refuseFields: true, refuseLegacy })
+      await gateway.client.registerDevice({ ...REGISTER_INPUT, routeKey: 'k'.repeat(43) })
+      await gateway.client.registerDevice({ ...REGISTER_INPUT, routeKey: 'k'.repeat(43) })
+      const bodies = gateway.calls
+        .filter((call) => call.url.endsWith('/v1/devices'))
+        .map((call) => call.body)
+      expect(bodies).toHaveLength(refuseLegacy ? 4 : 3)
+      expect(bodies[0]).toMatchObject({ routeKey: 'k'.repeat(43) })
+      expect(bodies[1]).toEqual({ v: 1, ...REGISTER_INPUT })
+      expect(JSON.stringify(bodies[2]).includes('routeKey')).toBe(refuseLegacy)
+    }
+  )
 })

@@ -108,15 +108,19 @@ async function commitGeneration(generation: number, pending: boolean): Promise<v
   cachedGeneration = { generation, pending }
 }
 
-function enqueueKeychainMutation(operation: () => Promise<void>): Promise<void> {
+function enqueueKeychainMutation<T>(operation: () => Promise<T>): Promise<T> {
   const mutation = keychainMutation.then(operation)
-  keychainMutation = mutation.catch(() => {})
+  keychainMutation = mutation.then(
+    () => {},
+    () => {}
+  )
   return mutation
 }
 
 async function preparePresenceWrite(
   key: string,
-  generation: number
+  generation: number,
+  isCurrent: () => boolean
 ): Promise<PresenceChange | null> {
   if (Platform.OS !== 'android') {
     return null
@@ -125,6 +129,7 @@ async function preparePresenceWrite(
   const storageKey = presenceStorageKey(key)
   const previousRaw = await AsyncStorage.getItem(storageKey)
   parsePresenceGeneration(previousRaw)
+  requireCurrent(isCurrent)
   await AsyncStorage.setItem(storageKey, String(generation))
   return { storageKey, previousRaw }
 }
@@ -140,9 +145,23 @@ async function restorePresence(change: PresenceChange | null): Promise<void> {
   await AsyncStorage.setItem(change.storageKey, change.previousRaw)
 }
 
-async function setItemAtGeneration(key: string, value: string, generation: number): Promise<void> {
-  const presenceChange = await preparePresenceWrite(key, generation)
+const RETIRED = Symbol('retired keychain write')
+function requireCurrent(isCurrent: () => boolean): void {
+  if (!isCurrent()) {
+    throw RETIRED
+  }
+}
+
+async function setItemAtGeneration(
+  key: string,
+  value: string,
+  generation: number,
+  isCurrent: () => boolean
+): Promise<void> {
+  requireCurrent(isCurrent)
+  const presenceChange = await preparePresenceWrite(key, generation, isCurrent)
   try {
+    requireCurrent(isCurrent)
     await SecureStore.setItemAsync(key, value, optionsForGeneration(generation))
   } catch (error) {
     // Why: a failed rollback leaves reads fail-closed at the attempted generation.
@@ -174,20 +193,29 @@ export async function readPairingKeychainItem(key: string): Promise<string | nul
   return null
 }
 
-async function writePairingKeychainItemImpl(key: string, value: string): Promise<void> {
+async function writePairingKeychainItemImpl(
+  key: string,
+  value: string,
+  isCurrent: () => boolean = () => true
+): Promise<void> {
+  requireCurrent(isCurrent)
   const loaded = await loadGeneration()
+  requireCurrent(isCurrent)
   if (!loaded.reliable) {
     throw loaded.error
   }
   const generation = loaded.generation
   let firstError: unknown
   try {
-    await setItemAtGeneration(key, value, generation)
+    await setItemAtGeneration(key, value, generation, isCurrent)
     if (loaded.pending) {
       await commitGeneration(generation, false)
     }
     return
   } catch (error) {
+    if (error === RETIRED) {
+      throw error
+    }
     firstError = error
   }
 
@@ -199,15 +227,19 @@ async function writePairingKeychainItemImpl(key: string, value: string): Promise
   if (rotated > MAX_GENERATION) {
     throw firstError
   }
+  requireCurrent(isCurrent)
   try {
     await commitGeneration(rotated, true)
   } catch {
     throw firstError
   }
   try {
-    await setItemAtGeneration(key, value, rotated)
+    await setItemAtGeneration(key, value, rotated, isCurrent)
     await commitGeneration(rotated, false)
-  } catch {
+  } catch (error) {
+    if (error === RETIRED) {
+      throw error
+    }
     throw firstError
   }
 }
@@ -222,6 +254,24 @@ function isAndroidEncryptionFailure(error: unknown): boolean {
 
 export function writePairingKeychainItem(key: string, value: string): Promise<void> {
   return enqueueKeychainMutation(() => writePairingKeychainItemImpl(key, value))
+}
+
+export function writePairingKeychainItemIfCurrent(
+  key: string,
+  value: string,
+  isCurrent: () => boolean
+): Promise<'written' | 'retired'> {
+  return enqueueKeychainMutation<'written' | 'retired'>(async () => {
+    try {
+      await writePairingKeychainItemImpl(key, value, isCurrent)
+      return 'written'
+    } catch (error) {
+      if (error === RETIRED) {
+        return 'retired'
+      }
+      throw error
+    }
+  })
 }
 
 async function deletePairingKeychainItemImpl(key: string): Promise<void> {

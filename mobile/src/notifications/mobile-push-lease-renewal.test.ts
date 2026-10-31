@@ -22,12 +22,14 @@ it('renews only while mobile is foregrounded, resumes on return, and tears down'
   vi.useFakeTimers()
   AppState.currentState = 'active'
   const renew = vi.fn(async () => {})
-  const stop = startMobilePushLeaseRenewal(renew)
+  const inactive = vi.fn()
+  const stop = startMobilePushLeaseRenewal(renew, inactive)
   expect(AppState.addEventListener).toHaveBeenCalledExactlyOnceWith('change', expect.any(Function))
   await vi.advanceTimersByTimeAsync(15 * 60_000)
   expect(renew).toHaveBeenCalledTimes(1)
   AppState.currentState = 'background'
   onChange('background')
+  expect(inactive).toHaveBeenCalledOnce()
   await vi.advanceTimersByTimeAsync(8 * 24 * 60 * 60_000)
   expect(renew).toHaveBeenCalledTimes(1)
   AppState.currentState = 'active'

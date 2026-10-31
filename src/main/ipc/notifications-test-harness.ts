@@ -1,5 +1,9 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
+import type { BrowserWindow } from 'electron'
+import type { NotificationHandlerRuntime, NotificationHandlerStore } from './notifications'
+import type { NotificationSettings } from '../../shared/notification-settings-types'
+import { getDefaultNotificationSettings } from '../../shared/notification-settings-defaults'
 
 // Split suites load mock state dynamically because hoisted factories cannot capture imports.
 
@@ -25,7 +29,10 @@ export const notificationCtorMock: NotificationSpy = vi.fn(function () {
 export const notificationIsSupportedMock = vi.fn(() => true)
 export const notificationRemoveMock: NotificationSpy = vi.fn()
 export const notificationRemoveGroupMock: NotificationSpy = vi.fn()
-export const getAllWindowsMock = vi.fn(() => [])
+type NotificationWindow = Pick<BrowserWindow, 'isDestroyed' | 'isFocused' | 'isVisible'> & {
+  webContents: Pick<BrowserWindow['webContents'], 'send'>
+}
+export const getAllWindowsMock = vi.fn((): NotificationWindow[] => [])
 export const getTrustedUIRendererWindowMock: NotificationSpy = vi.fn()
 export const shellOpenExternalMock: NotificationSpy = vi.fn()
 export const setTrayAttentionMock: NotificationSpy = vi.fn()
@@ -34,8 +41,38 @@ export const readAuthorizationStatusMock = vi.fn(
     Promise.resolve(null)
 )
 
+function unexpectedNotificationPort(): never {
+  throw new Error('Unexpected notification fixture port')
+}
+
+export function createNotificationStore(
+  settings: Partial<NotificationSettings>
+): NotificationHandlerStore {
+  return {
+    getSettings: () => ({ notifications: { ...getDefaultNotificationSettings(), ...settings } }),
+    getUI: unexpectedNotificationPort,
+    updateUI: unexpectedNotificationPort
+  }
+}
+
+export function createNotificationRuntime(
+  ports: Partial<NotificationHandlerRuntime>
+): NotificationHandlerRuntime {
+  return {
+    getForwardedNotificationEnvironments: unexpectedNotificationPort,
+    onForwardedNotificationEnvironmentsChanged: unexpectedNotificationPort,
+    refreshForwardedNotificationEnvironments: unexpectedNotificationPort,
+    retireStructuredAttention: unexpectedNotificationPort,
+    dismissMobileNotification: unexpectedNotificationPort,
+    reconcileStructuredPromptAttention: unexpectedNotificationPort,
+    dispatchMobileNotification: unexpectedNotificationPort,
+    ...ports
+  }
+}
+
 export function createElectronModuleMock(): Record<string, unknown> {
   return {
+    powerMonitor: { on: vi.fn(), getSystemIdleTime: vi.fn(() => 0) },
     ipcMain: {
       removeHandler: removeHandlerMock,
       handle: handleMock
@@ -49,7 +86,8 @@ export function createElectronModuleMock(): Record<string, unknown> {
       getAllWindows: getAllWindowsMock
     },
     app: {
-      focus: vi.fn()
+      focus: vi.fn(),
+      getPath: vi.fn(() => process.cwd())
     },
     shell: {
       openExternal: shellOpenExternalMock

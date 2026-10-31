@@ -41,6 +41,7 @@ function createService(
   let listener: ((event: MobileNotificationEvent) => void) | null = null
 
   const runtime = {
+    setMobilePushOrigin: vi.fn(),
     setMobilePushRegistrar: vi.fn(),
     onNotificationDispatched: vi.fn((next: (event: MobileNotificationEvent) => void) => {
       listener = next

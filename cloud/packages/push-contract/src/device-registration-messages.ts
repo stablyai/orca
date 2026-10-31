@@ -18,6 +18,10 @@ export const PushDeviceRegistrationRequestSchema = z
   .object({
     v: z.literal(1),
     deviceId: OpaqueIdSchema,
+    routeKey: z
+      .string()
+      .regex(/^[A-Za-z0-9_-]{43}$/)
+      .optional(),
     platform: PushPlatformSchema,
     token: z.string().min(1).max(4096),
     apnsEnvironment: ApnsEnvironmentSchema.optional()

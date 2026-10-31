@@ -117,7 +117,7 @@ function attentionPath(directory: string) {
     includePrompts: true,
     onState: delivery.reconcile,
     emit: (event) => {
-      if (event.type !== 'end') {
+      if (event.type === 'completion' || event.type === 'prompt') {
         delivery.deliver(event, undefined)
       }
     }

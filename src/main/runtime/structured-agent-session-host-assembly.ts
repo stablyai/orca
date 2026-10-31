@@ -104,7 +104,7 @@ export async function installOnJournal(
       id: 'host-attention-delivery',
       includePrompts: true,
       emit: (event) => {
-        if (event.type === 'end') {
+        if (event.type === 'end' || event.type === 'read') {
           return
         }
         const sessionId =

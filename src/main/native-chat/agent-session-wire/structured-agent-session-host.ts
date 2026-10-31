@@ -338,6 +338,7 @@ export class StructuredAgentSessionHost {
     this.deps.conversationNaming?.setUserName(...args) ?? Promise.resolve(null)
 
   /** Live-only completion/prompt events; missed events are never replayed. */
+  publishAttentionRead = this.clientDelivery.publishAttentionRead
   subscribeTurnCompletions = this.clientDelivery.subscribeTurnCompletions
   readStatusSummary = this.clientDelivery.readStatusSummary
 

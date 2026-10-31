@@ -43,9 +43,10 @@ it('refuses registration until unreadable cleanup is recovered and settled on re
     const createService = (outbox: PushUnregisterOutbox): DesktopPushService =>
       DesktopPushService.create({
         runtime: {
+          setMobilePushOrigin: vi.fn(),
           setMobilePushRegistrar: vi.fn(),
           onNotificationDispatched: () => () => {}
-        } as never,
+        },
         runtimeRpc: {
           getE2EEKeypair: createPushHostKeypair,
           getDeviceRegistry: () => registry,

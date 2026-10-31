@@ -21,6 +21,9 @@ import type { DeliveredNotificationIdentity } from '../../shared/mobile-notifica
 
 export type MobileNotificationDispatchEvent = {
   type: 'notification'
+  origin?: string
+  occurrence?: string
+  forwardingEnvironmentId?: string
   legacySocketAllowed?: boolean
   desktopAllowed?: boolean
   desktopAway?: boolean
@@ -63,6 +66,55 @@ export type MobilePushRegistrar = {
 }
 
 export class RuntimeMobileNotificationController {
+  pushOrigin: string | undefined
+  setPushOrigin(origin: string): void {
+    this.pushOrigin = origin
+  }
+  private forwarded = '[]'
+  private readonly forwardedListeners = new Set<(environments: string[]) => void>()
+  private expiryTimer?: ReturnType<typeof setTimeout>
+
+  getForwardedEnvironments(): string[] {
+    this.refreshForwardedEnvironments()
+    return JSON.parse(this.forwarded)
+  }
+
+  onForwardedEnvironmentsChanged(listener: (environments: string[]) => void): () => void {
+    this.forwardedListeners.add(listener)
+    return () => this.forwardedListeners.delete(listener)
+  }
+
+  refreshForwardedEnvironments(): void {
+    if (this.expiryTimer) {
+      clearTimeout(this.expiryTimer)
+    }
+    const snapshot = this.dismissalStore?.forwardedEnvironments() ?? { environments: [] }
+    const encoded = JSON.stringify(snapshot.environments)
+    if (encoded !== this.forwarded) {
+      this.forwarded = encoded
+      notifyRuntimeListeners(
+        this.forwardedListeners,
+        (listener) => listener(snapshot.environments),
+        'forwarded-notification-environments'
+      )
+    }
+    if (snapshot.expiresAt !== undefined) {
+      this.expiryTimer = setTimeout(
+        () => this.refreshForwardedEnvironments(),
+        Math.max(1, snapshot.expiresAt - Date.now())
+      )
+      const timer: unknown = this.expiryTimer
+      if (
+        typeof timer === 'object' &&
+        timer !== null &&
+        'unref' in timer &&
+        typeof timer.unref === 'function'
+      ) {
+        timer.unref()
+      }
+    }
+  }
+
   private readonly listeners = new Set<(event: MobileNotificationEvent) => void>()
   private readonly legacyCooldown = new Map<string, number>()
   private readonly replay = new MobileNotificationReplayBuffer()
@@ -72,6 +124,7 @@ export class RuntimeMobileNotificationController {
 
   configureDismissalStore(userDataPath: string): void {
     this.dismissalStore = new MobileNotificationDismissalStore(userDataPath)
+    this.refreshForwardedEnvironments()
   }
 
   /** Waits for the pending dismissal write without closing the store. */
@@ -80,6 +133,9 @@ export class RuntimeMobileNotificationController {
   }
 
   closeDismissals(): Promise<void> {
+    if (this.expiryTimer) {
+      clearTimeout(this.expiryTimer)
+    }
     return this.dismissalStore?.close() ?? Promise.resolve()
   }
 
@@ -141,6 +197,10 @@ export class RuntimeMobileNotificationController {
   }
 
   dispatch(event: MobileNotificationEvent): void {
+    this.recordAndDispatch(event)
+  }
+
+  private recordAndDispatch(event: MobileNotificationEvent, project = true): void {
     if (event.type === 'notification') {
       // Decide once before recording so reconnect and buffer eviction cannot reset cooldown.
       const legacySocketAllowed =
@@ -148,7 +208,7 @@ export class RuntimeMobileNotificationController {
         (event.emittedAt === undefined ||
           reserveNotificationCooldown(
             this.legacyCooldown,
-            event.attentionKey ?? event.worktreeId ?? 'global',
+            event.occurrence ?? event.attentionKey ?? event.worktreeId ?? 'global',
             event.emittedAt
           ))
       event = {
@@ -158,14 +218,19 @@ export class RuntimeMobileNotificationController {
       }
     }
     const seq = this.replay.record(event)
+    let changed = false
     try {
-      this.dismissalStore?.record({
-        ...event,
-        notificationSeq: seq,
-        notificationEpoch: this.replay.epoch
-      })
+      changed =
+        this.dismissalStore?.record({
+          ...event,
+          notificationSeq: seq,
+          notificationEpoch: this.replay.epoch
+        }) ?? false
     } catch {
       console.warn('[notifications] Could not persist dismissal recovery state')
+    }
+    if (changed && project) {
+      this.refreshForwardedEnvironments()
     }
     notifyRuntimeListeners(
       this.listeners,
@@ -192,33 +257,46 @@ export class RuntimeMobileNotificationController {
   }
 
   private retireDelivery(delivery: DeliveredNotificationIdentity): void {
-    this.dispatch({
-      type: 'dismiss',
-      notificationId: delivery.notificationId,
-      dismissedDelivery: {
+    this.recordAndDispatch(
+      {
+        type: 'dismiss',
         notificationId: delivery.notificationId,
-        notificationEpoch: delivery.notificationEpoch,
-        notificationSeq: delivery.notificationSeq
-      }
-    })
+        dismissedDelivery: {
+          notificationId: delivery.notificationId,
+          notificationEpoch: delivery.notificationEpoch,
+          notificationSeq: delivery.notificationSeq
+        }
+      },
+      false
+    )
   }
 
   retireStructuredAttention(read: StructuredAttentionRead): void {
+    let changed = false
     for (const delivery of this.dismissalStore?.liveDeliveries() ?? []) {
       if (attentionOriginWasRead(delivery.structuredOrigin, read)) {
         this.retireDelivery(delivery)
+        changed = true
       }
+    }
+    if (changed) {
+      this.refreshForwardedEnvironments()
     }
   }
 
   reconcileStructuredPromptAttention(state: StructuredAttentionState): void {
     const prefix = agentSessionAttentionSubjectPrefix(state.scope, state.sessionId)
     const pending = new Set(state.pendingPromptIds)
+    let changed = false
     for (const delivery of this.dismissalStore?.liveDeliveries(prefix) ?? []) {
       const cause = delivery.structuredOrigin?.cause
       if (cause?.kind === 'prompt' && !pending.has(cause.promptId)) {
         this.retireDelivery(delivery)
+        changed = true
       }
+    }
+    if (changed) {
+      this.refreshForwardedEnvironments()
     }
   }
 

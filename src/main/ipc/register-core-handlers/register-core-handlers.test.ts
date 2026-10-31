@@ -1,7 +1,9 @@
+import type { getForwardedPushSource } from '../runtime-environments/runtime-environments'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   getPathMock,
+  getForwardedPushSourceMock,
   listEnvironmentsMock,
   callRuntimeEnvironmentMock,
   registerCliHandlersMock,
@@ -72,6 +74,7 @@ const {
   registerEmulatorFrameStreamHandlersMock,
   registerEmulatorVideoStreamHandlersMock
 } = vi.hoisted(() => ({
+  getForwardedPushSourceMock: vi.fn<typeof getForwardedPushSource>(() => undefined),
   getPathMock: vi.fn(() => '/test/user-data'),
   listEnvironmentsMock: vi.fn(() => []),
   callRuntimeEnvironmentMock: vi.fn(),
@@ -316,6 +319,7 @@ vi.mock('../runtime', () => ({
 }))
 
 vi.mock('../runtime-environments/runtime-environments', () => ({
+  getForwardedPushSource: getForwardedPushSourceMock,
   invalidateRuntimeEnvironmentTransport: vi.fn(),
   registerRuntimeEnvironmentHandlers: registerRuntimeEnvironmentHandlersMock
 }))
@@ -455,6 +459,7 @@ let registeredRelaunchExit: (() => Promise<void>) | undefined
 
 describe('registerCoreHandlers', () => {
   beforeEach(() => {
+    getForwardedPushSourceMock.mockReset().mockReturnValue(undefined)
     getPathMock.mockReset()
     getPathMock.mockReturnValue('/test/user-data')
     listEnvironmentsMock.mockReset()
@@ -618,7 +623,11 @@ describe('registerCoreHandlers', () => {
     expect(registerStatsHandlersMock).toHaveBeenCalledWith(stats)
     expect(registerMemoryHandlersMock).toHaveBeenCalledWith(store)
     expect(registerNotebookHandlersMock).toHaveBeenCalledWith(store)
-    expect(registerNotificationHandlersMock).toHaveBeenCalledWith(store, runtime)
+    expect(registerNotificationHandlersMock).toHaveBeenCalledWith(
+      store,
+      runtime,
+      getForwardedPushSourceMock
+    )
     expect(registerDeveloperPermissionHandlersMock).toHaveBeenCalled()
     expect(registerComputerUsePermissionHandlersMock).toHaveBeenCalled()
     expect(registerDashboardPopoutHandlersMock).toHaveBeenCalledWith(store, undefined)

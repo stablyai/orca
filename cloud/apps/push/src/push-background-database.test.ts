@@ -23,6 +23,7 @@ function concurrencyProbe(capacity: number) {
     query: () => hold([]),
     transaction: (operation) => hold(undefined).then(() => operation(database)),
     lockQuotaScope: async () => undefined,
+    lockScope: async () => undefined,
     tryLockScope: async () => true,
     tryLockSharedScope: async () => true,
     close: async () => undefined

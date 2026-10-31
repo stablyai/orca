@@ -167,6 +167,9 @@ vi.mock('../runtime/orca-runtime', () => ({
       return null
     }
     syncWindowGraph() {}
+    setMobilePushOrigin(origin: string) {
+      state.controller!.setPushOrigin(origin)
+    }
     setMobilePushRegistrar(
       registrar: Parameters<RuntimeMobileNotificationController['setPushRegistrar']>[0]
     ) {

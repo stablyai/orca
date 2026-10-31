@@ -49,9 +49,10 @@ function harness() {
     client: client as never,
     scheduleRetry: (run, delayMs) => retries.push({ run, delayMs }),
     runtime: {
+      setMobilePushOrigin: () => {},
       setMobilePushRegistrar: () => {},
       onNotificationDispatched: () => () => {}
-    } as never,
+    },
     runtimeRpc: {
       getE2EEKeypair: createPushHostKeypair,
       getDeviceRegistry: () => registry,

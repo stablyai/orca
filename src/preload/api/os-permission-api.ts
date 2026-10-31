@@ -1,3 +1,4 @@
+import type { StructuredAttentionRead } from '../../shared/agent-session-attention'
 import type {
   ComputerUsePermissionId,
   ComputerUsePermissionResetResult,
@@ -22,6 +23,9 @@ import type {
 import type { AgentSessionExecutionLocation } from '../../shared/agent-session-record'
 
 export type NotificationsApi = {
+  applyRemoteStructuredRead: (read: StructuredAttentionRead) => Promise<void>
+  getForwardedEnvironments: () => Promise<string[]>
+  onForwardedEnvironments: (callback: (environments: string[]) => void) => () => void
   getDesktopAwayState: () => Promise<boolean | undefined>
   dispatch: (args: NotificationDispatchRequest) => Promise<NotificationDispatchResult>
   /** `paneKeys` also retires every id main announced for those subjects. */

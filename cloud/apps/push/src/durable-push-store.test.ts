@@ -1,3 +1,4 @@
+import { PushDeviceRegistryStore } from './device-registry-store.js'
 import { afterEach, describe, expect, it } from 'vitest'
 import { openPushDatabase } from './push-database.js'
 import { DurablePushStore, DELIVERY_LEASE_MS } from './durable-push-store.js'
@@ -165,20 +166,46 @@ it('cancels unsent alerts and prevents an older replay after dismissal', async (
 })
 
 it('does not resurrect an in-flight alert after a dismissal and transient provider failure', async () => {
-  const { store, advance } = await fixture()
-  await store.accept('host', 'phone', notification(1))
+  const { db, store, advance, clock } = await fixture()
+  const devices = new PushDeviceRegistryStore(db, clock)
+  const registered = await devices.upsert({
+    hostFingerprint: 'host',
+    deviceId: 'phone',
+    platform: 'ios',
+    token: 'ab'.repeat(32)
+  })
+  if (!registered.ok) {
+    throw new Error('Registration failed')
+  }
+  const phone = registered.registrationId
+  const device = await devices.findById(phone)
+  if (!device) {
+    throw new Error('Missing registered device')
+  }
+  await store.accept('host', phone, notification(1))
   const inFlight = (await store.claim())!
-  await store.accept('host', 'phone', {
+  await store.accept('host', phone, {
     ...notification(2, 'dismiss'),
     notificationId: notification(1).notificationId
   })
   await store.finish(inFlight, 1000)
   const dismissal = (await store.claim())!
-  expect(dismissal.notification.kind).toBe('dismiss')
+  expect(dismissal.notification).toEqual({
+    ...notification(2, 'dismiss'),
+    notificationId: notification(1).notificationId
+  })
   await store.finish(dismissal)
-  advance(1000)
   expect(await store.claim()).toBeNull()
-  expect(await store.pendingCount('phone')).toBe(0)
+  advance(1000)
+  const retry = await store.claim()
+  if (!retry) {
+    throw new Error('Missing covered retry')
+  }
+  expect(retry.id).toBe(inFlight.id)
+  expect(await store.admission(retry).acquire(device)).toBe('superseded')
+  await store.finish(retry)
+  expect(await store.claim()).toBeNull()
+  expect(await store.pendingCount(phone)).toBe(0)
 })
 
 it.each([false, true])(

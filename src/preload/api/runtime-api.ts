@@ -8,7 +8,10 @@ import type {
   RuntimeSyncWindowGraphResult,
   RuntimeTerminalDriverState
 } from '../../shared/runtime-types'
-import type { RuntimeRpcResponse } from '../../shared/runtime-rpc-envelope'
+import type {
+  RuntimeRpcResponse,
+  RuntimeSubscriptionContext
+} from '../../shared/runtime-rpc-envelope'
 import type { ClientHostedBrowserRowsEvent } from '../../shared/client-hosted-browser-rows'
 import type { SidebarInputsChangedEvent } from '../../shared/sidebar-list/sidebar-inputs-feed-contract'
 import type {
@@ -155,7 +158,10 @@ export type RuntimeApi = {
         expectedEnvironmentRuntimeId?: string
       },
       callbacks: {
-        onResponse: (response: RuntimeRpcResponse<unknown>) => void
+        onResponse: (
+          response: RuntimeRpcResponse<unknown>,
+          context?: RuntimeSubscriptionContext
+        ) => void
         onBinary?: (bytes: Uint8Array<ArrayBufferLike>) => void
         onError?: (error: { code: string; message: string }) => void
         onClose?: () => void

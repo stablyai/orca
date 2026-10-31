@@ -32,15 +32,16 @@ describe('send schemas', () => {
     ).toBe(true)
   })
 
-  it('rejects an oversized batch, over-long copy, and unknown notification keys', () => {
-    const ids = Array.from(
-      { length: PUSH_LIMITS.maxRegistrationIdsPerSend + 1 },
-      (_, i) => `reg-${i}`
-    )
-    expect(
-      PushSendRequestSchema.safeParse({ v: 1, registrationIds: ids, notification: notification() })
-        .success
-    ).toBe(false)
+  it('rejects distinct or repeated ids over the raw cap, over-long copy, and unknown notification keys', () => {
+    for (const ids of [
+      Array.from({ length: PUSH_LIMITS.maxRegistrationIdsPerSend + 1 }, (_, i) => `reg-${i}`),
+      Array.from({ length: PUSH_LIMITS.maxRegistrationIdsPerSend + 1 }, () => 'reg-1')
+    ]) {
+      expect(
+        PushSendRequestSchema.safeParse({ v: 1, registrationIds: ids, notification: notification() })
+          .success
+      ).toBe(false)
+    }
     expect(
       PushSendRequestSchema.safeParse({
         v: 1,
@@ -62,8 +63,10 @@ describe('send schemas', () => {
         notification: { ...notification(), coalescedCount: 2 }
       }).success
     ).toBe(false)
-    expect(PushSendRequestSchema.safeParse({ v: 1, registrationIds: [], notification: notification() }).success)
-      .toBe(false)
+    expect(
+      PushSendRequestSchema.safeParse({ v: 1, registrationIds: [], notification: notification() })
+        .success
+    ).toBe(false)
   })
 
   it('rejects a notification id that could not be sent as a collapse header', () => {
@@ -97,12 +100,29 @@ describe('send schemas', () => {
     expect(parsed.success).toBe(true)
     expect(parsed.success && parsed.data.registrationIds).toEqual(['reg-b', 'reg-a', 'reg-c'])
   })
+})
 
-  it('counts duplicates against the batch cap before deduping them', () => {
-    const ids = Array.from({ length: PUSH_LIMITS.maxRegistrationIdsPerSend + 1 }, () => 'reg-1')
+it('requires the complete origin occurrence pair on alerts only', () => {
+  for (const fields of [{}, { origin: 'o'.repeat(16), occurrence: 'c'.repeat(43) }]) {
     expect(
-      PushSendRequestSchema.safeParse({ v: 1, registrationIds: ids, notification: notification() })
-        .success
+      PushSendRequestSchema.safeParse({
+        v: 1,
+        registrationIds: ['reg'],
+        notification: { ...notification(), ...fields }
+      }).success
+    ).toBe(true)
+  }
+  for (const fields of [
+    { origin: 'o'.repeat(16) },
+    { occurrence: 'c'.repeat(43) },
+    { origin: 'o'.repeat(16), occurrence: 'c'.repeat(43), kind: 'dismiss' }
+  ]) {
+    expect(
+      PushSendRequestSchema.safeParse({
+        v: 1,
+        registrationIds: ['reg'],
+        notification: { ...notification(), ...fields }
+      }).success
     ).toBe(false)
-  })
+  }
 })

@@ -1,3 +1,5 @@
+import type { MobilePushRegisterInput } from '../../../src/shared/mobile-push-contract'
+import type { RpcOperationSender } from '../transport/rpc-operation-sender'
 import { bindDeferredRpcOperation, defineRpcOperation } from '../transport/rpc-operation'
 import { rpcResultVariant } from '../transport/rpc-operation-result-reader'
 import {
@@ -26,3 +28,23 @@ export const pushRouteUnregister = bindDeferredRpcOperation(
     read: rpcResultVariant('push-unregistered', notificationUnreadReplySchema)
   })
 )
+
+export type PushRegistrationObservation =
+  | { status: 'registered'; gatewayOrigin?: string }
+  | { status: 'refused' | 'unknown' }
+
+export async function sendRegister(
+  client: RpcOperationSender,
+  params: Omit<MobilePushRegisterInput, 'deviceId'>
+): Promise<PushRegistrationObservation> {
+  const reply = await pushRouteRegister
+    .request(client, params, { timeoutMs: 5000, failWhenDisconnected: true })
+    .catch(() => null)
+  if (!reply) {
+    return { status: 'unknown' }
+  }
+  const registration = pushRouteRegister.interpret(reply)
+  return registration.accepted && registration.value?.registered === true
+    ? { status: 'registered', gatewayOrigin: registration.value.gatewayOrigin }
+    : { status: 'refused' }
+}

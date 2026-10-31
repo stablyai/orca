@@ -1,5 +1,6 @@
 // Emit future turn completions and opted-in prompts only; unlike status snapshots, missed edges never replay.
 
+import { getStructuredAgentSessionHost } from '../../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { defineMethod, defineStreamingMethod } from '../core'
 import {
   requireStructuredCapability,
@@ -25,6 +26,7 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
         sessionId: params.sessionId,
         observedCursor: params.observedCursor
       })
+      getStructuredAgentSessionHost()?.publishAttentionRead(params)
       return { acknowledged: true }
     }
   }),
@@ -49,7 +51,9 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
               ? event.completion.sessionId
               : event.type === 'prompt'
                 ? event.prompt.sessionId
-                : undefined
+                : event.type === 'read'
+                  ? event.read.sessionId
+                  : undefined
           if (
             sessionId === undefined ||
             clientReadsStructuredSessionAgent(ctx, host.sessionAgent(sessionId) ?? '')
@@ -57,7 +61,8 @@ export const STRUCTURED_AGENT_SESSION_TURN_COMPLETION_METHODS = [
             emit(event)
           }
         },
-        includePrompts: params.includePrompts === true
+        includePrompts: params.includePrompts === true,
+        includeReads: params.includeReads === true
       })
       if (stream.isClosed()) {
         dispose()

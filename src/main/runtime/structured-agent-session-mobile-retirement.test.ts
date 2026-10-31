@@ -119,7 +119,7 @@ describe('host prompt delivery and retirement', () => {
           id: 'host-mobile',
           includePrompts: true,
           emit: (event) => {
-            if (event.type !== 'end') {
+            if (event.type === 'completion' || event.type === 'prompt') {
               delivery.deliver(event, undefined)
             }
           },

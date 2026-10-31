@@ -10,7 +10,11 @@ import {
 
 const MAX_NOTIFICATION_SOUND_BYTES = 10 * 1024 * 1024
 
-export function registerNotificationSoundHandlers(store: Store): void {
+export type NotificationSoundStore = {
+  getSettings: () => Pick<ReturnType<Store['getSettings']>, 'notifications'>
+}
+
+export function registerNotificationSoundHandlers(store: NotificationSoundStore): void {
   // Return paths so preload caching avoids repeat 10MB sound transfers.
   ipcMain.removeHandler('notifications:resolveSoundPath')
   ipcMain.handle(

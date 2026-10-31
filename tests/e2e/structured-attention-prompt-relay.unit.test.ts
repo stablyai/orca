@@ -136,7 +136,7 @@ describe('Delayed remote prompt delivery', () => {
       id: 'paused-relay',
       includePrompts: true,
       emit: (edge) => {
-        if (edge.type !== 'end') {
+        if (edge.type === 'completion' || edge.type === 'prompt') {
           edges.push(edge)
         }
       }

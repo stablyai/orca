@@ -1,3 +1,4 @@
+import type { StructuredAttentionRead } from '../../shared/agent-session-attention'
 import { ipcRenderer } from 'electron'
 import type {
   NotificationDeliveryProbeResult,
@@ -28,6 +29,16 @@ function disposeCachedNotificationSound(): void {
 }
 
 export const notificationsApi = {
+  applyRemoteStructuredRead: (read: StructuredAttentionRead): Promise<void> =>
+    ipcRenderer.invoke('notifications:applyRemoteStructuredRead', read),
+  getForwardedEnvironments: (): Promise<string[]> =>
+    ipcRenderer.invoke('notifications:getForwardedEnvironments'),
+  onForwardedEnvironments: (callback: (environments: string[]) => void): (() => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, environments: string[]): void =>
+      callback(environments)
+    ipcRenderer.on('notifications:forwardedEnvironments', listener)
+    return () => ipcRenderer.removeListener('notifications:forwardedEnvironments', listener)
+  },
   getDesktopAwayState: (): Promise<boolean | undefined> =>
     ipcRenderer.invoke('notifications:getDesktopAwayState'),
   dispatch: (args: Record<string, unknown>): Promise<NotificationDispatchResult> =>

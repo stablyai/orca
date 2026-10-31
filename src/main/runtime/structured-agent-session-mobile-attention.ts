@@ -1,5 +1,6 @@
 // Push phone attention from the execution host so headless sessions need no desktop relay. Desktop retains presentation and marks local delivery to avoid duplicate pushes.
 // Read labels synchronously at the raising commit so alerts cannot outlive prompts; edge ids dedupe delivery and address retirement.
+import { structuredPushOccurrence } from '../notifications/structured-push-identity'
 import type { AgentSessionStatusSummary } from '../../shared/agent-session-wire'
 import {
   agentSessionAttentionKey,
@@ -27,6 +28,7 @@ import { getRuntimeDesktopSurface } from './runtime-desktop-surface'
 export type StructuredAttentionWorkspaceLabels = { repoLabel?: string; worktreeLabel?: string }
 
 export type StructuredAttentionMobileDeliveryDeps = {
+  readPushOrigin?: () => string | undefined
   readNotificationSettings: () => NotificationSettings | undefined
   /** In-memory metadata only: a lookup that could wait would let the alert outlive its prompt. */
   readWorkspaceLabels: (scope: AgentSessionExecutionLocation) => StructuredAttentionWorkspaceLabels
@@ -121,6 +123,8 @@ export function createStructuredAttentionMobileDelivery(
         paneKey: structuredAgentSessionPaneKey(structuredAgentSessionTabId(sessionId), sessionId),
         notificationId: attentionKey,
         attentionKey,
+        origin: deps.readPushOrigin?.(),
+        occurrence: structuredPushOccurrence(attentionKey, structuredAttentionOrigin(edge)),
         ...(structuredAttentionOrigin(edge)
           ? { structuredOrigin: structuredAttentionOrigin(edge) }
           : {}),

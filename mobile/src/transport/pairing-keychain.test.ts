@@ -25,7 +25,8 @@ import {
   deletePairingKeychainItem,
   readPairingKeychainItem,
   resetPairingKeychainForTests,
-  writePairingKeychainItem
+  writePairingKeychainItem,
+  writePairingKeychainItemIfCurrent
 } from './pairing-keychain'
 
 const GENERATION_KEY = 'orca:pairing-keychain-generation'
@@ -62,6 +63,86 @@ describe('pairing keychain', () => {
     secureStoreMock.setItemAsync.mockResolvedValue(undefined)
     secureStoreMock.deleteItemAsync.mockResolvedValue(undefined)
     secureStoreMock.getItemAsync.mockResolvedValue(null)
+  })
+
+  it.each(['queue', 'presence-read', 'presence-write', 'alias-recovery'] as const)(
+    'qualifies guarded mutation after %s and rolls back only its own staged presence',
+    async (boundary) => {
+      const held = Promise.withResolvers<void>()
+      const entered = Promise.withResolvers<void>()
+      const metadata = new Map<string, string>()
+      let current = true
+      let failedAlias = false
+      asyncStorageMock.getItem.mockImplementation(async (key: string) => {
+        if (boundary === 'presence-read' && key === TOKEN_PRESENCE_KEY) {
+          entered.resolve()
+          await held.promise
+        }
+        return metadata.get(key) ?? null
+      })
+      asyncStorageMock.setItem.mockImplementation(async (key: string, value: string) => {
+        metadata.set(key, value)
+        if (boundary === 'presence-write' && key === TOKEN_PRESENCE_KEY) {
+          entered.resolve()
+          await held.promise
+        }
+      })
+      asyncStorageMock.removeItem.mockImplementation(async (key: string) => {
+        metadata.delete(key)
+      })
+      secureStoreMock.setItemAsync.mockImplementation(async (key: string) => {
+        if (boundary === 'queue' && key === 'prior') {
+          entered.resolve()
+          await held.promise
+        }
+        if (boundary === 'alias-recovery' && key === TOKEN_KEY && !failedAlias) {
+          failedAlias = true
+          current = false
+          throw ENCRYPT_REJECTION
+        }
+      })
+      const prior =
+        boundary === 'queue' ? writePairingKeychainItem('prior', 'owned') : Promise.resolve()
+      const guarded = writePairingKeychainItemIfCurrent(TOKEN_KEY, 'candidate', () => current)
+      if (boundary !== 'alias-recovery') {
+        await entered.promise
+        current = false
+        held.resolve()
+      }
+      await prior
+      await expect(guarded).resolves.toBe('retired')
+      expect(
+        secureStoreMock.setItemAsync.mock.calls.filter(([key]) => key === TOKEN_KEY)
+      ).toHaveLength(boundary === 'alias-recovery' ? 1 : 0)
+      expect(metadata.has(TOKEN_PRESENCE_KEY)).toBe(false)
+      expect(metadata.has(GENERATION_KEY)).toBe(false)
+      current = true
+      await expect(
+        writePairingKeychainItemIfCurrent(TOKEN_KEY, 'successor', () => current)
+      ).resolves.toBe('written')
+      expect(metadata.get(TOKEN_PRESENCE_KEY)).toBe('0')
+      expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
+    }
+  )
+
+  it('finishes an issued guarded native write and keeps its committed secret after retirement', async () => {
+    const issued = Promise.withResolvers<void>()
+    const held = Promise.withResolvers<void>()
+    let current = true
+    let secret: string | null = null
+    secureStoreMock.setItemAsync.mockImplementation(async (_key: string, value: string) => {
+      issued.resolve()
+      await held.promise
+      secret = value
+    })
+    secureStoreMock.getItemAsync.mockImplementation(async () => secret)
+    const write = writePairingKeychainItemIfCurrent(TOKEN_KEY, 'committed', () => current)
+    await issued.promise
+    current = false
+    held.resolve()
+    await expect(write).resolves.toBe('written')
+    await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('committed')
+    expect(secureStoreMock.deleteItemAsync).not.toHaveBeenCalled()
   })
 
   it('writes under the default keychain service so existing installs keep their tokens', async () => {
@@ -293,6 +374,24 @@ describe('pairing keychain', () => {
     await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBeNull()
     expect(secureStoreMock.getItemAsync).toHaveBeenLastCalledWith(TOKEN_KEY, expect.any(Object))
     expect(secureStoreMock.getItemAsync).toHaveBeenCalledTimes(2)
+    secureStoreMock.setItemAsync.mockImplementation(
+      async (_key: string, value: string, options: Options) => {
+        if (serviceOf(options) === 'orca.pairing.v1') {
+          throw ENCRYPT_REJECTION
+        }
+        secureStoreMock.getItemAsync.mockImplementation(
+          async (_key: string, readOptions: Options) =>
+            serviceOf(readOptions) === 'orca.pairing.v2' ? value : 'legacy-token'
+        )
+      }
+    )
+    await expect(
+      writePairingKeychainItemIfCurrent(TOKEN_KEY, 'replacement', () => true)
+    ).resolves.toBe('written')
+    expect(secureStoreMock.setItemAsync).toHaveBeenCalledTimes(3)
+    expect(generationRecord).toBe('2')
+    expect(presenceRecord).toBe('2')
+    await expect(readPairingKeychainItem(TOKEN_KEY)).resolves.toBe('replacement')
   })
 
   it('reads an older value while a newly recorded alias has no item yet', async () => {

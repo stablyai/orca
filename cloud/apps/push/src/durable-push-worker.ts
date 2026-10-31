@@ -73,13 +73,22 @@ export class DurablePushWorker {
         await this.store.finish(queued)
         continue
       }
+      const admission = this.store.admission(queued)
       const heartbeat = setInterval(() => {
-        void this.store.renew(queued).catch(() => {})
+        void Promise.all([this.store.renew(queued), admission.renew()]).catch(() => {})
       }, 10_000)
       heartbeat.unref()
       try {
+        const outcome = await this.dispatcher.sendOnce(delivery, admission)
+        if (outcome.status === 'deferred') {
+          await this.store.defer(queued)
+          continue
+        }
+        if (outcome.status === 'superseded') {
+          await this.store.finish(queued)
+          continue
+        }
         if (queued.attempts > 1) this.options.onRetry?.()
-        const outcome = await this.dispatcher.sendOnce(delivery)
         const retryAfterMs =
           outcome.status === 'error' && outcome.retryable
             ? Math.max(

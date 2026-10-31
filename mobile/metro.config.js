@@ -3,10 +3,20 @@ const { getDefaultConfig } = require('expo/metro-config')
 
 const projectRoot = __dirname
 const sharedRoot = path.resolve(projectRoot, '..', 'src', 'shared')
+const pushContractRoot = path.resolve(
+  projectRoot,
+  '..',
+  'cloud',
+  'packages',
+  'push-contract',
+  'src'
+)
 
 const config = getDefaultConfig(projectRoot)
 
-// Watch repo root: mobile source-control uses desktop’s pure prompt builders, outside Metro’s default mobile-only scope.
-config.watchFolders = Array.from(new Set([...(config.watchFolders ?? []), sharedRoot]))
+// Prompt builders and the signed push contract live outside Metro's mobile project root.
+config.watchFolders = Array.from(
+  new Set([...(config.watchFolders ?? []), sharedRoot, pushContractRoot])
+)
 
 module.exports = config

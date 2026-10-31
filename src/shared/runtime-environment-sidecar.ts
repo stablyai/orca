@@ -2,9 +2,12 @@ import { existsSync } from 'node:fs'
 import { join } from 'node:path'
 import { z } from 'zod'
 import { writeSecureJsonFileWithinLimit } from './bounded-secure-json-file'
-import { readNodeFileSyncWithinLimit } from './node-bounded-file-reader'
+import {
+  readEnvironmentStoreRecords,
+  readEnvironmentStoreContent,
+  type EnvironmentStoreContentReader
+} from './runtime-environment-store-records'
 import { RuntimeEnvironmentReconciliationRecordSchema } from './runtime-environment-reconciliation-record'
-import { readEnvironmentStoreRecords } from './runtime-environment-store-records'
 import {
   getPreferredLoopbackRuntimePort,
   KnownRuntimeEnvironmentSchema,
@@ -90,20 +93,24 @@ export function runtimeEnvironmentSidecarBinding(environment: PersistedRuntimeEn
   }
 }
 
-export function readRuntimeEnvironmentSidecar(userDataPath: string): RuntimeEnvironmentSidecar {
+export function readRuntimeEnvironmentSidecar(
+  userDataPath: string,
+  readContent: EnvironmentStoreContentReader = readEnvironmentStoreContent
+): RuntimeEnvironmentSidecar {
   const path = getRuntimeEnvironmentSidecarPath(userDataPath)
   if (!existsSync(path)) {
     return { version: 1, entries: {}, unreadable: {} }
   }
-  let raw: Record<string, unknown>
   try {
     hardenExistingSecureFile(path)
-    raw = SidecarEnvelopeSchema.parse(
-      JSON.parse(readNodeFileSyncWithinLimit(path, MAX_SIDECAR_FILE_BYTES).buffer.toString('utf8'))
-    ).entries
+    return readContent(path, MAX_SIDECAR_FILE_BYTES, decodeRuntimeEnvironmentSidecar)
   } catch {
     throw new RuntimeEnvironmentSidecarInvalidError(path)
   }
+}
+
+function decodeRuntimeEnvironmentSidecar(buffer: Buffer): RuntimeEnvironmentSidecar {
+  const raw = SidecarEnvelopeSchema.parse(JSON.parse(buffer.toString('utf8'))).entries
   const entries: RuntimeEnvironmentSidecar['entries'] = {}
   const unreadable: RuntimeEnvironmentSidecar['unreadable'] = {}
   for (const [id, value] of Object.entries(raw)) {

@@ -11,11 +11,11 @@ vi.mock('../../../shared/runtime-environment-store', () => ({
 vi.mock('./runtime-environment-transport-routing', () => ({
   subscribeRuntimeEnvironment: mocks.subscribe
 }))
-import {
-  registerRuntimeEnvironmentSubscriptionHandlers,
-  type PendingRuntimeSubscription,
-  type RetainedRemoteRuntimeSubscription
-} from './runtime-environment-subscription-handlers'
+import { registerRuntimeEnvironmentSubscriptionHandlers } from './runtime-environment-subscription-handlers'
+import type {
+  PendingRuntimeSubscription,
+  RetainedRemoteRuntimeSubscription
+} from './runtime-environment-subscription-source'
 
 const remoteRuntimeSubscriptions = new Map<string, RetainedRemoteRuntimeSubscription>()
 const pendingSubscriptions = new Map<string, PendingRuntimeSubscription>()

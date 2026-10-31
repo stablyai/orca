@@ -28,6 +28,7 @@ import { registerMemoryHandlers } from '../memory'
 import { registerRateLimitHandlers } from '../rate-limits'
 import { registerRuntimeHandlers } from '../runtime'
 import {
+  getForwardedPushSource,
   invalidateRuntimeEnvironmentTransport,
   registerRuntimeEnvironmentHandlers
 } from '../runtime-environments/runtime-environments'
@@ -211,7 +212,7 @@ export function registerCoreHandlers(
   registerExportHandlers()
   registerStatsHandlers(stats)
   registerMemoryHandlers(store)
-  registerNotificationHandlers(store, runtime)
+  registerNotificationHandlers(store, runtime, getForwardedPushSource)
   registerNotebookHandlers(store)
   registerOnboardingHandlers(store)
   registerDashboardPopoutHandlers(store, keybindings)

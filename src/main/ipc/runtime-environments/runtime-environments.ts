@@ -1,10 +1,11 @@
+import { findForwardedPushSource } from './runtime-environment-subscription-source'
 import { createAiVaultAssociationObserver } from '../ai-vault-projection-dependency'
 import { invalidateAiVaultHostLegCache } from '../ai-vault-host-leg-cache'
-import {
-  registerRuntimeEnvironmentSubscriptionHandlers,
-  type RetainedRemoteRuntimeSubscription,
-  type PendingRuntimeSubscription
-} from './runtime-environment-subscription-handlers'
+import { registerRuntimeEnvironmentSubscriptionHandlers } from './runtime-environment-subscription-handlers'
+import type {
+  PendingRuntimeSubscription,
+  RetainedRemoteRuntimeSubscription
+} from './runtime-environment-subscription-source'
 import { ipcMain } from 'electron'
 import { getRuntimeEnvironmentRegistryRoot } from './runtime-environment-registry-root'
 import { listEnvironments } from '../../../shared/runtime-environment-store'
@@ -195,4 +196,18 @@ export function registerRuntimeEnvironmentHandlers(store: Store): void {
     recordLayoutFrame: (environmentId, method, response) =>
       recordRemoteLayoutFrame(store, environmentId, method, response)
   })
+}
+
+export function getForwardedPushSource(
+  senderId: number,
+  environmentId: string,
+  context: { subscriptionId: string; requestId: string } | undefined
+) {
+  return findForwardedPushSource(
+    pendingSubscriptions,
+    remoteRuntimeSubscriptions,
+    senderId,
+    environmentId,
+    context
+  )
 }

@@ -139,7 +139,7 @@ function StructuredAgentSessionOwnedAttention({
   }, [paneKey, tab.entityId, target])
   useEffect(
     () =>
-      feed.subscribe((edge) => {
+      feed.subscribe((edge, context) => {
         const payload = edge.type === 'prompt' ? edge.prompt : edge.completion
         const cursor = payload.sessionId === tab.entityId ? payload.journalCursor : undefined
         if (cursor && (!surfaced.current || isLaterCursor(cursor, surfaced.current))) {
@@ -153,18 +153,24 @@ function StructuredAgentSessionOwnedAttention({
                 raisedAt: Math.max(edge.prompt.raisedAt, relayedPrompt.current?.raisedAt ?? 0)
               }
             }
-            dispatchStructuredPromptAttention(tab, edge.prompt, target, () => {
-              const read = readFrontier.current
-              return read?.sessionId === tab.entityId &&
-                sameStructuredReadTarget(read.target, target)
-                ? read
-                : undefined
-            })
+            dispatchStructuredPromptAttention(
+              tab,
+              edge.prompt,
+              target,
+              () => {
+                const read = readFrontier.current
+                return read?.sessionId === tab.entityId &&
+                  sameStructuredReadTarget(read.target, target)
+                  ? read
+                  : undefined
+              },
+              context
+            )
             // Its own resolution may already be mirrored; the relay above is already in main.
             settleRelayedPrompt.current()
           }
         } else if (edge.completion.sessionId === tab.entityId) {
-          dispatchStructuredTurnCompletionAttention(tab, edge.completion, target)
+          dispatchStructuredTurnCompletionAttention(tab, edge.completion, target, context)
         }
       }),
     [feed, tab, target]

@@ -17,6 +17,8 @@ import {
   getEnvironmentStorePath,
   MAX_RUNTIME_ENVIRONMENT_STORE_FILE_BYTES,
   readEnvironmentStoreRecords,
+  type EnvironmentStoreContentReader,
+  type EnvironmentStoreRecords,
   backUpBlankEnvironmentStore,
   remoteServerPairingStoreError,
   RuntimeEnvironmentStoreError,
@@ -42,7 +44,16 @@ export function readPersistedEnvironmentStore(
   userDataPath: string,
   options: EnvironmentStoreRecordsReadOptions = {}
 ): RuntimeEnvironmentStore {
-  const { environments, unreadable } = readEnvironmentStoreRecords(userDataPath, options)
+  return persistedEnvironmentStoreFromRecords(
+    userDataPath,
+    readEnvironmentStoreRecords(userDataPath, options)
+  )
+}
+
+function persistedEnvironmentStoreFromRecords(
+  userDataPath: string,
+  { environments, unreadable }: EnvironmentStoreRecords
+): RuntimeEnvironmentStore {
   if (unreadable.length > 0) {
     warnUnreadableEnvironmentState(
       `Skipping ${unreadable.length} unreadable server record(s) in ${getEnvironmentStorePath(userDataPath)} (ids: ${unreadable.map((record) => record.id ?? '<none>').join(', ')}); they may need a newer version of Orca and are kept on disk.`
@@ -56,11 +67,12 @@ export function readPersistedEnvironmentStore(
 
 /** Unreadable WSL state fails closed only while WSL hosts are served; otherwise it cannot hide SSH/paired servers. */
 function readWslHostDeploymentsForRegistry(
-  userDataPath: string
+  userDataPath: string,
+  readContent?: EnvironmentStoreContentReader
 ): ReturnType<typeof readWslHostDeployments> {
   const gateOpen = isWslHostsServing(process.env)
   try {
-    const read = readWslHostDeployments(userDataPath)
+    const read = readWslHostDeployments(userDataPath, readContent)
     return gateOpen ? read : { deployments: read.deployments, unreadableEnvironmentIds: new Set() }
   } catch (error) {
     if (!(error instanceof WslHostDeploymentStoreInvalidError) || gateOpen) {
@@ -78,14 +90,21 @@ export function readEnvironmentStore(
   version: 1
   environments: KnownRuntimeEnvironment[]
 } {
-  const store = readPersistedEnvironmentStore(userDataPath, options)
-  let sidecar: ReturnType<typeof readRuntimeEnvironmentSidecar>
-  let wslDeployments: ReturnType<typeof readWslHostDeployments>
+  const inputs = readEnvironmentStoreInputs(userDataPath, options)
+  return environmentStoreFromInputs(userDataPath, inputs)
+}
+
+export function readEnvironmentStoreInputs(
+  userDataPath: string,
+  options: EnvironmentStoreRecordsReadOptions = {},
+  readContent?: EnvironmentStoreContentReader
+) {
+  const records = readEnvironmentStoreRecords(userDataPath, options, readContent)
   try {
-    sidecar = readRuntimeEnvironmentSidecar(userDataPath)
-    wslDeployments = readWslHostDeploymentsForRegistry(userDataPath)
+    const sidecar = readRuntimeEnvironmentSidecar(userDataPath, readContent)
+    const wslDeployments = readWslHostDeploymentsForRegistry(userDataPath, readContent)
+    return { records, sidecar, wslDeployments }
   } catch (error) {
-    // Fail closed like the main file: a link we cannot read may pin a host key we must not drop.
     if (
       error instanceof RuntimeEnvironmentSidecarInvalidError ||
       error instanceof WslHostDeploymentStoreInvalidError
@@ -94,6 +113,13 @@ export function readEnvironmentStore(
     }
     throw error
   }
+}
+
+export function environmentStoreFromInputs(
+  userDataPath: string,
+  { records, sidecar, wslDeployments }: ReturnType<typeof readEnvironmentStoreInputs>
+): { version: 1; environments: KnownRuntimeEnvironment[] } {
+  const store = persistedEnvironmentStoreFromRecords(userDataPath, records)
   // Hide unreadable overlays: connecting/editing without them could silently discard SSH pins or deployment ownership.
   const isHidden = (id: string): boolean => Object.hasOwn(sidecar.unreadable, id)
   const hidden = store.environments.filter((environment) => isHidden(environment.id))

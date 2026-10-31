@@ -3,6 +3,8 @@ import { type PushNotification } from '@orca-cloud/push-contract'
 
 export type PushOrcaData = {
   kind?: 'alert' | 'dismiss'
+  origin?: string
+  occurrence?: string
   hostFingerprint: string
   worktreeId?: string
   paneKey?: string
@@ -25,13 +27,24 @@ export type PushDelivery = {
   orca: PushOrcaData
 }
 
-export function collapseIdFor(notification: PushNotification, hostFingerprint: string): string {
+export function collapseIdFor(
+  notification: Pick<
+    PushNotification,
+    'notificationId' | 'notificationEpoch' | 'notificationSeq' | 'origin'
+  >,
+  hostFingerprint: string,
+  admitted = false
+): string {
   const identity =
     notification.notificationId === undefined
       ? [notification.notificationEpoch, notification.notificationSeq]
       : notification.notificationId
   return createHash('sha256')
-    .update(JSON.stringify([hostFingerprint, identity]))
+    .update(
+      JSON.stringify(
+        admitted ? ['admitted-v1', notification.origin, identity] : [hostFingerprint, identity]
+      )
+    )
     .digest('hex')
 }
 
@@ -53,6 +66,9 @@ export function buildPushDelivery(input: {
     orca: {
       ...(notification.kind ? { kind: notification.kind } : {}),
       hostFingerprint,
+      ...(notification.origin
+        ? { origin: notification.origin, occurrence: notification.occurrence }
+        : {}),
       ...(notification.paneKey === undefined ? {} : { paneKey: notification.paneKey }),
       ...(notification.worktreeId === undefined ? {} : { worktreeId: notification.worktreeId }),
       ...(notification.executionHost === undefined

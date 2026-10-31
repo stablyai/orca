@@ -10,6 +10,11 @@ import {
 // One root navigator needs one pending transition so Resume and Tasks pushes can cancel each other.
 let pendingNavigation: PendingHostStackNavigation | null = null
 
+export function cancelPendingHostStackRoute(): void {
+  pendingNavigation?.controller.cancel()
+  pendingNavigation = null
+}
+
 export function useOpenHostStackRoute(): (hostId: string, target: HostStackRouteTarget) => void {
   const navigation = useNavigation<HostStackRootNavigation>()
   const router = useRouter()
@@ -19,8 +24,7 @@ export function useOpenHostStackRoute(): (hostId: string, target: HostStackRoute
   useEffect(
     () => () => {
       if (armedRef.current && armedRef.current === pendingNavigation) {
-        pendingNavigation.controller.cancel()
-        pendingNavigation = null
+        cancelPendingHostStackRoute()
       }
       armedRef.current = null
     },

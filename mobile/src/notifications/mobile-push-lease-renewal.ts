@@ -1,6 +1,9 @@
 import { AppState } from 'react-native'
 
-export function startMobilePushLeaseRenewal(renew: () => Promise<void>): () => void {
+export function startMobilePushLeaseRenewal(
+  renew: () => Promise<void>,
+  onInactive: () => void
+): () => void {
   const refresh = () => {
     if (AppState.currentState === 'active') {
       void renew().catch(() => {})
@@ -9,6 +12,8 @@ export function startMobilePushLeaseRenewal(renew: () => Promise<void>): () => v
   const subscription = AppState.addEventListener('change', (state) => {
     if (state === 'active') {
       refresh()
+    } else {
+      onInactive()
     }
   })
   const timer = setInterval(refresh, 15 * 60_000)

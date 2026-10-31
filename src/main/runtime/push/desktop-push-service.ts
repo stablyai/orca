@@ -1,4 +1,5 @@
 // Push authenticates with host keys, independent of cloud sign-in; retain gateway registrations and durable cleanup for accountless hosts too.
+import { deriveRelayHostId } from '../mobile-cloud-relay/relay-http-client'
 import { randomUUID } from 'node:crypto'
 import type {
   MobilePushTestResult,
@@ -7,8 +8,7 @@ import type {
 } from '../../../shared/mobile-push-contract'
 import { runKeyedSerializedOperation } from '../../cli/keyed-promise-queue'
 import type { DeviceRegistry } from '../device-registry'
-import type { OrcaRuntimeService } from '../orca-runtime'
-import type { OrcaRuntimeRpcServer } from '../runtime-rpc'
+import type { DesktopPushRuntime, DesktopPushRuntimeRpc } from './desktop-push-service-ports'
 import { PushDispatcher } from './push-dispatcher'
 import { PushGatewayClient } from './push-gateway-client'
 import { PushRegisterThrottle } from './push-register-throttle'
@@ -20,8 +20,8 @@ const OUTBOX_RETRY_MAX_MS = 10 * 60_000
 type RegisterStorageFailure = 'not_mobile' | 'registration_storage_failed'
 
 type DesktopPushServiceOptions = {
-  runtime: OrcaRuntimeService
-  runtimeRpc: OrcaRuntimeRpcServer
+  runtime: DesktopPushRuntime
+  runtimeRpc: DesktopPushRuntimeRpc
   gatewayUrl: string
   /** Inject a gateway client for tests. */
   client?: PushGatewayClient
@@ -32,8 +32,8 @@ type DesktopPushServiceOptions = {
 }
 
 export class DesktopPushService {
-  private readonly runtime: OrcaRuntimeService
-  private readonly runtimeRpc: OrcaRuntimeRpcServer
+  private readonly runtime: DesktopPushServiceOptions['runtime']
+  private readonly runtimeRpc: DesktopPushServiceOptions['runtimeRpc']
   private readonly registry: DeviceRegistry
   private readonly outbox: PushUnregisterOutbox
   private readonly client: PushGatewayClient
@@ -82,6 +82,10 @@ export class DesktopPushService {
 
   start(): void {
     this.stopped = false
+    const keypair = this.runtimeRpc.getE2EEKeypair()
+    if (keypair) {
+      this.runtime.setMobilePushOrigin(deriveRelayHostId(keypair.publicKey))
+    }
     this.dispatcher.start()
     this.runtime.setMobilePushRegistrar(this)
     this.unsubscribe = this.runtime.onNotificationDispatched((event) => {
@@ -198,7 +202,11 @@ export class DesktopPushService {
     void this.flushUnregisterOutbox()
     return failure
       ? { registered: false, reason: failure }
-      : { registered: true, registrationId: result.registrationId }
+      : {
+          registered: true,
+          registrationId: result.registrationId,
+          gatewayOrigin: this.client.gatewayOrigin
+        }
   }
 
   async unregister(deviceId: string): Promise<{ unregistered: boolean }> {
@@ -258,6 +266,7 @@ export class DesktopPushService {
       const stored = this.registry.setPushRegistration(input.deviceId, {
         registrationId,
         filter: input.filter,
+        ...(input.routeKey ? { routeKey: input.routeKey } : {}),
         expiresAt: Date.now() + 7 * 24 * 60 * 60_000
       })
       // False means the device was removed or left mobile scope while the gateway

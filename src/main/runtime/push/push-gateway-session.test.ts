@@ -100,7 +100,11 @@ describe('PushGatewaySession', () => {
   it('reports a refused handshake as rejected rather than unreachable', async () => {
     const harness = createSessionHarness({ sessionStatus: 403 })
 
-    expect(await harness.session.ensure(null)).toEqual({ ok: false, reason: 'rejected' })
+    expect(await harness.session.ensure(null)).toEqual({
+      ok: false,
+      reason: 'rejected',
+      status: 403
+    })
   })
 
   it('reports a session minted for another host as rejected', async () => {

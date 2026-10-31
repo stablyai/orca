@@ -11,6 +11,7 @@ import {
 
 export type DeliveredNotificationRecord = DeliveredNotificationIdentity & {
   structuredOrigin?: StructuredAttentionOrigin
+  forwardingEnvironmentId?: string
 }
 type RecordEntry = DeliveredNotificationRecord & { dismissedThrough: number; expiresAt: number }
 const LIMIT = 4096
@@ -43,9 +44,9 @@ export class MobileNotificationDismissalStore {
 
   record(
     event: MobileNotificationEvent & { notificationEpoch: string; notificationSeq: number }
-  ): void {
+  ): boolean {
     if (!event.notificationId) {
-      return
+      return false
     }
     const now = Date.now()
     const kept = this.entries.filter((entry) => entry.expiresAt > now)
@@ -72,6 +73,9 @@ export class MobileNotificationDismissalStore {
           notificationId: event.notificationId,
           notificationEpoch: event.notificationEpoch,
           notificationSeq: event.notificationSeq,
+          ...(event.forwardingEnvironmentId
+            ? { forwardingEnvironmentId: event.forwardingEnvironmentId }
+            : {}),
           ...(event.structuredOrigin ? { structuredOrigin: event.structuredOrigin } : {}),
           dismissedThrough: kept.find(same)?.dismissedThrough ?? -1,
           expiresAt: now + RETENTION_MS
@@ -96,7 +100,7 @@ export class MobileNotificationDismissalStore {
     next = next.slice(-LIMIT)
     this.entries = next
     if (this.unreadable) {
-      return
+      return true
     }
     const serialize = () => JSON.stringify(this.entries, null, 2)
     if (this.closed) {
@@ -106,9 +110,10 @@ export class MobileNotificationDismissalStore {
       } catch (error) {
         warnPersistFailed(error)
       }
-      return
+      return true
     }
     this.writer.write(serialize).catch(warnPersistFailed)
+    return true
   }
 
   flush(): Promise<void> {
@@ -136,6 +141,26 @@ export class MobileNotificationDismissalStore {
         notificationSeq,
         ...(structuredOrigin ? { structuredOrigin } : {})
       }))
+  }
+
+  forwardedEnvironments(): { environments: string[]; expiresAt?: number } {
+    const live = this.entries.filter(
+      (entry) =>
+        entry.expiresAt > Date.now() &&
+        entry.dismissedThrough < entry.notificationSeq &&
+        entry.structuredOrigin &&
+        typeof entry.forwardingEnvironmentId === 'string'
+    )
+    return {
+      environments: [
+        ...new Set(
+          live.flatMap((entry) =>
+            entry.forwardingEnvironmentId ? [entry.forwardingEnvironmentId] : []
+          )
+        )
+      ].sort(),
+      ...(live.length ? { expiresAt: Math.min(...live.map((entry) => entry.expiresAt)) } : {})
+    }
   }
 
   reconcile(delivered: readonly DeliveredNotificationIdentity[]): DeliveredNotificationIdentity[] {

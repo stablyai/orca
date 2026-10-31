@@ -31,6 +31,7 @@ export type NotificationDeliveryDependencies = {
   now: () => number
   /** Called for each actual desktop banner or mobile alert. */
   recordAnnounced?: (request: NotificationDispatchRequest) => void
+  resolveMobileOrigin?: (request: NotificationDispatchRequest) => string | undefined
 }
 
 export type NotificationDeliveryService = {
@@ -47,7 +48,11 @@ export function createNotificationDeliveryService(
 
   // Keyed news is announced once by its producer, so only its own repeat may collapse it.
   const dedupeKeyFor = (request: NotificationDispatchRequest): string =>
-    request.attentionKey ?? request.worktreeId ?? request.worktreeLabel ?? 'global'
+    request.occurrence ??
+    request.attentionKey ??
+    request.worktreeId ??
+    request.worktreeLabel ??
+    'global'
 
   const deliverNativeAndRecord = (
     request: NotificationDispatchRequest,
@@ -103,6 +108,9 @@ export function createNotificationDeliveryService(
             deps.now()
           )
         ) {
+          const origin = deps.resolveMobileOrigin
+            ? deps.resolveMobileOrigin(request)
+            : request.origin
           deps.dispatchMobileNotification({
             type: 'notification',
             emittedAt: deps.now(),
@@ -118,6 +126,10 @@ export function createNotificationDeliveryService(
             // Push needs real agent state to distinguish input/completion and silence running agents.
             ...(request.agentState ? { agentState: request.agentState } : {}),
             ...(request.attentionKey ? { attentionKey: request.attentionKey } : {}),
+            ...(origin && request.occurrence ? { origin, occurrence: request.occurrence } : {}),
+            ...(request.forwardingEnvironmentId
+              ? { forwardingEnvironmentId: request.forwardingEnvironmentId }
+              : {}),
             ...(request.structuredOrigin ? { structuredOrigin: request.structuredOrigin } : {})
           })
           deps.recordAnnounced?.(request)

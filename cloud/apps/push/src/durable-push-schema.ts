@@ -1,4 +1,26 @@
 export const DURABLE_PUSH_SCHEMA = `
+ALTER TABLE push_devices ADD COLUMN IF NOT EXISTS route_key TEXT;
+CREATE INDEX IF NOT EXISTS push_devices_destination ON push_devices(platform, token);
+CREATE TABLE IF NOT EXISTS push_route_declarations (
+  destination TEXT NOT NULL, route_key TEXT NOT NULL, version BIGINT NOT NULL,
+  hosts_json TEXT NOT NULL, updated_at BIGINT NOT NULL,
+  PRIMARY KEY(destination, route_key)
+);
+CREATE INDEX IF NOT EXISTS push_routes_retention ON push_route_declarations(updated_at);
+CREATE TABLE IF NOT EXISTS push_occurrence_domains (
+  destination TEXT NOT NULL, route_key TEXT NOT NULL, origin TEXT NOT NULL, occurrence TEXT NOT NULL,
+  state TEXT NOT NULL, batch_id TEXT, attempt TEXT, winner_host TEXT,
+  lease_until BIGINT NOT NULL, created_at BIGINT NOT NULL,
+  PRIMARY KEY(destination, route_key, origin, occurrence)
+);
+CREATE INDEX IF NOT EXISTS push_domains_retention ON push_occurrence_domains(created_at);
+CREATE TABLE IF NOT EXISTS push_batch_admissions (
+  batch_id TEXT NOT NULL, destination TEXT NOT NULL, route_key TEXT NOT NULL,
+  attempt TEXT NOT NULL, expires_at BIGINT NOT NULL,
+  PRIMARY KEY(batch_id, destination, route_key)
+);
+CREATE INDEX IF NOT EXISTS push_admissions_expiry ON push_batch_admissions(expires_at);
+
 CREATE TABLE IF NOT EXISTS push_dismissed_events (
   host_fingerprint TEXT NOT NULL,
   notification_epoch TEXT NOT NULL,

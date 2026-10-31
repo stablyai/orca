@@ -1,3 +1,4 @@
+import type { RuntimeSubscriptionContext } from '../../../../shared/runtime-rpc-envelope'
 /** Use host journal facts instead of PTY inference, sharing neutral unread/delivery policy; unknown outcomes and already-read prompts stay quiet. */
 import {
   notificationExecutionHostForOwner,
@@ -31,25 +32,40 @@ import type { StructuredTab } from './structured-agent-session-tabs'
 export function dispatchStructuredTurnCompletionAttention(
   tab: StructuredTab,
   completion: AgentSessionTurnCompletion,
-  subscriptionTarget?: RuntimeClientTarget
+  subscriptionTarget?: RuntimeClientTarget,
+  context?: RuntimeSubscriptionContext
 ): void {
-  dispatchStructuredAttention(tab, { type: 'completion', completion }, subscriptionTarget)
+  dispatchStructuredAttention(
+    tab,
+    { type: 'completion', completion },
+    subscriptionTarget,
+    undefined,
+    context
+  )
 }
 
 export function dispatchStructuredPromptAttention(
   tab: StructuredTab,
   prompt: AgentSessionPromptAttention,
   subscriptionTarget?: RuntimeClientTarget,
-  readFrontier?: () => StructuredAttentionRead | undefined
+  readFrontier?: () => StructuredAttentionRead | undefined,
+  context?: RuntimeSubscriptionContext
 ): void {
-  dispatchStructuredAttention(tab, { type: 'prompt', prompt }, subscriptionTarget, readFrontier)
+  dispatchStructuredAttention(
+    tab,
+    { type: 'prompt', prompt },
+    subscriptionTarget,
+    readFrontier,
+    context
+  )
 }
 
 function dispatchStructuredAttention(
   tab: StructuredTab,
   edge: AgentSessionAttentionEdge,
   subscriptionTarget: RuntimeClientTarget | undefined,
-  readFrontier?: () => StructuredAttentionRead | undefined
+  readFrontier?: () => StructuredAttentionRead | undefined,
+  context?: RuntimeSubscriptionContext
 ): void {
   // Host outcomes outrank stale row state; absent outcomes from older hosts remain unknown and quiet.
   const news = agentSessionAttentionNews(edge)
@@ -110,6 +126,10 @@ function dispatchStructuredAttention(
           notificationId: attentionKey,
           attentionKey,
           structuredOrigin: origin,
+          ...(context ? { forwardingSource: context } : {}),
+          ...(subscriptionTarget?.kind === 'environment'
+            ? { forwardingEnvironmentId: subscriptionTarget.environmentId }
+            : {}),
           // A local session's host is this app's own main, which already pushed its phones.
           ...(subscriptionTarget?.kind === 'local' ? { mobileDeliveredByHost: true } : {}),
           worktreeId: request.workspaceId,
