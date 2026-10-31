@@ -199,6 +199,26 @@ it.each([
   }
 )
 
+it('keeps the pin a chat took from the terminal it replaced on every later frame', () => {
+  const { state } = shownThree('host-a')
+  // The host pinned its terminal; this client never did.
+  const replacing = { ...chat, replaces: { tabId: 'host-a' }, isPinned: true }
+  const frame = (snapshotVersion: number) =>
+    makeSnapshot([replacing, terminal('host-b'), terminal('host-c')], {
+      snapshotVersion,
+      tabGroups: [
+        { id: 'host-group-1', activeTabId: null, tabOrder: [chat.id, 'host-b', 'host-c'] }
+      ]
+    })
+  const first = apply(state, frame(2))
+  const second = apply(first, frame(3))
+  for (const next of [first, second]) {
+    expect(
+      next.unifiedTabsByWorktree[WT]!.find((tab) => tab.entityId === 'session-1')?.isPinned
+    ).toBe(false)
+  }
+})
+
 it('places a destination in a split group this client is not looking at, without moving focus', () => {
   const { state, a, b, c } = shownThree('host-a')
   const [group] = state.groupsByWorktree[WT]!

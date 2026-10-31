@@ -156,8 +156,10 @@ export function buildMirroredAgentTabs(
         color: tab.color !== undefined ? tab.color : (existing?.color ?? null),
         sortOrder: sortOffset + index,
         createdAt: existing?.createdAt ?? now + sortOffset + index,
+        // A chat in a replaced tab's slot keeps the pin it took from that tab here for its life,
+        // as a terminal does; the host's flag on later frames never flips it.
         isPinned: existing
-          ? tab.isPinned !== undefined
+          ? tab.isPinned !== undefined && !tab.replaces
             ? tab.isPinned
             : existing.isPinned === true
           : (replacedTabPinned(currentUnifiedTabs, tab) ?? tab.isPinned === true)
