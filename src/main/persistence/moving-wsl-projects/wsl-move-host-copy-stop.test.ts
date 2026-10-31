@@ -73,17 +73,20 @@ describe("undo's stop of the host's copies", () => {
       expect(running.sleepWorkspace).not.toHaveBeenCalled()
     })
 
-    it('refuses a live terminal with nothing slept, and stops idle workspaces as before', async () => {
+    // A sleep after the census would end a terminal started in between, so refuse-live never sleeps.
+    it('never sleeps: refuses a live terminal, and reports an idle host stopped untouched', async () => {
       const live = port({ liveTerminals: vi.fn(async () => 1) })
       expect(await stopWslMoveHostCopies(['wt-a'], live, undefined, undefined, 'refuse-live')).toBe(
         'still-running'
       )
       expect(live.sleepWorkspace).not.toHaveBeenCalled()
 
-      const idle = port()
+      const idle = port({ workspacesWithTerminals: vi.fn(async () => ['wt-host-only']) })
       expect(await stopWslMoveHostCopies(['wt-a'], idle, undefined, undefined, 'refuse-live')).toBe(
         'stopped'
       )
+      expect(idle.sleepWorkspace).not.toHaveBeenCalled()
+      expect(idle.wait).not.toHaveBeenCalled()
     })
   })
 

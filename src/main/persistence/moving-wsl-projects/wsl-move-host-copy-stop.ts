@@ -96,9 +96,10 @@ export async function stopWslMoveHostCopies(
     return 'unreachable'
   }
   const { hostWorkspaceIds, running } = census
-  // Re-checked right before any sleep: a terminal that started since the probe still refuses.
-  if (mode === 'refuse-live' && running.size > 0) {
-    return 'still-running'
+  // Never sleeps: a sleep would end a terminal that started after this census. Re-checked here, so
+  // one that started since the preflight still refuses.
+  if (mode === 'refuse-live') {
+    return running.size > 0 ? 'still-running' : 'stopped'
   }
   // Only a workspace that ran a terminal has one to resume, so only it counts as asleep.
   let sleptAny = false

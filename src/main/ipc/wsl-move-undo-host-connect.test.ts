@@ -67,9 +67,17 @@ describe("undo's stop of the host's terminals: connecting the host", () => {
       host.ensureForRuntimeCall.mockClear()
       const ports = createWslMoveUndoPorts(store, '/user-data', 'automatic')
       expect(await ports.preflightHostCopies?.(move)).toBe('stopped')
+      host.call.mockClear()
       expect(await ports.stopHostCopies(move)).toBe('stopped')
       expect(host.ensureForRuntimeCall).toHaveBeenCalled()
       expect(host.connect).not.toHaveBeenCalled()
+      expect(host.call).not.toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        'worktree.sleep',
+        expect.anything(),
+        expect.anything()
+      )
     })
 
     it('reads a stopped distro as unreachable, asking the host nothing', async () => {
