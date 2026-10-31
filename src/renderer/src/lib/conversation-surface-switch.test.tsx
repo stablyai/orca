@@ -383,3 +383,30 @@ it('opens a History chat with no pane selected, at the end, and withdraws that o
   await expect(runConversationSwitch(args)).resolves.toBe(false)
   expect(peekWebSessionFocusIntent({ environmentId: 'paired' }, 'workspace')).toBeNull()
 })
+
+it('opens a History conversation’s existing chat selected, right after the pane it came from', async () => {
+  // The chat exists but is closed or not shown here, and the pane can't be captured: the host
+  // reopens that chat, and this client selects it as it would a new one.
+  mocks.target.current = { kind: 'environment', environmentId: 'paired' }
+  mocks.capture.mockResolvedValue(null)
+  mocks.call.mockResolvedValue({ status: 'completed', sessionId: 'existing-chat' })
+  const history = makeTabSessionHistoryRow({ agent: 'codex', sessionId: 'history-session' })
+  await expect(
+    runConversationSwitch({
+      direction: 'chat',
+      ...fromPane,
+      source: fromPane,
+      history,
+      sessionId: 'existing-chat'
+    })
+  ).resolves.toBe(true)
+  const [, method, params] = mocks.call.mock.calls[0]!
+  expect(method).toBe('agentSession.switchToChat')
+  expect(params.sessionId).toBe('existing-chat')
+  expect(params.execution).not.toHaveProperty('create')
+  expect(params.execution.sourceTabId).toBe('terminal')
+  expect(peekWebSessionFocusIntent({ environmentId: 'paired' }, 'workspace')).toMatchObject({
+    hostTabId: 'agent-session:existing-chat',
+    afterHostTabId: 'terminal'
+  })
+})

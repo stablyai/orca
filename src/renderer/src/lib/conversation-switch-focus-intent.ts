@@ -55,10 +55,9 @@ export function recordConversationSwitchFocus(args: {
  * focus after a definite refusal.
  */
 export function uncapturedSwitchChat(
-  intent: Pick<
-    StructuredAgentSessionLaunchIntent,
-    'target' | 'worktreeId' | 'sessionId' | 'params'
-  >,
+  /** A new chat's launch intent, or an existing chat (no params) the host reopens. */
+  intent: Pick<StructuredAgentSessionLaunchIntent, 'target' | 'worktreeId' | 'sessionId'> &
+    Partial<Pick<StructuredAgentSessionLaunchIntent, 'params'>>,
   invocationId: string,
   /** This client's id for the source's tab. */
   sourceTab: string | undefined
@@ -80,6 +79,10 @@ export function uncapturedSwitchChat(
   return {
     sessionId: intent.sessionId,
     abandonFocus: () => clearWebSessionFocusIntentIfMatches(owner, worktreeId, hostTabId),
-    execution: { invocationId, create: intent.params, ...(sourceTabId ? { sourceTabId } : {}) }
+    execution: {
+      invocationId,
+      ...(intent.params ? { create: intent.params } : {}),
+      ...(sourceTabId ? { sourceTabId } : {})
+    }
   }
 }

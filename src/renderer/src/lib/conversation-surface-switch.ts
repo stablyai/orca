@@ -306,6 +306,15 @@ async function switchRequest(
       }
     }
   }
+  // An existing chat (History's row names it) opens selected for this client, as a new one does.
+  const target = structuredAgentSessionTargetForHost(hostId)
+  if (args.direction === 'chat' && args.sessionId && target) {
+    return uncapturedSwitchChat(
+      { target, worktreeId: args.workspaceId, sessionId: args.sessionId },
+      invocationId,
+      args.source?.tabId
+    )
+  }
   return { sessionId: args.sessionId, execution: { invocationId } }
 }
 
