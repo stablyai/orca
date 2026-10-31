@@ -18,10 +18,7 @@ import {
 import { QuickChatIntents, type QuickChatIntent } from '@/lib/quick-chat-intents'
 import { QUICK_CHAT_EVENT, QUICK_CHAT_ANCHOR_EVENT } from '@/lib/quick-chat-events'
 import { isWebClientLocation } from '@/lib/web-client-location'
-import {
-  buildAgentLaunchRouteInput,
-  workspaceKindForWorktreeId
-} from '@/lib/agent-launch-route-input'
+import { workspaceKindForWorktreeId } from '@/lib/agent-launch-route-input'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
 import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key'
 import { activateAndRevealWorktree } from '@/lib/worktree-activation'
@@ -97,12 +94,6 @@ const QuickChatObservation = memo(function QuickChatObservation({
   useLayoutEffect(() => {
     current.current = { model, first, entries }
   })
-  const route = JSON.stringify(
-    buildAgentLaunchRouteInput(useAppStore.getState(), {
-      agent: 'claude',
-      workspace: target.workspace
-    })
-  )
   const launchIntent = (intent: QuickChatIntent, ...args: Parameters<typeof launch>) => {
     if (
       !first ||
@@ -129,21 +120,7 @@ const QuickChatObservation = memo(function QuickChatObservation({
             worktree: currentWorktree
           })
         : undefined
-    if (
-      !currentRepo ||
-      !currentWorktree ||
-      currentContext !== context ||
-      route !==
-        JSON.stringify(
-          buildAgentLaunchRouteInput(state, {
-            agent: 'claude',
-            workspace: {
-              ...target.workspace,
-              resolvedTarget: { repo: currentRepo, worktree: currentWorktree }
-            }
-          })
-        )
-    ) {
+    if (!currentRepo || !currentWorktree || currentContext !== context) {
       return
     }
     try {

@@ -24,7 +24,7 @@ const preparations = new WeakMap<AppState['addRepoPath'], Map<string, Preparatio
 export async function startQuickChat(): Promise<QuickChatDestination | null> {
   const initial = useAppStore.getState()
   try {
-    const { path, repoId } = await window.api.repos.ensureQuickChatFolder()
+    const { path, canonicalPath, repoId } = await window.api.repos.ensureQuickChatFolder()
     const store = useAppStore.getState()
     if (
       repoId &&
@@ -54,7 +54,7 @@ export async function startQuickChat(): Promise<QuickChatDestination | null> {
         }
       }
       entry.promise = Promise.race([
-        prepareQuickChat(path, repoId, entry).catch(() => {
+        prepareQuickChat(path, canonicalPath, repoId, entry).catch(() => {
           if (!entry.retired) {
             showQuickChatFailure()
           }
@@ -80,6 +80,7 @@ export async function startQuickChat(): Promise<QuickChatDestination | null> {
 
 async function prepareQuickChat(
   path: string,
+  canonicalPath: string,
   repoId: string | undefined,
   preparation: Preparation
 ): Promise<QuickChatDestination | null> {
@@ -115,7 +116,8 @@ async function prepareQuickChat(
       ) ??
       (await store.addRepoPath(path, 'folder', {
         runtimeEnvironmentId: null,
-        displayName: translate('quickChat.projectName', 'Chats')
+        displayName: translate('quickChat.projectName', 'Chats'),
+        showWslFilesystemBoundaryAdvisory: false
       }))
     // addRepoPath owns its failure toast.
     if (!repo || preparation.retired) {
@@ -143,8 +145,11 @@ async function prepareQuickChat(
     const worktree = selectWorktreesByRepo(useAppStore.getState())[repo.id]?.find(
       (worktree) =>
         worktree.hostId === LOCAL_EXECUTION_HOST_ID &&
-        normalizeRuntimePathForComparison(worktree.path) ===
-          normalizeRuntimePathForComparison(repo.path)
+        [repo.path, canonicalPath].some(
+          (path) =>
+            normalizeRuntimePathForComparison(worktree.path) ===
+            normalizeRuntimePathForComparison(path)
+        )
     )
     if (!currentRepo() || !worktree) {
       if (!preparation.retired) {

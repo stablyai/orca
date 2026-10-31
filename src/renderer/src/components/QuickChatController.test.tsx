@@ -121,7 +121,7 @@ beforeEach(() => {
   vi.clearAllMocks()
   mocks.builds = 0
   mocks.detect.mockResolvedValue(['codex'])
-  mocks.ensure.mockResolvedValue({ path: repo.path, repoId: repo.id })
+  mocks.ensure.mockResolvedValue({ path: repo.path, canonicalPath: repo.path, repoId: repo.id })
   mocks.launch.mockReturnValue({ surface: { kind: 'host-published' } })
   mocks.activate.mockImplementation((id: string) => {
     useAppStore.setState({
@@ -182,7 +182,7 @@ it.each(['ensure', 'inventory'])(
     if (phase === 'ensure') {
       mocks.ensure.mockReturnValue(
         new Promise((resolve) => {
-          release = () => resolve({ path: repo.path, repoId: repo.id })
+          release = () => resolve({ path: repo.path, canonicalPath: repo.path, repoId: repo.id })
         })
       )
     } else {
@@ -698,7 +698,7 @@ it('retires removed in-flight preparation and allows a new identity before the s
   mount()
   await act(async () => requestQuickChatFromShortcut())
   await act(async () => useAppStore.setState({ repos: [], worktreesByRepo: {} }))
-  mocks.ensure.mockResolvedValue({ path: repo.path, repoId: fresh.id })
+  mocks.ensure.mockResolvedValue({ path: repo.path, canonicalPath: repo.path, repoId: fresh.id })
   useAppStore.setState({
     fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockResolvedValue(true)
   })
@@ -714,7 +714,7 @@ it('waits for earlier accepted fallback preparation and executes distinct choice
   let release = () => {}
   mocks.ensure.mockReturnValueOnce(
     new Promise((resolve) => {
-      release = () => resolve({ path: repo.path, repoId: repo.id })
+      release = () => resolve({ path: repo.path, canonicalPath: repo.path, repoId: repo.id })
     })
   )
   useAppStore.setState({ settings: settings('blank') })
@@ -774,3 +774,26 @@ it.each([false, true])(
     expect(mocks.detect.mock.calls.every(([context]) => !context?.wslDistro)).toBe(true)
   }
 )
+
+it('launches the accepted fallback choice after an unrelated settings broadcast', async () => {
+  useAppStore.setState({ settings: settings('blank') })
+  mount()
+  const control = screen.getByRole('button', { name: 'New chat' })
+  const finished = vi.fn()
+  control.addEventListener(QUICK_CHAT_FINISHED_EVENT, finished)
+  await act(async () => requestQuickChat(control))
+  await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy())
+  await act(async () => {
+    useAppStore.setState((state) => ({
+      settings: state.settings && {
+        ...state.settings,
+        showTasksButton: !state.settings.showTasksButton
+      }
+    }))
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
+  expect(mocks.launch).toHaveBeenCalledOnce()
+  expect(mocks.activate).toHaveBeenCalledOnce()
+  expect(finished).toHaveBeenCalledOnce()
+  expect(mocks.error).not.toHaveBeenCalled()
+})

@@ -47,7 +47,11 @@ beforeEach(() => {
   mocks.repos = []
   mocks.worktreesByRepo = {}
   vi.stubGlobal('window', { api: { repos: { ensureQuickChatFolder: mocks.ensure } } })
-  mocks.ensure.mockImplementation(async () => ({ path: repo.path, repoId: mocks.repos[0]?.id }))
+  mocks.ensure.mockImplementation(async () => ({
+    path: repo.path,
+    canonicalPath: repo.path,
+    repoId: mocks.repos[0]?.id
+  }))
   mocks.add.mockImplementation(async () => {
     if (!mocks.repos.length) {
       mocks.repos.push(repo)
@@ -69,7 +73,8 @@ describe('startQuickChat', () => {
     expect(await startQuickChat()).toEqual({ repoId: 'chats', worktreeId: 'folder-chats' })
     expect(mocks.add).toHaveBeenCalledExactlyOnceWith('/data/chats', 'folder', {
       runtimeEnvironmentId: null,
-      displayName: 'Chats'
+      displayName: 'Chats',
+      showWslFilesystemBoundaryAdvisory: false
     })
     expect(mocks.repos).toEqual([repo])
     expect(repo.displayName).toBe('My chats')
@@ -134,4 +139,23 @@ it('selects the registered checkout path instead of the first local row for an e
   })
   await expect(startQuickChat()).resolves.toEqual({ repoId: repo.id, worktreeId: 'linked-chats' })
   expect(mocks.add).not.toHaveBeenCalled()
+})
+
+it('selects the physical Chats checkout when a created Git project retains an alias spelling', async () => {
+  mocks.repos = [{ ...repo, path: '/alias/chats', kind: 'git' }]
+  mocks.ensure.mockResolvedValue({
+    path: '/alias/chats',
+    canonicalPath: repo.path,
+    repoId: repo.id
+  })
+  mocks.fetch.mockImplementation(async () => {
+    mocks.worktreesByRepo[repo.id] = [
+      { id: 'main-elsewhere', path: '/elsewhere/main', hostId: 'local' },
+      { id: 'physical-chats', path: repo.path, hostId: 'local' }
+    ]
+    return true
+  })
+  await expect(startQuickChat()).resolves.toEqual({ repoId: repo.id, worktreeId: 'physical-chats' })
+  expect(mocks.add).not.toHaveBeenCalled()
+  expect(mocks.error).not.toHaveBeenCalled()
 })

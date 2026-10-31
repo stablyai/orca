@@ -1,8 +1,10 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { BrowserWindow } from 'electron'
-import { mkdtempSync, rmSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, rmSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
+import { realpath } from 'node:fs/promises'
+import type * as FsPromises from 'node:fs/promises'
 import { closeTestStores, createStore, testState } from '../../persistence/persistence-test-harness'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
@@ -17,6 +19,8 @@ import { RuntimeProjectHostSetupController } from '../../runtime/runtime-project
 import { RuntimeRepositoryIssueCommand } from '../../runtime/runtime-repository-issue-command'
 import { RuntimeRepositorySettingsController } from '../../runtime/runtime-repository-settings-controller'
 import * as issueCommandFile from '../../issue-command-file'
+import { registerRepoCreationHandlers } from './repo-creation-handlers'
+import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { registerProjectHostSetupHandlers } from './project-host-setup-handlers'
 
 const { handlers } = vi.hoisted(() => ({
@@ -31,6 +35,19 @@ vi.mock('electron', () => ({
       handlers.set(channel, handler)
     }
   }
+}))
+vi.mock('node:fs/promises', async (original) => {
+  const actual = await original<typeof FsPromises>()
+  return { ...actual, realpath: vi.fn(actual.realpath) }
+})
+vi.mock('../../repo-icon-autodetect', () => ({
+  detectRepoIconAndUpstream: vi.fn().mockResolvedValue({})
+}))
+vi.mock('../../worktree-root-preparation', () => ({
+  prepareLocalWorktreeRootForRepo: vi.fn().mockResolvedValue(undefined)
+}))
+vi.mock('../../repo-git-remote-identity', () => ({
+  readCurrentGitRemoteIdentity: vi.fn().mockResolvedValue({})
 }))
 vi.mock('../../telemetry/client', () => ({ track: vi.fn() }))
 vi.mock('../../telemetry/cohort-classifier', () => ({ getCohortAtEmit: vi.fn() }))
@@ -174,4 +191,35 @@ describe('repo settings on another host under a WSL move', () => {
 
     await expect(controller.setBaseRef('repo-1', 'origin/dev')).resolves.toBe(onHost)
   })
+})
+
+it('keeps the repos:add creator record when a joining setup alignment is fenced by a WSL move', async () => {
+  const path = join(testState.dir, 'chats')
+  mkdirSync(path)
+  const window = new BrowserWindow()
+  registerRepoCreationHandlers(window, store)
+  registerProjectHostSetupHandlers(window, store)
+  const preparation = Promise.withResolvers<void>()
+  vi.mocked(prepareLocalWorktreeRootForRepo).mockReturnValueOnce(preparation.promise)
+  const creator = invoke('repos:add', { path, kind: 'folder' })
+  await vi.waitFor(() => expect(store.getRepos()).toHaveLength(1))
+  const added = store.getRepos()[0]
+  const projectId = setupFor(added.id).projectId
+  seedWslMoveCutover(
+    testState.dir,
+    cutover('move-join', 'source-fenced', {}, { repoIds: [added.id] })
+  )
+  const canonicalCalls = vi.mocked(realpath).mock.calls.length
+  const joining = invoke('projectHostSetups:setupExistingFolder', {
+    path,
+    kind: 'folder',
+    hostId: 'local',
+    projectId
+  })
+  await vi.waitFor(() => expect(realpath).toHaveBeenCalledTimes(canonicalCalls + 1))
+  await vi.mocked(realpath).mock.results[canonicalCalls].value
+  preparation.resolve()
+  await expect(creator).resolves.toMatchObject({ repo: { id: added.id } })
+  await expect(joining).rejects.toBeInstanceOf(WslMoveProjectFencedError)
+  expect(store.getRepo(added.id)).toMatchObject({ path, kind: 'folder' })
 })

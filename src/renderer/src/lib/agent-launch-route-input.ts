@@ -158,13 +158,15 @@ function resolveProjectRuntime(
     return undefined
   }
   return workspace.worktreeId
-    ? getLocalProjectExecutionRuntimeContext(
-        store,
-        workspace.worktreeId,
-        undefined,
-        undefined,
-        workspace.resolvedTarget
-      )
+    ? workspace.resolvedTarget
+      ? getLocalProjectExecutionRuntimeContext(
+          store,
+          workspace.worktreeId,
+          undefined,
+          undefined,
+          workspace.resolvedTarget
+        )
+      : getLocalProjectExecutionRuntimeContext(store, workspace.worktreeId)
     : getLocalRepoProjectExecutionRuntimeContext(store, workspace.repoId)
 }
 

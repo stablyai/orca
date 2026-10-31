@@ -47,6 +47,7 @@ export async function addLocalRepoFromPath(
     pending.delete(canonical)
     registration = undefined
   }
+  const joined = Boolean(registration)
   if (!registration) {
     const entry: Registration = { promise: Promise.resolve({ error: 'Registration not started' }) }
     entry.promise = registerLocalRepoFromPath(store, path, kind, displayName, (repoId) => {
@@ -55,20 +56,37 @@ export async function addLocalRepoFromPath(
     registration = entry
     pending.set(canonical, entry)
   }
+  const currentResult = (result: RegistrationResult): RegistrationResult => {
+    if ('error' in result) {
+      return result
+    }
+    const current = store
+      .getRepos()
+      .find(
+        (repo) =>
+          repo.id === result.repo.id && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      )
+    return current
+      ? { ...result, repo: current }
+      : { error: 'The project was removed while it was being added.' }
+  }
   try {
     const result = await registration.promise
-    if ('repo' in result) {
-      const current = store
-        .getRepos()
-        .find(
-          (repo) =>
-            repo.id === result.repo.id && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
-        )
+    const current = currentResult(result)
+    if (!joined || ('repo' in result && 'error' in current)) {
       return current
-        ? { ...result, repo: current }
-        : { error: 'The project was removed while it was being added.' }
     }
-    return result
+    const own = await registerLocalRepoFromPath(store, path, kind, displayName, undefined, () => {
+      const checked = currentResult(result)
+      if ('repo' in result && 'error' in checked) {
+        return Promise.resolve(checked)
+      }
+      if (pending.get(canonical) === registration) {
+        pending.delete(canonical)
+      }
+      return addLocalRepoFromPath(store, path, kind, displayName)
+    })
+    return currentResult(own)
   } finally {
     if (pending.get(canonical) === registration) {
       pending.delete(canonical)
@@ -81,7 +99,8 @@ async function registerLocalRepoFromPath(
   path: string,
   kind: 'git' | 'folder' = 'git',
   displayName?: string,
-  registered?: (repoId: string) => void
+  registered?: (repoId: string) => void,
+  registerMissing?: () => Promise<RegistrationResult>
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
@@ -151,6 +170,9 @@ async function registerLocalRepoFromPath(
     }
   }
 
+  if (registerMissing) {
+    return registerMissing()
+  }
   const detected = await detectRepoIconAndUpstream({
     repoPath: resolvedPath,
     kind: repoKind,

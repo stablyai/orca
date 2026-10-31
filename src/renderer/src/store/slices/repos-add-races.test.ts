@@ -1,6 +1,11 @@
 import { describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../../shared/repo-types'
-import { createTestStore } from './store-test-helpers'
+import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
+import { startQuickChat } from '@/lib/start-quick-chat'
+import { createGlobalSettingsFixture } from '../../../../shared/global-settings-test-fixture'
+import { toast } from 'sonner'
+import { createTestStore, makeWorktree } from './store-test-helpers'
 import {
   installReposRuntimeRoutingHarness,
   localRepo,
@@ -86,3 +91,54 @@ function catalogOwner(store: {
 }): { runtimeEnvironmentId: string | null } {
   return { runtimeEnvironmentId: store.getState().settings?.activeRuntimeEnvironmentId ?? null }
 }
+
+it('keeps the Add Project WSL advisory but shows only normal success for the first quick chat', async () => {
+  const folder: Repo = {
+    ...localRepo,
+    id: 'chats',
+    path: 'C:\\data\\chats',
+    displayName: 'Chats',
+    kind: 'folder'
+  }
+  reposAdd.mockResolvedValue({ repo: folder })
+  const settings = {
+    ...createGlobalSettingsFixture(),
+    localWindowsRuntimeDefault: { kind: 'wsl' as const, distro: 'Ubuntu' }
+  }
+  const ordinary = createTestStore()
+  ordinary.setState({ settings })
+  await ordinary.getState().addRepoPath(folder.path, 'folder', { runtimeEnvironmentId: null })
+  expect(toast.warning).toHaveBeenCalledExactlyOnceWith(
+    'This project is stored on a Windows drive',
+    expect.any(Object)
+  )
+  vi.mocked(toast.warning).mockClear()
+  vi.mocked(toast.success).mockClear()
+  const store = createTestStore()
+  const worktree = makeWorktree({
+    id: 'chats-worktree',
+    path: folder.path,
+    repoId: folder.id,
+    hostId: 'local'
+  })
+  store.setState({
+    settings,
+    worktreesByRepo: { [folder.id]: [worktree] },
+    fetchWorktrees: vi.fn<AppState['fetchWorktrees']>().mockReturnValue(Promise.resolve(true))
+  })
+  Object.assign(window.api.repos, {
+    ensureQuickChatFolder: async () => ({ path: folder.path, canonicalPath: folder.path })
+  })
+  const read = vi.spyOn(useAppStore, 'getState').mockImplementation(store.getState)
+  const subscribe = vi.spyOn(useAppStore, 'subscribe').mockImplementation(store.subscribe)
+  try {
+    await expect(startQuickChat()).resolves.toEqual({ repoId: folder.id, worktreeId: worktree.id })
+    expect(toast.success).toHaveBeenCalledExactlyOnceWith('Folder added', { description: 'Chats' })
+    expect(toast.warning).not.toHaveBeenCalled()
+    expect(toast.info).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  } finally {
+    read.mockRestore()
+    subscribe.mockRestore()
+  }
+})

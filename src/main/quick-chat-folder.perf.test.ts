@@ -21,6 +21,7 @@ it.each([10, 100])(
     const root = await mkdtemp(join(tmpdir(), 'orca-quick-chat-perf-'))
     roots.push(root)
     const path = join(root, 'chats')
+    const canonicalPath = join(await realpath(root), 'chats')
     const locals: Repo[] = Array.from({ length: n }, (_, index) => ({
       id: String(index),
       path: index ? join(root, `p${index}`) : path,
@@ -38,6 +39,7 @@ it.each([10, 100])(
     vi.mocked(realpath).mockClear()
     expect(await ensureQuickChatFolder(root, [...locals, ...foreign])).toEqual({
       path,
+      canonicalPath,
       repoId: '0'
     })
     expect(realpath).toHaveBeenCalledTimes(n + 1)
@@ -49,12 +51,16 @@ it.each([10, 100])(
 it('validates every overlapping action rather than sharing an earlier directory verdict', async () => {
   const root = await mkdtemp(join(tmpdir(), 'orca-quick-chat-validation-'))
   roots.push(root)
-  const { path } = await ensureQuickChatFolder(root, [])
+  const { path, canonicalPath } = await ensureQuickChatFolder(root, [])
   await rm(path, { recursive: true })
   await writeFile(path, 'preserve')
   await expect(ensureQuickChatFolder(root, [])).rejects.toThrow()
   expect((await stat(path)).isFile()).toBe(true)
   await rm(path)
   await mkdir(path)
-  await expect(ensureQuickChatFolder(root, [])).resolves.toEqual({ path, repoId: undefined })
+  await expect(ensureQuickChatFolder(root, [])).resolves.toEqual({
+    path,
+    canonicalPath,
+    repoId: undefined
+  })
 })

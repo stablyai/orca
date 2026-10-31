@@ -104,6 +104,10 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
         )
       )
       expect(detectRepoIconAndUpstream).toHaveBeenCalledOnce()
+      expect(results.filter((result) => 'repo' in result && !result.alreadyExisted)).toHaveLength(1)
+      expect(results.filter((result) => 'repo' in result && result.alreadyExisted)).toHaveLength(
+        q - 1
+      )
       expect(repos).toHaveLength(2)
       expect(
         new Set(results.map((result) => ('repo' in result ? result.repo.id : result.error))).size
@@ -133,10 +137,33 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
     )
     const old = addLocalRepoFromPath(store, path, 'folder')
     await vi.waitFor(() => expect(repos).toHaveLength(1))
+    const reads = vi.spyOn(store, 'getRepos')
+    const joining = addLocalRepoFromPath(store, path, 'folder')
+    await vi.waitFor(() => expect(reads).toHaveBeenCalled())
     repos.splice(0)
     await expect(addLocalRepoFromPath(store, path, 'folder')).resolves.toHaveProperty('repo')
     release()
     await expect(old).resolves.toHaveProperty('error')
+    await expect(joining).resolves.toMatchObject({
+      error: 'The project was removed while it was being added.'
+    })
     await expect(addLocalRepoFromPath(store, path, 'folder')).resolves.toHaveProperty('repo')
   })
+})
+
+it('gives a valid folder caller its own outcome after a plain-folder Git caller refuses', async () => {
+  const path = await mkdtemp(join(tmpdir(), 'orca-mixed-kind-'))
+  try {
+    const repos: Repo[] = []
+    const store = createStore(repos)
+    const [git, folder] = await Promise.all([
+      addLocalRepoFromPath(store, path, 'git'),
+      addLocalRepoFromPath(store, path, 'folder')
+    ])
+    expect(git).toMatchObject({ error: expect.stringContaining('Not a valid git repository') })
+    expect(folder).toMatchObject({ repo: { path, kind: 'folder' }, alreadyExisted: false })
+    expect(repos).toHaveLength(1)
+  } finally {
+    await rm(path, { recursive: true, force: true })
+  }
 })

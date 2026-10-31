@@ -10,6 +10,14 @@ import {
   makeWorktree,
   TEST_REPO
 } from '@/store/slices/worktrees-slice-test-fixtures'
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import {
+  loadHostStructuredAgents,
+  retainHostStructuredAgents,
+  resetHostStructuredAgentsForTests
+} from '@/runtime/host-structured-agents'
+import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
+import type * as HostStructuredAgents from '@/runtime/host-structured-agents'
 import type * as RouteInput from '@/lib/agent-launch-route-input'
 import type * as ChatProgram from '@/lib/host-chat-program'
 import type * as MenuRows from '@/lib/new-tab-agent-menu-rows'
@@ -40,6 +48,9 @@ const mocks = vi.hoisted(() => ({
   load: vi.fn(),
   detection: vi.fn(),
   realRoutes: false,
+  realPublications: false,
+  catalogReads: 0,
+  call: vi.fn(),
   routes: Array<RouteInput.AgentLaunchRouteArgs>(),
   answers: Array<Parameters<typeof MenuRows.hostChatAnswer>[0]>(),
   selectors: 0,
@@ -99,24 +110,51 @@ vi.mock('@/lib/structured-agent-session-host-admission', () => ({
 vi.mock('@/hooks/useDetectedAgents', () => ({
   useDetectedAgents: mocks.detection
 }))
-vi.mock('@/runtime/host-structured-agents', () => ({
-  readHostStructuredAgents: mocks.catalog,
-  readHostStructuredAgentsForRuntime: mocks.catalog,
-  hostStructuredAgentsReadFailed: mocks.failed,
-  hostStructuredAgentsCatalogUnlearned: (
-    host: string,
-    runtimeId: string | null | undefined,
-    capabilities: readonly string[] | undefined
-  ) =>
-    runtimeId !== undefined &&
-    capabilities?.includes(CATALOG) === true &&
-    !mocks.catalog(host, runtimeId) &&
-    !mocks.failed(host, runtimeId),
-  loadHostStructuredAgents: mocks.load,
-  relearnHostStructuredAgents: mocks.load,
-  hostStructuredAgentsVersion: () => 0,
-  subscribeHostStructuredAgents: () => () => {}
-}))
+vi.mock('@/runtime/runtime-rpc-client', async (original) => {
+  const actual = await original<typeof RuntimeRpcClient>()
+  return { ...actual, callRuntimeRpc: mocks.call }
+})
+vi.mock('@/runtime/host-structured-agents', async (original) => {
+  const actual = await original<typeof HostStructuredAgents>()
+  return {
+    ...actual,
+    readHostStructuredAgents: (...args: Parameters<typeof actual.readHostStructuredAgents>) => {
+      mocks.catalogReads++
+      return mocks.realPublications
+        ? actual.readHostStructuredAgents(...args)
+        : mocks.catalog(...args)
+    },
+    readHostStructuredAgentsForRuntime: (
+      ...args: Parameters<typeof actual.readHostStructuredAgentsForRuntime>
+    ) => {
+      mocks.catalogReads++
+      return mocks.realPublications
+        ? actual.readHostStructuredAgentsForRuntime(...args)
+        : mocks.catalog(...args)
+    },
+    hostStructuredAgentsReadFailed: (
+      ...args: Parameters<typeof actual.hostStructuredAgentsReadFailed>
+    ) =>
+      mocks.realPublications
+        ? actual.hostStructuredAgentsReadFailed(...args)
+        : mocks.failed(...args),
+    hostStructuredAgentsCatalogUnlearned: (
+      ...args: Parameters<typeof actual.hostStructuredAgentsCatalogUnlearned>
+    ) =>
+      mocks.realPublications
+        ? actual.hostStructuredAgentsCatalogUnlearned(...args)
+        : args[1] !== undefined &&
+          args[2]?.includes(CATALOG) === true &&
+          !mocks.catalog(args[0], args[1]) &&
+          !mocks.failed(args[0], args[1]),
+    loadHostStructuredAgents: (...args: Parameters<typeof actual.loadHostStructuredAgents>) =>
+      mocks.realPublications ? actual.loadHostStructuredAgents(...args) : mocks.load(...args),
+    relearnHostStructuredAgents: (
+      ...args: Parameters<typeof actual.relearnHostStructuredAgents>
+    ) =>
+      mocks.realPublications ? actual.relearnHostStructuredAgents(...args) : mocks.load(...args)
+  }
+})
 vi.mock('@/lib/agent-launch-route-input', async (importOriginal) => {
   const actual = await importOriginal<typeof RouteInput>()
   return {
@@ -171,6 +209,10 @@ beforeEach(() => {
   mocks.subscribe.mockReset().mockResolvedValue({ unsubscribe: () => {} })
   mocks.publishing = false
   mocks.realRoutes = false
+  mocks.realPublications = false
+  mocks.catalogReads = 0
+  mocks.call.mockReset()
+  resetHostStructuredAgentsForTests()
   mocks.program.mockReset()
   mocks.catalog
     .mockReset()
@@ -193,7 +235,10 @@ beforeEach(() => {
     detectedAgentIds: ['claude', 'codex', 'opencode']
   })
 })
-afterEach(cleanup)
+afterEach(() => {
+  cleanup()
+  resetHostStructuredAgentsForTests()
+})
 
 function counted<T extends readonly unknown[]>(values: T): T {
   if (mocks.countedLists.has(values)) {
@@ -473,19 +518,6 @@ it("reads a publishing host's one snapshot, holding a placeholder only until it 
   expect(mocks.support).not.toHaveBeenCalled()
 })
 
-it('shows an older host from client facts and never asks it per agent', () => {
-  mocks.publishing = false
-  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
-  expect(
-    hook.result.current.state === 'settled' &&
-      hook.result.current.rows.find((r) => r.agent === 'claude')
-  ).toMatchObject({
-    kind: 'chat'
-  })
-  expect(mocks.subscribe).not.toHaveBeenCalled()
-  expect(mocks.support).not.toHaveBeenCalled()
-})
-
 it('updates the real menu when the global default changes and retains opposite overrides', async () => {
   useAppStore.setState((state) => ({
     settings: { ...state.settings!, agentDefaultSurface: 'terminal', nativeChatProviders: {} }
@@ -502,40 +534,19 @@ it('updates the real menu when the global default changes and retains opposite o
     }))
   })
   expect(row()?.kind).toBe('chat')
+  expect(mocks.subscribe).not.toHaveBeenCalled()
+  expect(mocks.support).not.toHaveBeenCalled()
   await act(async () => {
     useAppStore.setState((state) => ({
       settings: { ...state.settings!, nativeChatProviders: { claude: false } }
     }))
   })
-  expect(row()?.kind).toBe('cli')
-})
-
-it('offers a chat on the CLI row of an agent set to open as a CLI', () => {
-  const { settings } = useAppStore.getState()
-  useAppStore.setState({
-    settings: settings && { ...settings, nativeChatProviders: { claude: false } }
-  })
-  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
-  const rows = hook.result.current.state === 'settled' ? hook.result.current.rows : []
-  expect(rows.filter((row) => row.agent === 'claude')).toEqual([
-    { kind: 'cli', agent: 'claude', chat: true, executionHostId: 'local' }
-  ])
-  // An agent with no chat on this host keeps a plain CLI row.
-  expect(rows).toContainEqual({ kind: 'cli', agent: 'gemini', executionHostId: 'local' })
-})
-
-it('waits for a real catalog read, then preserves Gemini CLI after failure without retrying', () => {
-  mocks.catalog.mockReturnValue(undefined)
-  const hook = renderHook(() => useNewTabAgentMenuRows('one', true, { kind: 'local' }))
-  expect(mocks.load).toHaveBeenCalledTimes(1)
-  mocks.failed.mockReturnValue(true)
-  hook.rerender()
+  expect(row()).toMatchObject({ kind: 'cli', chat: true })
   expect(hook.result.current.state === 'settled' && hook.result.current.rows).toContainEqual({
     kind: 'cli',
     agent: 'gemini',
     executionHostId: 'local'
   })
-  expect(mocks.load).toHaveBeenCalledTimes(1)
 })
 
 it('settles an initial inventory failure despite pending health and catalog enrichment', () => {
@@ -682,3 +693,119 @@ it('preserves per-agent published answers and direct route inputs across context
     }
   }
 })
+
+it.each([10, 100])(
+  'isolates %s local menu consumers from real peer publications and updates local catalog/failure output linearly',
+  async (n) => {
+    mocks.realRoutes = mocks.realPublications = true
+    mocks.detection.mockReturnValue({ detectedIds: ['claude', 'codex', 'pi', 'gemini'] })
+    const localCaps = [CHAT, CLIENT, CATALOG]
+    const peerCaps = [...localCaps, AVAILABILITY]
+    const peer = `peer-${n}`
+    const runtime = createCompatibleRuntimeStatusResponse(`runtime-${n}`).result
+    setLocalRuntimeCapabilitiesForTests(localCaps)
+    useAppStore.setState({
+      repos: [TEST_REPO],
+      worktreesByRepo: {
+        [TEST_REPO.id]: [makeWorktree({ id: 'one', repoId: TEST_REPO.id, hostId: 'local' })]
+      },
+      runtimeStatusByEnvironmentId: new Map([
+        [peer, { status: { ...runtime, capabilities: peerCaps }, checkedAt: 1 }]
+      ]),
+      settings: {
+        ...getDefaultSettings('/home/me'),
+        nativeChatProviders: { claude: true, codex: true, pi: true }
+      }
+    })
+    mocks.call.mockResolvedValue({
+      agents: ['claude', 'codex'].map((agent) => ({ agent, capabilities: {} }))
+    })
+    await loadHostStructuredAgents('local', localCaps, null)
+    await loadHostStructuredAgents(`runtime:${peer}`, peerCaps, runtime.runtimeId)
+    const renders = Array<number>(n).fill(0)
+    const locals = renders.map((_, i) =>
+      renderHook(() => {
+        renders[i]++
+        return useNewTabAgentMenuRows('one', true, { kind: 'local' })
+      })
+    )
+    const remote = renderHook(() =>
+      useNewTabAgentMenuRows(
+        { workspace: { kind: 'git-worktree', runtimeEnvironmentId: peer } },
+        true,
+        { kind: 'local' }
+      )
+    )
+    await act(async () => {})
+    const output = () => JSON.stringify(locals[0].result.current)
+    const initialOutput = output()
+    const baseline = [...renders]
+    resetWork()
+    mocks.catalogReads = 0
+    await act(async () => retainHostStructuredAgents(new Set(['local'])))
+    expect(renders).toEqual(baseline)
+    await act(async () => {
+      mocks.call.mockResolvedValue({ agents: [{ agent: 'grok', capabilities: {} }] })
+      await loadHostStructuredAgents(`runtime:${peer}`, peerCaps, runtime.runtimeId)
+    })
+    expect(renders).toEqual(baseline)
+    const stream = mocks.subscribe.mock.calls.findLast(([target]) => target.environmentId === peer)
+    expect(stream).toBeDefined()
+    await act(async () =>
+      stream![3].onEvent({
+        type: 'availability',
+        agents: [{ agent: 'grok', state: 'available', chatProgram: 'available' }]
+      })
+    )
+    expect(renders).toEqual(baseline)
+    expect(output()).toBe(initialOutput)
+    expect(mocks.routes.length).toBeLessThan(30 * (n + 1))
+    expect(mocks.catalogReads).toBeLessThan(100 * (n + 1))
+    resetWork()
+    mocks.catalogReads = 0
+    await act(async () => retainHostStructuredAgents(new Set([`runtime:${peer}`])))
+    await act(async () => {
+      mocks.call.mockResolvedValue({
+        agents: ['claude', 'codex', 'pi'].map((agent) => ({ agent, capabilities: {} }))
+      })
+      await loadHostStructuredAgents('local', localCaps, null)
+    })
+    expect(renders.every((count, i) => count > baseline[i])).toBe(true)
+    expect(output()).not.toBe(initialOutput)
+    expect(
+      locals[0].result.current.state === 'settled' && locals[0].result.current.rows
+    ).toContainEqual({ kind: 'chat', agent: 'pi', executionHostId: 'local' })
+    expect(mocks.routes.length).toBeLessThan(30 * (n + 1))
+    expect(mocks.catalogReads).toBeLessThan(100 * (n + 1))
+    const learnedOutput = output()
+    await act(async () => retainHostStructuredAgents(new Set([`runtime:${peer}`])))
+    const unlearnedOutput = output()
+    expect(locals[0].result.current.state).toBe('loading')
+    const unlearnedRenders = [...renders]
+    resetWork()
+    mocks.catalogReads = 0
+    const failedReads = mocks.call.mock.calls.length
+    await act(async () => {
+      mocks.call.mockRejectedValue(new Error('catalog read failed'))
+      await loadHostStructuredAgents('local', localCaps, null)
+    })
+    expect(output()).not.toBe(learnedOutput)
+    expect(output()).not.toBe(unlearnedOutput)
+    expect(renders.every((count, i) => count > unlearnedRenders[i])).toBe(true)
+    expect(locals[0].result.current.state).toBe('settled')
+    expect(
+      locals[0].result.current.state === 'settled' && locals[0].result.current.rows
+    ).toContainEqual({ kind: 'cli', agent: 'gemini', executionHostId: 'local' })
+    expect(mocks.call).toHaveBeenCalledTimes(failedReads + 1)
+    expect(mocks.routes.length).toBeLessThan(30 * (n + 1))
+    expect(mocks.catalogReads).toBeLessThan(100 * (n + 1))
+    console.info('publication contract', {
+      n,
+      routes: mocks.routes.length,
+      catalogReads: mocks.catalogReads,
+      renders: renders[0]
+    })
+    locals.forEach((hook) => hook.unmount())
+    remote.unmount()
+  }
+)

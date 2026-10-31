@@ -1,4 +1,4 @@
-import { mkdir, mkdtemp, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it } from 'vitest'
@@ -42,6 +42,10 @@ it('reuses a local symlink alias and ignores an identical path on another host',
     kind: 'folder'
   }
   const remote = { ...repo, id: 'remote', path, connectionId: 'ssh-other' }
-  expect(await ensureQuickChatFolder(root, [remote, repo])).toEqual({ path, repoId: 'local' })
+  expect(await ensureQuickChatFolder(root, [remote, repo])).toEqual({
+    path,
+    canonicalPath: await realpath(path),
+    repoId: 'local'
+  })
   expect(repo.displayName).toBe('Renamed')
 })
