@@ -41,10 +41,19 @@ export function codexItemIdentity(input: {
       ordinal: input.ordinals.ordinalFor(input.threadId, turnId, item.id)
     }
   }
+  return codexNonMessageIdentity(input.threadId, turnId, item.id, input.historyImport)
+}
+
+export function codexNonMessageIdentity(
+  threadId: string,
+  turnId: string | null,
+  itemId: string,
+  historyImport?: true
+): AgentJournalItemIdentity {
   return {
     provider: 'orca',
-    clientMessageId: input.historyImport
-      ? `codex-history-item:${JSON.stringify([1, input.threadId, turnId, item.id])}`
-      : `codex-item:${input.threadId}:${item.id}`
+    clientMessageId: historyImport
+      ? `codex-history-item:${JSON.stringify([1, threadId, turnId, itemId])}`
+      : `codex-item:${threadId}:${itemId}`
   }
 }

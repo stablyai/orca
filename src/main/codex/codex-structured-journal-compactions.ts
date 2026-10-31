@@ -43,9 +43,7 @@ export class CodexJournalCompactions {
     }
     this.compacted(turnId)
     // Collapse compactions within a thread/turn; the canonical item replaces its legacy fallback.
-    const key = createHash('sha256')
-      .update(JSON.stringify([event.threadId, turnId]))
-      .digest('hex')
+    const key = codexCompactionKey(event.threadId, turnId)
     const source = event.method === 'item/completed' ? 'item' : 'legacy'
     const previous = this.turns.get(key)
     if (previous === 'item' || previous === source) {
@@ -77,4 +75,10 @@ export class CodexJournalCompactions {
   clear(): void {
     this.turns.clear()
   }
+}
+
+export function codexCompactionKey(threadId: string, turnId: string): string {
+  return createHash('sha256')
+    .update(JSON.stringify([threadId, turnId]))
+    .digest('hex')
 }

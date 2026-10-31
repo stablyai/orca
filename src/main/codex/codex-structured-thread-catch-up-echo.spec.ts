@@ -1,3 +1,6 @@
+import { registerCodexHistorySourcesTests } from './codex-structured-thread-catch-up-sources.spec'
+import { registerCodexHistoryVariantsTests } from './codex-structured-thread-catch-up-variants.spec'
+import { registerCodexHistoryBoundsTests } from './codex-structured-thread-catch-up-bounds.spec'
 import {
   adapterFor,
   fakeCodex,
@@ -6,6 +9,8 @@ import {
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { journalItemEchoFields } from '../native-chat/agent-session-journal/journal-item-echo'
 import { expect, it } from 'vitest'
+import { codexTurnLifecycleIdentity } from './codex-structured-journal-translation-turns'
+
 import type { AgentJournalMessageItem } from '../../shared/agent-session-journal-types'
 import { agentJournalItemKey } from '../../shared/agent-session-journal-item-key'
 import type {
@@ -31,6 +36,9 @@ export function registerCodexCatchUpEchoTests(input: {
   threadId: string
 }): void {
   const { chat, turn, codexWith, sessionId: SESSION, threadId: THREAD } = input
+  registerCodexHistorySourcesTests(input)
+  registerCodexHistoryVariantsTests(input)
+  registerCodexHistoryBoundsTests(input)
   it('reconciles older completed acquired content and keeps unchanged reacquisition write-free', async () => {
     const c = await chat({ now: 1_000 })
     const first = turn(1)
@@ -87,6 +95,7 @@ export function registerCodexCatchUpEchoTests(input: {
     expect(counts[1]).toBeLessThan(20_000)
     console.info('history selection set-entry visits N=100/1000:', counts)
   })
+
   it('uses saved native IDs only for display, preserving sends and drafts through outside echoes and replay', async () => {
     const c = await chat({ now: 1_000 })
     const body: AgentJournalMessageItem = {
@@ -284,6 +293,7 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.open([native])
     expect(c.journal.snapshot().items).toEqual([])
   })
+
   it('completes a represented turn and older gaps through an actual paginated open with partial returned content', async () => {
     const c = await chat({ now: 1_000 })
     const original = {
@@ -322,7 +332,13 @@ export function registerCodexCatchUpEchoTests(input: {
     await c.journal.appendItem(
       detailIdentity,
       { kind: 'tool-call', name: 'terminal', input: { command: 'pwd' }, state: 'running' },
-      { fence: 1, turnScope: { kind: 'thread' } }
+      {
+        fence: 1,
+        turnScope: {
+          kind: 'turn',
+          turnItemId: agentJournalItemKey(codexTurnLifecycleIdentity(SESSION, 'turn-2'))
+        }
+      }
     )
     current.items.push({
       type: 'commandExecution',

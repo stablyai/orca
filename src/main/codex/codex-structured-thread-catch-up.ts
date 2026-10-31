@@ -45,7 +45,9 @@ export async function catchUpCodexThread(input: {
     providerIdentity: AgentJournalItemIdentity
   ) => void | Promise<void>
 }): Promise<void> {
-  await runHistoryCatchUp({
+  let restoreHelpers: (() => void) | undefined
+  let discardHelpers: (() => void) | undefined
+  const outcome = await runHistoryCatchUp({
     agentName: 'Codex',
     scope: 'codex-thread-catch-up',
     sessionId: input.sessionId,
@@ -150,6 +152,7 @@ export async function catchUpCodexThread(input: {
         outsideNotice: view.hasRows ? continuedOutsideNotice(missing.rewound) : undefined,
         check
       })
+      discardHelpers = staging.discardHelpers
       try {
         const order = new Map(missing.order.map((id, index) => [id, index]))
         const rank = (turn: Record<string, unknown>) => order.get(String(turn.id)) ?? Infinity
@@ -163,22 +166,31 @@ export async function catchUpCodexThread(input: {
           )
           .sort((a, b) => rank(a) - rank(b))
         let next = 0
+        let groupId: unknown
+        const offer = (turn: Record<string, unknown>) => {
+          if (groupId !== turn.id) {
+            staging.completeTurn()
+          }
+          groupId = turn.id
+          staging.restore(turn)
+        }
         for await (const turn of loadCodexHistory(read, missing.pages, confirmReceipts)) {
           check()
           while (next < supplied.length && rank(supplied[next]!) <= rank(turn)) {
-            staging.restore(supplied[next++]!)
+            offer(supplied[next++]!)
             await yieldTurn()
           }
           if (selectCodexHistoryTurn(turn, view)) {
-            staging.restore(turn)
+            offer(turn)
           }
           await yieldTurn()
         }
         while (next < supplied.length) {
-          staging.restore(supplied[next++]!)
+          offer(supplied[next++]!)
           await yieldTurn()
         }
         const plan = staging.finish()
+        restoreHelpers = staging.restoreHelpers
         Object.assign(view, readCodexHistoryJournalView(history, input.threadId))
         return plan
       } finally {
@@ -186,4 +198,12 @@ export async function catchUpCodexThread(input: {
       }
     }
   })
+  try {
+    if (outcome === 'committed' || outcome === 'checked') {
+      input.assertCurrent?.()
+      restoreHelpers?.()
+    }
+  } finally {
+    discardHelpers?.()
+  }
 }

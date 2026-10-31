@@ -115,7 +115,7 @@ function restoreTurnItems(
 }
 
 /** Preserve the turn's status even when its optional timestamps are absent. */
-function historicalTurnLifecycle(
+export function historicalTurnLifecycle(
   threadId: string,
   turn: Record<string, unknown>
 ): AgentJournalTurnLifecycle | null {
