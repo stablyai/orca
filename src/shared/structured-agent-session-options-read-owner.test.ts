@@ -94,7 +94,7 @@ it('coalesces stale reads and publishes base/support/latch together before retir
   unsubscribe()
 })
 
-it('retains same-owner answers and permissions while resetting reports, and seeds a different owner', async () => {
+it('retains same-owner answers and permissions while resetting reports, and seeds a different owner but keeps its session-tagged support', async () => {
   const { reader, context, reads } = fixture()
   let close = reader.attach(context)
   await tick()
@@ -127,10 +127,10 @@ it('retains same-owner answers and permissions while resetting reports, and seed
   })
   expect(reader.getSnapshot().optionState.optionsAnswerPresent).toBeUndefined()
   expect(reader.getSnapshot().optionState.permissionMode).toBeNull()
-  expect(reader.getSnapshot().support).toBeNull()
-  reads[1].resolve(answer)
+  expect(reader.getSnapshot().support).toBe(accepted.support)
+  reads[1].resolve({ ...answer, acceptsImages: false })
   await tick()
-  expect(reader.getSnapshot().support).toBeNull()
+  expect(reader.getSnapshot().support).toBe(accepted.support)
   close()
 })
 

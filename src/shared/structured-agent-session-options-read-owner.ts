@@ -145,9 +145,10 @@ export function createStructuredAgentSessionOptionsReadOwner(
                 reportedEffort: undefined
               }
             : context.seed()
+        // Support stays tagged with its session; consumers filter by session, so it bridges a re-pair.
         snapshot = {
-          optionState: sameOwner ? { ...kept, permissionMode: current.permissionMode } : kept,
-          support: sameOwner ? snapshot.support : null
+          ...snapshot,
+          optionState: sameOwner ? { ...kept, permissionMode: current.permissionMode } : kept
         }
         notify()
       }
