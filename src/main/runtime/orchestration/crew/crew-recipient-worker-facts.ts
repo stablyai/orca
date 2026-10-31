@@ -97,5 +97,10 @@ export function createCrewRecipientWorkerFacts(
     key.orcaSessionId && identities.get(key.orcaSessionId)?.held
       ? (key.paneKey ?? undefined)
       : undefined
-  return { keyFor, prepare: prepareIdentities, livePane }
+  return {
+    keyFor,
+    prepare: prepareIdentities,
+    livePane,
+    covered: (id: OrcaSessionId) => identities.has(rootOf(id))
+  }
 }

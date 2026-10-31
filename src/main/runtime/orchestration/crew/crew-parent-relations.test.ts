@@ -66,8 +66,21 @@ describe('durable crew parents', () => {
       JSON.stringify(['home', 'run:run_home'])
     ].sort()
     expect(current.sections.managedBy.map((row) => row.partyKey).sort()).toEqual(expected)
+    expect(
+      current.sections.managedBy.find(
+        (row) => row.partyKey === JSON.stringify(['home', 'run:run_home'])
+      )?.sendAddress
+    ).toBe('run:run_home')
+    expect(
+      current.sections.managedBy.find(
+        (row) => row.partyKey === JSON.stringify(['test-host', 'term_coord'])
+      )
+    ).not.toHaveProperty('sendAddress')
     expect(buildCrewSnapshot('term_coord', deps).sections.managing).toEqual([])
     db.beginRemoteAttachmentStop('ctx_remote')
+    expect(
+      buildCrewSnapshot('term_worker', deps).sections.managedBy.every((row) => !row.sendAddress)
+    ).toBe(true)
     db.markRemoteAttachmentStopUnknown('ctx_remote', 'Unknown stop')
     await Promise.resolve()
     await Promise.resolve()
@@ -102,6 +115,11 @@ describe('durable crew parents', () => {
       await Promise.resolve()
       expect(acquire).toHaveBeenCalledTimes(before + 1)
       expect(current.sections.managedBy.map((row) => row.partyKey).sort()).toEqual(expected)
+      expect(
+        current.sections.managedBy.find(
+          (row) => row.partyKey === JSON.stringify(['home', 'run:run_home'])
+        )?.sendAddress
+      ).toBe(state === 'start_unknown' || state === 'stop_unknown' ? 'run:run_home' : undefined)
       expect(buildCrewSnapshot('term_coord', deps).sections.managing).toEqual([])
     }
     attach('ctx_legacy_remote', 'home')
@@ -110,8 +128,17 @@ describe('durable crew parents', () => {
     expect(db.getRunRaw(stub)?.home_database).toBe('remote')
     expect(
       buildCrewSnapshot('term_worker', deps).sections.managedBy.map((row) => row.sendAddress)
-    ).toContain(`run:${stub}`)
+    ).not.toContain(`run:${stub}`)
+    expect(
+      buildCrewSnapshot('term_worker', deps).sections.managedBy.map((row) => row.partyKey)
+    ).toContain(JSON.stringify(['home', `run:${stub}`]))
     db.recordRemoteAttachmentStage({ dispatchId: 'ctx_legacy_remote', stage: 'released' })
+    db.recordRemoteAttachmentStage({ dispatchId: 'ctx_remote', stage: 'ready', state: 'ready' })
+    expect(
+      buildCrewSnapshot('term_worker', deps).sections.managedBy.find(
+        (row) => row.partyKey === JSON.stringify(['home', 'run:run_home'])
+      )?.sendAddress
+    ).toBe('run:run_home')
     deps.processForHandle = () => 'process_replaced'
     db.crewChanges.notify()
     await Promise.resolve()
@@ -129,7 +156,7 @@ describe('durable crew parents', () => {
       .prepare('UPDATE dispatch_contexts SET completed_at = ? WHERE id = ?')
       .run('2000-01-01T00:00:00.000Z', creator.id)
     expect(buildCrewSnapshot('term_worker', deps).sections.managedBy[0].sendAddress).toBe(
-      `dispatch:${creator.id}`
+      'term_helper'
     )
     db.failDispatch(child.id, 'retry')
     db.updateTaskStatus(child.task_id, 'failed')
@@ -239,6 +266,9 @@ it('reduces a validated same-worker retry before deduping managers with other su
 it('uses an exact owned transfer chain and refuses external or corrupt history as replacement proof', () => {
   for (const ownership of ['created', 'external'] as const) {
     const { db, deps, handles, run } = fixture()
+    const processForHandle = deps.processForHandle
+    deps.processForHandle = (handle) =>
+      handle === 'term_worker' ? 'process_one' : (processForHandle?.(handle) ?? null)
     const start = (manager: string) =>
       db.createStartingWorkerDispatch({
         taskSpec: 'Transfer',
@@ -292,6 +322,9 @@ it('retains every member of a corrupt replacement cycle even when one member has
 
 it('collapses loopback representations only with existing source, worker, task and Run provenance', () => {
   const { db, deps, run, handles } = fixture()
+  const processForHandle = deps.processForHandle
+  deps.processForHandle = (handle) =>
+    handle === 'term_worker' ? 'process_one' : (processForHandle?.(handle) ?? null)
   const home = db.getOrCreateLocalMutationCallerFingerprint()
   const local = db.createStartingWorkerDispatch({
     taskRunId: run.id,

@@ -13,6 +13,8 @@ const sessionId = z.custom<OrcaSessionId>(
 )
 const Run = z.object({
   id: z.string(),
+  legacy: z.number(),
+  home_database: z.string(),
   coordinator_pane_key: nullable,
   coordinator_orca_session_id: sessionId.nullable(),
   coordinator_orca_session_id_generation: z.number().nullable(),
@@ -45,7 +47,7 @@ const resourceValue = nullable.transform((value) =>
 )
 const Dispatch = z.object({
   key: z.string(),
-  branch: z.enum(['handle', 'pane', 'suffix']),
+  branch: z.enum(['handle', 'pane', 'suffix', 'explicit']),
   id: z.string(),
   run_id: z.string(),
   contract_version: z.number(),
@@ -83,7 +85,7 @@ const Identity = z.object({
 })
 
 export type CrewRecipientRun = z.infer<typeof Run>
-const runColumns = `r.id, r.coordinator_pane_key, r.coordinator_orca_session_id,
+const runColumns = `r.id, r.legacy, r.home_database, r.coordinator_pane_key, r.coordinator_orca_session_id,
   r.coordinator_orca_session_id_generation, r.consumer_generation`
 
 /** Selected owner queries return complete source rows, never recipient decisions. */
@@ -110,7 +112,7 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
     )
   }
   const currentRuns = (
-    requested: { key: string; session: string | null; suffix: string | null }[]
+    requested: { key: string; session: string | null; suffix: string | null; id?: string }[]
   ) => {
     return Run.extend({ key: z.string() })
       .array()
@@ -118,13 +120,15 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
         db.db
           .prepare(`WITH requested AS (
       SELECT json_extract(value, '$.key') AS key, json_extract(value, '$.session') AS session,
-        json_extract(value, '$.suffix') AS suffix FROM json_each(?)
+        json_extract(value, '$.suffix') AS suffix, json_extract(value, '$.id') AS id FROM json_each(?)
     ), candidates AS (
       SELECT requested.key, r.rowid AS ordinal, ${runColumns} FROM requested CROSS JOIN runs r
       WHERE r.legacy = 0 AND r.coordinator_orca_session_id = requested.session
       UNION
       SELECT requested.key, r.rowid AS ordinal, ${runColumns} FROM requested CROSS JOIN runs r
       WHERE r.legacy = 0 AND r.coordinator_pane_key IS NOT NULL AND ${RUN_PANE_KEY_MATCH_SUFFIX_SQL.replaceAll('coordinator_pane_key', 'r.coordinator_pane_key')} = requested.suffix
+      UNION
+      SELECT requested.key, r.rowid AS ordinal, ${runColumns} FROM requested JOIN runs r ON r.id = requested.id
     ) SELECT * FROM candidates ORDER BY ordinal DESC`)
           .all(JSON.stringify(requested))
       )
@@ -136,6 +140,7 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
       caller: boolean
       pane: string | null
       suffix: string | null
+      id?: string
     }[]
   ) => {
     const columns = `d.id, d.run_id, d.contract_version, d.status, d.assignee_handle, d.assignee_pane_key,
@@ -144,19 +149,21 @@ export function crewRecipientOwnerQueries(db: OrchestrationDb) {
       db.db
         .prepare(`WITH requested AS (
       SELECT json_extract(value, '$.key') AS key, json_extract(value, '$.handle') AS handle, json_extract(value, '$.pane') AS pane,
-        json_extract(value, '$.suffix') AS suffix, json_extract(value, '$.caller') AS caller FROM json_each(?)
+        json_extract(value, '$.suffix') AS suffix, json_extract(value, '$.caller') AS caller, json_extract(value, '$.id') AS id FROM json_each(?)
     ), candidates AS (
       SELECT requested.key, requested.caller, 'handle' AS branch, d.rowid AS ordinal, d.* FROM requested CROSS JOIN dispatch_contexts d
-        WHERE d.status IN ('pending', 'dispatched') AND d.assignee_handle = requested.handle
+        WHERE requested.id IS NULL AND d.status IN ('pending', 'dispatched') AND d.assignee_handle = requested.handle
       UNION ALL
       SELECT requested.key, requested.caller, 'pane', d.rowid, d.* FROM requested CROSS JOIN dispatch_contexts d
-        WHERE d.status IN ('pending', 'dispatched') AND d.assignee_pane_key = requested.pane
+        WHERE requested.id IS NULL AND d.status IN ('pending', 'dispatched') AND d.assignee_pane_key = requested.pane
       UNION ALL
       SELECT requested.key, requested.caller, 'suffix', d.rowid, d.* FROM requested CROSS JOIN dispatch_contexts d
-        WHERE d.status IN ('pending', 'dispatched') AND d.assignee_pane_key IS NOT NULL
+        WHERE requested.id IS NULL AND d.status IN ('pending', 'dispatched') AND d.assignee_pane_key IS NOT NULL
           AND instr(d.assignee_pane_key, ':') > 1 AND ${DISPATCH_PANE_KEY_MATCH_SUFFIX_SQL.replaceAll('assignee_pane_key', 'd.assignee_pane_key')} = requested.suffix
+      UNION ALL
+      SELECT requested.key, requested.caller, 'explicit', d.rowid, d.* FROM requested JOIN dispatch_contexts d ON d.id = requested.id
     ) SELECT d.key, d.branch, ${columns} FROM candidates d
-      LEFT JOIN runs s ON d.caller AND s.id = d.run_id
+      LEFT JOIN runs s ON s.id = d.run_id
       LEFT JOIN federated_dispatches f ON f.dispatch_id = d.id
       LEFT JOIN worker_dispatches w ON w.dispatch_id = d.id
       LEFT JOIN worker_terminal_resources h ON h.id = (
