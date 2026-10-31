@@ -1,19 +1,19 @@
-import type { AgentJournalCursor } from './agent-session-journal-types'
-import type { AgentSessionSubscribeEvent } from './agent-session-wire'
-import { createStructuredAgentSessionEventCoalescer } from './agent-session/structured-agent-session-coalescer'
+import type { AgentJournalCursor } from '../agent-session-journal-identity'
+import type { AgentSessionSubscribeEvent } from '../agent-session-wire'
+import { createStructuredAgentSessionEventCoalescer } from './structured-agent-session-coalescer'
 import {
   AGENT_SESSION_UNATTACHED_READ_GRACE_MS,
   isFinalAgentSessionReadRefusal,
   isUnattachedAgentSessionReadRefusal
-} from './structured-agent-session-read-refusal'
-import type { AgentSessionRefusalReference } from './agent-session-wire-refusals'
-import { readAgentSessionErrorRefusal } from './agent-session-write-failure'
-import { createAgentSessionCurrentRequestsReader } from './agent-session-current-requests-reader'
+} from '../structured-agent-session-read-refusal'
+import type { AgentSessionRefusalReference } from '../agent-session-wire-refusals'
+import { readAgentSessionErrorRefusal } from '../agent-session-write-failure'
+import { createAgentSessionCurrentRequestsReader } from '../agent-session-current-requests-reader'
 import type {
   AgentSessionCurrentRequestsPiece,
   AgentSessionCurrentRequestsRead
-} from './agent-session-current-requests-wire'
-import type { StructuredAgentSessionAction } from './structured-agent-session-reducer'
+} from '../agent-session-current-requests-wire'
+import type { StructuredAgentSessionAction } from '../structured-agent-session-reducer'
 import { createReconnectScheduler } from './structured-agent-session-reconnect'
 
 /** One `agentSession.subscribe` stream, opened by whichever transport the client has. */
