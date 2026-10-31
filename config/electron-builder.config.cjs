@@ -54,12 +54,19 @@ const {
   verifyPackagedWindowsNodePty
 } = require('./scripts/verify-packaged-node-pty-job-ownership.cjs')
 const {
+  ORCAD_TEMPLATE_RESOURCE_DIR,
   assertOrcadTemplateBuilt,
   finalizePackagedOrcadTemplate,
   orcadTemplateExtraResource,
   orcadTemplateNodeModulesExtraResource,
-  orcadTemplateMacSignIgnore
+  orcadTemplateMacSignIgnore,
+  shipsOrcadTemplate
 } = require('./scripts/packaged-orcad-template.cjs')
+const {
+  stageWslNodeRuntimeArchive,
+  verifyPackagedWslNodeRuntime,
+  wslNodeRuntimeExtraResource
+} = require('./scripts/packaged-wsl-node-runtime.cjs')
 const { verifySkillsCliRuntime } = require('./scripts/verify-skills-cli-runtime.cjs')
 const { assertNotDarkBuild } = require('./dark-build-switches.cjs')
 const { verifyStaticAppImagePackage } = require('./scripts/static-appimage-package-contract.cjs')
@@ -379,6 +386,10 @@ module.exports = {
     if (context.electronPlatformName === 'linux') {
       ensureWaylandClipboard(context.arch)
     }
+    // A Windows installer that ships the WSL server template must also ship the Node it runs on.
+    if (context.electronPlatformName === 'win32' && shipsOrcadTemplate(orcadTemplateDir)) {
+      return stageWslNodeRuntimeArchive(context.arch)
+    }
   },
   afterPack: async (context) => {
     const resourcesDir =
@@ -440,6 +451,9 @@ module.exports = {
     if (context.electronPlatformName === 'win32') {
       verifyPackagedWindowsNodePty(resourcesDir, context.arch, { canExecuteTargetArch })
       verifyPackagedWindowsAgentHook(resourcesDir, context.arch)
+      if (existsSync(join(resourcesDir, ORCAD_TEMPLATE_RESOURCE_DIR))) {
+        verifyPackagedWslNodeRuntime(resourcesDir, context.arch)
+      }
     }
     verifySkillsCliRuntime(join(resourcesDir, 'app.asar.unpacked', 'out'), resourcesDir, {
       executeCommands: canExecuteTargetArch
@@ -522,6 +536,7 @@ module.exports = {
       ...commonExtraResources,
       ...windowsRuntimeResources,
       winSpeechNativeResource,
+      wslNodeRuntimeExtraResource,
       {
         from: 'resources/win32/bin/orca.cmd',
         to: 'bin/orca.cmd'

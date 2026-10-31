@@ -509,6 +509,13 @@ describe('arch-aware packaging guard', () => {
     }
   )
 
+  it('bundles the pinned WSL Node archive for the Windows slice being packaged', () => {
+    expect(electronBuilderConfig.win.extraResources).toContainEqual({
+      from: 'out/wsl-node-runtime/${arch}',
+      to: 'node-runtime-archives'
+    })
+  })
+
   it('requires installed Windows addons for Windows packaging', () => {
     const windowsAddon = electronBuilderConfig.win.extraResources.some(
       (resource) => resource.to === join('node_modules', '@vscode', 'windows-process-tree')

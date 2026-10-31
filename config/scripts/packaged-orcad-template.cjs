@@ -58,6 +58,13 @@ function assertOrcadTemplateBuilt(projectDir = join(__dirname, '..', '..'), env 
   }
 }
 
+/** Whether this package ships the template: release packaging requires it, local builds ship it when built. */
+function shipsOrcadTemplate(templateDir, env = process.env) {
+  return (
+    isOrcadTemplateRequired(env) || existsSync(join(templateDir, ORCAD_TEMPLATE_MANIFEST_FILENAME))
+  )
+}
+
 function sha256(path) {
   return createHash('sha256').update(readFileSync(path)).digest('hex')
 }
@@ -169,7 +176,8 @@ module.exports = {
   orcadTemplateNodeModulesExtraResource,
   orcadTemplateMacSignIgnore,
   resealOrcadTemplateManifest,
-  resealSignedWindowsApp
+  resealSignedWindowsApp,
+  shipsOrcadTemplate
 }
 
 if (require.main === module) {

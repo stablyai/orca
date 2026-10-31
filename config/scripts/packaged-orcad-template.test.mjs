@@ -16,7 +16,8 @@ const {
   finalizePackagedOrcadTemplate,
   findOrcadTemplateMachOFiles,
   resealOrcadTemplateManifest,
-  resealSignedWindowsApp
+  resealSignedWindowsApp,
+  shipsOrcadTemplate
 } = require('./packaged-orcad-template.cjs')
 
 const PTY = 'node_modules/node-pty/build/Release/pty.node'
@@ -115,6 +116,14 @@ describe('packaged orcad template', () => {
       'ORCA_REQUIRE_ORCAD_TEMPLATE=1'
     )
     expect(() => assertOrcadTemplateBuilt(resourcesDir, {})).not.toThrow()
+  })
+
+  it('ships the template when release packaging requires it or a local build made one', async () => {
+    const empty = await tempRoot()
+    expect(shipsOrcadTemplate(empty, {})).toBe(false)
+    expect(shipsOrcadTemplate(empty, { ORCA_REQUIRE_ORCAD_TEMPLATE: '1' })).toBe(true)
+    const built = await writeOrcadTemplateTestFixture(await tempRoot())
+    expect(shipsOrcadTemplate(built, {})).toBe(true)
   })
 
   it('reseals the Windows files SignPath returned, by their app-relative list', async () => {
