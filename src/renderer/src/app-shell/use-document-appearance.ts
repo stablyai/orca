@@ -1,4 +1,4 @@
-import { useEffect, useMemo } from 'react'
+import { useEffect, useMemo, useRef } from 'react'
 import { buildAppFontFamily } from '@/lib/app-font-family'
 import { applyCodeFontSmoothing } from '@/lib/code-font-smoothing'
 import { applyMarkdownCodeFontFamily } from '@/lib/markdown-code-font'
@@ -6,9 +6,13 @@ import { rebuildAllTerminalWebglRenderers } from '@/lib/pane-manager/pane-manage
 import { applyDocumentTheme, applyPluginAppTheme } from '../lib/document-theme'
 import { applyThemeBackground } from '../lib/theme-background'
 import { tolerantPluginThemeBackgroundRegistration } from '../../../shared/plugins/artifacts/plugin-theme-background'
-import { derivePluginMonacoTheme } from '../lib/plugin-monaco-theme'
+import {
+  findCodeEditorTheme,
+  paintCodeEditorColors,
+  resolveCodeEditorTheme
+} from '../lib/code-editor-theme'
 import { browserColorProbe } from '../lib/plugin-theme-tokens'
-import { usePluginMonacoThemeStore } from '../store/plugin-monaco-theme'
+import { useCodeEditorThemeStore } from '../store/code-editor-theme'
 import {
   usePluginAppThemeSync,
   usePluginTerminalPaletteRefresh,
@@ -27,12 +31,18 @@ export function useDocumentAppearance(): void {
   const selectedPluginTheme = useAppStore((s) =>
     dark ? s.settings?.pluginAppThemeDark : s.settings?.pluginAppThemeLight
   )
+  const pluginThemes = usePluginThemes()
   // Why find by id: a disabled or removed plugin drops out of the list, which restores built-in colors.
   const pluginTheme =
-    usePluginThemes().find(
+    pluginThemes.find(
       (entry) => entry.id === selectedPluginTheme && (entry.base === 'dark') === dark
     ) ?? null
+  const editorTheme = findCodeEditorTheme(
+    useAppStore((s) => (dark ? s.settings?.editorThemeDark : s.settings?.editorThemeLight)),
+    pluginThemes
+  )
   const pluginThemesLoaded = usePluginThemeStore((s) => s.loaded)
+  const appPainted = useRef<Readonly<Record<string, string>>>({})
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
@@ -64,20 +74,7 @@ export function useDocumentAppearance(): void {
     // Why wait for the list: until it loads, the startup cache is still the right paint.
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (pluginThemesLoaded && theme) {
-      const painted = applyPluginAppTheme(pluginTheme)
-      // Why read the document: the editor should match what was painted, built-ins included.
-      const computed = getComputedStyle(document.documentElement)
-      usePluginMonacoThemeStore.setState({
-        theme: pluginTheme
-          ? derivePluginMonacoTheme({
-              base: pluginTheme.base,
-              read: (token) => computed.getPropertyValue(token),
-              painted,
-              probe: browserColorProbe,
-              tokenColors: pluginTheme.tokenColors
-            })
-          : null
-      })
+      appPainted.current = applyPluginAppTheme(pluginTheme)
     }
   }, [pluginTheme, pluginThemesLoaded, theme, dark])
 
@@ -88,6 +85,25 @@ export function useDocumentAppearance(): void {
       applyThemeBackground(terminalTranslucent && !reduceEffects ? themeBackground : null)
     }
   }, [pluginThemesLoaded, terminalTranslucent, reduceEffects, themeBackground])
+
+  // Why after the paint above: a followed editor reads the colors it just painted. Built-in
+  // choices resolve before the plugin list loads; a plugin choice follows the app until then.
+  useEffect(() => {
+    if (!theme) {
+      return
+    }
+    const computed = getComputedStyle(document.documentElement)
+    const codeEditorTheme = resolveCodeEditorTheme({
+      dark,
+      appTheme: pluginTheme,
+      selected: editorTheme,
+      appPainted: appPainted.current,
+      readDocument: (token) => computed.getPropertyValue(token),
+      probe: browserColorProbe
+    })
+    paintCodeEditorColors(codeEditorTheme.override)
+    useCodeEditorThemeStore.setState(codeEditorTheme)
+  }, [pluginTheme, editorTheme, pluginThemesLoaded, theme, dark])
 
   useEffect(() => {
     document.documentElement.style.setProperty(

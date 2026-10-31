@@ -31,6 +31,26 @@ export const getThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] 
   }
 ])
 
+export const getCodeEditorThemeEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
+  {
+    title: translate('settings.appearance.editorTheme.title', 'Editor theme'),
+    description: translate(
+      'settings.appearance.editorTheme.description',
+      'Code editor, diff and notebook colors, apart from the app theme.'
+    ),
+    keywords: [
+      ...translateSearchKeyword('settings.appearance.editorTheme.keyword.editor', 'editor'),
+      ...translateSearchKeyword('settings.appearance.editorTheme.keyword.code', 'code'),
+      ...translateSearchKeyword('settings.appearance.editorTheme.keyword.monaco', 'monaco', {
+        englishOnly: true
+      }),
+      ...translateSearchKeyword('settings.appearance.editorTheme.keyword.syntax', 'syntax'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.262fe1d24f', 'dark'),
+      ...translateSearchKeyword('auto.components.settings.appearance.search.44d873fd18', 'light')
+    ]
+  }
+])
+
 export const getLanguageEntries = createLocalizedCatalog((): SettingsSearchEntry[] => [
   {
     title: translate('settings.appearance.language.title', 'Language'),
@@ -267,6 +287,7 @@ export function getAppearancePaneSearchEntries(
   return [
     ...getAppearanceSectionEntries(),
     ...getThemeEntries(),
+    ...getCodeEditorThemeEntries(),
     ...(SHOW_UI_LANGUAGE_SETTING ? getLanguageEntries() : []),
     ...getTypographyEntries(),
     ...getZoomEntries(),
