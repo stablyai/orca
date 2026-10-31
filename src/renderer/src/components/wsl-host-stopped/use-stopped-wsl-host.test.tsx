@@ -4,12 +4,12 @@ import { useStoppedWslHost } from './use-stopped-wsl-host'
 
 type MockState = {
   wslHostStatuses: Record<string, { state: string; distro: string }>
+  wslHostServerFiles: 'unknown' | 'present' | 'missing'
+  settings: { experimentalWslHosts: boolean }
+  runtimeEnvironments: { id: string; orcadDeployment?: { kind: string } }[]
 }
 
 let mockState: MockState
-const unavailable = vi.hoisted((): { reason: string | null } => ({
-  reason: null
-}))
 
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: MockState) => unknown) => selector(mockState)
@@ -17,9 +17,6 @@ vi.mock('@/store', () => ({
 vi.mock('../terminal-pane/remote-server-outage', () => ({
   selectWorkspaceRuntimeEnvironmentId: (_state: unknown, worktreeId: string | null) =>
     worktreeId === 'wt-wsl' ? 'wsl:ubuntu' : null
-}))
-vi.mock('../terminal-pane/use-wsl-host-unavailable-reason', () => ({
-  selectWslHostUnavailableReason: () => unavailable.reason
 }))
 
 function Probe({ worktreeId }: { worktreeId: string | null }) {
@@ -29,11 +26,11 @@ function Probe({ worktreeId }: { worktreeId: string | null }) {
 
 describe('useStoppedWslHost', () => {
   beforeEach(() => {
-    unavailable.reason = null
     mockState = {
-      wslHostStatuses: {
-        'wsl:ubuntu': { state: 'distro-stopped', distro: 'Ubuntu' }
-      }
+      wslHostStatuses: { 'wsl:ubuntu': { state: 'distro-stopped', distro: 'Ubuntu' } },
+      wslHostServerFiles: 'present',
+      settings: { experimentalWslHosts: true },
+      runtimeEnvironments: [{ id: 'wsl:ubuntu', orcadDeployment: { kind: 'wsl' } }]
     }
   })
 
@@ -46,14 +43,25 @@ describe('useStoppedWslHost', () => {
   it('is null for a running host, a local workspace, or no workspace', () => {
     expect(renderToStaticMarkup(<Probe worktreeId="wt-local" />)).toBe('<span>none</span>')
     expect(renderToStaticMarkup(<Probe worktreeId={null} />)).toBe('<span>none</span>')
-    mockState = {
-      wslHostStatuses: { 'wsl:ubuntu': { state: 'ready', distro: 'Ubuntu' } }
-    }
+    mockState.wslHostStatuses = { 'wsl:ubuntu': { state: 'ready', distro: 'Ubuntu' } }
     expect(renderToStaticMarkup(<Probe worktreeId="wt-wsl" />)).toBe('<span>none</span>')
   })
 
-  it('leaves a host that cannot run to its own notice', () => {
-    unavailable.reason = 'turned-off'
+  it('leaves a host whose server files are missing to its own notice', () => {
+    mockState.wslHostServerFiles = 'missing'
+    expect(renderToStaticMarkup(<Probe worktreeId="wt-wsl" />)).toBe('<span>none</span>')
+  })
+
+  it('still offers Start with the setting off while a saved host serves', () => {
+    mockState.settings = { experimentalWslHosts: false }
+    expect(renderToStaticMarkup(<Probe worktreeId="wt-wsl" />)).toBe(
+      '<span>wsl:ubuntu|Ubuntu</span>'
+    )
+  })
+
+  it('leaves a turned-off host, with no saved WSL host serving, to its own notice', () => {
+    mockState.settings = { experimentalWslHosts: false }
+    mockState.runtimeEnvironments = [{ id: 'ssh:desk' }]
     expect(renderToStaticMarkup(<Probe worktreeId="wt-wsl" />)).toBe('<span>none</span>')
   })
 })

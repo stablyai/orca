@@ -161,6 +161,7 @@ export function EditorConflictReviewSurface({
             worktreeId={contentFile.worktreeId}
             // Borrowed views reload through their owning workspace.
             onRetry={() => reloadContent(recordView ?? contentFile, USER_RETRY)}
+            onHostStarted={() => reloadContent(recordView ?? contentFile)}
           />
         </div>
       )
