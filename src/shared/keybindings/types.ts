@@ -91,6 +91,7 @@ export type KeybindingActionId =
   | 'browser.showHistory'
   | 'browser.grabElement'
   | 'browser.annotateElement'
+  | 'editor.commandPalette'
   | 'editor.find'
   | 'editor.replace'
   | 'editor.save'

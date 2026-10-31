@@ -21643,6 +21643,7 @@
       "browserFocusAddressBar": "將焦點移至瀏覽器網址列",
       "browserGrabElement": "擷取網頁元素",
       "browserAnnotateElement": "標註網頁元素",
+      "editorCommandPalette": "命令選擇區",
       "editorFind": "在編輯器中尋找",
       "editorReplace": "在編輯器中取代",
       "editorSave": "儲存檔案",

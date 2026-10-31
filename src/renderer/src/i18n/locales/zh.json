@@ -21817,6 +21817,7 @@
       "browserFocusAddressBar": "聚焦浏览器地址栏",
       "browserGrabElement": "抓取页面元素",
       "browserAnnotateElement": "批注页面元素",
+      "editorCommandPalette": "命令面板",
       "editorFind": "在编辑器中查找",
       "editorReplace": "在编辑器中替换",
       "editorSave": "保存文件",

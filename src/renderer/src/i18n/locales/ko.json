@@ -21763,6 +21763,7 @@
       "browserFocusAddressBar": "브라우저 주소 표시줄에 포커스",
       "browserGrabElement": "페이지 요소 가져오기",
       "browserAnnotateElement": "페이지 요소에 주석 달기",
+      "editorCommandPalette": "명령 팔레트",
       "editorFind": "편집기에서 찾기",
       "editorReplace": "편집기에서 바꾸기",
       "editorSave": "파일 저장",

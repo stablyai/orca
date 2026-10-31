@@ -1,7 +1,10 @@
 import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import Editor, { type OnMount } from '@monaco-editor/react'
 import type { editor } from 'monaco-editor'
-import { installMonacoEditorFindShortcut } from '@/components/editor/editor-shortcuts'
+import {
+  installMonacoEditorCommandPaletteShortcut,
+  installMonacoEditorFindShortcut
+} from '@/components/editor/editor-shortcuts'
 import { syncContentOnMount, syncContentUpdate } from '@/components/editor/monaco-content-sync'
 import { isMonacoFindWidgetOpen } from '@/components/editor/monaco-find-widget'
 import { computeEditorFontSize, resolveEditorFontFamily } from '@/lib/editor-font-zoom'
@@ -101,6 +104,7 @@ export function AutomationEditorPromptEditor({
     editorRef.current = editorInstance
     const editorDomNode = editorInstance.getContainerDomNode()
     const cleanupFindShortcut = installMonacoEditorFindShortcut(editorInstance)
+    const cleanupCommandPaletteShortcut = installMonacoEditorCommandPaletteShortcut(editorInstance)
     const cleanupEscapeDismiss = installPromptEditorEscapeDismiss(editorDomNode, onDismissRef)
     isApplyingProgrammaticContentRef.current = true
     try {
@@ -112,6 +116,7 @@ export function AutomationEditorPromptEditor({
     }
     editorInstance.onDidDispose(() => {
       cleanupFindShortcut()
+      cleanupCommandPaletteShortcut()
       cleanupEscapeDismiss()
       if (editorRef.current === editorInstance) {
         editorRef.current = null

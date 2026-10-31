@@ -9,7 +9,8 @@ import {
   DEFINITIONS_BY_ID,
   KEYBINDING_DEFINITIONS,
   getKeybindingPlatform,
-  isDigitIndexActionId
+  isDigitIndexActionId,
+  isKeybindingActionId
 } from './definitions'
 import { keybindingConflictIdentities } from './matching-key'
 import {
@@ -28,6 +29,29 @@ export function getDefaultBindings(
       allowShiftOnlyKeybindings: definition.allowShiftOnlyKeybindings === true
     })
     return normalized.ok ? normalized.value : binding
+  })
+}
+
+export function hasCustomEditorF1Binding(overrides?: KeybindingOverrides): boolean {
+  return Object.entries(overrides ?? {}).some(([actionId, bindings]) => {
+    if (
+      actionId === 'editor.commandPalette' ||
+      !isKeybindingActionId(actionId) ||
+      !Array.isArray(bindings)
+    ) {
+      return false
+    }
+    const definition = DEFINITIONS_BY_ID.get(actionId)
+    if (definition?.scope !== 'editor' && definition?.conflictGroup !== 'editor') {
+      return false
+    }
+    return bindings.some((binding) => {
+      const normalized = normalizeKeybindingWithOptions(
+        binding,
+        normalizeOptionsForAction(actionId)
+      )
+      return normalized.ok && normalized.value === 'F1'
+    })
   })
 }
 
@@ -57,6 +81,9 @@ function getConfiguredBindings(
       )
       return normalized.ok ? [normalized.value] : []
     })
+  }
+  if (actionId === 'editor.commandPalette' && hasCustomEditorF1Binding(overrides)) {
+    return []
   }
   return definition ? getDefaultBindings(definition, platform) : []
 }

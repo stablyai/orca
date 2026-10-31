@@ -22131,6 +22131,7 @@
       "browserFocusAddressBar": "Browser-Adressleiste fokussieren",
       "browserGrabElement": "Seitenelement erfassen",
       "browserAnnotateElement": "Seitenelement mit Anmerkung versehen",
+      "editorCommandPalette": "Befehlspalette",
       "editorFind": "Im Editor suchen",
       "editorReplace": "Im Editor ersetzen",
       "editorSave": "Datei speichern",

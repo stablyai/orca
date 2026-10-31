@@ -22442,6 +22442,7 @@
       "browserFocusAddressBar": "Enfocar la barra de direcciones del navegador",
       "browserGrabElement": "Capturar elemento de la página",
       "browserAnnotateElement": "Anotar elemento de la página",
+      "editorCommandPalette": "Paleta de comandos",
       "editorFind": "Buscar en el editor",
       "editorReplace": "Reemplazar en el editor",
       "editorSave": "Guardar archivo",
