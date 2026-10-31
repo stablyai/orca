@@ -69,6 +69,16 @@ later) in the same shape as a VS Code theme's, so most VS Code theme lists paste
 - A color under 3:1 contrast with the editor background is dropped, and anything a theme leaves
   out keeps the built-in light or dark code colors.
 
+### Import a VS Code theme
+
+`orca plugin import-vscode-theme <theme.json|extension folder> <new folder>` writes a plugin with
+an app theme for each VS Code color theme, plus a terminal theme from its `terminal.ansi*`
+colors, and validates it. A fixed table maps workbench colors to tokens (for example
+`editor.background` to `--background` and `--editor-surface`); `tokenColors` carry over,
+`include` files are flattened, translucent fills are painted onto the editor background, and
+`semanticTokenColors` and descendant scope selectors are dropped with a warning. Check the
+original theme's license before you publish the result.
+
 ## Terminal themes
 
 ```json

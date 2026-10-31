@@ -1,5 +1,11 @@
 import type { CommandHandler } from '../dispatch'
-import { createPluginFromTemplate, PluginCreateError } from '../plugin-authoring/plugin-create'
+import {
+  createPluginFromTemplate,
+  PluginCreateError,
+  writePluginFolder
+} from '../plugin-authoring/plugin-create'
+import { renderVscodeThemePlugin } from '../plugin-authoring/vscode-theme-conversion'
+import { readVscodeThemes, VscodeThemeReadError } from '../plugin-authoring/vscode-theme-reading'
 import {
   inspectPluginFolder,
   validatePluginTarget,
@@ -39,16 +45,24 @@ function formatGrants(report: PluginValidationReport): string[] {
   ]
 }
 
-function invalidError(report: PluginValidationReport): RuntimeClientError {
+function invalidError(
+  report: PluginValidationReport,
+  extra: { warnings?: string[]; nextStep?: string } = {}
+): RuntimeClientError {
+  const warnings = extra.warnings ?? []
   return new RuntimeClientError(
     PLUGIN_INVALID_CODE,
     [
       `${report.file} is not a valid plugin file:`,
-      ...report.errors.map((error) => `- ${error}`)
+      ...report.errors.map((error) => `- ${error}`),
+      ...warnings.map((warning) => `warning: ${warning}`)
     ].join('\n'),
     {
       ...report,
-      nextSteps: ['Fix the listed problems, then run `orca plugin validate` again.']
+      ...(warnings.length ? { warnings } : {}),
+      nextSteps: [
+        extra.nextStep ?? 'Fix the listed problems, then run `orca plugin validate` again.'
+      ]
     }
   )
 }
@@ -111,6 +125,52 @@ export const PLUGIN_AUTHORING_HANDLERS: Record<string, CommandHandler> = {
       [
         `Created ${created.pluginKey} from the ${template} template in ${created.path}`,
         ...created.files.map((file) => `  ${file}`),
+        ...formatGrants(report),
+        'Next: orca plugin dev load <dir>'
+      ].join('\n')
+    )
+  },
+  'plugin import-vscode-theme': async (ctx) => {
+    const command = 'import-vscode-theme'
+    const source = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'source'), command)
+    const dir = resolveLocalPluginPath(ctx, requirePluginPathArg(ctx, 'dir'), command)
+    let warnings: string[] = []
+    let written
+    try {
+      const set = readVscodeThemes(source)
+      written = await writePluginFolder(
+        {
+          dir,
+          publisher: optionalString(ctx.flags, 'publisher'),
+          id: optionalString(ctx.flags, 'id'),
+          name: optionalString(ctx.flags, 'name') ?? set.name
+        },
+        (identity) => {
+          const plugin = renderVscodeThemePlugin(set, identity)
+          warnings = plugin.warnings
+          return plugin
+        }
+      )
+    } catch (error) {
+      if (error instanceof PluginCreateError || error instanceof VscodeThemeReadError) {
+        throw new RuntimeClientError('invalid_argument', error.message)
+      }
+      throw error
+    }
+    const report = await validatePluginTarget(written.path)
+    if (!report.valid) {
+      throw invalidError(report, {
+        warnings,
+        nextStep: `The converted files stay in ${written.path}: fix them and run \`orca plugin validate\`, or delete the folder and import again.`
+      })
+    }
+    printPluginResult(
+      ctx,
+      { ...written, warnings, validation: report },
+      [
+        `Imported ${written.pluginKey} into ${written.path}`,
+        ...written.files.map((file) => `  ${file}`),
+        ...warnings.map((warning) => `warning: ${warning}`),
         ...formatGrants(report),
         'Next: orca plugin dev load <dir>'
       ].join('\n')
