@@ -33,6 +33,7 @@ import {
   removeWorktreeMetadataAndTransientState,
   stopPtysForDestructiveWorktreeRemoval
 } from './worktree-removal-ownership'
+import { maybePruneReviewHeadRefsAfterWorktreeDelete } from '../../../worktree-review-head-prune'
 import { isAlreadyRemovedWorktreePath } from './worktree-removal-filesystem'
 
 export async function removeUnregisteredWorktree(
@@ -98,6 +99,15 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
+    await maybePruneReviewHeadRefsAfterWorktreeDelete({
+      store,
+      repoPath: repo.path,
+      repoId,
+      worktreeId: args.worktreeId,
+      hostId: removalHostId,
+      meta: removedMeta,
+      localGitOptions: localWorktreeGitOptions
+    })
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
@@ -128,6 +138,15 @@ export async function removeUnregisteredWorktree(
     )
     invalidateAuthorizedRootsCache()
     runtime.clearOptimisticReconcileToken(args.worktreeId)
+    await maybePruneReviewHeadRefsAfterWorktreeDelete({
+      store,
+      repoPath: repo.path,
+      repoId,
+      worktreeId: args.worktreeId,
+      hostId: removalHostId,
+      meta: removedMeta,
+      localGitOptions: localWorktreeGitOptions
+    })
     removeWorktreeMetadataAndTransientState(
       { store, runtime },
       args.worktreeId,
