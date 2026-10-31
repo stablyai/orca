@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import nacl from 'tweetnacl'
+import { sanitizeCrashReportString } from '../../../src/shared/crash-report-redaction'
 import { setFlagsFromString } from 'node:v8'
 import { runInNewContext } from 'node:vm'
 import {
@@ -130,6 +131,14 @@ async function authenticate(ctx: ReturnType<typeof setup>): Promise<void> {
     ctx.schedule
   )
   await ctx.channel.handleMessage(Buffer.from(response).toString('base64'))
+}
+
+function assertReleasedPhysicalChannel(channel: object): void {
+  const queue = Reflect.get(channel, 'outboundQueue')
+  if (!queue || typeof queue.evidence !== 'function') {
+    throw new Error('physical channel queue diagnostic seam changed')
+  }
+  expect(queue.evidence()).toEqual({ queuedBytes: 0, queuedFrames: 0, storageSlots: 0 })
 }
 
 describe('mobile E2EE v2 physical channel', () => {
@@ -511,6 +520,31 @@ describe('direct v2 original-socket queue ownership', () => {
     'a guarded admitted frame handles %s without draining onto a successor',
     async (mode) => {
       vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'setInterval', 'clearInterval'] })
+      const timerBaseline = vi.getTimerCount()
+      let phase = 'setup'
+      const timerCreations: { phase: string; delay: number | undefined; stack: string }[] = []
+      const scheduleTimeout = globalThis.setTimeout
+      vi.spyOn(globalThis, 'setTimeout').mockImplementation((callback, delay, ...args) => {
+        timerCreations.push({
+          phase,
+          delay,
+          stack: sanitizeCrashReportString(
+            new Error('Physical channel timer creation').stack ?? '',
+            2000
+          )
+        })
+        return scheduleTimeout(callback, delay, ...args)
+      })
+      const scheduleInterval = globalThis.setInterval
+      vi.spyOn(globalThis, 'setInterval').mockImplementation((callback, delay, ...args) => {
+        timerCreations.push({
+          phase,
+          delay,
+          stack: sanitizeCrashReportString(new Error('interval').stack ?? '', 2000)
+        })
+        return scheduleInterval(callback, delay, ...args)
+      })
+      const disposed = vi.spyOn(MobileE2EEV2PhysicalChannel.prototype, 'dispose')
       const sockets: RetentionSocket[] = []
       class DirectSocket extends RetentionSocket {
         static OPEN = 1
@@ -521,15 +555,24 @@ describe('direct v2 original-socket queue ownership', () => {
         }
       }
       vi.stubGlobal('WebSocket', DirectSocket)
-      const ctx = setup(async () => null, 'direct')
-      vi.spyOn(MobileE2EEV2ClientSession, 'create').mockReturnValueOnce(ctx.session)
-      const client = connect(
-        'ws://desktop.invalid',
-        'valid-token',
-        Buffer.from(desktop.publicKey).toString('base64')
-      )
-      const socket = sockets[0]
+      let auxiliary: ReturnType<typeof setup> | undefined
+      let actualClient: ReturnType<typeof connect> | undefined
+      let requestSettled = false
+      let outcome: Promise<unknown> | undefined
+      let firstFailure: { error: unknown } | undefined
+      const cleanupFailures: unknown[] = []
       try {
+        const ctx = setup(async () => null, 'direct')
+        auxiliary = ctx
+        vi.spyOn(MobileE2EEV2ClientSession, 'create').mockReturnValueOnce(ctx.session)
+        const client = connect(
+          'ws://desktop.invalid',
+          'valid-token',
+          Buffer.from(desktop.publicKey).toString('base64')
+        )
+        actualClient = client
+        const socket = sockets[0]
+        phase = 'handshake'
         socket.onopen?.()
         socket.receive(JSON.stringify(ctx.ready))
         await nextInboundTurn()
@@ -553,6 +596,7 @@ describe('direct v2 original-socket queue ownership', () => {
         expect(client.getState()).toBe('connected')
         socket.bufferedAmount = 9 * 1024 * 1024
         const before = socket.sent.length
+        phase = 'request'
         const pending = client.sendRequest(
           'github.updateIssue',
           {
@@ -566,7 +610,16 @@ describe('direct v2 original-socket queue ownership', () => {
             }
           }
         )
-        const outcome = pending.catch((error: unknown) => error)
+        outcome = pending.then(
+          (reply) => {
+            requestSettled = true
+            return reply
+          },
+          (error: unknown) => {
+            requestSettled = true
+            return error
+          }
+        )
         await nextInboundTurn()
         expect(socket.sent).toHaveLength(before)
         if (mode === 'close') {
@@ -576,6 +629,7 @@ describe('direct v2 original-socket queue ownership', () => {
           socket.readyState = 3
           socket.onclose?.({ code: 1006 })
         }
+        phase = 'drain'
         socket.bufferedAmount = 0
         await vi.advanceTimersByTimeAsync(20)
         if (mode === 'live') {
@@ -619,9 +673,49 @@ describe('direct v2 original-socket queue ownership', () => {
           expect(await outcome).toBeInstanceOf(Error)
           expect(sockets).toHaveLength(1)
         }
+      } catch (error) {
+        firstFailure = { error }
       } finally {
-        client.close()
-        expect(vi.getTimerCount()).toBe(0)
+        phase = 'cleanup'
+        for (const release of [() => actualClient?.close(), () => auxiliary?.channel.dispose()]) {
+          try {
+            release()
+          } catch (error) {
+            cleanupFailures.push(error)
+          }
+        }
+        try {
+          // rejectAll queues rejection; let the actual tracker and inbound disposal finish without moving deadlines.
+          await Promise.resolve()
+          await nextInboundTurn()
+          if (outcome) {
+            expect(requestSettled).toBe(true)
+          }
+          if (auxiliary) {
+            expect(disposed.mock.contexts).toContain(auxiliary.channel)
+          }
+          expect(new Set(disposed.mock.contexts).size).toBe(
+            Number(Boolean(auxiliary)) + Number(Boolean(actualClient))
+          )
+          for (const channel of new Set(disposed.mock.contexts)) {
+            assertReleasedPhysicalChannel(channel)
+          }
+          expect(vi.getTimerCount(), JSON.stringify({ mode, phase, timerCreations })).toBe(
+            timerBaseline
+          )
+        } catch (error) {
+          cleanupFailures.push(error)
+        }
+      }
+      if (firstFailure && cleanupFailures.length === 0) {
+        throw firstFailure.error
+      }
+      if (cleanupFailures.length) {
+        throw new AggregateError(
+          [...(firstFailure ? [firstFailure.error] : []), ...cleanupFailures],
+          `direct ${mode}: ${firstFailure ? 'body failed; cleanup evidence follows' : 'cleanup failed'}`,
+          firstFailure ? { cause: firstFailure.error } : undefined
+        )
       }
     }
   )

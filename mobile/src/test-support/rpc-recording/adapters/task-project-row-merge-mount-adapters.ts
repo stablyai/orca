@@ -95,7 +95,9 @@ const ISSUE_ROW = {
   content: {
     repository: 'owner/repo',
     number: 1,
-    url: 'https://github.com/owner/repo/issues/1',
+    url: 'https://github.enterprise.test/owner/repo/issues/1',
+    title: 'Project issue',
+    body: 'Project issue body',
     state: 'OPEN',
     labels: [],
     assignees: [],
@@ -110,7 +112,9 @@ const PR_ROW = {
   content: {
     repository: 'owner/repo',
     number: 2,
-    url: 'https://github.com/owner/repo/pull/2',
+    url: 'https://github.enterprise.test/owner/repo/pull/2',
+    title: 'Project pull request',
+    body: 'Project pull request body',
     state: 'OPEN',
     labels: [],
     assignees: [],
@@ -154,7 +158,7 @@ function mountModelHook<Actions>(
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
-    useTaskActionMountOwners(modules, model, spec.fixture)
+    useTaskActionMountOwners(modules, context, model, spec.fixture)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })

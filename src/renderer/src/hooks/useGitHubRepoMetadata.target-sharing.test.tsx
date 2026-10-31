@@ -5,9 +5,11 @@ import { createServer, type Server } from 'node:http'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
+import { sanitizeCrashReportString } from '../../../shared/crash-report-redaction'
 import { runProcess } from '@orca/process-host'
 import { afterEach, expect, it, vi } from 'vitest'
 import { useRepoAssignees, useRepoLabels } from './useGitHubRepoMetadata'
+import { useGitHubOperationOwner } from './useGitHubOperationScope'
 import { GitHubWorkItemTargetContext } from '@/components/github-item-dialog/load-item-details/github-work-item-target-context'
 import { useGitHubWorkItemDetails } from '@/components/github-item-dialog/load-item-details/use-github-work-item-details'
 import { listAssignableUsers, listLabels } from '../../../main/github/issue-field-options'
@@ -193,33 +195,65 @@ it.each([10, 100])(
       throw new Error('fixture address missing')
     }
     const base = `http://127.0.0.1:${address.port}`
+    const processes: {
+      host: string
+      account: string | undefined
+      completed: boolean
+      code?: number | null
+      timedOut?: boolean
+      stderr?: string
+      error?: string
+    }[] = []
     provider.exec.mockImplementation(
       async (args: string[], options: { ghAccount?: { user: string }; fixtureHost: string }) => {
-        expect(args).toContain('--paginate')
-        const routed = args.map((arg) =>
-          arg.startsWith('repos/')
-            ? `${base}/${options.fixtureHost}/${options.ghAccount?.user}/${arg}`
-            : arg
-        )
-        // Execute gh's real paginator/parser. Only the I/O URL and throwaway authentication are adapted.
-        const result = await runProcess({
-          program: 'gh',
-          args: routed,
-          env: {
-            PATH: process.env.PATH,
-            SystemRoot: process.env.SystemRoot,
-            TEMP: process.env.TEMP,
-            TMP: process.env.TMP,
-            GH_CONFIG_DIR: configHome,
-            GH_TOKEN: 'fixture-token',
-            GH_ENTERPRISE_TOKEN: 'fixture-token',
-            GH_PROMPT_DISABLED: '1',
-            GH_PAGER: 'cat'
-          },
-          timeoutMs: 10_000
-        })
-        expect(result.code).toBe(0)
-        return { stdout: result.stdout }
+        const observation: (typeof processes)[number] = {
+          host: options.fixtureHost,
+          account: options.ghAccount?.user,
+          completed: false
+        }
+        processes.push(observation)
+        try {
+          expect(args).toContain('--paginate')
+          const routed = args.map((arg) =>
+            arg.startsWith('repos/')
+              ? `${base}/${options.fixtureHost}/${options.ghAccount?.user}/${arg}`
+              : arg
+          )
+          // Execute gh's real paginator/parser. Only the I/O URL and throwaway authentication are adapted.
+          const result = await runProcess({
+            program: 'gh',
+            args: routed,
+            env: {
+              PATH: process.env.PATH,
+              SystemRoot: process.env.SystemRoot,
+              TEMP: process.env.TEMP,
+              TMP: process.env.TMP,
+              GH_CONFIG_DIR: configHome,
+              GH_TOKEN: 'fixture-token',
+              GH_ENTERPRISE_TOKEN: 'fixture-token',
+              GH_PROMPT_DISABLED: '1',
+              GH_PAGER: 'cat'
+            },
+            timeoutMs: 10_000
+          })
+          Object.assign(observation, {
+            code: result.code,
+            timedOut: result.timedOut,
+            stderr: sanitizeCrashReportString(result.stderr, 2000)
+          })
+          if (result.code !== 0 || result.timedOut) {
+            throw new Error('gh fixture subprocess failed')
+          }
+          return { stdout: result.stdout }
+        } catch (error) {
+          observation.error = sanitizeCrashReportString(
+            error instanceof Error ? error.message : String(error),
+            2000
+          )
+          throw error
+        } finally {
+          observation.completed = true
+        }
       }
     )
     const host = `github-${count}.corp`
@@ -349,15 +383,41 @@ it.each([10, 100])(
       )
     )
     async function loaded(account: string) {
-      await act(async () => {
-        await vi.waitFor(
-          () =>
-            expect(container.querySelector('[data-list="0"]')?.textContent).toBe(
-              `S-${account}-page1,S-${account}-page2:S-${account}-page1,S-${account}-page2`
-            ),
-          { timeout: 10_000 }
-        )
-      })
+      // External process completion must not wait on a render held inside this act.
+      await vi.waitFor(
+        () => {
+          expect(
+            processes.filter((entry) => entry.account === account && entry.completed)
+          ).toHaveLength(2)
+        },
+        { timeout: 10_000 }
+      )
+      expect(
+        processes.filter((entry) => entry.error || entry.code !== 0 || entry.timedOut),
+        JSON.stringify(processes)
+      ).toEqual([])
+      await vi.waitFor(
+        async () => {
+          await act(async () => {})
+          expect(container.querySelector('[data-list="0"]')?.textContent).toBe(
+            `S-${account}-page1,S-${account}-page2:S-${account}-page1,S-${account}-page2`
+          )
+        },
+        { timeout: 10_000 }
+      )
+      const pages = requests
+        .map((path) => new URL(path, base))
+        .filter((url) => url.pathname.startsWith(`/S/${account}/`))
+      for (const kind of ['labels', 'assignees']) {
+        const observed = pages.filter((url) => url.pathname.endsWith(`/${kind}`))
+        expect(observed.map((url) => url.searchParams.get('page') ?? '1').sort()).toEqual([
+          '1',
+          '2'
+        ])
+        expect(
+          observed.every((url) => url.pathname === `/S/${account}/repos/fork/widgets/${kind}`)
+        ).toBe(true)
+      }
     }
     await loaded('A')
     expect(container.querySelector('output')?.textContent).toBe('A')
@@ -366,16 +426,23 @@ it.each([10, 100])(
     expect(requests).toHaveLength(4)
     const before = new Map(renders)
     const ioBefore = { ...calls }
+    // Two owners per Lists plus Detail's identity/context owners, allowing a notification and consistency read each.
+    const selectedOwners = 2 * count + 2
+    const evaluationLimit = 2 * selectedOwners
+    const rowReadLimit = 2 * selectedOwners * ROW_COUNT
     provider.evaluations = 0
     provider.rows = 0
     await act(async () => metadataStore.setState({ unrelated: count }))
     expect(renders).toEqual(before)
     expect(calls).toEqual(ioBefore)
     expect(provider.evaluations).toBeGreaterThanOrEqual(2 * count)
+    expect(provider.evaluations).toBeLessThanOrEqual(evaluationLimit)
     // Numeric array reads observe the production resolver's actual scans, separately from selected-value evaluations/renders.
     expect(provider.rows).toBeGreaterThanOrEqual(2 * count * ROW_COUNT)
-    expect(provider.rows).toBeLessThanOrEqual(provider.evaluations * ROW_COUNT * 2)
+    expect(provider.rows).toBeLessThanOrEqual(rowReadLimit)
     for (const unusedHost of ['local', 'runtime:unused'] as const) {
+      provider.evaluations = 0
+      provider.rows = 0
       await act(async () => {
         expect(
           await repoActions.updateRepo(
@@ -388,6 +455,39 @@ it.each([10, 100])(
       expect(renders).toEqual(before)
       expect(calls).toEqual(ioBefore)
       expect(requests).toHaveLength(4)
+      expect(provider.evaluations).toBeGreaterThanOrEqual(2 * count)
+      expect(provider.evaluations).toBeLessThanOrEqual(evaluationLimit)
+      expect(provider.rows).toBeGreaterThanOrEqual(2 * count * ROW_COUNT)
+      expect(provider.rows).toBeLessThanOrEqual(rowReadLimit)
+    }
+    function RedundantOwnerSubscription() {
+      useGitHubOperationOwner({ repoId: 'shared', repoPath: '/shared', sourceContext: source })
+      return null
+    }
+    const redundantRoot = createRoot(document.createElement('div'))
+    try {
+      await act(async () =>
+        redundantRoot.render(
+          Array.from({ length: 4 * count }, (_, index) => (
+            <RedundantOwnerSubscription key={index} />
+          ))
+        )
+      )
+      await act(async () => {})
+      const outputBefore = container.textContent
+      provider.evaluations = 0
+      provider.rows = 0
+      await act(async () => metadataStore.setState({ unrelated: count + 1 }))
+      expect(container.textContent).toBe(outputBefore)
+      expect(renders).toEqual(before)
+      expect(calls).toEqual(ioBefore)
+      expect(provider.exec).toHaveBeenCalledTimes(2)
+      expect(requests).toHaveLength(4)
+      // Extra real owner subscriptions must breach both budgets even when selected output and I/O stay equal.
+      expect(provider.evaluations).toBeGreaterThan(evaluationLimit)
+      expect(provider.rows).toBeGreaterThan(rowReadLimit)
+    } finally {
+      await act(async () => redundantRoot.unmount())
     }
     await act(async () => {
       expect(
@@ -416,6 +516,8 @@ it.each([10, 100])(
     })
     await loaded('A')
     expect(provider.exec).toHaveBeenCalledTimes(4)
+    expect(processes).toHaveLength(4)
+    expect(calls).toEqual({ labels: 2, users: 2, details: 2, status: 6 })
     expect(requests).toHaveLength(8)
   }
 )

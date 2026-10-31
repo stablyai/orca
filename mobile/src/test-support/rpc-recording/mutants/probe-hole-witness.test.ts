@@ -67,32 +67,20 @@ const HOLES: readonly { mutation: Mutation; operation: string; closedBy: readonl
   }
 ]
 
-/** What the scripted transport raises when a send no longer carries the params the step asserts. */
-const PARAMS_MISMATCH = 'Request params mismatch:'
-
-// Count only params-mismatch aborts after proving the anchor applied; unrelated scenario/loader failures must stay loud.
 async function verdict(id: string, mutation: Mutation): Promise<string> {
   const scenario = input.scenarios.find((candidate) => candidate.id === id)!
   const { adapters, assertMutationApplied } = pilotMountAdapters(root, {
     device: scenario,
     mutation: operationMutation(mutation)
   })
-  try {
-    const result = await runRecordingMutant(
-      scenario,
-      adapters[scenario.operation],
-      vitestRecordingScheduler(),
-      readGolden(goldens, id).recording
-    )
-    assertMutationApplied()
-    return result.verdict
-  } catch (error) {
-    assertMutationApplied()
-    if (error instanceof Error && error.message.startsWith(PARAMS_MISMATCH)) {
-      return 'killed'
-    }
-    throw error
-  }
+  const result = await runRecordingMutant(
+    scenario,
+    adapters[scenario.operation],
+    vitestRecordingScheduler(),
+    readGolden(goldens, id).recording
+  )
+  assertMutationApplied()
+  return result.verdict
 }
 
 describe('probe scenarios close holes the pre-probe recordings left open', () => {

@@ -23,6 +23,8 @@ import {
   type ProjectFileMergeActionsInput
 } from './use-mobile-tasks-project-file-merge-actions'
 import { useMobileTasksHostedMetadataActions } from './use-mobile-tasks-hosted-metadata-actions'
+import { useCommittedOwnerProjection } from '../test-support/rpc-recording/task-action-mount-owners'
+import { captureValue, type RecordedValue } from '../test-support/rpc-recording/recording-values'
 
 vi.mock('./mobile-tasks-legacy-foundation', async () => ({
   ...(await import('./mobile-tasks-item-mapping')),
@@ -108,6 +110,7 @@ async function mount() {
   const repoListEnsureLoaded = async () => repos
   const effectiveRepoIds = new Set<string>()
   const noop = () => {}
+  const committed: { name: string; value: RecordedValue }[] = []
   let current!: ReturnType<typeof ProbeModel>
   let select!: (selected: typeof a | null) => void
   let selectProject!: (selected: GitHubProjectRow | null) => void
@@ -249,6 +252,13 @@ async function mount() {
       refreshing,
       loading
     }
+    useCommittedOwnerProjection(
+      {
+        client: logical,
+        effect: (name, value) => committed.push({ name, value: captureValue(value) })
+      },
+      { ...itemState, ...selection, ...mutation }
+    )
     return useMobileTasksLinearItemActions(
       useMobileTasksGithubReplyMergeActions(
         useMobileTasksGithubCheckFileActions(
@@ -294,6 +304,7 @@ async function mount() {
     a,
     b,
     client,
+    committed,
     read: () => current,
     select: async (selected: typeof a | null) => act(async () => select(selected)),
     providerPages,
@@ -395,6 +406,19 @@ it('suppresses stale publication after a same-client disconnect/reconnect while 
   expect(f.read().detailPayload).toMatchObject({ body: 'fork' })
   expect(f.read().mutatingStatus).toBe(false)
   expect(f.client.requests).toHaveLength(1)
+  expect(
+    f.committed.filter(({ name }) => name === 'mutatingStatus').map(({ value }) => value)
+  ).toEqual([false, true, false])
+  await act(async () => {
+    pending = f.read().updateGitHubPullRequestMetadata(f.a, { body: 'fresh invocation' })
+  })
+  await f.answer({ ok: true })
+  await pending
+  expect(f.client.requests).toHaveLength(2)
+  expect(f.read().detailPayload).toMatchObject({ body: 'fresh invocation' })
+  expect(
+    f.committed.filter(({ name }) => name === 'mutatingStatus').map(({ value }) => value)
+  ).toEqual([false, true, false, true, false])
 })
 
 it('keeps the established old PR state route exact while refusing only an unsupported generic issue action', async () => {
@@ -666,7 +690,11 @@ it('the actual Project detail reset retires a task file and X→Y Project file b
   await act(async () => {
     task = f.read().toggleGitHubFileExpansion(f.a, file)
   })
+  const loading = () =>
+    f.committed.filter(({ name }) => name === 'prFileLoadingPath').map(({ value }) => value)
+  expect(loading()).toEqual([{ $rpc: 'null' }, 'same.ts'])
   await f.selectProject(projectRow('X'))
+  expect(loading()).toEqual([{ $rpc: 'null' }, 'same.ts', { $rpc: 'null' }])
   await f.answer(
     {
       ok: true,
@@ -686,6 +714,7 @@ it('the actual Project detail reset retires a task file and X→Y Project file b
   await f.answer({ original: 'task', modified: 'task' }, 0)
   await task
   expect(f.read().prFileLoadingPath).toBe('same.ts')
+  expect(loading()).toEqual([{ $rpc: 'null' }, 'same.ts', { $rpc: 'null' }, 'same.ts'])
   await f.selectProject(projectRow('Y'))
   await f.answer(
     {
@@ -706,12 +735,29 @@ it('the actual Project detail reset retires a task file and X→Y Project file b
   await f.answer({ original: 'X', modified: 'X' }, 2)
   await x
   expect(f.read()).toMatchObject({ prFileContents: {}, prFileLoadingPath: 'same.ts' })
+  const beforeY = structuredClone(f.committed)
+  expect(loading()).toEqual([
+    { $rpc: 'null' },
+    'same.ts',
+    { $rpc: 'null' },
+    'same.ts',
+    { $rpc: 'null' },
+    'same.ts'
+  ])
   await f.answer({ original: 'Y', modified: 'Y' }, 4)
   await y
   expect(f.read()).toMatchObject({
     prFileContents: { 'same.ts': { modified: 'Y' } },
     prFileLoadingPath: null
   })
+  expect(loading().at(-1)).toEqual({ $rpc: 'null' })
+  expect(beforeY.filter(({ name }) => name === 'prFileContents')).toEqual([
+    { name: 'prFileContents', value: {} }
+  ])
+  expect(f.committed.filter(({ name }) => name === 'prFileContents')).toEqual([
+    { name: 'prFileContents', value: {} },
+    { name: 'prFileContents', value: { 'same.ts': { original: 'Y', modified: 'Y' } } }
+  ])
 })
 
 it('terminal mutation releases while its real list refresh is pending, and obsolete refresh cannot replace a newer query', async () => {

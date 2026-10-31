@@ -1,10 +1,16 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type * as RuntimeRpcClient from '@/runtime/runtime-rpc-client'
 import {
   lookupGitHubWorkItemDetailsForSource,
   lookupGitHubWorkItemByOwnerRepoForSource
 } from './github-work-item-source-lookup'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import {
+  clearRuntimeEnvironmentConnectionGenerations,
+  setRuntimeEnvironmentConnectionGenerationForTests
+} from '@/store/slices/runtime-status-connection-generation'
+import type { GitHubWorkItemDetails } from '../../../shared/github/work-item-types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 
 vi.mock('@/runtime/runtime-rpc-client', async () => {
@@ -26,6 +32,8 @@ const runtimeSourceContext: TaskSourceContext = {
 
 describe('GitHub source lookup routing', () => {
   beforeEach(() => {
+    replaceRuntimeEnvironmentRevisions([{ id: 'env-1', createdAt: 100, pairingRevision: 701 }])
+    setRuntimeEnvironmentConnectionGenerationForTests('env-1', 4)
     vi.mocked(callRuntimeRpc).mockReset()
     vi.stubGlobal('window', {
       api: {
@@ -35,6 +43,12 @@ describe('GitHub source lookup routing', () => {
         }
       }
     })
+  })
+
+  afterEach(() => {
+    replaceRuntimeEnvironmentRevisions([])
+    clearRuntimeEnvironmentConnectionGenerations()
+    vi.unstubAllGlobals()
   })
 
   it.each(['local', 'ssh:build-box'] as const)(
@@ -93,28 +107,90 @@ describe('GitHub source lookup routing', () => {
     expect(window.api.gh.workItemByOwnerRepo).not.toHaveBeenCalled()
   })
 
-  it('routes runtime-owned GitHub details through runtime RPC', async () => {
-    vi.mocked(callRuntimeRpc).mockResolvedValue(null)
-
-    await expect(
-      lookupGitHubWorkItemDetailsForSource({
+  it.each([
+    { capable: true, returned: 'matching' },
+    { capable: false, returned: 'matching' },
+    { capable: false, returned: 'matching-no-runtime' },
+    { capable: false, returned: 'upstream' },
+    { capable: false, returned: 'wrong-kind' },
+    { capable: false, returned: 'null' }
+  ])(
+    'uses actual authority and validates the full addressed read: %j',
+    async ({ capable, returned }) => {
+      const ownerRepo = { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
+      const details: GitHubWorkItemDetails | null =
+        returned === 'null'
+          ? null
+          : {
+              item: {
+                id: 'issue:42',
+                number: 42,
+                type: returned === 'wrong-kind' ? 'pr' : 'issue',
+                title: 'selected issue',
+                url: `https://github.com/${returned === 'upstream' ? 'upstream' : 'fork-owner'}/widgets/${returned === 'wrong-kind' ? 'pull' : 'issues'}/42`,
+                labels: [],
+                author: null,
+                state: 'open',
+                updatedAt: ''
+              },
+              body: 'provider body',
+              comments: []
+            }
+      const runtimeId = capable
+        ? 'capable-runtime'
+        : returned === 'matching-no-runtime'
+          ? undefined
+          : 'legacy-runtime'
+      vi.mocked(callRuntimeRpc).mockImplementation(async (_target, method) => {
+        if (method === 'status.get') {
+          return {
+            ...(runtimeId ? { runtimeId } : {}),
+            ...(capable ? { capabilities: ['github.exact-work-item-target.v1'] } : {})
+          }
+        }
+        if (method === 'github.workItemDetails') {
+          return details
+        }
+        throw new Error(`Unexpected runtime method ${method}`)
+      })
+      const request = lookupGitHubWorkItemDetailsForSource({
         repoPath: '/home/runtime/app',
         repoId: 'renderer-repo',
         sourceContext: runtimeSourceContext,
         number: 42,
         type: 'issue',
-        ownerRepo: { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
+        ownerRepo
       })
-    ).rejects.toThrow('fork-owner/widgets#42')
-
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      { kind: 'environment', environmentId: 'env-1' },
-      'github.workItemDetails',
-      { repo: 'runtime-repo', number: 42, type: 'issue' },
-      { timeoutMs: 30_000 }
-    )
-    expect(window.api.gh.workItemDetails).not.toHaveBeenCalled()
-  })
+      await (returned.startsWith('matching')
+        ? expect(request).resolves.toEqual(details)
+        : expect(request).rejects.toThrow('fork-owner/widgets#42'))
+      expect(callRuntimeRpc).toHaveBeenCalledTimes(2)
+      expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+        1,
+        { kind: 'environment', environmentId: 'env-1' },
+        'status.get',
+        undefined,
+        {
+          timeoutMs: 15_000,
+          expectedEnvironmentPairingRevision: 701,
+          beforeSend: expect.any(Function)
+        }
+      )
+      expect(callRuntimeRpc).toHaveBeenNthCalledWith(
+        2,
+        { kind: 'environment', environmentId: 'env-1' },
+        'github.workItemDetails',
+        { repo: 'runtime-repo', number: 42, type: 'issue', ...(capable ? { ownerRepo } : {}) },
+        {
+          timeoutMs: 30_000,
+          expectedEnvironmentPairingRevision: 701,
+          expectedEnvironmentRuntimeId: runtimeId,
+          beforeSend: expect.any(Function)
+        }
+      )
+      expect(window.api.gh.workItemDetails).not.toHaveBeenCalled()
+    }
+  )
 
   it('uses the renderer repo id for runtime details when the source has no repo id', async () => {
     vi.mocked(callRuntimeRpc).mockResolvedValue(null)
@@ -131,8 +207,15 @@ describe('GitHub source lookup routing', () => {
       { kind: 'environment', environmentId: 'env-1' },
       'github.workItemDetails',
       { repo: 'renderer-repo', number: 42, type: 'pr' },
-      { timeoutMs: 30_000 }
+      {
+        timeoutMs: 30_000,
+        expectedEnvironmentPairingRevision: 701,
+        expectedEnvironmentRuntimeId: undefined,
+        beforeSend: expect.any(Function)
+      }
     )
+    expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
+    expect(window.api.gh.workItemDetails).not.toHaveBeenCalled()
   })
 
   it('keeps local GitHub details on Electron IPC with source context', async () => {
