@@ -23,7 +23,7 @@ vi.mock('./AgentKanbanCard', () => ({
     card: DashboardCard
     repoIcon?: RepoIcon | null
     now: number
-    onOpenTerminal: (card: DashboardCard) => void
+    onOpenTerminal: (card: DashboardCard, event: MouseEvent) => void
   }) => (
     <div
       data-testid="card"
@@ -31,7 +31,7 @@ vi.mock('./AgentKanbanCard', () => ({
       data-unseen={card.unseen}
       data-now={now}
       data-repo-icon={repoIcon === null ? 'none' : JSON.stringify(repoIcon)}
-      onClick={() => onOpenTerminal(card)}
+      onClick={(event) => onOpenTerminal(card, event.nativeEvent)}
     >
       {card.worktreeName}
     </div>
@@ -328,6 +328,39 @@ describe('AgentKanbanBoard', () => {
     rerender(<AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [] }} />)
     expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
     expect(screen.getByTestId('terminal-dialog').dataset.ptyId).toBeUndefined()
+  })
+
+  it('reveals the worktree directly on Mod+click and skips the preview dialog (#36250)', () => {
+    const revealAgent = vi.fn()
+    const agent = card({
+      paneKey: 'pk-mod',
+      bucket: 'done',
+      unseen: true,
+      repoId: 'repo-1',
+      worktreeId: 'wt-1',
+      tabId: 'tab-1',
+      leafId: 'leaf-1'
+    })
+    render(
+      <AgentKanbanBoard snapshot={{ generatedAt: 1, cards: [agent] }} onRevealAgent={revealAgent} />
+    )
+    const mac = navigator.userAgent.includes('Mac')
+
+    fireEvent.click(screen.getByTestId('card'), { metaKey: mac, ctrlKey: !mac })
+    expect(revealAgent).toHaveBeenCalledWith({
+      repoId: 'repo-1',
+      worktreeId: 'wt-1',
+      executionHostId: agent.executionHostId,
+      tabId: 'tab-1',
+      leafId: 'leaf-1'
+    })
+    expect(ackAgent.mock.calls).toEqual([['pk-mod', 'explicit']])
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('false')
+
+    // Plain click keeps the preview flow.
+    fireEvent.click(screen.getByTestId('card'))
+    expect(revealAgent).toHaveBeenCalledTimes(1)
+    expect(screen.getByTestId('terminal-dialog').dataset.open).toBe('true')
   })
 
   it('relays a seen-ack when a dialog opens and when the open agent changes state', () => {
