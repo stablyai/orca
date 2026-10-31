@@ -10,7 +10,10 @@ import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { expect, it, vi } from 'vitest'
-import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
+import {
+  agentSessionJournalProviderHandle,
+  claudeProviderHandle
+} from '../../../shared/agent-session-provider-handle-encoding'
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import { holdUnsentSends } from './journal-unsent-send-hold'
 import {
@@ -430,7 +433,7 @@ it.each(['legacy', 'observed'] as const)(
             clientMessageId: id,
             payloadFingerprint: id,
             body: message(id),
-            providerHandle: identity.providerHandle,
+            providerHandle: agentSessionJournalProviderHandle(identity),
             handoverRecorded: true,
             origin: 'client',
             options: { effort: 'high' }
@@ -567,7 +570,7 @@ it('retries partial keeps from committed facts and carries rank moves on the fir
 })
 
 it.each([10, 100])(
-  'normalizes old staged/restore aliases without promoting foreign/null comparison N=%i',
+  'indexes the initial legacy writer shape without promoting foreign/null comparison N=%i',
   async (n) => {
     const root = await mkdtemp(join(tmpdir(), 'orca-legacy-alias-'))
     const journals = createTrackedJournalOpener()
@@ -614,27 +617,18 @@ it.each([10, 100])(
       queue('N', null)
       database.transaction((db) => writeCommandReceiptTestRecord(db, identity.sessionId))
       const ids = Array.from({ length: n }, (_, i) => `M${i + 1}`)
+      for (let i = 0; i < n; i++) {
+        queue(`ordinary-${i}`, { epoch, sequence: seq })
+      }
+      queue('D', { epoch: 'original-foreign', sequence: 1 })
       for (const id of ids) {
-        for (let i = 0; i < n; i++) {
-          queue(`ordinary-${i}`, { epoch, sequence: seq })
-        }
-        if (id !== 'M2') {
-          queue('D', { epoch, sequence: seq })
-        } else {
-          insertTestJournalRow(database.db, identity.sessionId, {
-            ...base(),
-            kind: 'queue',
-            messageId: 'D',
-            change: { op: 'withdrawn' }
-          })
-        }
         const target: JournalRow = {
           ...base(),
           kind: 'submission',
           clientMessageId: id,
           payloadFingerprint: id,
           body: message(id),
-          providerHandle: identity.providerHandle,
+          providerHandle: agentSessionJournalProviderHandle(identity),
           handoverRecorded: true,
           origin: 'client'
         }
@@ -658,10 +652,6 @@ it.each([10, 100])(
           )
         }
       }
-      for (let i = 0; i < n; i++) {
-        queue(`ordinary-${i}`, { epoch: 'restored-canonical', sequence: 1 })
-      }
-      queue('D', { epoch: 'restored-canonical', sequence: 1 })
       queue('later-F', { epoch: 'original-foreign', sequence: 1 })
       journal = await journals.open({ identity, stateDirectory: root })
       const check = (state: JournalReducerState) => {
@@ -697,22 +687,21 @@ it.each([10, 100])(
             JSON.parse(row.rowJson)
           )
           expect(rows.length).toBeLessThanOrEqual(2 * n + 12)
-          const aliases = journal.inputOrder
+          const baseline = journal.inputOrder
             .replacementLineage(
               new Set(journal.queuedMessages.list().map((card) => card.messageId))
             )
-            .cards.reduce((sum, card) => sum + card.aliases.length, 0)
-          // Each ordinary entry needs its source-current alias and final foreign canonical alias.
-          expect(aliases).toBeLessThanOrEqual(2 * n + 10)
+            .cards.filter((card) => card.baseline !== undefined).length
+          expect(baseline).toBeLessThanOrEqual(n + 6)
           for (const id of ids) {
             journal.inputOrder.predecessors(journal.queuedMessages.displayState(), id)
             replay.state.inputOrder.predecessors(replay.state, id)
           }
           expect(domainQueries).toHaveBeenCalledTimes(2 * n)
           // Each independent fold adds at most one current command-witness transition beyond the normalized table. A safe-integer interval has <=106 canonical nodes.
-          expect(domainSets.mock.calls.length).toBeLessThanOrEqual(2 * (aliases + 1))
+          expect(domainSets.mock.calls.length).toBeLessThanOrEqual(4 * (n + 6) + 2 * rows.length)
           expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
-            106 * domainSets.mock.calls.length + 8 * rows.length
+            54 * domainSets.mock.calls.length + 8 * rows.length
           )
           console.info(
             'legacy-normalized-output',
@@ -720,7 +709,7 @@ it.each([10, 100])(
               n,
               pass,
               rows: rows.length,
-              aliases,
+              baseline,
               domainSets: domainSets.mock.calls.length,
               domainQueries: domainQueries.mock.calls.length,
               indexSets: indexSets.mock.calls.length
@@ -736,7 +725,7 @@ it.each([10, 100])(
       // One finite-rank move per current card and one keep per input, each touching at most its two scalar aliases.
       expect(domainSets.mock.calls.length).toBeLessThanOrEqual(16 * (n + 6))
       expect(indexSets.mock.calls.length).toBeLessThanOrEqual(
-        106 * domainSets.mock.calls.length + 16 * (n + 6)
+        54 * domainSets.mock.calls.length + 16 * (n + 6)
       )
       console.info(
         'legacy-recovery-index',
@@ -764,7 +753,7 @@ it.each([10, 100])(
       expect(journal.inputOrder['places'].size).toBe(0)
       expect(journal.inputOrder['witnesses'].size).toBe(0)
       expect(
-        [...journal.inputOrder.lineage.cards.values()].every((card) => card.aliases.length <= 1)
+        [...journal.inputOrder.lineage.cards.values()].every((card) => card.baseline === undefined)
       ).toBe(true)
     } finally {
       domainSets.mockRestore()

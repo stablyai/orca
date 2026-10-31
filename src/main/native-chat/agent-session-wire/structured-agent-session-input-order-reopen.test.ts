@@ -213,6 +213,7 @@ it.each([false, true])(
   }
 )
 
+// Two host restarts/replacements and four ordered handoffs need the extended budget.
 it('keeps an earlier-process recovery identity through two adoptions after both writes fail, then delivers the observed C,N,M place', async () => {
   const rig = await createQueuedMessageTestRig({
     restartable: true,

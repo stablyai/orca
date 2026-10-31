@@ -1,6 +1,7 @@
 import type { JournalInputContext } from './journal-input-lineage'
 import { journalItemEchoFields, type JournalItemEcho } from './journal-item-echo'
 import type {
+  AgentJournalSubmission,
   AgentJournalItemBody,
   AgentJournalItemIdentity,
   AgentJournalProducerLinkage,
@@ -281,13 +282,14 @@ export function buildJournalTombstoneRow(input: {
 }
 
 export function buildJournalSubmissionRow(
-  input: JournalSubmissionInput & {
-    state: JournalReducerState
-    providerHandle: AgentSessionJournalProviderHandle
-    seq: number
-    ts: number
-    inputOrderContext?: JournalInputContext
-  }
+  input: Omit<JournalSubmissionInput, 'source'> &
+    Pick<AgentJournalSubmission, 'source'> & {
+      state: JournalReducerState
+      providerHandle: AgentSessionJournalProviderHandle
+      seq: number
+      ts: number
+      inputOrderContext?: JournalInputContext
+    }
 ): JournalSubmissionRow {
   return {
     kind: 'submission',
