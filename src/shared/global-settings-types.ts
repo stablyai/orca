@@ -146,6 +146,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   windowBackgroundBlur?: boolean
   /** Windows-only: close (X) hides to tray instead of quitting; the tray icon is always present regardless. */
   minimizeToTrayOnClose?: boolean
+  /** Quit stops local daemon terminal sessions instead of keeping them for warm reattach; update and relaunch quits keep them. */
+  stopTerminalSessionsOnQuit?: boolean
   /** macOS: toggles the additive menu-bar entry (Orca survives last-window close); doesn't change Dock behavior. */
   showMenuBarIcon?: boolean
   /** Windows convention: right-click pastes; macOS/Linux keep the context menu. */

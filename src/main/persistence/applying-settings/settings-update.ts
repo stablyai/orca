@@ -70,6 +70,9 @@ export function updateSettings(
   if ('minimizeToTrayOnClose' in updates) {
     sanitizedUpdates.minimizeToTrayOnClose = updates.minimizeToTrayOnClose === true
   }
+  if ('stopTerminalSessionsOnQuit' in updates) {
+    sanitizedUpdates.stopTerminalSessionsOnQuit = updates.stopTerminalSessionsOnQuit === true
+  }
   if ('showMenuBarIcon' in updates) {
     sanitizedUpdates.showMenuBarIcon = updates.showMenuBarIcon === true
   }

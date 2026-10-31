@@ -5,7 +5,8 @@ import { closeAllWatchers } from '../ipc/filesystem/watchers/filesystem-watcher-
 import { disposeWorktreeBaseDirectoryWatchers } from '../ipc/worktree-base-directory-watcher'
 import { stopFolderRepoGitUpgradeWatch } from '../ipc/folder-repo-git-upgrade'
 import { killAllPty } from '../ipc/pty/kill-all'
-import { disconnectDaemon, shutdownDaemon } from '../daemon/daemon-provider-state'
+import { shutdownDaemon } from '../daemon/daemon-provider-state'
+import { disconnectDaemonOnQuit } from './quit-terminal-session-teardown'
 import { beginSshShutdown } from '../ipc/ssh/ssh-shutdown-drain'
 import { agentHookServer } from '../agent-hooks/server'
 import { wslHookRelayManager } from '../agent-hooks/wsl-hook-relay-manager'
@@ -261,7 +262,14 @@ function installWillQuitHandler(): void {
       rpcStopAndClear
     ]).then(() => state.runtime?.closeNotificationDismissals())
     // Normal quits preserve the detached daemon for warm reattach; dev-parent death leaves its temporary profile ownerless.
-    const daemonTeardown = isDevParentShutdownRequested() ? shutdownDaemon() : disconnectDaemon()
+    const daemonTeardown = isDevParentShutdownRequested()
+      ? shutdownDaemon()
+      : disconnectDaemonOnQuit({
+          settings: finalStore?.getSettings(),
+          isUpdateQuit: updateQuitInProgress,
+          isServeMode: state.isServeMode,
+          finalSave: storeFlush
+        })
     // Bound unsettled transports and final writes so quit cannot hang (#9447). Failures still exit; atomic swaps preserve old files if the final debounce is lost.
     settleTeardownWithinDeadline([
       { name: 'daemon', promise: daemonTeardown },

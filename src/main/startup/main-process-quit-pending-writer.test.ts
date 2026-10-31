@@ -1,6 +1,7 @@
 import { EventEmitter } from 'node:events'
 import { afterEach, expect, it, vi } from 'vitest'
 import { WILL_QUIT_TEARDOWN_DEADLINE_MS } from '../quit-teardown-deadline'
+import type { DaemonKillAllResult } from '../ipc/pty/pty-management'
 
 const settled = () => vi.fn(async () => {})
 const idle = () => vi.fn()
@@ -8,6 +9,14 @@ const stopAgentHookServer = idle()
 const stopStructuredAgentSessionRuntime = settled()
 const beginSshShutdown = settled()
 const killAllPty = idle()
+const disconnectDaemon = settled()
+const killAllDaemonSessions = vi.fn<() => Promise<DaemonKillAllResult>>(async () => ({
+  killedCount: 0,
+  remainingCount: 0,
+  killedSessionIds: []
+}))
+const isQuittingForUpdate = vi.fn(() => false)
+const isAppRelaunchRequested = vi.fn(() => false)
 /** Final-save calls seen by the first microtask after the SSH shutdown began. */
 let flushesByNextMicrotask = -1
 
@@ -17,7 +26,9 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../ipc/worktree-base-directory-watcher': { disposeWorktreeBaseDirectoryWatchers: settled() },
   '../ipc/folder-repo-git-upgrade': { stopFolderRepoGitUpgradeWatch: idle() },
   '../ipc/pty/kill-all': { killAllPty },
-  '../daemon/daemon-provider-state': { disconnectDaemon: settled(), shutdownDaemon: settled() },
+  '../ipc/pty/pty-management': { killAllDaemonSessions },
+  '../daemon/daemon-provider-state': { disconnectDaemon, shutdownDaemon: settled() },
+  '../app-relaunch': { isAppRelaunchRequested },
   '../ipc/ssh/ssh-shutdown-drain': { beginSshShutdown },
   './main-process-connector-startup': { desktopConnectorCloud: () => null },
   '../agent-hooks/server': { agentHookServer: { stop: stopAgentHookServer } },
@@ -47,7 +58,7 @@ const dependencies: Record<string, Record<string, unknown>> = {
   '../tray/system-tray': { destroySystemTray: idle() },
   '../telemetry/client': { shutdownTelemetry: settled() },
   '../observability': { shutdownObservability: settled() },
-  '../updater': { isQuittingForUpdate: vi.fn(() => false) },
+  '../updater': { isQuittingForUpdate },
   '../updater-lifecycle-diagnostics': { recordUpdaterLifecycle: idle() },
   '../macos-tcc-prompt-notice': { stopTccPromptNotice: idle() },
   '../terminal-history-gc': { cancelHistoryGc: idle() },
@@ -57,6 +68,8 @@ const dependencies: Record<string, Record<string, unknown>> = {
 }
 
 afterEach(() => {
+  isQuittingForUpdate.mockReturnValue(false)
+  isAppRelaunchRequested.mockReturnValue(false)
   vi.doUnmock('electron')
   vi.doUnmock('./main-process-state')
   for (const moduleName of Object.keys(dependencies)) {
@@ -69,10 +82,13 @@ afterEach(() => {
 
 async function startQuit(
   flushFinalOrThrowAsync: () => Promise<void>,
-  services: Record<string, unknown> = {}
+  services: Record<string, unknown> = {},
+  settings: { stopTerminalSessionsOnQuit?: boolean } = {}
 ) {
   beginSshShutdown.mockClear()
   killAllPty.mockClear()
+  disconnectDaemon.mockClear()
+  killAllDaemonSessions.mockClear()
   flushesByNextMicrotask = -1
   vi.resetModules()
   vi.useFakeTimers()
@@ -80,7 +96,8 @@ async function startQuit(
   const admission = { release: vi.fn() }
   const store = {
     flushFinalOrThrowAsync: vi.fn(flushFinalOrThrowAsync),
-    freezeWritesAsync: settled()
+    freezeWritesAsync: settled(),
+    getSettings: () => settings
   }
   beginSshShutdown.mockImplementation(async () => {
     void Promise.resolve().then(() => {
@@ -218,5 +235,54 @@ it.each([
       pendingTeardowns: ['notification-dismissals']
     })
     expect(app.quit).toHaveBeenCalledOnce()
+  }
+)
+
+// Exits from killed sessions must land after the frozen save, or next launch would drop their tabs.
+it('stops terminal sessions after the final save freezes, then disconnects the daemon', async () => {
+  const finalSave = Promise.withResolvers<void>()
+  const { app, store } = await startQuit(
+    () => finalSave.promise,
+    {},
+    { stopTerminalSessionsOnQuit: true }
+  )
+  await vi.advanceTimersByTimeAsync(0)
+  expect(killAllDaemonSessions).not.toHaveBeenCalled()
+  expect(disconnectDaemon).not.toHaveBeenCalled()
+  finalSave.resolve()
+  await vi.advanceTimersByTimeAsync(0)
+  expect(killAllDaemonSessions).toHaveBeenCalledOnce()
+  expect(store.freezeWritesAsync.mock.invocationCallOrder[0]).toBeLessThan(
+    killAllDaemonSessions.mock.invocationCallOrder[0]!
+  )
+  expect(killAllDaemonSessions.mock.invocationCallOrder[0]).toBeLessThan(
+    disconnectDaemon.mock.invocationCallOrder[0]!
+  )
+  expect(app.quit).toHaveBeenCalledOnce()
+})
+
+it('still disconnects the daemon when stopping sessions on quit fails', async () => {
+  killAllDaemonSessions.mockRejectedValueOnce(new Error('daemon unreachable'))
+  vi.spyOn(console, 'error').mockImplementation(() => {})
+  const { app } = await startQuit(async () => {}, {}, { stopTerminalSessionsOnQuit: true })
+  await vi.advanceTimersByTimeAsync(0)
+  expect(disconnectDaemon).toHaveBeenCalledOnce()
+  expect(app.quit).toHaveBeenCalledOnce()
+})
+
+it.each([
+  { reason: 'the setting is off', enabled: false },
+  { reason: 'an update installs', updating: true },
+  { reason: 'Orca relaunches', relaunching: true },
+  { reason: 'a serve host quits', isServeMode: true }
+])(
+  'keeps terminal sessions for warm reattach when $reason',
+  async ({ enabled = true, updating = false, relaunching = false, isServeMode = false }) => {
+    isQuittingForUpdate.mockReturnValue(updating)
+    isAppRelaunchRequested.mockReturnValue(relaunching)
+    await startQuit(async () => {}, { isServeMode }, { stopTerminalSessionsOnQuit: enabled })
+    await vi.advanceTimersByTimeAsync(0)
+    expect(killAllDaemonSessions).not.toHaveBeenCalled()
+    expect(disconnectDaemon).toHaveBeenCalledOnce()
   }
 )

@@ -126,6 +126,7 @@ export function normalizeLoadedGlobalSettings(
     mobilePairingCustomAddresses,
     machineName: normalizeMachineName(parsed.settings?.machineName),
     minimizeToTrayOnClose: parsed.settings?.minimizeToTrayOnClose === true,
+    stopTerminalSessionsOnQuit: parsed.settings?.stopTerminalSessionsOnQuit === true,
     // Default-on values round-trip off-platform; macOS consumers gate the actual effect.
     showMenuBarIcon: parsed.settings?.showMenuBarIcon !== false,
     ...migratedPortugueseUiLanguage,

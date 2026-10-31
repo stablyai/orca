@@ -11263,7 +11263,11 @@
             "454df22a5e": "fish",
             "ddd5efe113": "shell",
             "3de504994c": "Shell and arguments used for new local interactive terminal panes",
-            "1733ccd3e9": "Terminal shell"
+            "1733ccd3e9": "Terminal shell",
+            "stop_sessions_on_quit": "Stop terminal sessions when Orca quits",
+            "stop_sessions_on_quit_description": "Quitting stops local terminals, including running agents, instead of keeping them in the background. Tabs reopen with new shells and supported agents resume. Updates and restarts keep sessions.",
+            "quit": "quit",
+            "exit": "exit"
           },
           "windows": {
             "search": {
