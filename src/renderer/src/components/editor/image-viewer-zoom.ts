@@ -1,7 +1,4 @@
-export const MIN_IMAGE_VIEWER_ZOOM = 0.25
-export const MAX_IMAGE_VIEWER_ZOOM = 8
 export const IMAGE_VIEWER_ZOOM_STEP = 1.25
-export const IMAGE_VIEWER_SURFACE_PADDING = 16
 
 const DOM_DELTA_LINE = 1
 const DOM_DELTA_PAGE = 2

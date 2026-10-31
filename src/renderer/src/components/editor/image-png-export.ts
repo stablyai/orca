@@ -1,5 +1,5 @@
 import { CLIPBOARD_IMAGE_MAX_PIXELS } from '../../../../shared/clipboard-image'
-import type { PanZoomSize } from './pan-zoom-view'
+import type { PanZoomSize } from '../../../../shared/pan-zoom-view'
 
 const PREFERRED_PIXEL_RATIO = 2
 // Chromium returns a blank canvas when a side exceeds this.
