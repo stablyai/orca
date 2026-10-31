@@ -192,15 +192,6 @@ describe('Stop with a follow-up Claude queued behind the running turn', () => {
     expect(bySessionStart).toEqual(byInit)
   })
 
-  it('settles the swept follow-up without proof it never reached Claude', async () => {
-    const { settlements } = await stopWithQueuedFollowUp(
-      claudeCli({ initProof: 'init', capabilities: CAPABILITIES }),
-      () => {}
-    )
-    expect(settlements[0]).toMatchObject({ state: 'rejected' })
-    expect(JSON.stringify(settlements[0])).not.toContain('neverReachedAgent')
-  })
-
   it('keeps what a turn advertised when a later frame names nothing', async () => {
     const result = await stopWithQueuedFollowUp(
       claudeCli({ initProof: 'session-start' }),

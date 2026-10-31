@@ -549,7 +549,9 @@ describe('EditorFileTab icon', () => {
   const theme: ActivePluginIconTheme = {
     icons: { file: 3 },
     fileNames: {},
-    fileExtensions: { md: 7 }
+    fileExtensions: { md: 7 },
+    folderNames: {},
+    folderNamesExpanded: {}
   }
 
   beforeEach(() => {
