@@ -1,10 +1,7 @@
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { buildNativeChatProviderUpdate } from '../../../../shared/native-chat/native-chat-providers'
-import {
-  isNativeChatDefaultFor,
-  isNativeChatEnabled
-} from '../../../../shared/structured-native-chat-launch-route'
+import { nativeChatPreferenceFor } from '../../../../shared/structured-native-chat-launch-route'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { isTuiAgentEnabled } from '../../../../shared/tui-agent-selection'
 import { chatProviderAgents } from '@/lib/chat-provider-agents'
@@ -55,15 +52,13 @@ export function buildAgentOpensAs({
   updateSettings: (updates: Partial<GlobalSettings>) => void | Promise<void>
 }): AgentOpensAs | undefined {
   const offered =
-    isNativeChatEnabled(settings) &&
     chatProviderAgents(LOCAL_EXECUTION_HOST_ID, undefined).includes(agent) &&
     isTuiAgentEnabled(agent, settings.disabledTuiAgents)
   if (!offered) {
     return undefined
   }
   return {
-    // Matches launch: an unchosen agent opens as a chat.
-    value: isNativeChatDefaultFor(settings, agent) ? 'chat' : 'cli',
+    value: nativeChatPreferenceFor(settings, agent) ? 'chat' : 'cli',
     cliMissing: chatProgramHere && cliDetected === false,
     onChange: (value) =>
       void saveNativeChatProviderChoice({

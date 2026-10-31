@@ -7241,8 +7241,6 @@
             "toggleLabel": "切换新卡片样式"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "切换 Chat UI",
             "shellEnvNamesLabel": "从 shell 传递的变量",
             "shellEnvNamePlaceholder": "变量名",
             "shellEnvNameAdd": "添加",
@@ -7254,9 +7252,7 @@
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
-            "resumeToggleLabel": "重启后切换自动恢复",
-            "description": "在聊天 UI 中打开支持的新智能体。",
-            "copy": "支持的新智能体会在结构化聊天中打开。其他智能体在终端中打开；现有聊天仍可使用。"
+            "resumeToggleLabel": "重启后切换自动恢复"
           },
           "agentDashboard": {
             "title": "智能体仪表盘",
@@ -9410,19 +9406,6 @@
               "title": "新卡片样式",
               "worktree": "工作树",
               "worktrees": "工作树"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "原生",
-              "chat": "聊天",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "开放克劳德",
-              "omp": "奥普",
-              "terminal": "终端",
-              "agent": "智能体",
-              "description": "在聊天 UI 中打开支持的新智能体。"
             },
             "agentDashboard": {
               "title": "智能体仪表盘",
@@ -20235,18 +20218,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "新功能",
-      "title": "本机聊天已升级",
-      "intro": "受支持智能体的新聊天现在会在升级后的聊天视图中打开。要在聊天和 CLI 之间切换，请打开右侧边栏中的{{panel}}：",
-      "resumeInNativeChat": "{{action}}：在本机聊天中打开受支持的 CLI 对话。",
-      "resumeInCli": "{{action}}：将 Claude 或 Codex 聊天复制到新的 CLI 会话中。原始聊天保持不变。",
-      "gotIt": "知道了",
-      "leaveOff": "保持关闭",
-      "enableNow": "立即启用",
-      "enableError": "无法启用聊天模式。",
-      "manageInSettings": "在<link>设置 → 实验性</link>中管理 Chat UI。"
-    },
     "voice": {
       "demoPrompt": "查看此差异以了解边缘情况，并为您发现的任何内容添加测试。",
       "startDictation": "开始听写",

@@ -13,7 +13,6 @@ import {
 import { useAppStore } from '../store'
 import { isWebClientLocation } from '../lib/web-client-location'
 import type { OnboardingState } from '../../../shared/onboarding-state-types'
-import { isInNativeChatUpgradeTipAudience } from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
 
 export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 
@@ -30,15 +29,11 @@ export function useOnboardingAndFeatureTips() {
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const inNativeChatUpgradeTipAudience = useAppStore((s) =>
-    isInNativeChatUpgradeTipAudience(s.nativeChatUpgradeTipVariant)
-  )
   const contextualToursAutoEligible = useAppStore((s) => s.contextualToursAutoEligible)
   const actions = useAppStore(
     useShallow((s) => ({
       openModal: s.openModal,
       markFeatureTipsSeen: s.markFeatureTipsSeen,
-      setNativeChatUpgradeTipVariant: s.setNativeChatUpgradeTipVariant,
       setContextualToursAutoEligible: s.setContextualToursAutoEligible,
       setContextualToursOnboardingVisible: s.setContextualToursOnboardingVisible
     }))
@@ -93,37 +88,11 @@ export function useOnboardingAndFeatureTips() {
   }, [persistedUIReady])
 
   useEffect(() => {
-    if (!persistedUIReady) {
-      return
-    }
-
-    let cancelled = false
-    void window.api.onboarding
-      .getNativeChatUpgradeTipVariant()
-      .then((variant) => {
-        if (!cancelled) {
-          actions.setNativeChatUpgradeTipVariant(variant)
-        }
-      })
-      .catch(() => {
-        // Fail closed without holding other tips behind this read.
-        if (!cancelled) {
-          actions.setNativeChatUpgradeTipVariant('none')
-        }
-      })
-
-    return () => {
-      cancelled = true
-    }
-  }, [actions, persistedUIReady])
-
-  useEffect(() => {
     const featureTipsDecision = getFeatureTipsAppOpenDecision({
       activeModal,
       cliInstalled: featureTipCliInstalled,
       featureTipsSeenIds,
       featureInteractions,
-      inNativeChatUpgradeTipAudience,
       onboarding,
       persistedUIReady,
       promptedThisSession: promptedThisSessionRef.current,
@@ -160,7 +129,6 @@ export function useOnboardingAndFeatureTips() {
     featureTipCliInstalled,
     featureInteractions,
     featureTipsSeenIds,
-    inNativeChatUpgradeTipAudience,
     onboarding,
     persistedUIReady,
     settings

@@ -7241,8 +7241,6 @@
             "toggleLabel": "新規カードスタイルを切り替え"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Chat UI の切り替え",
             "shellEnvNamesLabel": "シェルから渡す変数",
             "shellEnvNamePlaceholder": "変数名",
             "shellEnvNameAdd": "追加",
@@ -7254,9 +7252,7 @@
             "shellEnvToggleLabel": "シェル環境の使用の切り替え",
             "resumeTitle": "再起動後に作業中のチャットを自動的に再開する",
             "resumeCopy": "Orca が終了するかアップデートをインストールすると、Orca が再度開かれたときに作業中だったチャットが自動的に再開されます。",
-            "resumeToggleLabel": "再起動後の自動再開の切り替え",
-            "description": "チャット UI でサポートされている新規 Agent を開きます。",
-            "copy": "サポートされている新規 Agent は構造化チャットで開きます。他の Agent はターミナルで開きます。既存のチャットは引き続き利用可能です。"
+            "resumeToggleLabel": "再起動後の自動再開の切り替え"
           },
           "agentDashboard": {
             "title": "Agent ダッシュボード",
@@ -9447,19 +9443,6 @@
               "title": "新規カードスタイル",
               "worktree": "ワークツリー",
               "worktrees": "ワークツリー"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "ネイティブ",
-              "chat": "チャット",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "ああ",
-              "terminal": "ターミナル",
-              "agent": "Agent",
-              "description": "チャット UI でサポートされている新規 Agent を開きます。"
             },
             "agentDashboard": {
               "title": "Agent ダッシュボード",
@@ -20234,18 +20217,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "新機能",
-      "title": "ネイティブチャットを刷新",
-      "intro": "対応 Agent の新しいチャットはアップグレード版のチャットビューで開きます。チャットと CLI の切り替えは右サイドバーの{{panel}}から:",
-      "resumeInNativeChat": "{{action}}: 対応する CLI の会話をネイティブチャットで開きます。",
-      "resumeInCli": "{{action}}: Claude/Codex のチャットを新しい CLI セッションに複製します。元のチャットは残ります。",
-      "gotIt": "OK",
-      "leaveOff": "オフのままにする",
-      "enableNow": "今すぐ有効にする",
-      "enableError": "チャットモードを有効にできませんでした。",
-      "manageInSettings": "<link>設定 → 実験的機能</link>で Chat UI を管理できます。"
-    },
     "voice": {
       "demoPrompt": "特殊なケースについてはこの差分を確認し、見つかったものについてはテストを追加してください。",
       "startDictation": "ディクテーションを開始する",

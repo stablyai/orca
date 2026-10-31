@@ -7701,10 +7701,6 @@
           "dd6f0a1d45": "寵物",
           "0e89a574ae": "右下角漂浮的動畫寵物。",
           "nativeChat": {
-            "title": "聊天介面",
-            "description": "在聊天介面中開啟支援此功能的新代理程式。",
-            "copy": "支援此功能的新代理程式會在結構化聊天介面中開啟。其他代理程式會在終端機中開啟；現有聊天仍可使用。",
-            "toggleLabel": "切換聊天介面",
             "resumeTitle": "重新啟動後自動恢復處理中的聊天",
             "resumeCopy": "當 Orca 結束或安裝更新時，原本正在處理任務的聊天會在重新開啟 Orca 後自動恢復。",
             "resumeToggleLabel": "切換重新啟動後自動恢復功能",
@@ -9916,19 +9912,6 @@
             "051203d37c": "寵物",
             "6b5a56ac35": "右下角漂浮的動畫寵物。",
             "87d99e634b": "寵物",
-            "nativeChat": {
-              "title": "聊天介面",
-              "description": "新啟動的代理程式若受支援，會以聊天介面開啟。",
-              "grok": "grok",
-              "native": "原生",
-              "chat": "聊天",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "終端機",
-              "agent": "代理程式"
-            },
             "agentDashboard": {
               "title": "代理程式儀表板",
               "description": "用於監控跨工作樹的代理程式的看板，支援視窗內或彈出視窗顯示。",
@@ -20082,18 +20065,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "新功能",
-      "title": "原生聊天已升級",
-      "leaveOff": "保持關閉",
-      "enableNow": "立即啟用",
-      "enableError": "無法啟用聊天模式。",
-      "intro": "受支援代理程式的新聊天現在會在升級後的聊天檢視中開啟。要在聊天和 CLI 之間切換，請開啟右側邊欄中的 {{panel}}：",
-      "resumeInNativeChat": "{{action}} 會在原生聊天中開啟受支援的 CLI 對話。",
-      "resumeInCli": "{{action}} 會將 Claude 或 Codex 聊天複製到新的 CLI 工作階段中。原始聊天保持不變。",
-      "gotIt": "知道了",
-      "manageInSettings": "在<link>設定 → 實驗性</link>中管理聊天介面。"
-    },
     "voice": {
       "demoPrompt": "審查這份差異的邊界情況，並為發現的問題新增測試。",
       "startDictation": "開始聽寫",

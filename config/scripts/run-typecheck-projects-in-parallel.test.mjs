@@ -297,7 +297,7 @@ describe('local and CI compiler selection', () => {
       memoryBytes: CI_RUNNER.totalBytes,
       parallelism: 4
     })
-    expect(batches.map((batch) => batch.length)).toEqual([2, 2])
+    expect(batches.map((batch) => batch.length)).toEqual([2, 2, 1])
     expect(batches.flat().map((project) => project.config)).toEqual(
       TYPECHECK_PROJECTS.map((project) => project.config)
     )

@@ -135,7 +135,6 @@ describe('suppressDevEducationForStore', () => {
     })
     expect(state.ui.featureTipsSeenIds).toEqual([
       'voice-dictation',
-      'native-chat-upgrade',
       'agent-session-search',
       'orca-cli',
       'cmd-j-palette'

@@ -7864,10 +7864,6 @@
           "dd6f0a1d45": "Evcil Hayvan",
           "0e89a574ae": "Sağ alt köşede yüzen animasyonlu evcil hayvan.",
           "nativeChat": {
-            "title": "Sohbet Arayüzü",
-            "description": "Desteklenen yeni ajanları Sohbet Arayüzünde açın.",
-            "copy": "Desteklenen yeni ajanlar yapılandırılmış sohbette açılır. Diğer ajanlar terminalde açılır; mevcut sohbetlere erişebilirsiniz.",
-            "toggleLabel": "Sohbet Arayüzünü aç/kapat",
             "resumeTitle": "Yeniden başlatma sonrasında çalışan sohbetlere otomatik devam et",
             "resumeCopy": "Orca kapatıldığında veya güncelleme yüklediğinde, çalışmakta olan sohbetlere Orca yeniden açıldığında otomatik olarak devam edilir.",
             "resumeToggleLabel": "Yeniden başlatma sonrasında otomatik devam etmeyi aç/kapat",
@@ -10079,19 +10075,6 @@
             "051203d37c": "evcil hayvan",
             "6b5a56ac35": "Sağ alt köşede yüzen animasyonlu evcil hayvan.",
             "87d99e634b": "Evcil Hayvan",
-            "nativeChat": {
-              "title": "Sohbet Arayüzü",
-              "description": "Desteklenen yeni ajanları Sohbet Arayüzünde açın.",
-              "grok": "grok",
-              "native": "yerel",
-              "chat": "sohbet",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "ajan"
-            },
             "agentDashboard": {
               "title": "Ajan Panosu",
               "description": "Worktree'ler genelinde ajanları izlemek için pencere içinde veya ayrı pencerede açılan kanban panosu.",
@@ -20380,18 +20363,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "Yeni",
-      "title": "Yerleşik sohbet yenilendi",
-      "leaveOff": "Kapalı bırak",
-      "enableNow": "Şimdi etkinleştir",
-      "enableError": "Sohbet modu etkinleştirilemedi.",
-      "intro": "Desteklenen ajanlarla yeni sohbetler artık yenilenmiş sohbet görünümünde açılıyor. Sohbet ve CLI arasında geçiş yapmak için sağ kenar çubuğundaki {{panel}} panelini açın:",
-      "resumeInNativeChat": "{{action}}, desteklenen bir CLI sohbetini yerleşik sohbette açar.",
-      "resumeInCli": "{{action}}, bir Claude veya Codex sohbetini yeni bir CLI oturumuna kopyalar. Asıl sohbet olduğu gibi kalır.",
-      "gotIt": "Anladım",
-      "manageInSettings": "Sohbet Arayüzünü <link>Ayarlar → Deneysel</link> bölümünde yönetin."
-    },
     "voice": {
       "demoPrompt": "Bu diff'i uç durumlar için inceleyin ve bulduğunuz her şey için test ekleyin.",
       "startDictation": "Sesli yazmayı başlat",

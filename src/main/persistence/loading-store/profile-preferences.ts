@@ -7,11 +7,6 @@ import type { PersistedState } from '../../../shared/persisted-state-types'
 import { getDefaultOnboardingState } from '../../../shared/onboarding-defaults'
 import type { FeatureInteractionId } from '../../../shared/feature-interactions'
 import {
-  nativeChatUpgradeTipVariant,
-  parseNativeChatUpgradeTipAudience,
-  type NativeChatUpgradeTipVariant
-} from '../../../shared/native-chat/native-chat-upgrade-tip-audience'
-import {
   updateSettings as updateSettingsOperation,
   type SettingsMutationOperations
 } from '../applying-settings/settings-update'
@@ -179,14 +174,6 @@ export class ProfilePreferences {
     }
     scheduleSave(this[profilePreferencesContext].scheduling)
     return this.getOnboarding()
-  }
-
-  getNativeChatUpgradeTipVariant(): NativeChatUpgradeTipVariant {
-    return nativeChatUpgradeTipVariant(
-      parseNativeChatUpgradeTipAudience(
-        this[profilePreferencesContext].runtime.state.nativeChatUpgradeTipAudience
-      )
-    )
   }
 
   getGitHubCache(): PersistedState['githubCache'] {

@@ -7878,10 +7878,6 @@
           "dd6f0a1d45": "Haustier",
           "0e89a574ae": "Schwebendes animiertes Haustier unten rechts.",
           "nativeChat": {
-            "title": "Chat-Oberfläche",
-            "description": "Neue unterstützte Agenten in der Chat-Oberfläche öffnen.",
-            "copy": "Neue unterstützte Agenten öffnen sich im strukturierten Chat. Andere Agenten öffnen sich im Terminal; bestehende Chats bleiben verfügbar.",
-            "toggleLabel": "Chat-Oberfläche umschalten",
             "resumeTitle": "Laufende Chats nach einem Neustart automatisch fortsetzen",
             "resumeCopy": "Wenn Orca beendet oder ein Update installiert wird, werden zuvor laufende Chats beim erneuten Öffnen von Orca automatisch fortgesetzt.",
             "resumeToggleLabel": "Automatisches Fortsetzen nach einem Neustart umschalten",
@@ -10093,19 +10089,6 @@
             "051203d37c": "Haustier",
             "6b5a56ac35": "Schwebendes animiertes Haustier unten rechts.",
             "87d99e634b": "Haustier",
-            "nativeChat": {
-              "title": "Chat-Oberfläche",
-              "description": "Neue unterstützte Agenten in der Chat-Oberfläche öffnen.",
-              "grok": "grok",
-              "native": "nativ",
-              "chat": "Chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "Agent"
-            },
             "agentDashboard": {
               "title": "Agenten-Dashboard",
               "description": "Kanban-Board zur Überwachung von Agenten über mehrere Worktrees hinweg, im Fenster oder als separates Fenster.",
@@ -20397,18 +20380,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "Neu",
-      "title": "Der native Chat wurde verbessert",
-      "leaveOff": "Deaktiviert lassen",
-      "enableNow": "Jetzt aktivieren",
-      "enableError": "Der Chatmodus konnte nicht aktiviert werden.",
-      "intro": "Neue Chats mit unterstützten Agenten werden jetzt in der verbesserten Chatansicht geöffnet. Zum Wechseln zwischen Chat und CLI {{panel}} in der rechten Seitenleiste öffnen:",
-      "resumeInNativeChat": "{{action}} öffnet eine unterstützte CLI-Unterhaltung im nativen Chat.",
-      "resumeInCli": "{{action}} kopiert einen Claude- oder Codex-Chat in eine neue CLI-Sitzung. Der ursprüngliche Chat bleibt unverändert.",
-      "gotIt": "Verstanden",
-      "manageInSettings": "Chat-Oberfläche unter <link>Einstellungen → Experimentell</link> verwalten."
-    },
     "voice": {
       "demoPrompt": "Diesen Diff auf Sonderfälle prüfen und Tests für alle gefundenen Fälle hinzufügen.",
       "startDictation": "Diktat starten",

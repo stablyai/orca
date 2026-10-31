@@ -1,4 +1,3 @@
-import type { NativeChatUpgradeTipVariant } from '../../shared/native-chat/native-chat-upgrade-tip-audience'
 import type { OnboardingState } from '../../shared/onboarding-state-types'
 
 export type OnboardingApi = {
@@ -9,8 +8,6 @@ export type OnboardingApi = {
       checklist?: Partial<OnboardingState['checklist']>
     }
   ) => Promise<OnboardingState>
-  /** Audience is fixed from the profile saved before the chat upgrade. */
-  getNativeChatUpgradeTipVariant: () => Promise<NativeChatUpgradeTipVariant>
 }
 
 export type StarNagApi = {

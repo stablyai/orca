@@ -7241,8 +7241,6 @@
             "toggleLabel": "새 카드 스타일 전환"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Chat UI 전환",
             "shellEnvNamesLabel": "셸에서 전달할 변수",
             "shellEnvNamePlaceholder": "변수 이름",
             "shellEnvNameAdd": "추가",
@@ -7254,9 +7252,7 @@
             "shellEnvToggleLabel": "셸 환경 사용 전환",
             "resumeTitle": "다시 시작한 후 작업 중인 채팅을 자동으로 재개합니다.",
             "resumeCopy": "Orca가 종료되거나 업데이트를 설치하면 Orca가 다시 열릴 때 작업 중이던 채팅이 자동으로 재개됩니다.",
-            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환",
-            "description": "Chat UI에서 지원되는 새 에이전트를 엽니다.",
-            "copy": "구조화된 채팅에서 지원되는 새 에이전트가 열립니다. 터미널에 다른 에이전트가 열립니다. 기존 채팅은 계속 사용할 수 있습니다."
+            "resumeToggleLabel": "다시 시작한 후 자동 재개 전환"
           },
           "agentDashboard": {
             "title": "에이전트 대시보드",
@@ -9410,19 +9406,6 @@
               "title": "새 카드 스타일",
               "worktree": "워크트리",
               "worktrees": "worktrees"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "네이티브",
-              "chat": "채팅",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "터미널",
-              "agent": "에이전트",
-              "description": "Chat UI에서 지원되는 새 에이전트를 엽니다."
             },
             "agentDashboard": {
               "title": "에이전트 대시보드",
@@ -20234,18 +20217,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "새 기능",
-      "title": "기본 채팅이 업그레이드되었습니다",
-      "intro": "이제 지원되는 Agent의 새 채팅은 업그레이드된 채팅 보기에서 열립니다. 채팅과 CLI 사이를 오가려면 오른쪽 사이드바에서 {{panel}}을 여세요:",
-      "resumeInNativeChat": "{{action}}: 지원되는 CLI 대화를 기본 채팅에서 엽니다.",
-      "resumeInCli": "{{action}}: Claude 또는 Codex 채팅을 새 CLI 세션으로 복사합니다. 원래 채팅은 그대로 유지됩니다.",
-      "gotIt": "확인",
-      "leaveOff": "꺼진 상태 유지",
-      "enableNow": "지금 활성화",
-      "enableError": "채팅 모드를 활성화하지 못했습니다.",
-      "manageInSettings": "<link>설정 → 실험적</link>에서 Chat UI를 관리하세요."
-    },
     "voice": {
       "demoPrompt": "극단적인 경우에 대해 이 차이점을 검토하고 찾은 항목에 대한 테스트를 추가하세요.",
       "startDictation": "받아쓰기 시작",

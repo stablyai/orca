@@ -20,9 +20,12 @@ export type PtySpawnOutcome = {
 
 export { provenSpawnResponse } from '../../../shared/terminal-spawn-response'
 
-export function requireAcceptedSpawn(outcome: PtySpawnOutcome): PtySpawnOutcome['result'] {
+export function requireAcceptedSpawn(
+  outcome: PtySpawnOutcome,
+  refusalCode = 'agent_session_exited_during_start'
+): PtySpawnOutcome['result'] {
   if (outcome.kind === 'registration-exited') {
-    throw new Error('agent_session_exited_during_start')
+    throw new Error(refusalCode)
   }
   return outcome.result
 }

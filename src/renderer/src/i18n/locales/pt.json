@@ -629,18 +629,6 @@
       "description": "Inicie o ditado por voz em qualquer painel em foco e use o atalho novamente para parar.",
       "cta": "Configurar ditado por voz"
     },
-    "nativeChatUpgrade": {
-      "eyebrow": "Novo",
-      "title": "O chat nativo foi aprimorado",
-      "leaveOff": "Manter desativado",
-      "enableNow": "Ativar agora",
-      "enableError": "Não foi possível ativar o modo de chat.",
-      "intro": "Novos chats com agentes compatíveis agora abrem na visualização de chat aprimorada. Para alternar entre chat e CLI, abra {{panel}} na barra lateral direita:",
-      "resumeInNativeChat": "{{action}} abre uma conversa de CLI compatível no chat nativo.",
-      "resumeInCli": "{{action}} copia um chat do Claude ou Codex para uma nova sessão de CLI. O chat original permanece como está.",
-      "gotIt": "Entendi",
-      "manageInSettings": "Gerencie a Interface de Chat em <link>Configurações → Experimental</link>."
-    },
     "sessionSearch": {
       "enableFailed": "Não foi possível ativar a busca de sessões. Tente novamente.",
       "progressStarting": "Localizando suas sessões…",
@@ -5114,19 +5102,6 @@
             "051203d37c": "bichinho",
             "6b5a56ac35": "Bichinho animado flutuante no canto inferior direito.",
             "87d99e634b": "Bichinho",
-            "nativeChat": {
-              "title": "Interface de Chat",
-              "description": "Abra os novos agentes compatíveis na interface de Chat.",
-              "grok": "grok",
-              "native": "nativo",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "agente"
-            },
             "agentDashboard": {
               "title": "Painel de Agentes",
               "description": "Quadro kanban para monitorar agentes entre worktrees, na própria janela ou em uma janela separada.",
@@ -5612,10 +5587,6 @@
           "dd6f0a1d45": "Bichinho",
           "0e89a574ae": "Bichinho animado flutuante no canto inferior direito.",
           "nativeChat": {
-            "title": "Interface de Chat",
-            "description": "Pré-visualize a interface de chat do desktop para sessões de terminal de agente suportadas.",
-            "copy": "Ativa a Interface de Chat experimental para novas sessões locais suportadas recém-criadas. As sessões de terminal existentes mantêm o caminho de chat do terminal enquanto ajustamos a fidelidade da transcrição, a transmissão e a paridade.",
-            "toggleLabel": "Alternar Interface de Chat",
             "resumeTitle": "Reconectar chats em andamento automaticamente após reiniciar",
             "resumeCopy": "Quando o Orca é encerrado ou instala uma atualização, os chats que estavam no meio de um turno são oferecidos novamente na próxima abertura. Ativado, eles são reconectados sem perguntar e o Orca avisa depois — o mesmo que marcar \"Não perguntar novamente\" naquele aviso. Desativado, você escolhe na lista a cada vez. Reconectar restaura um chat de onde ele parou; não continua a resposta interrompida.",
             "resumeToggleLabel": "Alternar reconexão automática após reiniciar",

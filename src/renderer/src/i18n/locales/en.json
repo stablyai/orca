@@ -7953,10 +7953,6 @@
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "nativeChat": {
-            "title": "Chat UI",
-            "description": "Open supported new agents in Chat UI.",
-            "copy": "Supported new agents open in structured chat. Other agents open in the terminal; existing chats stay available.",
-            "toggleLabel": "Toggle Chat UI",
             "resumeTitle": "Resume working chats automatically after a restart",
             "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
             "resumeToggleLabel": "Toggle automatic resume after a restart",
@@ -10170,19 +10166,6 @@
             "051203d37c": "pet",
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
             "87d99e634b": "Pet",
-            "nativeChat": {
-              "title": "Chat UI",
-              "description": "Open supported new agents in Chat UI.",
-              "grok": "grok",
-              "native": "native",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "agent"
-            },
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
@@ -20700,18 +20683,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "New",
-      "title": "Native chat got an upgrade",
-      "leaveOff": "Leave Off",
-      "enableNow": "Enable Now",
-      "enableError": "Could not enable chat mode.",
-      "intro": "New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open {{panel}} in the right sidebar:",
-      "resumeInNativeChat": "{{action}} opens a supported CLI conversation in native chat.",
-      "resumeInCli": "{{action}} copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.",
-      "gotIt": "Got It",
-      "manageInSettings": "Manage Chat UI in <link>Settings → Experimental</link>."
-    },
     "voice": {
       "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
       "startDictation": "Start dictation",
