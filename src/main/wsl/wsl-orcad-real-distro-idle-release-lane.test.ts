@@ -377,15 +377,17 @@ async function readOrcadStartupTiming() {
 
 /** SIGTERM the active orcad, as its idle exit ends it, and wait until it is gone; the distro stays up. */
 /**
- * True once the active slot's orcad is down: stopped here, or already exited. False only when a
- * live process holds the pid but its command line does not name the slot, which proves nothing.
+ * True once the active slot's orcad is proven down: stopped here, or its recorded pid is gone.
+ * False when nothing proves it: no active slot or pid file, or a live pid not naming the slot.
  */
 async function stopOrcadKeepingDistro(): Promise<boolean> {
   const answer = (
     await guest(
       `v=$(sed -n 's/.*"active": *"\\([^"]*\\)".*/\\1/p' "$HOME/.orca-remote/orcad-active.json"); ` +
         `p=$(cat "$HOME/.orca-remote/orcad-$v/.orcad-pid" 2>/dev/null); ` +
-        `if [ -z "$p" ] || [ ! -e "/proc/$p" ]; then echo GONE; ` +
+        // GONE needs evidence: a known slot and pid file whose process no longer exists.
+        `if [ -z "$v" ] || [ -z "$p" ] || [ -n "$(printf '%s' "$p" | tr -d 0-9)" ]; then echo UNKNOWN; ` +
+        `elif [ ! -e "/proc/$p" ]; then echo GONE; ` +
         // Only a pid whose command line still names the active slot: a reused pid is left alone.
         `elif tr '\\0' ' ' < "/proc/$p/cmdline" 2>/dev/null | grep -qF "orcad-$v/"; then echo "$p"; ` +
         `else echo MISMATCH; fi`
@@ -395,7 +397,7 @@ async function stopOrcadKeepingDistro(): Promise<boolean> {
     return true
   }
   const pid = Number(answer)
-  if (answer === 'MISMATCH' || !Number.isSafeInteger(pid) || pid <= 0) {
+  if (answer === 'MISMATCH' || answer === 'UNKNOWN' || !Number.isSafeInteger(pid) || pid <= 0) {
     return false
   }
   // It may exit on its own meanwhile; the wait below is what decides.
