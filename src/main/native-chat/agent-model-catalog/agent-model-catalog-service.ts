@@ -25,6 +25,7 @@ import {
   agentModelCatalogScopeIdentity,
   retireAgentModelCatalogRequests,
   agentModelCatalogMemoryBinding,
+  bindAgentModelCatalogScope,
   expireAgentModelCatalogBoundFailure,
   agentModelCatalogSessionPeek,
   type AgentModelCatalogBinding
@@ -161,22 +162,7 @@ export function createAgentModelCatalogService(
       if (!current() || !account) {
         return
       }
-      let { fingerprint } = account
-      const probeHome = account.accountHome
-      const scope = await resolveAgentModelCatalogScope(
-        deps,
-        { ...params, workspacePath, savedOnly },
-        scoped,
-        fingerprint,
-        probeHome,
-        current,
-        { deadline, current, signal: controller.signal }
-      )
-      if (!current() || !scope) {
-        return
-      }
-      const { base, exact, resolved, cwd } = scope
-      fingerprint = scope.fingerprint
+      const { fingerprint: base, accountHome: probeHome } = account
       let bindingCurrent = true
       const bound: AgentModelCatalogBinding = {
         identity,
@@ -190,23 +176,40 @@ export function createAgentModelCatalogService(
           bindingCurrent = false
           controller.abort()
         },
-        fingerprint,
+        fingerprint: base,
         base,
-        exact,
+        exact: false,
         folder,
-        cwd,
         workspacePath,
         keepDefault:
           workspacePath === undefined ||
           (workspacePath === null && independentAgentModelCatalog(params.agent))
       }
-      bindings.set(bindingKey, bound)
-      while (bindings.size > 256) {
-        const oldest = bindings.keys().next().value
-        if (oldest !== undefined) {
-          bindings.delete(oldest)
-        }
+      // Prewarm proves the selected account before command/folder resolution can finish.
+      if (
+        independentAgentModelCatalog(params.agent) &&
+        !scoped &&
+        workspacePath === undefined &&
+        !params.legacy &&
+        !savedOnly
+      ) {
+        bindAgentModelCatalogScope(bindings, bindingKey, bound)
       }
+      const scope = await resolveAgentModelCatalogScope(
+        deps,
+        { ...params, workspacePath, savedOnly },
+        scoped,
+        base,
+        probeHome,
+        current,
+        { deadline, current, signal: controller.signal }
+      )
+      if (!current() || !scope) {
+        return
+      }
+      const { fingerprint, exact, resolved, cwd } = scope
+      Object.assign(bound, { fingerprint, exact, cwd })
+      bindAgentModelCatalogScope(bindings, bindingKey, bound)
       bound.projecting = projectAgentModelCatalogDefault(
         deps,
         params.agent,
@@ -223,24 +226,17 @@ export function createAgentModelCatalogService(
       }
       const probe = deps.probes?.[params.agent]
       const signal = AbortSignal.any([lifetime.signal, controller.signal])
-      const list = seedAccountList(
-        deps,
-        scope,
-        params.agent,
-        current
-      )(
-        scopedAgentModelCatalogLister({
-          legacy: params.legacy,
-          operation: { deadline, current, signal },
-          canList: () => !record || !!deps.getRecord(record.sessionId),
-          admission,
-          signal,
-          resolved,
-          probe,
-          probeHome,
-          workspacePath: cwd ?? folder
-        })
-      )
+      const list = scopedAgentModelCatalogLister({
+        legacy: params.legacy,
+        operation: { deadline, current, signal },
+        canList: () => !record || !!deps.getRecord(record.sessionId),
+        admission,
+        signal,
+        resolved,
+        probe,
+        probeHome,
+        workspacePath: cwd ?? folder
+      })
       if (probe && probeHome && deps.store.probeDue(fingerprint)) {
         void deps.store.refresh(fingerprint, params.agent, list, current, signal)
       }
@@ -249,6 +245,9 @@ export function createAgentModelCatalogService(
       const pending = deps.store.pendingListing(fingerprint, true, true)
       if (pending) {
         await pending
+      }
+      if (current()) {
+        seedAccountList(deps, scope, params.agent)
       }
     }
     const promise = runAgentModelCatalogOperation(run, remaining, controller, () => {
@@ -287,7 +286,10 @@ export function createAgentModelCatalogService(
           binding: () => bindings.get(requestKey(params))
         })
       }
-      return readAccountList(deps, params, snapshot)
+      const result = snapshot(params)
+      return lifetime.signal.aborted
+        ? result
+        : readAccountList(deps, params, result, () => memoryBinding({ agent: params.agent })?.base)
     },
     recordLiveListing: live.recordLiveListing,
     async prewarm() {

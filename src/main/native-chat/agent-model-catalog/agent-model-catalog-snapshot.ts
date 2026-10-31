@@ -26,6 +26,20 @@ export type AgentModelCatalogBinding = {
   projecting?: Promise<void>
 }
 
+export function bindAgentModelCatalogScope(
+  bindings: Map<string, AgentModelCatalogBinding>,
+  key: string,
+  bound: AgentModelCatalogBinding
+): void {
+  bindings.set(key, bound)
+  while (bindings.size > 256) {
+    const oldest = bindings.keys().next().value
+    if (oldest !== undefined) {
+      bindings.delete(oldest)
+    }
+  }
+}
+
 export function agentModelCatalogReleasedOwner(
   record: AgentSessionConversationView | undefined
 ): boolean {

@@ -1,11 +1,29 @@
-import { homedir } from 'node:os'
-import { describe, expect, it, vi } from 'vitest'
+import { mkdtemp, rm } from 'node:fs/promises'
+import { homedir, tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { agentSessionConversationView } from '../../../shared/agent-session-conversation-view'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import { agentSessionRecordFixture } from '../agent-session-record-test-fixture'
+import { applyCodexConfiguredLaunchDefaults } from '../../codex/codex-configured-launch-defaults'
+import { getAgentSessionOptionCatalog } from '../../../shared/agent-session-option-catalog'
+import type { AgentSessionModelCatalogResult } from '../../../shared/agent-session-wire'
+import type { AgentSessionAccountHome } from '../../../shared/agent-session-record'
+import {
+  applyStructuredAgentSessionModelCatalog,
+  commitStructuredAgentSessionOptionValues,
+  createStructuredAgentSessionOptionState
+} from '../../../shared/structured-agent-session-options'
+import { cloneStructuredAgentSessionOptionRecord } from '../../../shared/structured-agent-session-option-state'
+import type { AgentModelCatalogEntry } from './agent-model-catalog-entry'
+import { structuredAgentSessionShownSnapshot } from '../../../shared/structured-agent-session-option-view'
+import { agentModelCatalogFingerprint } from './agent-model-catalog-fingerprint'
+import { createAgentModelCatalogFilePersistence } from './agent-model-catalog-persistence'
+import type { AgentModelCatalogServiceDeps } from './agent-model-catalog-service-contract'
 import { createAgentModelCatalogService } from './agent-model-catalog-service'
 import {
   AgentModelCatalogStore,
+  AGENT_MODEL_CATALOG_FRESH_MS,
   type AgentModelCatalogProbe,
   type AgentModelCatalogSuccess
 } from './agent-model-catalog-store'
@@ -20,10 +38,10 @@ const listing = (ids: string[], model?: string): AgentModelCatalogSuccess => ({
   configured: model ? { model } : {}
 })
 
-function record(sessionId: string): AgentSessionRecord {
+function record(sessionId: string, agent: 'claude' | 'codex' = 'codex'): AgentSessionRecord {
   return agentSessionRecordFixture({
     sessionId,
-    provider: 'codex',
+    provider: agent,
     accountHome: HOME,
     location: {
       executionHostId: 'local',
@@ -34,7 +52,10 @@ function record(sessionId: string): AgentSessionRecord {
   })
 }
 
-function harness() {
+function harness(
+  agent: 'claude' | 'codex' = 'codex',
+  overrides: Partial<AgentModelCatalogServiceDeps> = {}
+) {
   const full = ['gpt-a', 'gpt-b', 'gpt-c']
   const byFolder: Record<string, AgentModelCatalogSuccess> = {
     [homedir()]: listing(full),
@@ -44,33 +65,59 @@ function harness() {
   }
   const gates = new Map<string, PromiseWithResolvers<void>>()
   const runs: string[] = []
-  const resolve = vi.fn(async (_home: unknown, cwd: string) => ({
-    identity: { command: 'codex', cwd },
-    run: async () => {
-      runs.push(cwd)
-      await gates.get(cwd)?.promise
-      return byFolder[cwd]
+  const scopeGate = Promise.withResolvers<void>()
+  let holdScope = false
+  const resolve = vi.fn(async (_home: unknown, cwd: string) => {
+    if (holdScope) {
+      await scopeGate.promise
     }
-  }))
+    return {
+      identity: { command: agent, cwd },
+      run: async () => {
+        runs.push(cwd)
+        await gates.get(cwd)?.promise
+        return byFolder[cwd]
+      }
+    }
+  })
   const probe: AgentModelCatalogProbe = Object.assign(async () => byFolder[homedir()], { resolve })
+  const store = overrides.store ?? new AgentModelCatalogStore({ now: () => 1000 })
+  const resolveAccountHome = vi.fn<AgentModelCatalogServiceDeps['resolveAccountHome']>(
+    async () => HOME
+  )
   const service = createAgentModelCatalogService({
-    store: new AgentModelCatalogStore({ now: () => 1000 }),
-    getConversation: (id) => agentSessionConversationView(record(id)),
-    getRecord: record,
+    store,
+    getConversation: (id) => agentSessionConversationView(record(id, agent)),
+    getRecord: (id) => record(id, agent),
     drivesRecord: () => true,
-    resolveAccountHome: async () => HOME,
+    resolveAccountHome,
     recordWorkspacePath: async (saved) => FOLDERS[saved.sessionId] ?? null,
     workspaceMayOverrideDefaultModel: async () => false,
-    probes: { codex: probe }
+    probes: { [agent]: probe },
+    ...overrides
   })
   const hold = (folder: string): (() => void) => {
     const gate = Promise.withResolvers<void>()
     gates.set(folder, gate)
     return () => gate.resolve()
   }
-  const read = (sessionId: string, extra = {}) =>
-    service.read({ agent: 'codex', sessionId, ...extra })
-  return { service, runs, hold, read, full }
+  const read = (sessionId: string, extra = {}) => service.read({ agent, sessionId, ...extra })
+  onTestFinished(() => service.stop())
+  return {
+    service,
+    store,
+    runs,
+    hold,
+    read,
+    full,
+    byFolder,
+    resolve,
+    resolveAccountHome,
+    holdScope: () => {
+      holdScope = true
+      return () => scopeGate.resolve()
+    }
+  }
 }
 
 const ids = (result: Awaited<ReturnType<ReturnType<typeof harness>['read']>>) =>
@@ -111,3 +158,332 @@ describe('account model list for folders not yet listed', () => {
     h.service.stop()
   })
 })
+
+for (const agent of ['claude', 'codex'] as const) {
+  describe(`${agent} account publication and read ownership`, () => {
+    it.each(['cache', 'join'] as const)(
+      'publishes only on canonical %s reuse of explicit home discovery',
+      async (order) => {
+        const h = harness(agent)
+        const release = h.hold(homedir())
+        const explicit = h.service.demand({ agent, workspacePath: homedir() })
+        await vi.waitFor(() => expect(h.runs).toEqual([homedir()]))
+        if (order === 'cache') {
+          release()
+          await explicit
+        }
+        expect(ids(await h.read('a'))).toBeNull()
+        const canonical = h.service.demand({ agent })
+        if (order === 'join') {
+          await vi.waitFor(() => expect(h.resolve.mock.calls.length).toBeGreaterThanOrEqual(3))
+          release()
+        }
+        await Promise.all([explicit, canonical])
+        expect(ids(await h.read('a'))).toEqual(h.full)
+        expect(ids(await h.service.read({ agent, workspacePath: '/new-folder' }))).toEqual(h.full)
+        expect(h.runs).toEqual([homedir()])
+      }
+    )
+
+    it('never waits for an unresolved account on passive reads, including after the original deadline', async () => {
+      const home = Promise.withResolvers<AgentSessionAccountHome>()
+      const resolveAccountHome = vi.fn(() => home.promise)
+      const h = harness(agent, { resolveAccountHome })
+      const deadline = Date.now() + 50
+      const demand = h.service.demand({ agent, workspacePath: '/cold', deadline })
+      await vi.waitFor(() => expect(resolveAccountHome).toHaveBeenCalledTimes(1))
+      expect(await h.service.read({ agent, workspacePath: '/cold' })).toMatchObject({
+        origin: 'unknown'
+      })
+      expect(resolveAccountHome).toHaveBeenCalledTimes(1)
+      await demand
+      expect(
+        await h.service.read({ agent, workspacePath: '/cold', waitForListing: true, deadline })
+      ).toMatchObject({ origin: 'unknown' })
+      expect(resolveAccountHome).toHaveBeenCalledTimes(1)
+      home.resolve(HOME)
+      expect(h.runs).toEqual([])
+    })
+
+    it.each(['retire', 'stop'] as const)(
+      'rejects late account resolution on %s and preserves valid pinned accounts',
+      async (action) => {
+        const h = harness(agent)
+        await h.service.read({ agent, waitForListing: true })
+        expect(ids(await h.service.read({ agent, workspacePath: '/cold' }))).toEqual(h.full)
+        const home = Promise.withResolvers<AgentSessionAccountHome>()
+        h.resolveAccountHome.mockImplementationOnce(() => home.promise)
+        const late = h.service.demand({ agent, workspacePath: '/late' })
+        await vi.waitFor(() => expect(h.resolveAccountHome).toHaveBeenCalledTimes(2))
+        if (action === 'stop') {
+          h.service.stop()
+        } else {
+          h.store.expireFailures(agent)
+          h.service.retireContext()
+        }
+        home.resolve(HOME)
+        await late
+        expect(ids(await h.service.read({ agent, workspacePath: '/late' }))).toBeNull()
+        expect(ids(await h.read('a'))).toEqual(action === 'stop' ? null : h.full)
+        expect(h.runs).toEqual([homedir()])
+        h.service.stop()
+        expect(await h.read('a')).toEqual({ origin: 'unknown' })
+        expect(await h.service.read({ agent, workspacePath: '/late' })).toEqual({
+          origin: 'unknown'
+        })
+      }
+    )
+
+    it('does not publish incomplete or retired canonical discoveries', async () => {
+      const h = harness(agent)
+      const publish = vi.spyOn(h.store, 'recordSuccess')
+      h.byFolder[homedir()] = { ...listing(h.full), complete: false }
+      await h.service.read({ agent, waitForListing: true })
+      expect(publish).not.toHaveBeenCalled()
+      expect(ids(await h.read('a'))).toBeNull()
+      h.store.expireAgent(agent)
+      h.service.retireContext()
+      h.byFolder[homedir()] = listing(h.full)
+      const release = h.hold(homedir())
+      const late = h.service.demand({ agent })
+      await vi.waitFor(() => expect(h.runs).toHaveLength(2))
+      h.service.stop()
+      release()
+      await late
+      expect(publish).not.toHaveBeenCalled()
+      expect(
+        h.store.observation(
+          agentModelCatalogFingerprint({ agent, accountHome: HOME, wslDistro: null })
+        )
+      ).toBeNull()
+    })
+
+    it('roundtrips the account inventory and serves cold reads while prewarm scope resolution is suspended', async () => {
+      const directory = await mkdtemp(join(tmpdir(), 'pr-36646-account-reload-'))
+      onTestFinished(() => rm(directory, { recursive: true, force: true }))
+      const first = harness(agent)
+      await first.store.attachPersistence(createAgentModelCatalogFilePersistence(directory))
+      await first.service.prewarm()
+      // This fixture has no usage until a catalog is requested.
+      await first.service.read({ agent, waitForListing: true })
+      await first.store.flushPersistence()
+      first.service.stop()
+      const store = new AgentModelCatalogStore()
+      const persistence = createAgentModelCatalogFilePersistence(directory)
+      const save = vi.fn(persistence.save)
+      await store.attachPersistence({ ...persistence, save })
+      const h = harness(agent, { store })
+      const release = h.holdScope()
+      const prewarm = h.service.prewarm()
+      await vi.waitFor(() => expect(h.resolve).toHaveBeenCalled())
+      expect(ids(await h.read('a'))).toEqual(h.full)
+      expect(ids(await h.service.read({ agent, workspacePath: '/cold' }))).toEqual(h.full)
+      expect(h.runs).toEqual([])
+      expect(save).not.toHaveBeenCalled()
+      expect(h.resolveAccountHome).toHaveBeenCalledTimes(1)
+      release()
+      await prewarm
+      expect(h.runs).toEqual([homedir()])
+      await store.flushPersistence()
+    })
+
+    it('keeps configured effort local through the shared displayed view and preserves an unlisted pick', async () => {
+      const h = harness(agent)
+      const efforts = ['low', 'medium', 'high'].map((value) => ({ value, label: value }))
+      const raw = [
+        {
+          id: h.full[0],
+          label: 'Model',
+          isDefault: true,
+          efforts,
+          defaultEffort: 'medium',
+          declaredDefaultEffort: 'medium'
+        }
+      ]
+      const configured = (effort: string): AgentModelCatalogSuccess => ({
+        origin: 'probe',
+        complete: true,
+        configured: { model: h.full[0], effort },
+        // Codex folds configured defaults into rows before the catalog service sees them.
+        models: applyCodexConfiguredLaunchDefaults(raw, { model: h.full[0], effort })
+      })
+      h.byFolder[homedir()] = configured('high')
+      h.byFolder['/project-a'] = configured('low')
+      await h.service.read({ agent, waitForListing: true })
+      const release = h.hold('/project-a')
+      const demand = h.service.demand({ agent, sessionId: 'a' })
+      const fallback = await h.read('a')
+      expect(fallback).toMatchObject({
+        models: [{ isDefault: false }],
+        listingNamesConfiguredModel: false,
+        listingInProgress: true
+      })
+      if (fallback.origin === 'unknown') {
+        throw new Error('missing fallback')
+      }
+      expect(fallback.models[0]).not.toHaveProperty('defaultEffort')
+      expect(fallback.models[0]).not.toHaveProperty('declaredDefaultEffort')
+      const seed = getAgentSessionOptionCatalog(agent)
+      const initial = createStructuredAgentSessionOptionState(agent, seed)
+      initial.record.values.model = { value: h.full[0], source: 'saved' }
+      const apply = (state: typeof initial, catalog: AgentSessionModelCatalogResult) =>
+        applyStructuredAgentSessionModelCatalog(state, seed, catalog, {
+          newLaunch: true,
+          coherentCatalog: true
+        })
+      const provisional = apply(initial, fallback)
+      expect(provisional.verifiedModelIds).toBeUndefined()
+      expect(
+        structuredAgentSessionShownSnapshot(provisional).find((row) => row.id === 'effort')
+      ).not.toMatchObject({ kind: { currentValue: 'high' }, valueSource: 'default' })
+      const picked = commitStructuredAgentSessionOptionValues(
+        { ...provisional, record: cloneStructuredAgentSessionOptionRecord(provisional.record) },
+        {
+          model: 'retired-custom',
+          effort: 'high'
+        }
+      )
+      const pickedFallback = apply(picked, fallback)
+      expect(pickedFallback.record.values.model).toEqual({
+        value: 'retired-custom',
+        source: 'dispatched'
+      })
+      expect(pickedFallback.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
+      release()
+      await demand
+      const folder = await h.read('a')
+      const authoritative = apply(provisional, folder)
+      expect(authoritative.verifiedModelIds).toEqual([h.full[0]])
+      expect(
+        structuredAgentSessionShownSnapshot(authoritative).find((row) => row.id === 'effort')
+      ).toMatchObject({ kind: { currentValue: 'low' }, valueSource: 'default' })
+      const after = apply(pickedFallback, folder)
+      expect(after.catalog?.models.map((model) => model.id)).toEqual([h.full[0]])
+      expect(after.record.values.model).toEqual({ value: 'retired-custom', source: 'dispatched' })
+      expect(after.record.values.effort).toEqual({ value: 'high', source: 'dispatched' })
+      expect(
+        structuredAgentSessionShownSnapshot(after).find((row) => row.id === 'model')
+      ).toMatchObject({ kind: { currentValue: 'retired-custom' } })
+    })
+  })
+}
+
+it.each(['claude', 'codex'] as const)(
+  '%s account publication work stays scoped at N and 10N with changed-output controls',
+  async (agent) => {
+    for (const population of [10, 100]) {
+      let now = 1000
+      const rows = population === 10 ? 61 : 610
+      const store = new AgentModelCatalogStore({ now: () => now })
+      for (let index = 0; index < population; index++) {
+        store.recordSuccess(`unrelated-${index}`, 'grok', listing([`other-${index}`]), 'discovery')
+      }
+      const directory = await mkdtemp(join(tmpdir(), 'pr-36646-account-perf-'))
+      onTestFinished(() => rm(directory, { recursive: true, force: true }))
+      const persistence = createAgentModelCatalogFilePersistence(directory)
+      let materializations = 0
+      const save = vi.fn((snapshot: () => readonly AgentModelCatalogEntry[]) =>
+        persistence.save(() => {
+          materializations++
+          return snapshot()
+        })
+      )
+      await store.attachPersistence({ ...persistence, save })
+      const h = harness(agent, { store, hasChatRecords: () => true })
+      let inputVisits = 0
+      const account = listing(Array.from({ length: rows }, (_, index) => `scale-${index}`))
+      account.models = account.models.map((row) => ({
+        ...row,
+        get id() {
+          inputVisits++
+          return row.id
+        }
+      }))
+      h.byFolder[homedir()] = account
+      const publish = vi.spyOn(store, 'recordSuccess')
+      const observed = vi.spyOn(store, 'observation')
+      let comparisons = 0
+      const find = Array.prototype.find
+      const scan = vi.spyOn(Array.prototype, 'find').mockImplementation(function (
+        this: unknown[],
+        predicate,
+        thisArg
+      ) {
+        return find.call(this, (value, index, array) => {
+          if (
+            value &&
+            typeof value === 'object' &&
+            'id' in value &&
+            typeof value.id === 'string' &&
+            value.id.startsWith('scale-')
+          ) {
+            comparisons++
+          }
+          return predicate.call(thisArg, value, index, array)
+        })
+      })
+      onTestFinished(() => scan.mockRestore())
+      await h.service.prewarm()
+      const initialComparisons = comparisons
+      const initialInputVisits = inputVisits
+      expect(h.runs).toEqual([homedir()])
+      expect(publish).toHaveBeenCalledTimes(1)
+      expect(publish.mock.calls[0]?.[0]).toBe(
+        agentModelCatalogFingerprint({ agent, accountHome: HOME, wslDistro: null })
+      )
+      expect(save).toHaveBeenCalledTimes(2)
+      expect(materializations).toBe(0)
+      await store.flushPersistence()
+      expect(materializations).toBe(1)
+      // Both existing exact and added base ingestion keep the existing quadratic row merge bound.
+      expect(initialComparisons).toBeGreaterThanOrEqual(rows * rows)
+      expect(initialComparisons).toBeLessThanOrEqual(4 * rows * rows + 10 * rows)
+      expect(initialInputVisits).toBeGreaterThanOrEqual(rows)
+      expect(initialInputVisits).toBeLessThanOrEqual(8 * rows)
+      publish.mockClear()
+      observed.mockClear()
+      save.mockClear()
+      const resolverCalls = h.resolveAccountHome.mock.calls.length
+      const scopeCalls = h.resolve.mock.calls.length
+      const readComparisons = comparisons
+      for (let index = 0; index < population; index++) {
+        const answer = await h.service.read({ agent, workspacePath: `/unbound-${index}` })
+        expect(ids(answer)).toEqual(account.models.map((row) => row.id))
+      }
+      expect(comparisons).toBe(readComparisons)
+      expect(h.resolveAccountHome).toHaveBeenCalledTimes(resolverCalls)
+      expect(h.resolve).toHaveBeenCalledTimes(scopeCalls)
+      expect(h.runs).toEqual([homedir()])
+      expect(publish).not.toHaveBeenCalled()
+      expect(save).not.toHaveBeenCalled()
+      expect(observed.mock.calls.every(([key]) => !key.startsWith('unrelated-'))).toBe(true)
+      await h.service.prewarm()
+      expect(h.runs).toEqual([homedir()])
+      expect(publish).not.toHaveBeenCalled()
+      expect(comparisons).toBe(readComparisons)
+      expect(save).not.toHaveBeenCalled()
+      now += AGENT_MODEL_CATALOG_FRESH_MS + 1
+      await h.service.prewarm()
+      expect(h.runs).toEqual([homedir(), homedir()])
+      expect(save).not.toHaveBeenCalled()
+      await store.flushPersistence()
+      expect(materializations).toBe(1)
+      now += AGENT_MODEL_CATALOG_FRESH_MS + 1
+      h.byFolder[homedir()] = listing([
+        ...account.models.map((row) => row.id).slice(0, -1),
+        'scale-changed'
+      ])
+      await h.service.prewarm()
+      const changed = await h.service.read({ agent, workspacePath: '/changed-control' })
+      expect(changed.origin !== 'unknown' && changed.models.at(-1)?.id).toBe('scale-changed')
+      expect(save).toHaveBeenCalledTimes(2)
+      await store.flushPersistence()
+      expect(materializations).toBe(2)
+      expect((await persistence.load()).length).toBe(population + 2)
+      scan.mockRestore()
+      process.stdout.write(
+        `ACCOUNT_PUBLICATION ${JSON.stringify({ agent, population, rows, comparisons: initialComparisons, inputVisits: initialInputVisits, coldReaders: population, probes: h.runs.length, materializations })}\n`
+      )
+    }
+  }
+)

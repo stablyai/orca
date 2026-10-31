@@ -2,52 +2,52 @@ import type { AgentSessionModelCatalogResult } from '../../../shared/agent-sessi
 import { isNativeLocalLocation } from '../../../shared/execution-host'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 import {
-  agentModelCatalogResultFromEntry,
-  type AgentModelCatalogSuccess
+  agentModelCatalogListingKey,
+  agentModelCatalogResultFromEntry
 } from './agent-model-catalog-entry'
 import { agentModelCatalogFingerprintForRecord } from './agent-model-catalog-fingerprint'
-import { newChatCatalogKey } from './agent-model-catalog-prewarm'
 import type {
   AgentModelCatalogReadParams,
   AgentModelCatalogServiceDeps
 } from './agent-model-catalog-service-contract'
 
-// Claude/Codex lists are kept per folder, so a folder not yet listed (every new worktree) had
-// nothing to show until its own probe finished. The account's own listing stands in meanwhile.
-
-/** Wraps a listing so the account's own one also saves the list unlisted folders show. */
 export function seedAccountList(
   deps: AgentModelCatalogServiceDeps,
   scope: { exact: boolean; fingerprint: string; base: string; accountListing?: boolean },
-  agent: string,
-  current: () => boolean
-): (list: () => Promise<AgentModelCatalogSuccess>) => () => Promise<AgentModelCatalogSuccess> {
-  return (list) =>
-    !scope.exact || !scope.accountListing || scope.fingerprint === scope.base
-      ? list
-      : async () => {
-          const success = await list()
-          // The folder's configured default stays with the folder's own entry.
-          if (success.complete === true && current()) {
-            const { models, origin, fastModeSupport } = success
-            deps.store.recordSuccess(
-              scope.base,
-              agent,
-              { models, origin, complete: true, ...(fastModeSupport ? { fastModeSupport } : {}) },
-              'discovery'
-            )
-          }
-          return success
-        }
+  agent: string
+): void {
+  if (!scope.exact || !scope.accountListing || scope.fingerprint === scope.base) {
+    return
+  }
+  const entry = deps.store.observation(scope.fingerprint)
+  if (!entry || entry.discovered?.complete !== true) {
+    return
+  }
+  const listing = entry.discovered
+  // Configured effort may already be folded into rows; only the folder can declare its default.
+  const models = listing.models.map(
+    ({ defaultEffort: _effort, declaredDefaultEffort: _declared, ...model }) => ({
+      ...model,
+      isDefault: false
+    })
+  )
+  const discovered = { ...listing, models }
+  const previous = deps.store.observation(scope.base)
+  if (
+    !previous ||
+    agentModelCatalogListingKey(previous) !==
+      agentModelCatalogListingKey({ ...entry, discovered, live: null, configured: null })
+  ) {
+    deps.store.recordSuccess(scope.base, agent, discovered, 'discovery')
+  }
 }
 
-/** Before a read's scope resolves, answer from the account's list rather than nothing; it names no default. */
-export async function readAccountList(
+export function readAccountList(
   deps: AgentModelCatalogServiceDeps,
   params: AgentModelCatalogReadParams,
-  snapshot: (params: AgentModelCatalogReadParams) => AgentSessionModelCatalogResult
-): Promise<AgentSessionModelCatalogResult> {
-  const result = snapshot(params)
+  result: AgentSessionModelCatalogResult,
+  accountBase: () => string | undefined
+): AgentSessionModelCatalogResult {
   if (
     result.origin !== 'unknown' ||
     params.savedOnly ||
@@ -64,14 +64,13 @@ export async function readAccountList(
       isNativeLocalLocation(record.location)
       ? agentModelCatalogFingerprintForRecord(record)
       : null
-    : (await newChatCatalogKey(deps, params.agent))?.fingerprint
-  const latest = snapshot(params)
-  const entry = base && latest.origin === 'unknown' ? deps.store.observation(base) : null
+    : accountBase()
+  const entry = base ? deps.store.observation(base) : null
   return entry
     ? {
         ...agentModelCatalogResultFromEntry(entry, false, false, false),
         modelsDifferByWorkspace: true,
-        ...(latest.listingInProgress ? { listingInProgress: true as const } : {})
+        ...(result.listingInProgress ? { listingInProgress: true as const } : {})
       }
-    : latest
+    : result
 }
