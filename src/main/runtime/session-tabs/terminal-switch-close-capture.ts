@@ -178,7 +178,19 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
         // screen lives and dies with it; a replace or an unproven stop never publishes one.
         const agent = switched?.replacedBySessionId ? undefined : switched?.agent
         const providerSessionId = switched?.providerSessionId
-        const screen = agent && providerSessionId && heldScreen ? { screen: heldScreen } : {}
+        // A retry from the stopped pane stops nothing and reads no screen (the process is gone): the
+        // image already held for this exact process stays, one per pane.
+        const standing = this.stoppedSwitchSources.factFor(
+          source.worktreeId,
+          source.tabId,
+          source.leafId
+        )
+        const image =
+          heldScreen ??
+          (standing?.ptyId === addressedPty && standing.incarnationId === incarnation
+            ? standing.screen
+            : undefined)
+        const screen = agent && providerSessionId && image ? { screen: image } : {}
         heldScreen = undefined
         if (agent && providerSessionId) {
           this.stoppedSwitchSources.record(source, {

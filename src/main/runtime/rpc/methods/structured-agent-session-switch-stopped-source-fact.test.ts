@@ -118,6 +118,33 @@ it('publishes the stopped source to every viewer when a switch fails after its p
   expect(kept.runtime.isStoppedSwitchSourceHandle(kept.source.handle)).toBe(false)
 })
 
+it('keeps the held screen when a retry from the stopped pane fails after its no-op stop', async () => {
+  const readable = await failingAfterStop()
+  const kept = keptSourceTerminal()
+  kept.runtime.onPtyData(PTY_A, 'the reply so far', 1)
+  expect(await switchFrom(kept, 'first')).toMatchObject({ status: 'refused' })
+  const first = await sourceRow(kept)
+  const screen = first?.type === 'terminal' ? first.stoppedSwitchSource?.screen : undefined
+  expect(screen?.data).toContain('the reply so far')
+  // The retry reads the transcript, finds the process already stopped, then fails again.
+  vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
+    .mockResolvedValueOnce(readable)
+    .mockResolvedValue({ useRealCodexHome: false })
+  const retry = kept.runtime.resolveTerminalPane(
+    `${TAB_ID}:${kept.stoppedSource.leafId}`,
+    WORKTREE_ID
+  )
+  kept.settled.mockClear()
+  expect(
+    await switchFrom({ ...kept, source: { ...retry, presentation: retry.presentation! } }, 'retry')
+  ).toMatchObject({ status: 'refused' })
+  const after = await sourceRow(kept)
+  expect(after?.type === 'terminal' ? after.stoppedSwitchSource?.screen : undefined).toEqual(screen)
+  expect(kept.settled).toHaveBeenCalledExactlyOnceWith(
+    expect.objectContaining({ switched: { agent: 'codex', screen } })
+  )
+})
+
 it('publishes nothing for a stop it could not prove', async () => {
   await failingAfterStop()
   const kept = keptSourceTerminal({ unproven: true })
