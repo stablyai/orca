@@ -37,6 +37,7 @@ import {
 } from './bottom-drawer-modal-host-scope'
 import { useResponsiveLayout } from '../layout/responsive-layout'
 import { useWindowSafeAreaInsets } from '../layout/side-safe-area'
+import { useReleasedSideInset } from '../layout/released-side-inset'
 import { useBackClaim } from '../navigation/use-back-claim'
 import { currentSoftKeyboardHeight, subscribeSoftKeyboard } from '../platform/keyboard-occlusion'
 import { hostOs } from '../platform/host-os'
@@ -66,6 +67,8 @@ export type MountedBottomDrawerProps = {
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
   scrollResetKey?: string | null
+  /** Span a side the session lays its chat across (the Duo's status column), as that chat's composer does. */
+  spanReleasedSide?: boolean
 }
 
 export function MountedBottomDrawer({
@@ -78,7 +81,8 @@ export function MountedBottomDrawer({
   fillAvailable = false,
   interactive = true,
   zIndex = 1000,
-  scrollResetKey = null
+  scrollResetKey = null,
+  spanReleasedSide = false
 }: MountedBottomDrawerProps) {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -100,6 +104,8 @@ export function MountedBottomDrawer({
   const { height: screenHeight } = useWindowDimensions()
   const sheetHeight = useSharedValue(screenHeight)
   const insets = useWindowSafeAreaInsets()
+  const spanned = useReleasedSideInset()?.side
+  const spannedSide = spanReleasedSide ? spanned : undefined
   // Cap/center tablet width while retaining phone’s bottom anchor and drag/keyboard transforms.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useBottomDrawerModalHost() !== null
@@ -392,7 +398,10 @@ export function MountedBottomDrawer({
           style={[
             styles.anchor,
             isWideLayout && styles.anchorWide,
-            { paddingLeft: insets.left, paddingRight: insets.right }
+            {
+              paddingLeft: spannedSide === 'left' ? 0 : insets.left,
+              paddingRight: spannedSide === 'right' ? 0 : insets.right
+            }
           ]}
           pointerEvents="box-none"
         >
