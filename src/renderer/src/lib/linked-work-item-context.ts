@@ -13,6 +13,16 @@ const LINKED_CONTEXT_BEGIN_DELIMITER = '--- BEGIN LINKED WORK ITEM CONTEXT ---'
 const LINKED_CONTEXT_END_DELIMITER = '--- END LINKED WORK ITEM CONTEXT ---'
 const UNICODE_FORMAT_CONTROL_PATTERN = /\p{Cf}/u
 
+// Why: launched agents reported "done" with uncommitted work; the brief has to
+// name the finish, not only the identity of the issue.
+const LINEAR_FINISH_CHECKLIST = [
+  'Finish the issue before you stop:',
+  '1. commit and push the changes, then open a PR/MR whose body names the issue key',
+  '2. attach the PR/MR link to the issue',
+  '3. post one completion comment with the link and a 2-4 sentence summary',
+  '4. move the issue to the review state'
+].join('\n')
+
 function getUsableLinkedContext(
   linkedContext: LinkedWorkItemContext | null | undefined
 ): LinkedWorkItemContext | null {
@@ -164,7 +174,9 @@ export function getLaunchableWorkItemDraftContent(args: {
       title: args.title,
       url: args.url
     })
-    return linearBlock ? formatDraftContextBlock(linearBlock) : ''
+    return linearBlock
+      ? formatDraftContextBlock(`${linearBlock}\n\n${LINEAR_FINISH_CHECKLIST}`)
+      : ''
   }
   return args.url
 }
