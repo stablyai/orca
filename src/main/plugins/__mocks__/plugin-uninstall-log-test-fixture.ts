@@ -134,7 +134,8 @@ export async function createUninstallFixture() {
             },
             plugin: { url: `https://github.com/stablyai/${id}.git`, ref: 'main' }
           },
-          resolvedCommit: '1'.repeat(40)
+          resolvedCommit: '1'.repeat(40),
+          identity: { publisher: 'stablyai' }
         })
       : await installPluginFromLocalPath({
           pluginsDir: getUserPluginsDir(root),

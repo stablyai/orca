@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { makeTabSessionHistoryRow as row } from './tab-session-history-test-fixture'
 import { renderHook } from '@testing-library/react'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -43,7 +44,7 @@ function makeState(): AppState {
     activeRepoId: 'repo-1',
     activeWorktreeId: WORKTREE_ID,
     repos: [makeRepo()],
-    settings: { ...getDefaultSettings('/home/me'), experimentalNativeChat: true },
+    settings: { ...getDefaultSettings('/home/me'), nativeChatProviders: EVERY_AGENT_CHAT },
     worktreesByRepo: {
       'repo-1': [
         makeWorktree(WORKTREE_ID, 'wt', { path: '/repo/wt' }),

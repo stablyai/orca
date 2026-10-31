@@ -1,4 +1,4 @@
-// agent.launch shares desktop/mobile policy; absent --surface uses the host's Chat UI setting.
+// agent.launch shares desktop/mobile policy; absent --surface uses the host's Chat | CLI choice for the agent.
 
 import { randomUUID } from 'node:crypto'
 import type { AgentLaunchPrompt, AgentLaunchResult } from '../shared/agent-launch-intent'

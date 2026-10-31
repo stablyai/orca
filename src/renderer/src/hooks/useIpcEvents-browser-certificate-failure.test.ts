@@ -91,7 +91,7 @@ describe('browser audio state', () => {
         setBrowserPageAudible,
         settings: {
           terminalFontSize: 13,
-          experimentalNativeChat: false,
+          nativeChatProviders: { claude: false, codex: false },
           activeRuntimeEnvironmentId: 'env-a'
         }
       }),
@@ -127,7 +127,7 @@ function storeStateWithRuntime(
     remoteBrowserPageHandlesByPageId,
     settings: {
       terminalFontSize: 13,
-      experimentalNativeChat: false,
+      nativeChatProviders: { claude: false, codex: false },
       activeRuntimeEnvironmentId: 'env-a'
     }
   })

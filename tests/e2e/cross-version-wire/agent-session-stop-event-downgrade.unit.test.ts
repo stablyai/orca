@@ -325,7 +325,7 @@ test("this build keeps a newer build's row kind and refuses the load; a build be
       at,
       newer
     )
-    closeTestJournalHostDatabase(directory)
+    await closeTestJournalHostDatabase(directory)
     const rowsBefore = storedRows(directory)
 
     await expect(

@@ -3,7 +3,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft, ChevronRight, type LucideIcon } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -88,13 +88,13 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
   },
   heading: { fontSize: 20, fontWeight: '700', color: colors.textPrimary },
-  section: { backgroundColor: colors.bgPanel, borderRadius: 12, overflow: 'hidden' },
+  section: { backgroundColor: colors.bgPanel, borderRadius: radii.surface, overflow: 'hidden' },
   sectionSpacer: { marginTop: spacing.md },
   row: {
     flexDirection: 'row',

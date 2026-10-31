@@ -81,7 +81,7 @@ it('preserves actual TRUE writer-close through published close, join, and a heal
       fixture.record().lease.deathEvidence
     )
   } finally {
-    database.close()
+    await database.close()
   }
   expect(fixture.connections[0]!.exitVerdict).toMatchObject({ root: 'live', killDelivered: true })
   expect(await fixture.connections[0]!.close()).toBe(true)

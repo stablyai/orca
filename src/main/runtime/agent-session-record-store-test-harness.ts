@@ -132,7 +132,7 @@ export async function seedTestAgentSessionStoreFromNewerBuild(
   openTestJournalHostDatabase(stateDirectory).db.pragma(
     `user_version = ${JOURNAL_DB_SCHEMA_VERSION + 1}`
   )
-  closeTestJournalHostDatabase(stateDirectory)
+  await closeTestJournalHostDatabase(stateDirectory)
 }
 
 function parsed(json: unknown): unknown {

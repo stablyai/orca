@@ -49,7 +49,7 @@ const styles = themedStyleSheet(() => ({
     minHeight: 36,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     paddingHorizontal: spacing.lg

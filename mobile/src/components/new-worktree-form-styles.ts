@@ -1,16 +1,10 @@
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
-import { composerInputStyles, COMPOSER_TEXT_SIZE } from './composer-input/composer-input-styles'
+import { LIST_ROW_PADDING } from './list/ListGroup'
 
 export const newWorktreeFormStyles = themedStyleSheet(() => ({
   header: {
-    paddingHorizontal: spacing.xs,
-    marginBottom: spacing.md
-  },
-  title: {
-    fontSize: 15,
-    fontWeight: '600',
-    color: colors.textPrimary
+    marginTop: -spacing.xs
   },
   loadingContainer: {
     paddingVertical: spacing.xl,
@@ -18,59 +12,55 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
   },
   emptyText: {
     color: colors.textSecondary,
-    fontSize: typography.bodySize
+    fontSize: 15
   },
+  // A field's own label inside a section, lined up with the field's text.
+  fieldLabel: {
+    fontSize: 13,
+    color: colors.textSecondary,
+    paddingHorizontal: spacing.md,
+    marginBottom: 6
+  },
+  options: {
+    gap: spacing.lg,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.xs
+  },
+  repoDot: {
+    width: 10,
+    height: 10,
+    borderRadius: radii.pill
+  },
+  disabled: {
+    opacity: 0.55
+  },
+  // The SSH notice sits between the Where group and Start from, labelled like a section.
   field: {
-    marginBottom: spacing.md
+    marginTop: spacing.lg
   },
   label: {
     fontSize: 13,
     fontWeight: '500',
     color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  labelHint: {
-    fontWeight: '400',
-    color: colors.textMuted
-  },
-  // Pickers sit beside text fields in these forms, so they wear the same field shell.
-  fieldButton: {
-    ...composerInputStyles.field,
-    paddingVertical: spacing.sm
-  },
-  fieldButtonText: {
-    fontSize: COMPOSER_TEXT_SIZE,
-    color: colors.textPrimary
-  },
-  fieldButtonPlaceholder: {
-    color: colors.textMuted
-  },
-  repoDot: {
-    width: 8,
-    height: 8,
-    borderRadius: 999
-  },
-  disabled: {
-    opacity: 0.55
+    paddingHorizontal: LIST_ROW_PADDING,
+    marginBottom: 6
   },
   sshBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: spacing.md,
     gap: spacing.xs
   },
   sshRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm
+    gap: spacing.md
   },
   sshDot: {
     width: 8,
     height: 8,
-    borderRadius: 999
+    borderRadius: radii.pill
   },
   sshDotConnected: {
     backgroundColor: colors.statusGreen
@@ -86,144 +76,82 @@ export const newWorktreeFormStyles = themedStyleSheet(() => ({
     minWidth: 0
   },
   sshTitle: {
-    fontSize: typography.bodySize,
+    fontSize: 15,
     color: colors.textPrimary,
-    fontWeight: '600'
+    fontWeight: '500'
   },
   sshSubtitle: {
-    fontSize: 12,
+    fontSize: 13,
     color: colors.textSecondary,
     marginTop: 1
   },
   sshConnectButton: {
-    borderRadius: radii.button,
+    minHeight: 32,
+    justifyContent: 'center',
+    borderRadius: radii.control,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
+    paddingHorizontal: spacing.md
   },
   sshConnectText: {
     color: colors.textPrimary,
-    fontSize: 12,
+    fontSize: 13,
     fontWeight: '600'
   },
   errorInline: {
     color: colors.statusRed,
     fontSize: 12
   },
+  notice: {
+    fontSize: 13,
+    color: colors.statusAmber,
+    paddingHorizontal: LIST_ROW_PADDING,
+    marginTop: spacing.sm
+  },
   error: {
     color: colors.statusRed,
     fontSize: 13,
-    marginBottom: spacing.md
+    paddingHorizontal: LIST_ROW_PADDING,
+    marginTop: spacing.lg
   },
-  sourceWarning: {
-    marginTop: -spacing.sm,
-    marginBottom: spacing.md,
-    fontSize: 12,
-    color: colors.statusAmber
-  },
-  advancedToggle: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.xs,
-    paddingVertical: spacing.sm,
-    marginBottom: spacing.xs
-  },
-  advancedText: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textSecondary
+  footer: {
+    marginTop: spacing.xl
   },
   setupHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.xs
+    paddingHorizontal: spacing.md
   },
-  sourceBadge: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: 4,
-    paddingHorizontal: spacing.xs + 2,
-    paddingVertical: 2
-  },
-  sourceBadgeText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5
-  },
-  setupBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    padding: spacing.md
-  },
-  setupToggleRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    marginBottom: spacing.sm
-  },
-  setupToggleLabel: {
+  setupLabel: {
     fontSize: 13,
     color: colors.textSecondary
   },
-  setupChoiceRow: {
-    flexDirection: 'row',
-    gap: spacing.sm,
-    marginBottom: spacing.sm
+  sourceBadge: {
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.pill,
+    paddingHorizontal: spacing.sm,
+    paddingVertical: 2
   },
-  setupChoiceButton: {
-    flex: 1,
-    alignItems: 'center',
-    borderWidth: 1,
-    borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
-    paddingVertical: spacing.sm
-  },
-  setupChoiceButtonSelected: {
-    backgroundColor: colors.bgPanel,
-    borderColor: colors.textSecondary
-  },
-  setupChoiceText: {
-    fontSize: 13,
+  sourceBadgeText: {
+    fontSize: 11,
     fontWeight: '600',
-    color: colors.textPrimary
+    color: colors.textSecondary,
+    letterSpacing: 0.5
   },
-  setupSwitch: {
-    transform: [{ scaleX: 0.7 }, { scaleY: 0.7 }]
+  setupStack: {
+    gap: spacing.sm
   },
-  setupCommandBlock: {
-    backgroundColor: colors.bgBase,
-    borderRadius: 6,
-    paddingHorizontal: spacing.sm + 2,
-    paddingVertical: spacing.sm
+  codeBlock: {
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
+    paddingHorizontal: LIST_ROW_PADDING,
+    paddingVertical: spacing.md
   },
-  setupCommand: {
+  code: {
     fontSize: 13,
+    lineHeight: 19,
     fontFamily: typography.monoFamily,
     color: colors.textPrimary
-  },
-  actions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    marginTop: spacing.sm
-  },
-  createButton: {
-    backgroundColor: colors.textPrimary,
-    paddingHorizontal: spacing.lg,
-    paddingVertical: spacing.sm,
-    borderRadius: radii.button,
-    minWidth: 160,
-    alignItems: 'center'
-  },
-  createButtonDisabled: {
-    opacity: 0.4
-  },
-  createText: {
-    color: colors.bgBase,
-    fontSize: typography.bodySize,
-    fontWeight: '600'
   }
 }))

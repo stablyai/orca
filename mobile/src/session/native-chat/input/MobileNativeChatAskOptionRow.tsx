@@ -1,6 +1,6 @@
 import { Pressable, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
-import { colors, radii, spacing, typography } from '../../../theme/mobile-theme'
+import { colors, concentricRadius, radii, spacing, typography } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 
@@ -56,7 +56,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     gap: spacing.sm,
     padding: spacing.sm,
-    borderRadius: radii.card,
+    borderRadius: concentricRadius(radii.surface, spacing.xs),
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -74,10 +74,10 @@ const styles = themedStyleSheet(() => ({
     justifyContent: 'center'
   },
   checkCircle: {
-    borderRadius: 9
+    borderRadius: radii.pill
   },
   checkSquare: {
-    borderRadius: 4
+    borderRadius: radii.mark
   },
   checkOn: {
     backgroundColor: colors.statusGreen,

@@ -206,7 +206,6 @@ const NODE_RUNTIME_INCLUDE = [
   // Real fs.watch file bindings; Bun's watcher is not the one Electron runs.
   'src/main/ipc/rebinding-file-watch.test.ts',
   'src/main/ipc/parcel-watcher-shallow-file-subscription.test.ts',
-  'src/main/ipc/runtime-environments/runtime-environment-transport-routing-tailscale-hint.test.ts',
   'src/renderer/src/components/emulator-pane/emulator-device-frame-visibility.test.tsx',
   'src/main/claude/claude-agent-sdk-contract-pins.test.ts',
   'config/scripts/profile-state-worker-smoke.test.mjs',

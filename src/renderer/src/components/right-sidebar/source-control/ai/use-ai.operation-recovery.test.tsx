@@ -98,6 +98,57 @@ describe('AI operation recovery composer', () => {
     useAppStore.setState(initialState, true)
   })
 
+  it('claims recovery success only after the terminal and task handoff settle', async () => {
+    vi.mocked(toast.success).mockClear()
+    const completed = Promise.withResolvers<{
+      outcome: { status: 'created' }
+      delivered: boolean
+      failureNotified: boolean
+    }>()
+    const delivery = Promise.withResolvers<{ delivered: boolean; failureNotified: boolean }>()
+    launchAgent.mockReturnValue({
+      surface: { kind: 'host-published' },
+      terminalCompletion: completed.promise,
+      promptDeliveryResult: delivery.promise
+    })
+    useAppStore.setState({
+      settings: { ...getDefaultSettings(path.resolve('tmp')), defaultTuiAgent: 'codex' }
+    })
+    const run = () =>
+      launchSourceControlRecoveryAgentWithDefault({
+        activeWorktreeId: 'wt-1',
+        activeGroupId: null,
+        activeSourceControlLaunchPlatform: 'linux',
+        sourceRepoConnectionId: null,
+        actionId: 'fixCommitFailure',
+        basePrompt: 'fix this commit',
+        getLaunchActionRecipe: () => sourceControlActionRecipeEntry({ agentId: null }),
+        getStoreState: useAppStore.getState,
+        copy: getDefaultSourceControlRecoveryLaunchCopy('commit')
+      })
+    const starting = run()
+    await waitFor(() => expect(launchAgent).toHaveBeenCalledOnce())
+    expect(toast.success).not.toHaveBeenCalled()
+    completed.resolve({ outcome: { status: 'created' }, delivered: false, failureNotified: false })
+    await act(async () => {})
+    expect(toast.success).not.toHaveBeenCalled()
+    delivery.resolve({ delivered: true, failureNotified: false })
+    await expect(starting).resolves.toBe(true)
+    expect(toast.success).toHaveBeenCalledOnce()
+    vi.mocked(toast.success).mockClear()
+    launchAgent.mockReturnValue({
+      surface: { kind: 'host-published' },
+      terminalCompletion: Promise.resolve({
+        outcome: { status: 'failed', message: '' },
+        delivered: false,
+        failureNotified: true
+      })
+    })
+    await expect(run()).resolves.toBe(false)
+    expect(toast.success).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+  })
+
   it.each<GitConflictOperation>(['merge', 'rebase', 'cherry-pick'])(
     'opens for a paused %s with no unmerged paths',
     async (conflictOperation) => {

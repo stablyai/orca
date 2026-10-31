@@ -5,11 +5,12 @@ import {
 } from './agent-browser-batch-command'
 
 export function translateResult(
-  stdout: string
+  stdout: string,
+  options?: { cliArgv?: boolean }
 ): { ok: true; result: unknown } | { ok: false; error: { code: string; message: string } } {
   let parsed: AgentBrowserEnvelope
   try {
-    parsed = parseAgentBrowserJsonOutput(stdout)
+    parsed = parseAgentBrowserJsonOutput(stdout, options)
   } catch {
     return {
       ok: false,

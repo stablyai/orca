@@ -244,6 +244,8 @@ export type OrchestrationCompatibilitySshTerminal = Readonly<{
 
 export type TerminalWaiter = {
   handle: string
+  /** The terminal the handle named when the wait began; the wait follows it, not the handle. */
+  ptyId: string
   condition: RuntimeTerminalWaitCondition
   resolve: (result: RuntimeTerminalWait) => void
   reject: (error: Error) => void

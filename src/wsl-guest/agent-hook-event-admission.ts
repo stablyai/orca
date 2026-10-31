@@ -1,4 +1,4 @@
-import { transitionHookPresence } from '../shared/agent-hook-presence-transition'
+import { previewHookPresence } from '../shared/agent-hook-presence-transition'
 import { hasOtherAgentProcessOwner, isSameAgentProcess } from '../shared/agent-process-presence'
 import { sameAgentStatusTerminalOwner } from '../shared/agent-status-terminal-owner'
 import { cacheRelayLegacyAgentStatus } from '../shared/agent-status-legacy-relay-cache'
@@ -26,13 +26,19 @@ type RelayHookAdmissionHost = {
   checkAgentPresence: (paneKey: string) => Promise<void>
 }
 
+export type RelayHookAdmissionOptions = {
+  isReplay?: boolean
+  checkPresence?: boolean
+  onAccepted?: (event: AgentHookEventPayload) => void
+}
+
 export function applyRelayHookEvent(
   host: RelayHookAdmissionHost,
   incoming: AgentHookEventPayload,
   source: AgentHookSource,
   env?: string,
   version?: string,
-  options: { isReplay?: boolean; checkPresence?: boolean } = {}
+  options: RelayHookAdmissionOptions = {}
 ): AgentHookEventPayload | undefined {
   if (host.isCanonicalPane(incoming.paneKey)) {
     return undefined
@@ -53,7 +59,11 @@ export function applyRelayHookEvent(
   if (cancellation.hold) {
     return previous
   }
-  const transitioned = transitionHookPresence(cancellation.event, previous)
+  const preview = previewHookPresence(cancellation.event, previous)
+  const transitioned = preview.transitioned && {
+    ...preview.transitioned,
+    statusAdmissionSession: incoming.statusAdmissionSession
+  }
   if (!transitioned) {
     return undefined
   }
@@ -105,6 +115,7 @@ export function applyRelayHookEvent(
     version,
     ...(claudeSettledRequests ? { claudeSettledRequests } : {})
   })
+  options.onAccepted?.(event)
   host.forward(buildRelayHookEnvelope(event, source, env, version, options))
   const sender = incoming.agentPresence?.process
   const owner = event.agentPresence

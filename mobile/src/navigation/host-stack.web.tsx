@@ -7,7 +7,6 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { HOST_STACK_SCREENS, type HostStackAnimation } from './host-stack-screens'
 import { isOverlayPageRoute } from '../new-workspace/overlay-page-route'
-import { SideRailOnTopContext } from '../layout/side-rail'
 
 // Expo native-stack’s web view ignores animation and switches display; reuse StackRouter with a view that retains popped screens through their exit slide.
 export function HostStack({ animation }: { animation: HostStackAnimation }) {
@@ -101,9 +100,7 @@ function HostStackView({ animation }: { animation: HostStackAnimation }) {
             motion={leaving ? 'exit' : entering ? 'enter' : null}
             onSettled={settle}
           >
-            <SideRailOnTopContext.Provider value={route.key === topKey}>
-              {descriptor?.render()}
-            </SideRailOnTopContext.Provider>
+            {descriptor?.render()}
           </StackScreen>
         )
       })}

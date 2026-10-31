@@ -8,9 +8,16 @@ import { jiraTaskIssue as issue } from './cmd-j/task-search.test-fixture'
 import { makeRepo, makeWorktree } from './worktree-jump-palette-test-fixtures'
 import type * as ReactI18next from 'react-i18next'
 import type * as RuntimeJiraClient from '@/runtime/runtime-jira-client'
+import { linearSearchIssuesForTarget, linearStatusForTarget } from '@/runtime/runtime-linear-client'
+import { issue as linearIssue } from '@/store/slices/linear-slice-test-harness'
 import { jiraSearchIssuesForTarget, jiraStatusForTarget } from '@/runtime/runtime-jira-client'
 import WorktreeJumpPalette from './WorktreeJumpPalette'
 
+vi.mock('@/runtime/runtime-linear-client', async (original) => ({
+  ...(await original<Record<string, unknown>>()),
+  linearStatusForTarget: vi.fn(),
+  linearSearchIssuesForTarget: vi.fn()
+}))
 vi.mock('@/runtime/runtime-jira-client', async (importOriginal) => ({
   ...(await importOriginal<typeof RuntimeJiraClient>()),
   jiraStatusForTarget: vi.fn(),
@@ -167,18 +174,33 @@ it('discards a previous query response and aborts its Jira request', async () =>
   expect(screen.queryByText('Fix login redirect')).toBeNull()
 })
 
-it('keeps local results and offers a retry after a provider failure', async () => {
-  search.mockRejectedValueOnce(new Error('Offline'))
-  useAppStore.setState({
-    repos: [makeRepo()],
-    worktreesByRepo: { 'repo-1': [makeWorktree('local', 'login redirect workspace')] }
-  })
-  render(<WorktreeJumpPalette />)
-  fireEvent.change(screen.getByLabelText('Palette search'), { target: { value: 'login redirect' } })
-  await waitFor(() =>
-    expect(screen.queryByText(/Some task sources could not be searched/)).not.toBeNull()
-  )
-  expect(screen.getByRole('button', { name: /login redirect workspace/ })).toBeTruthy()
-  fireEvent.click(screen.getByText('Retry'))
-  await waitFor(() => expect(screen.queryByText('Fix login redirect')).not.toBeNull())
-})
+it.each(['jira', 'linear'] as const)(
+  'keeps local results and offers a retry after a %s failure',
+  async (provider) => {
+    if (provider === 'jira') {
+      search.mockRejectedValueOnce(new Error('Offline'))
+    } else {
+      vi.mocked(linearStatusForTarget).mockResolvedValue({ connected: true, viewer: null })
+      vi.mocked(linearSearchIssuesForTarget)
+        .mockReset()
+        .mockRejectedValueOnce(new Error('private provider diagnostic'))
+        .mockResolvedValue([{ ...linearIssue('LIN-1'), title: 'Fix login redirect' }])
+    }
+    useAppStore.setState({
+      settings: createGlobalSettingsFixture({ visibleTaskProviders: [provider] }),
+      repos: [makeRepo()],
+      worktreesByRepo: { 'repo-1': [makeWorktree('local', 'login redirect workspace')] }
+    })
+    render(<WorktreeJumpPalette />)
+    fireEvent.change(screen.getByLabelText('Palette search'), {
+      target: { value: 'login redirect' }
+    })
+    await waitFor(() =>
+      expect(screen.queryByText(/Some task sources could not be searched/)).not.toBeNull()
+    )
+    expect(screen.getByRole('button', { name: /login redirect workspace/ })).toBeTruthy()
+    expect(screen.getByRole('status').textContent).not.toContain('private provider diagnostic')
+    fireEvent.click(screen.getByText('Retry'))
+    await waitFor(() => expect(screen.queryByText('Fix login redirect')).not.toBeNull())
+  }
+)

@@ -18,7 +18,7 @@ import {
   type DiscoveredPlugin,
   type ValidDiscoveredPlugin
 } from './plugin-discovery'
-import { PluginAuditLog } from './plugin-audit-log'
+import { PluginAuditLog, type PluginAuditEntry } from './plugin-audit-log'
 import { executePluginHostCallRequest } from './workers/plugin-host-call-adapter'
 import { PluginContentVerifier } from './plugin-content-integrity'
 import {
@@ -148,7 +148,6 @@ export class PluginService {
       return
     }
     this.contentPacksReady = false
-    this.contentVerifier.clear()
     if (!enabled) {
       this.panels.revokeAll()
     }
@@ -188,6 +187,10 @@ export class PluginService {
 
   getDiscovered(): readonly DiscoveredPlugin[] {
     return this.installed.discovered
+  }
+
+  recordApprovalAudit(entry: PluginAuditEntry): Promise<void> {
+    return this.audit.record(entry)
   }
 
   getLogs(pluginKey: string) {

@@ -22,6 +22,7 @@ export type MobileFileTabDocRequest = {
   worktreeId: string
   relativePath: string
   diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+  oldPath?: string
   ignoreTrimWhitespace?: boolean
 }
 
@@ -35,7 +36,8 @@ export async function resolveMobileFileTabDoc(
     const reply = await fileTabDiffRead.request(client, {
       worktree,
       filePath: relativePath,
-      staged: request.diffSource === 'staged'
+      staged: request.diffSource === 'staged',
+      ...(request.diffSource === 'staged' && request.oldPath ? { oldPath: request.oldPath } : {})
     })
     const result = fileTabDiffRead.interpret(reply)
     if (result.kind !== 'text') {

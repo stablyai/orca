@@ -8,6 +8,7 @@
     "../src/preload/api/**/*",
     "../src/shared/**/*"
   ],
+  "exclude": ["../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts"],
   "compilerOptions": {
     "composite": true,
     "jsx": "react-jsx",

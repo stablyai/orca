@@ -195,7 +195,8 @@ describe('useNativeChatSessionOptions model reporting', () => {
       })
       expect(modelDescriptor(result.current.snapshot).choices).toContainEqual({
         value: 'gpt-6.1-sol',
-        label: 'gpt-6.1-sol'
+        label: 'GPT 6.1 Sol',
+        description: 'gpt-6.1-sol'
       })
       const snapshot = result.current.snapshot
       storeState.agentStatusByPaneKey[paneKey] = {}

@@ -9,6 +9,11 @@ const darkColors = {
   bgRaised: '#262626',
   borderSubtle: 'rgba(255, 255, 255, 0.07)',
   editorSurface: '#1e1e1e',
+  // Sheets sit a step above the screen, their groups a step above the sheet (the desktop's sidebar and secondary).
+  sheetSurface: '#171717',
+  sheetGroup: '#262626',
+  // A translucent grey that reads on any surface: off switches, and chips or picked segments on a sheet group.
+  translucentFill: 'rgba(120, 120, 128, 0.36)',
   // --chat-composer-surface painted over --chat-canvas, and --chat-composer-border.
   composerSurface: '#1f1f1f',
   composerBorder: 'rgba(250, 250, 250, 0.09)',
@@ -74,6 +79,10 @@ const lightColors: MobilePalette = {
   bgRaised: '#f5f5f5',
   borderSubtle: '#e5e5e5',
   editorSurface: '#ffffff',
+  // Light inverts it: a grey sheet under white groups, as iOS does.
+  sheetSurface: '#f5f5f5',
+  sheetGroup: '#ffffff',
+  translucentFill: 'rgba(120, 120, 128, 0.16)',
   composerSurface: '#ffffff',
   composerBorder: 'rgba(10, 10, 10, 0.11)',
   composerControl: '#f5f5f5',
@@ -162,15 +171,26 @@ export const spacing = {
   xl: 24
 } as const
 
+// Three shape types: one radius for what you tap, one for what holds content, and concentric nesting.
 export const radii = {
-  row: 6,
-  card: 14,
-  button: 6,
-  input: 6,
-  camera: 8,
-  composer: 24,
-  composerItem: 12
+  /** Everything you tap: buttons, icon buttons, text fields, pickers, segmented controls, key caps. */
+  control: 12,
+  /** Labels and round buttons: badges, chips, status pills, dots, avatars, and the composer's own buttons. */
+  pill: 999,
+  /** Everything that holds content: cards, groups, sheets, banners, code boxes, multi-line boxes, menus. */
+  surface: 16,
+  /** Layers floating over content: the composer box and dialogs. */
+  floating: 24,
+  /** Square icon tiles. */
+  tile: 10,
+  /** Inline code, check squares and tiny icons. */
+  mark: 4
 } as const
+
+/** A shape inside another keeps its curve parallel to the parent's: the parent radius minus the gap between them. */
+export function concentricRadius(parentRadius: number, inset: number): number {
+  return Math.max(radii.mark, parentRadius - inset)
+}
 
 export const typography = {
   titleSize: 18,

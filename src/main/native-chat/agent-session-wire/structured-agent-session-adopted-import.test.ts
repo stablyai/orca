@@ -17,7 +17,10 @@ import { AgentSessionJournal } from '../agent-session-journal/journal-store'
 import * as legacyImport from '../agent-session-journal/journal-legacy-import'
 import { writeCodexHistoryFixture } from '../agent-session-journal/codex-history-test-fixture'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import {
@@ -48,6 +51,7 @@ let store: AgentSessionRecordStore | null = null
 
 afterEach(async () => {
   if (root) {
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
   root = null

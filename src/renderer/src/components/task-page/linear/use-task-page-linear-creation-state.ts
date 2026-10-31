@@ -1,11 +1,122 @@
 import type { TaskPageJiraListProjectionModel } from '../../use-task-page-jira-list-projection'
-import { useState, useMemo, useEffect, type SetStateAction } from 'react'
+import { useState, useMemo, useEffect, useReducer, type SetStateAction } from 'react'
 import { useTeamMembers, useTeamLabels, useTeamStates } from '@/hooks/useIssueMetadata'
-import { useTaskCreationDraftRetention } from '@/components/use-task-creation-draft-retention'
+import {
+  useTaskCreationDraftRetention,
+  type LinearIssueForm,
+  linearIssueFormPickerDefaults as pickerDefaults,
+  sameLinearIssueFormSignature as sameSignature,
+  linearIssueFormSignature as signatureOf,
+  completeLinearIssueForm,
+  handoffLinearIssueForm as handoff
+} from '@/components/use-task-creation-draft-retention'
 import { useNewLinearIssueProjects } from '../../use-new-linear-issue-projects'
 import { useContextualTour } from '@/components/contextual-tours/use-contextual-tour'
 import { writeNewLinearIssueDraft, writeNewLinearProjectDraft } from '../task-page-draft-storage'
 import { defaultScopeSource } from '@/lib/default-creation-host'
+type FormAction = (value: LinearIssueForm, target: string) => LinearIssueForm
+export function useLinearIssueCreationForm(
+  runtime: string,
+  initial = { open: false, title: '', body: '' }
+) {
+  const [form, update] = useReducer(
+    (previous: LinearIssueForm, action: FormAction) => action(previous, runtime),
+    {
+      ...initial,
+      ...pickerDefaults,
+      runtime,
+      attempt: null,
+      occurrence: {},
+      titleContributor: {},
+      bodyContributor: {},
+      retirement: null
+    }
+  )
+  const retention = useTaskCreationDraftRetention({
+    open: form.open,
+    signature: form.open ? form : (form.retirement ?? form),
+    sameSignature,
+    draft: {
+      title: (form.open ? form : (form.retirement ?? form)).title,
+      body: (form.open ? form : (form.retirement ?? form)).body
+    },
+    writeDraft: writeNewLinearIssueDraft
+  })
+  const commands = useMemo(() => {
+    const field =
+      <
+        K extends keyof Pick<
+          LinearIssueForm,
+          'open' | 'title' | 'body' | keyof typeof pickerDefaults
+        >
+      >(
+        key: K
+      ) =>
+      (value: SetStateAction<LinearIssueForm[K]>) => {
+        const contribution = {}
+        update((current, target) => {
+          if (current.runtime !== runtime && target !== runtime) {
+            return current
+          }
+          const previous = current.runtime === runtime ? current : handoff(current, runtime)
+          const next = typeof value === 'function' ? value(previous[key]) : value
+          if (Object.is(next, previous[key])) {
+            return previous
+          }
+          return {
+            ...previous,
+            runtime,
+            [key]: next,
+            occurrence: key === 'open' && next ? contribution : previous.occurrence,
+            titleContributor: key === 'title' ? contribution : previous.titleContributor,
+            bodyContributor: key === 'body' ? contribution : previous.bodyContributor,
+            retirement: key === 'open' ? (next ? null : signatureOf(previous)) : previous.retirement
+          }
+        })
+      }
+    return {
+      setNewLinearIssueOpen: field('open'),
+      setNewLinearIssueTitle: field('title'),
+      setNewLinearIssueBody: field('body'),
+      setNewLinearIssueStateId: field('stateId'),
+      setNewLinearIssueAssigneeId: field('assigneeId'),
+      setNewLinearIssuePriority: field('priority'),
+      setNewLinearIssueProjectId: field('projectId'),
+      setNewLinearIssueLabelIds: field('labelIds'),
+      completeNewLinearIssueDraft(submitted: ReturnType<typeof retention.capture>) {
+        retention.complete(submitted)
+        update((previous, target) =>
+          completeLinearIssueForm(previous, runtime, target, submitted.signature)
+        )
+      },
+      beginNewLinearIssue: (attempt: NonNullable<LinearIssueForm['attempt']>) =>
+        update((previous, target) =>
+          target === runtime ? { ...handoff(previous, runtime), attempt } : previous
+        ),
+      settleNewLinearIssue: (attempt: NonNullable<LinearIssueForm['attempt']>) =>
+        update((previous, target) =>
+          target === runtime && previous.runtime === runtime && previous.attempt === attempt
+            ? { ...previous, attempt: null }
+            : previous
+        ),
+      resetNewLinearIssue: () =>
+        update((previous, target) => (target === runtime ? handoff(previous, runtime) : previous))
+    }
+  }, [retention, runtime])
+  return {
+    ...commands,
+    newLinearIssueOpen: form.open,
+    newLinearIssueTitle: form.title,
+    newLinearIssueBody: form.body,
+    newLinearIssueSubmitting: form.attempt !== null,
+    newLinearIssueStateId: form.stateId,
+    newLinearIssueAssigneeId: form.assigneeId,
+    newLinearIssuePriority: form.priority,
+    newLinearIssueProjectId: form.projectId,
+    newLinearIssueLabelIds: form.labelIds,
+    captureNewLinearIssueDraft: retention.capture
+  }
+}
 export function useTaskPageLinearCreationState(model: TaskPageJiraListProjectionModel) {
   const {
     settings,
@@ -62,24 +173,9 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     writeDraft: writeNewLinearProjectDraft
   })
 
-  const [newLinearIssueOpen, setNewLinearIssueOpen] = useState(false)
-  const [newLinearIssueTitle, setNewLinearIssueTitle] = useState('')
-  const [newLinearIssueBody, setNewLinearIssueBody] = useState('')
+  const issueForm = useLinearIssueCreationForm(model.providerRuntimeContextKey)
+  const { newLinearIssueOpen, newLinearIssueStateId, setNewLinearIssueStateId } = issueForm
   const [newLinearIssueTeamId, setNewLinearIssueTeamIdState] = useState<string | null>(null)
-  const [newLinearIssueSubmitting, setNewLinearIssueSubmitting] = useState(false)
-  const [newLinearIssueStateId, setNewLinearIssueStateId] = useState<string | null>(null)
-  const [newLinearIssueAssigneeId, setNewLinearIssueAssigneeId] = useState<string | null>(null)
-  const [newLinearIssuePriority, setNewLinearIssuePriority] = useState<number>(0)
-  const [newLinearIssueProjectId, setNewLinearIssueProjectId] = useState<string | null>(null)
-  const [newLinearIssueLabelIds, setNewLinearIssueLabelIds] = useState<string[]>([])
-  const discardNewLinearIssueDraft = useTaskCreationDraftRetention({
-    open: newLinearIssueOpen,
-    draft: {
-      title: newLinearIssueTitle,
-      body: newLinearIssueBody
-    },
-    writeDraft: writeNewLinearIssueDraft
-  })
   const newLinearIssueTargetTeam = useMemo(
     () => availableTeams.find((t) => t.id === newLinearIssueTeamId) ?? availableTeams[0] ?? null,
     [availableTeams, newLinearIssueTeamId]
@@ -100,15 +196,15 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     const id = typeof value === 'function' ? value(newLinearIssueTeamId) : value
     setNewLinearIssueTeamIdState(id)
     setNewLinearIssueStateId(null)
-    setNewLinearIssueAssigneeId(null)
-    setNewLinearIssuePriority(0)
+    issueForm.setNewLinearIssueAssigneeId(null)
+    issueForm.setNewLinearIssuePriority(0)
     const targetTeam = availableTeams.find((team) => team.id === id) ?? availableTeams[0]
-    setNewLinearIssueProjectId(
+    issueForm.setNewLinearIssueProjectId(
       selectedLinearProject?.workspaceId === targetTeam?.workspaceId
         ? (selectedLinearProject?.id ?? null)
         : null
     )
-    setNewLinearIssueLabelIds([])
+    issueForm.setNewLinearIssueLabelIds([])
   }
   const newLinearStates = useTeamStates(
     linearConnected ? newLinearIssueTargetTeam?.id || null : null,
@@ -126,14 +222,12 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
     newLinearIssueTargetTeam?.workspaceId
   )
   useEffect(() => {
-    if (newLinearStates.data.length > 0 && !newLinearIssueStateId) {
-      const defaultState =
-        newLinearStates.data.find((s) => s.type === 'unstarted') || newLinearStates.data[0]
-      if (defaultState) {
-        setNewLinearIssueStateId(defaultState.id)
-      }
+    const defaultState =
+      newLinearStates.data.find((s) => s.type === 'unstarted') ?? newLinearStates.data[0]
+    if (!newLinearIssueStateId && defaultState) {
+      setNewLinearIssueStateId(defaultState.id)
     }
-  }, [newLinearStates.data, newLinearIssueStateId])
+  }, [newLinearStates.data, newLinearIssueStateId, setNewLinearIssueStateId])
   const [linearConnectOpen, setLinearConnectOpen] = useState(false)
   const [jiraConnectOpen, setJiraConnectOpen] = useState(false)
   useContextualTour(
@@ -149,129 +243,55 @@ export function useTaskPageLinearCreationState(model: TaskPageJiraListProjection
       activeModal === 'none',
     'tasks_open'
   )
-  const nextModel = model as typeof model & {
-    newLinearProjectOpen: typeof newLinearProjectOpen
-    setNewLinearProjectOpen: typeof setNewLinearProjectOpen
-    newLinearProjectName: typeof newLinearProjectName
-    setNewLinearProjectName: typeof setNewLinearProjectName
-    newLinearProjectDescription: typeof newLinearProjectDescription
-    setNewLinearProjectDescription: typeof setNewLinearProjectDescription
-    newLinearProjectContent: typeof newLinearProjectContent
-    setNewLinearProjectContent: typeof setNewLinearProjectContent
-    newLinearProjectTeamId: typeof newLinearProjectTeamId
-    setNewLinearProjectTeamId: typeof setNewLinearProjectTeamId
-    newLinearProjectLeadId: typeof newLinearProjectLeadId
-    setNewLinearProjectLeadId: typeof setNewLinearProjectLeadId
-    newLinearProjectMemberIds: typeof newLinearProjectMemberIds
-    setNewLinearProjectMemberIds: typeof setNewLinearProjectMemberIds
-    newLinearProjectLabelIds: typeof newLinearProjectLabelIds
-    setNewLinearProjectLabelIds: typeof setNewLinearProjectLabelIds
-    newLinearProjectPriority: typeof newLinearProjectPriority
-    setNewLinearProjectPriority: typeof setNewLinearProjectPriority
-    newLinearProjectStartDate: typeof newLinearProjectStartDate
-    setNewLinearProjectStartDate: typeof setNewLinearProjectStartDate
-    newLinearProjectTargetDate: typeof newLinearProjectTargetDate
-    setNewLinearProjectTargetDate: typeof setNewLinearProjectTargetDate
-    newLinearProjectSubmitting: typeof newLinearProjectSubmitting
-    setNewLinearProjectSubmitting: typeof setNewLinearProjectSubmitting
-    newLinearProjectTargetTeam: typeof newLinearProjectTargetTeam
-    newLinearProjectMembers: typeof newLinearProjectMembers
-    newLinearProjectLabels: typeof newLinearProjectLabels
-    discardNewLinearProjectDraft: typeof discardNewLinearProjectDraft
-    newLinearIssueOpen: typeof newLinearIssueOpen
-    setNewLinearIssueOpen: typeof setNewLinearIssueOpen
-    newLinearIssueTitle: typeof newLinearIssueTitle
-    setNewLinearIssueTitle: typeof setNewLinearIssueTitle
-    newLinearIssueBody: typeof newLinearIssueBody
-    setNewLinearIssueBody: typeof setNewLinearIssueBody
-    newLinearIssueTeamId: typeof newLinearIssueTeamId
-    setNewLinearIssueTeamId: typeof setNewLinearIssueTeamId
-    newLinearIssueSubmitting: typeof newLinearIssueSubmitting
-    setNewLinearIssueSubmitting: typeof setNewLinearIssueSubmitting
-    newLinearIssueStateId: typeof newLinearIssueStateId
-    setNewLinearIssueStateId: typeof setNewLinearIssueStateId
-    newLinearIssueAssigneeId: typeof newLinearIssueAssigneeId
-    setNewLinearIssueAssigneeId: typeof setNewLinearIssueAssigneeId
-    newLinearIssuePriority: typeof newLinearIssuePriority
-    setNewLinearIssuePriority: typeof setNewLinearIssuePriority
-    newLinearIssueProjectId: typeof newLinearIssueProjectId
-    setNewLinearIssueProjectId: typeof setNewLinearIssueProjectId
-    newLinearIssueLabelIds: typeof newLinearIssueLabelIds
-    setNewLinearIssueLabelIds: typeof setNewLinearIssueLabelIds
-    discardNewLinearIssueDraft: typeof discardNewLinearIssueDraft
-    newLinearIssueTargetTeam: typeof newLinearIssueTargetTeam
-    newLinearIssueProjects: typeof newLinearIssueProjects
-    setNewLinearIssueProjects: typeof setNewLinearIssueProjects
-    newLinearIssueProjectsLoading: typeof newLinearIssueProjectsLoading
-    setNewLinearIssueProjectsLoading: typeof setNewLinearIssueProjectsLoading
-    newLinearStates: typeof newLinearStates
-    newLinearMembers: typeof newLinearMembers
-    newLinearLabels: typeof newLinearLabels
-    linearConnectOpen: typeof linearConnectOpen
-    setLinearConnectOpen: typeof setLinearConnectOpen
-    jiraConnectOpen: typeof jiraConnectOpen
-    setJiraConnectOpen: typeof setJiraConnectOpen
-  }
-  nextModel.newLinearProjectOpen = newLinearProjectOpen
-  nextModel.setNewLinearProjectOpen = setNewLinearProjectOpen
-  nextModel.newLinearProjectName = newLinearProjectName
-  nextModel.setNewLinearProjectName = setNewLinearProjectName
-  nextModel.newLinearProjectDescription = newLinearProjectDescription
-  nextModel.setNewLinearProjectDescription = setNewLinearProjectDescription
-  nextModel.newLinearProjectContent = newLinearProjectContent
-  nextModel.setNewLinearProjectContent = setNewLinearProjectContent
-  nextModel.newLinearProjectTeamId = newLinearProjectTeamId
-  nextModel.setNewLinearProjectTeamId = setNewLinearProjectTeamId
-  nextModel.newLinearProjectLeadId = newLinearProjectLeadId
-  nextModel.setNewLinearProjectLeadId = setNewLinearProjectLeadId
-  nextModel.newLinearProjectMemberIds = newLinearProjectMemberIds
-  nextModel.setNewLinearProjectMemberIds = setNewLinearProjectMemberIds
-  nextModel.newLinearProjectLabelIds = newLinearProjectLabelIds
-  nextModel.setNewLinearProjectLabelIds = setNewLinearProjectLabelIds
-  nextModel.newLinearProjectPriority = newLinearProjectPriority
-  nextModel.setNewLinearProjectPriority = setNewLinearProjectPriority
-  nextModel.newLinearProjectStartDate = newLinearProjectStartDate
-  nextModel.setNewLinearProjectStartDate = setNewLinearProjectStartDate
-  nextModel.newLinearProjectTargetDate = newLinearProjectTargetDate
-  nextModel.setNewLinearProjectTargetDate = setNewLinearProjectTargetDate
-  nextModel.newLinearProjectSubmitting = newLinearProjectSubmitting
-  nextModel.setNewLinearProjectSubmitting = setNewLinearProjectSubmitting
-  nextModel.newLinearProjectTargetTeam = newLinearProjectTargetTeam
-  nextModel.newLinearProjectMembers = newLinearProjectMembers
-  nextModel.newLinearProjectLabels = newLinearProjectLabels
-  nextModel.discardNewLinearProjectDraft = discardNewLinearProjectDraft
-  nextModel.newLinearIssueOpen = newLinearIssueOpen
-  nextModel.setNewLinearIssueOpen = setNewLinearIssueOpen
-  nextModel.newLinearIssueTitle = newLinearIssueTitle
-  nextModel.setNewLinearIssueTitle = setNewLinearIssueTitle
-  nextModel.newLinearIssueBody = newLinearIssueBody
-  nextModel.setNewLinearIssueBody = setNewLinearIssueBody
-  nextModel.newLinearIssueTeamId = newLinearIssueTeamId
-  nextModel.setNewLinearIssueTeamId = setNewLinearIssueTeamId
-  nextModel.newLinearIssueSubmitting = newLinearIssueSubmitting
-  nextModel.setNewLinearIssueSubmitting = setNewLinearIssueSubmitting
-  nextModel.newLinearIssueStateId = newLinearIssueStateId
-  nextModel.setNewLinearIssueStateId = setNewLinearIssueStateId
-  nextModel.newLinearIssueAssigneeId = newLinearIssueAssigneeId
-  nextModel.setNewLinearIssueAssigneeId = setNewLinearIssueAssigneeId
-  nextModel.newLinearIssuePriority = newLinearIssuePriority
-  nextModel.setNewLinearIssuePriority = setNewLinearIssuePriority
-  nextModel.newLinearIssueProjectId = newLinearIssueProjectId
-  nextModel.setNewLinearIssueProjectId = setNewLinearIssueProjectId
-  nextModel.newLinearIssueLabelIds = newLinearIssueLabelIds
-  nextModel.setNewLinearIssueLabelIds = setNewLinearIssueLabelIds
-  nextModel.discardNewLinearIssueDraft = discardNewLinearIssueDraft
-  nextModel.newLinearIssueTargetTeam = newLinearIssueTargetTeam
-  nextModel.newLinearIssueProjects = newLinearIssueProjects
-  nextModel.setNewLinearIssueProjects = setNewLinearIssueProjects
-  nextModel.newLinearIssueProjectsLoading = newLinearIssueProjectsLoading
-  nextModel.setNewLinearIssueProjectsLoading = setNewLinearIssueProjectsLoading
-  nextModel.newLinearStates = newLinearStates
-  nextModel.newLinearMembers = newLinearMembers
-  nextModel.newLinearLabels = newLinearLabels
-  nextModel.linearConnectOpen = linearConnectOpen
-  nextModel.setLinearConnectOpen = setLinearConnectOpen
-  Object.assign(nextModel, { jiraConnectOpen, setJiraConnectOpen })
-  return nextModel
+  return Object.assign(model, issueForm, {
+    resetNewLinearIssue: () => {
+      issueForm.resetNewLinearIssue()
+      if (newLinearIssueOpen) {
+        setNewLinearIssueTeamIdState(null)
+      }
+    },
+    newLinearProjectOpen,
+    setNewLinearProjectOpen,
+    newLinearProjectName,
+    setNewLinearProjectName,
+    newLinearProjectDescription,
+    setNewLinearProjectDescription,
+    newLinearProjectContent,
+    setNewLinearProjectContent,
+    newLinearProjectTeamId,
+    setNewLinearProjectTeamId,
+    newLinearProjectLeadId,
+    setNewLinearProjectLeadId,
+    newLinearProjectMemberIds,
+    setNewLinearProjectMemberIds,
+    newLinearProjectLabelIds,
+    setNewLinearProjectLabelIds,
+    newLinearProjectPriority,
+    setNewLinearProjectPriority,
+    newLinearProjectStartDate,
+    setNewLinearProjectStartDate,
+    newLinearProjectTargetDate,
+    setNewLinearProjectTargetDate,
+    newLinearProjectSubmitting,
+    setNewLinearProjectSubmitting,
+    newLinearProjectTargetTeam,
+    newLinearProjectMembers,
+    newLinearProjectLabels,
+    discardNewLinearProjectDraft,
+    newLinearIssueTeamId,
+    setNewLinearIssueTeamId,
+    newLinearIssueTargetTeam,
+    newLinearIssueProjects,
+    setNewLinearIssueProjects,
+    newLinearIssueProjectsLoading,
+    setNewLinearIssueProjectsLoading,
+    newLinearStates,
+    newLinearMembers,
+    newLinearLabels,
+    linearConnectOpen,
+    setLinearConnectOpen,
+    jiraConnectOpen,
+    setJiraConnectOpen
+  })
 }
 export type TaskPageLinearCreationStateModel = ReturnType<typeof useTaskPageLinearCreationState>

@@ -228,9 +228,13 @@ async function recordStartedHandle(
     return store.getRecord(event.sessionId)?.lease.provenHandleLinkId != null
   }
   try {
-    await store.transitionHandoff(event.sessionId, (record) =>
+    const committed = await store.transitionHandoff(event.sessionId, (record) =>
       recordAgentSessionProviderHandle({ record, fence: event.fence, link, now: context.now() })
     )
+    // Inherit only a committed new context; a resumed CLI keeps its own later title.
+    if (event.newConversation ?? (link.origin === 'created' || link.origin === 'forked')) {
+      context.deps.nameProviderConversation?.(committed)
+    }
     return true
   } catch (error) {
     logger.warn('recording the handle a started provider answered with failed', {

@@ -37,6 +37,21 @@ describe('typecheck project coverage', () => {
     expect(tests.filter((file) => !project.files.has(resolve(root, file)))).toEqual([])
   })
 
+  it('assigns the combined pane launch integration to its typed cross-process project', () => {
+    const suite = resolve(
+      root,
+      'src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts'
+    )
+    expect(
+      projects.filter((project) => project.files.has(suite)).map((project) => project.config)
+    ).toEqual(['config/tsconfig.test.pane-launch.json'])
+    const combined = projects.find(
+      (project) => project.config === 'config/tsconfig.test.pane-launch.json'
+    )
+    expect(combined.files.has(resolve(root, 'src/types/build-constants.d.ts'))).toBe(true)
+    expect(combined.files.has(resolve(root, 'src/renderer/src/env.d.ts'))).toBe(true)
+  })
+
   it('checks every shared test exactly once, in the scheduled Node project', () => {
     const tests = typedFiles('src/shared').filter(isTest)
     expect(tests.length).toBeGreaterThan(0)

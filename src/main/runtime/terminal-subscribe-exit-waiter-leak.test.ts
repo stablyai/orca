@@ -7,7 +7,7 @@ import type { RuntimeTerminalWait } from '../../shared/runtime-types'
 type RuntimeInternals = {
   recordPtyWorktree: (ptyId: string, worktreeId: string, state?: { connected?: boolean }) => unknown
   handleByPtyId: Map<string, string>
-  terminalWaiters: { get: (handle: string) => ReadonlySet<unknown> | undefined }
+  terminalWaiters: { forPty: (ptyId: string) => unknown[] }
 }
 
 function internals(runtime: OrcaRuntimeService): RuntimeInternals {
@@ -21,7 +21,8 @@ function registerLivePty(runtime: OrcaRuntimeService, ptyId: string, handle: str
 }
 
 function waiterCount(runtime: OrcaRuntimeService, handle: string): number {
-  return internals(runtime).terminalWaiters.get(handle)?.size ?? 0
+  const ptyId = [...internals(runtime).handleByPtyId].find(([, mapped]) => mapped === handle)?.[0]
+  return ptyId ? internals(runtime).terminalWaiters.forPty(ptyId).length : 0
 }
 
 describe('terminal.subscribe exit-waiter leak regression', () => {

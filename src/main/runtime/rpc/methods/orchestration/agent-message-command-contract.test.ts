@@ -74,7 +74,7 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
     expect(await current.host.attach(QUEUED_RIG_CALLER, attach)).toMatchObject({ ok: true })
     const { db, runtime } = h.setup(
       false,
-      partialRuntimeStore({ getSettings: () => ({ experimentalNativeChat: false }) })
+      partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
     )
     vi.spyOn(runtime, 'ensureStructuredAgentSessionHost').mockResolvedValue()
     vi.spyOn(runtime, 'validateOrchestrationAgentLauncher').mockImplementation(() => {})
@@ -268,7 +268,8 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
         `orca_session_id:${WORKER}`,
         '--inject',
         '--return-preamble',
-        '--json'
+        '--json',
+        '--full'
       ]
     } else {
       argv = [
@@ -282,11 +283,12 @@ it.each(['worker-start', 'saved-task', 'dispatch'] as const)(
         '1000',
         '--retry-request',
         '11111111-1111-4111-8111-111111111111',
-        '--json'
+        '--json',
+        '--full'
       ]
     }
     if (command === 'saved-task') {
-      await main(['orchestration', 'task-create', '--spec', task, '--json'])
+      await main(['orchestration', 'task-create', '--spec', task, '--json', '--full'])
       const created = db.listTasks({ runId: run.id }).find((entry) => entry.spec === task)
       if (!created) {
         throw new Error('serialized task-create did not store exact task')

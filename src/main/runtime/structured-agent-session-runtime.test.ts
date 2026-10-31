@@ -27,7 +27,10 @@ import {
 import { seedTestAgentSessionRecordStore } from './agent-session-record-store-test-harness'
 import { nativeChatScratchFolderFor } from '../native-chat/native-chat-scratch-folder'
 import { foundAgentSessionRecord } from './agent-session-record-founding'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { recordingStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { createStructuredAgentSessionLogger } from '../native-chat/agent-session-wire/structured-agent-session-logger'
 import { onStructuredAgentSessionsHeldChanged } from '../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -80,7 +83,7 @@ describe('structured agent-session store presence', () => {
   }
 
   it('reports a profile whose database holds no chat absent', async () => {
-    ;(await openProfileDatabase()).close()
+    await (await openProfileDatabase()).close()
 
     expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(false)
   })
@@ -90,7 +93,7 @@ describe('structured agent-session store presence', () => {
     database.db
       .prepare('INSERT INTO agent_session_records (session_id, record_json) VALUES (?, ?)')
       .run('session-1', '{}')
-    database.close()
+    await database.close()
 
     expect(hasPersistedStructuredAgentSessionStore(profile)).toBe(true)
   })
@@ -219,6 +222,7 @@ describe('structured agent-session runtime install', () => {
   afterEach(async () => {
     await stopStructuredAgentSessionRuntime()
     if (stateDirectory) {
+      await closeTestJournalHostDatabases()
       await rm(stateDirectory, { recursive: true, force: true })
       stateDirectory = null
     }

@@ -1,4 +1,4 @@
-/** agent.launch.v2 vouches for Claude/Codex chat rendering; other agents need explicit client support, host callers need none, and disabled structured chat always uses a terminal. */
+/** agent.launch.v2 vouches for Claude/Codex chat rendering; other agents need explicit client support, host callers need none, and an agent set to CLI always uses a terminal. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -83,9 +83,9 @@ describe('a launch the caller cannot show as a chat', () => {
   })
 })
 
-describe('Grok with the structured-chat setting off', () => {
+describe('Grok set to open as a CLI', () => {
   it('opens as a terminal for every caller, as Claude and Codex do', async () => {
-    const off = { ...STRUCTURED_PREFERENCE, experimentalNativeChat: false }
+    const off = { ...STRUCTURED_PREFERENCE, nativeChatProviders: { grok: false, claude: false } }
     for (const agent of ['grok', 'claude']) {
       const { result, runtime } = await launchInto(agent, {}, off)
       expect(result.outcome).toMatchObject({ kind: 'terminal' })
@@ -97,8 +97,8 @@ describe('Grok with the structured-chat setting off', () => {
 })
 
 describe("a launch carrying its caller's chat default", () => {
-  it("opens a chat for a relayed phone whose desktop has chats on, though this host's are off", async () => {
-    const runtime = runtimeStub({ settings: { experimentalNativeChat: false } })
+  it("opens a chat for a relayed phone whose desktop picks chat, though this host's choice is CLI", async () => {
+    const runtime = runtimeStub({ settings: { nativeChatProviders: { claude: false } } })
     const parsed = AGENT_LAUNCH.params.parse({
       agent: 'claude',
       target: { kind: 'existing', worktree: 'id:wt-7' },

@@ -70,8 +70,8 @@ describe('one-time move of permission flags out of Arguments', () => {
     )
     expect(migrated.agentPermissionDefault).toBe('full-access')
     expect(migrated.agentDefaultArgs).toMatchObject({
-      claude: '--model opus',
-      codex: '-c model_reasoning_effort="high"',
+      claude: '',
+      codex: '',
       gemini: '',
       grok: '--permission-mode plan',
       cursor: ''
@@ -88,7 +88,7 @@ describe('one-time move of permission flags out of Arguments', () => {
     })
     // Terminals launch what they launched before the move.
     expect(resolveTuiAgentLaunchArgs('claude', migrated)).toBe(
-      '--dangerously-skip-permissions --model opus'
+      '--model opus --dangerously-skip-permissions'
     )
     expect(resolveTuiAgentLaunchArgs('grok', migrated)).toBe('--permission-mode plan')
     expect(resolveTuiAgentLaunchEnv('goose', migrated)).toEqual({ GOOSE_MODE: 'auto', OTHER: '1' })
@@ -362,7 +362,7 @@ describe('permission carrier ownership across save, reload and consumers', () =>
       'codex',
       '-c model_reasoning_effort=high',
       '-c model_reasoning_effort=high',
-      '--approve-for-me -c model_reasoning_effort=high',
+      '-c model_reasoning_effort=high --approve-for-me',
       'auto',
       false
     ],
@@ -390,12 +390,15 @@ describe('permission carrier ownership across save, reload and consumers', () =>
     )
   )('%s preserves ownership for %s', (agent, value, raw, launch, chat, carrier, n) => {
     const before: AgentLaunchSettingsSource = {
+      agentLaunchChoices: {},
       agentPermissionDefault: agent === 'grok' ? 'ask' : 'auto'
     }
     const start = [importWork.chars, importWork.visits]
     expect(
-      migrateAgentPermissionChoice({ agentDefaultArgs: { [agent]: value } }, 'linux')
-        .agentDefaultArgs[agent]
+      migrateAgentPermissionChoice(
+        { agentLaunchChoices: {}, agentDefaultArgs: { [agent]: value } },
+        'linux'
+      ).agentDefaultArgs[agent]
     ).toBe(raw)
     const updates = agentLaunchSettingsMutationUpdates(
       before,
@@ -417,7 +420,9 @@ describe('permission carrier ownership across save, reload and consumers', () =>
       const size = [importWork.chars - start[0], importWork.visits - start[1]]
       expectSettingsWorkScale(`import-${key}`, n, size)
     }
-    expect(loaded.agentDefaultArgs[agent]).toBe(raw)
+    expect(loaded.agentDefaultArgs[agent]).toBe(
+      value === '-c model_reasoning_effort=high' ? '' : raw
+    )
     expect(resolveTuiAgentLaunchArgs(agent, loaded)).toBe(launch)
     expect(projectAgentLaunchSettings(loaded).agentDefaultArgs[agent]).toBe(launch)
     expect(newChatPermissionModeForSettings(agent, loaded)).toBe(chat)

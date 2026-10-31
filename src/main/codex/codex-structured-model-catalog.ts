@@ -79,6 +79,7 @@ function modelOption(value: unknown): AgentSessionModelOption | null {
     ...(description ? { description } : {}),
     isDefault: row.isDefault === true,
     ...(defaultEffort ? { defaultEffort } : {}),
+    declaredDefaultEffort: defaultEffort ?? null,
     efforts,
     ...(!Array.isArray(row.supportedReasoningEfforts) ||
     efforts.length !== row.supportedReasoningEfforts.length

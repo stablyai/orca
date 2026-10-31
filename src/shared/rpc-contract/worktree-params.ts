@@ -194,6 +194,8 @@ export const WorktreeSet = WorktreeSelector.extend({
 })
 
 export const WorktreeRemove = WorktreeSelector.extend({
+  // Omission retains legacy/UI metadata policy; explicit CLI intent overrides it.
+  deleteBranch: OptionalBoolean,
   hostId: OptionalExecutionHostId,
   force: OptionalBoolean,
   // Desktop force also means ordinary confirmed delete; PTY-stop waivers need their own field (#11960).

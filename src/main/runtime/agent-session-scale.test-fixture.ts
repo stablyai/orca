@@ -170,7 +170,7 @@ afterEach(async () => {
   setStructuredAgentSessionHost(null)
   vi.restoreAllMocks()
   await journals.closeAll()
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   for (const root of roots.splice(0)) {
     await rm(root, { recursive: true, force: true })
   }

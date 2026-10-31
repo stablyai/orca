@@ -168,6 +168,7 @@ export function watchDistroRunning(
           clearTimeout(grace)
           resolveStopped()
         }
+        return undefined
       })
       .catch((error: unknown) => {
         failures += 1

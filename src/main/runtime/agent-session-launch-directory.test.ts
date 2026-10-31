@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises'
 import type * as NodeFsPromises from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -96,6 +97,7 @@ beforeEach(async () => {
 afterEach(async () => {
   statFault.error = null
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

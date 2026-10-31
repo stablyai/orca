@@ -1,6 +1,6 @@
 import { homedir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import {
   AgentSessionAcquisitionRootExitObservedError,
   AgentSessionPromptAnswerRejectedError
@@ -20,7 +20,10 @@ import {
   USER_MESSAGE,
   type FakeConnection
 } from './claude-structured-session-test-support'
-import { claudeOpened } from './claude-structured-startup-settled-test-support'
+import {
+  claudeOpened,
+  claudeStartupSettled
+} from './claude-structured-startup-settled-test-support'
 import { invokeCanUseTool } from './claude-can-use-tool-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { providerRequestTimeoutOf } from '../provider-process/provider-request-timeout'
@@ -28,11 +31,12 @@ import { providerRequestTimeoutOf } from '../provider-process/provider-request-t
 describe('ClaudeStructuredSessionAdapter.acquire', () => {
   it('ends a stalled initialize at its 60-second deadline with the timed-out step', async () => {
     vi.useFakeTimers()
+    const claude = fakeClaude({ initDelayMs: 60_001 })
+    const adapter = adapterFor(claude)
+    let result: Promise<unknown> | undefined
     try {
-      const claude = fakeClaude({ initDelayMs: 60_001 })
-      const adapter = adapterFor(claude)
       let settled = false
-      const result = adapter
+      result = adapter
         .acquire({ identity: identityFor(), fence: 7, spawnToken: 'deadline' })
         .catch((error: unknown) => {
           settled = true
@@ -47,14 +51,20 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
       })
       expect(claude.connections).toHaveLength(1)
     } finally {
-      vi.useRealTimers()
+      claude.dispose()
+      try {
+        await result
+        await adapter.closeAll()
+      } finally {
+        vi.useRealTimers()
+      }
     }
   })
 
   it('pins the account and proves init without treating the system-frame uuid as a chain leaf', async () => {
     const claude = fakeClaude()
     const events: ClaudeStructuredSessionEvent[] = []
-    const adapter = adapterFor(claude, {}, events)
+    const adapter = adapterFor(claude, { continuesChain: true, resumesTranscript: false }, events)
 
     const acquisition = await adapter.acquire({
       identity: identityFor(),
@@ -82,10 +92,11 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
     expect((await claudeOpened(adapter, 'session-1')).link).toEqual({
       linkId: `claude-7-${PROVIDER_SESSION_ID}-empty`,
       handle: claudeProviderHandle(PROVIDER_SESSION_ID, null),
-      origin: 'created',
+      origin: 'resumed',
       mintedAtFence: 7,
       observedAt: 1_700_000_000_500
     })
+    expect((await claudeOpened(adapter, 'session-1')).newConversation).toBe(true)
     expect(events[0]).toMatchObject({ type: 'message', message: { subtype: 'hook_started' } })
   })
 
@@ -457,11 +468,37 @@ describe('ClaudeStructuredSessionAdapter.acquire', () => {
   })
 
   it('reports the CLI diagnostic when the child exits during open', async () => {
-    const claude = fakeClaude({ exitBeforeInit: 'Claude login required' })
+    const claude = fakeClaude({ holdInit: true })
     const adapter = adapterAtPublishFor(claude)
+    let opening: Promise<unknown> | undefined
+    onTestFinished(async () => {
+      claude.dispose()
+      await Promise.allSettled(opening ? [opening] : [])
+      await adapter.closeAll()
+      await adapter.drainObservedExits()
+    })
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
-    await expect(claudeOpened(adapter, 'session-1')).rejects.toThrow('Claude login required')
+    const connection = claude.connections[0]
+    const exited = vi.spyOn(connection.handlers, 'onExit')
+    const proof = vi.spyOn(connection.handlers, 'onMessage')
+    const first = connection.initializationResult()
+    expect(connection.initializationResult()).toBe(first)
+    opening = claudeOpened(adapter, 'session-1')
+    void opening.catch(() => {})
+    connection.closed = true
+    connection.handlers.onExit?.(new Error('Claude login required'))
+    connection.initialization.reject(new Error('Query closed before response received'))
+    await expect(opening).rejects.toThrow('Claude login required')
+    await expect(first).rejects.toThrow('Query closed before response received')
+    expect(connection.initializationResult()).toBe(first)
+    expect(connection.sent).toEqual([])
     await adapter.drainObservedExits()
+    const reads = connection.calls.length
+    await connection.close()
+    expect(connection.initializationResult()).toBe(first)
+    expect(connection.calls).toHaveLength(reads + 1)
+    expect(exited).toHaveBeenCalledOnce()
+    expect(proof).not.toHaveBeenCalled()
   })
 
   it('refuses an unauthenticated initialize response even when SessionStart runs', async () => {
@@ -503,23 +540,46 @@ describe('ClaudeStructuredSessionAdapter acquisition cleanup', () => {
   it('forgets a retained exit once the session is acquired again', async () => {
     const options: Parameters<typeof fakeClaude>[0] = {}
     const claude = fakeClaude(options)
-    const adapter = adapterFor(claude, {
+    const adapter = adapterAtPublishFor(claude, {
       resumesTranscript: true,
       continuesChain: true,
       resumeLeafUuid: 'tip'
     })
+    let opening: Promise<unknown> | undefined
+    onTestFinished(async () => {
+      claude.dispose()
+      await Promise.allSettled(opening ? [opening] : [])
+      await adapter.closeAll()
+    })
     await adapter.acquire({ identity: identityFor(), fence: 7, spawnToken: 'spawn-9' })
+    await claudeStartupSettled(adapter, 'session-1')
     const first = claude.connections[0]
+    const proof = vi.spyOn(first.handlers, 'onMessage')
+    const response = first.initializationResult()
+    expect(first.initializationResult()).toBe(response)
+    expect(proof).not.toHaveBeenCalled()
     first.handlers.onExit?.(new Error('claude stream-json exited (code 1): crashed'))
     first.exitVerdict = { root: 'exited', tree: 'unverifiable' }
     first.close = async () => false
-    options.exitBeforeInit = 'claude stream-json exited (code 1): not logged in'
+    options.holdInit = true
 
-    await expect(
-      adapter.acquire({ identity: identityFor(), fence: 8, spawnToken: 'spawn-10' })
-    ).rejects.toThrow('not logged in')
+    const acquisition = adapter.acquire({
+      identity: identityFor(),
+      fence: 8,
+      spawnToken: 'spawn-10'
+    })
+    opening = acquisition.then(() => claudeOpened(adapter, 'session-1'))
+    void opening.catch(() => {})
+    await acquisition
+    const second = claude.connections[1]
+    second.closed = true
+    second.handlers.onExit?.(new Error('claude stream-json exited (code 1): not logged in'))
+    second.initialization.reject(new Error('Query closed before response received'))
+    await expect(opening).rejects.toThrow('not logged in')
     await expect(adapter.releaseAcquisition({ sessionId: 'session-1' })).resolves.toBe(true)
     expect(first.closeCount).toBe(1)
+    expect(first.initializationResult()).toBe(response)
+    expect(proof).not.toHaveBeenCalled()
   })
 
   it('reports unproven published-session cleanup so callers can retry safely', async () => {

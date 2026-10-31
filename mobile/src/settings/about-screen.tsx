@@ -5,7 +5,7 @@ import { ChevronLeft, Globe } from 'lucide-react-native'
 import Svg, { Path } from 'react-native-svg'
 import { OrcaLogo } from '../components/OrcaLogo'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -123,7 +123,7 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -151,7 +151,7 @@ const styles = themedStyleSheet(() => ({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   row: {

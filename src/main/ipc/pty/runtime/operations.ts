@@ -3,7 +3,11 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import type { IPtyProvider } from '../../../providers/pty-provider-contract'
 import { LocalPtyProvider } from '../../../providers/local-pty-provider'
 import { ptyOwnership } from '../provider/ownership-state'
-import { ptySizes } from '../delivery/visibility-state'
+import { isRendererViewShowingPty, ptySizes } from '../delivery/visibility-state'
+import { isHiddenRendererPty } from '../delivery/pty-hidden-delivery-gate'
+import { seedTerminalRestoreRecordsFromSpawnResult } from '../pane/agent-session-owners'
+import { seedHeadlessTerminalFromSpawnResult } from '../pane/terminal-spawn-restore'
+import { hideRuntimeOwnedRendererDelivery } from './spawn-hidden-delivery'
 import { rendererSerializerReadiness } from '../pane/serializer-state'
 import { getProviderForPty, localProvider, resolvePtyExecutionHost } from '../provider/registry'
 import { inspectPtyProviderProcess } from '../../../providers/pty-process-inspection'
@@ -125,6 +129,10 @@ export async function attachPtyFromRuntimeController(
   if (provider !== localProvider || provider instanceof LocalPtyProvider) {
     return false
   }
+  // A pane's own hidden claim stays its own; a reveal or exit clears main's.
+  if (!isRendererViewShowingPty(ptyId) && !isHiddenRendererPty(ptyId)) {
+    hideRuntimeOwnedRendererDelivery(deps, ptyId)
+  }
   try {
     const sequenceBeforeProviderAttach = deps.runtime?.getPtyOutputSequence?.(ptyId) ?? 0
     const attachResult = await provider.attach(ptyId)
@@ -135,9 +143,12 @@ export async function attachPtyFromRuntimeController(
         sequenceBeforeProviderAttach
       )
     }
-    if (attachResult?.lastTitle) {
-      deps.runtime?.seedTerminalRestoreTail?.(ptyId, { lastTitle: attachResult.lastTitle })
+    if (attachResult) {
+      // A restarted runtime has never seen this screen; an idle agent may print nothing after attach.
+      seedHeadlessTerminalFromSpawnResult(deps.runtime, attachResult, null)
+      seedTerminalRestoreRecordsFromSpawnResult(deps.runtime, attachResult)
     }
+    deps.syncPtyBackgroundedDelivery?.(ptyId, 'main-attach')
     return true
   } catch {
     return false

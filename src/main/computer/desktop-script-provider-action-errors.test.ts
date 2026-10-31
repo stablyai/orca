@@ -18,6 +18,7 @@ describe('DesktopScriptProviderClient action errors', () => {
   it('maps action-specific bridge errors to actionable codes', async () => {
     mockBridgeResponse({ ok: false, error: 'element value is not settable' })
     mockBridgeResponse({ ok: false, error: 'Raise is not a valid secondary action' })
+    mockBridgeResponse({ ok: false, error: 'text_input_incomplete: inspect state before retrying' })
 
     const client = await createDesktopScriptProviderClient('linux', '/tmp/runtime.py')
 
@@ -26,6 +27,9 @@ describe('DesktopScriptProviderClient action errors', () => {
     })
     await expect(client.snapshot({ app: 'Text Editor' })).rejects.toMatchObject({
       code: 'action_not_supported'
+    })
+    await expect(client.snapshot({ app: 'Text Editor' })).rejects.toMatchObject({
+      code: 'action_timeout'
     })
   })
 

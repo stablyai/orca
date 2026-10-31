@@ -126,7 +126,7 @@ export function registerJournalRowContextUsageTests(): void {
         future.body.contextUsage = { used: { kind: 'measured-later', tokens: 'many' } }
         updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
       } finally {
-        opened.close()
+        await opened.close()
       }
 
       const reopened = await open()

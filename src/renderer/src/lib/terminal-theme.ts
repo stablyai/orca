@@ -12,6 +12,7 @@ import {
   DEFAULT_TERMINAL_THEME_DARK,
   DEFAULT_TERMINAL_THEME_LIGHT,
   lookupTerminalTheme,
+  type TerminalThemeLookupSettings,
   selectTerminalTheme
 } from '../../../shared/terminal-theme-selection'
 
@@ -51,7 +52,7 @@ export function getBuiltinTheme(name: string): ITheme | null {
 }
 
 export function getTerminalTheme(
-  settings: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'> | undefined,
+  settings: TerminalThemeLookupSettings | undefined,
   selection: string
 ): ITheme | null {
   return lookupTerminalTheme(settings, selection)
@@ -59,7 +60,7 @@ export function getTerminalTheme(
 
 function getTerminalThemePreview(
   name: string,
-  settings?: Pick<GlobalSettings, 'terminalCustomThemes' | 'terminalPluginPalettes'>,
+  settings?: TerminalThemeLookupSettings,
   fallbackMode: 'dark' | 'light' = 'dark'
 ): ITheme | null {
   const theme = getTerminalTheme(settings, name)
@@ -114,7 +115,8 @@ export function resolveEffectiveTerminalAppearance(
     | 'terminalCustomThemes'
     | 'terminalPluginPalettes'
     | 'terminalDividerColorLight'
-  >,
+  > &
+    TerminalThemeLookupSettings,
   systemPrefersDark = getSystemPrefersDark()
 ): EffectiveTerminalAppearance {
   const {

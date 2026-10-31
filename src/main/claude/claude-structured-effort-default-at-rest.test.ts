@@ -434,7 +434,14 @@ describe('Claude effort default at rest', () => {
     const resting = await readAtRest(new AgentModelCatalogStore(), record)
 
     expect(resting.models).toEqual([
-      { id: 'gpt-5.5', label: 'gpt-5.5', isDefault: false, efforts: [], effortsKnown: false }
+      {
+        id: 'gpt-5.5',
+        label: 'GPT 5.5',
+        description: 'gpt-5.5',
+        isDefault: false,
+        efforts: [],
+        effortsKnown: false
+      }
     ])
     expect(pickerEffort(resting, 'codex')).toBe('high')
   })

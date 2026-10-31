@@ -1,7 +1,7 @@
 import { createElement, memo } from 'react'
 import { ChevronDown, Folder, FolderOpen } from 'lucide-react'
 import { STATUS_COLORS, STATUS_LABELS } from '@/components/right-sidebar/status-display'
-import type { SourceControlTreeNode } from '@/components/right-sidebar/source-control-tree'
+import type { SourceControlTreeNode } from '../../../../../../shared/source-control-tree'
 import { FileTypeIcon } from '@/components/FileTypeIcon'
 import { basename, dirname, joinPath } from '@/lib/path'
 import { cn } from '@/lib/utils'

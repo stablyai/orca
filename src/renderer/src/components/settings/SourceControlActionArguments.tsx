@@ -1,10 +1,17 @@
+import { resolveAgentChoiceLayers } from '../../../../shared/agent-choice-layers'
+import {
+  findCatalogModel,
+  getAgentSessionOptionLaunchCatalog
+} from '../../../../shared/agent-session-option-catalog'
+import { sourceControlActionOptions } from '../../../../shared/source-control-action-launch-preferences'
+import { agentModelChoiceChips } from './agent-model-choice-chips'
 import type {
   SourceControlActionLaunchPreferences,
   SourceControlActionRecipe
 } from '../../../../shared/source-control-ai-actions'
 import {
-  agentPermissionChoices,
   agentPermissionArgs,
+  agentPermissionChoices,
   resolveAgentPermission
 } from '../../../../shared/tui-agent-permission-choice'
 import { agentArgsSetPermission } from '../../../../shared/tui-agent-permission-lift'
@@ -12,10 +19,7 @@ import {
   editActionArgumentChoices,
   type ActionArgumentChoices
 } from '../../../../shared/source-control-action-argument-choices'
-import type { AgentChoicePatch } from '../../../../shared/agent-launch-choices'
-import { composeAgentLaunchModel } from '../../../../shared/agent-session-option-launch'
-import { projectAgentLaunchProfile } from '../../../../shared/agent-launch-profile'
-import { sourceControlActionOptions } from '../../../../shared/source-control-action-launch-preferences'
+import type { AgentChoicePatch, AgentLaunchChoices } from '../../../../shared/agent-launch-choices'
 import { SourceControlActionModelPicker } from './SourceControlActionModelPicker'
 import { AGENT_CATALOG } from '@/lib/agent-catalog'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -32,6 +36,7 @@ export function SourceControlActionArguments({
   authoredAgent,
   modelSelectionBase = 'default',
   argumentChoices,
+  agentLaunchChoices,
   placeholder,
   disabled,
   showArguments = true,
@@ -45,6 +50,7 @@ export function SourceControlActionArguments({
   authoredAgent?: SourceControlActionRecipe['agentId']
   modelSelectionBase?: 'inherit' | 'default'
   argumentChoices?: ActionArgumentChoices
+  agentLaunchChoices?: AgentLaunchChoices | null
   placeholder?: string
   disabled?: boolean
   showArguments?: boolean
@@ -56,6 +62,8 @@ export function SourceControlActionArguments({
   ) => void
 }): React.JSX.Element {
   const settings = useAppStore((state) => state.settings)
+  const defaults =
+    agentLaunchChoices === undefined ? settings?.agentLaunchChoices : agentLaunchChoices
   const selected = preferences?.agentId === agent ? preferences : undefined
   const inherited = agent ? resolveAgentPermission(agent, settings).choice : 'own'
   const choice = selected?.permissionMode ?? inherited
@@ -101,48 +109,32 @@ export function SourceControlActionArguments({
   const select = (permissionMode: typeof choice | 'default'): void => {
     commit({ permissionMode })
   }
-  const chips = agent
-    ? Object.entries({ model: selected?.model, ...selected?.options }).flatMap(([key, chosen]) => {
-        if (!chosen) {
-          return []
-        }
-        const option =
-          sourceControlActionOptions(agent, selected?.model ?? '').find(
-            ({ option }) => option.id === key
-          )?.option ??
-          sourceControlActionOptions(agent, '').find(({ option }) => option.id === key)?.option
-        const flag = option?.apply.composedIntoModel
-          ? `${option.label} ${chosen}`
-          : projectAgentLaunchProfile(
-              agent,
-              { agentPermissionDefault: 'own' },
-              {
-                target: 'legacy-permission',
-                userArgs: '',
-                choices:
-                  key === 'model'
-                    ? {
-                        model: composeAgentLaunchModel(agent, {
-                          ...selected?.options,
-                          model: chosen
-                        })
-                      }
-                    : { options: { [key]: chosen } }
-              }
-            ).args
-        return flag
-          ? [
-              {
-                key,
-                label,
-                flag,
-                onRemove: (text: string) =>
-                  commit(key === 'model' ? { model: null } : { options: { [key]: null } }, text)
-              }
-            ]
-          : []
+  const chips = agentModelChoiceChips(
+    agent,
+    label,
+    loose && selected ? { ...selected, permissionMode: undefined } : selected,
+    commit
+  )
+  const { effort: _currentEffort, ...resetOptions } = selected?.options ?? {}
+  const defaultChoices = agent
+    ? resolveAgentChoiceLayers({
+        agent,
+        defaults: defaults?.[agent],
+        action: { ...selected, options: resetOptions },
+        argumentOwner: 'launch',
+        userArgs: value
       })
-    : []
+    : undefined
+  const effort = agent
+    ? sourceControlActionOptions(agent, defaultChoices?.model ?? '').find(
+        ({ option }) => option.id === 'effort'
+      )?.option
+    : undefined
+  const effortLabel =
+    effort?.kind.type === 'select'
+      ? effort.kind.choices.find((choice) => choice.value === defaultChoices?.options?.effort)
+          ?.label
+      : undefined
   return (
     <>
       {agent ? (
@@ -175,6 +167,44 @@ export function SourceControlActionArguments({
         <SourceControlActionModelPicker
           agent={agent}
           value={selected}
+          defaultLabels={
+            defaults != null
+              ? {
+                  model: translate(
+                    'settings.agents.sameAsChoice',
+                    'Same as {{agent}} · {{choice}}',
+                    {
+                      agent: label,
+                      choice: defaults[agent]?.model
+                        ? (findCatalogModel(
+                            getAgentSessionOptionLaunchCatalog(agent) ?? {
+                              models: [],
+                              modelApply: {}
+                            },
+                            defaults[agent]?.model ?? ''
+                          )?.label ?? defaults[agent]?.model)
+                        : translate(
+                            'settings.sourceControl.actionModel.agentDefault',
+                            'Agent default'
+                          )
+                    }
+                  ),
+                  options: {
+                    effort: translate(
+                      'settings.agents.sameAsChoice',
+                      'Same as {{agent}} · {{choice}}',
+                      {
+                        agent: label,
+                        choice:
+                          effortLabel ??
+                          defaultChoices?.options?.effort ??
+                          translate('settings.sourceControl.actionModel.effortDefault', 'Default')
+                      }
+                    )
+                  }
+                }
+              : undefined
+          }
           disabled={disabled}
           layout="contents"
           onChange={(next) =>
@@ -224,19 +254,7 @@ export function SourceControlActionArguments({
                 onArgsChange(text, true)
               }
             }}
-            choiceChips={[
-              ...(flag && !loose
-                ? [
-                    {
-                      key: 'permissionMode',
-                      label,
-                      flag,
-                      onRemove: (text: string) => commit({ permissionMode: 'own' }, text)
-                    }
-                  ]
-                : []),
-              ...chips
-            ]}
+            choiceChips={chips}
             note={
               loose
                 ? translate(

@@ -48,9 +48,6 @@ vi.mock('@/lib/native-chat-telemetry', () => ({
   emitNativeChatPickerItemAccepted: vi.fn(),
   emitNativeChatSendClassified: vi.fn()
 }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 
 afterEach(() => {
   cleanup()

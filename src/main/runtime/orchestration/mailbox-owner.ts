@@ -1,15 +1,28 @@
 import type { AgentStatus } from '../../../shared/agent-detection'
 import type { OrchestrationDb } from './db'
 
-export type OrchestrationMailboxLeaf = {
-  tabId: string
-  leafId: string
-  ptyId: string | null
-  writable: boolean
+/** A live terminal mail pointers are typed into, keyed by its PTY rather than any window pane. */
+export type OrchestrationMailboxTerminal = {
+  ptyId: string
+  /** The handle the terminal is known by; direct mail and Run coordinators name it. */
+  handle: string
+  /** Every pane Runs and Dispatches bind it by: two window panes can show one terminal. */
+  paneKeys: readonly string[]
   lastAgentStatus: AgentStatus | null
   lastAgentStatusObservedLive: boolean
-  lastOscTitle: string | null
-  paneTitle?: string | null
+}
+
+/** An agent at rest or mid-turn takes typed mail: agents queue or steer text sent during a turn. */
+export function agentStatusTakesTypedInput(status: AgentStatus | null): boolean {
+  return status === 'idle' || status === 'working'
+}
+
+export function isMailboxTerminalTakingInput(
+  terminal: Pick<OrchestrationMailboxTerminal, 'lastAgentStatus' | 'lastAgentStatusObservedLive'>
+): boolean {
+  return (
+    terminal.lastAgentStatusObservedLive && agentStatusTakesTypedInput(terminal.lastAgentStatus)
+  )
 }
 
 export type RoutedOrchestrationMailbox = {
@@ -24,9 +37,7 @@ export type DetachedMailboxRoutingPage = {
 
 type OrchestrationMailboxOwnerDependencies = {
   getDb: () => OrchestrationDb | null
-  getLeaf: (leafKey: string) => OrchestrationMailboxLeaf | undefined
-  getLeafKey: (tabId: string, leafId: string) => string
-  getTerminalHandleForLeafKey: (leafKey: string) => string | undefined
+  getTerminal: (ptyId: string) => OrchestrationMailboxTerminal | null
   getTerminalProcessIncarnation: (terminalHandle: string) => string | null
   onRoutedMessageTypes: (mailboxHandle: string, types: readonly string[]) => void
   onForeignMailboxRouted: (mailboxHandle: string, messageType: string) => void
@@ -39,35 +50,32 @@ export class OrchestrationMailboxOwner {
   constructor(private readonly deps: OrchestrationMailboxOwnerDependencies) {}
 
   resolve(
-    leaf: OrchestrationMailboxLeaf,
+    terminal: OrchestrationMailboxTerminal,
     requestedMailbox?: string,
     options: {
       requireRequestedMail?: boolean
       routeDirectMail?: boolean
-      terminalHandle?: string
     } = {}
   ): string | null {
     const db = this.deps.getDb()
     if (!db) {
       return null
     }
-    const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    const terminalHandle = options.terminalHandle ?? this.deps.getTerminalHandleForLeafKey(leafKey)
-    if (!terminalHandle) {
-      return null
-    }
-    const paneKey = `${leaf.tabId}:${leaf.leafId}`
-    const run = db.getCurrentRunForPane?.(paneKey)
+    const { handle: terminalHandle, paneKeys } = terminal
+    const runs = this.runsBoundToTerminal(db, terminal)
+    // A coordinator of several Runs owns each one's mailbox; unnamed mail goes to its current Run.
+    const run = runs.find((bound) => requestedMailbox === `run:${bound.id}`) ?? runs[0]
     if (run) {
-      return this.resolveRunMailbox(db, leaf, terminalHandle, run.id, requestedMailbox, options)
+      return this.resolveRunMailbox(db, terminal, run.id, requestedMailbox, options)
     }
 
-    const dispatch = db.getActiveDispatchForIdentity?.(terminalHandle, paneKey)
+    const dispatch = firstDefined(paneKeys, (paneKey) =>
+      db.getActiveDispatchForIdentity?.(terminalHandle, paneKey)
+    )
     if (dispatch) {
       return this.resolveDispatchMailbox(
         db,
-        leaf,
-        terminalHandle,
+        terminal,
         dispatch.id,
         dispatch.run_id,
         requestedMailbox,
@@ -75,8 +83,12 @@ export class OrchestrationMailboxOwner {
       )
     }
 
-    const remoteAttachment = db.findActiveRemoteAttachmentForPane?.(paneKey)
-    if (remoteAttachment) {
+    const attached = firstDefined(paneKeys, (paneKey) => {
+      const attachment = db.findActiveRemoteAttachmentForPane?.(paneKey)
+      return attachment ? { paneKey, remoteAttachment: attachment } : undefined
+    })
+    if (attached) {
+      const { paneKey, remoteAttachment } = attached
       const isCurrent = db.isRemoteAttachmentProcessCurrent?.({
         dispatchId: remoteAttachment.dispatch_id,
         paneKey,
@@ -92,18 +104,27 @@ export class OrchestrationMailboxOwner {
     return !requestedMailbox || requestedMailbox === terminalHandle ? terminalHandle : null
   }
 
-  routeForeignDirectMessages(leaf: OrchestrationMailboxLeaf): RoutedOrchestrationMailbox[] {
+  /** The terminal's mailbox, then every other Run it coordinates, so an input edge wakes each with mail. */
+  resolveAll(terminal: OrchestrationMailboxTerminal): string[] {
+    const mailboxHandle = this.resolve(terminal)
+    if (!mailboxHandle) {
+      return []
+    }
+    const db = this.deps.getDb()
+    const runs = db ? this.runsBoundToTerminal(db, terminal) : []
+    return [...new Set([mailboxHandle, ...runs.map((run) => `run:${run.id}`)])]
+  }
+
+  private runsBoundToTerminal(db: OrchestrationDb, terminal: OrchestrationMailboxTerminal) {
+    return terminal.paneKeys.flatMap((paneKey) => db.runsBoundToPane?.(paneKey) ?? [])
+  }
+
+  routeForeignDirectMessages(terminal: OrchestrationMailboxTerminal): RoutedOrchestrationMailbox[] {
     const db = this.deps.getDb()
     if (!db) {
       return []
     }
-    const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    const terminalHandle = this.deps.getTerminalHandleForLeafKey(leafKey)
-    if (!terminalHandle) {
-      return []
-    }
-    const paneKey = `${leaf.tabId}:${leaf.leafId}`
-    const ownerMailbox = this.resolve(leaf, undefined, { routeDirectMail: false })
+    const ownerMailbox = this.resolve(terminal, undefined, { routeDirectMail: false })
     const ownerRunId = ownerMailbox?.startsWith('run:')
       ? ownerMailbox.slice('run:'.length)
       : ownerMailbox?.startsWith('dispatch:')
@@ -112,15 +133,13 @@ export class OrchestrationMailboxOwner {
     if (!ownerRunId) {
       return []
     }
-    const routed = db.routeForeignDirectMessagesToOwnedMailboxes?.(
-      terminalHandle,
-      ownerRunId,
-      paneKey
+    const pages = terminal.paneKeys.map((paneKey) =>
+      db.routeForeignDirectMessagesToOwnedMailboxes?.(terminal.handle, ownerRunId, paneKey)
     )
-    if (routed?.hasMore) {
-      this.scheduleDirectReconciliation(leaf)
+    if (pages.some((routed) => routed?.hasMore)) {
+      this.scheduleDirectReconciliation(terminal)
     }
-    return routed?.mailboxes ?? []
+    return pages.flatMap((routed) => routed?.mailboxes ?? [])
   }
 
   routeDetachedDirectMessages(directHandle: string, paneKey?: string): DetachedMailboxRoutingPage {
@@ -135,12 +154,12 @@ export class OrchestrationMailboxOwner {
 
   private resolveRunMailbox(
     db: OrchestrationDb,
-    leaf: OrchestrationMailboxLeaf,
-    terminalHandle: string,
+    terminal: OrchestrationMailboxTerminal,
     runId: string,
     requestedMailbox: string | undefined,
     options: { requireRequestedMail?: boolean; routeDirectMail?: boolean }
   ): string | null {
+    const terminalHandle = terminal.handle
     const runMailbox = `run:${runId}`
     if (
       requestedMailbox &&
@@ -160,7 +179,7 @@ export class OrchestrationMailboxOwner {
       const routed = db.routeUnreadDirectMessagesToRunMailbox?.(runId, terminalHandle)
       this.deps.onRoutedMessageTypes(runMailbox, routed?.types ?? [])
       if (routed?.hasMore) {
-        this.scheduleDirectReconciliation(leaf)
+        this.scheduleDirectReconciliation(terminal)
       }
     }
     return runMailbox
@@ -168,13 +187,13 @@ export class OrchestrationMailboxOwner {
 
   private resolveDispatchMailbox(
     db: OrchestrationDb,
-    leaf: OrchestrationMailboxLeaf,
-    terminalHandle: string,
+    terminal: OrchestrationMailboxTerminal,
     dispatchId: string,
     runId: string,
     requestedMailbox: string | undefined,
     options: { requireRequestedMail?: boolean; routeDirectMail?: boolean }
   ): string | null {
+    const terminalHandle = terminal.handle
     const dispatchMailbox = `dispatch:${dispatchId}`
     if (
       requestedMailbox &&
@@ -198,30 +217,30 @@ export class OrchestrationMailboxOwner {
       )
       this.deps.onRoutedMessageTypes(dispatchMailbox, routed?.types ?? [])
       if (routed?.hasMore) {
-        this.scheduleDirectReconciliation(leaf)
+        this.scheduleDirectReconciliation(terminal)
       }
     }
     return dispatchMailbox
   }
 
-  private scheduleDirectReconciliation(leaf: OrchestrationMailboxLeaf): void {
-    const leafKey = this.deps.getLeafKey(leaf.tabId, leaf.leafId)
-    if (this.pendingDirectReconciliations.has(leafKey)) {
+  private scheduleDirectReconciliation(terminal: OrchestrationMailboxTerminal): void {
+    const { ptyId } = terminal
+    if (this.pendingDirectReconciliations.has(ptyId)) {
       return
     }
-    this.pendingDirectReconciliations.add(leafKey)
+    this.pendingDirectReconciliations.add(ptyId)
     setImmediate(() => {
-      this.pendingDirectReconciliations.delete(leafKey)
-      const currentLeaf = this.deps.getLeaf(leafKey)
-      if (!currentLeaf || currentLeaf.ptyId !== leaf.ptyId) {
+      this.pendingDirectReconciliations.delete(ptyId)
+      const current = this.deps.getTerminal(ptyId)
+      if (!current) {
         return
       }
-      for (const routed of this.routeForeignDirectMessages(currentLeaf)) {
+      for (const routed of this.routeForeignDirectMessages(current)) {
         for (const messageType of routed.types) {
           this.deps.onForeignMailboxRouted(routed.mailboxHandle, messageType)
         }
       }
-      this.resolve(currentLeaf)
+      this.resolve(current)
     })
   }
 
@@ -246,4 +265,14 @@ export class OrchestrationMailboxOwner {
       }
     })
   }
+}
+
+function firstDefined<T, R>(items: readonly T[], read: (item: T) => R | undefined): R | undefined {
+  for (const item of items) {
+    const value = read(item)
+    if (value !== undefined) {
+      return value
+    }
+  }
+  return undefined
 }

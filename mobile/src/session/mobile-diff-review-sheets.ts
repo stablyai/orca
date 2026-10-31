@@ -2,7 +2,6 @@ import type { MobileDiffReviewQueueItem } from './mobile-diff-review-queue'
 import type { ComposerState, SendSheetState } from './mobile-diff-review-screen-model'
 
 export type ReviewSheet =
-  | { kind: 'actions' }
   | { kind: 'send'; load: SendSheetState }
   | { kind: 'discard'; target: MobileDiffReviewQueueItem }
   | { kind: 'composer'; composer: ComposerState }

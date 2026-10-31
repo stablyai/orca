@@ -6,7 +6,9 @@ import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY
 } from './protocol-version'
 import {
+  nativeChatPreferenceFor,
   resolveStructuredNativeChatSupport,
+  type NativeChatDefaultSettings,
   type StructuredNativeChatSupportInput
 } from './structured-native-chat-launch-route'
 
@@ -114,3 +116,38 @@ describe('agents beyond Claude and Codex', () => {
     expect(support({ agent: 'codex' })).toEqual({ supported: true })
   })
 })
+
+describe('per-agent Chat | CLI preference', () => {
+  it('opens only an agent saved as chat as a chat, host-registered ids included', () => {
+    expect(
+      nativeChatPreferenceFor({ nativeChatProviders: { 'acme-agent': true } }, 'acme-agent')
+    ).toBe(true)
+    expect(nativeChatPreferenceFor({}, 'claude')).toBe(false)
+    expect(nativeChatPreferenceFor({ nativeChatProviders: { claude: true } }, 'acme-agent')).toBe(
+      false
+    )
+    expect(nativeChatPreferenceFor({ nativeChatProviders: { claude: false } }, 'claude')).toBe(
+      false
+    )
+    expect(nativeChatPreferenceFor(null, 'claude')).toBe(false)
+    // Inherited object keys are not saved choices.
+    expect(nativeChatPreferenceFor({ nativeChatProviders: {} }, 'constructor')).toBe(false)
+  })
+})
+
+it.each(['chat', 'terminal'] as const)(
+  'resolves boolean overrides before default %s for existing and later agents',
+  (agentDefaultSurface) => {
+    const settings: NativeChatDefaultSettings = {
+      agentDefaultSurface,
+      nativeChatProviders: { claude: false, codex: true }
+    }
+    expect(nativeChatPreferenceFor(settings, 'claude')).toBe(false)
+    expect(nativeChatPreferenceFor(settings, 'codex')).toBe(true)
+    expect(nativeChatPreferenceFor(settings, 'later-agent')).toBe(agentDefaultSurface === 'chat')
+    Reflect.set(settings.nativeChatProviders!, 'malformed', 'true')
+    expect(nativeChatPreferenceFor(settings, 'malformed')).toBe(agentDefaultSurface === 'chat')
+    Reflect.set(settings, 'agentDefaultSurface', 'invalid')
+    expect(nativeChatPreferenceFor(settings, 'later-agent')).toBe(false)
+  }
+)

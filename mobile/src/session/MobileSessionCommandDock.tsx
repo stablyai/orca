@@ -18,6 +18,9 @@ import {
 } from './MobileTerminalInputActions'
 import { MobileNativeChatStopButton } from './native-chat/input/MobileNativeChatStopButton'
 import { MobileSessionAccessoryKeys } from './MobileSessionAccessoryKeys'
+import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
+import { sessionCommandDockShown } from './mobile-session-command-dock-shown'
+import { useSessionTerminalKeyRail } from './use-session-terminal-key-rail'
 import {
   isMobileTerminalTabRunningAgent,
   resolveMobileTerminalTabOwnedAgentId
@@ -34,27 +37,12 @@ const ESC = '\x1b'
 // Both fields must remain focusable during the tap that hands the keyboard to the other mode.
 const inactiveFieldStyle = { position: 'absolute', left: 0, right: 0, opacity: 0 } as const
 
-// Markdown, file, browser and chat tabs bring their own input; only terminals get the dock and its keys.
-export function sessionCommandDockShown(controller: MobileSessionController): boolean {
-  return (
-    !controller.activeMarkdownTab &&
-    !controller.activeFileTab &&
-    !controller.activeBrowserTab &&
-    !controller.showNativeChat
-  )
-}
-
 // Keys mode types straight into the terminal; Message mode writes in the chat composer and sends on tap.
 // Agent tabs open in Message, shells in Keys; the key row sends to the terminal in both.
-export function MobileSessionCommandDock({
-  controller,
-  keysInRail
-}: {
-  controller: MobileSessionController
-  keysInRail: boolean
-}) {
+export function MobileSessionCommandDock({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const rail = useSessionTerminalKeyRail(controller)
   const {
     insets,
     bufferedTerminalDraftState,
@@ -279,7 +267,15 @@ export function MobileSessionCommandDock({
           />
         </View>
       </View>
-      {keysInRail ? null : <MobileSessionAccessoryKeys controller={controller} />}
+      {rail.keysInRail ? (
+        <MobileTerminalMoreKeysSheet
+          controller={controller}
+          visible={rail.moreKeysVisible}
+          onClose={rail.closeMoreKeys}
+        />
+      ) : (
+        <MobileSessionAccessoryKeys controller={controller} />
+      )}
     </View>
   )
 }

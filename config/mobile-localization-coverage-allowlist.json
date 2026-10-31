@@ -635,5 +635,21 @@
     "text": "WebSocket connect timeout",
     "dynamic": false,
     "count": 1
+  },
+  {
+    "filePath": "mobile/src/automations/automation-reply-schema.ts",
+    "kind": "object-property:message",
+    "text": "Invalid execution host",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Internal RPC reply validation diagnostic; the operation reader rejects the reply and the UI renders automationErrorMessage, never the Zod issue text."
+  },
+  {
+    "filePath": "mobile/src/automations/automation-reply-schema.ts",
+    "kind": "object-property:message",
+    "text": "Automation ownership is missing or ambiguous",
+    "dynamic": false,
+    "count": 1,
+    "reason": "Internal RPC reply validation diagnostic; the operation reader rejects the reply and the UI renders automationErrorMessage, never the Zod issue text."
   }
 ]

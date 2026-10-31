@@ -1,23 +1,16 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import {
-  AppState,
-  View,
-  Text,
-  StyleSheet,
-  Pressable,
-  Switch,
-  type AppStateStatus
-} from 'react-native'
+import { AppState, View, Text, Pressable, type AppStateStatus } from 'react-native'
 import { useFocusEffect } from 'expo-router'
 import { ChevronRight, X } from 'lucide-react-native'
 import type Animated from 'react-native-reanimated'
 import type { AnimatedRef, SharedValue } from 'react-native-reanimated'
+import { useDirectionPadAvailable } from '../layout/use-shell-side-rail'
 import { CustomKeyModal } from './CustomKeyModal'
 import { loadCustomKeys, saveCustomKeys, type CustomKey } from '../terminal/terminal-custom-keys'
 import { DragReorderList } from './DragReorderList'
 import { useSerializedStoredState } from '../storage/use-serialized-stored-state'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
-import { themedStyleSheet } from '../theme/themed-styles'
+import { colors } from '../theme/mobile-theme'
+import { styles } from './terminal-shortcut-settings-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -29,9 +22,9 @@ import {
   loadTerminalAccessoryLayout,
   reorderTerminalAccessoryBuiltInIds,
   saveTerminalAccessoryLayout,
-  setTerminalAccessoryBuiltInVisible,
-  type TerminalAccessoryLayout
+  setTerminalAccessoryBuiltInVisible
 } from '../terminal/terminal-accessory-layout'
+import { MobileSwitch } from './MobileSwitch'
 
 // Absolutely positioned DragReorderList rows require one fixed height per section.
 const REORDER_ROW_HEIGHT = 56
@@ -46,6 +39,7 @@ function ShortcutBarRow({
   onToggle: (visible: boolean) => void
 }): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <View style={styles.reorderRowContent}>
       <View style={styles.keycap}>
@@ -54,19 +48,19 @@ function ShortcutBarRow({
       <View style={styles.rowContent}>
         <Text style={styles.rowLabel}>{shortcutKey.accessibilityLabel ?? shortcutKey.label}</Text>
       </View>
-      <Switch
+      <MobileSwitch
+        accessibilityLabel={t(
+          'components.terminalShortcutSettings.showShortcut',
+          'Show {{label}} shortcut',
+          {
+            label: shortcutKey.accessibilityLabel ?? shortcutKey.label
+          }
+        )}
         value={visible}
         onValueChange={onToggle}
-        trackColor={{ false: colors.borderSubtle, true: colors.textSecondary }}
-        thumbColor={colors.textPrimary}
       />
     </View>
   )
-}
-
-async function loadShortcutLayout(): Promise<TerminalAccessoryLayout> {
-  const { orderedBuiltInIds, visibleBuiltInIds } = await loadTerminalAccessoryLayout()
-  return { orderedBuiltInIds, visibleBuiltInIds }
 }
 
 type Props = {
@@ -84,6 +78,9 @@ export function TerminalShortcutSettings({
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
+  const hasPad = useDirectionPadAvailable()
+  const defaultLayout = useCallback(() => getDefaultTerminalAccessoryLayout(hasPad), [hasPad])
+  const loadShortcutLayout = useCallback(() => loadTerminalAccessoryLayout(hasPad), [hasPad])
   const {
     value: customKeys,
     setValue: setCustomKeys,
@@ -97,11 +94,7 @@ export function TerminalShortcutSettings({
     setValue: setShortcutLayout,
     persist: persistLayout,
     refresh: refreshShortcutLayout
-  } = useSerializedStoredState(
-    getDefaultTerminalAccessoryLayout,
-    loadShortcutLayout,
-    saveTerminalAccessoryLayout
-  )
+  } = useSerializedStoredState(defaultLayout, loadShortcutLayout, saveTerminalAccessoryLayout)
 
   const handleDeleteCustomKey = useCallback(
     (key: CustomKey) => {
@@ -154,10 +147,10 @@ export function TerminalShortcutSettings({
   )
 
   const resetBuiltInKeys = useCallback(() => {
-    const next = getDefaultTerminalAccessoryLayout()
+    const next = defaultLayout()
     setShortcutLayout(next)
     persistLayout(next)
-  }, [persistLayout])
+  }, [defaultLayout, persistLayout])
 
   const reorderCustomKeys = useCallback(
     (orderedKeys: string[]) => {
@@ -177,10 +170,6 @@ export function TerminalShortcutSettings({
     [persistCustomKeys]
   )
 
-  const visibleBuiltInSet = useMemo(
-    () => new Set(shortcutLayout.visibleBuiltInIds),
-    [shortcutLayout.visibleBuiltInIds]
-  )
   const orderedAccessoryKeys = useMemo(() => {
     const byId = new Map(TERMINAL_ACCESSORY_KEYS.map((key) => [key.id, key]))
     return shortcutLayout.orderedBuiltInIds.flatMap((id) => {
@@ -191,6 +180,42 @@ export function TerminalShortcutSettings({
 
   return (
     <>
+      {hasPad ? (
+        <>
+          <Text style={[styles.groupHeading, styles.groupTopGap]}>
+            {t('components.terminalShortcutSettings.directionPad', 'DIRECTION PAD')}
+          </Text>
+          <View style={[styles.section, styles.sectionTopGap]}>
+            <View style={styles.row}>
+              <View style={styles.rowContent}>
+                <Text style={styles.rowLabel}>
+                  {t('components.terminalShortcutSettings.showDirectionPad', 'Show D-pad')}
+                </Text>
+                <Text style={styles.rowSublabel}>
+                  {t(
+                    'components.terminalShortcutSettings.showDirectionPadDescription',
+                    'Pin the arrow pad in the side rail. Without it, the rail lists the arrow keys.'
+                  )}
+                </Text>
+              </View>
+              <MobileSwitch
+                accessibilityLabel={t(
+                  'components.terminalShortcutSettings.showDirectionPad',
+                  'Show D-pad'
+                )}
+                value={shortcutLayout.directionPadEnabled !== false}
+                onValueChange={(enabled) =>
+                  setShortcutLayout((current) => {
+                    const next = { ...current, directionPadEnabled: enabled }
+                    persistLayout(next)
+                    return next
+                  })
+                }
+              />
+            </View>
+          </View>
+        </>
+      ) : null}
       <Text style={[styles.groupHeading, styles.groupTopGap]}>
         {t('components.terminalShortcutSettings.moreKeys', 'MORE KEYS')}
       </Text>
@@ -213,7 +238,7 @@ export function TerminalShortcutSettings({
           renderRow={(shortcutKey) => (
             <ShortcutBarRow
               shortcutKey={shortcutKey}
-              visible={visibleBuiltInSet.has(shortcutKey.id)}
+              visible={shortcutLayout.visibleBuiltInIds.includes(shortcutKey.id)}
               onToggle={(visible) => toggleBuiltInKey(shortcutKey.id, visible)}
             />
           )}
@@ -270,6 +295,25 @@ export function TerminalShortcutSettings({
                     {key.bytes.replace(/\r/g, ' ↵')}
                   </Text>
                 </View>
+                <MobileSwitch
+                  accessibilityLabel={t(
+                    'components.terminalShortcutSettings.showShortcut',
+                    'Show {{label}} shortcut',
+                    {
+                      label: key.label
+                    }
+                  )}
+                  value={key.visible !== false}
+                  onValueChange={(visible) =>
+                    setCustomKeys((current) => {
+                      const next = current.map((item) =>
+                        item.id === key.id ? { ...item, visible } : item
+                      )
+                      persistCustomKeys(next)
+                      return next
+                    })
+                  }
+                />
                 <Pressable
                   style={({ pressed }) => [
                     styles.deleteButton,
@@ -317,102 +361,3 @@ export function TerminalShortcutSettings({
     </>
   )
 }
-
-const styles = themedStyleSheet(() => ({
-  groupHeading: {
-    fontSize: 11,
-    fontWeight: '600',
-    color: colors.textMuted,
-    letterSpacing: 0.5,
-    marginBottom: spacing.xs,
-    paddingHorizontal: spacing.xs
-  },
-  groupTopGap: {
-    marginTop: spacing.xl
-  },
-  groupDescription: {
-    fontSize: typography.bodySize - 1,
-    color: colors.textSecondary,
-    lineHeight: 20,
-    paddingHorizontal: spacing.xs
-  },
-  section: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
-    overflow: 'hidden'
-  },
-  sectionTopGap: {
-    marginTop: spacing.sm
-  },
-  row: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingVertical: spacing.md,
-    paddingHorizontal: spacing.md + 2
-  },
-  rowPressed: {
-    backgroundColor: colors.bgRaised
-  },
-  // Reorder list supplies fixed height/trailing grip; pad content only on left.
-  reorderRowContent: {
-    flex: 1,
-    height: '100%',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: spacing.sm + 2,
-    paddingLeft: spacing.md + 2
-  },
-  rowContent: {
-    flex: 1
-  },
-  rowLabel: {
-    fontSize: typography.bodySize,
-    fontWeight: '500',
-    color: colors.textPrimary
-  },
-  rowSublabel: {
-    fontSize: typography.bodySize - 2,
-    color: colors.textSecondary,
-    marginTop: 2
-  },
-  keycap: {
-    minWidth: 62,
-    alignItems: 'center',
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.button,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.xs
-  },
-  keycapText: {
-    color: colors.textSecondary,
-    fontSize: typography.metaSize,
-    fontFamily: typography.monoFamily
-  },
-  separator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginHorizontal: spacing.md
-  },
-  emptyContainer: {
-    padding: spacing.md,
-    alignItems: 'center',
-    justifyContent: 'center'
-  },
-  emptyText: {
-    fontSize: typography.bodySize,
-    color: colors.textSecondary,
-    padding: spacing.md
-  },
-  deleteButton: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-    backgroundColor: 'rgba(239, 68, 68, 0.1)'
-  },
-  deleteButtonPressed: {
-    backgroundColor: 'rgba(239, 68, 68, 0.2)'
-  }
-}))

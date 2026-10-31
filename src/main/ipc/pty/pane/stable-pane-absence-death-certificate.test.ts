@@ -110,7 +110,11 @@ describe('a stable pane whose reattach was refused', () => {
     // Typed SessionNotFound comes from the owning registry; lost endpoints raise TerminalHostGoneError.
     const { runtime } = await adoptAfterAttachRefusal(new SessionNotFoundError(PTY_ID))
 
-    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({ status: 'exited' })
+    expect(runtime.getPtyLivenessVerdict(PTY_ID)).toEqual({
+      status: 'exited',
+      incarnationId: undefined,
+      cause: { kind: 'unknown', reason: 'stop_unverified' }
+    })
   })
 
   it('refuses to abandon the binding on an untyped "not found" string', async () => {

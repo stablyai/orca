@@ -1,6 +1,9 @@
 import type { PluginHostImages } from '../../shared/plugins/images/plugin-image-url'
 import type { PluginUpdateAccessGrowth } from '../../shared/plugins/approval/plugin-update-access-growth'
-import type { PluginAutoUpdateState } from '../../shared/plugins/catalog/plugin-update-policy'
+import type {
+  PluginAutoUpdateState,
+  PluginUpdateReviewNotice
+} from '../../shared/plugins/catalog/plugin-update-policy'
 import type {
   PluginIconThemeMetadata,
   PluginIconThemeRegistration
@@ -22,6 +25,7 @@ import type {
   PluginMarketplaceGitSource
 } from '../../shared/plugins/catalog/plugin-marketplace'
 import type { PluginCatalogRelease } from '../../shared/plugins/catalog/plugin-catalog-release'
+import type { PluginGitSourceResolution } from '../../shared/plugins/installation/plugin-git-resolution'
 
 export type {
   PluginHostCustomEditor,
@@ -40,7 +44,7 @@ export type PluginHostLogLine = {
 
 export type PluginHostInstallSource =
   | { kind: 'local-path'; path: string }
-  | { kind: 'git'; url: string; ref: string }
+  | { kind: 'git'; url: string; ref: string; expectedCommit?: string }
 
 export type PluginHostInstallResult =
   | {
@@ -162,6 +166,8 @@ export type PluginsApi = {
     action: string
     params?: unknown
   }) => Promise<PluginHostCallOutcome>
+  /** Pins a Git install input to an exact commit without downloading it. */
+  resolveGitSource: (args: { url: string; ref: string }) => Promise<PluginGitSourceResolution>
   install: (source: PluginHostInstallSource) => Promise<PluginHostInstallResult>
   listMarketplaces: () => Promise<PluginMarketplaceHostSourceState[]>
   addMarketplace: (source: PluginMarketplaceGitSource) => Promise<PluginMarketplaceHostSourceState>
@@ -208,6 +214,11 @@ export type PluginsApi = {
   onChanged: (callback: (event: PluginChangeEvent) => void) => () => void
   /** What automatic updates last did. Older hosts reject the call; treat that as nothing. */
   getAutoUpdateState: () => Promise<PluginAutoUpdateState>
+  /** Held updates not yet told to the user, each returned once per version; never approves. */
+  takeUpdateReviewNotices: () => Promise<PluginUpdateReviewNotice[]>
+  /** Public install counts by plugin key, display only; empty when unknown. Older hosts reject. */
+  getInstallCounts: () => Promise<Record<string, number>>
+  onInstallCountsChanged: (callback: () => void) => () => void
   /** Fires after each automatic update pass, with the plugins it just updated. */
   onAutoUpdateChanged: (callback: (event: PluginAutoUpdateEvent) => void) => () => void
 }

@@ -143,4 +143,24 @@ describe('a desktop AI-button launch', () => {
     expect(argv({ ...thinking, thinking: false })).toBe('--model claude-opus-4-8-high')
     expect(argv({ model: 'gpt-5.3-codex', fastMode: true })).toBe('--model gpt-5.3-codex-fast')
   })
+  it('keeps inactive launches in their requested group without revealing Terminal', () => {
+    const initial = store.getState()
+    const activeTabId = initial.activeTabId
+    const groupId = initial.createEmptySplitGroup(WT, initial.activeGroupIdByWorktree[WT], 'down', {
+      activate: false
+    })!
+    const { tabId } = launchAgentThroughHost({
+      agent: 'claude',
+      worktreeId: WT,
+      groupId,
+      prompt: 'p',
+      cwd: '/tmp/feature/sub',
+      activate: false
+    })
+    expect(store.getState().activeTabId).toBe(activeTabId)
+    expect(
+      store.getState().groupsByWorktree[WT].find((group) => group.id === groupId)?.tabOrder
+    ).toContain(tabId)
+    expect(queuedLaunch(tabId)?.launch.cwd).toBe('/tmp/feature/sub')
+  })
 })

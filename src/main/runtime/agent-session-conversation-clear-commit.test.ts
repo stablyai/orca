@@ -4,7 +4,10 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
 import type { AgentSessionOwnerProbe } from '../../shared/agent-session-lease-adjudication'
 import { AgentSessionJournal } from '../native-chat/agent-session-journal/journal-store'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import {
   providerContextBoundaryForClear,
   type AgentSessionConversationClear
@@ -25,6 +28,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

@@ -366,7 +366,7 @@ const styles = themedStyleSheet(() => ({
   next: {
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.lg,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   nextSkip: {

@@ -58,3 +58,23 @@ export function parsePluginImageUrl(url: string): PluginImageReference | null {
   }
   return null
 }
+
+/** Only the images main serves over the plugin image scheme. Why: entries can come from a paired
+ *  remote host, and the renderer's CSP allows web images, so any other URL could hotlink. */
+export function servedPluginHostImages(
+  images: PluginHostImages | undefined
+): PluginHostImages | undefined {
+  if (!images) {
+    return undefined
+  }
+  const served = <T extends PluginHostImage>(image: T | undefined): T | undefined =>
+    image && parsePluginImageUrl(image.url) ? image : undefined
+  const icon = served(images.icon)
+  const cover = served(images.cover)
+  const screenshots = images.screenshots?.filter((shot) => served(shot))
+  return {
+    ...(icon ? { icon } : {}),
+    ...(cover ? { cover } : {}),
+    ...(screenshots?.length ? { screenshots } : {})
+  }
+}

@@ -114,9 +114,6 @@ export function useMobileTasksRouteAndItemState() {
   const defaultLinearTeamSelectionRef = useRef<string[] | null>(null)
   const [showLinearWorkspacePicker, setShowLinearWorkspacePicker] = useState(false)
   const [showLinearTeamPicker, setShowLinearTeamPicker] = useState(false)
-  const [showLinearViewPicker, setShowLinearViewPicker] = useState(false)
-  const [showLinearGroupPicker, setShowLinearGroupPicker] = useState(false)
-  const [showLinearOrderPicker, setShowLinearOrderPicker] = useState(false)
   const [showLinearDisplayPicker, setShowLinearDisplayPicker] = useState(false)
   const [showLinearConnect, setShowLinearConnect] = useState(false)
   const [linearApiKeyDraft, setLinearApiKeyDraft] = useState('')
@@ -155,13 +152,12 @@ export function useMobileTasksRouteAndItemState() {
   >({})
   const [query, setQuery] = useState(getTaskPresetQuery('issues'))
   const [appliedQuery, setAppliedQuery] = useState(getTaskPresetQuery('issues'))
-  const [showProviderPicker, setShowProviderPicker] = useState(false)
   const [showGitHubKindPicker, setShowGitHubKindPicker] = useState(false)
   const [showGitHubPresetPicker, setShowGitHubPresetPicker] = useState(false)
   const [showGitLabViewPicker, setShowGitLabViewPicker] = useState(false)
   const [showGitLabFilterPicker, setShowGitLabFilterPicker] = useState(false)
   const [showLinearFilterPicker, setShowLinearFilterPicker] = useState(false)
-  const [showSortPicker, setShowSortPicker] = useState(false)
+  const [showFilterSheet, setShowFilterSheet] = useState(false)
   const [showRepoPicker, setShowRepoPicker] = useState(false)
   const [showGitHubIssueSourcePicker, setShowGitHubIssueSourcePicker] = useState(false)
   const [showGitHubPagePicker, setShowGitHubPagePicker] = useState(false)
@@ -260,12 +256,6 @@ export function useMobileTasksRouteAndItemState() {
     setShowLinearWorkspacePicker,
     showLinearTeamPicker,
     setShowLinearTeamPicker,
-    showLinearViewPicker,
-    setShowLinearViewPicker,
-    showLinearGroupPicker,
-    setShowLinearGroupPicker,
-    showLinearOrderPicker,
-    setShowLinearOrderPicker,
     showLinearDisplayPicker,
     setShowLinearDisplayPicker,
     showLinearConnect,
@@ -307,8 +297,6 @@ export function useMobileTasksRouteAndItemState() {
     setQuery,
     appliedQuery,
     setAppliedQuery,
-    showProviderPicker,
-    setShowProviderPicker,
     showGitHubKindPicker,
     setShowGitHubKindPicker,
     showGitHubPresetPicker,
@@ -319,8 +307,8 @@ export function useMobileTasksRouteAndItemState() {
     setShowGitLabFilterPicker,
     showLinearFilterPicker,
     setShowLinearFilterPicker,
-    showSortPicker,
-    setShowSortPicker,
+    showFilterSheet,
+    setShowFilterSheet,
     showRepoPicker,
     setShowRepoPicker,
     showGitHubIssueSourcePicker,

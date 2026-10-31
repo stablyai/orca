@@ -3,7 +3,7 @@ import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useAllHostClients } from '../transport/use-all-host-clients'
 import { loadHostCatalog } from '../transport/host-store'
 import { pushDeliveryTest } from '../notifications/mobile-push-delivery-test-operations'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -273,7 +273,7 @@ const styles = themedStyleSheet(() => ({
   button: {
     alignSelf: 'flex-start',
     backgroundColor: colors.bgRaised,
-    borderRadius: 8,
+    borderRadius: radii.control,
     paddingVertical: spacing.sm,
     paddingHorizontal: spacing.md
   },

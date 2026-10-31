@@ -386,9 +386,9 @@ it.each([1, 10])(
       }
     )
     await journal.close()
-    closeTestJournalHostDatabase(root ?? '')
+    await closeTestJournalHostDatabase(root ?? '')
     journal = await openJournal()
-    const reopened = openTestJournalHostDatabase(root ?? '').db
+    const reopened = openTestJournalHostDatabase(root ?? '')
     const store = new AgentSessionAttachmentStore(agentSessionAttachmentStoreRoot(root ?? ''), {
       hasSession: () => true
     })
@@ -397,7 +397,11 @@ it.each([1, 10])(
     )
     const swept = await sweepAgentSessionAttachments(
       store,
-      { database: () => reopened, recordedSessionIds: () => new Set([IDENTITY.sessionId]) },
+      {
+        database: () => reopened.db,
+        write: (run) => reopened.writeAutocommit(run),
+        recordedSessionIds: () => new Set([IDENTITY.sessionId])
+      },
       Math.max(...uploadModifiedAt) + UNCLAIMED_ATTACHMENT_MAX_AGE_MS + 1000
     )
     expect(swept.removed).toHaveLength(count - 1)
@@ -548,7 +552,7 @@ it.each([
   }
   if (kind === 'unknown') {
     await journal.close()
-    closeTestJournalHostDatabase(root ?? '')
+    await closeTestJournalHostDatabase(root ?? '')
     const reopened = await openJournal()
     await expect(journal.withdrawGoalObjective(identity, { fence: 1 })).rejects.toThrow()
     await reopened.withdrawGoalObjective(identity, { fence: 1 })
@@ -684,7 +688,7 @@ it.each(['step', 'batch'] as const)(
     failPublication = false
     expect(claims()).toHaveLength(1)
     await journal.close()
-    closeTestJournalHostDatabase(root ?? '')
+    await closeTestJournalHostDatabase(root ?? '')
     const reopened = await openJournal()
     expect(reopened.snapshot().items.map((item) => item.body)).toContainEqual(file.body)
     expect(

@@ -10,7 +10,6 @@ const mocks = vi.hoisted(() => ({
 }))
 
 vi.mock('./structured-agent-session-client', () => ({ callStructuredAgentSession: mocks.call }))
-vi.mock('./local-structured-chats', () => ({ localStructuredChatsInUse: async () => true }))
 vi.mock('./local-runtime-capabilities', () => ({
   subscribeLocalRuntimeCapabilitiesKnown: () => () => {},
   ensureLocalRuntimeCapabilities: async () => mocks.capabilities,
@@ -143,12 +142,43 @@ describe('host model catalog snapshots sync', () => {
     useAppStore.setState({
       settings: {
         ...getDefaultSettings('/tmp/orca-workspaces'),
+        agentDefaultSurface: 'chat',
         nativeChatSessionOptions: { claude: { model: 'opus[1m]' }, codex: {} }
       },
       runtimeStatusByEnvironmentId: new Map()
     })
   })
   afterEach(() => stop?.())
+
+  it.each(['chat', 'terminal', undefined] as const)(
+    'preloads registered saved catalogs through the production %s aggregate',
+    async (surface) => {
+      mocks.capabilities = [SAVED_ONLY]
+      useAppStore.setState({
+        settings: {
+          ...getDefaultSettings('/tmp/orca-workspaces'),
+          agentDefaultSurface: surface,
+          nativeChatProviders: {},
+          nativeChatSessionOptions: {}
+        }
+      })
+      mocks.agents.set('local', { runtimeId: null, agents: REGISTERED })
+      stop = installHostModelCatalogSnapshotsSync()
+      await new Promise((resolve) => setTimeout(resolve, 0))
+      if (surface === 'chat') {
+        await vi.waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(REGISTERED.length))
+        expect(mocks.call.mock.calls).toEqual(
+          REGISTERED.map(({ agent }) => [
+            LOCAL,
+            'agentSession.modelCatalog',
+            { agent, savedOnly: true }
+          ])
+        )
+      } else {
+        expect(mocks.call).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('retires reconnect observers after catalog removals while preserving live hosts', async () => {
     const count = 10

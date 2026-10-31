@@ -79,6 +79,7 @@ export function trackLaunchSettlement(
       if (state.cancelled) {
         return
       }
+      state.visibilityUnknown = false
       materializeStructuredLaunchSurface(state.intent)
       if (!state.hostListed) {
         const { worktreeId, sessionId, executionHostId } = state.intent

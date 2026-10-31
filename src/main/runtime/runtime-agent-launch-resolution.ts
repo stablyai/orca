@@ -97,6 +97,22 @@ export function resolveLaunchCommandPaneAgent(command: string | null | undefined
   return recognized && isTuiAgent(recognized.agent) ? recognized.agent : null
 }
 
+/** The agent a fresh launch's command starts; a command override keeps the planned agent. No command starts none. */
+export function resolveLaunchedAgent(
+  command: string | null | undefined,
+  plannedAgent: unknown
+): TuiAgent | null {
+  if (!command) {
+    return null
+  }
+  const recognized = resolveLaunchCommandPaneAgent(command)
+  // A known agent run headless (`claude --print`) has no composer; only an unrecognized override keeps the plan.
+  if (recognized || recognizeAgentLaunchCommand(command, { includeHeadlessOneShot: true })) {
+    return recognized
+  }
+  return isTuiAgent(plannedAgent) ? plannedAgent : null
+}
+
 export function inferCapturedClaudeAgentTeamsMode(
   launchConfig: SleepingAgentLaunchConfig | undefined,
   command: string | undefined,

@@ -180,17 +180,36 @@ describe('registerPtyHandlers', () => {
       0
     )
   })
-  it('seeds the title of a session adopted by subscriber-driven attach', async () => {
+  it('seeds the screen and title of a session adopted by main attach', async () => {
     const daemonPtyId = 'repo-1::/tmp/wt@@title-handoff'
     const localProvider = createAgentClaimProvider({})
-    localProvider.attach.mockResolvedValueOnce({ lastTitle: '⠋ Claude' })
+    localProvider.attach.mockResolvedValueOnce({
+      id: daemonPtyId,
+      snapshot: 'idle composer\r\n',
+      snapshotCols: 120,
+      snapshotRows: 40,
+      lastTitle: '⠋ Claude'
+    })
     setLocalPtyProvider(localProvider as never)
+    const seedHeadlessTerminal = vi.fn()
     const seedTerminalRestoreTail = vi.fn()
-    const controller = registerAgentClaimController({ seedTerminalRestoreTail })
+    const controller = registerAgentClaimController({
+      seedHeadlessTerminal,
+      seedTerminalRestoreTail
+    })
 
     await expect(controller.attach(daemonPtyId)).resolves.toBe(true)
 
-    expect(seedTerminalRestoreTail).toHaveBeenCalledWith(daemonPtyId, { lastTitle: '⠋ Claude' })
+    expect(seedHeadlessTerminal).toHaveBeenCalledWith(
+      daemonPtyId,
+      'idle composer\r\n',
+      { cols: 120, rows: 40 },
+      {}
+    )
+    expect(seedTerminalRestoreTail).toHaveBeenCalledWith(daemonPtyId, {
+      text: 'idle composer\r\n',
+      lastTitle: '⠋ Claude'
+    })
   })
   it('does not dispatch a runtime PTY spawn after its client disconnects', async () => {
     const provider = createAgentClaimProvider({})

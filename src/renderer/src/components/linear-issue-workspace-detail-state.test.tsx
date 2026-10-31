@@ -1,5 +1,8 @@
+import { createTestStore } from '@/store/slices/linear-slice-test-harness'
+import { clearLinearRequestMaps } from '@/store/slices/linear/linear-slice-request-state'
 // @vitest-environment happy-dom
 
+import { useStore } from 'zustand'
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -11,7 +14,6 @@ import {
 } from '../../../shared/task-source-context'
 import {
   mergeLinearIssueComments,
-  mergeLinearIssueHydration,
   useLinearIssueWorkspaceDetail
 } from './linear-issue-workspace-detail-state'
 
@@ -30,6 +32,15 @@ vi.mock('@/components/LinearItemDrawer', () => ({
     labelIds: selected.labelIds,
     labels: selected.labels
   })
+}))
+
+const detailStore = createTestStore()
+vi.mock('@/store', () => ({
+  useAppStore: Object.assign(
+    (selector: (state: ReturnType<typeof detailStore.getState>) => unknown) =>
+      useStore(detailStore, selector),
+    { getState: () => detailStore.getState() }
+  )
 }))
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true })
@@ -106,34 +117,10 @@ afterEach(() => {
   roots.splice(0).forEach((root) => act(() => root.unmount()))
   document.body.replaceChildren()
   vi.clearAllMocks()
+  clearLinearRequestMaps()
 })
 
 describe('Linear issue workspace detail state', () => {
-  it('preserves the edited fields while accepting fresh hydration data', () => {
-    const current = {
-      ...issue('1', 'Edited'),
-      project: { id: 'project-edited', name: 'Edited project' },
-      state: { name: 'In Progress', type: 'started', color: '#111111' },
-      assignee: { id: 'user-1', displayName: 'Ada' },
-      labels: ['Edited label'],
-      labelIds: ['edited-label'],
-      priority: 1,
-      estimate: 8
-    }
-    const fetched = {
-      ...issue('1', 'Server'),
-      project: { id: 'project-server', name: 'Server project' },
-      dueDate: '2026-09-01'
-    }
-    expect(mergeLinearIssueHydration(fetched, current, true)).toEqual({
-      ...current,
-      project: fetched.project,
-      dueDate: '2026-09-01',
-      updatedAt: fetched.updatedAt
-    })
-    expect(mergeLinearIssueHydration(fetched, current, false)).toBe(fetched)
-  })
-
   it('deduplicates optimistic comments against provider refreshes', () => {
     const fetched: LinearComment[] = [
       { id: 'server', body: 'Server', createdAt: '2026-08-01', user: { displayName: 'Ada' } },
@@ -198,34 +185,5 @@ describe('Linear issue workspace detail state', () => {
     expect(container.querySelector('[data-testid="comments"]')?.textContent).toBe('comment-b')
     expect(runtimeMocks.linearGetIssue).toHaveBeenCalledWith(sourceContext, 'b', 'workspace-1')
     expect(runtimeMocks.linearIssueComments).toHaveBeenCalledWith(sourceContext, 'b', 'workspace-1')
-  })
-})
-
-describe('mergeLinearIssueHydration project preservation', () => {
-  // Only details carry project; preserving the list’s undefined value after an edit would erase the hydrated project.
-  it('takes project from the hydrated detail even when the user has edited', () => {
-    const listIssue = { ...issue('ENG-1'), project: undefined }
-    const hydrated = { ...issue('ENG-1'), project: { id: 'p1', name: 'Compiler' } }
-
-    const merged = mergeLinearIssueHydration(hydrated, listIssue, true)
-
-    expect(merged.project).toEqual({ id: 'p1', name: 'Compiler' })
-  })
-
-  it('still preserves the fields the user actually edits', () => {
-    const edited = { ...issue('ENG-1'), title: 'my edit', priority: 1 }
-    const hydrated = { ...issue('ENG-1'), title: 'server title', priority: 4 }
-
-    const merged = mergeLinearIssueHydration(hydrated, edited, true)
-
-    expect(merged.title).toBe('my edit')
-    expect(merged.priority).toBe(1)
-  })
-
-  it('keeps project out of the preserved-field set', () => {
-    const listIssue = { ...issue('ENG-1'), project: undefined }
-    const hydrated = { ...issue('ENG-1'), project: { id: 'p2', name: 'Runtime' } }
-
-    expect(mergeLinearIssueHydration(hydrated, listIssue, true).project?.id).toBe('p2')
   })
 })

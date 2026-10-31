@@ -195,7 +195,7 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
     // Record ordering before removal, which also marks a program turn boundary.
     const workingSince =
       event.fromProgramStatus === true
-        ? this.programStatusFacets.noteState(paneKey, event.payload.state, now)
+        ? this.programStatusFacets.noteState(paneKey, event.payload, now)
         : undefined
     if (event.removesProgramStatusRow === true) {
       this.hookSilenceRechecks.cancel(paneKey)
@@ -248,6 +248,9 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       if (previous && mutationBefore !== undefined) {
         this.commitStatusRowMutation(mutationBefore, previous)
         this.emitEnrichedStatus(previous)
+      }
+      if (hookOwnsAgent && previous) {
+        this.settleClaudePromptBlocked(previous)
       }
       return
     }
@@ -315,7 +318,8 @@ export abstract class AgentHookServerIngestTerminal extends AgentHookServerInges
       event.origin ?? 'osc',
       undefined,
       mutationBefore,
-      newRun
+      newRun,
+      !preservedProviderSession
     )
   }
 }

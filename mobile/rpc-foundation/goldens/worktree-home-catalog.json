@@ -4,12 +4,29 @@
   "family": "worktree.home-catalog",
   "namedDeltas": [],
   "values": {
-    "07d517ec3da6": {
+    "0d02c4637af4": {
       "name": "info",
       "ordinal": 3,
       "value": {
         "host-1": {
           "activeCount": 2,
+          "attention": [
+            {
+              "branch": {
+                "$rpc": "undefined"
+              },
+              "displayName": "One",
+              "dotStatus": "working",
+              "lastOutputAt": {
+                "$rpc": "undefined"
+              },
+              "repo": "Repo",
+              "workingMode": {
+                "$rpc": "undefined"
+              },
+              "worktreeId": "w-1"
+            }
+          ],
           "countsProvenAt": 1767225600000,
           "hostId": "host-1",
           "lastActiveWorktree": {
@@ -96,9 +113,26 @@
         "startedAt": 0
       }
     },
-    "6624fb97ea31": {
+    "87aae336d391": {
       "host-1": {
         "activeCount": 2,
+        "attention": [
+          {
+            "branch": {
+              "$rpc": "undefined"
+            },
+            "displayName": "One",
+            "dotStatus": "working",
+            "lastOutputAt": {
+              "$rpc": "undefined"
+            },
+            "repo": "Repo",
+            "workingMode": {
+              "$rpc": "undefined"
+            },
+            "worktreeId": "w-1"
+          }
+        ],
         "countsProvenAt": 1767225600000,
         "hostId": "host-1",
         "lastActiveWorktree": {
@@ -151,8 +185,8 @@
           "settlements": {
             "load": "eb79a9b3682a"
           },
-          "state": "6624fb97ea31",
-          "effects": ["07d517ec3da6"]
+          "state": "87aae336d391",
+          "effects": ["0d02c4637af4"]
         }
       }
     ]

@@ -468,7 +468,7 @@ export function registerJournalStoreTests(): void {
     try {
       run(opened.db)
     } finally {
-      opened.close()
+      await opened.close()
     }
   }
 

@@ -1,3 +1,4 @@
+import type { ClaudeNamingGeneration } from './claude-naming-generation'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import {
   AgentSessionAcquisitionExitUnprovenError,
@@ -44,6 +45,7 @@ export async function resolveClaudeAcquisitionLaunch(args: {
   callbacks: ClaudeAcquireCallbacks
   previous: ClaudeAcquisitionAttempt | undefined
   attempt: ClaudeAcquisitionAttempt
+  naming?: ClaudeNamingGeneration
 }): Promise<ClaudeAcquisitionLaunch> {
   const { input, deps, sessions, acquisitions, exits, callbacks, previous, attempt } = args
   const sessionId = input.identity.sessionId

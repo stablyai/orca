@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
 import {
   STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY as CHAT,
@@ -193,7 +194,7 @@ it('publishes real chat options to main and popout, retaining card candidates an
   transport.call.mockResolvedValue({ agents: [{ agent: 'grok', capabilities: {} }] })
   transport.subscribe.mockResolvedValue({ unsubscribe })
   setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, HEALTH])
-  seed({ ...getDefaultSettings('/tmp'), experimentalNativeChat: true })
+  seed({ ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT })
   useAppStore.setState({
     detectedAgentIds: [],
     worktreesByRepo: { 'repo-1': [worktree(), { ...worktree(), id: 'wt-2' }] }

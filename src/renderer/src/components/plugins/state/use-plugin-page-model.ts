@@ -5,7 +5,10 @@ import type {
 } from '../../../../../preload/api-types'
 import { pluginExecutionProfile } from '../../../../../shared/plugins/contributions/plugin-execution-profile'
 import { PLUGIN_CONTRIBUTION_SUMMARY_LIMIT } from '../../../../../shared/plugins/contributions/plugin-contribution-summary'
-import type { PluginHostImages } from '../../../../../shared/plugins/images/plugin-image-url'
+import {
+  servedPluginHostImages,
+  type PluginHostImages
+} from '../../../../../shared/plugins/images/plugin-image-url'
 import type { PluginListEntry } from '../list/plugin-list-entries'
 import {
   installedPluginTrust,
@@ -167,8 +170,9 @@ export function usePluginPageModel({
         ?.filter((item) => item.kind === 'customEditors')
         .flatMap((item) => (item.detail ? item.detail.split(', ') : [])) ?? null)
 
-  const images: PluginHostImages | undefined =
+  const images: PluginHostImages | undefined = servedPluginHostImages(
     plugin?.images ?? listing?.images ?? shownPreview?.images
+  )
   return {
     plugin,
     listing,

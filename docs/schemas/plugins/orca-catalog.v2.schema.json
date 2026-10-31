@@ -61,7 +61,7 @@
         "id": {
           "type": "string",
           "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*\\.[a-z0-9]+(?:-[a-z0-9]+)*$",
-          "description": "`<publisher>.<id>`, matching the plugin's manifest. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused.",
+          "description": "`<publisher>.<id>`: the publisher is the repository owner, lowercased (Orca installs under this key, whatever the manifest's deprecated `publisher` says), and the id is the manifest's `id`. Each half is at most 64 characters, and the reserved names `constructor` and `prototype` are refused.",
           "x-orca-since": "1.4.245",
           "examples": [
             "acme.gleam-syntax"
@@ -69,6 +69,16 @@
         },
         "source": {
           "$ref": "#/$defs/CatalogGitSource"
+        },
+        "ownerId": {
+          "description": "GitHub's numeric id of the repository owner, recorded the first time the plugin was listed. Names can be renamed or re-registered; this id cannot. Informational: Orca does not read it yet, and older Orca ignores it.",
+          "x-orca-since": "1.4.246",
+          "examples": [
+            1234567
+          ],
+          "type": "integer",
+          "exclusiveMinimum": 0,
+          "maximum": 9007199254740991
         },
         "description": {
           "description": "Listing text shown in the catalog.",

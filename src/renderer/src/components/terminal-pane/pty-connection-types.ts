@@ -1,3 +1,4 @@
+import type { TerminalLaunchInputAttemptOwner } from './terminal-launch-input-attempt'
 import type { WorkspaceAttentionSlice } from '@/store/slices/workspace-attention/workspace-attention-contract'
 import type { NotificationWorkspaceOwner } from '../../../../shared/notification-source'
 import type { PtyTransport, PtyTransportRecoveryState } from './pty-transport-types'
@@ -62,6 +63,7 @@ export type PtyConnectionDeps = {
   cwd?: string
   /** Delays a fresh split's spawn without delaying its renderer pane. */
   cwdPromise?: Promise<string>
+  launchInputAttempt?: TerminalLaunchInputAttemptOwner
   placement?: TerminalPanePlacement
   /** Input handed off from a predecessor mount of the same deferred split. */
   preconnectInput?: readonly PtyPreconnectInputEntry[]

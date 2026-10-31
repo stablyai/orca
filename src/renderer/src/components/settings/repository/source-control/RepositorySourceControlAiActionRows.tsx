@@ -262,6 +262,7 @@ export function RepositorySourceControlAiActionRows({
               <div className="flex min-w-0 flex-wrap items-start gap-3">
                 {isLaunchAction ? (
                   <SourceControlActionArguments
+                    agentLaunchChoices={observation.preferences.agentLaunchChoices ?? null}
                     showArguments={shouldShowSourceControlActionArguments({
                       agent: actual.status === 'ready' ? actual.agent : null,
                       settings,

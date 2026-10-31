@@ -17,7 +17,7 @@ export const appearanceSettingsStyles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -46,7 +46,7 @@ export const appearanceSettingsStyles = themedStyleSheet(() => ({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   sectionTopGap: {

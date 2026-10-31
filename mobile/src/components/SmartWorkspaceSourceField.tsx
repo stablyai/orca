@@ -1,4 +1,4 @@
-import { Pressable, Text, View } from 'react-native'
+import { Pressable, View } from 'react-native'
 import {
   CircleDot,
   ExternalLink,
@@ -9,12 +9,15 @@ import {
 } from 'lucide-react-native'
 import type { SmartNameSelection } from '../tasks/mobile-composer-source-types'
 import type { MobileComposerSource } from '../tasks/use-mobile-composer-source'
-import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { colors, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import { TextField } from './composer-input/TextField'
+import { LIST_LEADING_INSET, ListGroup } from './list/ListGroup'
+import { ListRow } from './list/ListRow'
+import { SectionHeader } from './list/SectionHeader'
 
 type Props = {
   composer: MobileComposerSource
@@ -30,20 +33,21 @@ type Props = {
 function SelectionIcon({ kind }: { kind: SmartNameSelection['kind'] }) {
   useMobileColorScheme()
   if (kind === 'github-pr') {
-    return <GitPullRequest size={15} color={colors.textSecondary} />
+    return <GitPullRequest size={18} color={colors.textSecondary} />
   }
   if (kind === 'gitlab-mr') {
-    return <GitMerge size={15} color={colors.textSecondary} />
+    return <GitMerge size={18} color={colors.textSecondary} />
   }
   if (kind === 'github-issue' || kind === 'gitlab-issue') {
-    return <CircleDot size={15} color={colors.textSecondary} />
+    return <CircleDot size={18} color={colors.textSecondary} />
   }
   if (kind === 'branch') {
-    return <GitBranch size={15} color={colors.textSecondary} />
+    return <GitBranch size={18} color={colors.textSecondary} />
   }
-  return <TaskProviderLogo provider="linear" size={15} color={colors.textSecondary} />
+  return <TaskProviderLogo provider="linear" size={18} color={colors.textSecondary} />
 }
 
+/** The form's "Start from" section: a name, or the source a workspace is created from. */
 export function SmartWorkspaceSourceField({
   composer,
   label,
@@ -66,40 +70,53 @@ export function SmartWorkspaceSourceField({
   }
 
   return (
-    <View style={styles.field}>
-      <Text style={styles.label}>
-        {label}{' '}
-        <Text style={styles.labelHint}>
-          {t('components.smartWorkspaceSourceField.optional', '[Optional]')}
-        </Text>
-      </Text>
+    <>
+      <SectionHeader
+        title={label}
+        trailing={t('components.smartWorkspaceSourceField.optionalLabel', 'Optional')}
+      />
       {selection ? (
-        <View style={styles.pill}>
-          <SelectionIcon kind={selection.kind} />
-          <Text style={styles.pillLabel} numberOfLines={1}>
-            {selection.label}
-          </Text>
-          {selection.url ? (
-            <Pressable
-              accessibilityRole="link"
-              accessibilityLabel={t(
-                'components.smartWorkspaceSourceField.openSelectedSource',
-                'Open selected source'
-              )}
-              hitSlop={6}
-              onPress={() => {
-                if (selection.url) {
-                  onOpenExternalUrl(selection.url)
-                }
-              }}
-            >
-              <ExternalLink size={15} color={colors.textMuted} />
-            </Pressable>
-          ) : null}
-          <Pressable hitSlop={6} onPress={composer.handleClearSmartNameSelection}>
-            <X size={15} color={colors.textMuted} />
-          </Pressable>
-        </View>
+        <ListGroup separatorInset={LIST_LEADING_INSET}>
+          <ListRow
+            key="selection"
+            title={selection.label}
+            leading={<SelectionIcon kind={selection.kind} />}
+            accessory={
+              <View style={styles.actions}>
+                {selection.url ? (
+                  <Pressable
+                    style={styles.action}
+                    accessibilityRole="link"
+                    accessibilityLabel={t(
+                      'components.smartWorkspaceSourceField.openSelectedSource',
+                      'Open selected source'
+                    )}
+                    hitSlop={6}
+                    onPress={() => {
+                      if (selection.url) {
+                        onOpenExternalUrl(selection.url)
+                      }
+                    }}
+                  >
+                    <ExternalLink size={17} color={colors.textSecondary} />
+                  </Pressable>
+                ) : null}
+                <Pressable
+                  style={styles.action}
+                  accessibilityRole="button"
+                  accessibilityLabel={t(
+                    'components.smartWorkspaceSourceField.clearSelectedSource',
+                    'Clear selected source'
+                  )}
+                  hitSlop={6}
+                  onPress={composer.handleClearSmartNameSelection}
+                >
+                  <X size={17} color={colors.textSecondary} />
+                </Pressable>
+              </View>
+            }
+          />
+        </ListGroup>
       ) : (
         // Use real TextInput sharing composer.name with docked picker field so typed text survives native focus handoff.
         <TextField
@@ -113,6 +130,7 @@ export function SmartWorkspaceSourceField({
             'components.smartWorkspaceSourceField.searchPlaceholder',
             'Type a name or search a source'
           )}
+          accessibilityLabel={label}
           autoCapitalize="none"
           autoCorrect={false}
           // Return opens picker, never submits create form during focus handoff.
@@ -120,41 +138,24 @@ export function SmartWorkspaceSourceField({
           showSoftInputOnFocus={false}
         />
       )}
-    </View>
+    </>
   )
 }
 
 const styles = themedStyleSheet(() => ({
-  field: {
-    marginBottom: spacing.md
-  },
-  label: {
-    fontSize: 13,
-    fontWeight: '500',
-    color: colors.textSecondary,
-    marginBottom: spacing.xs
-  },
-  labelHint: {
-    fontWeight: '400',
-    color: colors.textMuted
-  },
   enabled: {
     opacity: 1
   },
-  pill: {
+  // The 36 pt hit boxes reach into the row's padding so the glyphs line up with its edge.
+  actions: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: spacing.sm,
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
-    paddingHorizontal: spacing.md,
-    paddingVertical: spacing.sm,
-    borderWidth: 1,
-    borderColor: colors.borderSubtle
+    marginRight: -spacing.sm
   },
-  pillLabel: {
-    flex: 1,
-    fontSize: typography.bodySize,
-    color: colors.textPrimary
+  action: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center'
   }
 }))

@@ -24,7 +24,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { codexProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from './structured-agent-session-adapter-router-test-support'
@@ -67,7 +70,11 @@ async function liveReader() {
       batches: events.slice(opened).filter((event) => event.type === 'batch').length
     }
   }
-  return { received }
+  const hydration = events.findLast((event) => event.type === 'snapshot' || event.type === 'reset')
+  return {
+    received,
+    hydratedCursor: hydration?.page.liveCursor ?? hydration?.page.window.nextCursor
+  }
 }
 
 async function send(text: string): Promise<string> {
@@ -151,6 +158,7 @@ beforeEach(async () => {
 
 afterEach(async () => {
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -218,7 +226,42 @@ describe('an open chat receives each row once', () => {
     if (!journal) {
       throw new Error('the attached chat has no journal')
     }
-    const readSince = vi.spyOn(journal, 'readSince')
+    const hydratedCursor = journal.cursor()
+    expect(pane.hydratedCursor).toEqual(hydratedCursor)
+    const reads: {
+      epoch: string
+      sequence: number
+      limit: number | undefined
+      ok: boolean
+      returnedCursor: { epoch: string; sequence: number } | null
+      rowCount: number
+      rows: { epoch: string; sequence: number; kind: string; itemId: string | null }[]
+    }[] = []
+    const realReadSince = journal.readSince.bind(journal)
+    const readSince = vi.spyOn(journal, 'readSince').mockImplementation((cursor, limit) => {
+      const epoch = cursor.epoch
+      const sequence = cursor.sequence
+      const result = realReadSince(cursor, limit)
+      reads.push({
+        epoch,
+        sequence,
+        limit,
+        ok: result.ok,
+        returnedCursor: result.ok
+          ? { epoch: result.cursor.epoch, sequence: result.cursor.sequence }
+          : null,
+        rowCount: result.ok ? result.rows.length : 0,
+        rows: result.ok
+          ? result.rows.map((row) => ({
+              epoch: row.epoch,
+              sequence: row.seq,
+              kind: row.kind,
+              itemId: 'itemId' in row ? row.itemId : null
+            }))
+          : []
+      })
+      return result
+    })
 
     sink.appendItem(
       { provider: 'orca', clientMessageId: 'streamed' },
@@ -229,8 +272,41 @@ describe('an open chat receives each row once', () => {
     await host.flushStreamedEvents(SESSION)
 
     expect(pane.received().statuses).toEqual(['streamed row'])
-    // Caught-up publication must not reread streamed rows.
-    expect(readSince).toHaveBeenCalledOnce()
+    expect(pane.received().batches).toBe(1)
+    const committedCursor = { epoch: hydratedCursor.epoch, sequence: hydratedCursor.sequence + 1 }
+    expect(journal.cursor()).toEqual(committedCursor)
+    const readResult = {
+      epoch: hydratedCursor.epoch,
+      sequence: hydratedCursor.sequence,
+      ok: true,
+      returnedCursor: committedCursor,
+      rowCount: 1,
+      rows: [
+        {
+          epoch: committedCursor.epoch,
+          sequence: committedCursor.sequence,
+          kind: 'item',
+          itemId: 'orca:streamed'
+        }
+      ]
+    }
+    // Call-time provenance: readForward owns lookahead; reusePromptProjection owns the delta.
+    const paneHistoryRead = { ...readResult, limit: 201 }
+    const promptDeltaRead = { ...readResult, limit: 200 }
+    expect(reads.filter(({ limit }) => limit === paneHistoryRead.limit)).toEqual([paneHistoryRead])
+    expect(reads.filter(({ limit }) => limit === promptDeltaRead.limit)).toEqual([promptDeltaRead])
+    expect(reads).toHaveLength(2)
+    expect(readSince).toHaveBeenCalledTimes(2)
+    expect(reads.reduce((count, read) => count + read.rowCount, 0)).toBe(2)
+
+    const delivered = pane.received()
+    const settledReads = [...reads]
+    sink.publish()
+    await host.flushStreamedEvents(SESSION)
+
+    expect(reads).toEqual(settledReads)
+    expect(readSince).toHaveBeenCalledTimes(2)
+    expect(pane.received()).toEqual(delivered)
   })
 
   it('when a writer publishes the row it appended', async () => {

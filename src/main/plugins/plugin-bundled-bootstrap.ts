@@ -138,7 +138,7 @@ export async function bootstrapBundledPlugins(options: {
       const inspection = await inspectPluginInstallTree({
         rootDir: sourcePath,
         hostVersion: options.hostVersion,
-        expectedPluginKey: entry.pluginKey
+        identity: { pluginKey: entry.pluginKey }
       })
       if (!inspection.ok) {
         throw new Error(inspection.error)

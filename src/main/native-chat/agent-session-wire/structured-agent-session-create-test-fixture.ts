@@ -13,16 +13,18 @@ export const CREATE_TEST_CALLER = { callerKey: 'client-1' }
 
 export function createTestParams(
   firstMessage?: StructuredAgentSessionFirstMessage,
-  overrides: Partial<AgentSessionAttachParams> = {}
+  overrides: Partial<AgentSessionAttachParams> = {},
+  sessionId = overrides.envelope?.sessionId ?? HOST_TEST_SESSION
 ): AgentSessionAttachParams {
   const params = hostTestAttachParams(null, { providerHandle: undefined, ...overrides })
   return {
     ...params,
     envelope: {
       ...params.envelope,
+      sessionId,
       payloadFingerprint: computeAgentSessionPayloadFingerprint({
         method: 'agentSession.create',
-        sessionId: params.envelope.sessionId,
+        sessionId,
         fields: {
           worktree: `id:${params.location.workspaceId}`,
           agent: params.agent,

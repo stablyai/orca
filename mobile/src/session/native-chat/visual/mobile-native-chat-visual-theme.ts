@@ -28,7 +28,7 @@ export const MOBILE_NATIVE_CHAT_VISUAL_THEME: NativeChatVisualTheme = {
       '--border': colors.borderSubtle,
       '--input': colors.borderSubtle,
       '--ring': colors.textMuted,
-      '--radius': `${radii.row}px`,
+      '--radius': `${radii.tile}px`,
       '--chart-1': '#8ec5ff',
       '--chart-2': '#2b7fff',
       '--chart-3': '#155dfc',

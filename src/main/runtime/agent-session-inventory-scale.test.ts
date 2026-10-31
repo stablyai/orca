@@ -336,7 +336,7 @@ describe('real conversation inventory work', () => {
     } finally {
       db.close()
       const released = await releaseAgentSessionRecordStore()
-      released?.journalDatabase.close()
+      await released?.journalDatabase.close()
     }
   })
 

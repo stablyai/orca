@@ -17,6 +17,44 @@
       "restoreAfterSeconds_other": "After {{count}}s"
     }
   },
+  "automations": {
+    "orphanIssues": {
+      "hostReselection": "Edit this automation and reselect its host before running it.",
+      "malformed": "Its stored host record is incomplete.",
+      "projectMissing": "Its project no longer exists, so its host cannot be resolved.",
+      "projectUnverified": "Its project could not be checked from here, so its host is unconfirmed.",
+      "scheduledElsewhere": "It is stored here but scheduled against a remote runtime.",
+      "targetMissing": "Its SSH host is no longer registered.",
+      "targetReplaced": "Its SSH host was removed and re-added, so it must be re-adopted.",
+      "workspaceHostAmbiguous": "Its workspace spans more than one host, so it has no single owner."
+    },
+    "runFailures": {
+      "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
+      "agentNoCompletion": "Automation agent did not report completion.",
+      "automationChanged": "The automation changed before this run could launch.",
+      "destinationChanged": "The automation destination changed before this run could launch.",
+      "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
+      "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
+      "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
+      "noDispatchHost": "No Orca window was available to launch the automation.",
+      "noRunnableHost": "This automation has no host to run on.",
+      "projectPathChanged": "Project path for the selected automation host has changed.",
+      "projectSetupMissing": "Project is not set up on the selected automation host anymore.",
+      "remoteSchedulingUnavailable": "Remote-server automation scheduling is not available from this Orca client yet. Run this automation on the remote server or update Orca when durable remote scheduling is available.",
+      "repoDetached": "Repository is no longer attached to the selected automation host.",
+      "repoUnavailable": "Repository for the selected automation host is no longer available.",
+      "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
+      "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",
+      "targetSetupMismatch": "Automation run target no longer matches the selected project host setup.",
+      "targetUnavailable": "Automation run target is no longer available.",
+      "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",
+      "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
+      "workspaceHostAmbiguous": "The automation workspace spans more than one host, so Orca cannot tell which one to run it on.",
+      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs.",
+      "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
+      "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy."
+    }
+  },
   "chat": {
     "subagentGroup": {
       "ran_one": "Ran {{count}} subagent",
@@ -121,7 +159,7 @@
     }
   },
   "hostScreen": {
-    "hostScreenHeader": {
+    "hostBottomBar": {
       "activeFilters_one": "Workspace options ({{count}} filter active)",
       "activeFilters_other": "Workspace options ({{count}} filters active)"
     }
@@ -282,6 +320,10 @@
     "filterPickers": {
       "teams_one": "{{count}} team",
       "teams_other": "{{count}} teams"
+    },
+    "filterSheet": {
+      "projectItems_one": "{{count}} item",
+      "projectItems_other": "{{count}} items"
     },
     "githubProjectList": {
       "moreFields_one": "+{{count}} field",

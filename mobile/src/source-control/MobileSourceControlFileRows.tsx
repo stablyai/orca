@@ -15,6 +15,7 @@ import {
 import type { MobileSourceControlState } from './use-mobile-source-control-state'
 import { styles } from './mobile-source-control-styles'
 import { mobileConflictResolutionLabel } from './mobile-source-control-conflict-actions'
+import { getUnstageablePaths } from './mobile-git-status'
 
 type RowState = Pick<
   MobileSourceControlState,
@@ -156,9 +157,12 @@ export function makeRenderFileRow(state: RowState, t: Translate) {
               pressed && styles.iconButtonPressed
             ]}
             disabled={ioBusy}
-            onPress={() =>
-              void runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path })
-            }
+            onPress={() => {
+              const filePaths = getUnstageablePaths([item])
+              void (filePaths.length > 1
+                ? runGitAction(item.unstageActionId, 'git.bulkUnstage', { filePaths })
+                : runGitAction(item.unstageActionId, 'git.unstage', { filePath: item.path }))
+            }}
             hitSlop={8}
             accessibilityLabel={t('sourceControl.fileRows.unstageFile', 'Unstage {{path}}', {
               path: item.path

@@ -211,7 +211,8 @@ export class RuntimeAgentOrchestrationProjection {
           currentCreatorPane &&
           storedCreatorPane.leafId === currentCreatorPane.leafId))
     )
-    const paneRun = creatorPaneKey ? scope.pane(creatorPaneKey) : undefined
+    const paneRuns = creatorPaneKey ? scope.paneRuns(creatorPaneKey) : []
+    const paneRun = paneRuns.find((run) => run.id === owningRun?.id) ?? paneRuns[0]
     const sameRunCreatorDispatch = Boolean(
       task?.creator_dispatch_id &&
       task.creator_dispatch_run_id === owningRun?.id &&

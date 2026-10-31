@@ -10,8 +10,6 @@ import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-reco
 export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRuntimeWithResolveKnownWorkspaceFileTarget {
   protected abstract getOrCreatePtyWorktreeRecord(ptyId: string): RuntimePtyWorktreeRecord | null
 
-  protected abstract rejectWaitersForHandle(handle: string, code: string): void
-
   protected retirePredecessorPtyExitEvidence(pty: RuntimePtyWorktreeRecord): void {
     pty.lastExitCode = null
     pty.lastExitCause = null
@@ -44,7 +42,12 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
     for (const handle of invalidated) {
       this.handles.delete(handle)
       this.syntheticTerminalHandles.delete(handle)
-      this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
+    }
+    for (const waiter of this.terminalWaiters.forPty(ptyId)) {
+      // Waits end with the process they named; only the surviving alias carries its waits over.
+      if (waiter.handle !== preserveHandle) {
+        this.terminalWaiters.reject(waiter, 'terminal_handle_stale')
+      }
     }
     for (const [leafKey, handle] of this.handleByLeafKey) {
       if (invalidated.has(handle) || (preserveHandle !== undefined && handle === preserveHandle)) {
@@ -176,7 +179,7 @@ export abstract class OrcaRuntimeWithInvalidateAllHandlesForPty extends OrcaRunt
         })
       }
     }
-    this.terminalViewSubscribers.markSpawnPublished(ptyId)
+    this.mainDaemonAttachments.markSpawnPublished(ptyId)
     const pty = this.getOrCreatePtyWorktreeRecord(ptyId)
     if (pty) {
       if (incarnationId) {

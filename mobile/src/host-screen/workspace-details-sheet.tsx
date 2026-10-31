@@ -15,8 +15,7 @@ import { colors, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { prStateColor } from '../components/WorktreeMetaGlyphs'
-import { hostScreenStyles } from './host-screen-styles'
-import { OptionRowList } from './workspace-option-rows'
+import { ListGroup } from '../components/list/ListGroup'
 import { TaskProviderLogo } from '../components/TaskProviderLogo'
 import { getWorktreeGitIdentityDisplay } from '../../../src/shared/worktree/git-identity-display'
 import {
@@ -98,8 +97,8 @@ export function WorkspaceDetailsSheet(props: { row: Worktree; onOpenLink: (url: 
         ) : null}
       </View>
       {rows.length > 0 && (
-        <View testID="workspace-details" style={hostScreenStyles.filterGroup}>
-          <OptionRowList>{rows}</OptionRowList>
+        <View testID="workspace-details">
+          <ListGroup style={styles.group}>{rows}</ListGroup>
         </View>
       )}
     </>
@@ -256,6 +255,9 @@ const styles = themedStyleSheet(() => ({
     lineHeight: 16,
     color: colors.textMuted
   },
+  group: {
+    marginBottom: spacing.md
+  },
   row: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -265,7 +267,7 @@ const styles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md + 2
   },
   rowPressed: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.borderSubtle
   },
   icon: {
     width: ICON_SIZE,

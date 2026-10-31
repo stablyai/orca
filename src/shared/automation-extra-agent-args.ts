@@ -266,6 +266,18 @@ export function mergeExtraAgentArgs(args: {
   if (!extras.ok) {
     return extras
   }
+  return mergeParsedExtraAgentArgs({ ...args, defaultArgs, extras })
+}
+
+/** Accepted saved POSIX tokens keep their meaning when rendered for the execution shell. */
+export function mergeParsedExtraAgentArgs(args: {
+  agent: TuiAgent
+  defaultArgs: string | null | undefined
+  extras: Extract<ParsedExtraAgentArgs, { ok: true }>
+  shell: AgentStartupShell
+}): MergedAgentArgs {
+  const defaultArgs = args.defaultArgs ?? ''
+  const { extras } = args
   const defaults = defaultArgs.trim()
     ? tokenizeStartupCommand(defaultArgs.trim(), args.shell)
     : { ok: true as const, tokens: [] }

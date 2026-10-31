@@ -8,7 +8,7 @@ import {
   compactSourceControlTree,
   flattenSourceControlTree,
   type SourceControlTreeNode
-} from '@/components/right-sidebar/source-control-tree'
+} from '../../../../shared/source-control-tree'
 import { VirtualizedList } from '@/components/virtualized-list'
 import type { ConflictReviewEntry } from '@/store/slices/editor'
 import type { GitStatusEntry } from '../../../../shared/git-status-types'

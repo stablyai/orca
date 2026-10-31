@@ -40,7 +40,10 @@ export function MobileBranchDiffPreviewDrawer({ branchDiffPreview, onClose }: Pr
           </Text>
         </View>
         <Pressable
-          style={({ pressed }) => [styles.diffCloseButton, pressed && styles.iconButtonPressed]}
+          style={({ pressed }) => [
+            styles.diffCloseButton,
+            pressed && styles.diffCloseButtonPressed
+          ]}
           onPress={onClose}
           hitSlop={8}
           accessibilityLabel={t(

@@ -2,7 +2,7 @@ import { Activity } from 'lucide-react-native'
 import { Animated, View } from 'react-native'
 import type { AgentDotState } from '../worktree/agent-row-display'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
+import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useWorkingRingRotation } from './use-working-ring-rotation'
@@ -69,11 +69,11 @@ export function AgentStateDot({ state }: { state: AgentDotState | 'unverifiable'
 
 const styles = themedStyleSheet(() => ({
   wrapper: { width: 10, height: 10, alignItems: 'center', justifyContent: 'center' },
-  dot: { width: 6, height: 6, borderRadius: 3 },
+  dot: { width: 6, height: 6, borderRadius: radii.pill },
   dashedRing: {
     width: 8,
     height: 8,
-    borderRadius: 4,
+    borderRadius: radii.pill,
     borderWidth: 1.5,
     borderStyle: 'dashed',
     borderColor: colors.statusAmber
@@ -81,7 +81,7 @@ const styles = themedStyleSheet(() => ({
   spinner: {
     width: 6,
     height: 6,
-    borderRadius: 3,
+    borderRadius: radii.pill,
     borderWidth: 1.5,
     borderColor: AGENT_WORKING_COLOR,
     borderTopColor: 'transparent'

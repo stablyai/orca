@@ -24,9 +24,16 @@ import type {
   AgentSessionOptionsResult
 } from '../../../../shared/agent-session-wire'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
+import {
+  recordHostModelCatalogSnapshot,
+  resetHostModelCatalogSnapshotsForTests
+} from '@/runtime/host-model-catalog-snapshots'
 import type { StructuredAgentSessionMutate } from './use-structured-agent-session-mutate'
 import { useStructuredAgentSessionOptions } from './use-structured-agent-session-options'
+import { useStructuredAgentSessionSendOptions } from './use-structured-agent-session-send-options'
+import type { AcpDeclaredEffortFixtureModule } from '../../../../shared/acp-declared-effort.test-fixture-contract'
+import { structuredAgentSessionMessageSelection } from '../../../../shared/structured-agent-session-option-view'
+import { firstFrameOptionState } from './structured-agent-session-option-first-frame'
 
 // Only the first chat without a saved pick may wait to name its model; later launches use the host’s learned default.
 
@@ -107,7 +114,11 @@ function renderChat(agent: string, sessionId: string, worktree: string) {
         launch
       })
       frames.push(pill(options.optionSnapshot))
-      return options
+      const capture = useStructuredAgentSessionSendOptions(sessionId, launch, {
+        ...options.sendSource,
+        takesSelection: true
+      })
+      return { ...options, capture }
     },
     { initialProps: NOT_STARTED }
   )
@@ -186,4 +197,61 @@ describe('a second new chat after one that named no model', () => {
     first.unmount()
     elsewhere.unmount()
   })
+})
+
+const { recordedEffortCase } = await vi.importActual<AcpDeclaredEffortFixtureModule>(
+  '../../../../main/acp/acp-declared-effort.test-fixture'
+)
+
+describe('declared context at the desktop consumer', () => {
+  it.each(['low', 'max', 'opencode', 'absent'] as const)(
+    'keeps %s policy on first frame and actual live/rest context out of input',
+    async (input) => {
+      const { agent, model, policy, display, catalog, live, resting } =
+        await recordedEffortCase(input)
+      resetHostModelCatalogSnapshotsForTests()
+      recordHostModelCatalogSnapshot(LOCAL, agent, '/declared-folder', catalog)
+      const first = firstFrameOptionState(agent, LOCAL, {
+        newLaunch: true,
+        seedsModel: false,
+        worktree: '/declared-folder'
+      })
+      expect(structuredAgentSessionMessageSelection(first)).toEqual({ model, effort: policy })
+      for (const answer of [live, resting]) {
+        mocks.call.mockReset()
+        resetHostModelCatalogSnapshotsForTests()
+        mocks.call.mockImplementation(async (_target: unknown, method: string) =>
+          method === 'agentSession.modelCatalog'
+            ? catalog
+            : method === 'agentSession.options'
+              ? answer
+              : new Promise(() => {})
+        )
+        const chat = renderChat(
+          agent,
+          `declaration-${input}-${answer === live ? 'live' : 'rest'}`,
+          'id:declaration'
+        )
+        chat.rerender({ running: { fence: 1 } })
+        await waitFor(() =>
+          expect(chat.result.current.sendSource.optionStateRef.current.optionsAnswerPresent).toBe(
+            true
+          )
+        )
+        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        const effort = chat.result.current.optionSnapshot.find((o) => o.id === 'effort')
+        if (answer.models.find((row) => row.id === model)!.efforts.length > 0) {
+          expect(effort?.valueSource).toBe(display ? 'default' : 'unknown')
+        } else {
+          expect(effort).toBeUndefined()
+        }
+        expect(chat.result.current.capture()).toEqual({ selection: { model } })
+        mocks.call.mockImplementation(() => new Promise(() => {}))
+        chat.rerender({ running: { fence: 2 } })
+        expect(chat.frames.at(-1)).toEqual({ model, effort: display ?? null })
+        expect(chat.result.current.capture()).toEqual({ selection: { model } })
+        chat.unmount()
+      }
+    }
+  )
 })

@@ -86,7 +86,7 @@ export const mobileSessionReaderStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.sm,
     backgroundColor: colors.bgRaised
   },

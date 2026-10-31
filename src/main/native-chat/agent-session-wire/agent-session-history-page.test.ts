@@ -614,7 +614,7 @@ async function reopenWithRawRows(rows: readonly RawSeedRow[]): Promise<AgentSess
     }
     opened.db.exec('COMMIT')
   } finally {
-    opened.close()
+    await opened.close()
   }
   return journals.open({ identity: IDENTITY, stateDirectory: root, now: tick })
 }

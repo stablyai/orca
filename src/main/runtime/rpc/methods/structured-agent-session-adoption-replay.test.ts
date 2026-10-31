@@ -18,7 +18,10 @@ import type { RpcRequest, RpcResponse } from '../core'
 import type { RpcDispatchStreamingOptions } from '../dispatcher-stream-options'
 import { RpcDispatcher } from '../dispatcher'
 import { STRUCTURED_AGENT_SESSION_METHODS } from './structured-agent-session'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../../shared/agent-session-provider-handle-encoding'
 import { claudeAndCodexAgents } from '../../../native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
@@ -139,6 +142,7 @@ afterEach(async () => {
   setStructuredAgentSessionHost(null)
   await host?.flushAllStreamedEvents()
   await host?.close(SESSION, 'evict')
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
   vi.restoreAllMocks()
   vi.unstubAllEnvs()
@@ -228,12 +232,6 @@ describe('committed adopting create RPC replay', () => {
       .spyOn(runtime, 'getAgentProviderSessionRows')
       .mockImplementation(() => rows)
     const sourceRoute = vi.spyOn(runtime, 'getStructuredAgentCliSourceRoute')
-    // The structured surface is settings-gated for every caller, not just mobile; this test
-    // probes durable-identity replay, which only runs once the gate admits the call.
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The RPC gate reads only this setting from the test double.
-    vi.spyOn(runtime, 'getClientSettings').mockReturnValue({
-      experimentalNativeChat: true
-    } as ReturnType<OrcaRuntimeService['getClientSettings']>)
     vi.spyOn(runtime, 'getStructuredAgentSessionCreateSupport').mockResolvedValue({
       supported: true
     })

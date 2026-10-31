@@ -28,6 +28,7 @@ import {
 import { isSubmoduleWorktreeOnlyChange } from '../../../../../../shared/source-control-discard-all-sequence'
 import { toPermanentSourceControlRowOpenEvent, type SourceControlRowOpenEvent } from './split-open'
 import {
+  getSourceControlRowHighlightClass,
   SOURCE_CONTROL_ROW_ACTION_OVERLAY_CLASS,
   SOURCE_CONTROL_TREE_FILE_PADDING_PX,
   SOURCE_CONTROL_TREE_INDENT_PX,
@@ -119,7 +120,7 @@ export const UncommittedEntryRow = React.memo(function UncommittedEntryRow({
         data-current={isOpenFile ? 'true' : undefined}
         className={cn(
           'group relative flex cursor-pointer items-center gap-1 pr-3 py-1 transition-colors',
-          isOpenFile ? 'bg-accent hover:bg-accent' : 'hover:bg-accent/40',
+          getSourceControlRowHighlightClass(isOpenFile),
           !isOpenFile && selected && 'bg-accent/60'
         )}
         style={{

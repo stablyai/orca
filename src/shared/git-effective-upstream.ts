@@ -8,6 +8,7 @@ import { splitRemoteBranchName } from './git-remote-branch-name'
 import { parseGitRevListAheadBehindCounts } from './git-rev-list-output'
 import { iterateProcessOutputLines } from './process-output-field-scanner'
 import { createGitConfigSnapshotRunner } from './git-config-snapshot-runner'
+import { getGitCurrentBranchName } from './git-current-branch'
 
 export { gitRefTargetsBranchName, splitRemoteBranchName } from './git-remote-branch-name'
 
@@ -56,16 +57,6 @@ async function splitRemoteBranchNameByKnownRemote(
     }
     const branchName = refName.slice(bestRemoteName.length + 1)
     return branchName ? { remoteName: bestRemoteName, branchName } : null
-  } catch {
-    return null
-  }
-}
-
-async function getCurrentBranchName(runGit: GitCommandRunner): Promise<string | null> {
-  try {
-    const { stdout } = await runGit(['symbolic-ref', '--quiet', '--short', 'HEAD'])
-    const branchName = stdout.trim()
-    return branchName || null
   } catch {
     return null
   }
@@ -183,7 +174,7 @@ export async function resolveEffectiveGitUpstream(
   execGit: GitCommandRunner
 ): Promise<EffectiveGitUpstream | null> {
   const runGit = createGitConfigSnapshotRunner(execGit)
-  return resolveEffectiveGitUpstreamForBranch(runGit, await getCurrentBranchName(runGit))
+  return resolveEffectiveGitUpstreamForBranch(runGit, await getGitCurrentBranchName(runGit))
 }
 
 export async function getEffectiveGitUpstreamStatus(
@@ -191,7 +182,7 @@ export async function getEffectiveGitUpstreamStatus(
   getBehindCommitsArePatchEquivalent?: (upstreamName: string) => Promise<boolean>
 ): Promise<GitUpstreamStatus> {
   const runGit = createGitConfigSnapshotRunner(execGit)
-  const currentBranchName = await getCurrentBranchName(runGit)
+  const currentBranchName = await getGitCurrentBranchName(runGit)
   const upstream = await resolveEffectiveGitUpstreamForBranch(runGit, currentBranchName)
   if (!upstream) {
     const hasConfiguredPushTarget = currentBranchName

@@ -1,5 +1,5 @@
 import { Platform, StyleSheet } from 'react-native'
-import { colors, spacing } from '../theme/mobile-theme'
+import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
 export const bottomDrawerStyles = themedStyleSheet(() => ({
@@ -12,7 +12,7 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
   },
   backdrop: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(0,0,0,0.5)'
+    backgroundColor: 'rgba(0,0,0,0.55)'
   },
   backdropPressable: {
     ...StyleSheet.absoluteFillObject
@@ -24,10 +24,11 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
   anchorWide: {
     alignItems: 'center'
   },
+  // A sheet floats over the screen like a dialog, so it takes the floating radius.
   drawer: {
-    backgroundColor: colors.bgBase,
-    borderTopLeftRadius: 16,
-    borderTopRightRadius: 16,
+    backgroundColor: colors.sheetSurface,
+    borderTopLeftRadius: radii.floating,
+    borderTopRightRadius: radii.floating,
     paddingHorizontal: spacing.md,
     ...Platform.select({
       ios: {
@@ -47,10 +48,10 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
   handle: {
     alignSelf: 'center',
     width: 36,
-    height: 4,
-    borderRadius: 2,
+    height: 5,
+    borderRadius: radii.pill,
     backgroundColor: colors.textMuted,
-    opacity: 0.4
+    opacity: 0.5
   },
   handleHitArea: {
     alignItems: 'center',
@@ -74,6 +75,6 @@ export const bottomDrawerStyles = themedStyleSheet(() => ({
     left: 0,
     right: 0,
     height: 500,
-    backgroundColor: colors.bgBase
+    backgroundColor: colors.sheetSurface
   }
 }))

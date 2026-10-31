@@ -59,17 +59,17 @@ vi.mock('@/components/ui/tooltip', () => ({
   }
 }))
 
-vi.mock('@/components/ui/dropdown-menu', () => ({
-  DropdownMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
-  DropdownMenuContent: () => null,
-  DropdownMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSeparator: () => null,
-  DropdownMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuLabel: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSub: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubContent: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuSubTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
-  DropdownMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
+vi.mock('@/components/ui/context-menu', () => ({
+  ContextMenu: ({ children }: { children: ReactNode }) => <>{children}</>,
+  ContextMenuContent: () => null,
+  ContextMenuItem: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ContextMenuSeparator: () => null,
+  ContextMenuShortcut: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ContextMenuLabel: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ContextMenuSub: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ContextMenuSubContent: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ContextMenuSubTrigger: ({ children }: { children?: ReactNode }) => <>{children}</>,
+  ContextMenuTrigger: ({ children }: { children: ReactNode }) => <>{children}</>
 }))
 
 vi.mock('@/components/ui/input', () => ({
@@ -141,7 +141,8 @@ vi.mock('@/lib/file-type-icons', () => ({
   getFileTypeIcon: () =>
     function FileIcon() {
       return <span data-file-icon />
-    }
+    },
+  getPluginFileTypeIconIndex: () => null
 }))
 
 vi.mock('@/lib/rename-file', () => ({

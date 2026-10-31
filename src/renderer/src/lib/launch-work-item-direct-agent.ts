@@ -1,4 +1,3 @@
-import { readLaunchPermissionChoice } from '../../../shared/tui-agent-permission-choice'
 import { toast } from 'sonner'
 import { track, tuiAgentToAgentKind } from '@/lib/telemetry'
 import {
@@ -12,13 +11,8 @@ import type { LaunchSource } from '../../../shared/telemetry-events'
 import type { StartupCommandDelivery } from '../../../shared/codex-startup-delivery'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentStartupShell } from '../../../shared/tui-agent-startup-shell'
-import {
-  agentLaunchPermissionSettings,
-  resolveTuiAgentLaunchArgs,
-  resolveTuiAgentLaunchEnv,
-  type AgentLaunchProfileSettings
-} from '../../../shared/tui-agent-launch-defaults'
-import { terminalSessionOptionInputs } from '../../../shared/tui-agent-launch-command'
+import type { AgentLaunchProfileSettings } from '../../../shared/tui-agent-launch-defaults'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { translate } from '@/i18n/i18n'
 
 export function buildDirectWorkItemAgentStartupPlan(args: {
@@ -47,44 +41,22 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
     return { startupPlan: null, draftLaunchedNatively: false, startupPlanFailed: false }
   }
 
-  const permissionSettings = agentLaunchPermissionSettings(
-    args.agent,
-    args.settings ?? {},
-    args.sessionOptions
-  )
-  const effectiveAgentArgs =
-    args.agentArgs === undefined
-      ? resolveTuiAgentLaunchArgs(
-          args.agent,
-          permissionSettings,
-          readLaunchPermissionChoice(args.sessionOptions) ? 'own' : undefined
-        )
-      : args.agentArgs
-  const effectiveAgentEnv = resolveTuiAgentLaunchEnv(
-    args.agent,
-    permissionSettings,
-    args.launchPlatform
-  )
-  const sessionOptionInputs = terminalSessionOptionInputs({
+  const startupInputs = resolveAgentStartupPlanInputs({
     agent: args.agent,
+    settings: args.settings ?? {},
+    agentArgs: args.agentArgs,
     sessionOptions: args.sessionOptions,
-    yieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
-    agentArgs: effectiveAgentArgs,
-    shell: args.shell ?? (args.launchPlatform === 'win32' ? 'powershell' : 'posix')
+    sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+    platform: args.launchPlatform,
+    shell: args.shell,
+    isRemote: args.isRemote ?? false
   })
   const draftLaunchPlan =
     args.promptDelivery === 'submit-after-ready'
       ? null
       : buildAgentDraftLaunchPlan({
-          agent: args.agent,
-          draft: args.draftContent,
-          cmdOverrides: args.settings?.agentCmdOverrides ?? {},
-          platform: args.launchPlatform,
-          ...(args.shell ? { shell: args.shell } : {}),
-          isRemote: args.isRemote,
-          agentArgs: effectiveAgentArgs,
-          agentEnv: effectiveAgentEnv,
-          ...sessionOptionInputs
+          ...startupInputs,
+          draft: args.draftContent
         })
 
   if (draftLaunchPlan) {
@@ -95,6 +67,9 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
         expectedProcess: draftLaunchPlan.expectedProcess,
         followupPrompt: null,
         launchConfig: draftLaunchPlan.launchConfig,
+        ...(draftLaunchPlan.sessionOptions
+          ? { sessionOptions: draftLaunchPlan.sessionOptions }
+          : {}),
         ...(draftLaunchPlan.startupCommandDelivery
           ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
           : {}),
@@ -106,15 +81,8 @@ export function buildDirectWorkItemAgentStartupPlan(args: {
   }
 
   const startupPlan = buildAgentStartupPlan({
-    agent: args.agent,
+    ...startupInputs,
     prompt: '',
-    cmdOverrides: args.settings?.agentCmdOverrides ?? {},
-    platform: args.launchPlatform,
-    ...(args.shell ? { shell: args.shell } : {}),
-    isRemote: args.isRemote,
-    agentArgs: effectiveAgentArgs,
-    agentEnv: effectiveAgentEnv,
-    ...sessionOptionInputs,
     allowEmptyPromptLaunch: true,
     ...(args.promptDelivery === 'submit-after-ready' ? { suppressStartupUpdatePrompt: true } : {})
   })

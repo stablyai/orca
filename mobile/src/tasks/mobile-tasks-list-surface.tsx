@@ -17,7 +17,8 @@ import { JiraConnectPrompt } from '../components/JiraConnectPrompt'
 
 export function renderMobileTasksListSurface(
   model: ConnectionPresentationModel,
-  colorScheme: MobileColorScheme
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
 ) {
   const {
     githubMode,
@@ -36,7 +37,7 @@ export function renderMobileTasksListSurface(
   } = model
   return !tasksSupported ? (
     tasksUnsupported ? (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
         <Text style={styles.emptyText}>
           {translate('tasks.listSurface.updateDesktopTitle', 'Update Orca desktop')}
         </Text>
@@ -48,7 +49,7 @@ export function renderMobileTasksListSurface(
         </Text>
       </View>
     ) : (
-      <View style={styles.centered}>
+      <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
         <ActivityIndicator size="small" color={colors.textSecondary} />
       </View>
     )
@@ -68,7 +69,7 @@ export function renderMobileTasksListSurface(
       }}
     />
   ) : provider === 'linear' && !linearConnected ? (
-    <View style={styles.centered}>
+    <View style={[styles.centered, { paddingBottom: bottomBarHeight }]}>
       <TaskProviderLogo provider="linear" size={32} color={colors.textSecondary} />
       <Text style={styles.emptyText}>
         {translate('tasks.listSurface.connectLinearTitle', 'Connect your Linear account')}
@@ -98,18 +99,19 @@ export function renderMobileTasksListSurface(
       </Pressable>
     </View>
   ) : provider === 'github' && githubMode === 'project' ? (
-    renderMobileTasksGitHubProjectList(model, colorScheme)
+    renderMobileTasksGitHubProjectList(model, colorScheme, bottomBarHeight)
   ) : (
-    renderMobileTasksNonProjectLists(model, colorScheme)
+    renderMobileTasksNonProjectLists(model, colorScheme, bottomBarHeight)
   )
 }
 
 export function renderMobileTasksNonProjectLists(
   model: ConnectionPresentationModel,
-  colorScheme: MobileColorScheme
+  colorScheme: MobileColorScheme,
+  bottomBarHeight: number
 ) {
   const { provider } = model
   return provider === 'linear'
-    ? renderMobileTasksLinearList(model, colorScheme)
-    : renderMobileTasksProviderItemList(model, colorScheme)
+    ? renderMobileTasksLinearList(model, colorScheme, bottomBarHeight)
+    : renderMobileTasksProviderItemList(model, colorScheme, bottomBarHeight)
 }

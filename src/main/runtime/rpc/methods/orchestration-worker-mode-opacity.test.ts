@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import {
   agentSessionLeaseFixture,
   agentSessionRecordFixture
@@ -53,12 +54,12 @@ vi.mock('./orchestration-structured-worker-session', async (importOriginal) => (
 }))
 
 const STRUCTURED_DEFAULT = {
-  experimentalNativeChat: true,
+  nativeChatProviders: EVERY_AGENT_CHAT,
   agentCmdOverrides: {},
   agentDefaultArgs: {},
   agentDefaultEnv: {}
 }
-const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, experimentalNativeChat: false }
+const TERMINAL_DEFAULT = { ...STRUCTURED_DEFAULT, nativeChatProviders: {} }
 
 /** A coordinator that IS a structured session: registry identity plus a live durable record. */
 function installStructuredCoordinator(handle: string, sessionId: string): string {

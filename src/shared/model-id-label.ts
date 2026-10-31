@@ -1,6 +1,7 @@
 // Keep renderer session-option labels independent of the commit-message agent registry.
 export function labelFromModelId(id: string): string {
   return id
+    .replace(/\[(\d+[km])\]$/i, (_, size: string) => ` (${size.toUpperCase()} context)`)
     .split(/[/-]/)
     .filter(Boolean)
     .map((part) => {

@@ -44,14 +44,6 @@ export const Scroll = BrowserTarget.extend({
     .optional()
 })
 
-export const Screenshot = BrowserTarget.extend({
-  format: z
-    .unknown()
-    .transform((v) => (v === 'png' || v === 'jpeg' ? v : undefined))
-    .pipe(z.union([z.enum(['png', 'jpeg']), z.undefined()]))
-    .optional()
-})
-
 export const Screencast = BrowserTarget.extend({
   format: z
     .unknown()

@@ -333,7 +333,7 @@ describe('ACP session options', () => {
               reasoningEfforts: [{ value: 'medium', default: true }]
             }
           },
-          // Session-selected effort metadata must not become a model default.
+          // Display declarations do not change the legacy marker policy.
           {
             modelId: 'model-b',
             name: 'Model B',
@@ -352,12 +352,14 @@ describe('ACP session options', () => {
         label: 'Model A',
         isDefault: false,
         efforts: [{ value: 'medium', label: 'Medium' }],
-        defaultEffort: 'medium'
+        defaultEffort: 'medium',
+        declaredDefaultEffort: 'medium'
       },
       {
         id: 'model-b',
         label: 'Model B',
         isDefault: false,
+        declaredDefaultEffort: 'high',
         efforts: [
           { value: 'low', label: 'Low' },
           { value: 'high', label: 'High' }

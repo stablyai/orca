@@ -3,7 +3,12 @@ import { admitStablePaneAdoption } from '../../runtime-terminal-pane-identity'
 import type { RuntimePtyController } from '../../runtime-pty-controller-contract'
 import type { TerminalCreateOptions } from '../../runtime-terminal-contracts'
 import type { RuntimePtyWorktreeRecord } from '../../runtime-terminal-state-records'
-import { copySleepingAgentLaunchConfig } from '../../runtime-agent-launch-resolution'
+import type { TuiAgent } from '../../../../shared/tui-agent'
+import {
+  copySleepingAgentLaunchConfig,
+  resolveLaunchCommandPaneAgent,
+  resolveLaunchedAgent
+} from '../../runtime-agent-launch-resolution'
 
 type TerminalSpawnResult = Awaited<ReturnType<NonNullable<RuntimePtyController['spawn']>>>
 
@@ -41,11 +46,13 @@ export function resolveTerminalLaunchResult(
   }
 }
 
+/** Returns the agent a fresh launch's command starts; null for an adopted pane, whose process was already running. */
 export function recordTerminalLaunchMetadata(
   pty: RuntimePtyWorktreeRecord,
   result: TerminalSpawnResult,
-  launch: ReturnType<typeof resolveTerminalLaunchResult>
-): void {
+  launch: ReturnType<typeof resolveTerminalLaunchResult>,
+  command: string | undefined
+): TuiAgent | null {
   if (launch.adoptedStablePane) {
     // A lower owner can supply facts before this runtime has a launch record.
     if (!pty.launchConfig && result.launchConfig) {
@@ -56,14 +63,18 @@ export function recordTerminalLaunchMetadata(
     if (pty.launchToken && !pty.launchIncarnationId) {
       pty.launchIncarnationId = pty.incarnationId
     }
-  } else {
-    pty.launchConfig = launch.launchConfig
-      ? copySleepingAgentLaunchConfig(launch.launchConfig)
-      : null
-    pty.launchToken = launch.launchToken ?? null
-    pty.launchIncarnationId = launch.launchToken ? pty.incarnationId : null
-    pty.launchAgent = launch.launchAgent ?? null
+    return null
   }
+  pty.launchConfig = launch.launchConfig ? copySleepingAgentLaunchConfig(launch.launchConfig) : null
+  pty.launchToken = launch.launchToken ?? null
+  pty.launchIncarnationId = launch.launchToken ? pty.incarnationId : null
+  pty.launchAgent = launch.launchAgent ?? null
+  if (result.agentResumeRefused) {
+    pty.launchCommandAgent = null
+    return null
+  }
+  pty.launchCommandAgent = resolveLaunchCommandPaneAgent(command)
+  return resolveLaunchedAgent(command, pty.launchAgent)
 }
 
 export function terminalLaunchPublicFacts(

@@ -14,6 +14,7 @@ import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixtur
 import { reconcileLifecycleMessage } from './orchestration/lifecycle-reconciliation'
 import { RuntimeOrchestrationSenderNames } from './runtime-orchestration-sender-names'
 import { structuredMailSource } from './orchestration/structured-mail-source'
+import { structuredAgentSessionTabId } from '../../shared/structured-agent-session-projection'
 import type { MessageRow } from './orchestration/types'
 
 const hostRef = vi.hoisted((): { current: unknown } => ({ current: null }))
@@ -366,6 +367,32 @@ describe("a sender's name, from what Orca shows for it", () => {
 
   it('names a party nothing records as nothing', () => {
     expect(names().nameOf(terminalParty('term_unknown'))).toBeNull()
+  })
+
+  it('names a worktree.ps terminal row by its conversation title, and an unnamed one not by its agent', () => {
+    const row = {
+      paneKey: 'tab_term_plain:leaf',
+      tabId: 'tab_term_plain',
+      worktreeId: WORKTREE,
+      agentType: 'claude'
+    }
+    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: '✳ PR rebase' }] }
+    expect(names().agentRowNamer()(row)).toBe('PR rebase')
+    session.tabsByWorktree = { [WORKTREE]: [{ id: 'tab_term_plain', title: '✳ Claude Code' }] }
+    expect(names().agentRowNamer()(row)).toBeNull()
+  })
+
+  it('names a worktree.ps chat row as its chat tab does', () => {
+    const tabId = structuredAgentSessionTabId(CHAT)
+    session.unifiedTabs = { [WORKTREE]: [chatTab('Login fix', 'Claude Chat')] }
+    expect(
+      names().agentRowNamer()({
+        paneKey: `${tabId}:x`,
+        tabId,
+        worktreeId: WORKTREE,
+        agentType: 'claude'
+      })
+    ).toBe('Login fix')
   })
 
   it('builds the one sender a message records: its party and the name it has now', () => {

@@ -146,13 +146,13 @@ describe('host model catalog read', () => {
     sessionId = `session-${sessionCount}`
   })
 
-  it('reads a warm catalog once, showing the quiet placeholder only until it answers', async () => {
+  it('reads a warm catalog once, showing saved input before its labels arrive', async () => {
     const first = deferred()
     answerCatalog([() => first.promise])
     const { result, unmount } = renderOptions()
     await flush()
-    expect(modelChoices(result.current.optionSnapshot)).toEqual([])
-    expect(model(result.current.optionSnapshot).settable).toBe(false)
+    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
+    expect(model(result.current.optionSnapshot).kind.currentValue).toBe('gpt-5.5')
     first.resolve(HOST_CATALOG)
     await flush()
     expect(catalogReads()).toEqual([{ agent: 'codex', sessionId }])
@@ -163,7 +163,7 @@ describe('host model catalog read', () => {
     unmount()
   })
 
-  it('a new Codex chat on a cold catalog shows a usable unnamed built-in list, then the listing', async () => {
+  it('a cold catalog keeps only the saved model until discovery adds replacement choices', async () => {
     const waited = deferred()
     answerCatalog([() => Promise.resolve(LISTING), () => waited.promise])
     const { result, unmount } = renderOptions()
@@ -172,10 +172,11 @@ describe('host model catalog read', () => {
       { agent: 'codex', sessionId },
       { agent: 'codex', sessionId, waitForListing: true }
     ])
-    // A settled empty host catalog enables built-ins without claiming a replaceable model default.
+    // Pending discovery describes only the saved input, never built-in replacement choices.
     const first = model(result.current.optionSnapshot)
     expect(usable(result.current.optionSnapshot)).toBe(true)
-    expect(first.kind.type === 'select' ? first.kind.currentValue : null).toBeUndefined()
+    expect(first.kind.currentValue).toBe('gpt-5.5')
+    expect(modelChoices(result.current.optionSnapshot)).toEqual(['gpt-5.5'])
     expect(modelChoices(result.current.optionSnapshot)).not.toContain('gpt-hosted')
     await act(async () => {
       expect(await result.current.setStructuredOption('model', 'gpt-5.5')).toBe(true)

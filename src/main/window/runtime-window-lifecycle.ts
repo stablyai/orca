@@ -193,14 +193,23 @@ export function registerRuntimeWindowLifecycle(
         ...(position ? { position } : {})
       }),
     revealEditorTab: (reveal) => send('ui:revealEditorTabFromRuntime', reveal),
-    openDiff: (worktreeId, filePath, relativePath, staged, runtimeEnvironmentId?, navigation?) =>
+    openDiff: (
+      worktreeId,
+      filePath,
+      relativePath,
+      staged,
+      runtimeEnvironmentId?,
+      navigation?,
+      oldPath?
+    ) =>
       send('ui:openDiffFromMobile', {
         worktreeId,
         filePath,
         relativePath,
         staged,
         runtimeEnvironmentId,
-        ...(navigation ? { navigation } : {})
+        ...(navigation ? { navigation } : {}),
+        ...(oldPath ? { oldPath } : {})
       }),
     closeTerminal: (tabId) => send('ui:closeTerminal', { kind: 'tab', tabId }),
     closeTerminalPane: (tabId, leafId) => send('ui:closeTerminal', { kind: 'pane', tabId, leafId }),

@@ -65,7 +65,7 @@ export function registerJournalRowSchemaVersionTests(): void {
           ['item', 3]
         ])
       } finally {
-        opened.close()
+        await opened.close()
       }
     })
   })

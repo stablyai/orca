@@ -1,3 +1,4 @@
+import { nativeChatAskDismissKey } from '../../../../shared/native-chat-ask-dismiss-key'
 import { useCallback, useLayoutEffect, useRef, useState } from 'react'
 import type { InteractivePromptCard } from '../../../../shared/native-chat-interactive-prompt'
 import { NativeChatQuestionCard } from './NativeChatQuestionCard'
@@ -81,6 +82,7 @@ export function NativeChatInteractiveCard({
     }
     return (
       <NativeChatQuestionCard
+        key={nativeChatAskDismissKey(card.prompt)}
         prompt={card.prompt}
         isSubmitting={submitting}
         isCancelling={cancelling}

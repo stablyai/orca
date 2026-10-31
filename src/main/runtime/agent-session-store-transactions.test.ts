@@ -24,7 +24,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -235,7 +235,7 @@ describe('after the database closes', () => {
   it('refuses a write with journal_closed and leaves memory as it was', async () => {
     const store = await openTestAgentSessionRecordStore(root)
     const before = await liveChat(store, 'chat-a-0001')
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
 
     await expect(store.setConversationName('chat-a-0001', 'late')).rejects.toMatchObject({
       code: 'journal_closed'

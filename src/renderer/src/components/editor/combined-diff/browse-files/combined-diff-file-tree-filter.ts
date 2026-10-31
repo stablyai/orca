@@ -6,7 +6,7 @@ import {
   buildSourceControlTree,
   compactSourceControlTree,
   flattenSourceControlTree
-} from '@/components/right-sidebar/source-control-tree'
+} from '../../../../../../shared/source-control-tree'
 import {
   getCombinedDiffFileTreeSectionKey,
   isGitStatusEntry,

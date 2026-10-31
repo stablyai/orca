@@ -1,4 +1,4 @@
-import { delimiter, isAbsolute, resolve } from 'node:path'
+import { pathEnvRelativeTo } from '../../shared/node-cli-command-resolution'
 import { waitForPromiseWithSignal } from '../../shared/abort-signal-reason'
 import {
   assertStructuredAgentResolutionCurrent,
@@ -86,11 +86,7 @@ async function readCodexStructuredInvocation(
   )
   assertStructuredAgentResolutionCurrent(deps.operation)
   deps.signal?.throwIfAborted()
-  const pathEnv =
-    (environment?.PATH ?? environment?.Path)
-      ?.split(delimiter)
-      .map((entry) => (entry && !isAbsolute(entry) ? resolve(cwd ?? process.cwd(), entry) : entry))
-      .join(delimiter) ?? null
+  const pathEnv = pathEnvRelativeTo(environment?.PATH ?? environment?.Path, cwd ?? process.cwd())
   const homePath = environment?.HOME ?? environment?.USERPROFILE
   const options = {
     pathEnv,

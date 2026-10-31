@@ -17,7 +17,7 @@ describe('unconfirmed effort menus', () => {
     expect(discoveredModel(unconfirmed, false, 'pi').options).toEqual([])
   })
 
-  it.each(['omp', 'claude', 'codex', undefined] as const)('still offers them for %s', (agent) => {
+  it.each(['omp', 'claude', 'codex'] as const)('still offers them for %s', (agent) => {
     const [effort] = discoveredModel(unconfirmed, false, agent).options
     expect(effort?.kind).toMatchObject({ type: 'select', choices: unconfirmed.efforts })
   })

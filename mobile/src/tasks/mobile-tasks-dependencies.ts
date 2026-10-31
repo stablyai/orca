@@ -29,10 +29,12 @@ export {
   ExternalLink,
   GitBranch,
   Lock,
+  MoreHorizontal,
   Pencil,
   Plus,
   RefreshCw,
   Search,
+  SlidersHorizontal,
   X
 } from 'lucide-react-native'
 export type { RpcClient } from '../transport/rpc-client'

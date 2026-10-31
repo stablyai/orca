@@ -35,6 +35,34 @@ const HOST_CATALOG: AgentSessionModelCatalogResult = {
 const LAUNCH = { newLaunch: true }
 
 describe('structured option state from the host model catalog', () => {
+  it.each(['codex', 'pi'] as const)(
+    '%s: pending inventory offers no built-ins and retains an applicable good list',
+    (agent) => {
+      const seed = structuredAgentSessionSeedCatalog(agent)!
+      const state = createStructuredAgentSessionOptionState(agent, seed)
+      const pending: AgentSessionModelCatalogResult = { origin: 'unknown', listingInProgress: true }
+      const launch = { newLaunch: true, coherentCatalog: true }
+      const cold = applyStructuredAgentSessionModelCatalog(state, seed, pending, launch)
+      expect(cold.catalogSource).toBe('seed')
+      expect(structuredAgentSessionOptionSnapshot(cold)[0]).toMatchObject({
+        settable: false,
+        kind: { choices: [] }
+      })
+      const good = applyStructuredAgentSessionModelCatalog(state, seed, HOST_CATALOG, launch)
+      const refresh = applyStructuredAgentSessionModelCatalog(good, seed, pending, launch)
+      expect(refresh.catalog).toBe(good.catalog)
+      expect(refresh.catalogSource).toBe(good.catalogSource)
+      const unavailable = applyStructuredAgentSessionModelCatalog(
+        cold,
+        seed,
+        { origin: 'unknown' },
+        launch
+      )
+      expect(unavailable.catalogSource).toBe('builtin')
+      expect(unavailable.listingInProgress).toBe(false)
+    }
+  )
+
   it('upgrades the seed with host models as a provisional, uncommitted default', () => {
     const state = applyStructuredAgentSessionModelCatalog(
       createStructuredAgentSessionOptionState('codex', SEED),

@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../src/shared/native-chat/every-agent-chat.test-fixture'
 import { beforeAll, describe, expect, it } from 'vitest'
 import {
   RUNTIME_CAPABILITIES,
@@ -11,7 +12,7 @@ import { importReleaseCheckoutModule, materializeReleaseCheckout } from './relea
 
 // Read real released capability strings so renamed capabilities cannot be hidden by matching hand-written fixtures.
 const LEGACY_PAIRED_STRUCTURED_LAUNCH_RELEASE_REF = 'v1.4.219'
-const SETTINGS = { experimentalNativeChat: true }
+const SETTINGS = { nativeChatProviders: EVERY_AGENT_CHAT }
 
 let legacyHostCapabilities: readonly string[]
 

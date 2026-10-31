@@ -11,13 +11,7 @@ import { MobileSessionActiveContent } from './MobileSessionActiveContent'
 import { MobileSessionCommandDock } from './MobileSessionCommandDock'
 import { MobileDictationStatusAnnouncement } from './MobileDictationStatusAnnouncement'
 
-export function MobileSessionContentRow({
-  controller,
-  keysInRail
-}: {
-  controller: MobileSessionController
-  keysInRail: boolean
-}) {
+export function MobileSessionContentRow({ controller }: { controller: MobileSessionController }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
@@ -57,7 +51,7 @@ export function MobileSessionContentRow({
         ) : null}
         <MobileSessionActiveContent controller={controller} />
         {/* Why: translate instead of resize so keyboard toggles don't trigger a server-side PTY viewport change. */}
-        <MobileSessionCommandDock controller={controller} keysInRail={keysInRail} />
+        <MobileSessionCommandDock controller={controller} />
         <MobileDictationStatusAnnouncement dictation={dictation} />
       </View>
       {canDockPanel && activePanel !== null && (

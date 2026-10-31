@@ -1,4 +1,9 @@
 import { afterEach, describe, expect, it } from 'vitest'
+import { homedir } from 'node:os'
+import { join } from 'node:path'
+import { resolveOrcaManagedCodexHomePath } from '../codex/codex-home-paths'
+import { parseAiVaultListResult } from './session-list-result-validation'
+import { redactForTransport } from '../../shared/ai-vault-search-transport'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
@@ -63,6 +68,8 @@ describe('structured AI Vault ownership', () => {
       {
         ...plain,
         title: 'auth/login',
+        accountHome: agentSessionRecordFixture().accountHome,
+        accountWslDistro: null,
         structuredSession: { sessionId: 'session-alpha', workspaceId: 'workspace-1' }
       },
       other
@@ -77,6 +84,72 @@ describe('structured AI Vault ownership', () => {
       () => false
     )
     expect(response.kind === 'results' && response.hits).toEqual([other])
+  })
+
+  it.each(['claude', 'codex'] as const)(
+    'projects %s recorded account evidence through history validation',
+    (provider) => {
+      const accountHome = {
+        variable: provider === 'claude' ? 'CLAUDE_CONFIG_DIR' : 'CODEX_HOME',
+        path: '/accounts/recorded'
+      }
+      installOwnership({ provider, accountHome, wslDistro: 'Ubuntu' })
+      const result = listResult()
+      result.sessions[0]!.agent = provider
+      const projected = projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT)
+      expect(parseAiVaultListResult(projected).sessions[0]).toMatchObject({
+        accountHome,
+        accountWslDistro: 'Ubuntu'
+      })
+      expect(
+        parseAiVaultListResult({
+          ...projected,
+          sessions: [{ ...projected.sessions[0], accountHome: { kind: 'future' } }]
+        }).sessions[0]?.accountHome
+      ).toBeUndefined()
+
+      installOwnership({
+        provider,
+        accountHome: { ...accountHome, path: join(homedir(), `.${provider}`) }
+      })
+      expect(
+        projectStructuredAiVaultSessions(result, OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+          ?.accountHome
+      ).toBeNull()
+      expect(parseAiVaultListResult(result).sessions[0]?.accountHome).toBeUndefined()
+    }
+  )
+
+  it('keeps the legacy shared Codex home unknown and redacts account homes over relay search', () => {
+    installOwnership({
+      accountHome: { variable: 'CODEX_HOME', path: resolveOrcaManagedCodexHomePath() }
+    })
+    expect(
+      projectStructuredAiVaultSessions(listResult(), OPENS_EVERY_STRUCTURED_CHAT).sessions[0]
+        ?.accountHome
+    ).toBeUndefined()
+    const accountHome = { variable: 'CODEX_HOME', path: '/accounts/recorded' }
+    installOwnership({ accountHome })
+    const response = projectStructuredAiVaultSearchResponse(
+      searchResults([searchHit()]),
+      OPENS_EVERY_STRUCTURED_CHAT
+    )
+    if (response.kind !== 'results') {
+      throw new Error('Expected search results')
+    }
+    const hit = response.hits[0]!
+    expect(redactForTransport(hit, 'ipc').accountHome).toEqual(accountHome)
+    expect(redactForTransport(hit, 'relay')).not.toHaveProperty('accountHome')
+    expect(redactForTransport(hit, 'relay')).not.toHaveProperty('accountWslDistro')
+    const relayed = projectStructuredAiVaultSearchResponse(
+      searchResults([searchHit()]),
+      OPENS_EVERY_STRUCTURED_CHAT,
+      'relay'
+    )
+    if (relayed.kind !== 'results') {
+      throw new Error('Expected search results')
+    }
+    expect(relayed.hits[0]).not.toHaveProperty('accountHome')
   })
 
   it.each(['claude', 'codex'] as const)(

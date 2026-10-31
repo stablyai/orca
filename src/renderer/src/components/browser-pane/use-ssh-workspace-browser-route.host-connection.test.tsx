@@ -3,6 +3,7 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorktreeHostConnection } from '@/lib/worktree-host-connection-phase'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
+import type { useSshWorkspaceBrowserRoute as UseSshWorkspaceBrowserRoute } from './use-ssh-workspace-browser-route'
 
 const mocks = vi.hoisted(() => {
   const hostConnection: WorktreeHostConnection = {
@@ -24,7 +25,7 @@ vi.mock('@/lib/worktree-host-connection-phase', () => ({
   useWorktreeHostConnection: () => mocks.hostConnection
 }))
 
-import { useSshWorkspaceBrowserRoute } from './use-ssh-workspace-browser-route'
+let useSshWorkspaceBrowserRoute: typeof UseSshWorkspaceBrowserRoute
 
 const READY_PARTITION = 'persist:orca-browser-v1-routed'
 
@@ -55,7 +56,10 @@ function setHost(
 }
 
 describe('useSshWorkspaceBrowserRoute under a reconnecting SSH host', () => {
-  beforeEach(() => {
+  beforeEach(async () => {
+    // Verified routes outlive mounts at module scope; each test starts unverified.
+    vi.resetModules()
+    ;({ useSshWorkspaceBrowserRoute } = await import('./use-ssh-workspace-browser-route'))
     mocks.prepare.mockReset()
     mocks.executionHostId = 'ssh:target-a'
     Object.defineProperty(window, 'api', {

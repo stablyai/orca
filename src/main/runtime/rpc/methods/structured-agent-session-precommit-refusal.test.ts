@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 // Before attach, classify no-effects refusal; at/after attach, failure cannot prove no session exists.
 
@@ -81,7 +82,7 @@ async function create(
   const runtime = {
     getRuntimeId: () => 'runtime-1',
     // Fixtures pass capability admission so they exercise the pre-commit refusal boundary.
-    getClientSettings: () => ({ experimentalNativeChat: true }),
+    getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     registerSubscriptionCleanup: vi.fn(),
     cleanupSubscription: vi.fn(),
     cleanupSubscriptionsByPrefix: vi.fn(),

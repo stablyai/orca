@@ -134,7 +134,7 @@ it.each([10, 100])(
       writer.mockRestore()
       await stopStructuredAgentSessionRuntime()
       await closeTestStores()
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
     }
   }
 )

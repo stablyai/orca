@@ -3,7 +3,10 @@ import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journal-types'
 import type { AgentJournalItemBody } from '../../../shared/agent-session-journal-types'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   adapter,
@@ -30,6 +33,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )

@@ -236,7 +236,7 @@ describe('inline queued editor', () => {
     await begin(hook)
     act(() => hook.result.current.editor?.change('see [Image #1] not [Image #2]'))
     hook.rerender({ messages: [] })
-    expect(readNativeChatDraftCache(SCOPE)).toBe('see  not [Image #2]')
+    expect(readNativeChatDraftCache(SCOPE)).toBe('see not [Image #2]')
   })
 
   it('a clean edit whose card leaves just closes; an unloaded list proves nothing', async () => {

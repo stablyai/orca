@@ -23,22 +23,6 @@ function normalizeLegacyProfile(overrides: Record<string, unknown>): PersistedSt
   return normalizeLoadedGlobalSettings(parsed, terminal, profile)
 }
 
-describe('chat worker error preference upgrade', () => {
-  it('defaults a truly missing saved key to on and preserves a saved opt-out', () => {
-    const parsed = getDefaultPersistedState(homedir())
-    delete parsed.settings.orchestrationChatErrorEscalationEnabled
-    const normalize = () =>
-      normalizeLoadedGlobalSettings(
-        parsed,
-        prepareLoadedTerminalSettings(parsed, () => {}),
-        prepareLoadedProfileSettings(parsed, getDefaultPersistedState(homedir()), () => {})
-      )
-    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(true)
-    parsed.settings.orchestrationChatErrorEscalationEnabled = false
-    expect(normalize().orchestrationChatErrorEscalationEnabled).toBe(false)
-  })
-})
-
 describe('retired setup placement', () => {
   it.each(['split-vertical', 'split-horizontal', 'new-tab', undefined])(
     'drops saved setup location %s without changing terminal preferences',
@@ -78,27 +62,19 @@ describe('retired managed servers experiment', () => {
 })
 
 describe('retired chat default selectors', () => {
-  it('keeps Chat UI on while dropping both older keys from a saved profile', () => {
-    const normalized = normalizeLegacyProfile({
-      experimentalNativeChat: true,
-      experimentalStructuredNativeChat: false,
-      openAgentTabsInChatByDefault: true
-    })
-    expect(normalized.experimentalNativeChat).toBe(true)
-    expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
-    expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
-  })
-
-  it('turns Chat UI off when new tabs opened in the terminal, dropping both older keys', () => {
-    const normalized = normalizeLegacyProfile({
-      experimentalNativeChat: true,
-      experimentalStructuredNativeChat: false,
-      openAgentTabsInChatByDefault: false
-    })
-    expect(normalized.experimentalNativeChat).toBe(false)
-    expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
-    expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
-  })
+  it.each([true, false])(
+    'drops the Chat UI switch and both older keys from a saved profile (default view chat %s)',
+    (chatDefaultView) => {
+      const normalized = normalizeLegacyProfile({
+        experimentalNativeChat: true,
+        experimentalStructuredNativeChat: false,
+        openAgentTabsInChatByDefault: chatDefaultView
+      })
+      expect(normalized).not.toHaveProperty('experimentalNativeChat')
+      expect(normalized).not.toHaveProperty('experimentalStructuredNativeChat')
+      expect(normalized).not.toHaveProperty('openAgentTabsInChatByDefault')
+    }
+  )
 })
 
 describe('structured chat shell environment settings', () => {

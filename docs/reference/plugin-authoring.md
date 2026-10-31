@@ -3,7 +3,8 @@
 From an empty folder to a plugin anyone can install from a catalog. The field-by-field rules
 live in the generated references: [manifest](plugin-manifest.md), [catalog](plugin-catalog.md),
 [host API](plugin-host-api.md), [themes](plugin-themes.md) and [theme tokens](plugin-theme-tokens.md),
-[syntaxes](plugin-syntax.md).
+[syntaxes](plugin-syntax.md). Listed plugins must follow the
+[plugin listing policy](plugin-listing-policy.md).
 
 ## 1. Write
 
@@ -16,10 +17,28 @@ completion, or from one of:
 | `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                    |
 | `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events |
 
-Set `publisher` to the GitHub or GitLab user or organization that owns your repository (`acme`
-for `github.com/acme/gleam-syntax`), or the official and community catalogs reject the listing.
+Leave `publisher` out. Orca names the publisher after where the plugin comes from, the way a
+[Go module path](https://go.dev/ref/mod#module-path) is its repository path: the owner of the
+repository, lowercased (`acme` for `github.com/Acme/gleam-syntax`), so the plugin installs as
+`acme.gleam-syntax`. Nobody can choose a publisher name that is not theirs.
+
+| Installed from                    | Publisher                                                    |
+| --------------------------------- | ------------------------------------------------------------ |
+| The official or community catalog | the repository owner, set by the catalog in the entry's `id` |
+| Another catalog                   | whatever that catalog's entry `id` says                      |
+| A Git URL                         | the URL's owner (`.` and `_` become `-`)                     |
+| A local or development folder     | `local`                                                      |
+
+`publisher` is deprecated: Orca ignores it for catalog and Git installs. Leaving it out needs
+`engines.orca` of at least `>=1.4.246`, because older Orca requires the field and refuses a
+value that differs from the catalog's. To keep supporting older Orca, keep `publisher` and set it
+to the repository owner; `validate:plugin` warns about it either way. An install made before
+1.4.246 keeps its key, approvals and data. A local or development folder that still declares
+`publisher` keeps using it until you remove it.
+
 When copying the Gleam example, also drop its `stablyai` publisher and `orca-` id prefix: both are
-reserved for Orca's own plugins.
+reserved for Orca's own plugins, as are owners named `official`, `anthropic`, `openai`, `github`
+or starting with `orca`.
 
 Pick the lowest `execution` profile that covers what you contribute; it decides what the user is
 asked to approve:
@@ -120,9 +139,15 @@ listen with `orca.on('theme', …)`, to follow it.
 ## 2. Load it while you work
 
 1. Settings → Plugins: click **Turn on plugins**.
-2. **Development folders…** → add the plugin folder. A development folder overrides an installed
-   copy with the same `<publisher>.<id>`.
+2. **Development folders…** → add the plugin folder. It loads as `local.<id>` (or under its
+   deprecated `publisher` while it still declares one), and overrides an installed copy with
+   the same key.
 3. Review and enable it. Nothing runs before that.
+
+From a terminal (or a coding agent), `orca plugin dev load <dir>` does the same. A content-only
+plugin loads at once; anything that runs code fails with `approval_required`, which lists what it
+would be granted and the command to re-run with `--approve <fingerprint>`. `orca plugin logs
+<publisher.id>` prints its logs and `orca plugin dev unload <dir>` removes it.
 
 Orca watches development folders and reloads the plugin when its manifest or files change.
 Theme, syntax and translation edits show up as you save. Panels and workers are not bound to
@@ -135,18 +160,35 @@ worker, and the plugin's logs to see what it printed.
 
 ```sh
 pnpm validate:plugin path/to/plugin
+# or, without an Orca checkout:
+orca plugin validate path/to/plugin
 ```
+
+`orca plugin create <dir> --template <theme|terminal-theme|icon-theme|syntax|language-pack|editor|panel>`
+scaffolds a plugin that passes these checks, and `orca plugin inspect <dir>` shows what it would be
+allowed to do and its content hash.
 
 This runs the manifest checks Orca runs, strictly: unknown keys, limits, contributions beyond the
 execution profile, and an `engines.orca` too low for the fields used. On a catalog it also
-checks that listed images exist and fit. In a Git repository it warns when `publisher` is not the
-owner of the `origin` remote. Run it in CI for the plugin and catalog repositories.
+checks that listed images exist and fit. It warns when the manifest still declares the deprecated
+`publisher`, and, in a Git repository, when that value is not the owner of the `origin` remote.
+Warnings do not fail the check. Run it in CI for the plugin and catalog repositories.
 
-## 4. Publish to a catalog
+## 4. List it in the Orca plugin directory
+
+1. `orca plugin validate .` passes, and the plugin is committed and pushed to the GitHub
+   repository whose owner matches `publisher`.
+2. Commit the new `version` in `orca-plugin.json`, then tag that commit and push the tag:
+   `git tag -a v1.2.0 -m v1.2.0 && git push origin v1.2.0`.
+3. Add the `orca-plugin` topic to the repository: `gh repo edit <owner>/<repo> --add-topic orca-plugin`.
+4. Check its listing at `https://www.onorca.dev/plugins/<owner>/<repo>`.
+
+## 5. Publish to a catalog
 
 A catalog is a Git repository with `orca-catalog.json` at its root that lists plugins and pins
 each release to an exact commit and file hash, so Orca refuses bytes the catalog did not vouch
-for.
+for. Plugins in Orca's official and community catalogs must follow the
+[plugin listing policy](plugin-listing-policy.md), starting with being free to install and use.
 
 1. Commit the plugin and run `pnpm validate:plugin` on its directory. It prints the
    release entry for `HEAD`: version, full commit SHA, `contentHash`, execution profile, minimum
@@ -166,6 +208,9 @@ for.
      "releases": [{ "...": "the printed entry" }]
    }
    ```
+
+   The `id` is `<publisher>.<manifest id>`. In your own catalog you choose the publisher; use the
+   repository owner, as the official and community catalogs do.
 
    `commit` must be a full 40-character SHA. A tag or branch name is refused by validation and
    skipped by Orca. Keep the previous release listed when you raise `engines.orca`, so older

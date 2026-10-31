@@ -1,3 +1,8 @@
+import type { AgentLaunchChoices } from '../../../shared/agent-launch-choices'
+import { structuredAgentLabel } from './structured-agent-session-launch-label'
+import type { SessionOptionValue } from '../../../shared/native-chat/input/native-chat-session-options'
+import { ensureAgentLaunchPreferences } from '@/components/settings/use-host-agent-launch-preferences'
+import { hostSupportsLaunchChoices } from '@/components/settings/agent-launch-settings-transport'
 import { createWebRuntimeSessionTerminalResult } from '@/runtime/web-runtime-terminal-create-operation'
 import { webTerminalPlacementParentTabId } from '@/runtime/web-session-terminal-placement'
 import { toast } from 'sonner'
@@ -7,7 +12,7 @@ import {
   createWebRuntimeAgentSessionTerminalWithLaunchDraft,
   type createWebRuntimeSessionTerminal
 } from '@/runtime/web-runtime-terminal-creation'
-import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
+import type { LaunchAgentStartupPromptPlan } from '@/lib/launch-agent-startup-prompt-plan'
 import type { Tab } from '../../../shared/tab-types'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import type { AgentPromptDelivery } from '../../../shared/agent-session-host-authority'
@@ -20,17 +25,16 @@ import {
 } from '../../../shared/agent-launch-preferences'
 
 /** Paired web tabs are host-owned; never create a local tab, and return tabId:null. */
-export function launchAgentInWebHostTab(args: {
+export async function launchAgentInWebHostTab(args: {
   agent: TuiAgent
   worktreeId: string
   environmentId: string | null
   groupId?: string
   cwd?: string | null
-  startupPlan: AgentStartupPlan
+  buildStartup: (choices: AgentLaunchChoices | undefined) => LaunchAgentStartupPromptPlan
+  sessionOptions?: Readonly<Record<string, SessionOptionValue>>
   prompt: string
   promptDelivery: 'auto-submit' | 'draft' | 'submit-after-ready'
-  pastePromptAfterReady: string | null
-  submitPastedPrompt: boolean
   agentArgs?: string | null
   viewMode?: Tab['viewMode']
   /** False opens the host's tab without selecting it. */
@@ -43,17 +47,54 @@ export function launchAgentInWebHostTab(args: {
     environmentId,
     groupId,
     cwd,
-    startupPlan,
     prompt,
     promptDelivery,
-    pastePromptAfterReady,
-    submitPastedPrompt,
     agentArgs,
     viewMode,
     onPromptDelivered
   } = args
+  const failureMessage = translate(
+    'agentLaunch.terminalPreparationFailed',
+    "Couldn't open a terminal for {{value0}}. Check the workspace connection and agent settings, then try again.",
+    { value0: structuredAgentLabel(agent) }
+  )
+  let capable: boolean
+  let startup: LaunchAgentStartupPromptPlan
+  try {
+    capable = environmentId ? await hostSupportsLaunchChoices({ environmentId }) : false
+    const preferences = await ensureAgentLaunchPreferences(useAppStore.getState(), {
+      kind: 'git-worktree',
+      worktreeId
+    })
+    startup = args.buildStartup(
+      preferences.agentLaunchChoices ??
+        (capable ? {} : useAppStore.getState().settings?.agentLaunchChoices)
+    )
+  } catch (error) {
+    const cancelled = error instanceof Error && error.name === 'AbortError'
+    if (!cancelled) {
+      toast.error(failureMessage)
+    }
+    return {
+      delivered: false,
+      failureNotified: true,
+      outcome: { status: 'failed', message: cancelled ? '' : failureMessage }
+    }
+  }
+  const { startupPlan, pasteDraftAfterLaunch: pastePromptAfterReady, submitPastedPrompt } = startup
+  if (!startupPlan) {
+    toast.error(failureMessage)
+    return {
+      delivered: false,
+      failureNotified: true,
+      outcome: { status: 'failed', message: failureMessage }
+    }
+  }
   const hasPrompt = prompt.length > 0
-  const launchPreferences = toAgentLaunchPreferences(startupPlan.sessionOptions, agent)
+  const launchPreferences = toAgentLaunchPreferences(
+    capable ? args.sessionOptions : startupPlan.sessionOptions,
+    agent
+  )
   const structuredPromptDelivery: AgentPromptDelivery =
     promptDelivery === 'draft' ? 'draft' : 'auto-submit'
   const launch = {
@@ -65,7 +106,7 @@ export function launchAgentInWebHostTab(args: {
     ...(cwd?.trim() ? { cwd } : {}),
     ...(viewMode ? { viewMode } : {}),
     agentSessionKind: 'fresh',
-    // Why: with or without a prompt, the desktop's launch settings decide args (#31986).
+    // Prepared delivery retains caller settings; authoritative creation resolves the host defaults.
     launchAgent: agent,
     preparedAgentCommand: agentLaunchNeedsPreparedCommand(agent, startupPlan.sessionOptions),
     command: startupPlan.launchCommand,
@@ -78,7 +119,7 @@ export function launchAgentInWebHostTab(args: {
     ...(hasPrompt && pastePromptAfterReady === null
       ? { promptDelivery: structuredPromptDelivery }
       : {}),
-    ...(launchPreferences?.mode
+    ...(!capable && launchPreferences?.mode
       ? { agentArgs: startupPlan.launchConfig.agentArgs }
       : agentArgs !== undefined
         ? { agentArgs }
@@ -96,14 +137,7 @@ export function launchAgentInWebHostTab(args: {
     hostTabId?: string
   }): { delivered: boolean; failureNotified: boolean } & AgentTerminalLaunchCompletion => {
     if (outcome.status === 'failed') {
-      toast.error(
-        outcome.message ||
-          translate(
-            'auto.lib.launch.agent.in.new.tab.11cce5cc77',
-            'Could not launch {{value0}} in a new terminal.',
-            { value0: agent }
-          )
-      )
+      toast.error(failureMessage)
       return { delivered: false, failureNotified: true, outcome }
     }
     if (args.activate !== false) {
@@ -112,9 +146,19 @@ export function launchAgentInWebHostTab(args: {
     if (hasPrompt && promptDelivered) {
       onPromptDelivered?.()
     }
+    const failureNotified = hasPrompt && !promptDelivered
+    if (failureNotified) {
+      toast.error(
+        translate(
+          'agentLaunch.terminalPromptFailed',
+          'Orca opened a terminal for {{value0}}, but could not pass it your prompt. Send the prompt in that terminal.',
+          { value0: structuredAgentLabel(agent) }
+        )
+      )
+    }
     return {
       delivered: promptDelivered,
-      failureNotified: false,
+      failureNotified,
       outcome,
       ...(hostTabId
         ? { tabId: toWebTerminalSurfaceTabId(webTerminalPlacementParentTabId(hostTabId)) }
@@ -137,7 +181,7 @@ export function launchAgentInWebHostTab(args: {
       ...launch,
       agent,
       launchDraft: prompt
-    }).then((outcome) => handleCreation({ outcome, promptDelivered: outcome.status === 'created' }))
+    }).then(handleCreation)
   }
   return createWebRuntimeSessionTerminalResult(launch).then((created) =>
     handleCreation({

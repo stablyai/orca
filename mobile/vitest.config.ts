@@ -16,6 +16,13 @@ export default defineConfig({
     }
   },
   test: {
+    // Web renderer tests must resolve the SVG/icon libraries through the same host aliases.
+    server: {
+      deps: {
+        inline: ['lucide-react-native', 'react-native-svg'],
+        external: [/\/config\/scripts\/build-mobile-web-app-bundle\.mjs$/]
+      }
+    },
     pool: 'threads',
     environment: 'node',
     setupFiles: ['./vitest.setup.ts'],

@@ -29,9 +29,9 @@ beforeEach(async () => {
   warned = vi.spyOn(console, 'warn').mockImplementation(() => undefined)
 })
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
-  rig.dispose()
+  await rig.dispose()
 })
 
 function opId(): string {

@@ -73,12 +73,16 @@ export function applyCodexConfiguredLaunchDefaults(
   const defaultEffort =
     effort && defaultModel?.efforts.some((choice) => choice.value === effort) ? effort : null
   if (!configuredModel && !defaultEffort) {
-    return models
+    return effort && defaultModel
+      ? models.map((model) =>
+          model === defaultModel ? { ...model, declaredDefaultEffort: null } : model
+        )
+      : models
   }
   return models.map((model) => {
     const isDefault = model === defaultModel
     return isDefault && defaultEffort
-      ? { ...model, isDefault, defaultEffort }
-      : { ...model, isDefault }
+      ? { ...model, isDefault, defaultEffort, declaredDefaultEffort: defaultEffort }
+      : { ...model, isDefault, ...(isDefault && effort ? { declaredDefaultEffort: null } : {}) }
   })
 }

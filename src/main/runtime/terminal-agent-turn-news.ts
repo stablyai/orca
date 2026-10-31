@@ -21,6 +21,8 @@ export type TerminalAgentTurnNewsDeps<Prepared> = {
   started?: (news: TerminalAgentTurnNewsItem) => void
   /** Opt-in: a turn its user stopped or a newer request replaced, which is otherwise no news. */
   stopped?: (news: TerminalAgentTurnNewsItem) => void
+  /** Opt-in: a finish is news only once the pane's children settle too, not when its lead agent does. */
+  allClearOnly?: true
 }
 
 type PendingFinish = {
@@ -115,7 +117,7 @@ export class TerminalAgentTurnNews<Prepared> {
       return
     }
     const { turnCompletedAt } = row
-    if (turnCompletedAt === undefined) {
+    if (turnCompletedAt === undefined || this.deps.allClearOnly) {
       this.workingSeen.add(paneKey)
       return
     }
@@ -137,7 +139,8 @@ export class TerminalAgentTurnNews<Prepared> {
   // Seed restored rows like the window: working counts as seen, stamped completion as announced.
   private seed(paneKey: string): void {
     const row = this.deps.readHookRow(paneKey)
-    if (row?.turnCompletedAt !== undefined) {
+    // An all-clear listener never heard the lead's finish, so its stamp announces nothing.
+    if (row?.turnCompletedAt !== undefined && !this.deps.allClearOnly) {
       this.finishedTurnByPane.set(paneKey, row.turnCompletedAt)
     }
     if (row?.state === 'working') {

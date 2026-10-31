@@ -607,21 +607,29 @@ describe('native chat PTY session options', () => {
     expect(surface.getSnapshot()[0]).toMatchObject({ valueSource: 'unknown' })
   })
 
-  it('passes an unknown persisted model through as a literal choice', () => {
+  it('passes an unknown persisted model through as a literal choice', async () => {
     seedNativeChatAppliedSessionOptions('pty-1', 'claude', {
       model: 'future-model'
     })
+    const dispatch = vi.fn()
     const surface = createNativeChatPtySessionOptions({
       agent: 'claude',
       scopeKey: 'pty-1',
       mode: 'live',
       modelLabel: 'Model',
-      dispatchCommand: vi.fn()
+      dispatchCommand: dispatch
     })!
     const model = surface.getSnapshot()[0]
     expect(model.kind).toMatchObject({
       currentValue: 'future-model',
-      choices: expect.arrayContaining([{ value: 'future-model', label: 'future-model' }])
+      choices: expect.arrayContaining([
+        { value: 'future-model', label: 'Future Model', description: 'future-model' }
+      ])
+    })
+    await surface.setOption('model', 'future-model')
+    expect(dispatch).toHaveBeenCalledExactlyOnceWith('/model future-model', {
+      detectAgentInteraction: 'claude-model-switch-confirmation',
+      expectedChoiceLabel: 'Future Model'
     })
   })
 

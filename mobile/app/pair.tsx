@@ -80,7 +80,7 @@ const styles = themedStyleSheet(() => ({
   primaryButton: {
     alignItems: 'center',
     backgroundColor: colors.textPrimary,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2
   },

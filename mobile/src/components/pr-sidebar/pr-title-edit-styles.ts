@@ -16,7 +16,7 @@ export const prTitleEditStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   cancelText: {
     color: colors.textSecondary,
@@ -29,7 +29,7 @@ export const prTitleEditStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.textPrimary
   },
   submitText: {

@@ -1,3 +1,4 @@
+import type { TerminalExitCause } from '../../shared/terminal-exit-cause'
 import type { TerminalLaunchResult } from '../../shared/agent-session-resume'
 import type { TerminalOscLinkRange } from '../../shared/terminal-osc-link-ranges'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -16,6 +17,8 @@ export type PtySpawnResult = TerminalLaunchResult & {
   incarnationId?: PtyIncarnationId
   /** The provider observed this exact spawn exit before returning its spawn result. */
   exitedBeforeSpawnReply?: true
+  /** Observed cause for this exact early-dead process. */
+  exitCause?: TerminalExitCause
   /** Host marker proof: false means inspected/unarmed; absent means legacy and retains the client guess. */
   shellReadyArmed?: boolean
   /** OS shell PID for subtree memory collection; null when the host cannot publish one during spawn. */

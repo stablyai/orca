@@ -15,13 +15,17 @@ import { pluginManifestDetailFields } from '../catalog/plugin-detail-fields'
 import { PLUGIN_ICON_RULE_TEXT, pluginManifestImageFields } from '../images/plugin-image-fields'
 import { validatePluginManifestContributions } from './plugin-manifest-contribution-validation'
 import { validatePluginEngineFloor } from './plugin-engine-floor'
-import { validatePluginManifestV2Rules } from './plugin-manifest-v2-rules'
+import {
+  validateOmittedPublisherFloor,
+  validatePluginManifestV2Rules
+} from './plugin-manifest-v2-rules'
 import { upgradePluginManifestV1Names } from './plugin-manifest-v1-names'
 import { formatPluginSchemaIssues } from './plugin-schema-issues'
 import { pluginApiMajorSchema } from '../workers/plugin-host-api-major'
 import {
   pluginFieldDoc,
   pluginPathFieldDoc,
+  PLUGIN_DERIVED_PUBLISHER_SINCE,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
 } from './plugin-schema-field-docs'
@@ -76,7 +80,7 @@ const enginesDoc = pluginFieldDoc(
 const pluginManifestFields = {
   id: pluginIdSchema.meta(
     pluginFieldDoc(
-      'Plugin id, kebab-case. The install identity is `<publisher>.<id>`. The reserved names `constructor` and `prototype` are refused.',
+      'Plugin id, kebab-case. The install identity is `<publisher>.<id>`, where Orca derives the publisher from the repository owner. The reserved names `constructor` and `prototype` are refused.',
       V1,
       ['gleam-syntax']
     )
@@ -167,6 +171,15 @@ export const pluginManifestV2Object = z
       )
     ),
     ...pluginManifestFields,
+    // Why optional: Orca derives the publisher (plugin-publisher-derivation.ts), so a value is ignored.
+    publisher: pluginIdSchema.optional().meta({
+      deprecated: true,
+      ...pluginFieldDoc(
+        `Deprecated: leave it out. Orca derives the publisher from where the plugin comes from, the way a Go module is named by its repository path: the repository owner for the official and community catalogs and for Git URL installs (\`acme\` for \`github.com/acme/gleam-syntax\`), and \`local\` for a folder. A value here is ignored for catalog and Git installs. Leaving it out needs \`engines.orca\` of at least \`>=${PLUGIN_DERIVED_PUBLISHER_SINCE}\`, because older Orca requires it; if you keep it for older Orca, it must equal the repository owner. Reserved owners (\`stablyai\`, \`official\`, \`anthropic\`, \`openai\`, \`github\` and any starting \`orca\`) and ids starting \`orca-\` install only from Orca's official catalog.`,
+        V1,
+        ['acme']
+      )
+    }),
     ...pluginManifestImageFields,
     // Why strict here too: format 2 refuses unknown keys at every level; format 1 never did.
     author: z.strictObject(authorFields).optional().meta(authorDoc),
@@ -194,6 +207,7 @@ function buildPluginManifestSchema(enforceEngineFloor: boolean) {
         validatePluginManifestV2Rules(manifest, ctx)
         if (enforceEngineFloor) {
           validatePluginEngineFloor(pluginManifestV2Object, manifest, ctx)
+          validateOmittedPublisherFloor(manifest, ctx)
         }
       })
     ])
@@ -206,7 +220,10 @@ export const pluginManifestSchema = buildPluginManifestSchema(true)
 // parses every field and meets engines.orca runs the plugin fine, so refusing it strands installs.
 const hostPluginManifestSchema = buildPluginManifestSchema(false)
 
+/** The manifest file as written; format 2 may leave `publisher` out. */
 export type PluginManifest = z.infer<typeof pluginManifestSchema>
+/** A manifest whose `publisher` Orca derived from its source (withPluginPublisher). */
+export type PluginManifestWithPublisher = PluginManifest & { publisher: string }
 export {
   PLUGIN_PANEL_LIMIT,
   type PluginPanelContribution
@@ -230,8 +247,9 @@ export {
 
 export const PLUGIN_MANIFEST_FILENAME = 'orca-plugin.json'
 
-/** Canonical install identity: `<publisher>.<id>` (also the install dir name). */
-export function qualifiedPluginKey(manifest: Pick<PluginManifest, 'publisher' | 'id'>): string {
+/** Canonical install identity: `<publisher>.<id>` (also the install dir name). The publisher
+ *  must be the derived one, never the file's own. */
+export function qualifiedPluginKey(manifest: { publisher: string; id: string }): string {
   return `${manifest.publisher}.${manifest.id}`
 }
 

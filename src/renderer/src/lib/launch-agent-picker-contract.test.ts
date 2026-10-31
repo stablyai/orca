@@ -43,7 +43,10 @@ vi.mock('../components/settings/agent-launch-settings-transport', async (importO
   ...(await importOriginal<typeof SettingsTransport>()),
   readHostAgentLaunchSettings: inventory.settings
 }))
-vi.mock('@/runtime/runtime-rpc-client', () => ({ callRuntimeRpc: inventory.legacy }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: inventory.legacy,
+  runtimeEnvironmentSupportsCapability: async () => false
+}))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: inventory.session
 }))
@@ -116,6 +119,7 @@ describe('picker window launch contract', () => {
   it.each(['local', 'ssh', 'paired', 'older-host'] as const)(
     'keeps ordinary and configured-default launch input/failure contracts on %s',
     async (target) => {
+      inventory.settings.mockResolvedValue(null)
       const launcher = await import('./launch-agent-in-new-tab')
       const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab')
       const { launchAgentInNewTab } = launcher
@@ -146,7 +150,7 @@ describe('picker window launch contract', () => {
       const host: ExecutionHostId =
         target === 'ssh' ? 'ssh:ssh-target-1' : target === 'local' ? 'local' : 'runtime:web-runtime'
       const rows = buildNewTabAgentMenuRows({
-        settings: { experimentalNativeChat: true, nativeChatProviders: { claude: false } },
+        settings: { agentDefaultSurface: 'chat', nativeChatProviders: { claude: false } },
         detectedOnHost: ['claude'],
         chatAgents: ['claude'],
         hostChatAnswer: () => (target === 'ssh' ? 'ssh' : 'yes'),
@@ -202,19 +206,7 @@ describe('picker window launch contract', () => {
                   null,
                   createElement(AgentLaunchPickerMenu, {
                     entries: [entry],
-                    runLaunch,
-                    model: {
-                      state: 'settled',
-                      rows,
-                      detection: {
-                        detectedIds: ['claude'],
-                        isLoading: false,
-                        isRefreshing: false,
-                        detectionFailed: false,
-                        needsServerUpdate: false,
-                        refresh: async (): Promise<AgentPickerEntry['agent'][]> => ['claude']
-                      }
-                    }
+                    runLaunch
                   })
                 )
               )

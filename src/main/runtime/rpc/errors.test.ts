@@ -1,3 +1,4 @@
+import { terminalStartError } from '../../../shared/terminal-start-failure'
 import { describe, expect, it } from 'vitest'
 import { mapRuntimeError } from './errors'
 import {
@@ -31,6 +32,35 @@ class LineageError extends Error {
 }
 
 describe('mapRuntimeError', () => {
+  it.each(['agent_session_exited_during_start', 'agent_session_operation_unknown'] as const)(
+    'preserves %s while explaining the failed start',
+    (code) => {
+      const startError = terminalStartError('agent_session_exited_during_start', {
+        kind: 'exited',
+        exitCode: 256,
+        initialOutputDiagnostic: 'git-bash-console-capacity'
+      })
+      const error =
+        code === 'agent_session_operation_unknown'
+          ? new Error(code, { cause: startError })
+          : startError
+      const response = mapRuntimeError('start', { runtimeId: 'host' }, error)
+      expect(response).toMatchObject({
+        id: 'start',
+        ok: false,
+        _meta: { runtimeId: 'host' },
+        error: {
+          code,
+          message: expect.stringContaining('Git Bash reported its limit of 128 open terminals')
+        }
+      })
+      expect(response.error.message).toContain('Close some Git Bash terminals and try again.')
+      expect(response.error.message.includes("Couldn't confirm the terminal started.")).toBe(
+        code === 'agent_session_operation_unknown'
+      )
+    }
+  )
+
   it('keeps runtime_error and a readable message for a WSL host Windows drive refusal', () => {
     const error = new WslHostWindowsDriveRefusalError('C:\\src\\app')
     expect(mapRuntimeError('req_1', { runtimeId: 'runtime-1' }, error)).toMatchObject({

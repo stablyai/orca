@@ -4,6 +4,10 @@ import { bindAtRestCommandContexts } from '../native-chat/agent-session-wire/at-
 import { StructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-host'
 import { StructuredAgentSessionAdapterRouter } from '../native-chat/agent-session-wire/structured-agent-session-adapter-router'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
+import {
+  createStructuredAgentSessionProviderNaming,
+  withProviderNaming
+} from '../native-chat/agent-session-wire/structured-agent-session-provider-naming'
 import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import { scheduleNativeChatVisualsSweep } from '../native-chat/native-chat-visuals-sweep'
 import type { InstalledRuntime } from './agent-session/structured-agent-session-runtime-teardown'
@@ -21,6 +25,7 @@ import { createStructuredAgentSessionLifecycleDelivery } from './structured-agen
 import { createStructuredAgentSessionDispatchFollowUps } from './structured-agent-session-dispatch-followups'
 import { modelCatalogHostDeps } from './structured-agent-model-catalog-wiring'
 import type { StructuredAgentSessionRuntimeDeps } from './structured-agent-session-runtime'
+import type { AgentSessionRecord } from '../../shared/agent-session-record'
 
 export async function installOnJournal(
   deps: StructuredAgentSessionRuntimeDeps,
@@ -57,9 +62,15 @@ export async function installOnJournal(
   const adapter = new StructuredAgentSessionAdapterRouter(agents, async () => {
     await Promise.all(registrations.map((registration) => registration.adapter.closeAll()))
   })
+  const providerNaming = createStructuredAgentSessionProviderNaming({
+    adapter,
+    logger: deps.logger
+  })
+  const nameProvider = (record: AgentSessionRecord): void => void providerNaming.push(record)
   host = new StructuredAgentSessionHost({
     store,
     adapter,
+    nameProviderConversation: (record) => void providerNaming.push(record, true),
     agents,
     recoveryCapsule: new AgentSessionRecoveryCapsule(deps.stateDirectory),
     journalDatabase,
@@ -71,7 +82,9 @@ export async function installOnJournal(
     ...(deps.onRequestFailure ? { onRequestFailure: deps.onRequestFailure } : {}),
     ...(deps.onSessionStatusChanged ? { onSessionStatusChanged: deps.onSessionStatusChanged } : {}),
     ...(deps.statusSink ? { statusSink: deps.statusSink } : {}),
-    ...(deps.conversationNaming ? { conversationNaming: deps.conversationNaming } : {}),
+    ...(deps.conversationNaming
+      ? { conversationNaming: withProviderNaming(deps.conversationNaming, nameProvider) }
+      : {}),
     ...(deps.hasOpenDispatch ? { hasOpenDispatch: deps.hasOpenDispatch } : {}),
     ...(deps.startupLimits ? { startupLimits: deps.startupLimits } : {}),
     ...(deps.onSessionTabHidden ? { onSessionTabHidden: deps.onSessionTabHidden } : {}),
@@ -99,6 +112,15 @@ export async function installOnJournal(
         delivery.deliver(event, installed.readStatusSummary(sessionId))
       },
       onState: delivery.reconcile
+    })
+  }
+  if (deps.onTurnAttention) {
+    const installed = host
+    const onTurnAttention = deps.onTurnAttention
+    installed.subscribeTurnCompletions({
+      id: 'host-turn-attention',
+      includePrompts: true,
+      emit: (event) => onTurnAttention(event, installed.readStatusSummary)
     })
   }
   // Prewarm catalogs at runtime start for local and remote hosts.
@@ -136,10 +158,12 @@ export async function installOnJournal(
     journalDatabase,
     waitForRecovery: lifecycle.drain,
     stopBackgroundWork: () => {
+      const namingStopped = providerNaming.stop()
       unbindEnvironment()
       stopCommands()
       stopVisualsSweep?.()
       modelCatalog?.stop()
+      return namingStopped
     }
   }
 }

@@ -16,7 +16,10 @@ import {
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { structuredClaudeLifecycleEvent } from '../../runtime/structured-claude-runtime-adapter'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import { createStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import {
@@ -92,6 +95,7 @@ beforeEach(async () => {
 afterEach(async () => {
   await adapter.closeAll()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

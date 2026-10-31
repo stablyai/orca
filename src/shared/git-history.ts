@@ -12,6 +12,7 @@ import {
   type GitHistoryOptions,
   type GitHistoryResult
 } from './git-history-types'
+import { getGitCurrentBranchName } from './git-current-branch'
 
 export type {
   GitHistoryExecutor,
@@ -93,22 +94,17 @@ async function resolveCurrentRef(
   cwd: string,
   headOid: string
 ): Promise<{ currentRef: GitHistoryItemRef; branchName: string | null }> {
-  try {
-    const { stdout } = await git(['symbolic-ref', '--quiet', '--short', 'HEAD'], cwd)
-    const branchName = stdout.trim()
-    if (branchName) {
-      return {
-        branchName,
-        currentRef: {
-          id: `refs/heads/${branchName}`,
-          name: branchName,
-          revision: headOid,
-          category: 'branches'
-        }
+  const branchName = await getGitCurrentBranchName((args) => git(args, cwd))
+  if (branchName) {
+    return {
+      branchName,
+      currentRef: {
+        id: `refs/heads/${branchName}`,
+        name: branchName,
+        revision: headOid,
+        category: 'branches'
       }
     }
-  } catch {
-    // Detached HEAD.
   }
 
   return {

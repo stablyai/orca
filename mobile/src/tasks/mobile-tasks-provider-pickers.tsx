@@ -7,7 +7,8 @@ import {
   Pressable,
   Check,
   colors,
-  ScrollView
+  ScrollView,
+  type TaskProvider
 } from './mobile-tasks-dependencies'
 import {
   normalizeGitHubPreset,
@@ -25,12 +26,11 @@ import { styles } from './mobile-tasks-legacy-styles'
 import { normalizeJiraFilter } from './mobile-jira-issue-filters'
 import { translate as t } from '../i18n/mobile-i18n'
 
-export function renderMobileTasksProviderPicker(model: ConnectionPresentationModel) {
+// Restores the provider's last view and query so switching sources round-trips.
+export function selectMobileTasksProvider(model: ConnectionPresentationModel, next: TaskProvider) {
   const {
     githubPreset,
     persistTaskSource,
-    provider,
-    providerOptions,
     setAppliedQuery,
     setGithubKind,
     setGithubMode,
@@ -40,61 +40,47 @@ export function renderMobileTasksProviderPicker(model: ConnectionPresentationMod
     setJiraFilter,
     setProvider,
     setQuery,
-    setShowProviderPicker,
-    showProviderPicker,
-    taskResumeRef,
-    taskUiReady
+    taskResumeRef
   } = model
-  return (
-    <PickerModal
-      visible={taskUiReady && showProviderPicker}
-      title={t('tasks.providerPickers.taskSource', 'Task Source')}
-      options={providerOptions}
-      selected={provider}
-      onSelect={(next) => {
-        const resume = taskResumeRef.current
-        persistTaskSource(next)
-        setProvider(next)
-        setItems([])
-        if (next === 'github') {
-          const nextMode = resume.githubMode === 'project' ? 'project' : 'items'
-          setGithubMode(nextMode)
-          if (nextMode === 'project') {
-            setQuery('')
-            setAppliedQuery('')
-            return
-          }
-          const preset =
-            resume.githubItemsPreset === null
-              ? githubPreset
-              : normalizeGitHubPreset(resume.githubItemsPreset ?? githubPreset)
-          const nextQuery =
-            resume.githubItemsPreset === null
-              ? (resume.githubItemsQuery ?? '')
-              : getTaskPresetQuery(preset)
-          const nextKind = githubKindFromQuery(nextQuery, preset)
-          setGithubPreset(preset)
-          setGithubKind(nextKind)
-          setQuery(nextQuery)
-          setAppliedQuery(scopeGitHubTaskSearch(nextQuery, nextKind))
-        } else if (next === 'linear') {
-          const nextQuery = resume.linearQuery ?? ''
-          setLinearFilter(normalizeLinearFilter(resume.linearPreset))
-          setQuery(nextQuery)
-          setAppliedQuery(nextQuery.trim())
-        } else if (next === 'jira') {
-          const nextQuery = resume.jiraQuery ?? ''
-          setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
-          setQuery(nextQuery)
-          setAppliedQuery(nextQuery.trim())
-        } else {
-          setQuery('')
-          setAppliedQuery('')
-        }
-      }}
-      onClose={() => setShowProviderPicker(false)}
-    />
-  )
+  const resume = taskResumeRef.current
+  persistTaskSource(next)
+  setProvider(next)
+  setItems([])
+  if (next === 'github') {
+    const nextMode = resume.githubMode === 'project' ? 'project' : 'items'
+    setGithubMode(nextMode)
+    if (nextMode === 'project') {
+      setQuery('')
+      setAppliedQuery('')
+      return
+    }
+    const preset =
+      resume.githubItemsPreset === null
+        ? githubPreset
+        : normalizeGitHubPreset(resume.githubItemsPreset ?? githubPreset)
+    const nextQuery =
+      resume.githubItemsPreset === null
+        ? (resume.githubItemsQuery ?? '')
+        : getTaskPresetQuery(preset)
+    const nextKind = githubKindFromQuery(nextQuery, preset)
+    setGithubPreset(preset)
+    setGithubKind(nextKind)
+    setQuery(nextQuery)
+    setAppliedQuery(scopeGitHubTaskSearch(nextQuery, nextKind))
+  } else if (next === 'linear') {
+    const nextQuery = resume.linearQuery ?? ''
+    setLinearFilter(normalizeLinearFilter(resume.linearPreset))
+    setQuery(nextQuery)
+    setAppliedQuery(nextQuery.trim())
+  } else if (next === 'jira') {
+    const nextQuery = resume.jiraQuery ?? ''
+    setJiraFilter(normalizeJiraFilter(resume.jiraPreset))
+    setQuery(nextQuery)
+    setAppliedQuery(nextQuery.trim())
+  } else {
+    setQuery('')
+    setAppliedQuery('')
+  }
 }
 
 export function renderMobileTasksRepoPicker(model: ConnectionPresentationModel) {

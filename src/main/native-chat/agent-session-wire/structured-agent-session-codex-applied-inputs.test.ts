@@ -10,7 +10,10 @@ import {
   THREAD_ID
 } from '../../codex/codex-structured-session-adapter-fixture'
 import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { claudeAndCodexDeclared } from './structured-agent-session-adapter-router-test-support'
 import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
@@ -207,6 +210,7 @@ it('steers inherited applied inputs and sends an explicit effort or tier change 
   } finally {
     await host.flushAllStreamedEvents()
     await adapter.closeAll()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   }
 })

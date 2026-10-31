@@ -182,7 +182,7 @@ const styles = themedStyleSheet(() => ({
   },
   card: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     padding: spacing.lg,
     borderWidth: 1,
     borderColor: colors.borderSubtle
@@ -202,7 +202,7 @@ const styles = themedStyleSheet(() => ({
   primaryButton: {
     backgroundColor: colors.textPrimary,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     marginBottom: spacing.sm
   },
@@ -214,7 +214,7 @@ const styles = themedStyleSheet(() => ({
   secondaryButton: {
     backgroundColor: colors.bgRaised,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   secondaryButtonText: {

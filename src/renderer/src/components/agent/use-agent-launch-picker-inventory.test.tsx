@@ -664,7 +664,7 @@ it('updates a mounted setup from current host rows without making ordinary actio
   function Menu({ answer }: { answer: HostChatAnswer }) {
     const menu = model('late-offer')
     menu.rows = buildNewTabAgentMenuRows({
-      settings: { experimentalNativeChat: true, nativeChatProviders: { codex: false } },
+      settings: { agentDefaultSurface: 'chat', nativeChatProviders: { codex: false } },
       detectedOnHost: ['codex'],
       chatAgents: ['codex'],
       hostChatAnswer: () => answer,
@@ -681,7 +681,7 @@ it('updates a mounted setup from current host rows without making ordinary actio
         createElement(
           DropdownMenuContent,
           null,
-          createElement(AgentLaunchPickerMenu, { model: menu, entries: current, runLaunch: launch })
+          createElement(AgentLaunchPickerMenu, { entries: current, runLaunch: launch })
         )
       )
     )

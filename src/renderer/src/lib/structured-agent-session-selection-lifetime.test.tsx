@@ -184,7 +184,8 @@ it.each([false, true])(
         unloadedTurnRevisions: undefined
       })
     )
-    expect(reads).toHaveLength(1)
+    // The read starts one microtask after its attach, from the shared queue.
+    await waitFor(() => expect(reads).toHaveLength(1))
     const capture = () => {
       const source = hook.result.current.sendSource
       const view = source.optionView(source.optionStateRef.current, seed)

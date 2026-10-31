@@ -258,7 +258,7 @@ setTimeout(() => { db.exec('COMMIT'); db.close() }, 200)`,
       await tearDownRuntime(installed, 'quit')
 
       expect(database.isClosed).toBe(true)
-      closeTestJournalHostDatabases()
+      await closeTestJournalHostDatabases()
       const reopened = openTestJournalHostDatabase(root)
       expect(
         readTestJournalRows(reopened.db, IDENTITY.sessionId, journal.epoch).map((row) => row.seq)

@@ -1,82 +1,10 @@
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { translate } from '../i18n/mobile-i18n'
-import {
-  BottomDrawer,
-  View,
-  Text,
-  Pressable,
-  Check,
-  colors,
-  PickerModal
-} from './mobile-tasks-dependencies'
+import { BottomDrawer, View, Text } from './mobile-tasks-dependencies'
+import { ListGroup } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListRow'
 import { styles } from './mobile-tasks-legacy-styles'
-import {
-  LINEAR_VIEW_OPTIONS,
-  LINEAR_GROUP_OPTIONS,
-  LINEAR_ORDER_OPTIONS,
-  LINEAR_DISPLAY_OPTIONS,
-  SORT_OPTIONS
-} from './mobile-tasks-legacy-foundation'
-
-export function renderMobileTasksLinearViewPicker(model: ConnectionPresentationModel) {
-  const {
-    linearViewMode,
-    setLinearViewMode,
-    setShowLinearViewPicker,
-    showLinearViewPicker,
-    taskUiReady
-  } = model
-  return (
-    <PickerModal
-      visible={taskUiReady && showLinearViewPicker}
-      title={translate('tasks.listDisplayPickers.linearViewTitle', 'Linear View')}
-      options={LINEAR_VIEW_OPTIONS}
-      selected={linearViewMode}
-      onSelect={setLinearViewMode}
-      onClose={() => setShowLinearViewPicker(false)}
-    />
-  )
-}
-
-export function renderMobileTasksLinearGroupPicker(model: ConnectionPresentationModel) {
-  const {
-    linearGroupBy,
-    setLinearGroupBy,
-    setShowLinearGroupPicker,
-    showLinearGroupPicker,
-    taskUiReady
-  } = model
-  return (
-    <PickerModal
-      visible={taskUiReady && showLinearGroupPicker}
-      title={translate('tasks.listDisplayPickers.linearGroupTitle', 'Group Linear Issues')}
-      options={LINEAR_GROUP_OPTIONS}
-      selected={linearGroupBy}
-      onSelect={setLinearGroupBy}
-      onClose={() => setShowLinearGroupPicker(false)}
-    />
-  )
-}
-
-export function renderMobileTasksLinearOrderPicker(model: ConnectionPresentationModel) {
-  const {
-    linearOrderBy,
-    setLinearOrderBy,
-    setShowLinearOrderPicker,
-    showLinearOrderPicker,
-    taskUiReady
-  } = model
-  return (
-    <PickerModal
-      visible={taskUiReady && showLinearOrderPicker}
-      title={translate('tasks.listDisplayPickers.linearOrderTitle', 'Order Linear Issues')}
-      options={LINEAR_ORDER_OPTIONS}
-      selected={linearOrderBy}
-      onSelect={setLinearOrderBy}
-      onClose={() => setShowLinearOrderPicker(false)}
-    />
-  )
-}
+import { LINEAR_DISPLAY_OPTIONS } from './mobile-tasks-legacy-foundation'
 
 export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentationModel) {
   const {
@@ -97,52 +25,30 @@ export function renderMobileTasksLinearDisplayPicker(model: ConnectionPresentati
           {translate('tasks.listDisplayPickers.displayPropertiesTitle', 'Display Properties')}
         </Text>
       </View>
-      <View style={styles.repoPickerGroup}>
-        {LINEAR_DISPLAY_OPTIONS.map((property, index) => {
-          const selected = effectiveLinearDisplayProperties.has(property.value)
-          return (
-            <View key={property.value}>
-              {index > 0 ? <View style={styles.actionSeparator} /> : null}
-              <Pressable
-                style={styles.repoPickerRow}
-                onPress={() => {
-                  if (property.value === 'team') {
-                    setLinearTeamPropertyTouched(true)
-                  }
-                  setLinearDisplayProperties((current) => {
-                    const next = new Set(current)
-                    if (next.has(property.value)) {
-                      next.delete(property.value)
-                    } else {
-                      next.add(property.value)
-                    }
-                    return next
-                  })
-                }}
-              >
-                <View style={styles.repoPickerTextWrap}>
-                  <Text style={styles.repoPickerTitle}>{property.label}</Text>
-                </View>
-                {selected ? <Check size={15} color={colors.textPrimary} /> : null}
-              </Pressable>
-            </View>
-          )
-        })}
-      </View>
+      <ListGroup>
+        {LINEAR_DISPLAY_OPTIONS.map((property) => (
+          <ListRow
+            key={property.value}
+            title={property.label}
+            selected={effectiveLinearDisplayProperties.has(property.value)}
+            accessibilityRole="checkbox"
+            onPress={() => {
+              if (property.value === 'team') {
+                setLinearTeamPropertyTouched(true)
+              }
+              setLinearDisplayProperties((current) => {
+                const next = new Set(current)
+                if (next.has(property.value)) {
+                  next.delete(property.value)
+                } else {
+                  next.add(property.value)
+                }
+                return next
+              })
+            }}
+          />
+        ))}
+      </ListGroup>
     </BottomDrawer>
-  )
-}
-
-export function renderMobileTasksSortPicker(model: ConnectionPresentationModel) {
-  const { setShowSortPicker, setTaskSort, showSortPicker, taskSort, taskUiReady } = model
-  return (
-    <PickerModal
-      visible={taskUiReady && showSortPicker}
-      title={translate('tasks.listDisplayPickers.sortTasksTitle', 'Sort Tasks')}
-      options={SORT_OPTIONS}
-      selected={taskSort}
-      onSelect={setTaskSort}
-      onClose={() => setShowSortPicker(false)}
-    />
   )
 }

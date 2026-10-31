@@ -158,37 +158,38 @@ describe('the first message owned by create', () => {
   it.each([
     ['new', {}],
     ['resumed', { resumeFrom: { providerSessionId: 'provider-session-1' } }]
-  ])(
-    "keeps a remembered model the host's saved list lacks, %s: create sends the literal saved choice",
-    async (_kind, resume) => {
-      mocks.exactSupport.mockResolvedValue(true)
-      mocks.settings = {
-        nativeChatSessionOptions: {
-          claude: { model: 'claude-gone' }
-        }
-      }
-      const xhigh = [{ value: 'xhigh', label: 'xhigh' }]
-      recordHostModelCatalogSnapshot(target, 'claude', null, {
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [{ id: 'opus[1m]', label: 'Opus', isDefault: true, efforts: xhigh }]
-      })
-      mocks.call.mockImplementation(async () => created())
-      try {
-        const launch = startStructuredAgentLaunch('workspace-1', 'claude', {
-          requestId: newAgentLaunchRequestId(),
-          executionHostId: 'local',
-          prompt: 'opening text',
-          ...resume
-        })
-        await launch.launchResult
-        expect(createParams().options?.model).toBe('claude-gone')
-        expect(createParams().firstMessage?.selection).toEqual({ model: 'claude-gone' })
-      } finally {
-        mocks.settings = {}
+  ])('keeps remembering in its owning lifetime, %s', async (_kind, resume) => {
+    mocks.exactSupport.mockResolvedValue(true)
+    mocks.settings = {
+      nativeChatSessionOptions: {
+        claude: { model: 'claude-gone' }
       }
     }
-  )
+    const xhigh = [{ value: 'xhigh', label: 'xhigh' }]
+    recordHostModelCatalogSnapshot(target, 'claude', null, {
+      origin: 'probe',
+      fetchedAt: 1,
+      models: [{ id: 'opus[1m]', label: 'Opus', isDefault: true, efforts: xhigh }]
+    })
+    mocks.call.mockImplementation(async () => created())
+    try {
+      const launch = startStructuredAgentLaunch('workspace-1', 'claude', {
+        requestId: newAgentLaunchRequestId(),
+        executionHostId: 'local',
+        prompt: 'opening text',
+        ...resume
+      })
+      await launch.launchResult
+      expect(createParams().options?.model).toBe(
+        'resumeFrom' in resume && resume.resumeFrom ? undefined : 'claude-gone'
+      )
+      expect(createParams().firstMessage?.selection).toEqual(
+        'resumeFrom' in resume && resume.resumeFrom ? {} : { model: 'claude-gone' }
+      )
+    } finally {
+      mocks.settings = {}
+    }
+  })
 
   registerActionEffortCreateTests(mocks, created)
 

@@ -94,7 +94,7 @@ async function disposeHistory() {
   setStructuredAgentSessionHost(null)
   await host?.flushAllStreamedEvents()
   host = null
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   if (directory) {
     await rm(directory, { recursive: true, force: true })
   }

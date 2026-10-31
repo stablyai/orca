@@ -166,7 +166,7 @@ const styles = themedStyleSheet(() => ({
   frame: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     marginBottom: spacing.sm,
     overflow: 'hidden'
   },
@@ -183,7 +183,7 @@ const styles = themedStyleSheet(() => ({
     right: spacing.xs,
     width: 28,
     height: 28,
-    borderRadius: 14,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: colors.bgPanel,

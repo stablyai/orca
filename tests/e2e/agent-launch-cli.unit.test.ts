@@ -5,6 +5,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { AGENT_LAUNCH_RUNTIME_CAPABILITIES } from '../../src/shared/agent-launch-runtime-capability'
 import type { StructuredAgentSessionFirstMessage } from '../../src/shared/structured-agent-session-create'
 import { openTestAgentSessionRecordStore } from '../../src/main/runtime/agent-session-record-store-test-harness'
+import { closeTestJournalHostDatabase } from '../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { RuntimeClient, RuntimeClientError } from '../../src/cli/runtime-client'
 import { callAgentLaunch, readCliAgentLaunch } from '../../src/cli/agent-launch-request'
 import { parseArgs } from '../../src/cli/args'
@@ -47,6 +48,7 @@ beforeEach(async () => {
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabase(directory)
   await rm(directory, { recursive: true, force: true })
 })
 

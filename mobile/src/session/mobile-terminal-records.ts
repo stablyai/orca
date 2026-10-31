@@ -53,6 +53,8 @@ type MobileSessionTabLike =
       filePath?: string
       relativePath?: string
       language?: string
+      diffSource?: 'staged' | 'unstaged' | 'branch' | 'commit'
+      oldPath?: string
       isDirty?: boolean
       isActive?: boolean
     }
@@ -114,6 +116,21 @@ export function mobileSessionTabsEqual(
   return a.length === b.length && a.every((tab, index) => mobileSessionTabEqual(tab, b[index]))
 }
 
+export function mobileFileTabsReadSameDocument(
+  a: Pick<
+    Extract<MobileSessionTabLike, { type: 'file' }>,
+    'relativePath' | 'diffSource' | 'oldPath'
+  >,
+  b: Pick<
+    Extract<MobileSessionTabLike, { type: 'file' }>,
+    'relativePath' | 'diffSource' | 'oldPath'
+  >
+): boolean {
+  return (
+    a.relativePath === b.relativePath && a.diffSource === b.diffSource && a.oldPath === b.oldPath
+  )
+}
+
 function mobileSessionTabEqual(
   a: MobileSessionTabLike,
   b: MobileSessionTabLike | undefined
@@ -154,7 +171,7 @@ function mobileSessionTabEqual(
       return (
         b.type === 'file' &&
         a.filePath === b.filePath &&
-        a.relativePath === b.relativePath &&
+        mobileFileTabsReadSameDocument(a, b) &&
         a.language === b.language &&
         a.isDirty === b.isDirty
       )

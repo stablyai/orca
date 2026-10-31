@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { mkdir, mkdtemp, rm } from 'node:fs/promises'
 import { homedir, tmpdir } from 'node:os'
@@ -137,6 +138,7 @@ let shellEnv: NodeJS.ProcessEnv
 let shellEnvironmentPolicy: NativeChatShellEnvironmentPolicy
 let childWork: Parameters<NonNullable<StructuredAgentSessionStatusSink['publishChildWork']>>[]
 let hookServer: AgentHookServer
+let releaseUsage = (): void => {}
 
 async function call(method: string, params: unknown): Promise<RpcResponse> {
   const replies: RpcResponse[] = []
@@ -201,6 +203,7 @@ function textOf(item: AgentJournalRenderItem): string {
 }
 
 beforeEach(async () => {
+  releaseUsage = () => {}
   operations = 0
   claudeAuthPolicy = { account: 'system' }
   shellEnv = { PATH: '/shell/bin:/usr/bin' }
@@ -221,7 +224,7 @@ beforeEach(async () => {
   hookServer = new AgentHookServer()
   const runtime = {
     getRuntimeId: () => 'runtime-1',
-    getClientSettings: () => ({ experimentalNativeChat: true }),
+    getClientSettings: () => ({ nativeChatProviders: EVERY_AGENT_CHAT }),
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
     structuredAgentSessionLaunchSeedOptions: () => undefined,
     resolveStructuredAgentSessionCreateIntent: async (input: { envelope: unknown }) => ({
@@ -274,11 +277,48 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
-  vi.unstubAllEnvs()
-  claude.setSelfExit(null)
-  await stopStructuredAgentSessionRuntime()
-  await rm(root, { recursive: true, force: true })
+  releaseUsage()
+  claude.dispose()
+  for (const cleanup of cleanups.values()) {
+    cleanup()
+  }
+  try {
+    await stopStructuredAgentSessionRuntime()
+  } finally {
+    vi.unstubAllEnvs()
+    await rm(root, { recursive: true, force: true })
+  }
 })
+
+async function startingConnection() {
+  const connection = claude.live()
+  await vi.waitFor(() => {
+    expect(getStructuredAgentSessionHost()?.['sessions'].get(SESSION)?.child).toMatchObject({
+      phase: 'starting',
+      generation: expect.any(String),
+      fence: leaseOf(SESSION).runtimeFence
+    })
+    expect(getStructuredAgentSessionHost()?.deps.store.getRecord(SESSION)?.lease).toMatchObject({
+      claimStatus: 'live',
+      handoffStage: null,
+      ownerProcess: { pid: connection.pid }
+    })
+  })
+  return connection
+}
+
+function failStarting(
+  connection: ReturnType<typeof claude.live>,
+  tree: 'unverifiable' | 'live' | 'exited'
+) {
+  connection.exitVerdict = { root: 'exited', tree }
+  connection.closeProven = tree === 'exited'
+  connection.handlers.onExit?.(
+    new Error('claude stream-json exited (code 1): claude: not signed in')
+  )
+  connection.initialization.reject(new Error('Query closed before response received'))
+  claude.setInitializeHeld(false)
+}
 
 describe('a structured Claude session over agentSession.*', () => {
   it("hands its subagents to the status sink under the session's own address", async () => {
@@ -382,9 +422,12 @@ describe('a structured Claude session over agentSession.*', () => {
   })
 
   it('publishes, then ends the session with sign-in guidance when initialization has no credentials', async () => {
+    claude.setInitializeHeld(true)
     claude.setInitializeAccount({ apiProvider: 'firstParty', tokenSource: 'none' })
 
     await ok<{ fence: number }>('agentSession.create', createIntentParams())
+    const connection = await startingConnection()
+    connection.initialization.resolve()
     await waitForStructuredAgentSessionRecovery()
 
     const guidance = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
@@ -403,14 +446,12 @@ describe('a structured Claude session over agentSession.*', () => {
   it.each(['unverifiable', 'live'] as const)(
     'releases a session whose CLI self-exited after spawn with its tree %s, with a readable failure',
     async (tree) => {
-      claude.setSelfExit({
-        message: 'claude stream-json exited (code 1): claude: not signed in',
-        exitVerdict: { root: 'exited', tree }
-      })
+      claude.setInitializeHeld(true)
 
       const failed = await call('agentSession.create', createIntentParams())
 
       expect(failed).toMatchObject({ ok: true, result: { ok: true } })
+      failStarting(await startingConnection(), tree)
       await vi.waitFor(() => expect(leaseOf(SESSION).claimStatus).toBe('released'))
       const failure = itemsOf(await subscribe()).find((item) => item.body?.kind === 'status')
       expect(failure?.body).toMatchObject({
@@ -426,35 +467,36 @@ describe('a structured Claude session over agentSession.*', () => {
         detail: 'claude stream-json exited (code 1): claude: not signed in'
       })
 
-      claude.setSelfExit(null)
       await ok<{ fence: number }>('agentSession.ensure', ensureParams(lease.runtimeFence))
     }
   )
 
   it('releases a spawned child whose whole CLI tree exited', async () => {
-    claude.setSelfExit({
-      message: 'claude stream-json exited (code 1): claude: not signed in',
-      exitVerdict: { root: 'exited', tree: 'exited' }
-    })
+    claude.setInitializeHeld(true)
 
     const failed = await call('agentSession.create', createIntentParams())
 
     expect(failed).toMatchObject({ ok: true, result: { ok: true } })
+    failStarting(await startingConnection(), 'exited')
     await vi.waitFor(() =>
       expect(leaseOf(SESSION)).toMatchObject({ claimStatus: 'released', handoffStage: null })
     )
     expect(leaseOf(SESSION).deathEvidence).toMatchObject({ kind: 'exit-observed' })
-    claude.setSelfExit(null)
   })
 
   it('keeps the owner when a published child failure has no proof of exit', async () => {
-    claude.setSelfExit({
-      message: 'claude stream-json exited (code 1): claude: not signed in',
-      // Without observed root exit, process death remains unproven.
-      exitVerdict: { root: 'live', tree: 'unverifiable' }
+    claude.setInitializeHeld(true)
+    expect(await call('agentSession.create', createIntentParams())).toMatchObject({
+      ok: true,
+      result: { ok: true }
     })
-
-    await call('agentSession.create', createIntentParams())
+    const connection = await startingConnection()
+    connection.closeProven = false
+    connection.exitVerdict = { root: 'live', tree: 'unverifiable' }
+    connection.handlers.onFault?.(
+      new Error('claude stream-json exited (code 1): claude: not signed in')
+    )
+    connection.initialization.reject(new Error('Query closed before response received'))
     await vi.waitFor(() => expect(claude.live().closed).toBe(true))
 
     // Losing stdio is not proof that a published owner exited.
@@ -464,7 +506,6 @@ describe('a structured Claude session over agentSession.*', () => {
       deathEvidence: null
     })
     expect(claude.connections).toHaveLength(1)
-    claude.setSelfExit(null)
   })
 
   it.each(['unverifiable', 'live'] as const)(
@@ -776,42 +817,61 @@ describe('a structured Claude session over agentSession.*', () => {
 
   it('delivers the breakdown a settled turn asks for with no later frame to carry it', async () => {
     const answers: ((value: unknown) => void)[] = []
-    claude.setContextUsage(() => new Promise((resolve) => answers.push(resolve)))
-    const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
-    const stream = await subscribe({
-      ...CLIENT,
-      clientCapabilities: [...CLIENT.clientCapabilities, AGENT_SESSION_TURN_ITEM_CAPABILITY]
+    let disposed = false
+    const usage: Promise<unknown>[] = []
+    releaseUsage = () => {
+      disposed = true
+      for (const answer of answers.splice(0)) {
+        answer({})
+      }
+    }
+    claude.setContextUsage(() => {
+      const response = disposed
+        ? Promise.resolve({})
+        : new Promise((resolve) => answers.push(resolve))
+      usage.push(response)
+      return response
     })
-    const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hi' }] }
-    await ok('agentSession.send', {
-      envelope: envelope('agentSession.send', { body }, created.fence),
-      body
-    })
-    claude.live().handlers.onMessage?.({
-      type: 'result',
-      subtype: 'success',
-      session_id: PROVIDER_SESSION,
-      uuid: 'result-frame-uuid'
-    })
-    await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
-    const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
-    expect(turnRow()?.body).toMatchObject({ state: 'completed' })
-
-    answers.at(-1)?.({
-      model: 'claude-sonnet-5',
-      totalTokens: 18_600,
-      rawMaxTokens: 200_000,
-      categories: [{ name: 'Messages', tokens: 12_000 }]
-    })
-    // This final event has no later publication to carry it to the client.
-    await vi.waitFor(async () => {
+    try {
+      const created = await ok<{ fence: number }>('agentSession.create', createIntentParams())
+      const stream = await subscribe({
+        ...CLIENT,
+        clientCapabilities: [...CLIENT.clientCapabilities, AGENT_SESSION_TURN_ITEM_CAPABILITY]
+      })
+      const body = { kind: 'message', role: 'user', blocks: [{ type: 'text', text: 'Hi' }] }
+      await ok('agentSession.send', {
+        envelope: envelope('agentSession.send', { body }, created.fence),
+        body
+      })
+      claude.live().handlers.onMessage?.({
+        type: 'result',
+        subtype: 'success',
+        session_id: PROVIDER_SESSION,
+        uuid: 'result-frame-uuid'
+      })
       await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
-      const turn = turnRow()?.body
-      expect(turn?.kind === 'turn' ? turn.contextUsage?.used : undefined).toMatchObject({
-        kind: 'report',
-        usedTokens: 18_600,
+      const turnRow = () => itemsOf(stream).find((item) => item.body?.kind === 'turn')
+      expect(turnRow()?.body).toMatchObject({ state: 'completed' })
+
+      answers.at(-1)?.({
+        model: 'claude-sonnet-5',
+        totalTokens: 18_600,
+        rawMaxTokens: 200_000,
         categories: [{ name: 'Messages', tokens: 12_000 }]
       })
-    })
+      // This final event has no later publication to carry it to the client.
+      await vi.waitFor(async () => {
+        await getStructuredAgentSessionHost()?.flushStreamedEvents(SESSION)
+        const turn = turnRow()?.body
+        expect(turn?.kind === 'turn' ? turn.contextUsage?.used : undefined).toMatchObject({
+          kind: 'report',
+          usedTokens: 18_600,
+          categories: [{ name: 'Messages', tokens: 12_000 }]
+        })
+      })
+    } finally {
+      releaseUsage()
+      await Promise.allSettled(usage)
+    }
   })
 })

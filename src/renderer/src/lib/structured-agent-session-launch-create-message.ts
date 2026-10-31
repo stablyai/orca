@@ -106,6 +106,22 @@ function structuredLaunchCreateOptions(state: StructuredLaunchState): {
     worktree: intent.params.worktree,
     seedsModel: intent.seedOptions?.model !== undefined
   })
+  if (intent.params.resumeFrom) {
+    holdStructuredLaunchCreatePicks(state)
+    const options = { ...requested, ...overlay }
+    const view = structuredAgentSessionOptionView(
+      firstFrame,
+      undefined,
+      options,
+      state.selection.explicit
+    )
+    return {
+      ...(Object.keys(options).length ? { options } : {}),
+      ...(intent.sendSelectionSupport
+        ? { selection: structuredAgentSessionMessageSelection(view) }
+        : {})
+    }
+  }
   // Create has always carried options, so any host takes what the chat shows.
   const view = structuredAgentSessionOptionView(
     firstFrame,

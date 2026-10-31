@@ -19,6 +19,7 @@ vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' 
 // Mock RN hosts as strings: Vitest cannot parse React Native Flow, but panel structure stays real.
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   SectionList: 'SectionList',
@@ -35,11 +36,19 @@ vi.mock('react-native-safe-area-context', () => ({
 }))
 vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
 vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
   ChevronLeft: 'Icon',
-  Play: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
   RefreshCw: 'Icon',
   Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
   X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children }: { children: unknown }) => children
 }))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 // Mock Metro PNG requires; no client means session list never renders here.
@@ -79,9 +88,9 @@ function render(pair: Pair): ReactElement {
 
 /** The panel's own chevron, found by the label a user reads rather than by tree position. */
 function pressBack(tree: ReactTestRenderer): void {
-  const back = tree.root
-    .findAll((node) => node.props.accessibilityLabel === 'Back')
-    .filter((node) => typeof node.props.onPress === 'function')
+  const back = tree.root.findAll(
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Back'
+  )
   if (back.length !== 1) {
     throw new Error(`expected one Back control, found ${back.length}`)
   }

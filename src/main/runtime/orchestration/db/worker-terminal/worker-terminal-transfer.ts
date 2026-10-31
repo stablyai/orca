@@ -53,6 +53,69 @@ export function findTransferableWorkerTerminalResource(
   )
 }
 
+/** The pane and process a new Dispatch would claim, as its custody row records them. */
+export type NewWorkAssignee = {
+  assigneeHandle: string
+  assigneePaneKey?: string
+  processIncarnation?: string
+  hostScope?: string | null
+}
+
+/** Why a terminal or chat cannot take new work now: an active Dispatch on it or its pane (handle remint
+ * cannot dodge that), or a finished Dispatch's custody that only worker-start transfers. */
+function newWorkRefusal(
+  db: OrchestrationDb,
+  assignee: NewWorkAssignee,
+  taskId: string
+): Error | null {
+  const { assigneeHandle, assigneePaneKey } = assignee
+  const existing = db.findActiveDispatchForAssignee(assigneeHandle, assigneePaneKey)
+  if (existing) {
+    return new Error(
+      `Terminal ${assigneeHandle} already has an active dispatch (${existing.id} for task ${existing.task_id})`
+    )
+  }
+  let held: WorkerTerminalResourceRow | undefined
+  try {
+    held =
+      assigneePaneKey && assignee.processIncarnation
+        ? db.findTransferableWorkerTerminalResource({
+            terminalHandle: assigneeHandle,
+            paneKey: assigneePaneKey,
+            processIncarnation: assignee.processIncarnation,
+            hostScope: assignee.hostScope ?? null
+          })
+        : undefined
+  } catch (error) {
+    if (error instanceof OrchestrationError) {
+      return error
+    }
+    throw error
+  }
+  return held
+    ? new OrchestrationError(
+        'invalid_argument',
+        `Terminal ${assigneeHandle} is still held by finished Dispatch ${held.owner_dispatch_id}. Start this Task on it with \`orca orchestration worker-start --task ${taskId} --terminal ${assigneeHandle}\`.`
+      )
+    : null
+}
+
+export function assertTakesNewWork(
+  db: OrchestrationDb,
+  assignee: NewWorkAssignee,
+  taskId: string
+): void {
+  const refusal = newWorkRefusal(db, assignee, taskId)
+  if (refusal) {
+    throw refusal
+  }
+}
+
+/** The same rule as a census filter, so the coordinator never selects what dispatch refuses. */
+export function takesNewWork(db: OrchestrationDb, assignee: NewWorkAssignee): boolean {
+  return newWorkRefusal(db, assignee, '<task_id>') === null
+}
+
 export function workerTerminalResourceHasIdentityConflict(
   this: OrchestrationDb,
   resourceId: string

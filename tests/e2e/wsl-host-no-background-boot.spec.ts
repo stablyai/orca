@@ -101,7 +101,7 @@ test.describe('E9: background work on a stopped WSL host', () => {
         const settings = await window.api.settings.set({ experimentalWslHosts: true })
         window.__store?.setState({ settings })
         await window.__store?.getState().updateSettings({
-          experimentalNativeChat: true,
+          nativeChatProviders: { claude: true, codex: true },
           defaultTuiAgent: 'claude',
           agentCmdOverrides: { claude }
         })

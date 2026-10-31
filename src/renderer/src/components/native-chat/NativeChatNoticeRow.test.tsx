@@ -664,3 +664,56 @@ it('renders the localized unacknowledged goal pause through the existing Stop no
     )
   ).toBeInTheDocument()
 })
+
+// Protocol-shaped synthetic notices; no exact recorded review/denial capture is available.
+it.each([
+  [
+    'codex',
+    'notification:guardianWarning',
+    'warning',
+    'Codex reported a safety review warning. View details.',
+    'Codex a signalé un avertissement de sécurité. Voir les détails.'
+  ],
+  [
+    'claude',
+    'message:system:permission_denied',
+    'error',
+    'Claude denied permission. View details.',
+    'Claude a refusé la permission. Voir les détails.'
+  ]
+] as const)(
+  'compacts the declared %s notice while retaining every available diagnostic',
+  async (provider, kind, tone, heading, french) => {
+    const text = `${'安全 '.repeat(1500)}EXPLANATION_SENTINEL`
+    const head = `{"partial":"${'é'.repeat(4500)}PAYLOAD_SENTINEL`
+    renderStatus({
+      kind: 'status',
+      tone,
+      text,
+      providerFrame: {
+        provider,
+        kind,
+        payload: { head, byteLength: 99999, digest: 'synthetic', truncated: true }
+      }
+    })
+    const summary = screen.getByText(heading).closest('summary')!
+    const disclosure = summary.closest('details')!
+    expect(disclosure.open).toBe(false)
+    expect(summary).not.toHaveTextContent(/SENTINEL|99999/)
+    expect(disclosure.parentElement).not.toHaveClass('text-destructive', 'text-chat-warning')
+    fireEvent.click(summary)
+    expect(disclosure.open).toBe(true)
+    const detail = disclosure.querySelector('pre')!
+    expect(detail.textContent).toContain(text)
+    expect(detail.textContent).toContain(head)
+    expect(detail).toHaveTextContent('Provider response truncated (original size: 99999 bytes).')
+    expect(detail).toHaveClass(tone === 'error' ? 'text-destructive' : 'text-chat-warning')
+    expect(screen.queryByText('Show full output')).toBeNull()
+    await act(() => i18n.changeLanguage('fr'))
+    expect(summary).toHaveTextContent(french)
+    expect(detail).toHaveTextContent(
+      'Réponse du fournisseur tronquée (taille d’origine : 99999 octets).'
+    )
+    expect(disclosure.open).toBe(true)
+  }
+)

@@ -69,4 +69,21 @@ describe('plugin terminal palettes', () => {
       ).toEqual(fallback)
     }
   })
+
+  it('stops painting while its plugin is off and paints again once it is back on', () => {
+    const selected = { ...base, terminalThemeDark: id, terminalPluginPalettes: [{ id, colors }] }
+    const fallback = resolveConfiguredTerminalColors(base, true)
+    expect(
+      resolveConfiguredTerminalColors({ ...selected, disabledPlugins: ['samples.dusk'] }, true)
+    ).toEqual(fallback)
+    expect(
+      resolveConfiguredTerminalColors({ ...selected, pluginSystemEnabled: false }, true)
+    ).toEqual(fallback)
+    expect(
+      resolveConfiguredTerminalColors(
+        { ...selected, disabledPlugins: ['samples.other'], pluginSystemEnabled: true },
+        true
+      )
+    ).toEqual({ foreground: '#e8e0ff', background: '#1b1430' })
+  })
 })

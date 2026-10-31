@@ -8,7 +8,10 @@ import { startsWhenPublished } from '../../../src/main/native-chat/agent-session
 import { setStructuredAgentSessionHost } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-registry'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { openTestAgentSessionRecordStore } from '../../../src/main/runtime/agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabase,
+  openTestJournalHostDatabase
+} from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import type { AgentSessionJournal } from '../../../src/main/native-chat/agent-session-journal/journal-store'
 import { agentJournalItemKey } from '../../../src/shared/agent-session-journal-item-key'
 import { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
@@ -132,6 +135,7 @@ export function createReleasedStopNoteRig(port: ScenarioPort, ref: string) {
     setStructuredAgentSessionHost(null)
     await host.flushAllStreamedEvents()
     await journal.close()
+    await closeTestJournalHostDatabase(root)
     await rm(root, { recursive: true, force: true })
   })
   function call(method: string, params: unknown) {

@@ -5,6 +5,7 @@ import type {
   AgentSessionModelOption,
   AgentSessionOptionsResult
 } from '../../../shared/agent-session-wire'
+import { labelFromModelId } from '../../../shared/model-id-label'
 import type { AgentModelCatalogLiveListing } from '../agent-model-catalog/agent-model-catalog-entry'
 
 export type StructuredAgentSessionOptionProjection = {
@@ -36,7 +37,14 @@ export function structuredAgentSessionOptionModels<TModel extends AgentSessionMo
   const models = [...catalog]
   if (current && !models.some((entry) => entry.id === current)) {
     models.push(
-      row({ id: current, label: current, isDefault: false, efforts: [], effortsKnown: false })
+      row({
+        id: current,
+        label: labelFromModelId(current),
+        description: current,
+        isDefault: false,
+        efforts: [],
+        effortsKnown: false
+      })
     )
   }
   return models

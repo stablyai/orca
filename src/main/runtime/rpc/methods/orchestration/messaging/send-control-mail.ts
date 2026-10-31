@@ -46,10 +46,15 @@ export function sendFederatedControlMail(args: {
       `Federated Dispatch ${dispatchId} does not support coordinator control mail; start a fresh worker after updating its Orca server.`
     )
   }
-  if (db.getWorkerDispatch(dispatchId)?.state !== 'ready') {
+  const state = db.getWorkerDispatch(dispatchId)?.state
+  if (state !== 'ready') {
+    const server = federatedTarget.environment_name
+    // Paired servers cannot continue a finished worker yet; steering a running one still works.
     throw new OrchestrationError(
       'dispatch_inactive',
-      `Federated Dispatch ${dispatchId} is not active.`
+      state && ['succeeded', 'failed', 'stopped', 'abandoned'].includes(state)
+        ? `Dispatch ${dispatchId} finished on ${server}, which cannot take follow-ups for finished workers yet. Start a new worker there with \`orca orchestration worker-start --on ${server}\`.`
+        : `Dispatch ${dispatchId} on ${server} is not confirmed running (${state ?? 'unknown'}), so this message was not sent. Check it with \`orca orchestration worker-show --dispatch ${dispatchId}\` before starting another worker.`
     )
   }
   if (params.type === 'worker_done' || params.type === 'heartbeat') {

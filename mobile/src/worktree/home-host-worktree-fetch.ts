@@ -6,6 +6,7 @@ import {
   type HomeWorktreeSummary,
   type HostWorktreeInfo
 } from './home-worktree-info'
+import { selectHomeAttentionWorktrees } from './home-jump-back-in'
 import { pickResumeWorktree } from './resume-worktree'
 import { isWorktreeActive } from './workspace-list-sections'
 import { worktreeCatalogRead } from './worktree-catalog-operations'
@@ -44,7 +45,7 @@ export function fetchHomeHostWorktreeInfo(
           markUnavailable()
           return
         }
-        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktrees` is a salvaged member, so the `?? []` is what makes it an array; the rows stay opaque because three screens project a row differently. This card reads `status` and the resume pick, both through their own guards, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: `worktrees` is a salvaged member, so the `?? []` is what makes it an array; the rows stay opaque because three screens project a row differently. Home reads `status`, `sidebarStatus` and the resume pick, both through their own guards, and the `worktree-home-catalog` golden records the row it is given as `{worktreeId, displayName, repo, status}`.
         const worktrees = (catalog.value.worktrees ?? []) as HomeWorktreeSummary[]
         setCachedWorktrees(hostId, worktrees, { proven: true })
         // Count what the list shows: archived rows are hidden, and active is the sleeping filter's rule.
@@ -58,6 +59,7 @@ export function fetchHomeHostWorktreeInfo(
             totalWorktrees: listed.length,
             activeCount: listed.filter(isWorktreeActive).length,
             lastActiveWorktree: lastActive,
+            attention: selectHomeAttentionWorktrees(listed),
             countsProvenAt: Date.now()
           }
         }))

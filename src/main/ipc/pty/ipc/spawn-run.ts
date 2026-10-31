@@ -1,3 +1,5 @@
+import { AGENT_LAUNCH_PANE_REFUSED_CODE } from '../../../../shared/agent-launch-pane-verdict'
+import { requireAcceptedSpawn } from '../spawn-outcome'
 import { runPtySpawn, normalizePtySpawnSessionId } from '../spawn-operation'
 import { checkPtyIpcLaunchPane, resolveEarlyPaneKey } from './spawn-begin'
 import { stopReplacedPaneOwner } from '../pane/pane-owner-replacement'
@@ -79,7 +81,9 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
     onOutcome: (settled) =>
       endPaneAgentLaunch(
         ctx,
-        settled.kind === 'registration-exited' ? { exitedDuringStart: true } : { started: true }
+        settled.kind === 'registration-exited'
+          ? { exitedDuringStart: true, terminalStartFailure: settled.terminalStartFailure }
+          : { started: true }
       ),
     onError: (error) => endPaneAgentLaunch(ctx, { error }),
     releasePreparation: () => {
@@ -108,5 +112,7 @@ export async function runPtyIpcSpawn(deps: PtySpawnIpcDeps, request: PtySpawnIpc
         }
       : {})
   })
-  return outcome.result
+  return args.agentLaunch === undefined
+    ? outcome.result
+    : requireAcceptedSpawn(outcome, AGENT_LAUNCH_PANE_REFUSED_CODE)
 }

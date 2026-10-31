@@ -113,6 +113,10 @@ export abstract class BrowserManagerState extends BrowserManagerViewportScrollSt
     error: string | null
   ): void
   protected abstract getDownloadReceivedBytes(item: Electron.DownloadItem): number
+  protected abstract isAwaitingDownloadFrom(
+    guestWebContentsId: number,
+    rootGuestWebContentsId: number
+  ): boolean
   protected abstract openLinkInOrcaTab(
     browserTabId: string,
     rawUrl: string,

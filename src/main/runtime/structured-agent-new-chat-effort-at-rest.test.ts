@@ -33,7 +33,6 @@ import type { StructuredAgentSessionMutationContext } from '../native-chat/agent
 import { readStructuredAgentSessionOptions } from '../native-chat/agent-session-wire/structured-agent-session-options-read'
 import { StructuredAgentRegistry } from '../native-chat/agent-session-wire/structured-agent-registry'
 import { PI_RPC_AGENT } from '../pi/rpc-agent-definition'
-import { piModelCatalogFromListing } from '../pi/rpc-model-catalog-probe'
 
 // A chat whose agent offers permission modes also names its own, which a new chat leaves at Ask.
 const modeOf = (agent: string) => (agentChatPermissionModes(agent) ? { permissionMode: 'ask' } : {})
@@ -108,13 +107,14 @@ const GROK_LISTING = grokModelCatalogFromState({
   ]
 })
 
-const PI_LISTING = piModelCatalogFromListing(
-  [
-    'provider   model            context  max-out  thinking  images',
-    'anthropic  claude-sonnet-4  200K     64K      yes       yes',
-    'openai     gpt-6            400K     128K     yes       yes'
-  ].join('\n')
-)
+const PI_LISTING: AgentSessionModelOption[] = [
+  { id: 'anthropic/claude-sonnet-4', label: 'Claude Sonnet 4' },
+  { id: 'openai/gpt-6', label: 'GPT-6' }
+].map((model) => ({
+  ...model,
+  isDefault: false,
+  efforts: ['off', 'minimal', 'low', 'medium', 'high'].map((value) => ({ value, label: value }))
+}))
 
 type Account = {
   models: AgentSessionModelOption[]

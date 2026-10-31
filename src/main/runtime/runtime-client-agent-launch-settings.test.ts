@@ -16,12 +16,13 @@ vi.mock('../agent-hooks/managed-agent-hook-controls', () => ({
   applyAgentStatusHooksEnabled: vi.fn(async () => {})
 }))
 
-function fixture() {
+function fixture(overrides: Partial<GlobalSettings> = {}) {
   const host = createGlobalSettingsFixture({
     workspaceDir: '/host',
     agentDefaultArgs: { claude: '--host-old', codex: '--host-codex' },
     agentDefaultEnv: { claude: { API_KEY: 'host-secret', KEEP: 'host-only' } },
-    agentCmdOverrides: { codex: '/host/codex' }
+    agentCmdOverrides: { codex: '/host/codex' },
+    ...overrides
   })
   const updateSettings = vi.fn((updates: Partial<GlobalSettings>) => Object.assign(host, updates))
   const runDurableMutation: NonNullable<RuntimeStore['runDurableMutation']> = async (mutate) =>
@@ -204,6 +205,17 @@ describe('execution-host agent launch settings', () => {
     expect(controller.get().agentDefaultEnv?.claude?.API_KEY).toBe('host-secret')
     await controller.mutateAgentLaunch({ type: 'command', agent: 'claude', value: '' })
     expect(JSON.stringify(controller.getAgentLaunch())).not.toContain('host-secret')
+    const legacy = fixture({ agentPermissionDefault: undefined })
+    expect(legacy.host.agentPermissionDefault).toBeUndefined()
+    const literal = {
+      agentDefaultArgs: { claude: '--model literal --verbose' },
+      agentDefaultEnv: { goose: { GOOSE_MODE: 'manual', KEEP: 'literal' } }
+    }
+    const response = await legacy.controller.update(literal)
+    expect(legacy.host.agentDefaultArgs).toEqual(literal.agentDefaultArgs)
+    expect(legacy.host.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
+    expect(response.agentDefaultArgs?.claude).toBe(literal.agentDefaultArgs.claude)
+    expect(response.agentDefaultEnv).toEqual(literal.agentDefaultEnv)
   })
 
   it('reports a failed host write instead of returning a successful projection', async () => {
@@ -257,7 +269,7 @@ describe('execution-host agent launch settings', () => {
         value: ''
       }).success
     ).toBe(true)
-    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(false)
+    expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.getAgentLaunch')).toBe(true)
     expect(MOBILE_RPC_METHOD_ALLOWLIST.has('settings.mutateAgentLaunch')).toBe(false)
   })
 })

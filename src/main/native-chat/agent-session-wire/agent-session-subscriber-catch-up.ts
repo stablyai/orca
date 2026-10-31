@@ -193,7 +193,10 @@ export function deliverToSubscriber(
     )
     subscriber.cursor = page.window.nextCursor
     if (!page.hasNewer || !port.isActive(subscriber)) {
-      refreshPublishedWork(delivery, subscriber, journal, work, shared)
+      // The contiguous page already carries current fields and changed submissions.
+      if (work && work.workViewKey() !== subscriber.workView) {
+        refreshPublishedWork(delivery, subscriber, journal, work, shared)
+      }
       return
     }
   }

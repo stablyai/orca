@@ -1,10 +1,10 @@
-import { useMemo } from 'react'
+import { useEffect, useMemo, type ReactElement } from 'react'
 import {
   ActivityIndicator,
+  Animated,
   Platform,
   Pressable,
   RefreshControl,
-  SectionList,
   Text,
   View
 } from 'react-native'
@@ -13,8 +13,7 @@ import { AuthFailedBanner } from '../components/AuthFailedBanner'
 import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { MobileRepoIcon } from '../components/MobileRepoIcon'
-import { MobileSearchField } from '../components/MobileSearchField'
-import { NewWorkspaceFab, FAB_SIZE } from '../components/NewWorkspaceFab'
+import type { CollapsingTitle } from '../components/nav-bar/PageTitle'
 import { WorktreeListRow } from '../components/WorktreeListRow'
 import { colors, spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -32,10 +31,18 @@ import { HostPendingCreationRow } from './host-pending-creation-row'
 import { useSlowPendingKeys } from './use-slow-pending-keys'
 import { projectGroupHeaderIndent } from '../worktree/project-group-indent'
 import type { HostScreenController } from './use-host-screen-controller'
-import { useMobileTranslation } from '../i18n/use-mobile-translation'
 
-export function HostWorkspaceList({ controller }: { controller: HostScreenController }) {
-  const t = useMobileTranslation()
+export function HostWorkspaceList({
+  controller,
+  bottomBarHeight,
+  pageTitle
+}: {
+  controller: HostScreenController
+  /** The bottom bar floats over the list's end; rows pad by it so the last one stays reachable. */
+  bottomBarHeight: number
+  /** The host name at the top of the list, folding into the bar as it scrolls. */
+  pageTitle?: { element: ReactElement; collapsing: CollapsingTitle }
+}) {
   const colorScheme = useMobileColorScheme()
   const {
     actions,
@@ -70,6 +77,13 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       [pending]
     )
   )
+  const hasRows = sections.length > 0
+  const resetTitle = pageTitle?.collapsing.reset
+  useEffect(() => {
+    if (!hasRows) {
+      resetTitle?.()
+    }
+  }, [hasRows, resetTitle])
   const repoLookById = useMemo(() => buildRepoLookById(repoById), [repoById])
   const { worktreeCardProperties, compactWorktreeCards, newCardStyle } = state.view
   const cardDetails = useMemo(
@@ -121,22 +135,7 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
         />
       )}
 
-      {state.showSearch && (
-        <View style={styles.searchBar}>
-          <MobileSearchField
-            value={state.search}
-            onChangeText={state.setSearch}
-            placeholder={t('hostScreen.hostWorkspaceList.searchPlaceholder', 'Search workspaces…')}
-            autoFocus
-            // Remount the focus effect per open so rapid search toggles reopen the keyboard.
-            focusKey={state.showSearch}
-            accessibilityLabel={t(
-              'hostScreen.hostWorkspaceList.searchWorkspaces',
-              'Search workspaces'
-            )}
-          />
-        </View>
-      )}
+      {hasRows ? null : pageTitle?.element}
 
       {controller.feed?.kind === 'reopen' ? (
         <HostWorkspaceListReopen aboveRows={sections.length > 0} />
@@ -158,8 +157,12 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
       )}
 
       {sections.length > 0 && (
-        <SectionList
+        <Animated.SectionList
           ref={activeWorktreeScroll.sectionListRef}
+          ListHeaderComponent={pageTitle?.element}
+          onScroll={pageTitle?.collapsing.onScroll}
+          {...pageTitle?.collapsing.touchHandlers}
+          scrollEventThrottle={16}
           sections={sections}
           extraData={colorScheme}
           keyExtractor={(w) => w.sectionListKey ?? getWorktreeRowIdentity(w)}
@@ -169,11 +172,10 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
           // React Native Web dismisses on-drag for any scroll, including one caused by narrowing search.
           keyboardDismissMode={Platform.OS === 'web' ? 'none' : 'on-drag'}
           onScrollToIndexFailed={activeWorktreeScroll.onScrollToIndexFailed}
-          // Keep the final row above the system navigation bar in edge-to-edge layouts.
           contentContainerStyle={[
             styles.list,
-            // Reserve room so the last row stays tappable above the phone's floating "+" (embedded uses the toolbar +).
-            { paddingBottom: (embedded ? spacing.lg : FAB_SIZE + spacing.xl) + insets.bottom },
+            // Before the bar measures, the safe area still keeps the last row off the home indicator.
+            { paddingBottom: Math.max(bottomBarHeight, insets.bottom) + spacing.sm },
             isWideLayout &&
               !embedded && { maxWidth: contentMaxWidth, width: '100%', alignSelf: 'center' }
           ]}
@@ -271,13 +273,6 @@ export function HostWorkspaceList({ controller }: { controller: HostScreenContro
               onToggleLineage={settings.toggleWorktreeLineage}
             />
           )}
-        />
-      )}
-
-      {!embedded && (
-        <NewWorkspaceFab
-          onPress={actions.openNewWorktreeModal}
-          disabled={connState !== 'connected'}
         />
       )}
     </>

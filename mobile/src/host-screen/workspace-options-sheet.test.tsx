@@ -3,6 +3,7 @@ import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
 vi.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
   Platform: { OS: 'android' },
   Pressable: 'Pressable',
   StyleSheet: { create: <T,>(styles: T) => styles, hairlineWidth: 1 },
@@ -12,8 +13,10 @@ vi.mock('react-native', () => ({
 }))
 vi.mock('lucide-react-native', () => ({
   Check: 'Check',
+  ChevronDown: 'ChevronDown',
   ChevronLeft: 'ChevronLeft',
-  ChevronRight: 'ChevronRight'
+  ChevronRight: 'ChevronRight',
+  X: 'X'
 }))
 vi.mock('../navigation/use-back-claim', () => ({ useBackClaim: () => {} }))
 vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => false }))
@@ -33,6 +36,7 @@ vi.mock('react-native-reanimated', () => ({
 }))
 vi.mock('../components/BottomDrawer', () => ({ BottomDrawer: 'BottomDrawer' }))
 vi.mock('../components/MobileSearchField', () => ({ MobileSearchField: 'MobileSearchField' }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { INITIAL_MOBILE_VIEW } from '../worktree/workspace-view-settings'
@@ -45,7 +49,12 @@ afterEach(() => {
   renderer = null
 })
 
-type SheetOptions = { newCardStyle: boolean; hideSleeping: boolean; hasFolderRow?: boolean }
+type SheetOptions = {
+  newCardStyle: boolean
+  hideSleeping: boolean
+  hasFolderRow?: boolean
+  activeFilterCount?: number
+}
 
 function buildController(options: SheetOptions) {
   const settings = {
@@ -61,7 +70,7 @@ function buildController(options: SheetOptions) {
     pendingViewChanges: { pending: [], stale: false }
   }
   const controller = {
-    activeFilterCount: 0,
+    activeFilterCount: options.activeFilterCount ?? 0,
     projectOrderBy: 'manual',
     displayWorktrees: [],
     sectionsResult: {
@@ -92,21 +101,19 @@ function buildController(options: SheetOptions) {
   return { controller, settings }
 }
 
-function sheet(options: SheetOptions, settings?: ReturnType<typeof buildController>['settings']) {
-  const built = buildController(options)
-  const controller = settings ? { ...built.controller, settings } : built.controller
-  return createElement(WorkspaceOptionsSheet, {
-    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sheet reads only these members.
-    controller: controller as unknown as Parameters<typeof WorkspaceOptionsSheet>[0]['controller']
-  })
-}
-
 function render(options: SheetOptions) {
-  const { settings } = buildController(options)
+  const { controller, settings } = buildController(options)
   act(() => {
-    renderer = create(sheet(options, settings))
+    renderer = create(
+      createElement(WorkspaceOptionsSheet, {
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the sheet reads only these members.
+        controller: controller as unknown as Parameters<
+          typeof WorkspaceOptionsSheet
+        >[0]['controller']
+      })
+    )
   })
-  return settings
+  return { settings, state: controller.state }
 }
 
 const texts = () =>
@@ -115,11 +122,14 @@ const texts = () =>
     .map((node) => node.props.children)
     .filter((child): child is string => typeof child === 'string')
 
+const pressable = (label: string) =>
+  renderer!.root.find(
+    (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === label
+  )
+
 const press = (label: string) => {
   act(() => {
-    renderer!.root
-      .find((node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === label)
-      .props.onPress()
+    pressable(label).props.onPress()
   })
 }
 
@@ -154,7 +164,7 @@ describe('the phone Workspace options sheet', () => {
   })
 
   it('opens an option page from its row, stays there after a pick, and goes back', () => {
-    const settings = render({ newCardStyle: false, hideSleeping: false })
+    const { settings } = render({ newCardStyle: false, hideSleeping: false })
     expect(texts()).toContain('Card layout')
     expect(texts()).toContain('Show properties')
     expect(texts()).not.toContain('Card display')
@@ -168,7 +178,7 @@ describe('the phone Workspace options sheet', () => {
   })
 
   it('writes each control to the shared value it names', () => {
-    const settings = render({ newCardStyle: false, hideSleeping: true })
+    const { settings } = render({ newCardStyle: false, hideSleeping: true })
     expect(texts()).toContain('Except default branch')
     flip('Hide CLI-created', true)
     expect(settings.setFilter).toHaveBeenCalledWith('hideCliCreatedWorkspaces', true)
@@ -197,5 +207,24 @@ describe('the phone Workspace options sheet', () => {
     expect(settings.toggleCardProperty).not.toHaveBeenCalledWith('ports')
     press('Full list')
     expect(settings.setAgentActivityDisplayMode).toHaveBeenCalledWith('full')
+  })
+  it('resets filters only when some are active, and Done closes from the main sheet or a page', () => {
+    const { settings, state } = render({
+      newCardStyle: false,
+      hideSleeping: false,
+      activeFilterCount: 2
+    })
+    expect(texts()).toContain('Synced across your devices')
+    press('Reset')
+    expect(settings.clearFilters).toHaveBeenCalledTimes(1)
+    press('Sort by, Agent Activity')
+    const pageDone = renderer!.root.findAll(
+      (node) => String(node.type) === 'Pressable' && node.props.accessibilityLabel === 'Done'
+    )
+    act(() => pageDone.at(-1)?.props.onPress())
+    expect(state.setShowWorkspaceOptions).toHaveBeenCalledWith(false)
+    act(() => renderer?.unmount())
+    render({ newCardStyle: false, hideSleeping: false })
+    expect(pressable('Reset').props.disabled).toBe(true)
   })
 })

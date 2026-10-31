@@ -4,7 +4,7 @@ import {
   normalizeComputerAwakeMode
 } from '../../../../shared/computer-awake-mode'
 import { normalizeTerminalCursorStyleDefault } from '../../../../shared/terminal-cursor-style-settings'
-import { mergeSettings } from './web-preference-normalization'
+import { mergeSettings, stripRetiredWebChatSettings } from './web-preference-normalization'
 import {
   getRuntimeBackedStoredSettings,
   getStoredSettings,
@@ -21,14 +21,16 @@ import {
 } from './web-runtime-session'
 import { noopUnsubscribe } from './web-storage'
 
-export function createWebSettingsApi(): Partial<PreloadApi> {
+export function createWebSettingsApi(): Pick<Partial<PreloadApi>, 'agentAwake'> & {
+  settings: Partial<WebSettingsApi>
+} {
   return {
     settings: {
       get: async () => getRuntimeBackedStoredSettings(),
       // Why: localStorage-backed settings are synchronous, so the pre-hydration kill-switch read works the same as desktop.
       getSync: () => settingsForActiveVisibilityOwner(getStoredSettings()),
       set: async (updates) => {
-        const sanitizedUpdates = { ...updates }
+        const sanitizedUpdates = stripRetiredWebChatSettings(updates)
         const runtimeEnvironment = requireActiveEnvironmentOrNull()
         delete sanitizedUpdates.activeRuntimeEnvironmentId
         if (
@@ -82,9 +84,7 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
           preserveAutoRenameBranchFromWorkUpdate: 'autoRenameBranchFromWork' in sanitizedUpdates
         })
         writeStoredSettings(next)
-        return settingsForActiveVisibilityOwner(
-          await syncRuntimeBackedSettings(sanitizedUpdates, next)
-        )
+        return settingsForActiveVisibilityOwner(await syncRuntimeBackedSettings(sanitizedUpdates))
       },
       setActiveRuntimeEnvironmentPreference: async ({ environmentId }) => {
         const requestedEnvironmentId = environmentId?.trim() || null
@@ -100,7 +100,7 @@ export function createWebSettingsApi(): Partial<PreloadApi> {
       updatePRBotAuthorOverride: (args) => updateRuntimePRBotAuthorOverride(args),
       listFonts: () => Promise.resolve([]),
       onChanged: () => noopUnsubscribe
-    } satisfies Partial<WebSettingsApi> as unknown as WebSettingsApi,
+    },
     agentAwake: {
       getStatus: async () => {
         const settings = getStoredSettings()

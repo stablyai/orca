@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
-import { Alert, Pressable, Text, View } from 'react-native'
+import { Alert, View } from 'react-native'
 import { SafeAreaView, useSafeAreaFrame } from 'react-native-safe-area-context'
 import { ChevronLeft, Save } from 'lucide-react-native'
 import { translate } from '../i18n/mobile-i18n'
@@ -7,7 +7,7 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useWorkspaceExecutionHost } from '../navigation/workspace-execution-host'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { getWorktreeLabel } from '../session/worktree-label'
-import { colors, spacing } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useForceReconnect } from '../transport/host-client-hooks'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
@@ -20,7 +20,13 @@ import {
   type MobileFilePreviewResult
 } from './mobile-file-preview-request'
 import { ConfirmModal } from '../components/ConfirmModal'
+import { NavBar } from '../components/nav-bar/NavBar'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import { MobileFilePreviewBody } from './MobileFilePreviewBody'
+import {
+  MobileMarkdownPreviewModeBar,
+  useMarkdownPreviewMode
+} from './MobileMarkdownPreviewModeBar'
 import {
   displayNameFromPreviewPath,
   type MobileFilePreviewRouteState
@@ -236,9 +242,7 @@ function MobileFilePreviewDocument({ route }: Props) {
     previewParams?.worktreeName,
     previewParams?.worktreeId ?? ''
   )
-  const meta = previewParams
-    ? `${worktreeLabel} - ${displayPath}`
-    : t('files.filePreviewScreen.title', 'Preview')
+  const [markdownMode, setMarkdownMode] = useMarkdownPreviewMode(displayPath, lineColumn?.line)
   const isEditableTerminalArtifact =
     previewSource?.source === 'terminalArtifact' &&
     isEditableMobileTerminalArtifactPreview(preview, previewSource.readOnly === true)
@@ -313,38 +317,43 @@ function MobileFilePreviewDocument({ route }: Props) {
   return (
     <View style={styles.container}>
       <SafeAreaView style={styles.header} edges={['top']}>
-        <View style={styles.topBar}>
-          <Pressable
-            style={({ pressed }) => [styles.backButton, pressed && styles.backButtonPressed]}
-            onPress={requestBack}
-            hitSlop={8}
-            accessibilityRole="button"
-            accessibilityLabel={t('files.filePreviewScreen.backToFiles', 'Back to files')}
-          >
-            <ChevronLeft size={22} color={colors.textSecondary} strokeWidth={2.2} />
-          </Pressable>
-          <View style={styles.titleBlock}>
-            <Text style={styles.title} numberOfLines={1}>
-              {title || t('files.filePreviewScreen.title', 'Preview')}
-            </Text>
-            <Text style={styles.meta} numberOfLines={1}>
-              {meta}
-            </Text>
-          </View>
-          {isEditableTerminalArtifact ? (
-            <Pressable
-              style={[styles.saveButton, (!canSaveArtifact || saving) && styles.saveButtonDisabled]}
-              onPress={() => void saveArtifact()}
-              disabled={!canSaveArtifact || saving}
-              accessibilityLabel={t(
-                'files.filePreviewScreen.saveArtifact',
-                'Save terminal artifact'
-              )}
-            >
-              <Save size={18} color={colors.textPrimary} strokeWidth={2.2} />
-            </Pressable>
-          ) : null}
-        </View>
+        <NavBar
+          leading={
+            <NavBarButton
+              icon={ChevronLeft}
+              onPress={requestBack}
+              accessibilityLabel={t('files.filePreviewScreen.backToFiles', 'Back to files')}
+            />
+          }
+          title={title || t('files.filePreviewScreen.title', 'Preview')}
+          subtitle={previewParams ? worktreeLabel : undefined}
+          trailing={
+            isEditableTerminalArtifact ? (
+              <NavBarButton
+                icon={Save}
+                onPress={() => void saveArtifact()}
+                disabled={!canSaveArtifact || saving}
+                accessibilityLabel={t(
+                  'files.filePreviewScreen.saveArtifact',
+                  'Save terminal artifact'
+                )}
+              />
+            ) : null
+          }
+          accessory={
+            preview.status === 'ready' &&
+            preview.kind === 'markdown' &&
+            !isEditableTerminalArtifact ? (
+              <MobileMarkdownPreviewModeBar
+                mode={markdownMode}
+                onModeChange={setMarkdownMode}
+                relativePath={displayPath}
+                content={preview.content}
+                truncated={preview.truncated}
+              />
+            ) : null
+          }
+        />
       </SafeAreaView>
       <MobileFilePreviewBody
         preview={preview}
@@ -353,6 +362,7 @@ function MobileFilePreviewDocument({ route }: Props) {
         relativePath={displayPath}
         title={title || t('files.filePreviewScreen.fileTitle', 'File')}
         editable={isEditableTerminalArtifact}
+        markdownMode={markdownMode}
         draftContent={draftContent}
         saveError={saveError}
         lineColumn={lineColumn}

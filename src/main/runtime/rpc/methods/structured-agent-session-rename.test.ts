@@ -68,7 +68,7 @@ it.each([10, 100])('filters cold naming notes with linear work for %i healthy ro
   const rawRows = database.db
     .prepare('SELECT session_id, record_json FROM agent_session_records ORDER BY session_id')
     .all()
-  closeTestJournalHostDatabase(rig.root)
+  await closeTestJournalHostDatabase(rig.root)
   const store = await openTestAgentSessionRecordStore(rig.root)
   const reopened = openTestJournalHostDatabase(rig.root)
   const host = new StructuredAgentSessionHost({

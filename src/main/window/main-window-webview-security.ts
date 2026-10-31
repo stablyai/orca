@@ -24,6 +24,7 @@ import { registerHostFrameNavigationGuard } from './host-frame-navigation-guard'
 import { installPrivilegedWindowNavigationPolicy } from './privileged-window-navigation'
 import { parseChromeExtensionUrl } from '../../shared/browser-extension-url'
 import { getBrowserExtensionSessionForProfile } from '../browser/extensions/browser-extension-session-loader'
+import { installBrowserJavaScriptDialogs } from '../browser/browser-javascript-dialogs'
 
 /** orca-preview is outside normal browser URL admission; require the doc partition and a main-minted user-preview grant. */
 function isAdmissibleDocPreviewAttach(partition: string, src: string): boolean {
@@ -133,6 +134,7 @@ export function installMainWindowWebviewSecurity(mainWindow: BrowserWindow): voi
     }
     // Install popup/navigation policy at creation or early redirects/target=_blank can outrun registration.
     browserManager.attachGuestPolicies(guest)
+    installBrowserJavaScriptDialogs(guest, () => browserManager.resolvePagePromptTarget(guest))
     // Route guests stay blank until exact main-owned registration and override generic popup routing.
     browserRouteWebContentsRegistry.attachGuest(guest)
     // Proxies cannot block WebRTC UDP; enforce it per WebContents.

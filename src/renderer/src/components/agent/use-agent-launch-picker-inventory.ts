@@ -60,6 +60,7 @@ export function useAgentLaunchPickerInventory(
         model.state === 'settled' ? model.detection.detectedIds : [],
         settings && {
           agentDefaultArgs: settings.agentDefaultArgs,
+          agentLaunchChoices: settings.agentLaunchChoices,
           agentPermissionDefault: settings.agentPermissionDefault,
           agentPermissionOverrides: settings.agentPermissionOverrides,
           nativeChatSessionOptions: settings.nativeChatSessionOptions,
@@ -141,8 +142,11 @@ export function useAgentLaunchPickerInventory(
                 let structuredKnown = false
                 if (usable(host)) {
                   const permission = host.agentPermission
+                  const choices = host.agentChoices
                   defaults = {
-                    agentDefaultArgs: permission?.userArgs ?? host.agentDefaultArgs,
+                    agentDefaultArgs:
+                      choices?.userArgs ?? permission?.userArgs ?? host.agentDefaultArgs,
+                    agentLaunchChoices: choices?.defaults ?? settings?.agentLaunchChoices,
                     ...(permission
                       ? {
                           agentPermissionDefault: permission.default,

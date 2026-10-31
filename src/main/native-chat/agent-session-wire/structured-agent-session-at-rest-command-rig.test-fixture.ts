@@ -36,7 +36,10 @@ import {
   hostTestOperationId,
   resetHostTestOperationIds
 } from './structured-agent-session-host-test-data'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../agent-session-journal/journal-host-database-test-support'
 import { claudeProviderHandle } from '../../../shared/agent-session-provider-handle-encoding'
 
 const runtimeMocks = vi.hoisted(() => ({ call: vi.fn(), subscribe: vi.fn() }))
@@ -184,6 +187,7 @@ afterEach(async () => {
   cleanup()
   renderer.resetReadOwners()
   await host.flushAllStreamedEvents()
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

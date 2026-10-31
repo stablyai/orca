@@ -1,25 +1,62 @@
-import type { TuiAgent } from '../../../shared/tui-agent'
 import { structuredAgentSessionTabId } from '../../../shared/structured-agent-session-projection'
-import { useAppStore } from '@/store'
+import { findStructuredLaunchTab } from './structured-agent-session-launch-surface'
+import {
+  deleteNativeChatComposerDraft,
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey,
+  updateNativeChatComposerDraft
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import type { NativeChatComposerDraftChange } from '@/components/native-chat/native-chat-composer-draft-store'
+import { promptTextContent } from '@/components/native-chat/native-chat-prompt-document-text'
 import type { StructuredAgentLaunchOptions } from './structured-agent-session-launch-callers'
+import type { StructuredLaunchState } from './agent-session/launch/structured-agent-session-launch-registry'
 
-/** Structured chats have no TUI mirror; the legacy forty-line cap would drop prompts instead of protecting TUI clearing. */
 export function seedStructuredAgentLaunchDraft(
-  sessionId: string,
-  agent: TuiAgent,
+  state: StructuredLaunchState,
   options: StructuredAgentLaunchOptions
 ): void {
+  if (options.draftFromScope) {
+    const source = readNativeChatComposerDraft(options.draftFromScope)
+    const { text, document, pastedTextFiles, images } = source
+    const moved =
+      (text !== '' || images.length > 0) &&
+      seedEmptyLaunchDraft(state, {
+        text,
+        images,
+        ...(document ? { document } : {}),
+        ...(pastedTextFiles ? { pastedTextFiles } : {})
+      })
+    // An occupied chat draft keeps the source, so the text is never dropped.
+    if (moved || (text === '' && images.length === 0)) {
+      deleteNativeChatComposerDraft(options.draftFromScope)
+    }
+  }
   if (options.promptDelivery !== 'draft' || !options.prompt) {
     return
   }
-  useAppStore.getState().seedNativeChatLaunchDraft({
-    tabId: structuredAgentSessionTabId(sessionId),
-    agent,
-    text: options.prompt,
-    createdAt: Date.now()
-  })
+  seedEmptyLaunchDraft(state, { text: options.prompt, document: promptTextContent(options.prompt) })
 }
 
-export function clearStructuredAgentLaunchDraft(sessionId: string): void {
-  useAppStore.getState().clearNativeChatLaunchDraft(structuredAgentSessionTabId(sessionId))
+function seedEmptyLaunchDraft(
+  state: StructuredLaunchState,
+  change: NativeChatComposerDraftChange
+): boolean {
+  const { sessionId, worktreeId, executionHostId } = state.intent
+  const scopeKey = structuredAgentSessionDraftScopeKey(sessionId)
+  const current = readNativeChatComposerDraft(scopeKey)
+  if (current.text !== '' || current.document) {
+    return false
+  }
+  updateNativeChatComposerDraft(
+    scopeKey,
+    { ...change, owner: { workspaceId: worktreeId, executionHostId } },
+    'immediate',
+    undefined,
+    {
+      at: 'end',
+      target: findStructuredLaunchTab(state.intent)?.id ?? structuredAgentSessionTabId(sessionId),
+      pending: true
+    }
+  )
+  return true
 }

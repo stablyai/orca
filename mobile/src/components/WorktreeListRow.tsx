@@ -307,7 +307,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   prNumber: {
     fontSize: 10,
@@ -319,7 +319,7 @@ const styles = themedStyleSheet(() => ({
     height: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 4,
+    borderRadius: radii.mark,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     backgroundColor: colors.bgRaised
@@ -328,7 +328,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   folderBadgeText: {
     fontSize: 10,
@@ -359,7 +359,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 5,
     paddingVertical: 1,
-    borderRadius: 4
+    borderRadius: radii.pill
   },
   childBadgeText: {
     fontSize: 10,
@@ -385,7 +385,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     paddingHorizontal: 8,
     paddingVertical: 4,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   lineageToggleText: {
     fontSize: 11,

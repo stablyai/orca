@@ -119,7 +119,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
   )
   const [showGitHubProjectPicker, setShowGitHubProjectPicker] = useState(false)
   const [showGitHubProjectViewPicker, setShowGitHubProjectViewPicker] = useState(false)
-  const [showGitHubProjectSortPicker, setShowGitHubProjectSortPicker] = useState(false)
   const [showGitHubProjectFieldsPicker, setShowGitHubProjectFieldsPicker] = useState(false)
   const [pendingGitHubProjectViewSelection, setPendingGitHubProjectViewSelection] =
     useState<GitHubProjectRef | null>(null)
@@ -273,8 +272,6 @@ export function useMobileTasksWorkspaceAndProjectState(model: RouteAndItemStateM
     setShowGitHubProjectPicker,
     showGitHubProjectViewPicker,
     setShowGitHubProjectViewPicker,
-    showGitHubProjectSortPicker,
-    setShowGitHubProjectSortPicker,
     showGitHubProjectFieldsPicker,
     setShowGitHubProjectFieldsPicker,
     pendingGitHubProjectViewSelection,

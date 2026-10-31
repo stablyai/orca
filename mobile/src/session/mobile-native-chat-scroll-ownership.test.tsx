@@ -18,6 +18,7 @@ import { MobileNativeChatScrollRootsBoundary } from './MobileNativeChatScrollRoo
 import { MobileNativeChatScrollMotion } from './mobile-native-chat-scroll-motion'
 import {
   mobileNativeChatScrollFrame,
+  mobileNativeChatScrollRootKey,
   mobileNativeChatReadingParts,
   mobileNativeChatVisible,
   MobileNativeChatScrollRoots
@@ -482,3 +483,86 @@ it("forgets a closed tool line's nested command and output positions, not its ne
   new MobileNativeChatScrollRoots(memory, 10).forget('line:a')
   expect([...memory.keys()]).toEqual(['run:o', 'run:o/line:ab:command', 'diff:src/line:a.ts'])
 })
+
+it.each([10, 100])(
+  'bounds expanded notice scroll work and releases collapsed/unmounted roots (%i notices)',
+  (count) => {
+    const draw = mount()
+    const notices = Array.from({ length: count }, (_, i) =>
+      msg(
+        `notice:${i}`,
+        [
+          {
+            type: 'text',
+            text: `Diagnostic ${i}`,
+            tone: i % 2 === 0 ? 'warning' : 'error',
+            providerFrame: {
+              provider: i % 2 === 0 ? 'codex' : 'claude',
+              kind:
+                i % 2 === 0 ? 'notification:guardianWarning' : 'message:system:permission_denied',
+              payload: { head: '{}', byteLength: 2, digest: 'synthetic', truncated: false }
+            }
+          }
+        ],
+        'system'
+      )
+    )
+    const register = vi.spyOn(MobileNativeChatScrollRoots.prototype, 'register')
+    draw(notices)
+    expect(register).not.toHaveBeenCalled()
+    const observer = { observe: vi.fn(), unobserve: vi.fn(), disconnect: vi.fn() }
+    roots.observeWith(observer)
+    const toggles = Array.from(container.querySelectorAll('div')).filter(
+      (node) => node.childElementCount === 0 && node.textContent?.includes('View details.')
+    )
+    expect(toggles).toHaveLength(count)
+    act(() => toggles.forEach((toggle) => toggle.click()))
+    expect(register).toHaveBeenCalledTimes(count)
+    expect(observer.observe).toHaveBeenCalledTimes(2 * count)
+    const viewports = Array.from(container.querySelectorAll<HTMLElement>('[data-chat-scroll-root]'))
+    expect(viewports).toHaveLength(count)
+    const ids = viewports.map((node) => mobileNativeChatScrollRootKey(node)!)
+    expect(new Set(ids).size).toBe(count)
+    draw([...notices])
+    viewports.forEach((node) => reader(node, 35))
+    act(() => vi.advanceTimersByTime(160))
+
+    const memoryWrites = vi.spyOn(store.runScroll, 'set')
+    const queries = vi.spyOn(Element.prototype, 'querySelectorAll')
+    const geometry = vi.spyOn(Element.prototype, 'getBoundingClientRect')
+    const capture = vi.spyOn(roots, 'capture')
+    const restore = vi.spyOn(roots, 'restoreAll')
+    register.mockClear()
+    draw([...notices])
+    expect(capture).toHaveBeenCalledOnce()
+    expect(restore).toHaveBeenCalledOnce()
+    expect(memoryWrites).toHaveBeenCalledTimes(2 * count)
+    expect(queries.mock.calls.length).toBeLessThanOrEqual(12 * count)
+    expect(geometry.mock.calls.length).toBeLessThanOrEqual(8 * count)
+    expect(register.mock.calls.length).toBeLessThanOrEqual(count)
+    expect(observer.observe).toHaveBeenCalledTimes(2 * count)
+    expect(viewports.map((node) => node.scrollTop)).toEqual(Array(count).fill(35))
+
+    act(() => toggles.slice(0, count / 2).forEach((toggle) => toggle.click()))
+    expect(observer.unobserve).toHaveBeenCalledTimes(count)
+    ids.forEach((id, i) => expect(roots.frame(id)).toBe(i < count / 2 ? undefined : viewports[i]))
+    draw(notices, { shown: false })
+    expect(observer.unobserve).toHaveBeenCalledTimes(2 * count)
+    for (const node of viewports) {
+      expect(node.hasAttribute('data-chat-scroll-root')).toBe(false)
+      expect(mobileNativeChatScrollRootKey(node)).toBeUndefined()
+      expect(observer.unobserve).toHaveBeenCalledWith(node)
+      expect(observer.unobserve).toHaveBeenCalledWith(node.firstElementChild)
+    }
+    ids.forEach((id) => expect(roots.frame(id)).toBeUndefined())
+    memoryWrites.mockClear()
+    queries.mockClear()
+    geometry.mockClear()
+    roots.capture(new Set(), false)
+    roots.restoreAll()
+    viewports.forEach((node) => reader(node, 50))
+    expect(memoryWrites).not.toHaveBeenCalled()
+    expect(queries).not.toHaveBeenCalled()
+    expect(geometry).not.toHaveBeenCalled()
+  }
+)

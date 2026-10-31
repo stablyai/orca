@@ -224,6 +224,8 @@ vi.mock('lucide-react-native', () => ({
 }))
 vi.mock('expo-router', () => ({ useFocusEffect: () => {} }))
 vi.mock('./CustomKeyModal', () => ({ CustomKeyModal: () => null }))
+vi.mock('./MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
+vi.mock('../layout/use-shell-side-rail', () => ({ useDirectionPadAvailable: () => false }))
 vi.mock('@react-native-async-storage/async-storage', () => ({
   default: { getItem: async () => null, setItem: async () => {} }
 }))

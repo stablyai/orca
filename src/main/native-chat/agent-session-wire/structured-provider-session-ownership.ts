@@ -12,6 +12,7 @@ import {
 } from '../structured-conversation-key'
 
 export type StructuredProviderSessionOwnership = {
+  wslDistro: string | null
   sessionId: string
   workspaceId: string
   provider: StructuredAgentId
@@ -38,6 +39,7 @@ export function listStructuredProviderSessionOwnership(
             ? [
                 {
                   sessionId: record.sessionId,
+                  wslDistro: record.location.wslDistro,
                   workspaceId: record.location.workspaceId,
                   provider: record.provider,
                   providerSessionId: history.rowSessionId(link),

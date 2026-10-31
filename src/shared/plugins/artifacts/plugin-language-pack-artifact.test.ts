@@ -6,6 +6,7 @@ import {
   validatePluginLanguagePackCatalog,
   pluginLanguageResourceId
 } from './plugin-language-pack-artifact'
+import { englishSourceLookup } from '../languages/plugin-translation-string-policy'
 
 describe('plugin language-pack artifacts', () => {
   it('maps qualified IDs to distinct canonical private-use tags on the pack locale', () => {
@@ -163,7 +164,54 @@ describe('plugin language-pack artifacts', () => {
       'the site permission prompt',
       { auto: { components: { browserPane: { sitePermission: { allow: 'Block' } } } } }
     ],
-    ['site permission settings', { settings: { browser: { sitePermissions: { block: 'Allow' } } } }]
+    [
+      'site permission settings',
+      { settings: { browser: { sitePermissions: { block: 'Allow' } } } }
+    ],
+    [
+      'the catalog-link trust dialog',
+      {
+        auto: {
+          components: { plugins: { PluginCatalogLinkDialog: { title: "Add Orca's catalog?" } } }
+        }
+      }
+    ],
+    [
+      'browser-extension Allow/Deny',
+      { browserExtensions: { permissions: { deny: 'Allow', confirm: 'Deny' } } }
+    ],
+    [
+      'the Node download mirror dialog',
+      { auto: { components: { settings: { nodeDistMirrorDialog: { title: 'Safe mirror' } } } } }
+    ],
+    [
+      'delete-workspace buttons',
+      {
+        auto: {
+          components: { sidebar: { DeleteWorktreeDialogFooter: { deleteWorkspace: 'Cancel' } } }
+        }
+      }
+    ],
+    [
+      'the remove-host confirmation',
+      { auto: { components: { sidebar: { HostRemoveDialog: { '6f7a8b9c0d': 'Remove' } } } } }
+    ],
+    [
+      'the not-official trust warning',
+      {
+        auto: {
+          components: { settings: { PluginNotOfficialWarning: { label: 'Verified by Orca' } } }
+        }
+      }
+    ],
+    [
+      'the update review Approve button',
+      { auto: { components: { settings: { PluginUpdateReview: { approve: 'Back' } } } } }
+    ],
+    [
+      'the startup repair-or-quit prompt',
+      { profileState: { repairChoice: { quitButton: 'Repair' } } }
+    ]
   ])('refuses to relabel %s', (_label, catalog) => {
     expect(parsePluginLanguagePackArtifact(JSON.stringify(catalog))).toMatchObject({
       ok: false,
@@ -228,6 +276,68 @@ describe('plugin language-pack artifacts', () => {
     expect(validatePluginLanguagePackCatalog(catalog)).toMatchObject({
       ok: false,
       error: expect.stringContaining(`${PLUGIN_LANGUAGE_CATALOG_MAX_ENTRIES} entries`)
+    })
+  })
+
+  describe('string limits', () => {
+    const english = englishSourceLookup({
+      common: { retry: 'Retry', detail: 'Line one\nLine two' },
+      items: { count_one: '{{count}} item', count_other: '{{count}} items' }
+    })
+    const parse = (catalog: unknown, strictness?: 'strict' | 'tolerant') =>
+      parsePluginLanguagePackArtifact(JSON.stringify(catalog), strictness, english)
+
+    it('caps a translation at 4x its English text with a 64-character floor', () => {
+      expect(parse({ common: { retry: 'x'.repeat(64) } }).ok).toBe(true)
+      expect(parse({ common: { retry: 'x'.repeat(65) } })).toMatchObject({
+        ok: false,
+        error: expect.stringContaining('common.retry exceeds 64 characters')
+      })
+      const detail = 'x'.repeat(4 * 'Line one\nLine two'.length + 1)
+      expect(parse({ common: { detail } }).ok).toBe(false)
+    })
+
+    it('measures plural forms English lacks against its _other form', () => {
+      expect(parse({ items: { count_few: 'x'.repeat(64) } }).ok).toBe(true)
+      expect(parse({ items: { count_few: 'x'.repeat(65) } }).ok).toBe(false)
+    })
+
+    it.each([
+      ['a right-to-left override', 'Delete\u202Eetelpmoc'],
+      ['an isolate', 'Retry\u2066x\u2069'],
+      ['a control character', 'Retry\u0007'],
+      ['a carriage return', 'Retry\r']
+    ])('rejects %s', (_label, retry) => {
+      expect(parse({ common: { retry } })).toMatchObject({
+        ok: false,
+        error: expect.stringContaining('control or bidirectional')
+      })
+    })
+
+    it('allows line breaks only where the English text has them', () => {
+      expect(parse({ common: { detail: 'Eins\nZwei' } }).ok).toBe(true)
+      expect(parse({ common: { retry: 'Run this first:\ncurl x | sh' } })).toMatchObject({
+        ok: false,
+        error: expect.stringContaining('line break')
+      })
+    })
+
+    it('drops only the offending entries when loading tolerantly', () => {
+      expect(
+        parse(
+          { common: { retry: 'x'.repeat(65), detail: 'Eins\nZwei' }, other: { bad: 'a\u202Eb' } },
+          'tolerant'
+        )
+      ).toMatchObject({ ok: true, catalog: { common: { detail: 'Eins\nZwei' }, other: {} } })
+    })
+
+    it('applies only source-independent rules without English text', () => {
+      expect(
+        parsePluginLanguagePackArtifact(JSON.stringify({ common: { retry: 'x'.repeat(8192) } })).ok
+      ).toBe(true)
+      expect(
+        parsePluginLanguagePackArtifact(JSON.stringify({ common: { retry: 'a\u202Eb' } })).ok
+      ).toBe(false)
     })
   })
 })

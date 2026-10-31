@@ -714,7 +714,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
       { tabId: 'reserved-worker', sessionId: SESSION_Y }
     ]
   })
-  closeTestJournalHostDatabase(directory)
+  await closeTestJournalHostDatabase(directory)
   const path = join(directory, 'orchestration.sqlite')
   let db = new OrchestrationDb(path)
   let opened = false
@@ -771,7 +771,7 @@ it('reads reopened/backfilled assignments and committed clear facts from the alr
     }
   } finally {
     if (opened) {
-      ;(await releaseAgentSessionRecordStore())?.journalDatabase.close()
+      await (await releaseAgentSessionRecordStore())?.journalDatabase.close()
     }
     db.close()
     rmSync(directory, { recursive: true, force: true })

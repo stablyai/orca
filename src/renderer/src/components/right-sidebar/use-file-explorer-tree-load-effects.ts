@@ -5,7 +5,7 @@ import { shouldResetFileExplorerForVisibleWorktree } from './file-explorer-reset
 import { decideExpandedDirLoad } from './file-explorer-stale-dir-cache'
 import { clearFileExplorerUndoHistory } from './fileExplorerUndoRedo'
 import type { DirCache } from './file-explorer-types'
-import { splitPathSegments } from './path-tree'
+import { splitPathSegments } from '../../../../shared/cross-platform-path'
 import { takeRecentWorkspaceSwitchWake } from '@/lib/workspace-switch-user-act'
 
 type UseFileExplorerTreeLoadEffectsParams = {

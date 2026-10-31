@@ -278,6 +278,18 @@ export function getLatestDispatchForTerminal(
     | undefined
 }
 
+/** Helpers this Dispatch started that have not settled; their reports wake their creator. */
+export function hasOpenHelperDispatch(this: OrchestrationDb, dispatchId: string): boolean {
+  return (
+    this.db
+      .prepare(
+        `SELECT 1 FROM dispatch_contexts
+         WHERE creator_dispatch_id = ? AND status IN ('pending', 'dispatched') LIMIT 1`
+      )
+      .get(dispatchId) !== undefined
+  )
+}
+
 export type DispatchLookupMethods = {
   getActiveDispatchForTerminal: typeof getActiveDispatchForTerminal
   hasAnyDispatchContexts: typeof hasAnyDispatchContexts
@@ -287,6 +299,7 @@ export type DispatchLookupMethods = {
   findActiveDispatchForAssignee: typeof findActiveDispatchForAssignee
   listSessionDispatchesForPresentation: typeof listSessionDispatchesForPresentation
   getLatestDispatchForTerminal: typeof getLatestDispatchForTerminal
+  hasOpenHelperDispatch: typeof hasOpenHelperDispatch
 }
 
 export function attachDispatchLookup(ctor: { prototype: object }): void {
@@ -298,6 +311,7 @@ export function attachDispatchLookup(ctor: { prototype: object }): void {
     isDispatchMessageSender,
     findActiveDispatchForAssignee,
     getLatestDispatchForTerminal,
+    hasOpenHelperDispatch,
     listSessionDispatchesForPresentation
   })
 }

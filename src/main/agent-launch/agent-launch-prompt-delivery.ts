@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { randomUUID } from 'node:crypto'
 import { createStructuredAgentSessionOperationId } from '../../shared/structured-agent-session-mutation'
 import { structuredAgentSessionSendBody } from '../../shared/structured-agent-session-send-mutation'
@@ -66,14 +67,20 @@ export async function settleLaunchPromptDisposal(
   if (created.promptRodeLaunchCommand) {
     return HANDED_TO_TERMINAL
   }
-  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, { freshLaunch: true })
+  return deliverTerminalLaunchPrompt(execution, created.outcome.handle, {
+    freshLaunch: true,
+    terminalCreation: created.terminalCreation
+  })
 }
 
 /** PTY writes prove handoff, not consumption; drafts remain undelivered because acceptance is unobservable. */
 export async function deliverTerminalLaunchPrompt(
   execution: AgentLaunchSurfaceExecution,
   handle: string,
-  { freshLaunch }: { freshLaunch: boolean }
+  {
+    freshLaunch,
+    terminalCreation
+  }: { freshLaunch: boolean; terminalCreation?: RuntimeTerminalCreate }
 ): Promise<AgentLaunchPromptDisposal> {
   const { intent, surfaces, signal } = execution
   if (!intent.prompt || intent.prompt.delivery !== 'submit' || signal?.aborted) {
@@ -83,6 +90,7 @@ export async function deliverTerminalLaunchPrompt(
     handle,
     agent: intent.agent,
     freshLaunch,
+    terminalCreation,
     prompt: intent.prompt,
     ...(signal ? { signal } : {})
   })

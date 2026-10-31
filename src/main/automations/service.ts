@@ -1,6 +1,7 @@
 import {
   AutomationDispatchCancelledError,
   requestAutomationDispatch,
+  runAutomationRequestPrecheck,
   type AutomationRendererChannel
 } from './automation-dispatch-request'
 export type { AutomationRendererChannel } from './automation-dispatch-request'
@@ -14,7 +15,6 @@ import {
 } from '../../shared/automations-types'
 import type { ClaudeUsageStore } from '../claude-usage/store'
 import type { CodexUsageStore } from '../codex-usage/store'
-import { failedPrecheckResult, runAutomationPrecheck } from './precheck-runner'
 import {
   captureLegacyRunTarget,
   resolveAutomationRunTarget,
@@ -57,6 +57,7 @@ export class AutomationService {
   private readonly codexUsage: CodexUsageStore | null
   private readonly allowRemoteHostScheduling: boolean
   private readonly headlessDispatcher: HeadlessAutomationDispatcher | null
+  private readonly chatDispatcher: HeadlessAutomationDispatcher | null
   private readonly automationLanes = new Map<string, Promise<void>>()
   /** Close unused completed terminals on headless hosts; return the count. */
   releaseFinishedRunTerminals: (() => Promise<number>) | null = null
@@ -74,6 +75,7 @@ export class AutomationService {
       codexUsage?: CodexUsageStore
       allowRemoteHostScheduling?: boolean
       headlessDispatcher?: HeadlessAutomationDispatcher
+      chatDispatcher?: HeadlessAutomationDispatcher
       terminalObserver?: AutomationRunTerminalObserver
       onAutomationsChanged?: PublishAutomationsChanged
     } = {}
@@ -84,6 +86,7 @@ export class AutomationService {
     this.codexUsage = opts.codexUsage ?? null
     this.allowRemoteHostScheduling = opts.allowRemoteHostScheduling ?? false
     this.headlessDispatcher = opts.headlessDispatcher ?? null
+    this.chatDispatcher = opts.chatDispatcher ?? null
     this.publish = opts.onAutomationsChanged ?? null
     this.runs = createAutomationRunWriter(store, this.publish)
     this.completionWatcher = opts.terminalObserver
@@ -166,28 +169,9 @@ export class AutomationService {
   }
 
   async runPrecheck(automationId: string, runId: string): Promise<AutomationPrecheckResult | null> {
-    const automation = this.store.listAutomations().find((entry) => entry.id === automationId)
-    if (!automation) {
-      throw new Error('Automation not found.')
-    }
-    const run = this.store.listAutomationRuns(automationId).find((entry) => entry.id === runId)
-    if (!run) {
-      throw new Error('Automation run not found.')
-    }
-    if (run.trigger !== 'scheduled' || !automation.precheck) {
-      return null
-    }
-    const target = this.resolveTarget(automation)
-    if (!target.ok) {
-      return failedPrecheckResult(automation.precheck, Date.now(), target.error)
-    }
-    return await runAutomationPrecheck({
-      precheck: automation.precheck,
-      target:
-        automation.executionTargetType === 'ssh'
-          ? { type: 'ssh', cwd: target.cwd, connectionId: automation.executionTargetId }
-          : { type: 'local', cwd: target.cwd }
-    })
+    return runAutomationRequestPrecheck(this.store, automationId, runId, (automation) =>
+      this.resolveTarget(automation)
+    )
   }
 
   async markDispatchResult(result: AutomationDispatchResult): Promise<AutomationRun> {
@@ -314,6 +298,10 @@ export class AutomationService {
           isActive: () => !this.stopped && generation === this.dispatchGeneration,
           getRenderer: () => (this.canDispatchToRenderer() ? this.webContents : null),
           headlessDispatcher: this.headlessDispatcher,
+          chatDispatcher:
+            this.allowRemoteHostScheduling || this.canDispatchToRenderer()
+              ? this.chatDispatcher
+              : null,
           resolveTarget: (current) => this.resolveTarget(current),
           runPrecheck: () => this.runPrecheck(automation.id, run.id),
           markDispatchResult: (result) => this.markDispatchResult(result),

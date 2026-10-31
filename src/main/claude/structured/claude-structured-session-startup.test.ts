@@ -11,16 +11,44 @@ import type { ClaudeStructuredSessionEvent } from './claude-structured-session-s
 import { CLAUDE_INITIALIZE_TIMEOUT_MS } from './claude-structured-session-startup'
 import { providerRequestTimeoutOf } from '../../provider-process/provider-request-timeout'
 
+const owned: {
+  claude: ReturnType<typeof fakeClaude>
+  adapter: ReturnType<typeof adapterAtPublishFor>
+  opens: Promise<unknown>[]
+}[] = []
+
 const ACQUIRE = { identity: identityFor(), fence: 7, spawnToken: 'spawn-9' }
 
 function adapterFor(claude: ReturnType<typeof fakeClaude>) {
   const events: ClaudeStructuredSessionEvent[] = []
-  return { adapter: adapterAtPublishFor(claude, {}, events), events }
+  const adapter = adapterAtPublishFor(claude, {}, events)
+  const opens: Promise<unknown>[] = []
+  owned.push({ claude, adapter, opens })
+  const open = adapter.open.bind(adapter)
+  adapter.open = (request) => {
+    const result = open(request)
+    void result.catch(() => {})
+    opens.push(result)
+    return result
+  }
+  return { adapter, events }
 }
 
 describe('Claude host-awaited open', () => {
   beforeEach(() => vi.useFakeTimers())
-  afterEach(() => vi.useRealTimers())
+  afterEach(async () => {
+    try {
+      for (const { claude } of owned) {
+        claude.dispose()
+      }
+      for (const { adapter, opens } of owned.splice(0)) {
+        await Promise.allSettled(opens)
+        await adapter.closeAll()
+      }
+    } finally {
+      vi.useRealTimers()
+    }
+  })
 
   // SDK-typed shape; ordering constructed
   it.each([
@@ -140,18 +168,22 @@ describe('Claude host-awaited open', () => {
     })
     const claude = fakeClaude({ settings })
     const { adapter, events } = adapterFor(claude)
-    await adapter.acquire(ACQUIRE)
-    const opened = await claudeOpened(adapter, 'session-1')
-    expect(opened.reportedOptions).toBeDefined()
-    expect(claude.connections[0].calls.map((call) => call.subtype)).toContain('get_settings')
-    expect(events.some((event) => event.type === 'options-reported')).toBe(false)
-    answerSettings({ applied: { model: 'claude-haiku-4-5' }, effective: {} })
-    await vi.waitFor(() =>
-      expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
-        reportedOptions: { model: 'claude-haiku-4-5' }
-      })
-    )
-    await adapter.closeAll()
+    try {
+      await adapter.acquire(ACQUIRE)
+      const opened = await claudeOpened(adapter, 'session-1')
+      expect(opened.reportedOptions).toBeDefined()
+      expect(claude.connections[0].calls.map((call) => call.subtype)).toContain('get_settings')
+      expect(events.some((event) => event.type === 'options-reported')).toBe(false)
+      answerSettings({ applied: { model: 'claude-haiku-4-5' }, effective: {} })
+      await vi.waitFor(() =>
+        expect(events.find((event) => event.type === 'options-reported')).toMatchObject({
+          reportedOptions: { model: 'claude-haiku-4-5' }
+        })
+      )
+      await adapter.closeAll()
+    } finally {
+      answerSettings({})
+    }
   })
 
   it('applies a Fast choice at message input when launch settings cannot carry it', async () => {

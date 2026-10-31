@@ -60,10 +60,14 @@ export function fakeCodexAppServer(routes: Record<string, CodexTestRoute> = {}):
       calls: [],
       pid: 4321,
       closed: false,
-      request: async (method, params) => {
+      request: async (method, params, options) => {
         connection.calls.push({ method, params })
         const route = routes[method] ?? (method === 'turn/steer' ? refuseUnroutedSteer : undefined)
-        return route?.(params) ?? {}
+        const routed = route?.(params) ?? {}
+        const result = routed instanceof Promise ? await routed : routed
+        // The real dispatcher runs onReply at receipt, before the caller's continuation.
+        options?.onReply?.(result)
+        return result
       },
       notify: () => {},
       respond: () => {},

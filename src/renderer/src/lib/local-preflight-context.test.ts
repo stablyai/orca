@@ -96,6 +96,22 @@ describe('local preflight context', () => {
     expect(localPreflightContextKey(first)).toBe('wsl:Ubuntu')
   })
 
+  it('retains duplicate-row refusal and refreshes the repo index when the slice changes', () => {
+    const state = makeState({
+      repoPath: '/repo',
+      worktreePath: String.raw`\\wsl.localhost\Ubuntu\home\alice\repo`,
+      worktree: { hostId: 'local' }
+    })
+    const repo = state.repos[0]!
+    expect(getLocalPreflightContext(state, 'darwin')).toEqual({ wslDistro: 'Ubuntu' })
+    state.repos = [repo, { ...repo, path: '/other-copy' }]
+    expect(getLocalPreflightContext(state, 'darwin')).toBeUndefined()
+    state.repos = [repo, { ...repo, executionHostId: 'runtime:other' }]
+    expect(getLocalPreflightContext(state, 'darwin')).toEqual({ wslDistro: 'Ubuntu' })
+    state.repos = []
+    expect(getLocalPreflightContext(state, 'darwin')).toBeUndefined()
+  })
+
   it('reuses the same WSL snapshot across equivalent active repo and worktree paths', () => {
     const fromRepo = getLocalPreflightContext(
       makeState({

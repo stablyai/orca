@@ -58,6 +58,8 @@ type _CohortExtendedRoster =
   | 'orca_cli_feature_tip_setup_result'
   | 'cmd_j_palette_feature_tip_shown'
   | 'cmd_j_palette_feature_tip_acknowledged'
+  | 'chat_ui_feature_tip_shown'
+  | 'chat_ui_feature_tip_action'
 // Strict empty payloads infer string index signatures; exclude those from keyed rosters.
 type _KnownPayloadKeys<T> = string extends keyof T ? never : keyof T
 type _DerivedCohortExtendedEvents = {

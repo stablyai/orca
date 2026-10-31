@@ -108,6 +108,7 @@ export function resolveNativeChatInteractivePromptCard(args: {
   /** Pass the command-boundary-trimmed messages so an ask abandoned via `/clear` stays gone. */
   messages: readonly NativeChatMessage[]
   transcriptSettled: boolean
+  transcriptAsk?: AskPrompt | null
   say?: NativeChatApprovalSay
 }): InteractivePromptCard {
   const statusCard = parseInteractivePrompt(
@@ -122,7 +123,8 @@ export function resolveNativeChatInteractivePromptCard(args: {
   const prompt = resolveNativeChatAsk({
     liveAsk: statusCard?.prompt ?? null,
     messages: args.messages,
-    transcriptSettled: args.transcriptSettled
+    transcriptSettled: args.transcriptSettled,
+    transcriptAsk: args.transcriptAsk
   })
   return prompt ? { kind: 'question', prompt } : null
 }

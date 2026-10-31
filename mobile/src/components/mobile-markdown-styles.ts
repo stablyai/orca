@@ -40,7 +40,7 @@ export const styles = themedStyleSheet(() => ({
     fontSize: 12,
     color: colors.textPrimary,
     backgroundColor: colors.bgRaised,
-    borderRadius: radii.row,
+    borderRadius: radii.mark,
     paddingHorizontal: 4
   },
   inlineCodeLink: {
@@ -50,8 +50,8 @@ export const styles = themedStyleSheet(() => ({
   quote: {
     borderLeftWidth: 2,
     borderLeftColor: colors.borderSubtle,
-    borderTopRightRadius: radii.row,
-    borderBottomRightRadius: radii.row,
+    borderTopRightRadius: radii.surface,
+    borderBottomRightRadius: radii.surface,
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
@@ -66,7 +66,7 @@ export const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   codeHeader: {
@@ -107,7 +107,7 @@ export const styles = themedStyleSheet(() => ({
   imageFrame: {
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgRaised,
     overflow: 'hidden',
     padding: spacing.sm
@@ -126,7 +126,7 @@ export const styles = themedStyleSheet(() => ({
     borderTopWidth: 1,
     borderLeftWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.input,
+    borderRadius: radii.surface,
     overflow: 'hidden',
     backgroundColor: colors.bgPanel
   },

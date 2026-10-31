@@ -8,6 +8,7 @@ import type {
 import type { SessionOptionDescriptor } from '../../../src/shared/native-chat/input/native-chat-session-options'
 import type { RpcClient } from '../transport/rpc-client'
 import { useMobileStructuredAgentOptions } from './use-mobile-structured-agent-options'
+import { deferred } from './use-mobile-structured-agent-options.test-fixture'
 
 const HOST_LIST: AgentSessionModelCatalogResult = {
   origin: 'probe',
@@ -42,7 +43,7 @@ function modelChoices(snapshot: readonly SessionOptionDescriptor[]): string[] {
   return model?.kind.type === 'select' ? model.kind.choices.map((choice) => choice.value) : []
 }
 
-type Props = { rpc: RpcClient; fence: number; agent?: 'pi' | 'codex' }
+type Props = { rpc: RpcClient; fence: number; agent?: string }
 
 async function mount(initial: Props) {
   const frames: string[][] = []
@@ -125,6 +126,47 @@ describe('the phone picker’s first frame', () => {
       harness.frames.filter((choices) => choices.length > 0).map(() => ['gpt-host'])
     )
     await harness.unmount()
+  })
+
+  it('keeps unknown options current/permission and paints a later catalog while the recovery read waits', async () => {
+    const listing = deferred<AgentSessionModelCatalogResult>()
+    const recovery = deferred<AgentSessionOptionsResult>()
+    const current = {
+      model: 'provider/saved',
+      effort: 'high',
+      permissionMode: 'ask',
+      defaulted: []
+    }
+    let catalogs = 0
+    let reads = 0
+    const rpc = client(
+      () =>
+        ++catalogs === 1
+          ? Promise.resolve({ origin: 'unknown', listingInProgress: true })
+          : listing.promise,
+      () =>
+        ++reads === 1
+          ? Promise.resolve({ models: [], modelsKnown: false, current })
+          : recovery.promise
+    )
+    const harness = await mount({ rpc, fence: 1, agent: 'omp' })
+    const descriptor = (id: string) => harness.snapshot().find((row) => row.id === id)
+    try {
+      expect(modelChoices(harness.snapshot())).toEqual(['provider/saved'])
+      await act(async () => listing.resolve(HOST_LIST))
+      expect(reads).toBe(2)
+      expect(modelChoices(harness.snapshot())).toEqual(['gpt-host', 'provider/saved'])
+      expect(descriptor('model')?.kind.currentValue).toBe('provider/saved')
+      expect(descriptor('effort')?.kind.currentValue).toBe('high')
+      expect(descriptor('permissionMode')?.kind.currentValue).toBe('ask')
+      // A completed empty options answer remains authoritative over later catalog refreshes.
+      await act(async () => recovery.resolve({ models: [], current }))
+      await act(async () => harness.options().optionSurface.demandModelCatalog?.())
+      expect(modelChoices(harness.snapshot())).toEqual(['provider/saved'])
+      expect(descriptor('permissionMode')?.kind.currentValue).toBe('ask')
+    } finally {
+      await harness.unmount()
+    }
   })
 
   it('keeps the host list through a new fence instead of falling back to the placeholder', async () => {

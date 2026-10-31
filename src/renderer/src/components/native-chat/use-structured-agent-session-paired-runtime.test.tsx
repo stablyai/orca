@@ -217,7 +217,10 @@ describe('a structured chat on a paired server', () => {
       expect.any(Function)
     )
     expect(mocks.subscribe.mock.calls.every(([target]) => target === PAIRED_TARGET)).toBe(true)
-    expect(mocks.call.mock.calls.every(([target]) => target === PAIRED_TARGET)).toBe(true)
+    // The options view memoizes an equal target by environment, so routing compares by value.
+    expect(mocks.call.mock.calls.map(([target]) => target)).toEqual(
+      mocks.call.mock.calls.map(() => PAIRED_TARGET)
+    )
   })
 
   it("reads the rail's conversation outline from the server", async () => {

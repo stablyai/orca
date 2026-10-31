@@ -1,3 +1,4 @@
+import { closeTestJournalHostDatabases } from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { upgradeStoredStructuredAgentSessionOwnerExitEvidence } from '../native-chat/agent-session-wire/structured-agent-session-lease-release'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -43,6 +44,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 

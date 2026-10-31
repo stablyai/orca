@@ -13,7 +13,8 @@ import { listPluginVmRecipeCommands } from '../../shared/plugins/artifacts/plugi
 import {
   isOfficialMarketplaceGitSource,
   isOfficialOrganizationGitSource,
-  pluginSourceLabel
+  pluginSourceLabel,
+  splitQualifiedPluginKey
 } from '../../shared/plugins/catalog/plugin-marketplace'
 import { pluginCatalogTypes } from '../../shared/plugins/catalog/plugin-catalog-types'
 import { mapWithConcurrency } from '../../shared/map-with-concurrency'
@@ -142,7 +143,7 @@ export async function buildPluginList(
         consentFingerprint: plugin.consentFingerprint,
         name: plugin.manifest.name,
         version: plugin.manifest.version,
-        publisher: plugin.manifest.publisher,
+        publisher: splitQualifiedPluginKey(plugin.pluginKey)?.publisher ?? '',
         ...(plugin.manifest.description ? { description: plugin.manifest.description } : {}),
         execution: pluginExecutionProfile(plugin.manifest),
         types: pluginCatalogTypes(plugin.manifest),

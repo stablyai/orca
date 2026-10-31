@@ -1,14 +1,15 @@
 import { useState, useCallback, useEffect, useRef, type ReactNode } from 'react'
-import { AppState, View, Text, Pressable, Switch, ScrollView } from 'react-native'
+import { AppState, View, Text, Pressable, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useFocusEffect } from 'expo-router'
 import type { NotificationSettingsOperations } from './notification-settings-operations'
 import { ChevronLeft } from 'lucide-react-native'
-import { colors, spacing, typography } from '../theme/mobile-theme'
+import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { NotificationPermissionState } from '../notifications/notification-permissions'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileSwitch } from '../components/MobileSwitch'
 
 const DEFAULT_PERMISSION_STATE: NotificationPermissionState = {
   granted: false,
@@ -154,7 +155,7 @@ export default function NotificationsScreen({
           <Text style={styles.rowLabel}>
             {t('settings.notificationSettingsScreen.enableNotifications', 'Enable notifications')}
           </Text>
-          <Switch
+          <MobileSwitch
             value={switchEnabled}
             testID="notification-enabled"
             accessibilityLabel={t(
@@ -163,8 +164,6 @@ export default function NotificationsScreen({
             )}
             disabled={notificationsBlocked || saving}
             onValueChange={(v) => void togglePush(v)}
-            trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-            thumbColor={colors.textPrimary}
           />
         </View>
         <Text style={styles.hint}>{hint}</Text>
@@ -213,7 +212,7 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -225,7 +224,7 @@ const styles = themedStyleSheet(() => ({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: 12,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   row: {
@@ -254,7 +253,7 @@ const styles = themedStyleSheet(() => ({
     marginBottom: spacing.md,
     paddingVertical: spacing.xs,
     paddingHorizontal: spacing.sm,
-    borderRadius: 8,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   settingsButtonPressed: {

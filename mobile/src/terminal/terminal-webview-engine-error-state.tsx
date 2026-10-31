@@ -3,7 +3,7 @@ import { RefreshCw } from 'lucide-react-native'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { translate } from '../i18n/mobile-i18n'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { colors } from '../theme/mobile-theme'
+import { colors, radii } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 
@@ -128,7 +128,7 @@ const styles = themedStyleSheet(() => ({
     gap: 8,
     minHeight: 36,
     paddingHorizontal: 14,
-    borderRadius: 6,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright
   },
   reloadButtonText: {

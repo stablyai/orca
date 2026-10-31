@@ -266,7 +266,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   const settled = journal.snapshot()
   const submissions = journal.submissions()
   await journal.close()
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   const reopened = await journals.open(options)
   expect(reopened.snapshot()).toEqual(settled)
   expect(reopened.submissions()).toEqual(submissions)

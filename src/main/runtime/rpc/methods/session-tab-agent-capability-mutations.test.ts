@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../../../shared/native-chat/every-agent-chat.test-fixture'
 import '../unused-default-rpc-methods.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -131,7 +132,7 @@ describe('session tab structured capability mutations', () => {
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Dispatcher uses only the methods supplied by this test double.
       const runtime = {
         getRuntimeId: () => 'test-runtime',
-        getClientSettings: vi.fn(() => ({ experimentalNativeChat: true })),
+        getClientSettings: vi.fn(() => ({ nativeChatProviders: EVERY_AGENT_CHAT })),
         listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
         closeMobileSessionTab
       } as unknown as OrcaRuntimeService
@@ -184,7 +185,7 @@ function createFixture(
     listMobileSessionTabs: vi.fn().mockResolvedValue(snapshot),
     getClientSettings: () => ({
       // Default-on settings isolate capability gating; opt explicitly into off cases.
-      experimentalNativeChat: options.structuredNativeChatEnabled !== false
+      nativeChatProviders: options.structuredNativeChatEnabled !== false ? EVERY_AGENT_CHAT : {}
     }),
     ...calls
   } as unknown as OrcaRuntimeService

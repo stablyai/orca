@@ -180,3 +180,17 @@ export function resetHostStructuredAgentsForTests(): void {
   failed.clear()
   publish()
 }
+
+export function hostStructuredAgentsCatalogUnlearned(
+  host: string,
+  runtimeId: string | null | undefined,
+  capabilities: readonly string[] | null | undefined
+): boolean {
+  return (
+    runtimeId !== undefined &&
+    capabilities?.includes(STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY) ===
+      true &&
+    !readHostStructuredAgentsForRuntime(host, runtimeId) &&
+    !hostStructuredAgentsReadFailed(host, runtimeId)
+  )
+}

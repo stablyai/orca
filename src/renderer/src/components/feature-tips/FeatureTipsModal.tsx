@@ -1,19 +1,21 @@
 import { useEffect, useRef, useState, type JSX } from 'react'
 import { toast } from 'sonner'
 import { getDefaultVoiceSettings } from '../../../../shared/constants'
-import { isInNativeChatUpgradeTipAudience } from '../../../../shared/native-chat/native-chat-upgrade-tip-audience'
 import {
   ORCHESTRATION_ENABLED_STORAGE_KEY,
   ORCHESTRATION_SETUP_DISMISSED_STORAGE_KEY,
   notifyOrchestrationSetupStateChanged
 } from '@/lib/orchestration-setup-state'
 import { useAppStore } from '@/store'
+import { ChatUiHereTipDialog } from './ChatUiHereTipDialog'
+import { AGENT_DEFAULT_SURFACE_SECTION_ID } from '../settings/agents-search'
 import { CliSetupTipDialog } from './CliSetupTipDialog'
 import { CmdJPaletteTipDialog } from './CmdJPaletteTipDialog'
 import { installCliFromFeatureTip } from './feature-tip-cli-install-action'
 import { getFeatureTipForModal } from './feature-tip-modal-state'
 import {
   getOrcaCliFeatureTipTelemetrySource,
+  trackChatUiFeatureTipAction,
   trackCmdJPaletteFeatureTipAcknowledged,
   trackOrcaCliFeatureTipSetupClicked,
   trackOrcaCliFeatureTipSetupResult
@@ -21,7 +23,6 @@ import {
 import { useMountedRef } from '@/hooks/useMountedRef'
 import { isWebClientLocation } from '@/lib/web-client-location'
 import { translate } from '@/i18n/i18n'
-import { NativeChatUpgradeTipDialog } from './NativeChatUpgradeTipDialog'
 import { SessionSearchTipDialog } from './SessionSearchTipDialog'
 import { useSessionSearchTipSetup } from './use-session-search-tip-setup'
 import { VoiceDictationTipDialog } from './VoiceDictationTipDialog'
@@ -36,7 +37,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
   const updateSettingsOrThrow = useAppStore((s) => s.updateSettingsOrThrow)
   const seenTipIds = useAppStore((s) => s.featureTipsSeenIds)
   const featureInteractions = useAppStore((s) => s.featureInteractions)
-  const nativeChatUpgradeTipVariant = useAppStore((s) => s.nativeChatUpgradeTipVariant)
+  const chatUiLaunchTipVariant = useAppStore((s) => s.chatUiLaunchTipVariant) ?? 'none'
   const markFeatureTipsSeen = useAppStore((s) => s.markFeatureTipsSeen)
   const modalData = useAppStore((s) => s.modalData)
   const showAiVaultSearch = useAppStore((s) => s.showAiVaultSearch)
@@ -51,7 +52,7 @@ export default function FeatureTipsModal(): JSX.Element | null {
     modalData,
     seenTipIds,
     featureInteractions,
-    inNativeChatUpgradeTipAudience: isInNativeChatUpgradeTipAudience(nativeChatUpgradeTipVariant),
+    chatUiLaunchTipVariant,
     settings,
     webClient: isWebClientLocation()
   })
@@ -71,6 +72,9 @@ export default function FeatureTipsModal(): JSX.Element | null {
 
   const handleOpenChange = (open: boolean): void => {
     if (!open) {
+      if (currentTip?.id === 'chat-ui-here') {
+        trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
+      }
       setupRequestIdRef.current += 1
       markCurrentTipSeen()
       setSkillTerminalOpen(false)
@@ -114,13 +118,20 @@ export default function FeatureTipsModal(): JSX.Element | null {
     openSettingsPage()
   }
 
-  const openNativeChatSettings = (): void => {
+  const stayInTerminal = (): void => {
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'stay_in_terminal')
+    handleSkip()
+  }
+
+  const openAgentSettings = (): void => {
+    trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'open_settings')
     markCurrentTipSeen()
     closeModal()
     openSettingsTarget({
-      pane: 'experimental',
+      pane: 'agents',
       repoId: null,
-      sectionId: 'experimental-native-chat'
+      hostScope: { kind: 'local' },
+      sectionId: AGENT_DEFAULT_SURFACE_SECTION_ID
     })
     openSettingsPage()
   }
@@ -136,26 +147,26 @@ export default function FeatureTipsModal(): JSX.Element | null {
       return
     }
 
-    if (currentTip.action !== 'learn-native-chat-upgrade') {
-      markFeatureTipsSeen([currentTip.id])
-    }
+    markFeatureTipsSeen([currentTip.id])
     switch (currentTip.action) {
-      case 'learn-native-chat-upgrade': {
-        if (settings?.experimentalNativeChat !== true) {
-          setPrimaryBusy(true)
-          try {
-            await updateSettingsOrThrow({ experimentalNativeChat: true })
-          } catch {
-            toast.error(
-              translate('featureTips.nativeChatUpgrade.enableError', 'Could not enable chat mode.')
-            )
-            return
-          } finally {
-            setPrimaryBusy(false)
-          }
-        }
-        markFeatureTipsSeen([currentTip.id])
+      case 'use-chat-ui': {
         closeModal()
+        if (chatUiLaunchTipVariant !== 'chat-ui-off') {
+          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'dismissed')
+          break
+        }
+        try {
+          // Only the default moves; an agent the user set for itself keeps its own choice.
+          await updateSettingsOrThrow({ agentDefaultSurface: 'chat' })
+          trackChatUiFeatureTipAction(chatUiLaunchTipVariant, 'use_chat_ui')
+        } catch {
+          toast.error(
+            translate(
+              'featureTips.chatUiHere.saveFailed',
+              'Could not turn on Chat UI. Choose Chat in Settings → Agents.'
+            )
+          )
+        }
         break
       }
       case 'learn-cmd-j-palette': {
@@ -299,6 +310,23 @@ export default function FeatureTipsModal(): JSX.Element | null {
     )
   }
 
+  if (currentTip.action === 'use-chat-ui') {
+    if (chatUiLaunchTipVariant === 'none') {
+      return null
+    }
+    return (
+      <ChatUiHereTipDialog
+        open={isOpen}
+        tip={currentTip}
+        variant={chatUiLaunchTipVariant}
+        onOpenChange={handleOpenChange}
+        onPrimaryAction={() => void handlePrimaryAction()}
+        onSkip={stayInTerminal}
+        onSettingsClick={openAgentSettings}
+      />
+    )
+  }
+
   if (currentTip.action === 'learn-cmd-j-palette') {
     return (
       <CmdJPaletteTipDialog
@@ -309,20 +337,6 @@ export default function FeatureTipsModal(): JSX.Element | null {
         onPrimaryAction={() => void handlePrimaryAction()}
         onSkip={handleSkip}
         onRebindClick={openShortcutsSettings}
-      />
-    )
-  }
-
-  if (currentTip.action === 'learn-native-chat-upgrade') {
-    return (
-      <NativeChatUpgradeTipDialog
-        open={isOpen}
-        tip={currentTip}
-        primaryBusy={primaryBusy}
-        chatModeOn={settings?.experimentalNativeChat === true}
-        onOpenChange={handleOpenChange}
-        onPrimaryAction={() => void handlePrimaryAction()}
-        onSettingsClick={openNativeChatSettings}
       />
     )
   }

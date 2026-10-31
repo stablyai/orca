@@ -21,7 +21,7 @@ index 742f0879ff4f04509e4a07c8efdf0d5743fe8ee5..885a206a394fff783737a412c0b75bf9
  }
  
 diff --git a/src/TextureAtlas.ts b/src/TextureAtlas.ts
-index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318e7db194c 100644
+index 4977ad741065e26bbfd35bc50e7558a033b13340..2ee2c11eb830116aca1370d89bef1daa203f8bf8 100644
 --- a/src/TextureAtlas.ts
 +++ b/src/TextureAtlas.ts
 @@ -3,6 +3,7 @@
@@ -32,7 +32,37 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
  import { IColorContrastCache } from 'browser/Types';
  import { DIM_OPACITY, TEXT_BASELINE } from './Constants';
  import { tryDrawCustomGlyph } from './customGlyphs/CustomGlyphRasterizer';
-@@ -135,21 +136,23 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -112,20 +113,25 @@ export class TextureAtlas implements ITextureAtlas {
+     this._onRemoveTextureAtlasCanvas.dispose();
+   }
+ 
+-  public warmUp(): void {
++  public warmUp(domContainer?: HTMLElement): void {
+     if (!this._didWarmUp) {
+-      this._doWarmUp();
++      this._doWarmUp(domContainer);
+       this._didWarmUp = true;
+     }
+   }
+ 
+-  private _doWarmUp(): void {
++  private _doWarmUp(domContainer: HTMLElement | undefined): void {
+     // Pre-fill with ASCII 33-126, this is not urgent and done in idle callbacks
+     const queue = new IdleTaskQueue(this._logService);
+     for (let i = 33; i < 126; i++) {
+       queue.enqueue(() => {
++        // Orca: a canvas outside the document ignores the page's font smoothing and rasterizes
++        // heavier glyphs that stay cached, so leave them to on-demand drawing until connected.
++        if (!domContainer?.isConnected) {
++          return;
++        }
+         if (!this._cacheMap.get(i, DEFAULT_COLOR, DEFAULT_COLOR, DEFAULT_EXT)) {
+-          const rasterizedGlyph = this._drawToCache(i, DEFAULT_COLOR, DEFAULT_COLOR, DEFAULT_EXT, false, undefined);
++          const rasterizedGlyph = this._drawToCache(i, DEFAULT_COLOR, DEFAULT_COLOR, DEFAULT_EXT, false, domContainer);
+           this._cacheMap.set(i, DEFAULT_COLOR, DEFAULT_COLOR, DEFAULT_EXT, rasterizedGlyph);
+         }
+       });
+@@ -135,21 +141,23 @@ export class TextureAtlas implements ITextureAtlas {
    private _pageLayoutVersion = 0;
    public get pageLayoutVersion(): number { return this._pageLayoutVersion; }
  
@@ -68,7 +98,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
    }
  
    private _createNewPage(): AtlasPage {
-@@ -465,6 +468,36 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -465,6 +473,36 @@ export class TextureAtlas implements ITextureAtlas {
      return this._config.colors.contrastCache;
    }
  
@@ -105,7 +135,7 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
    private _drawToCache(codeOrChars: number | string, bg: number, fg: number, ext: number, restrictToCellHeight: boolean, domContainer: HTMLElement | undefined): IRasterizedGlyph {
      const chars = typeof codeOrChars === 'number' ? String.fromCharCode(codeOrChars) : codeOrChars;
  
-@@ -536,6 +569,7 @@ export class TextureAtlas implements ITextureAtlas {
+@@ -536,6 +574,7 @@ export class TextureAtlas implements ITextureAtlas {
      const fontStyle = italic ? 'italic' : '';
      this._tmpCtx.font =
        `${fontStyle} ${fontWeight} ${this._config.fontSize * this._config.devicePixelRatio}px ${this._config.fontFamily}`;
@@ -113,10 +143,32 @@ index 4977ad741065e26bbfd35bc50e7558a033b13340..f55805ddc3f266415f7f8e81e5b8c318
      this._tmpCtx.textBaseline = TEXT_BASELINE;
  
      const powerlineGlyph = chars.length === 1 && isPowerlineGlyph(chars.charCodeAt(0));
+diff --git a/src/Types.ts b/src/Types.ts
+index bfd6fd76cebe8f55dce7bfad5406d4f7cd184320..0bd283ea7b2bb72d5d3f20b6e7e11e7cc44f283f 100644
+--- a/src/Types.ts
++++ b/src/Types.ts
+@@ -65,7 +65,7 @@ export interface ITextureAtlas extends IDisposable {
+   /**
+    * Warm up the texture atlas, adding common glyphs to avoid slowing early frame.
+    */
+-  warmUp(): void;
++  warmUp(domContainer?: HTMLElement): void;
+ 
+   /**
+    * Incremented whenever cached glyph texture page mappings may be stale, such as after atlas page
 diff --git a/src/WebglRenderer.ts b/src/WebglRenderer.ts
-index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1d65ed8bf 100644
+index a951efba5c75e82735cd39b6b22c4b5d5fad5928..3543141cede0175e01e9395fda934a944fd3a623 100644
 --- a/src/WebglRenderer.ts
 +++ b/src/WebglRenderer.ts
+@@ -316,7 +316,7 @@ export class WebglRenderer extends Disposable implements IRenderer {
+       );
+     }
+     this._charAtlas = atlas;
+-    this._charAtlas.warmUp();
++    this._charAtlas.warmUp(this._terminal.element);
+     this._glyphRenderer.value?.setAtlas(this._charAtlas);
+   }
+ 
 @@ -386,7 +386,10 @@ export class WebglRenderer extends Disposable implements IRenderer {
      // page's version, so re-run the update and force a full texture rebind.
      let merged = false;
@@ -129,3 +181,16 @@ index a951efba5c75e82735cd39b6b22c4b5d5fad5928..e7f80c3a8c14dd65a16a97f1d17e3da1
        merged = true;
        this._clearModel(true);
        this._updateModel(0, this._terminal.rows - 1);
+diff --git a/src/renderLayer/BaseRenderLayer.ts b/src/renderLayer/BaseRenderLayer.ts
+index 5b11615328957b6f5d41a174284c11e061910d91..1654e5ae39baf65a7243cbe7b1395c28824b269e 100644
+--- a/src/renderLayer/BaseRenderLayer.ts
++++ b/src/renderLayer/BaseRenderLayer.ts
+@@ -97,7 +97,7 @@ export abstract class BaseRenderLayer extends Disposable implements IRenderLayer
+     }
+ 
+     this._charAtlas = acquireTextureAtlas(terminal, this._optionsService.rawOptions, colorSet, this._deviceCellWidth, this._deviceCellHeight, this._deviceCharWidth, this._deviceCharHeight, this._coreBrowserService.dpr, 2048);
+-    this._charAtlas.warmUp();
++    this._charAtlas.warmUp(terminal.element);
+   }
+ 
+   public resize(terminal: Terminal, dim: IRenderDimensions): void {

@@ -18,9 +18,6 @@ import type { NativeChatComposerImageAttachment } from './NativeChatComposerFiel
 import { useNativeChatStructuredComposerSend } from './use-native-chat-structured-composer-send'
 
 vi.mock('@/lib/native-chat-telemetry', () => ({ emitNativeChatMessageSent: vi.fn() }))
-vi.mock('@/lib/worker-terminal-takeover-report', () => ({
-  reportStructuredSessionUserInput: vi.fn()
-}))
 
 const ATTACHMENT = { id: 'a1', path: '/tmp/shot.png' } as NativeChatComposerImageAttachment
 

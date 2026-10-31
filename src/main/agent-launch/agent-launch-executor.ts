@@ -1,3 +1,4 @@
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { decideAgentLaunchIntentMode } from './agent-launch-intent-mode'
 /** Structured launches create the workspace without an agent, then ask its host for chat support.
  * The host needs the created workspace to answer; a definitive refusal starts a terminal agent. */
@@ -112,7 +113,8 @@ export async function executeAgentLaunch(
           placed.promptRodeLaunchCommand
             ? HANDED_TO_TERMINAL
             : await deliverTerminalLaunchPrompt(execution, placed.startupTerminalHandle, {
-                freshLaunch: true
+                freshLaunch: true,
+                terminalCreation: placed.startupTerminalCreation
               })
         )
       }
@@ -233,6 +235,7 @@ async function resolveWorkspace(
 export type CreatedSurface = {
   outcome: AgentLaunchResult['outcome']
   warning?: string
+  terminalCreation?: RuntimeTerminalCreate
   structured?: AgentLaunchStructuredSurface
   promptRodeLaunchCommand?: boolean
 }
@@ -288,6 +291,7 @@ async function createTerminalSurface(
       handle: terminal.handle,
       ...(terminal.paneKey ? { paneKey: terminal.paneKey } : {})
     },
+    terminalCreation: terminal.terminalCreation,
     ...(terminal.warning ? { warning: terminal.warning } : {}),
     ...(startupPrompt && terminal.promptRodeLaunchCommand ? { promptRodeLaunchCommand: true } : {})
   }

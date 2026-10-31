@@ -3,12 +3,9 @@ import { View, Text, ScrollView, Pressable } from 'react-native'
 import { ChevronDown, Ellipsis, Keyboard as KeyboardIcon, PenLine } from 'lucide-react-native'
 import type { TerminalShortcutModifier } from '../terminal/terminal-accessory-keys'
 import { TERMINAL_ACCESSORY_REPEAT_DELAY_MS } from '../terminal/terminal-accessory-repeat'
-import { SPECIAL_KEY_LABELS } from '../terminal/terminal-key-definitions'
-import { createTerminalLiveAccessoryInput } from '../terminal/terminal-live-accessory-input'
-import { isTerminalPhoneDisplayMode } from './mobile-session-route-helpers'
 import { isMobileTerminalTabRunningAgent } from './mobile-terminal-tab-agent'
 import { TerminalArrowPad } from './TerminalArrowPad'
-import { TerminalMoreKeysSheet } from './TerminalMoreKeysSheet'
+import { MobileTerminalMoreKeysSheet } from './MobileTerminalMoreKeysSheet'
 import { terminalDockStyles as styles } from './terminal-dock-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
@@ -22,42 +19,19 @@ const ESC = '\x1b'
 const CTRL_C = '\x03'
 const SHELL_CHARACTERS = ['/', '|', '~', '-', ':']
 const AGENT_CHARACTERS = ['/', '@', '!']
-const ARROW_IDS = ['arrowUp', 'arrowDown', 'arrowLeft', 'arrowRight']
-// Built-in keys each row already shows; the ⋯ sheet offers the rest.
-const SHELL_ROW_KEY_IDS: ReadonlySet<string> = new Set(['escape', 'tab', ...ARROW_IDS])
-const AGENT_ROW_KEY_IDS: ReadonlySet<string> = new Set([
-  'escape',
-  'shiftTab',
-  'enter',
-  'ctrlC',
-  ...ARROW_IDS
-])
-
-// The terminal's key row: a row under the input, or a column in the Duo's side rail. Every key goes straight to the terminal.
+// The terminal's key row under the input; the Duo's side rail shows the same keys. Every key goes straight to the terminal.
 export function MobileSessionAccessoryKeys({
-  controller,
-  vertical = false
+  controller
 }: {
   controller: MobileSessionController
-  vertical?: boolean
 }) {
   useMobileColorScheme()
   const t = useMobileTranslation()
   const {
-    activeHandle,
     activeSessionTab,
-    customKeys,
-    setShowCustomKeyModal,
-    setDeleteKeyTarget,
-    visibleBuiltInAccessoryKeys,
-    terminalModes,
-    canPaste,
     canSend,
     canCompose,
     liveInputEnabled,
-    isAttaching,
-    attachImage,
-    toggleDisplayMode,
     handleAccessoryKey,
     dockKeys: keys,
     dismissSoftwareKeyboard,
@@ -67,7 +41,6 @@ export function MobileSessionAccessoryKeys({
     stopAccessoryRepeat,
     cancelAccessoryRepeat,
     prepareAccessoryPress,
-    handlePaste,
     keyboardLift
   } = controller
   const keepsKeyboard = useKeyboardPersistingTaps('always')
@@ -83,7 +56,7 @@ export function MobileSessionAccessoryKeys({
   const runsAgent =
     activeSessionTab?.type === 'terminal' && isMobileTerminalTabRunningAgent(activeSessionTab)
   const keyboardUp = keyboardLift > 0
-  const keyStyle = vertical ? [styles.key, styles.keyVertical] : styles.key
+  const keyStyle = styles.key
   const sendBytes = (bytes: string) => void handleAccessoryKey({ bytes })
 
   const keyButton = (
@@ -212,11 +185,10 @@ export function MobileSessionAccessoryKeys({
   const showKeyboard = () => (liveInputEnabled ? liveInputRef : commandInputRef).current?.focus()
 
   return (
-    <View ref={keepsKeyboard} style={vertical ? styles.keyRail : styles.keyRow}>
+    <View ref={keepsKeyboard} style={styles.keyRow}>
       <Pressable
         style={({ pressed }) => [
           styles.modeKey,
-          vertical && styles.keyVertical,
           pressed && styles.keyPressed,
           !canCompose && styles.disabled
         ]}
@@ -249,22 +221,18 @@ export function MobileSessionAccessoryKeys({
       </Pressable>
       {/* Why: default tap handling makes the first key tap dismiss the keyboard and get swallowed (#5106). */}
       <ScrollView
-        style={vertical ? styles.keyScrollVertical : styles.keyScroll}
-        horizontal={!vertical}
+        style={styles.keyScroll}
+        horizontal
         scrollEnabled={!padHeld}
         showsHorizontalScrollIndicator={false}
         showsVerticalScrollIndicator={false}
-        contentContainerStyle={vertical ? styles.keyScrollContentVertical : styles.keyScrollContent}
+        contentContainerStyle={styles.keyScrollContent}
         keyboardShouldPersistTaps="always"
         onScrollBeginDrag={cancelAccessoryRepeat}
       >
         {rowKeys}
         <Pressable
-          style={({ pressed }) => [
-            styles.ghostKey,
-            vertical && styles.keyVertical,
-            pressed && styles.keyPressed
-          ]}
+          style={({ pressed }) => [styles.ghostKey, pressed && styles.keyPressed]}
           onPress={() => setSheetVisible(true)}
           accessibilityRole="button"
           accessibilityLabel={t('session.accessoryKeys.moreKeys', 'More keys and actions')}
@@ -276,7 +244,6 @@ export function MobileSessionAccessoryKeys({
       <Pressable
         style={({ pressed }) => [
           styles.iconKey,
-          vertical && styles.keyVertical,
           pressed && styles.keyPressed,
           !keyboardUp && !canCompose && styles.disabled
         ]}
@@ -296,33 +263,10 @@ export function MobileSessionAccessoryKeys({
           <KeyboardIcon size={17} color={colors.textSecondary} strokeWidth={2} />
         )}
       </Pressable>
-      <TerminalMoreKeysSheet
+      <MobileTerminalMoreKeysSheet
+        controller={controller}
         visible={sheetVisible}
         onClose={() => setSheetVisible(false)}
-        canSend={canSend}
-        canPaste={canPaste}
-        isAttaching={isAttaching}
-        phoneDisplay={isTerminalPhoneDisplayMode(activeHandle, terminalModes)}
-        rowKeyIds={runsAgent ? AGENT_ROW_KEY_IDS : SHELL_ROW_KEY_IDS}
-        builtInKeys={visibleBuiltInAccessoryKeys}
-        customKeys={customKeys}
-        onPaste={() => void handlePaste()}
-        onAttachImage={() => void attachImage('library')}
-        onAttachFile={() => void attachImage('files')}
-        onToggleDisplay={() => {
-          if (activeHandle) {
-            void toggleDisplayMode(activeHandle)
-          }
-        }}
-        onBuiltInKey={(key) =>
-          SPECIAL_KEY_LABELS[key.id]
-            ? keys.sendKey(key.id)
-            : void handleAccessoryKey(createTerminalLiveAccessoryInput(key))
-        }
-        onSpecialKey={keys.sendKey}
-        onCustomKey={(key) => sendBytes(key.bytes)}
-        onDeleteCustomKey={setDeleteKeyTarget}
-        onAddCustomKey={() => setShowCustomKeyModal(true)}
       />
     </View>
   )

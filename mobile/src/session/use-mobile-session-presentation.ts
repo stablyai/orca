@@ -8,6 +8,7 @@ import { useInitialSessionTerminalAutoCreate } from './use-initial-session-termi
 import { MOBILE_SESSION_STATUS_LABELS } from './mobile-session-route-helpers'
 import type { MobileSessionBulkCloseModel } from './use-mobile-session-bulk-close'
 import { hostOs } from '../platform/host-os'
+import { useDirectionPadAvailable, useShellSideRail } from '../layout/use-shell-side-rail'
 import { useCalmConnectionState } from '../transport/calm-connection-state'
 
 export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel) {
@@ -31,6 +32,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     hostEndpoint,
     initialSessionAutoCreateRef,
     terminalFrameRef,
+    getTerminalPaneViewport,
     handleCreateTerminal,
     visibleTabs,
     forceReconnectHost
@@ -78,17 +80,29 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
           ? verdictDisplayLabel(connectionVerdict)
           : MOBILE_SESSION_STATUS_LABELS[presentedConnState]
 
-  // Why: iOS keyboard height includes the home-indicator inset; Android IME height does not.
+  const [sideRail, padAvailable] = [useShellSideRail(), useDirectionPadAvailable()]
+  const dockShown =
+    !scope.showNativeChat &&
+    !scope.activeMarkdownTab &&
+    !scope.activeFileTab &&
+    !scope.activeBrowserTab
+  const dockBottomInset = dockShown && (sideRail || padAvailable) ? 0 : insets.bottom
+  // Subtract only the space actually reserved below the input dock.
   const keyboardLift =
     keyboardHeight > 0
       ? hostOs() === 'ios'
-        ? Math.max(0, keyboardHeight - insets.bottom)
+        ? Math.max(0, keyboardHeight - dockBottomInset)
         : keyboardHeight
       : 0
   const activeTerminalKeyboardLift = computeActiveTerminalKeyboardLift({
     keyboardLift,
     metrics: activeHandle ? terminalKeyboardMetrics.get(activeHandle) : undefined,
-    terminalFrameHeight: terminalFrameRef.current?.height ?? 0
+    terminalFrameHeight:
+      (activeHandle
+        ? getTerminalPaneViewport?.(activeHandle).terminalFrameRef.current?.height
+        : null) ??
+      terminalFrameRef.current?.height ??
+      0
   })
   const toastAnimatedStyle = {
     opacity: toastOpacityRef.current,
@@ -100,6 +114,7 @@ export function useMobileSessionPresentation(scope: MobileSessionBulkCloseModel)
     showEmptyState,
     connectionVerdict,
     showConnectionRetry,
+    connectionEscalated,
     terminalSummary,
     keyboardLift,
     activeTerminalKeyboardLift,

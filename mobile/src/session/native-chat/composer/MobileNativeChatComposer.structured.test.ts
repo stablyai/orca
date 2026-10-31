@@ -22,6 +22,7 @@ import {
 import { structuredSendResultFixture } from '../../structured-agent-send-result.test-fixture'
 import { findByHostType } from '../../../test-support/react-test-renderer-host-nodes'
 import type { RpcClient } from '../../../transport/rpc-client'
+vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../../../platform/media-picker', () => ({
   useMediaPicker: () => ({ pickImages: async () => [] })
 }))

@@ -25,9 +25,11 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import {
+  BOTTOM_DRAWER_EASING,
   BOTTOM_DRAWER_HIDE_DURATION_MS,
   BOTTOM_DRAWER_SHOW_DURATION_MS
 } from './bottom-drawer-constants'
+import { AutoHeight } from './AutoHeight'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import {
   useBottomDrawerModalHost,
@@ -44,6 +46,12 @@ const SPRING_CONFIG = { damping: 28, stiffness: 400 }
 // Damp upward pull with rubber-band factor to signal drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
 const TOP_SCROLL_EPSILON = 1
+const SHOW_TIMING = { duration: BOTTOM_DRAWER_SHOW_DURATION_MS, easing: BOTTOM_DRAWER_EASING }
+const HIDE_TIMING = { duration: BOTTOM_DRAWER_HIDE_DURATION_MS, easing: BOTTOM_DRAWER_EASING }
+// The sheet travels its own height plus this, not the whole screen, so short sheets don't rush.
+const OFFSCREEN_MARGIN = 48
+// The grabber row above the content: its padding plus the 5 pt bar.
+const HANDLE_AREA_HEIGHT = spacing.sm + 5 + spacing.md
 
 export type MountedBottomDrawerProps = {
   visible: boolean
@@ -90,6 +98,7 @@ export function MountedBottomDrawer({
   // Use React layout inset for fill height shrink plus lift; translation alone can cross status-bar gap.
   const [keyboardInset, setKeyboardInset] = useState(0)
   const { height: screenHeight } = useWindowDimensions()
+  const sheetHeight = useSharedValue(screenHeight)
   const insets = useWindowSafeAreaInsets()
   // Cap/center tablet width while retaining phone’s bottom anchor and drag/keyboard transforms.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
@@ -114,7 +123,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = 0
-    progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+    progress.value = withTiming(1, SHOW_TIMING)
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -122,11 +131,11 @@ export function MountedBottomDrawer({
     if (visible) {
       translateY.value = 0
       scrollOffsetY.value = 0
-      progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+      progress.value = withTiming(1, SHOW_TIMING)
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
-      progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+      progress.value = withTiming(0, HIDE_TIMING, (finished) => {
         if (finished) {
           runOnJS(onHidden)()
         }
@@ -189,7 +198,7 @@ export function MountedBottomDrawer({
       return
     }
     Keyboard.dismiss()
-    progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+    progress.value = withTiming(0, HIDE_TIMING, (finished) => {
       if (finished) {
         runOnJS(onClose)()
       }
@@ -291,13 +300,18 @@ export function MountedBottomDrawer({
       transform: [
         {
           translateY:
-            interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP) +
+            interpolate(
+              progress.value,
+              [0, 1],
+              [Math.min(sheetHeight.value + OFFSCREEN_MARGIN, screenHeight), 0],
+              Extrapolation.CLAMP
+            ) +
             translateY.value -
             keyboardShift
         }
       ]
     }
-  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable, sheetHeight])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
@@ -317,44 +331,45 @@ export function MountedBottomDrawer({
     </GestureDetector>
   )
 
-  const body = !contentScrollable ? (
-    <>
-      {handle}
-      <View style={[styles.staticContent, fillAvailable && styles.staticContentFill]}>
-        {children}
-      </View>
-    </>
+  const content = !contentScrollable ? (
+    <View style={[styles.staticContent, fillAvailable && styles.staticContentFill]}>
+      {children}
+    </View>
   ) : dragContentToDismiss ? (
-    <>
-      {handle}
-      <GestureDetector gesture={contentPanGesture}>
-        <Animated.View collapsable={false} style={styles.scrollFrame}>
-          <GestureDetector gesture={scrollGesture}>
-            <Animated.ScrollView
-              ref={scrollRef}
-              bounces={false}
-              keyboardShouldPersistTaps="handled"
-              onScroll={scrollHandler}
-              scrollEventThrottle={16}
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </Animated.ScrollView>
-          </GestureDetector>
-        </Animated.View>
-      </GestureDetector>
-    </>
+    <GestureDetector gesture={contentPanGesture}>
+      <Animated.View collapsable={false} style={styles.scrollFrame}>
+        <GestureDetector gesture={scrollGesture}>
+          <Animated.ScrollView
+            ref={scrollRef}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </Animated.ScrollView>
+        </GestureDetector>
+      </Animated.View>
+    </GestureDetector>
   ) : (
+    <ScrollView
+      ref={scrollRef}
+      bounces={false}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      {children}
+    </ScrollView>
+  )
+
+  // Content-sized sheets ease to a new height when what they show changes; fill sheets have a fixed one.
+  const contentCap =
+    screenHeight - insets.top - spacing.lg - (insets.bottom + spacing.lg) - HANDLE_AREA_HEIGHT
+  const body = (
     <>
       {handle}
-      <ScrollView
-        ref={scrollRef}
-        bounces={false}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {children}
-      </ScrollView>
+      {fillAvailable ? content : <AutoHeight maxHeight={contentCap}>{content}</AutoHeight>}
     </>
   )
 
@@ -401,6 +416,9 @@ export function MountedBottomDrawer({
               },
               drawerStyle
             ]}
+            onLayout={(event) => {
+              sheetHeight.value = event.nativeEvent.layout.height
+            }}
           >
             {body}
             <View style={styles.bottomExtension} />

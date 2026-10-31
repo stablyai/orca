@@ -1,4 +1,8 @@
 // @vitest-environment happy-dom
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
 
 import type * as LaunchErrors from '@/lib/structured-agent-session-launch-errors'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
@@ -203,11 +207,8 @@ describe('coalesced launch delivery mode', () => {
     expect(mocks.callRuntimeRpc.mock.calls.some((call) => call[1] === 'agentSession.send')).toBe(
       false
     )
-    expect(mocks.seedDraft).toHaveBeenLastCalledWith(
-      expect.objectContaining({
-        tabId: 'structured-agent-session-unset-delivery-session',
-        text: 'PR context'
-      })
-    )
+    expect(
+      readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(intent.sessionId)).text
+    ).toBe('PR context')
   })
 })

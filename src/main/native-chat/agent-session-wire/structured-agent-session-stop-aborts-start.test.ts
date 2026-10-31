@@ -17,9 +17,9 @@ import {
 
 let rig: QueuedMessageTestRig
 
-afterEach(() => {
+afterEach(async () => {
   vi.restoreAllMocks()
-  rig.dispose()
+  await rig.dispose()
 })
 
 async function duringStart(during: () => void): Promise<void> {

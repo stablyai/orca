@@ -13,6 +13,7 @@ import type {
   AgentSessionOperationRefusalCode
 } from '../../../../shared/agent-session-operation-ledger'
 import { resolveAgentSessionReplayOutcome } from '../../../native-chat/agent-session-wire/structured-agent-session-replay-outcome'
+import type { TerminalSpawnDispatch } from '../../../agent-launch/agent-launch-not-started'
 import type { RpcContext } from '../core'
 import { rpcCallerOperationKey } from '../rpc-caller-identity'
 import { agentLaunchFailureMessage } from './agent-launch-failure-code'
@@ -28,6 +29,15 @@ export function agentLaunchOperationCallerKey(context: Pick<RpcContext, 'caller'
 
 /** Launch failures retain their own codes and original words (said), outside the closed agentSession refusal vocabulary. */
 export type AgentLaunchRefusal = { code: string; message: string; said?: string }
+
+/** What a launch admitted under an operation id carries into its execution. */
+export type ReplaySafeLaunch = {
+  attachOperationId: string
+  callerKey: string
+  terminalSpawn: TerminalSpawnDispatch
+  /** Queue provisional surface/prompt recording without awaiting it; ordered ledger transactions keep final settlement after it. */
+  recordSurface: (provisional: AgentLaunchResult) => void
+}
 
 export type AgentLaunchAdmission =
   /** This caller owns the operation. It alone runs the effect, and it must settle the row. */

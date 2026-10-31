@@ -21,6 +21,9 @@ vi.mock('./runner', () => ({
   translateWslOutputPaths: translateWslOutputPathsMock
 }))
 
+// Keep the ordered runner queues; worktree-checkout-progress-real-git covers the checkout.workers read.
+vi.mock('./checkout-workers-git-args', () => ({ checkoutWorkersGitArgs: async () => [] }))
+
 vi.mock('./status', () => ({
   resolveGitDir: vi.fn(),
   runWithGitReadCacheInvalidation: <T>(run: () => Promise<T>) => run()

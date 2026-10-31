@@ -266,7 +266,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.bgRaised,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     padding: spacing.sm,
     marginBottom: spacing.sm
   },
@@ -287,7 +287,7 @@ const styles = themedStyleSheet(() => ({
   details: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     marginBottom: spacing.sm,
     overflow: 'hidden'
   },
@@ -305,7 +305,7 @@ const styles = themedStyleSheet(() => ({
   table: {
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   tableRow: {

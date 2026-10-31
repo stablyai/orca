@@ -91,6 +91,15 @@ describeRender(
       expect(
         await page.evaluate(() => document.fonts.check('13px "Orca Nerd Font Symbols"', '\ue0b0'))
       ).toBe(true)
+      // Android has no system glyph for Claude Code's \u23f5\u23f5; a face still loading here would paint boxes.
+      expect(
+        await page.evaluate(
+          () =>
+            [...document.fonts].find(
+              (face) => face.family.replaceAll('"', '') === 'Orca Terminal Symbols'
+            )?.status
+        )
+      ).toBe('loaded')
       const applied = await page.evaluate((data) => {
         globalThis.__orcaTerminalProbe.write(data)
         return data.length

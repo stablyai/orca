@@ -620,4 +620,19 @@ describe('fleet liveness and attention after a host verdict', () => {
 
     expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
   })
+
+  // A follow-up reuses the terminal while the pane still reports the earlier Dispatch's turn.
+  it('asks nothing of a settled worker whose terminal moved to a follow-up', () => {
+    const now = 10_000
+    const projected = projectOrchestrationFleet({
+      workers: [worker('1', { workerState: 'succeeded', dispatchStatus: 'completed' })],
+      statuses: [
+        status('1', now - 1_000, { orchestration: { taskId: 'task-1', dispatchId: '1' } })
+      ],
+      now
+    })
+
+    expect(projected.workers[0]!.liveness.verdict).toBe('live')
+    expect(projected.workers[0]!.nextAction).toEqual({ kind: 'none', argv: [] })
+  })
 })

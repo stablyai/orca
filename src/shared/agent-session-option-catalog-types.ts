@@ -47,6 +47,7 @@ export type CatalogOption = {
 }
 
 export type CatalogModel = {
+  declaredDefaultEffort?: string | null
   id: string
   label: string
   description?: string

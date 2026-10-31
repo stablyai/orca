@@ -4,6 +4,7 @@ import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-rec
 import { AGENT_SESSION_JOURNAL_SCHEMA_VERSION } from '../../../shared/agent-session-journal-types'
 import type Database from '../../sqlite/sync-database'
 import {
+  closeTestJournalHostDatabases,
   liveTestJournalRows,
   openTestJournalHostDatabase,
   updateTestJournalRowJson
@@ -33,6 +34,7 @@ beforeEach(() => {
 
 afterEach(async () => {
   vi.restoreAllMocks()
+  await closeTestJournalHostDatabases()
   await Promise.all(
     relaunchedRoots.splice(0).map((dir) => rm(dir, { recursive: true, force: true }))
   )

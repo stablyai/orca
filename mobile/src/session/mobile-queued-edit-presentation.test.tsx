@@ -37,6 +37,7 @@ import {
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 
 const picker = vi.hoisted(() => ({ pickFiles: vi.fn(), pickImages: vi.fn() }))
+vi.mock('../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('../platform/media-picker', () => ({ useMediaPicker: () => picker }))
 vi.mock('../components/DragReorderList', () => ({ DragReorderList: 'DragReorderList' }))
 vi.mock('react-native-reanimated', async () => {

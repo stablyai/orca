@@ -1,3 +1,6 @@
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
+import { agentMenuShortcutLabels } from '../components/tab-bar/agent-menu-shortcut-labels'
+import { makeWorktree, TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { getDefaultSourceControlAiSettings } from '../../../shared/source-control-ai-settings'
 import { afterEach, assert, beforeEach, expect, it, vi } from 'vitest'
 import { getDefaultSettings } from '../../../shared/constants'
@@ -45,7 +48,7 @@ beforeEach(() => {
   rpc.subscribe.mockReset().mockResolvedValue({ unsubscribe: vi.fn() })
   setLocalRuntimeCapabilitiesForTests(CAPS)
   useAppStore.setState({
-    settings: { ...getDefaultSettings('/tmp'), experimentalNativeChat: true },
+    settings: { ...getDefaultSettings('/tmp'), nativeChatProviders: EVERY_AGENT_CHAT },
     runtimeStatusByEnvironmentId: new Map([['B', status()]])
   })
 })
@@ -72,6 +75,17 @@ it('acquires inactive B independently of detection, preserves unknown truth and 
   rpc.subscribe.mock.calls[0][3].onEvent(frame('grok', 'available'))
   catalogReply.resolve(catalog)
   expect((await action).offered).toEqual(['grok'])
+  useAppStore.setState((current) => ({
+    repos: [TEST_REPO],
+    worktreesByRepo: {
+      [TEST_REPO.id]: [
+        makeWorktree({ id: 'known-chat', repoId: TEST_REPO.id, hostId: 'runtime:B' })
+      ]
+    },
+    runtimeDetectedAgentIds: {},
+    settings: { ...current.settings!, defaultTuiAgent: 'grok', nativeChatProviders: { grok: true } }
+  }))
+  expect(agentMenuShortcutLabels('known-chat', {}, 'darwin').get('grok')).toBe('⌘⌥T')
   const state = useAppStore.getState()
   const lease = holdChatProgramFacts(chat.resolveChatProgramContext(state, workspace))
   rpc.subscribe.mock.calls.at(-1)![3].onEvent(frame('grok', 'future-program'))
@@ -120,7 +134,7 @@ it('adapts only absent publication on older hosts and shares the saved Checks ga
   setLocalRuntimeCapabilitiesForTests([CHAT, CATALOG, INSTALL])
   const local = { kind: 'git-worktree' } as const
   const settings = getDefaultSettings('/tmp')
-  settings.experimentalNativeChat = true
+  settings.nativeChatProviders = EVERY_AGENT_CHAT
   settings.sourceControlAi = getDefaultSourceControlAiSettings()
   settings.sourceControlAi.actions = { fixChecks: { agentId: 'antigravity' } }
   useAppStore.setState({ settings, ensureDetectedAgents: async () => [] })

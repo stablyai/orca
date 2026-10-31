@@ -11,6 +11,7 @@ import {
   nextSavedAt,
   notifyScope,
   records,
+  installNativeChatDraftRecord,
   refusedScopes,
   unconfirmed,
   reconcileRestoredImageChecks,
@@ -253,9 +254,9 @@ function adoptForeignChange(message: unknown): void {
       const draft = parseStoredNativeChatComposerDraft(value)
       if (draft) {
         reconcileRestoredImageChecks(scopeKey, draft.images, records.get(scopeKey)?.images ?? [])
-        records.set(scopeKey, draft)
+        installNativeChatDraftRecord(scopeKey, draft)
       } else {
-        records.delete(scopeKey)
+        installNativeChatDraftRecord(scopeKey)
         reconcileRestoredImageChecks(scopeKey, [])
       }
       notifyScope(scopeKey)

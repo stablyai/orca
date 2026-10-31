@@ -236,29 +236,43 @@ const ACCOUNT_METHOD_DEFINITIONS = [
     name: 'accounts.subscribe',
     permission: 'workspace',
     params: null,
-    handler: async (_params, { runtime, connectionId }, emit) => {
-      await new Promise<void>((resolve) => {
-        const unsubscribe = runtime.onAccountsChanged((snapshot) => {
-          emit({ type: 'snapshot', snapshot })
-        })
-
-        // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
-        const seq = ++accountsSubscriptionSeq
-        const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
-        runtime.registerSubscriptionCleanup(
-          subscriptionId,
-          () => {
-            unsubscribe()
-            emit({ type: 'end' })
-            resolve()
-          },
-          connectionId
-        )
-
-        // Publish a snapshot immediately, then refresh stale data; reconnect must not force repeated provider fetches.
-        emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsSnapshot() })
-        void runtime.refreshAccountsForMobileSubscriber()
+    handler: async (_params, { runtime, connectionId, signal }, emit) => {
+      if (signal?.aborted) {
+        return
+      }
+      const stopped = Promise.withResolvers<void>()
+      const unsubscribe = runtime.onAccountsChanged((snapshot) => {
+        emit({ type: 'snapshot', snapshot })
       })
+
+      // Key cleanup by socket plus sequence so sibling sockets and concurrent subscribes cannot evict each other.
+      const seq = ++accountsSubscriptionSeq
+      const subscriptionId = `accounts-${connectionId ?? 'inproc'}-${seq}`
+      const release = (): void => runtime.cleanupSubscription(subscriptionId)
+      runtime.registerSubscriptionCleanup(
+        subscriptionId,
+        () => {
+          signal?.removeEventListener('abort', release)
+          unsubscribe()
+          stopped.resolve()
+        },
+        connectionId
+      )
+
+      try {
+        if (signal?.aborted) {
+          release()
+        } else {
+          signal?.addEventListener('abort', release, { once: true })
+          // Publish a snapshot immediately, then refresh stale data; reconnect must not force repeated provider fetches.
+          emit({ type: 'ready', subscriptionId, snapshot: runtime.getAccountsStreamSnapshot() })
+          void runtime.refreshAccountsForMobileSubscriber()
+        }
+        await stopped.promise
+        emit({ type: 'end' })
+      } finally {
+        release()
+      }
     }
   }),
   defineMethod({

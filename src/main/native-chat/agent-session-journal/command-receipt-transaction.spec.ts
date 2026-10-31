@@ -66,7 +66,7 @@ export function registerCommandReceiptTransactionTests(): void {
   })
 
   afterEach(async () => {
-    closeTestJournalHostDatabases()
+    await closeTestJournalHostDatabases()
     await rm(root, { recursive: true, force: true })
   })
 

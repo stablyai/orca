@@ -380,29 +380,22 @@ export function renderMobileTasksGitHubProjectViewPicker(model: ConnectionPresen
   )
 }
 
-export function renderMobileTasksGitHubProjectSortPicker(model: ConnectionPresentationModel) {
-  return (
-    <PickerModal
-      visible={model.taskUiReady && model.showGitHubProjectSortPicker}
-      title={translate('tasks.githubProjectPickers.sort', 'Project Sort')}
-      options={model.githubProjectSortOptions}
-      selected={model.githubProjectSortOverride?.fieldId ?? PROJECT_VIEW_DEFAULT_SORT}
-      onSelect={(fieldId) => {
-        if (fieldId === PROJECT_VIEW_DEFAULT_SORT) {
-          model.setGithubProjectSortOverride(null)
-          return
-        }
-        model.setGithubProjectSortOverride((current) => {
-          if (!current || current.fieldId !== fieldId) {
-            return { fieldId, direction: 'ASC' }
-          }
-          if (current.direction === 'ASC') {
-            return { fieldId, direction: 'DESC' }
-          }
-          return null
-        })
-      }}
-      onClose={() => model.setShowGitHubProjectSortPicker(false)}
-    />
-  )
+// Picking the active field again flips it to descending, then back to the view's own order.
+export function cycleMobileTasksGitHubProjectSort(
+  model: ConnectionPresentationModel,
+  fieldId: string
+) {
+  if (fieldId === PROJECT_VIEW_DEFAULT_SORT) {
+    model.setGithubProjectSortOverride(null)
+    return
+  }
+  model.setGithubProjectSortOverride((current) => {
+    if (!current || current.fieldId !== fieldId) {
+      return { fieldId, direction: 'ASC' }
+    }
+    if (current.direction === 'ASC') {
+      return { fieldId, direction: 'DESC' }
+    }
+    return null
+  })
 }

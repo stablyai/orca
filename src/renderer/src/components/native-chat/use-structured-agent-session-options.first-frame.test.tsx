@@ -153,6 +153,54 @@ describe('a new chat picker’s first frame', () => {
     resetHostModelCatalogSnapshotsForTests()
   })
 
+  it('holds the placeholder after unknown options and renders discovery before its recovery reread answers', async () => {
+    const catalog = deferred<AgentSessionModelCatalogResult>()
+    let reads = 0
+    mocks.call.mockImplementation((_target: unknown, method: string) =>
+      method === 'agentSession.options'
+        ? ++reads === 1
+          ? Promise.resolve({ models: [], modelsKnown: false, current: { defaulted: [] } })
+          : new Promise(() => {})
+        : method === 'agentSession.modelCatalog'
+          ? catalog.promise
+          : new Promise(() => {})
+    )
+    const view = renderHook(() =>
+      useStructuredAgentSessionOptions({
+        agent: 'pi',
+        sessionId: 'cold-pi',
+        target: LOCAL_TARGET,
+        transportEnabled: true,
+        isVisible: true,
+        providerVisible: true,
+        fence: 1,
+        turnId: null,
+        unloadedTurnRevisions: undefined,
+        mutate: vi.fn()
+      })
+    )
+    const model = () => view.result.current.optionSnapshot.find(({ id }) => id === 'model')
+    await waitFor(() =>
+      expect(view.result.current.sendSource.optionStateRef.current.optionsAnswerPresent).toBe(true)
+    )
+    expect(model()).toMatchObject({ settable: false })
+    await act(async () => catalog.resolve(listed([{ id: 'provider/model', label: 'Pi model' }])))
+    await waitFor(() =>
+      expect(model()).toMatchObject({
+        kind: {
+          choices: expect.arrayContaining([
+            expect.objectContaining({ value: 'provider/model', label: 'Pi model' })
+          ])
+        }
+      })
+    )
+    expect(reads).toBeGreaterThan(1)
+    expect(
+      view.result.current.sendSource.optionStateRef.current.record.values.model
+    ).toBeUndefined()
+    view.unmount()
+  })
+
   it('Pi cached first paint and late precise catalog keep the supported remembered composer value', async () => {
     const row = {
       id: 'openai/gpt-5',
@@ -177,7 +225,12 @@ describe('a new chat picker’s first frame', () => {
     const next = deferred<AgentSessionModelCatalogResult>()
     catalogAnswers(() => next.promise)
     const late = renderNewChat({ agent: 'pi', seedOptions: remembered, restored: true })
-    expect(late.frames[0]).toEqual(PLACEHOLDER)
+    expect(late.frames[0]).toEqual({
+      model: row.id,
+      label: 'Openai GPT 5',
+      effort: 'off',
+      usable: true
+    })
     await act(async () => next.resolve(list))
     await waitFor(() => expect(late.frames.at(-1)?.effort).toBe('minimal'))
     expect(remembered.effort).toBe('off')
@@ -311,40 +364,55 @@ describe('a new chat picker’s first frame', () => {
     unmount()
   })
 
-  it.each(['claude', 'codex', 'grok'] as const)(
-    '%s: a cold account shows the quiet placeholder until the host answers, then the list once',
-    async (agent) => {
+  it.each([
+    ['claude', CLAUDE_LIST, 'Opus (1M context)'],
+    ['codex', CODEX_LIST, 'GPT 5.5'],
+    ['grok', GROK_LIST, 'Grok Build']
+  ] as const)(
+    '%s: a cold account keeps the saved literal until its host label arrives',
+    async (agent, list, expectedLiteralLabel) => {
       const answer = deferred<AgentSessionModelCatalogResult>()
       catalogAnswers(() => answer.promise)
-      const list = agent === 'claude' ? CLAUDE_LIST : agent === 'codex' ? CODEX_LIST : GROK_LIST
       const first = list.models[0]!
       const { frames, unmount } = renderNewChat({ agent, seedOptions: { model: first.id } })
-      expect(frames[0]).toEqual(PLACEHOLDER)
+      expect(frames[0]).toEqual({
+        model: first.id,
+        label: expectedLiteralLabel,
+        effort: null,
+        usable: true
+      })
       answer.resolve(list)
-      await waitFor(() => expect(frames.at(-1)?.usable).toBe(true))
-      const named = frames.filter((frame) => frame.model !== null)
-      expect(new Set(named.map((frame) => frame.label))).toEqual(new Set([first.label]))
-      const beforeNamed = frames.slice(0, frames.indexOf(named[0]!))
-      expect(beforeNamed).toEqual(beforeNamed.map(() => PLACEHOLDER))
+      await waitFor(() => expect(frames.at(-1)?.label).toBe(first.label))
+      expect(frames.every((frame) => frame.model === first.id)).toBe(true)
       unmount()
     }
   )
 
-  it('with nothing saved, the built-in list is usable, naming nothing, until the listing lands', async () => {
+  it('with nothing saved, pending discovery keeps a disabled placeholder until real choices arrive', async () => {
     const listing = deferred<AgentSessionModelCatalogResult>()
     catalogAnswers(
       () => Promise.resolve({ origin: 'unknown', listingInProgress: true }),
       () => listing.promise
     )
-    const { frames, unmount } = renderNewChat({ agent: 'codex', seedOptions: { model: 'gpt-5.5' } })
+    const { frames, unmount } = renderNewChat({ agent: 'codex' })
     expect(frames[0]).toEqual(PLACEHOLDER)
-    await waitFor(() => expect(frames.at(-1)).toEqual({ ...PLACEHOLDER, usable: true }))
-    listing.resolve(CODEX_LIST)
+    await waitFor(() => expect(mocks.call).toHaveBeenCalledTimes(2))
+    expect(frames.every((frame) => JSON.stringify(frame) === JSON.stringify(PLACEHOLDER))).toBe(
+      true
+    )
+    const joined = renderNewChat({ agent: 'codex' })
+    await act(async () => {})
+    expect(
+      joined.frames.every((frame) => JSON.stringify(frame) === JSON.stringify(PLACEHOLDER))
+    ).toBe(true)
+    listing.resolve({ ...CODEX_LIST, listingNamesConfiguredModel: true })
     await waitFor(() => expect(frames.at(-1)?.label).toBe('GPT-5.5 (host)'))
+    await waitFor(() => expect(joined.frames.at(-1)?.label).toBe('GPT-5.5 (host)'))
     expect(frames.some((frame) => frame.model !== null && frame.label !== 'GPT-5.5 (host)')).toBe(
       false
     )
     unmount()
+    joined.unmount()
   })
 
   it('keeps a saved pick visible when the host list omits it', async () => {
@@ -358,7 +426,7 @@ describe('a new chat picker’s first frame', () => {
     expect(frames.length).toBeGreaterThan(0)
     expect(
       frames.every(
-        (frame) => frame.model === 'gpt-retired' && frame.label === 'gpt-retired' && frame.usable
+        (frame) => frame.model === 'gpt-retired' && frame.label === 'GPT Retired' && frame.usable
       )
     ).toBe(true)
     unmount()
@@ -382,9 +450,14 @@ describe('a new chat picker’s first frame', () => {
     })
     expect(second.frames[0]).toMatchObject({ label: 'GPT-6.1 Sol', usable: true })
     second.unmount()
-    // A paired host’s cache must never name a model for the unanswered local host.
+    // A local seed must not borrow the paired host’s labels or capabilities.
     const local = renderNewChat({ agent: 'codex', seedOptions: { model: 'gpt-5.5' } })
-    expect(local.frames[0]).toEqual(PLACEHOLDER)
+    expect(local.frames[0]).toEqual({
+      model: 'gpt-5.5',
+      label: 'GPT 5.5',
+      effort: null,
+      usable: true
+    })
     local.unmount()
   })
 })

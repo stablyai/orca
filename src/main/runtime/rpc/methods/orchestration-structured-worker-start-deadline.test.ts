@@ -64,7 +64,6 @@ it('leaves the preamble only what the setup gate did not use of the caller’s t
     showTerminal: async () => ({ worktreeId: 'wt_1' }),
     showManagedTerminalWorkspace: async () => ({ id: 'wt_1' }),
     getNestedWorkerMaxDepth: () => 3,
-    getOrchestrationHeartbeatMinutes: () => 5,
     getRuntimeId: () => 'epoch-1',
     getTerminalOrchestrationCliCommand: () => 'orca',
     getStructuredAgentSessionCreateSupport: async () => ({ supported: true }),
@@ -100,7 +99,8 @@ it('leaves the preamble only what the setup gate did not use of the caller’s t
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the start path reaches only these db members.
     db: db as unknown as OrchestrationDb,
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the run id is read.
-    run: { id: 'run_1' } as never,
+    bindRun: () => ({ id: 'run_1' }) as never,
+    taskDeps: undefined,
     coordinator: null
   })
 

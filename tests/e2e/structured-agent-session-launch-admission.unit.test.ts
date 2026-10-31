@@ -178,6 +178,46 @@ describe('a structured chat launch on a paired server', () => {
     expectNoChatCommitted()
   })
 
+  it.each(['created', 'failed'] as const)(
+    'waits for the declined terminal %s before claiming success',
+    async (status) => {
+      mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+      const completion = Promise.withResolvers<{
+        outcome: { status: 'created' } | { status: 'failed'; message: string }
+        delivered: boolean
+        failureNotified: boolean
+      }>()
+      const onHostDeclined = vi.fn(() => ({
+        opened: true,
+        completion: completion.promise,
+        promptDeliveryResult: completion.promise
+      }))
+      const launch = beginStructuredAgentSessionProvisionalLaunch({
+        plan: { ...pairedPlan(), promptDelivery: 'draft' },
+        hooks: {},
+        beforeOpen: vi.fn(),
+        onHostDeclined
+      })
+      await vi.waitFor(() => expect(onHostDeclined).toHaveBeenCalledOnce())
+      expect(mocks.toastInfo).not.toHaveBeenCalled()
+      completion.resolve({
+        outcome: status === 'created' ? { status } : { status, message: 'already notified' },
+        delivered: status === 'created',
+        failureNotified: status === 'failed'
+      })
+      await expect(launch?.settlement).resolves.toEqual(
+        status === 'created' ? { kind: 'terminal' } : { kind: 'cancelled', sessionId: null }
+      )
+      await expect(launch?.promptDeliveryResult).resolves.toMatchObject({
+        delivered: status === 'created',
+        failureNotified: status === 'failed'
+      })
+      expect(mocks.toastInfo).toHaveBeenCalledTimes(status === 'created' ? 1 : 0)
+      expect(mocks.toastError).not.toHaveBeenCalled()
+      expectNoChatCommitted()
+    }
+  )
+
   it("opens a direct caller's terminal with the caller's own CLI arguments on a decline", async () => {
     mocks.createSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
     mocks.launchAgentInNewTab.mockReturnValue({ surface: { kind: 'host-published' } })

@@ -181,7 +181,7 @@ async function reopenWithOversizedRemoval(afterSequence: number): Promise<AgentS
     }
     opened.db.exec('COMMIT')
   } finally {
-    opened.close()
+    await opened.close()
   }
   return journals.open({
     identity: {

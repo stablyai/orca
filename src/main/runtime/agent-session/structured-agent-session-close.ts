@@ -26,6 +26,8 @@ export type StructuredAgentSessionCloseOptions = {
   afterClose?: () => void
   // Restore visibility on unproven close unless the caller will delete the workspace regardless.
   restoreTabOnUnprovenClose?: boolean
+  // Last word in the session lane before Stop; false refuses the close and restores the tab.
+  admitClose?: () => boolean
 }
 
 export async function closeStructuredAgentSessionChild(
@@ -69,7 +71,7 @@ async function closeHiddenStructuredAgentSessionChild(
     await host.setSessionTabVisibility?.(sessionId, false, undefined, { deferHiddenNotice: true })
     closeAttempted = true
     // A worktree teardown or an orchestration stop: not the user closing this chat.
-    await host.close(sessionId, 'evict')
+    await host.close(sessionId, 'evict', options.admitClose)
   } catch (error) {
     // Restore only after closeAttempted: failed hide transactions undo themselves.
     if (closeAttempted) {

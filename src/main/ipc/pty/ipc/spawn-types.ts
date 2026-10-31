@@ -121,12 +121,14 @@ export type PtySpawnIpcDeps = PtySpawnCodexResumeDeps & {
     worktreeId: string | undefined,
     sessionId?: string,
     cwd?: string,
-    passiveWslRestore?: boolean
+    passiveWslRestore?: boolean,
+    connectionId?: string | null
   ) => Promise<void> | void
   resolvePtySpawnStartupCwd: (
     worktreeId: string | undefined,
     cwd: string | undefined,
-    missingDirFallback?: TerminalStartupCwdMissingDirFallback
+    missingDirFallback?: TerminalStartupCwdMissingDirFallback,
+    connectionId?: string | null
   ) => string | undefined
   transitionSpawnHiddenRendererPtyDeliveryState: (id: string, hidden: boolean) => void
   trustedTerminalHandleEnv: Set<string>

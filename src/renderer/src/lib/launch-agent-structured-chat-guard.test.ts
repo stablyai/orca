@@ -1,8 +1,8 @@
 // @vitest-environment happy-dom
+import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
 
 import {
   mockCreateTab,
-  mockCreateUnifiedTab,
   mockWaitForAgentReady,
   mockPasteDraftWhenAgentReady,
   mockCreateStructuredCodexSessionLaunchIntent,
@@ -13,316 +13,140 @@ import {
   mockCallStructuredAgentSession,
   mockCreateSupport,
   structuredLaunchIntent,
-  store,
-  structuredLaunchErrorMocks,
-  setHostCapabilities
+  liveStore,
+  main
 } from './launch-agent-structured-chat-test-fixture'
-import type * as PickerMenu from '@/components/agent/AgentLaunchPickerMenu'
-import type * as Dropdown from '@/components/ui/dropdown-menu'
-import type * as Tooltip from '@/components/ui/tooltip'
-import type * as QuickLaunch from '@/components/tab-bar/QuickLaunchButton'
-import { createElement } from 'react'
-import { cleanup, fireEvent, render } from '@testing-library/react'
-import { buildNewTabAgentMenuRows } from '../../../shared/agent-launch-picker-rows'
-import type * as StructuredLaunch from './launch-structured-agent-session'
-import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from 'vitest'
+import type { AppState } from '@/store/types'
+import type { GlobalSettings } from '../../../shared/global-settings-types'
+import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
+import type { launchAgentInNewTab } from './launch-agent-in-new-tab'
+import { makeTab, makeUnifiedTab } from '@/store/slices/store-test-helpers'
+import { layoutApplyTestTransport } from '@/runtime/layout-apply-test-transport.test-fixture'
+import { isPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import {
+  resetStructuredAgentLaunchRegistryForTests,
+  getStructuredLaunchStateBySessionId
+} from './agent-session/launch/structured-agent-session-launch-registry'
+import { resetStructuredAgentLaunchPersistenceForTests } from './agent-session/launch/structured-agent-session-launch-persistence'
+import * as capabilities from '@/runtime/local-runtime-capabilities'
+import { afterEach, beforeEach, describe, expect, it, vi, type MockInstance } from 'vitest'
 
-const launchErrorMocks = structuredLaunchErrorMocks()
+const mockCreateUnifiedTab = vi.fn<AppState['createUnifiedTab']>()
+const mockSetTabViewMode = vi.fn<AppState['setTabViewMode']>()
+const mockMarkNativeChatLaunchPromptFailed = vi.fn<AppState['markNativeChatLaunchPromptFailed']>()
+const STRUCTURED_HOST_CAPABILITIES = ['agent-session.structured.v1'] as const
+let hostCapabilities: ReturnType<typeof capabilities.readLocalRuntimeCapabilitiesOrUnknown> =
+  STRUCTURED_HOST_CAPABILITIES
+const state = () => liveStore().getState()
 
+function launchScenarioSettings(overrides: Partial<GlobalSettings> = {}): GlobalSettings {
+  return createGlobalSettingsFixture({
+    agentCmdOverrides: {},
+    agentDefaultArgs: {},
+    agentDefaultEnv: {},
+    activeRuntimeEnvironmentId: null,
+    agentDefaultSurface: 'chat',
+    nativeChatSessionOptions: undefined,
+    agentPermissionDefault: undefined,
+    agentPermissionOverrides: undefined,
+    ...overrides
+  })
+}
+
+let warnings: MockInstance<typeof console.warn>
+const owned: ReturnType<typeof launchAgentInNewTab>[] = []
+const lateCreates: (() => void)[] = []
 // No initial chat mode proves availability rejection preceded terminal-tab adoption.
 describe('structured chat adoption guard on the launch path', () => {
-  let restoreCatalogStore: (() => void) | undefined
   beforeEach(async () => {
-    const { registerStructuredSelectionCatalogStore } =
-      await import('./structured-agent-session-selection-controller')
-    restoreCatalogStore = registerStructuredSelectionCatalogStore({
-      read: () => ({ ...store, runtimeEnvironmentCatalogHydrated: true }),
-      subscribe: () => () => {}
+    localStorage.clear()
+    resetStructuredAgentLaunchRegistryForTests()
+    resetStructuredAgentLaunchPersistenceForTests()
+    liveStore().setState({ settings: launchScenarioSettings() })
+    mockCreateUnifiedTab.mockImplementation(state().createUnifiedTab)
+    liveStore().setState({
+      createUnifiedTab: mockCreateUnifiedTab,
+      setTabViewMode: mockSetTabViewMode,
+      markNativeChatLaunchPromptFailed: mockMarkNativeChatLaunchPromptFailed
+    })
+    vi.spyOn(capabilities, 'readLocalRuntimeCapabilitiesOrUnknown').mockImplementation(
+      () => hostCapabilities
+    )
+    vi.spyOn(capabilities, 'ensureLocalRuntimeCapabilities').mockImplementation(
+      async () => hostCapabilities
+    )
+    warnings = vi.spyOn(console, 'warn')
+    mockWaitForAgentReady.mockResolvedValue({ ready: true, reason: 'foreground-match' })
+    mockPasteDraftWhenAgentReady.mockResolvedValue(true)
+    mockCreateStructuredCodexSessionLaunchIntent.mockImplementation((worktreeId: string) =>
+      structuredLaunchIntent(worktreeId)
+    )
+    mockRetryStructuredAgentSessionLaunchIntent.mockImplementation((intent) => ({
+      ...intent,
+      params: {
+        ...intent.params,
+        envelope: {
+          ...intent.params.envelope,
+          clientOperationId: `${intent.params.envelope.clientOperationId}-retry`
+        }
+      }
+    }))
+    mockLaunchStructuredCodexSession.mockResolvedValue({
+      sessionId: 'codex-session-1',
+      fence: 1
+    })
+    mockCallStructuredAgentSession.mockResolvedValue({
+      ok: true,
+      page: { fence: 1 },
+      value: { submission: { dispatchState: 'accepted' } }
+    })
+    mockRefreshLocalStructuredSessionTabs.mockResolvedValue([
+      {
+        worktree: 'wt-1',
+        tabs: [{ type: 'agent-session', sessionId: 'codex-session-1' }]
+      }
+    ])
+    mockCreateSupport.mockResolvedValue({ supported: true })
+    hostCapabilities = STRUCTURED_HOST_CAPABILITIES
+    const module = await import('./launch-agent-in-new-tab')
+    const launch = module.launchAgentInNewTab
+    vi.spyOn(module, 'launchAgentInNewTab').mockImplementation((args) => {
+      const result = launch(args)
+      owned.push(result)
+      return result
     })
   })
+
   afterEach(async () => {
-    cleanup()
-    vi.restoreAllMocks()
     const { cancelStructuredAgentLaunch, retireStructuredAgentSessionLaunchCancellationTombstone } =
       await import('./structured-agent-session-launch')
+    const pending = ['codex-session-1', 'codex-session-2'].flatMap((id) => {
+      const launch = getStructuredLaunchStateBySessionId(id)
+      return launch ? [launch.promise] : []
+    })
     for (const sessionId of ['codex-session-1', 'codex-session-2']) {
       cancelStructuredAgentLaunch('wt-1', sessionId)
-      retireStructuredAgentSessionLaunchCancellationTombstone('wt-1', sessionId)
     }
-    restoreCatalogStore?.()
-  })
-
-  let pickerMenu: typeof PickerMenu
-  let dropdown: typeof Dropdown
-  let tooltip: typeof Tooltip
-  let quickLaunch: typeof QuickLaunch
-  let actual: typeof StructuredLaunch
-  beforeAll(async () => {
-    actual = await vi.importActual<typeof StructuredLaunch>('./launch-structured-agent-session')
-    ;[pickerMenu, dropdown, tooltip, quickLaunch] = await Promise.all([
-      import('@/components/agent/AgentLaunchPickerMenu'),
-      import('@/components/ui/dropdown-menu'),
-      import('@/components/ui/tooltip'),
-      import('@/components/tab-bar/QuickLaunchButton')
-    ])
-  })
-
-  it.each(
-    (['local', 'runtime:web-runtime'] as const).flatMap((host) =>
-      (
-        [
-          ['claude', 'success'],
-          ['claude', 'refusal'],
-          ['claude', 'failure'],
-          ['codex', 'success'],
-          ['codex', 'refusal'],
-          ['codex', 'failure']
-        ] as const
-      ).map(([agent, outcome]) => ({ host, agent, outcome }))
-    )
-  )(
-    'keeps ordinary and picker $agent Chat inputs and $outcome endpoint outcomes equivalent on $host',
-    async ({ host, agent, outcome }) => {
-      store.settings.activeRuntimeEnvironmentId = host === 'local' ? null : 'web-runtime'
-      const { captureNativeChatComposerFocusIntent } =
-        await import('@/components/native-chat/use-native-chat-composer-reveal-focus')
-      const { AgentLaunchPickerMenu } = pickerMenu
-      const { DropdownMenu, DropdownMenuContent, DropdownMenuTrigger } = dropdown
-      const { TooltipProvider } = tooltip
-      const { useTabAgentMenuLaunch } = quickLaunch
-      const launcher = await import('./launch-agent-in-new-tab')
-      const dispatch = vi.spyOn(launcher, 'launchAgentInNewTab')
-      const { launchAgentInNewTab } = launcher
-      const { resetStructuredAgentLaunchRegistryForTests } =
-        await import('./agent-session/launch/structured-agent-session-launch-registry')
-      const { resetStructuredAgentLaunchPersistenceForTests } =
-        await import('./agent-session/launch/structured-agent-session-launch-persistence')
-      const { agentPickerChoiceSeeds, agentPickerEntriesFromRows } =
-        await import('../../../shared/agent-launch-picker')
-      store.settings.nativeChatSessionOptions = {
-        [agent]: {
-          model: 'saved-unknown-model',
-          valuesByModel: { 'saved-unknown-model': { effort: 'high' } }
-        }
-      }
-      store.settings.nativeChatProviders = { [agent]: false }
-      const rows = buildNewTabAgentMenuRows({
-        settings: store.settings,
-        detectedOnHost: [agent],
-        chatAgents: [agent],
-        hostChatAnswer: () => 'yes',
-        chatProgram: () => 'available'
-      }).map((row) => ({ ...row, executionHostId: host }))
-      expect(rows).toEqual([{ agent, kind: 'cli', chat: true, executionHostId: host }])
-      const entry = agentPickerEntriesFromRows(
-        rows,
-        [agent],
-        (selected) => agentPickerChoiceSeeds(selected, store.settings),
-        (selected) => selected
-      )[0]
-      expect(entry.defaultSurface).toBe('terminal')
-      expect(entry.surfaces).toEqual(['chat', 'terminal'])
-      Object.assign(entry, {
-        defaultsPending: true,
-        structuredDefaultsPending: true,
-        arguments: undefined,
-        terminal: {},
-        structured: {}
-      })
-      // The searched setup matches the saved choices so endpoint parity includes search intent.
-      entry.catalog = {
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [
-          {
-            id: 'saved-unknown-model',
-            label: 'Saved model',
-            isDefault: true,
-            efforts: [{ value: 'high', label: 'High' }]
-          }
-        ]
-      }
-      function Menu() {
-        const runLaunch = useTabAgentMenuLaunch({
-          worktreeId: 'wt-1',
-          groupId: 'group-1',
-          onFocusTerminal: () => {}
-        })
-        return createElement(
-          TooltipProvider,
-          null,
-          createElement(
-            DropdownMenu,
-            { defaultOpen: true, modal: false },
-            createElement(DropdownMenuTrigger, null, 'New tab'),
-            createElement(
-              DropdownMenuContent,
-              null,
-              createElement(AgentLaunchPickerMenu, {
-                entries: [entry],
-                runLaunch,
-                model: {
-                  state: 'settled',
-                  rows,
-                  detection: {
-                    detectedIds: [agent],
-                    isLoading: false,
-                    isRefreshing: false,
-                    detectionFailed: false,
-                    needsServerUpdate: false,
-                    refresh: async () => [agent]
-                  }
-                }
-              })
-            )
-          )
-        )
-      }
-      mockCreateStructuredCodexSessionLaunchIntent.mockImplementation(
-        (worktreeId, selectedAgent, host, resume, seed) => {
-          const intent = actual.createStructuredAgentSessionLaunchIntent(
-            worktreeId,
-            selectedAgent,
-            host,
-            resume,
-            seed,
-            false
-          )
-          return {
-            ...intent,
-            sessionId: 'codex-session-1',
-            params: {
-              ...intent.params,
-              envelope: structuredLaunchIntent(worktreeId).params.envelope
-            }
-          }
-        }
-      )
-      const error =
-        outcome === 'refusal'
-          ? new launchErrorMocks.StructuredAgentSessionCreateRefusalError('provider unavailable')
-          : new Error('connection failed')
-      const perform = async (picker: false | 'ordinary' | 'searched') => {
-        resetStructuredAgentLaunchRegistryForTests()
-        resetStructuredAgentLaunchPersistenceForTests()
-        mockLaunchStructuredCodexSession.mockClear()
-        mockCreateTab.mockClear()
-        mockToastError.mockClear()
-        if (outcome === 'failure') {
-          store.unifiedTabsByWorktree = {}
-          mockRefreshLocalStructuredSessionTabs.mockResolvedValue([])
-        }
-        const preparationErrors: unknown[] = []
-        mockLaunchStructuredCodexSession.mockImplementation(async (intent) => {
-          await Promise.resolve()
-          intent.createMessageSupport = true
-          try {
-            expect(intent.prepareCreate).toBeTypeOf('function')
-            intent.prepareCreate!(false)
-            expect(intent.createPrepared).toBe(true)
-          } catch (error) {
-            preparationErrors.push(error instanceof Error ? error.stack : error)
-            throw error
-          }
-          if (outcome !== 'success') {
-            throw error
-          }
-          return { sessionId: intent.sessionId, fence: 1 }
-        })
-        dispatch.mockClear()
-        if (picker) {
-          const view = render(createElement(Menu))
-          if (picker === 'searched') {
-            fireEvent.change(view.getByPlaceholderText('Search agents and setups…'), {
-              target: { value: 'saved-unknown-model high' }
-            })
-          }
-          fireEvent.click(
-            document.querySelector<HTMLButtonElement>(`button[aria-label="Configure ${agent}"]`)!
-          )
-          expect(mockLaunchStructuredCodexSession).not.toHaveBeenCalled()
-          expect(document.querySelector('textarea')).toHaveProperty('disabled', true)
-          expect(document.body.textContent).toContain('Launch terminal')
-          expect(
-            [...document.querySelectorAll('button')].find(
-              (button) => button.textContent === 'Launch terminal'
-            )?.className
-          ).toContain('bg-primary')
-          fireEvent.click(
-            [...document.querySelectorAll('button')].find(
-              (button) => button.textContent === 'Launch chat'
-            )!
-          )
-        } else {
-          launchAgentInNewTab({
-            requestId: `equivalent-${agent}-${outcome}`,
-            agent,
-            worktreeId: 'wt-1',
-            groupId: 'group-1',
-            requestedSurface: 'chat',
-            selectedExecutionHostId: host,
-            focusIntent: captureNativeChatComposerFocusIntent()
-          })
-        }
-        const call = dispatch.mock.results.at(-1)
-        const result = call?.type === 'return' ? call.value : undefined
-        const settlement = await result?.structuredSettlement
-        cleanup()
-        expect(preparationErrors).toEqual([])
-        const intent = mockLaunchStructuredCodexSession.mock.calls[0]?.[0]
-        return {
-          surface: result?.surface,
-          settlement,
-          target: intent?.target,
-          params: intent?.params,
-          seed: intent?.seedOptions,
-          explicit: intent?.explicitLaunchOptions,
-          terminalCalls: mockCreateTab.mock.calls,
-          errors: mockToastError.mock.calls
-        }
-      }
-      const ordinary = await perform(false)
-      const picker = await perform('ordinary')
-      expect(picker).toEqual(ordinary)
-      const searched = await perform('searched')
-      expect(searched).toMatchObject({
-        surface: ordinary.surface,
-        settlement: ordinary.settlement,
-        target: ordinary.target,
-        errors: ordinary.errors,
-        terminalCalls: []
-      })
-      expect(searched.params).toMatchObject({
-        agent,
-        worktree: 'id:wt-1',
-        options: { model: 'saved-unknown-model', effort: 'high' }
-      })
-      expect(searched.explicit).toMatchObject({ model: 'saved-unknown-model', effort: 'high' })
-      dispatch.mockRestore()
-      expect(picker.target).toEqual(
-        host === 'local' ? { kind: 'local' } : { kind: 'environment', environmentId: 'web-runtime' }
-      )
-      expect(picker.params).toMatchObject({
-        agent,
-        worktree: 'id:wt-1'
-      })
-      expect(picker.params).not.toHaveProperty('options')
-      expect(picker.explicit).toBeUndefined()
-      if (host === 'local') {
-        expect(picker.seed).toMatchObject({ model: 'saved-unknown-model', effort: 'high' })
-      } else {
-        expect(picker.seed).toBeUndefined()
-      }
-      expect(picker.terminalCalls).toEqual([])
-      expect(picker.settlement?.kind).toBe(
-        outcome === 'success'
-          ? 'structured'
-          : outcome === 'refusal'
-            ? 'failed'
-            : 'visibility-unknown'
-      )
+    for (const finish of lateCreates.splice(0)) {
+      finish()
     }
-  )
+    await Promise.allSettled(pending)
+    await Promise.all(owned.splice(0).map((result) => result?.structuredSettlement))
+    await main.settle()
+    expect(lateCreates).toEqual([])
+    expect(layoutApplyTestTransport.pendingCount).toBe(0)
+    for (const tab of state().unifiedTabsByWorktree['wt-1'] ?? []) {
+      expect(isPendingTab(tab.id)).toBe(false)
+    }
+    expect(
+      warnings.mock.calls.filter(
+        ([message]) => message === '[layout-owner] pending tab waiter threw:'
+      )
+    ).toEqual([])
+    for (const id of ['codex-session-1', 'codex-session-2']) {
+      retireStructuredAgentSessionLaunchCancellationTombstone('wt-1', id)
+    }
+  })
 
   it('takes the structured path when the chat-default view is selected', async () => {
     const { launchAgentInNewTab, shouldQueueTerminalFocusAfterMenuClose } =
@@ -363,12 +187,13 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('takes the structured path when a Codex model and effort are already saved', async () => {
-    store.settings.nativeChatSessionOptions = {
-      codex: {
-        model: 'gpt-5.6-sol',
-        valuesByModel: { 'gpt-5.6-sol': { effort: 'medium' } }
-      }
-    }
+    liveStore().setState({
+      settings: launchScenarioSettings({
+        nativeChatSessionOptions: {
+          codex: { model: 'gpt-5.6-sol', valuesByModel: { 'gpt-5.6-sol': { effort: 'medium' } } }
+        }
+      })
+    })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -414,8 +239,16 @@ describe('structured chat adoption guard on the launch path', () => {
 
   // WSL-bound Claude accounts must decline before opening a chat that could only fail Retry.
   it('opens the terminal, and no chat, when this machine declines the chat', async () => {
-    store.unifiedTabsByWorktree = {}
+    liveStore().setState({ unifiedTabsByWorktree: {} })
     mockCreateSupport.mockResolvedValue({ supported: false, reason: 'wsl' })
+    mockCreateTab.mockImplementation((_worktreeId, _groupId, _unused, options) => {
+      const tab = makeTab({ id: options?.id ?? 'tab-1', worktreeId: 'wt-1' })
+      const leafId = options?.initialLeafId
+      if (options?.pendingStartup?.agentLaunch && leafId) {
+        queueMicrotask(() => settleAgentLaunchPaneStart(tab.id, leafId, `${tab.id}-pty`))
+      }
+      return tab
+    })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -456,7 +289,7 @@ describe('structured chat adoption guard on the launch path', () => {
   it.each([[], null])(
     'preserves terminal-backed launches with capability answer %s',
     async (capabilities) => {
-      setHostCapabilities(capabilities)
+      hostCapabilities = capabilities
       const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
       const launches = [
@@ -471,9 +304,10 @@ describe('structured chat adoption guard on the launch path', () => {
     }
   )
 
-  // Recheck persisted opt-in against current default view; the hidden toggle can remain enabled under Terminal chat.
-  it('ignores a stale structured opt-in while the default view is Terminal chat', async () => {
-    store.settings.experimentalNativeChat = false
+  it('opens a terminal for an agent inheriting the Terminal default', async () => {
+    liveStore().setState({
+      settings: launchScenarioSettings({ nativeChatProviders: {}, agentDefaultSurface: 'terminal' })
+    })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     const result = launchAgentInNewTab({
@@ -514,7 +348,7 @@ describe('structured chat adoption guard on the launch path', () => {
       error: refusal
     })
     expect(mockCreateTab).not.toHaveBeenCalled()
-    expect(store.unifiedTabsByWorktree['wt-1']).toContainEqual(
+    expect(state().unifiedTabsByWorktree['wt-1']).toContainEqual(
       expect.objectContaining({ contentType: 'agent-session', entityId: 'codex-session-1' })
     )
     await new Promise((resolve) => setTimeout(resolve, 0))
@@ -552,7 +386,10 @@ describe('structured chat adoption guard on the launch path', () => {
     let resolveLaunch!: (receipt: { sessionId: string; fence: number }) => void
     mockLaunchStructuredCodexSession.mockImplementationOnce(
       () =>
-        new Promise<{ sessionId: string; fence: number }>((resolve) => (resolveLaunch = resolve))
+        new Promise<{ sessionId: string; fence: number }>((resolve) => {
+          resolveLaunch = resolve
+          lateCreates.push(() => resolve({ sessionId: 'codex-session-1', fence: 1 }))
+        })
     )
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -578,7 +415,8 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('settles a successful create and opens its chat without an inventory refresh', async () => {
-    store.unifiedTabsByWorktree = {}
+    liveStore().setState({ unifiedTabsByWorktree: {} })
+    expect(state().getTab('structured-agent-session-codex-session-1')).toBeNull()
     mockRefreshLocalStructuredSessionTabs.mockRejectedValue(new Error('inventory unavailable'))
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
@@ -592,15 +430,20 @@ describe('structured chat adoption guard on the launch path', () => {
       kind: 'structured',
       sessionId: 'codex-session-1'
     })
-    expect(store.unifiedTabsByWorktree['wt-1']).toContainEqual(
+    expect(state().unifiedTabsByWorktree['wt-1']).toContainEqual(
       expect.objectContaining({ contentType: 'agent-session', entityId: 'codex-session-1' })
     )
+    await main.settle()
+    const tab = state().unifiedTabsByWorktree['wt-1']!.find(
+      (row) => row.entityId === 'codex-session-1'
+    )!
+    expect(state().getTab(tab.id)).toBe(tab)
     expect(mockRefreshLocalStructuredSessionTabs).not.toHaveBeenCalled()
     expect(mockToastError).not.toHaveBeenCalled()
   })
 
   it('re-checks a chat whose visibility proof is unknown through its own Retry, with its own intent', async () => {
-    store.unifiedTabsByWorktree = {}
+    liveStore().setState({ unifiedTabsByWorktree: {} })
     const firstIntent = structuredLaunchIntent('wt-1', 'codex-session-1')
     const secondIntent = structuredLaunchIntent('wt-1', 'codex-session-2')
     mockCreateStructuredCodexSessionLaunchIntent
@@ -614,15 +457,19 @@ describe('structured chat adoption guard on the launch path', () => {
       .mockRejectedValueOnce(new Error('inventory unavailable'))
       .mockResolvedValueOnce([])
       .mockImplementationOnce(() => {
-        store.unifiedTabsByWorktree['wt-1'] = [
-          {
-            id: `structured-agent-session-${firstIntent.sessionId}`,
-            contentType: 'agent-session',
-            entityId: firstIntent.sessionId,
-            worktreeId: 'wt-1',
-            groupId: 'group-1'
+        liveStore().setState({
+          unifiedTabsByWorktree: {
+            'wt-1': [
+              makeUnifiedTab({
+                id: `structured-agent-session-${firstIntent.sessionId}`,
+                contentType: 'agent-session',
+                entityId: firstIntent.sessionId,
+                worktreeId: 'wt-1',
+                groupId: 'group-1'
+              })
+            ]
           }
-        ]
+        })
         return Promise.resolve([
           { worktree: 'wt-1', tabs: [{ type: 'agent-session', sessionId: firstIntent.sessionId }] }
         ])
@@ -677,9 +524,15 @@ describe('structured chat adoption guard on the launch path', () => {
     expect(mockCreateStructuredCodexSessionLaunchIntent).toHaveBeenCalledTimes(2)
     expect(mockLaunchStructuredCodexSession).toHaveBeenCalledTimes(3)
     expect(mockLaunchStructuredCodexSession.mock.calls[2]?.[0]).toBe(secondIntent)
-    expect(store.unifiedTabsByWorktree['wt-1']?.map((tab) => tab.entityId)).toEqual(
+    expect(state().unifiedTabsByWorktree['wt-1']?.map((tab) => tab.entityId)).toEqual(
       expect.arrayContaining([firstIntent.sessionId, secondIntent.sessionId])
     )
+    const replacement = state().unifiedTabsByWorktree['wt-1']!.find(
+      (row) => row.entityId === secondIntent.sessionId
+    )!
+    liveStore().setState({ unifiedTabsByWorktree: { 'wt-1': [replacement] } })
+    expect(state().getTab(`structured-agent-session-${firstIntent.sessionId}`)).toBeNull()
+    expect(state().getTab(replacement.id)).toBe(replacement)
   })
 
   it('routes an auto-submitted Codex prompt through the structured outbox', async () => {
@@ -724,7 +577,7 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('keeps an SSH Codex tab on the bridge', async () => {
-    store.repos = [{ id: 'repo-1', connectionId: 'ssh-a', path: '/repo' }]
+    liveStore().setState({ repos: [{ ...state().repos[0]!, connectionId: 'ssh-a' }] })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-18', agent: 'codex', worktreeId: 'wt-1' })
@@ -740,7 +593,7 @@ describe('structured chat adoption guard on the launch path', () => {
   })
 
   it('keeps a runtime-paired Codex tab on the bridge', async () => {
-    store.repos = [{ id: 'repo-1', connectionId: 'runtime-ssh-a', path: '/repo' }]
+    liveStore().setState({ repos: [{ ...state().repos[0]!, connectionId: 'runtime-ssh-a' }] })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
     launchAgentInNewTab({ requestId: 'request-19', agent: 'codex', worktreeId: 'wt-1' })

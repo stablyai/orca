@@ -1,6 +1,7 @@
 // @vitest-environment happy-dom
 
 import type { ReactNode } from 'react'
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   act,
   cleanup,
@@ -478,6 +479,8 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   beforeEach(() => {
     localStorage.clear()
     resetStructuredAgentLaunchRegistryForTests()
+    // A host without chats lists every agent as a terminal.
+    setLocalRuntimeCapabilitiesForTests([])
   })
 
   it('keeps every agent launchable while chats start, fail or retry', () => {

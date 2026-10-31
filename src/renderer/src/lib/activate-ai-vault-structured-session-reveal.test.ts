@@ -18,7 +18,10 @@ vi.mock('./worktree-runtime-owner', () => ({
   runtimeEnvironmentIdOrLocalUnlessTwin: mocks.environmentIdFor
 }))
 
-import { revealStructuredSession } from './activate-ai-vault-structured-session'
+import {
+  activateAiVaultStructuredSession,
+  revealStructuredSession
+} from './activate-ai-vault-structured-session'
 import { STRUCTURED_AGENT_SESSION_REVEAL_RUNTIME_CAPABILITY } from '../../../shared/protocol-version'
 import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
 
@@ -151,4 +154,34 @@ describe('revealStructuredSession', () => {
 
     await expect(revealStructuredSession(target)).resolves.toBe('unreachable')
   })
+})
+
+it('bounds a cached stalled probe, releases the shared click and permits a subsequent explicit retry', async () => {
+  vi.useFakeTimers()
+  const host = { kind: 'environment', environmentId: 'cached-stalled' } as const
+  const cached = new Promise<boolean>(() => {})
+  mocks.supports.mockReturnValue(cached)
+  const parts = {
+    activate: vi.fn(() => false),
+    refresh: vi.fn(async () => undefined),
+    reveal: revealStructuredSession,
+    unavailable: vi.fn(),
+    gone: vi.fn(),
+    hostCannotOpen: vi.fn()
+  }
+  const session = {
+    structuredSession: { workspaceId: target.worktreeId, sessionId: target.sessionId }
+  }
+  try {
+    const click = activateAiVaultStructuredSession(session, parts, host)
+    await vi.advanceTimersByTimeAsync(5_001)
+    expect(await click).toBe(true)
+    expect(parts.unavailable).toHaveBeenCalledOnce()
+    expect(mocks.call).not.toHaveBeenCalled()
+    mocks.supports.mockResolvedValue(false)
+    expect(await activateAiVaultStructuredSession(session, parts, host)).toBe(true)
+    expect(parts.hostCannotOpen).toHaveBeenCalledOnce()
+  } finally {
+    vi.useRealTimers()
+  }
 })
