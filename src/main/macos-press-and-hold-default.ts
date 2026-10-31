@@ -1,8 +1,9 @@
 import { mkdirSync, readFileSync } from 'node:fs'
-import { dirname, join } from 'node:path'
+import { join } from 'node:path'
 import { runProcessSync } from '@orca/process-host'
 import type { ProcessResult } from '@orca/process-host/process-spec'
 import { writeFileAtomically } from './codex-accounts/fs-utils'
+import { readBundleIdentifierFromExecutablePath } from './macos-bundle-identifier'
 
 // Opt out of the accent picker once so terminal keys repeat (#14746); later user choices win.
 // The separate defaults process may affect only the next launch. Reverting this also requires deleting the key.
@@ -18,7 +19,7 @@ const DEFAULTS_TIMEOUT_MS = 5_000
 // defaults uses exit 1 for an absent key; other failures leave its presence unknown.
 const DEFAULTS_MISSING_STATUS = 1
 
-const ORCA_BUNDLE_ID = 'com.stablyai.orca'
+const SHARED_ELECTRON_DOMAINS = new Set(['com.github.Electron'])
 
 export type PressAndHoldDecision =
   | 'not-macos'
@@ -49,20 +50,9 @@ export type PressAndHoldHost = {
   now: () => string
 }
 
-// Unpackaged Electron apps share com.github.Electron; do not change that domain.
-export function isOrcaPreferencesDomain(domain: string): boolean {
-  return domain === ORCA_BUNDLE_ID || domain.startsWith(`${ORCA_BUNDLE_ID}.`)
-}
-
-export function readBundleIdentifierFromExecutablePath(execPath: string): string | null {
-  try {
-    const plist = readFileSync(join(dirname(dirname(execPath)), 'Info.plist'), 'utf8')
-    const match = /<key>CFBundleIdentifier<\/key>\s*<string>([^<]*)<\/string>/.exec(plist)
-    const identifier = match?.[1]?.trim()
-    return identifier ? identifier : null
-  } catch {
-    return null
-  }
+// Reject only the domain every unpackaged Electron app shares; any other id came from this bundle's Info.plist.
+export function isOwnPreferencesDomain(domain: string): boolean {
+  return domain.length > 0 && !SHARED_ELECTRON_DOMAINS.has(domain)
 }
 
 /** Failed probes cannot establish absence and must never authorize overwriting a preference. */
@@ -151,7 +141,7 @@ export function ensureMacPressAndHoldDefault(host: PressAndHoldHost): PressAndHo
   }
 
   const domain = host.resolveBundleIdentifier()
-  if (!domain || !isOrcaPreferencesDomain(domain)) {
+  if (!domain || !isOwnPreferencesDomain(domain)) {
     return record('foreign-bundle', domain)
   }
 
