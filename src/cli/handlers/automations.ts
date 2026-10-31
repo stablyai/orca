@@ -97,15 +97,15 @@ async function resolveDefaultTarget(
     }
   }
   const workspace = await getOptionalWorktreeSelector(flags, 'workspace', cwd, client)
-  if (repo || workspace) {
-    return { repo, workspace }
-  }
-  if (client.isRemote) {
-    return {}
+  if (repo || workspace || client.isRemote) {
+    return repo || workspace ? { repo, workspace } : {}
   }
   try {
-    return { workspace: await resolveCurrentWorktreeSelector(cwd, client) }
-  } catch {
+    return { workspace: await resolveCurrentWorktreeSelector(cwd, client, 'workspace') }
+  } catch (error) {
+    if (error instanceof RuntimeClientError && error.code === 'selector_ambiguous') {
+      throw error
+    }
     return {}
   }
 }

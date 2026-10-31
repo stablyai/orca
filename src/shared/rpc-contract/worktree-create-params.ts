@@ -90,6 +90,8 @@ export const WorktreeCreate = z
     envParentWorkspace: OptionalString,
     parentWorktree: OptionalString,
     cwdParentWorktree: OptionalString,
+    // Absent on older clients: retain the existing cwd parent.
+    cwdParentAmbiguous: z.literal(true).optional(),
     noParent: OptionalBoolean,
     callerTerminalHandle: OptionalString,
     orchestrationContext: z

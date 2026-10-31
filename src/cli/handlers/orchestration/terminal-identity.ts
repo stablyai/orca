@@ -51,7 +51,9 @@ export async function resolveOrchestrationTerminalHandle(
   if (flagName === 'from') {
     return await resolveImplicitOrchestrationSender(cwd, client)
   }
-  return await getTerminalHandle(callerScopeFlags(), cwd, client)
+  return await getTerminalHandle(callerScopeFlags(), cwd, client, {
+    purpose: 'orchestration-caller'
+  })
 }
 
 // terminal.show requires a PTY; resolveIdentity also recognizes structured workers without panes.
@@ -185,7 +187,10 @@ async function resolveImplicitOrchestrationSender(
 ): Promise<string> {
   try {
     // An arbitrary active-terminal choice would let this command speak as a sibling worker.
-    return await getTerminalHandle(callerScopeFlags(), cwd, client, { requireUnambiguous: true })
+    return await getTerminalHandle(callerScopeFlags(), cwd, client, {
+      requireUnambiguous: true,
+      purpose: 'orchestration-caller'
+    })
   } catch (err) {
     if (!isNoActiveTerminalError(err)) {
       throw err

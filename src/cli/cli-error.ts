@@ -68,6 +68,33 @@ export function cliErrorCode(error: unknown): string | undefined {
 export function formatCliError(error: unknown, context: CliErrorContext = {}): string {
   const message = error instanceof Error ? error.message : String(error)
   const selector = contextRecovery(cliErrorCode(error), context)
+  if (
+    error instanceof RuntimeClientError &&
+    !(error instanceof RuntimeRpcFailureError) &&
+    error.code === 'selector_ambiguous' &&
+    error.data &&
+    typeof error.data === 'object' &&
+    'workspaces' in error.data &&
+    Array.isArray(error.data.workspaces) &&
+    error.data.workspaces.every(
+      (row: unknown) =>
+        row &&
+        typeof row === 'object' &&
+        'id' in row &&
+        typeof row.id === 'string' &&
+        'path' in row &&
+        typeof row.path === 'string' &&
+        'hostId' in row &&
+        typeof row.hostId === 'string' &&
+        'selector' in row &&
+        typeof row.selector === 'string'
+    )
+  ) {
+    return formatMessageWithNextSteps(
+      `${message}\nWorkspace choices (JSON data):\n${JSON.stringify(error.data.workspaces, null, 2)}`,
+      nextStepsFromData(error.data)
+    )
+  }
   if (selector) {
     return formatMessageWithNextSteps(
       message,

@@ -341,6 +341,72 @@ describe('Windows CLI launcher', () => {
     }
   })
 
+  itWindows(
+    'keeps workspace-choice data in one argv value through native and supported PowerShell modes',
+    () => {
+      const root = mkdtempSync(join(tmpdir(), 'orca choice native argv '))
+      try {
+        const launcher = join(root, 'bin', 'orca.exe')
+        const entry = join(root, 'argv.cjs')
+        const script = join(root, 'choice.ps1')
+        writeFileSync(entry, 'process.stdout.write(JSON.stringify(process.argv.slice(2)))')
+        copySharedLauncher(launcher)
+        writeFileSync(
+          join(dirname(launcher), 'orca-launcher.cfg'),
+          `node=${process.execPath}\ncli=${entry}\nuser-data=${root}\n`
+        )
+        writeFileSync(
+          script,
+          [
+            '[Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)',
+            '$PSNativeCommandArgumentPassing = $env:ORCA_CHOICE_MODE',
+            '& $env:ORCA_CHOICE_LAUNCHER worktree show --worktree $env:ORCA_CHOICE_SELECTOR --json',
+            'exit $LASTEXITCODE'
+          ].join('\n')
+        )
+        const selectors = [
+          'id:repo::C:\\space path\\child',
+          'id:repo::C:\\quotes" and smart“quotes”',
+          'id:repo::C:\\semi;&$`%!^()',
+          'id:repo::C:\\back\\slash/',
+          'id:repo::C:\\line\nfeed',
+          'id:repo::C:\\cafe\u0301',
+          'id:repo::C:\\trailing\\'
+        ]
+        for (const selector of selectors) {
+          const argv = ['worktree', 'show', '--worktree', selector, '--json']
+          const native = runProcessSync({ program: launcher, args: argv })
+          expect(native.code, native.stderr).toBe(0)
+          expect(JSON.parse(native.stdout)).toEqual(argv)
+          for (const [program, mode] of [
+            ['powershell.exe', 'Legacy'],
+            ['pwsh.exe', 'Standard'],
+            ['pwsh.exe', 'Legacy']
+          ]) {
+            // Legacy native argument passing itself drops embedded quotes; no universal shell recipe is promised.
+            if (mode === 'Legacy' && selector.includes('"')) {
+              continue
+            }
+            const result = runProcessSync({
+              program,
+              args: ['-NoProfile', '-NonInteractive', '-File', script],
+              env: {
+                ...process.env,
+                ORCA_CHOICE_MODE: mode,
+                ORCA_CHOICE_LAUNCHER: launcher,
+                ORCA_CHOICE_SELECTOR: selector
+              }
+            })
+            expect(result.code, `${program}/${mode}: ${result.stderr}`).toBe(0)
+            expect(JSON.parse(result.stdout)).toEqual(argv)
+          }
+        }
+      } finally {
+        removeFixtureTree(root)
+      }
+    }
+  )
+
   it('cross-compiles only the architectures the orcad template ships', () => {
     expect(windowsRustExecutableTarget(undefined)).toBeNull()
     expect(windowsRustExecutableTarget('x64')).toBe('x86_64-pc-windows-msvc')

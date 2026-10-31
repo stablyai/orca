@@ -27,6 +27,10 @@ export async function withCliAgentLaunchRecovery<T>(
     ) {
       throw error
     }
+    // This specific lineage refusal occurs before creation or agent start on every launch route.
+    if (error instanceof RuntimeRpcFailureError && error.code === 'LINEAGE_PARENT_AMBIGUOUS') {
+      throw error
+    }
     // Keep the setup choice's pre-launch refusal intact for the CLI's existing recovery.
     if (
       error instanceof RuntimeClientError &&

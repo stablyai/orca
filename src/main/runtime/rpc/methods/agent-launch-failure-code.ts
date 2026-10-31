@@ -1,4 +1,8 @@
 import { formatTerminalStartFailure } from '../../../../shared/terminal-start-failure'
+import {
+  RuntimeLineageError,
+  LINEAGE_PARENT_AMBIGUOUS
+} from '../../runtime-worktree-lineage-resolution'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
 import type { AgentLaunchTarget } from '../../../../shared/agent-launch-intent'
 import {
@@ -32,10 +36,16 @@ export function agentLaunchFailureCode(error: unknown): string {
 }
 
 /** A coded refusal's own words, kept beside its code so a replay says the same; bounded likewise. */
-export function agentLaunchFailureMessage(error: unknown): string | undefined {
+export function agentLaunchFailureMessage(
+  error: unknown,
+  targetKind?: AgentLaunchTarget['kind']
+): string | undefined {
   return (
     formatTerminalStartFailure(error) ??
-    (error instanceof OrchestrationError
+    (error instanceof OrchestrationError ||
+    (error instanceof RuntimeLineageError &&
+      error.code === LINEAGE_PARENT_AMBIGUOUS &&
+      targetKind === 'create-worktree')
       ? error.message.slice(0, REFUSAL_TEXT_MAX_LENGTH)
       : undefined)
   )
@@ -69,6 +79,14 @@ export function launchFailureWithoutEffectsCode(
   }
   if (error instanceof WorktreeCreateSetupChoiceRefusedError && targetKind === 'create-worktree') {
     return agentLaunchFailureCode(error)
+  }
+  // The unique producer refuses retained cwd lineage before any workspace or agent effects.
+  if (
+    error instanceof RuntimeLineageError &&
+    error.code === LINEAGE_PARENT_AMBIGUOUS &&
+    targetKind === 'create-worktree'
+  ) {
+    return LINEAGE_PARENT_AMBIGUOUS
   }
   if (error instanceof AgentLaunchPaneAlreadyLiveError && targetKind === 'existing') {
     return AGENT_LAUNCH_PANE_ALREADY_LIVE_CODE
