@@ -283,7 +283,11 @@ async function switchToChat(
     activate: true,
     check,
     focusWindow: agentLaunchMovesHostWindow(ctx),
-    ...(replaces ? { replaces } : sameWorkspace ? { placement: close.placement() } : {})
+    ...(replaces
+      ? { replaces }
+      : sameWorkspace
+        ? { placement: close.placement(), sourceTabId: close.source.tabId }
+        : {})
   })
   replacedBy = replaces ? sessionId : undefined
   deadline.check()

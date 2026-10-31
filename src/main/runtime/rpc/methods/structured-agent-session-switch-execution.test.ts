@@ -211,6 +211,8 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
           return { tabId: tab.id, groupId: group!.id, tabOrder: [...group!.tabOrder] }
         })
       : undefined
+    const focusEditorTab = vi.fn()
+    runtime.setNotifier({ focusEditorTab })
     const acquisitions = rig.adapter.acquire.mock.calls.length
     const operation = executeStructuredSessionSwitch(
       {
@@ -267,9 +269,12 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
     expect(published.tabs.find((tab) => tab.id === destination)).toMatchObject(
       elsewhere ? {} : split ? { after: { tabId: TAB_ID } } : { replaces: { tabId: TAB_ID } }
     )
-    if (shape !== 'reselected') {
-      expect(published.activeTabId).toBe(destination)
+    if (split) {
+      // The window's focus is judged against the split pane's tab the chat opened beside.
+      expect(focusEditorTab).toHaveBeenCalledWith(expect.any(String), WORKTREE_ID, TAB_ID)
     }
+    // What paired clients mirror is the write's decision: a user who picked another tab keeps it.
+    expect(published.activeTabId === destination).toBe(shape !== 'reselected')
     if (!split && !elsewhere) {
       // A whole tab is replaced in the one write: its rows are gone from the published snapshot.
       expect(

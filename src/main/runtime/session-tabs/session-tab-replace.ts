@@ -25,7 +25,14 @@ function tabBarIdOf(row: ReplacementRow): string {
  */
 export function replaceSessionTabInSnapshot(
   existing: RuntimeMobileSessionTabsSnapshot | undefined,
-  input: { workspaceId: string; replacedTabId: string; row: ReplacementRow; activate: boolean }
+  input: {
+    workspaceId: string
+    replacedTabId: string
+    row: ReplacementRow
+    activate: boolean
+    /** The layout owner's write already decided `activate` from the source's selection. */
+    selectionDecided?: boolean
+  }
 ): RuntimeMobileSessionTabsSnapshot {
   const { replacedTabId } = input
   const replaced = new Set(existing ? rowsOfTab(existing, replacedTabId).map((row) => row.id) : [])
@@ -33,10 +40,14 @@ export function replaceSessionTabInSnapshot(
     { id: getHeadlessMobileSessionGroupId(input.workspaceId), activeTabId: null, tabOrder: [] }
   ]
   const slot = groups.find((group) => group.tabOrder.includes(replacedTabId))
-  // Decided in this write: the new row takes the selection only from its source, or from a group
-  // nothing holds; with no slot here to read, the request's own choice stands.
+  // The new row takes the selection only from its source, or from a group nothing holds. A source
+  // no group lists here is no proof the user stayed on it, unless the layout owner's write decided.
   const held = slot?.activeTabId
-  const activate = input.activate && (held == null || held === replacedTabId || replaced.has(held))
+  const activate =
+    input.activate &&
+    (slot
+      ? held == null || held === replacedTabId || replaced.has(held)
+      : input.selectionDecided === true)
   // The hint names the confirmed source even when this snapshot no longer lists it (the window can
   // drop it first); a client that still shows that tab puts the row there.
   const row: ReplacementRow = {

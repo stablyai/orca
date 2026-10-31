@@ -17,6 +17,8 @@ export type StructuredSessionTabProjection = {
   placement?: { groupId?: string; afterTabId?: string; index?: number }
   /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
   replaces?: string
+  /** The layout owner's own write already decided `activate` from its source's selection. */
+  selectionDecided?: boolean
 }
 
 /** Publish membership; a listed chat keeps its place, a new one goes last or into the replaced slot. */
@@ -42,7 +44,8 @@ export function projectStructuredSessionTab(
       workspaceId: input.workspaceId,
       replacedTabId: input.replaces,
       row,
-      activate: input.activate
+      activate: input.activate,
+      selectionDecided: input.selectionDecided
     })
   }
   const tabs = [...(existing?.tabs ?? [])].map((tab) => ({

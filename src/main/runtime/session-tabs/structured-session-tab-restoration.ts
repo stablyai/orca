@@ -91,6 +91,8 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     placement?: { groupId?: string; afterTabId?: string; index?: number }
     /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
     replaces?: string
+    /** A split pane's switch: the tab the chat opens beside, whose selection it may take. */
+    sourceTabId?: string
   }): Promise<void> {
     const host = getStructuredAgentSessionHost()
     input.check?.()
@@ -113,8 +115,10 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     // A replace takes the selection only from a tab that still holds it, decided by the layout
     // owner as it writes: here for main's layout, else by the window applying the replace.
     let activate = input.activate
+    let selectionDecided = false
     // The switch's source: the replaced tab, or the split pane's tab the chat opens beside.
-    const source = input.replaces ?? (input.check ? input.placement?.afterTabId : undefined)
+    const source =
+      input.replaces ?? input.sourceTabId ?? (input.check ? input.placement?.afterTabId : undefined)
     const windowReplaces = Boolean(
       input.replaces && !ORCA_LAYOUT_OWNER_IS_MAIN && this.getAvailableAuthoritativeWindow()
     )
@@ -124,6 +128,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
         () => {
           const session = this.getWorkspaceSessionForWorktree(input.workspaceId)
           if (source && session) {
+            selectionDecided = true
             activate &&= savedTabHoldsSelection(
               this.getWorkspaceSessionHostIdForWorktree(input.workspaceId),
               session,
@@ -152,7 +157,8 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
       this.saveWindowlessAgentSessionTab(input.workspaceId, input)
     }
     input.check?.()
-    this.projectStructuredAgentSessionTab(input)
+    // The snapshot paired clients mirror says what this write decided, never the request's wish.
+    this.projectStructuredAgentSessionTab({ ...input, activate, selectionDecided })
     if (activate && input.check) {
       // The saved view selects the chat the switch put in the slot; the window draws from it.
       this.commitWindowlessChatSession(input.workspaceId, (session) =>
@@ -182,6 +188,7 @@ export abstract class OrcaRuntimeWithRestoreStructuredAgentSessionTabsOnce exten
     notify?: boolean
     /** A same-slot switch: the chat takes this tab's slot and the tab's rows leave, in one write. */
     replaces?: string
+    selectionDecided?: boolean
   }): void {
     const next = projectStructuredSessionTab(
       this.mobileSessionTabsByWorktree.get(input.workspaceId),
