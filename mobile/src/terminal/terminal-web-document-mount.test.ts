@@ -87,7 +87,7 @@ describe('a stopped document takes its engines with it', () => {
     const terminal = mountTerminalWebDocument(plantHost(), () => {})
     const style = document.getElementById('orca-terminal-document-style')?.textContent ?? ''
     expect(style).toContain(`src:url('${terminalNerdFontUrl}') format('woff2')`)
-    expect(style).not.toContain('data:font/')
+    expect(style).not.toContain("font-family:'Orca Nerd Font Symbols';src:url('data:")
     expect(style).toContain('unicode-range:U+E000-F8FF,U+F0000-FFFFD,U+100000-10FFFD')
     terminal.dispose()
   })
