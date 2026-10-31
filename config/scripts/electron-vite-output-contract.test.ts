@@ -1,3 +1,4 @@
+import { verifyPreloadSource, verifyPreloadOutput } from './preload-output-contract.mjs'
 import * as nodeFs from 'node:fs'
 import { mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import * as nodePath from 'node:path'
@@ -6,7 +7,7 @@ import { tmpdir } from 'node:os'
 import { EventEmitter } from 'node:events'
 import { runInNewContext } from 'node:vm'
 import { describe, expect, it, vi } from 'vitest'
-import { MainConfigFactory } from 'electron-vite'
+import { MainConfigFactory, PreloadConfigFactory } from 'electron-vite'
 import { resolveConfig } from 'vite'
 import {
   BOOTSTRAP_FATAL_LOG_ENV_VAR,
@@ -242,6 +243,61 @@ describe('Electron Vite output contract', () => {
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('tldts')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('zod')
     expect(electronViteConfig.main?.build?.externalizeDeps?.exclude).toContain('smol-toml')
+  })
+
+  it('bundles ordinary preload dependencies while retaining sandbox builtins', async () => {
+    expect(electronViteConfig.preload?.build?.externalizeDeps).toBe(false)
+    const preload = await new PreloadConfigFactory(electronViteConfig.preload ?? {}, {}, {}).build()
+    const resolved = await resolveConfig({ ...preload, configFile: false }, 'build')
+    const patterns = resolved.build.rolldownOptions.external
+    if (!Array.isArray(patterns)) {
+      throw new Error('Expected preload externals')
+    }
+    const external = (source: string) =>
+      patterns.some((pattern) =>
+        typeof pattern === 'string' ? pattern === source : pattern.test(source)
+      )
+    expect(external('electron')).toBe(true)
+    expect(external('node:fs')).toBe(true)
+    for (const name of ['smol-toml', 'smol-toml/package.json', 'zod']) {
+      expect(external(name)).toBe(false)
+    }
+  })
+
+  it('rejects unsupported lazy, dynamic, indirect and chunked sandbox output', async () => {
+    for (const source of [
+      'require("smol-toml")',
+      'function later(){ return require("node:fs") }',
+      'require(name)',
+      'const load = require; load("smol-toml")',
+      'import("smol-toml")',
+      'module.require("smol-toml")',
+      'const load = process.getBuiltinModule; load("fs")'
+    ]) {
+      await expect(verifyPreloadSource(source)).rejects.toThrow()
+    }
+    await expect(verifyPreloadSource('require("electron")')).rejects.toThrow('executable')
+    const root = mkdtempSync(join(tmpdir(), 'orca-preload-contract-'))
+    try {
+      nodeFs.mkdirSync(join(root, 'out', 'preload'), { recursive: true })
+      nodeFs.writeFileSync(join(root, 'out', 'preload', 'index.js'), '')
+      nodeFs.writeFileSync(join(root, 'out', 'preload', 'lazy.js'), '')
+      await expect(verifyPreloadOutput(root)).rejects.toThrow('one complete artifact')
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it('executes the restricted published bridge and checks its returned IPC results', async () => {
+    const source = `const {contextBridge, ipcRenderer} = require('electron');
+      contextBridge.exposeInMainWorld('api', {
+        app: {getIdentity: () => ipcRenderer.invoke('app:getIdentity')},
+        orcaProfiles: {list: () => ipcRenderer.invoke('orcaProfiles:list')}
+      });`
+    await expect(verifyPreloadSource(source)).resolves.toEqual({ imports: ['electron'] })
+    await expect(verifyPreloadSource(source.replace('app:getIdentity', 'wrong'))).rejects.toThrow(
+      'bridge result'
+    )
   })
 
   it('exits when a static import fails before source error guards load', () => {

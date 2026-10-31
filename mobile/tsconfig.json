@@ -5,6 +5,7 @@
     "paths": {
       "@/*": ["./src/*"],
       "@noble/hashes/*": ["./node_modules/@noble/hashes/*"],
+      "smol-toml": ["./node_modules/smol-toml"],
       "tweetnacl": ["./node_modules/tweetnacl"],
       "ws": ["./node_modules/@types/ws"],
       "zod": ["./node_modules/zod"]
