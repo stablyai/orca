@@ -120,6 +120,33 @@ describe('AgentcookieSessionSync', () => {
     }
   })
 
+  it('reports a rejected startup or interval pull instead of leaving it unhandled', async () => {
+    const dir = mkdtempSync(join(tmpdir(), 'ac-sync-'))
+    const exe = writeFakeAgentcookie(dir)
+    diag.mockClear()
+    vi.useFakeTimers()
+    try {
+      const sync = new AgentcookieSessionSync({
+        targetPartition: 'persist:orca-browser',
+        isEnabled: () => true,
+        getApprovedBinaryPath: () => exe,
+        intervalMs: 1000
+      })
+      const syncNow = vi.spyOn(sync, 'syncNow').mockRejectedValue(new Error('store closed'))
+
+      sync.start()
+      await vi.advanceTimersByTimeAsync(1000)
+      sync.stop()
+
+      expect(syncNow).toHaveBeenCalledTimes(2)
+      expect(diag).toHaveBeenCalledTimes(2)
+      expect(diag).toHaveBeenCalledWith('agentcookie sync failed: Error: store closed')
+    } finally {
+      vi.useRealTimers()
+      rmSync(dir, { recursive: true, force: true })
+    }
+  })
+
   it('keeps one timer across repeated start() calls and can restart after stop()', () => {
     const dir = mkdtempSync(join(tmpdir(), 'ac-sync-'))
     const exe = writeFakeAgentcookie(dir)

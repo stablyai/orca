@@ -106,11 +106,11 @@ export class AgentcookieSessionSync {
       lastImportedCount: null
     })
     if (binary && this.options.isEnabled()) {
-      void this.syncNow()
+      this.syncInBackground()
     }
     this.timer = setInterval(() => {
       if (this.options.isEnabled()) {
-        void this.syncNow()
+        this.syncInBackground()
       }
     }, this.intervalMs)
   }
@@ -144,5 +144,13 @@ export class AgentcookieSessionSync {
     } finally {
       this.running = false
     }
+  }
+
+  // Why: nobody awaits a startup or interval pull, and the import or the status
+  // callback can still reject, so report it here rather than leave it unhandled.
+  private syncInBackground(): void {
+    this.syncNow().catch((error: unknown) => {
+      diag(`agentcookie sync failed: ${summarizeCookieImportError(error)}`)
+    })
   }
 }
