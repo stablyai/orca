@@ -339,8 +339,9 @@ describe('repos:add + repos:clone', () => {
     ).rejects.toThrow('Imported folder does not match the selected project identity.')
 
     expect(mockStore.removeProjectForHost).toHaveBeenCalledWith(
-      expect.objectContaining({ id: added[0]?.id })
+      expect.objectContaining(mockStore.addRepo.mock.calls[0][0])
     )
+    expect(added).toEqual([])
     expect(invalidateAuthorizedRootsCacheMock).toHaveBeenCalled()
   })
 
@@ -373,7 +374,7 @@ describe('repos:add + repos:clone', () => {
 
     expect(mockStore.updateRepo).not.toHaveBeenCalled()
     expect(mockStore.removeProjectForHost).toHaveBeenCalledWith(
-      expect.objectContaining({ id: added[0]?.id })
+      expect.objectContaining(mockStore.addRepo.mock.calls[0][0])
     )
   })
 

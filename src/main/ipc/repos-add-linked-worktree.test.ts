@@ -2,6 +2,8 @@
 
 import { describe, expect, it, vi, beforeEach } from 'vitest'
 import type { Repo } from '../../shared/repo-types'
+import { runKeyedSerializedOperation } from '../cli/keyed-promise-queue'
+import { emitRepoAdded } from './repos/repo-added-telemetry'
 
 const {
   handleMock,
@@ -29,6 +31,13 @@ const {
   prepareLocalWorktreeRootForRepoMock: vi.fn(),
   detectRepoIconAndUpstreamMock: vi.fn()
 }))
+
+vi.mock(import('../cli/keyed-promise-queue'), async (original) => {
+  const actual = await original()
+  return { ...actual, runKeyedSerializedOperation: vi.fn(actual.runKeyedSerializedOperation) }
+})
+
+vi.mock('./repos/repo-added-telemetry', () => ({ emitRepoAdded: vi.fn() }))
 
 vi.mock('electron', () => ({
   dialog: { showOpenDialog: vi.fn() },
@@ -93,6 +102,8 @@ describe('repos:add with git worktrees', () => {
   }
 
   beforeEach(() => {
+    vi.mocked(runKeyedSerializedOperation).mockClear()
+    vi.mocked(emitRepoAdded).mockClear()
     handlers.clear()
     handleMock.mockReset()
     handleMock.mockImplementation((channel: string, handler: (...a: unknown[]) => unknown) => {
@@ -100,7 +111,9 @@ describe('repos:add with git worktrees', () => {
     })
     removeHandlerMock.mockReset()
     mockStore.getRepos.mockReset().mockReturnValue([])
-    mockStore.addRepo.mockReset()
+    mockStore.addRepo.mockReset().mockImplementation((repo: Repo) => {
+      mockStore.getRepos().push(repo)
+    })
     isGitRepoMock.mockReset().mockReturnValue(true)
     // A linked worktree's own toplevel cannot identify its already-tracked main repo.
     getGitRepoRootMock.mockReset().mockImplementation((path: string) => path)
@@ -159,37 +172,52 @@ describe('repos:add with git worktrees', () => {
       const repos: Repo[] = []
       mockStore.getRepos.mockImplementation(() => repos)
       mockStore.addRepo.mockImplementation((repo: Repo) => repos.push(repo))
-      const releases: (() => void)[] = []
-      detectRepoIconAndUpstreamMock.mockImplementation(
-        () => new Promise((resolve) => releases.push(() => resolve({})))
-      )
+      const discovery = Promise.withResolvers<object>()
+      detectRepoIconAndUpstreamMock.mockReturnValueOnce(discovery.promise)
       const first = callAdd({ path: MAIN_CHECKOUT, kind })
       const second = callAdd({ path: MAIN_CHECKOUT, kind })
-      await vi.waitFor(() => expect(releases).toHaveLength(2))
-      releases[0]()
-      const winner = await first
-      releases[1]()
-      expect(await second).toEqual(winner)
-      expect(repos).toHaveLength(1)
-      expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+      try {
+        await vi.waitFor(() => expect(detectRepoIconAndUpstreamMock).toHaveBeenCalledOnce())
+        discovery.resolve({})
+        const winner = await first
+        expect(await second).toEqual(winner)
+        expect(repos).toHaveLength(1)
+        expect(emitRepoAdded).toHaveBeenCalledWith('folder_picker', false, kind === 'git')
+        expect(emitRepoAdded).toHaveBeenCalledWith('folder_picker', true, kind === 'git')
+        expect(emitRepoAdded).toHaveBeenCalledTimes(2)
+        expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+        expect(detectRepoIconAndUpstreamMock).toHaveBeenCalledOnce()
+      } finally {
+        discovery.resolve({})
+        await Promise.allSettled([first, second])
+      }
     }
   )
 
-  it('returns a main checkout added while linked-worktree icon discovery is pending', async () => {
-    let release: () => void = () => {}
-    detectRepoIconAndUpstreamMock.mockImplementation(
-      () =>
-        new Promise((resolve) => {
-          release = () => resolve({})
-        })
-    )
+  it('keeps a late main-checkout race result private while a folder at the linked path waits', async () => {
+    const discovery = Promise.withResolvers<object>()
+    detectRepoIconAndUpstreamMock.mockReturnValueOnce(discovery.promise).mockResolvedValue({})
     getLinkedWorktreeMainRepoRootMock.mockReturnValue(MAIN_CHECKOUT)
     const pending = callAdd({ path: LINKED_WORKTREE })
-    await vi.waitFor(() => expect(detectRepoIconAndUpstreamMock).toHaveBeenCalled())
-    mockStore.getRepos.mockReturnValue([trackedMainRepo()])
-    release()
-    expect(await pending).toEqual({ repo: expect.objectContaining({ id: 'main-repo-id' }) })
-    expect(mockStore.addRepo).not.toHaveBeenCalled()
+    await vi.waitFor(() => expect(detectRepoIconAndUpstreamMock).toHaveBeenCalledOnce())
+    const folder = callAdd({ path: LINKED_WORKTREE, kind: 'folder' })
+    try {
+      await vi.waitFor(() => expect(runKeyedSerializedOperation).toHaveBeenCalledTimes(2))
+      expect(detectRepoIconAndUpstreamMock).toHaveBeenCalledOnce()
+      mockStore.getRepos().push(trackedMainRepo())
+      discovery.resolve({ upstream: { owner: 'git-only', repo: 'metadata' } })
+      expect(await pending).toEqual({ repo: expect.objectContaining({ id: 'main-repo-id' }) })
+      expect(await folder).toEqual({
+        repo: expect.objectContaining({ path: LINKED_WORKTREE, kind: 'folder' })
+      })
+      expect(mockStore.getRepos()).toHaveLength(2)
+      expect(mockStore.getRepos()[1]).not.toHaveProperty('upstream')
+      expect(mockStore.addRepo).toHaveBeenCalledTimes(1)
+      expect(detectRepoIconAndUpstreamMock).toHaveBeenCalledTimes(2)
+    } finally {
+      discovery.resolve({})
+      await Promise.allSettled([pending, folder])
+    }
   })
 
   it('matches the tracked main checkout across path separator differences', async () => {
