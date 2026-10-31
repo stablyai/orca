@@ -12539,7 +12539,8 @@
           "license": "ライセンス",
           "whatsNew": "新機能",
           "hashCopied": "コンテンツハッシュをコピーしました",
-          "hashCopyFailed": "ハッシュをコピーできませんでした。"
+          "hashCopyFailed": "ハッシュをコピーできませんでした。",
+          "readme": "{{value0}} で README を読む"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "これらのフィルターに一致するプラグインはありません",

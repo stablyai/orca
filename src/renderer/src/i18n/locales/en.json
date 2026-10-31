@@ -13218,7 +13218,8 @@
           "license": "License",
           "whatsNew": "What’s new",
           "hashCopied": "Content hash copied",
-          "hashCopyFailed": "Couldn't copy the hash."
+          "hashCopyFailed": "Couldn't copy the hash.",
+          "readme": "Read the README on {{value0}}"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "No plugins match these filters",

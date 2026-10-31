@@ -12572,7 +12572,8 @@
           "license": "许可证",
           "whatsNew": "新功能",
           "hashCopied": "已复制内容哈希",
-          "hashCopyFailed": "无法复制哈希。"
+          "hashCopyFailed": "无法复制哈希。",
+          "readme": "在 {{value0}} 上阅读 README"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "没有与这些筛选条件匹配的插件",

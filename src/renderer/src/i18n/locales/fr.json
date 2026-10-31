@@ -13051,7 +13051,8 @@
           "license": "Licence",
           "whatsNew": "Nouveautés",
           "hashCopied": "Empreinte du contenu copiée",
-          "hashCopyFailed": "Impossible de copier l’empreinte."
+          "hashCopyFailed": "Impossible de copier l’empreinte.",
+          "readme": "Lire le README sur {{value0}}"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Aucun plugin ne correspond à ces filtres",

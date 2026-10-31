@@ -12827,7 +12827,8 @@
           "license": "Licencia",
           "whatsNew": "Novedades",
           "hashCopied": "Hash de contenido copiado",
-          "hashCopyFailed": "No se pudo copiar el hash."
+          "hashCopyFailed": "No se pudo copiar el hash.",
+          "readme": "Leer el README en {{value0}}"
         },
         "PluginListEmptyStates": {
           "noFilterMatches": "Ningún plugin coincide con estos filtros",

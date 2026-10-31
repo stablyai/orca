@@ -8,7 +8,10 @@ import { DetailSection } from './PluginDetailSections'
 import { formatPluginReleaseDate } from '../presentation/plugin-release-date'
 import { usePluginRollbackVersion } from '../state/use-plugin-rollback-version'
 import { openAppHttpLink } from '@/lib/app-http-link-open'
-import { pluginRepositoryPageUrl } from '../../../../../shared/plugins/catalog/plugin-repository-link'
+import {
+  pluginReadmePageUrl,
+  pluginRepositoryPageUrl
+} from '../../../../../shared/plugins/catalog/plugin-repository-link'
 
 function InfoRow({
   label,
@@ -33,7 +36,7 @@ function InfoRow({
   )
 }
 
-function RepositoryLink({ url }: { url: string | null }) {
+function ExternalLink({ url, label }: { url: string | null; label: string }) {
   if (!url) {
     return null
   }
@@ -44,7 +47,7 @@ function RepositoryLink({ url }: { url: string | null }) {
       className="-ml-2"
       onClick={(event) => openAppHttpLink(url, { event })}
     >
-      {translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
+      {label}
       <ArrowUpRight />
     </Button>
   )
@@ -69,6 +72,13 @@ export function PluginDetailInfo({
   const sourceUrl =
     listing?.source.url ?? (plugin?.source?.kind === 'git' ? plugin.source.reference : null)
   const repository = sourceUrl ? pluginRepositoryPageUrl(sourceUrl) : null
+  const readme = listing?.release
+    ? pluginReadmePageUrl({
+        gitUrl: listing.source.url,
+        commit: listing.release.commit,
+        path: listing.source.path
+      })
+    : null
 
   return (
     <aside className="mt-6">
@@ -129,7 +139,18 @@ export function PluginDetailInfo({
         />
       </dl>
       <div className="mt-2 flex flex-col items-start">
-        <RepositoryLink url={repository} />
+        <ExternalLink
+          url={repository}
+          label={translate('auto.components.settings.PluginDetailPage.repository', 'Repository')}
+        />
+        <ExternalLink
+          url={readme}
+          label={translate(
+            'auto.components.settings.PluginDetailInfo.readme',
+            'Read the README on {{value0}}',
+            { value0: readme?.startsWith('https://gitlab.com/') ? 'GitLab' : 'GitHub' }
+          )}
+        />
       </div>
     </aside>
   )
