@@ -29,19 +29,23 @@ describe('keybindings', () => {
     ).toEqual([])
   })
 
-  it('matches the macOS Plugins shortcut when Option produces a composed character', () => {
+  it.each([
+    ['darwin', '≈', 'KeyX'],
+    ['linux', 'Y', 'KeyY'],
+    ['win32', 'Y', 'KeyY']
+  ] as const)('matches the Plugins shortcut input on %s', (platform, key, code) => {
     expect(
       keybindingMatchesAction(
         'view.plugins',
         {
-          key: '≈',
-          code: 'KeyX',
-          meta: true,
-          control: false,
-          alt: true,
-          shift: false
+          key,
+          code,
+          meta: platform === 'darwin',
+          control: platform !== 'darwin',
+          alt: platform === 'darwin',
+          shift: platform !== 'darwin'
         },
-        'darwin'
+        platform
       )
     ).toBe(true)
   })
