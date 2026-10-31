@@ -1,4 +1,3 @@
-import { isFinalAutomationRunStatus } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   AutomationChatLaunchRequest,
@@ -38,17 +37,6 @@ export async function reuseAutomationChat(
       continue
     }
     seen.add(id)
-    if (
-      previous.status !== 'completed' ||
-      runs.some(
-        (entry) =>
-          entry.id !== run.id &&
-          entry.chatSessionId === id &&
-          !isFinalAutomationRunStatus(entry.status)
-      )
-    ) {
-      continue
-    }
     const target: AutomationChatAgentLaunch = {
       // The caller only attempts Chat reuse for a stable workspace.
       workspaceId: automation.workspaceId!,

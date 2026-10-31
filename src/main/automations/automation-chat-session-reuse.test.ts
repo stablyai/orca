@@ -3,7 +3,7 @@ import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cu
 import { resolveCallerAutomationRun } from './automation-run-caller'
 import { automationLaunchRunTarget } from './headless-dispatch'
 import { reuseAutomationChat } from './automation-chat-session-reuse'
-import type { AutomationRun, AutomationRunStatus } from '../../shared/automations-types'
+import type { AutomationRun } from '../../shared/automations-types'
 
 const { send } = vi.hoisted(() => ({ send: vi.fn() }))
 vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', () => ({
@@ -11,25 +11,7 @@ vi.mock('../native-chat/agent-session-wire/structured-agent-session-registry', (
 }))
 
 describe('automation chat reuse', () => {
-  it.each<{ label: string; activeStatus?: AutomationRunStatus; activeAt?: number }>([
-    { label: 'binds a completed session before handing off the next prompt' },
-    {
-      label: 'excludes a session with a newer dispatching run',
-      activeStatus: 'dispatching',
-      activeAt: 3
-    },
-    {
-      label: 'excludes a session with a newer dispatched run',
-      activeStatus: 'dispatched',
-      activeAt: 3
-    },
-    {
-      label: 'excludes a session with an older unfinished run',
-      activeStatus: 'dispatched',
-      activeAt: 0
-    }
-  ])('$label', async ({ activeStatus, activeAt }) => {
-    send.mockReset()
+  it('binds a reused session before handing off the next prompt', async () => {
     const state = buildProfileStateCutoverFixture('/fixture')
     const automation = { ...state.automations[0], agentId: 'claude' as const, workspaceId: 'wt-1' }
     const previous = {
@@ -77,17 +59,7 @@ describe('automation chat reuse', () => {
         automation,
         run: current,
         target: { ok: true, cwd: '/fixture', repo: state.repos[0] },
-        runs: activeStatus
-          ? [
-              previous,
-              {
-                ...previous,
-                id: 'active-run',
-                status: activeStatus,
-                dispatchedAt: activeAt ?? null
-              }
-            ]
-          : [previous],
+        runs: [previous],
         agentPrompt: 'Run instructions\nCheck the repo',
         bindSession: (target) => {
           current = { ...current, ...automationLaunchRunTarget(target) }
@@ -95,13 +67,7 @@ describe('automation chat reuse', () => {
       }
     )
 
-    if (activeStatus) {
-      expect(result).toBeNull()
-      expect(current.chatSessionId).toBeNull()
-      expect(send).not.toHaveBeenCalled()
-    } else {
-      expect(result?.chatSessionId).toBe('chat-1')
-      expect(send).toHaveBeenCalledOnce()
-    }
+    expect(result?.chatSessionId).toBe('chat-1')
+    expect(send).toHaveBeenCalledOnce()
   })
 })
