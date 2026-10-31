@@ -3,7 +3,7 @@ import { existsSync, mkdtempSync, readFileSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { isDeepStrictEqual } from 'node:util'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   AGENT_JOURNAL_THREAD_SCOPE,
   type AgentSessionJournalIdentity,
@@ -221,3 +221,79 @@ describe('a chat this build wrote, opened by a shipped build', () => {
     SUITE_TIMEOUT_MS
   )
 })
+
+it(
+  'leaves an existing chat whose first write from this build failed as it was, so the newest release opens and writes it',
+  async () => {
+    const older = createTrackedJournalOpener({ legacyInputs: true })
+    const seeded = await older.open({ identity: IDENTITY, stateDirectory: directory })
+    for (let ordinal = 0; ordinal < 3; ordinal++) {
+      await appendStatus(seeded, ordinal)
+    }
+    await older.closeAll()
+    const prefix = liveTestJournalRows(
+      openTestJournalHostDatabase(directory).db,
+      IDENTITY.sessionId
+    )
+    await closeTestJournalHostDatabase(directory)
+
+    const journals = createTrackedJournalOpener()
+    const journal = await journals.open({ identity: IDENTITY, stateDirectory: directory })
+    const database = openTestJournalHostDatabase(directory)
+    // The first write fails after its marker is in: at a record, then at COMMIT.
+    database.db.exec(`CREATE TEMP TRIGGER failure BEFORE INSERT ON main.journal_outcomes
+      BEGIN SELECT RAISE(ABORT, 'record failure'); END`)
+    await expect(appendStatus(journal, 3)).rejects.toThrow('record failure')
+    database.db.exec('DROP TRIGGER failure')
+    const exec = database.db.exec.bind(database.db)
+    const commit = vi.spyOn(database.db, 'exec').mockImplementation((sql) => {
+      if (sql === 'COMMIT') {
+        throw new Error('commit failure')
+      }
+      exec(sql)
+    })
+    await expect(appendStatus(journal, 4)).rejects.toThrow('commit failure')
+    commit.mockRestore()
+    expect(journalOutcomeSource(database.db, IDENTITY.sessionId, journal.epoch)).toBeNull()
+    expect(
+      database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcome_generations').get()?.n
+    ).toBe(0)
+    expect(liveTestJournalRows(database.db, IDENTITY.sessionId)).toEqual(prefix)
+    await journals.closeAll()
+
+    const checkout = await materializeReleaseCheckout(resolveBaselineReleaseRef())
+    const support = await importReleaseCheckoutModule(
+      checkout,
+      `${JOURNAL}/journal-host-database-test-support.ts`
+    )
+    const release = releaseModuleExport<() => ReleasedOpener>(
+      support,
+      'createTrackedJournalOpener'
+    )()
+    try {
+      const opened = await release.open({ identity: IDENTITY, stateDirectory: directory })
+      expect(opened.snapshot().items).toHaveLength(3)
+      await opened.appendItem(
+        { provider: 'codex', threadId: 'thread-1', turnId: 'turn-1', ordinal: 9 },
+        { kind: 'status', text: 'from the release' },
+        { fence: 1, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
+      )
+    } finally {
+      await release.closeAll()
+      releaseModuleExport<(stateDirectory: string) => void>(
+        support,
+        'closeTestJournalHostDatabase'
+      )(directory)
+    }
+    const reopened = openTestJournalHostDatabase(directory)
+    try {
+      expect(restoreJournal(reopened.db, IDENTITY.sessionId)?.state.items.size).toBe(4)
+      expect(liveTestJournalRows(reopened.db, IDENTITY.sessionId).slice(0, prefix.length)).toEqual(
+        prefix
+      )
+    } finally {
+      await closeTestJournalHostDatabase(directory)
+    }
+  },
+  SUITE_TIMEOUT_MS
+)
