@@ -6,7 +6,10 @@ import {
   createQueuedMessageTestRig,
   type QueuedMessageTestRig
 } from '../../native-chat/agent-session-wire/structured-agent-session-queued-message-rig.test-fixture'
-import { HOST_TEST_SESSION as SESSION } from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
+import {
+  HOST_TEST_SESSION as SESSION,
+  hostTestOperationId
+} from '../../native-chat/agent-session-wire/structured-agent-session-host-test-data'
 
 let rig: QueuedMessageTestRig
 beforeEach(async () => {
@@ -85,7 +88,11 @@ it('requires handoff permission and a worker before calling the service', async 
     audit: { record: vi.fn() }
   }
   expect(
-    await executePluginHostCall({ ...input, surface: 'worker', grantedCapabilities: ['chat:read'] })
+    await executePluginHostCall({
+      ...input,
+      surface: 'worker',
+      grantedCapabilities: ['chat:read']
+    })
   ).toMatchObject({ ok: false })
   expect(
     await executePluginHostCall({
@@ -95,4 +102,25 @@ it('requires handoff permission and a worker before calling the service', async 
     })
   ).toMatchObject({ ok: false })
   expect(handoff).not.toHaveBeenCalled()
+})
+
+it('includes the previous handoff when preparing the next summary', async () => {
+  const services = pluginChatServices(() => rig.host)
+  const workspace = rig.store.getRecord(SESSION)!.location.workspaceId
+  const first = rig.send('Keep the original requirement')
+  await first.result
+  await rig.settleAccepted(first.id, 'answer')
+  const read = await services.read(workspace, SESSION)
+  expect(
+    await services.handoff(workspace, 'samples.handoff', {
+      sessionId: SESSION,
+      operationId: hostTestOperationId(),
+      fence: read.fence,
+      cursor: read.cursor,
+      context: 'The original requirement remains important'
+    })
+  ).toEqual({ completed: true })
+  expect((await services.read(workspace, SESSION)).transcript).toContain(
+    'The original requirement remains important'
+  )
 })

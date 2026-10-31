@@ -25,19 +25,32 @@ export default function activate(orca) {
       const chats = await orca.host.call('chat.list')
       const sessionId = args.sessionId ?? (chats.length === 1 ? chats[0].sessionId : undefined)
       if (!sessionId || !chats.some((chat) => chat.sessionId === sessionId)) {
-        return { message: 'Choose a local chat by passing its sessionId.', chats }
+        return {
+          message: 'Choose a local chat by passing its sessionId.',
+          chats
+        }
       }
       const key = `pending:${sessionId}`
       const pending = (await orca.host.call('storage.get', { key })).value
       let request = pending
       if (!request) {
         const read = await orca.host.call('chat.readContext', { sessionId })
-        if (args.context !== undefined && (!args.cursor || !args.fence)) {
+        if (
+          args.context !== undefined &&
+          (!args.cursor ||
+            typeof args.cursor.epoch !== 'string' ||
+            !args.cursor.epoch ||
+            args.cursor.epoch.length > 512 ||
+            !Number.isSafeInteger(args.cursor.sequence) ||
+            args.cursor.sequence < 0 ||
+            !Number.isSafeInteger(args.fence) ||
+            args.fence <= 0)
+        ) {
           return 'A supplied summary must include the cursor and fence of the transcript it summarizes.'
         }
         request = {
           sessionId,
-          operationId: randomUUID(),
+          operationId: `${Date.now()}-${randomUUID().replaceAll('-', '')}`,
           fence: args.fence ?? read.fence,
           cursor: args.cursor ?? read.cursor,
           context:

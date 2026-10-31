@@ -1,5 +1,6 @@
 import { getStructuredAgentSessionHost } from '../../native-chat/agent-session-wire/structured-agent-session-registry'
 import { computeAgentSessionPayloadFingerprint } from '../../../shared/agent-session-mutation-envelope'
+import { isAgentSessionProviderContextBoundary } from '../../../shared/agent-session-provider-context'
 import { agentSessionCurrentContextRows } from '../../../shared/agent-session-context-clear'
 import type { PluginChatServices } from '../../../shared/plugins/workers/plugin-chat-api'
 
@@ -31,7 +32,11 @@ export function pluginChatServices(getHost = getStructuredAgentSessionHost): Plu
     },
     async read(workspaceId, sessionId) {
       const host = hostFor(workspaceId, sessionId)
-      const history = await host.history({ sessionId, direction: 'tail', limit: 1 })
+      const history = await host.history({
+        sessionId,
+        direction: 'tail',
+        limit: 1
+      })
       if (!history.ok || history.page.fence === undefined) {
         throw new Error('Chat history is not available for a handoff')
       }
@@ -39,6 +44,14 @@ export function pluginChatServices(getHost = getStructuredAgentSessionHost): Plu
       const snapshot = await host.journalSnapshot(sessionId)
       let latestUserMessage = ''
       const lines: string[] = []
+      const boundary = snapshot.items.findLast(
+        (item) =>
+          item.body.kind === 'status' &&
+          isAgentSessionProviderContextBoundary(item.body.contextClear)
+      )?.body
+      if (boundary?.kind === 'status' && boundary.contextClear?.handoff) {
+        lines.push(`Previous handoff context: ${boundary.contextClear.handoff}`)
+      }
       for (const item of agentSessionCurrentContextRows(snapshot.items).items) {
         if (item.body.kind !== 'message' || item.body.command) {
           continue

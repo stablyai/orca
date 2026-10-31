@@ -20,7 +20,11 @@ function harness() {
           return [{ sessionId: 'chat-1' }]
         }
         if (method === 'chat.readContext') {
-          return { fence: 1, cursor: { epoch: 'e', sequence: 5 }, transcript: 'user: latest words' }
+          return {
+            fence: 1,
+            cursor: { epoch: 'e', sequence: 5 },
+            transcript: 'user: latest words'
+          }
         }
         if (method === 'storage.get') {
           return { value: storage.get(params.key) ?? null }
@@ -52,6 +56,7 @@ test('retries the same durable operation after a lost handoff reply', async () =
   const h = harness()
   await assert.rejects(h.command(), /lost response/)
   assert.equal(h.storage.size, 1)
+  assert.match(h.requests[0].operationId, /^\d{13}-[0-9a-f]{32}$/)
   assert.match(await h.command(), /Context handed off/)
   assert.deepEqual(h.requests[0], h.requests[1])
   assert.equal(h.storage.size, 0)
@@ -60,5 +65,19 @@ test('retries the same durable operation after a lost handoff reply', async () =
 test('refuses an externally generated summary without its original cursor', async () => {
   const h = harness()
   assert.match(await h.command({ context: 'old summary' }), /cursor and fence/)
+  assert.equal(h.requests.length, 0)
+})
+
+test('does not persist malformed summary checkpoints', async () => {
+  const h = harness()
+  assert.match(
+    await h.command({
+      context: 'summary',
+      cursor: { epoch: 'e', sequence: -1 },
+      fence: 1
+    }),
+    /cursor and fence/
+  )
+  assert.equal(h.storage.size, 0)
   assert.equal(h.requests.length, 0)
 })
