@@ -6,7 +6,6 @@ import type { GlobalSettings } from '../../../shared/global-settings-types'
 import { normalizeDisabledTuiAgents } from '../../../shared/tui-agent-selection'
 import { normalizeNativeChatProviderChoices } from '../../../shared/native-chat/native-chat-providers'
 import { resolveNestedWorkerMaxDepth } from '../../../shared/nested-worker-depth'
-import { resolveOrchestrationHeartbeatInterval } from '../../../shared/orchestration-heartbeat'
 import { sanitizeAgentLaunchProfileUpdates } from '../../../shared/tui-agent-launch-defaults'
 import { normalizeTerminalQuickCommands } from '../../../shared/terminal-quick-commands'
 import { assertTerminalQuickCommandsStorable } from '../../../shared/terminal-quick-command-prompt-limit'
@@ -80,11 +79,6 @@ export function updateSettings(
   if ('nestedWorkerMaxDepth' in updates) {
     sanitizedUpdates.nestedWorkerMaxDepth = resolveNestedWorkerMaxDepth({
       nestedWorkerMaxDepth: updates.nestedWorkerMaxDepth
-    })
-  }
-  if ('orchestrationHeartbeatIntervalMinutes' in updates) {
-    sanitizedUpdates.orchestrationHeartbeatIntervalMinutes = resolveOrchestrationHeartbeatInterval({
-      orchestrationHeartbeatIntervalMinutes: updates.orchestrationHeartbeatIntervalMinutes
     })
   }
   if ('nativeChatAppearance' in updates) {

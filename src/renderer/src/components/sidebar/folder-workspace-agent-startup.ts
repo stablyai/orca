@@ -1,3 +1,7 @@
+import {
+  resolveAgentStartupPlanInputs,
+  type AgentStartupSettings
+} from '../../../../shared/agent-startup-plan-inputs'
 import type { LinkedWorkItemSummary } from '@/lib/new-workspace'
 import {
   resolveRepoExecutionHostPlatform,
@@ -43,6 +47,7 @@ export function resolveFolderWorkspaceLaunchDraft(
 
 export function buildFolderWorkspaceLinkedStartupPlan(args: {
   agent: TuiAgent
+  settings?: AgentStartupSettings
   linkedWorkItem: LinkedWorkItemSummary
   note: string
   agentCmdOverrides: Record<string, string> | undefined
@@ -52,17 +57,22 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   shell?: AgentStartupShell
   isRemote: boolean
 }): AgentStartupPlan | null {
+  const inputs = resolveAgentStartupPlanInputs({
+    agent: args.agent,
+    settings: args.settings ?? { agentCmdOverrides: args.agentCmdOverrides },
+    agentArgs: args.settings ? args.agentArgs : (args.agentArgs ?? null),
+    platform: args.platform,
+    shell: args.shell,
+    isRemote: args.isRemote
+  })
+  if (args.agentEnv) {
+    inputs.agentEnv = args.agentEnv
+  }
   const linkedDraftPrompt = resolveFolderWorkspaceLaunchDraft(args.linkedWorkItem, args.note)
   const draftLaunchPlan = linkedDraftPrompt
     ? buildAgentDraftLaunchPlan({
-        agent: args.agent,
-        draft: linkedDraftPrompt,
-        cmdOverrides: args.agentCmdOverrides ?? {},
-        agentArgs: args.agentArgs,
-        agentEnv: args.agentEnv,
-        platform: args.platform,
-        shell: args.shell,
-        isRemote: args.isRemote
+        ...inputs,
+        draft: linkedDraftPrompt
       })
     : null
   if (draftLaunchPlan) {
@@ -72,6 +82,7 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
       expectedProcess: draftLaunchPlan.expectedProcess,
       followupPrompt: null,
       launchConfig: draftLaunchPlan.launchConfig,
+      ...(draftLaunchPlan.sessionOptions ? { sessionOptions: draftLaunchPlan.sessionOptions } : {}),
       ...(draftLaunchPlan.startupCommandDelivery
         ? { startupCommandDelivery: draftLaunchPlan.startupCommandDelivery }
         : {}),
@@ -80,15 +91,8 @@ export function buildFolderWorkspaceLinkedStartupPlan(args: {
   }
 
   const startupPlan = buildAgentStartupPlan({
-    agent: args.agent,
-    // Why: linked context must stay reviewable; launch empty, then paste the draft after readiness.
+    ...inputs,
     prompt: '',
-    cmdOverrides: args.agentCmdOverrides ?? {},
-    agentArgs: args.agentArgs,
-    agentEnv: args.agentEnv,
-    platform: args.platform,
-    shell: args.shell,
-    isRemote: args.isRemote,
     allowEmptyPromptLaunch: true
   })
   if (startupPlan && linkedDraftPrompt) {

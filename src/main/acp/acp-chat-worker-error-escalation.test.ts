@@ -76,10 +76,13 @@ async function assigned() {
     identity.handle,
     identity.paneKey
   )
-  let enabled = true
   const failure = vi.fn((request: Parameters<typeof escalateChatWorkerError>[0]) => {
     deliveries.push(
-      escalateChatWorkerError(request, { db: () => db, enabled: () => enabled, notify: () => {} })
+      escalateChatWorkerError(request, {
+        getDb: () => db,
+        notify: () => {},
+        isWaitingForMail: () => false
+      })
     )
   })
   const h = await openHostRig({ onRequestFailure: failure })
@@ -143,9 +146,6 @@ async function assigned() {
     end,
     allow: (n: number) => {
       allowed = n
-    },
-    enabled: (value: boolean) => {
-      enabled = value
     },
     mail: () => db.getUnreadRunMailbox(run.id, 100, ['escalation'])
   }
@@ -372,7 +372,7 @@ scenario(
   }
 )
 
-it.each(['dispatch', 'setting', 'history', 'clear'] as const)(
+it.each(['dispatch', 'history', 'clear'] as const)(
   'preserves %s authority/lifetime behavior during the pending answer',
   async (change) =>
     usingAssigned(async (r) => {
@@ -387,8 +387,6 @@ it.each(['dispatch', 'setting', 'history', 'clear'] as const)(
           r.dispatch.assignee_handle!,
           r.dispatch.assignee_pane_key ?? undefined
         )
-      } else if (change === 'setting') {
-        r.enabled(false)
       } else if (change === 'history') {
         r.host
           .collaboratorsForTests()

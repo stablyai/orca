@@ -61,7 +61,7 @@ import {
   type RpcClientIdentity,
   type RpcReply
 } from './versioned-agent-session-wire'
-import { openTestJournalHostDatabase } from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
+import * as journalHostDatabase from '../../../src/main/native-chat/agent-session-journal/journal-host-database-test-support'
 import { createStructuredAgentSessionLogger } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-logger'
 import { codexProviderHandle } from '../../../src/shared/agent-session-provider-handle-encoding'
 import { NO_STRUCTURED_AGENTS } from '../../../src/main/native-chat/agent-session-wire/structured-agent-session-adapter-router-test-support'
@@ -99,6 +99,12 @@ function legacyClientCapabilities(): string[] {
 /** The structured methods the baseline release actually registers, read from it. */
 function baselineStructuredMethods(): string[] {
   return baseline.methodNames.filter((name) => name.startsWith('agentSession.'))
+}
+
+async function releaseHostRoot(root: string): Promise<void> {
+  setStructuredAgentSessionHost(null)
+  await journalHostDatabase.closeTestJournalHostDatabase(root)
+  await rm(root, { recursive: true, force: true })
 }
 
 describe('cross-version structured agent sessions', () => {
@@ -485,7 +491,7 @@ describe('cross-version structured agent sessions', () => {
           spawnToken: 'spawn-vault',
           host: () => host
         }),
-        journalDatabase: openTestJournalHostDatabase(root),
+        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => 'spawn-vault',
         now: () => NOW
@@ -529,10 +535,7 @@ describe('cross-version structured agent sessions', () => {
       }
     })
 
-    afterEach(async () => {
-      setStructuredAgentSessionHost(null)
-      await rm(root, { recursive: true, force: true })
-    })
+    afterEach(() => releaseHostRoot(root))
 
     it('hides the row from the old client and annotates it for a capable client', async () => {
       const [oldReply] = await callBuild(
@@ -716,7 +719,7 @@ describe('cross-version structured agent sessions', () => {
         logger: createStructuredAgentSessionLogger(),
         store,
         adapter: adapter(() => host),
-        journalDatabase: openTestJournalHostDatabase(root),
+        journalDatabase: journalHostDatabase.openTestJournalHostDatabase(root),
         claimKeyId: 'key-1',
         mintSpawnToken: () => `spawn-${generation}`,
         // The provider died with the host that spawned it, which is what makes
@@ -787,10 +790,7 @@ describe('cross-version structured agent sessions', () => {
       await bootHost('a')
     })
 
-    afterEach(async () => {
-      setStructuredAgentSessionHost(null)
-      await rm(root, { recursive: true, force: true })
-    })
+    afterEach(() => releaseHostRoot(root))
 
     it('resumes from the cursor the client held, with no snapshot and no replay', async () => {
       const created = await answer('agentSession.create', createIntentParams())

@@ -1,3 +1,10 @@
+import {
+  readNativeChatComposerDraft,
+  structuredAgentSessionDraftScopeKey
+} from '@/components/native-chat/native-chat-composer-draft-store'
+import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
+import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
+import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
   AgentSessionLaunchPlan,
@@ -192,8 +199,16 @@ function beginLocalProvisionalLaunch(
   if (!worktreeId) {
     throw new Error('A provisional structured launch needs its workspace.')
   }
+  const draft = readNativeChatComposerDraft(structuredAgentSessionDraftScopeKey(handle.sessionId))
+  const position = nativeChatDraftPositions.get(draft)
+  const retirePosition = (target = structuredAgentSessionTabId(handle.sessionId)) => {
+    if (position?.at === 'end' && position.target === target) {
+      position.pending = false
+    }
+  }
   try {
     if (args.beforeOpen?.(handle.sessionId) === false) {
+      retirePosition()
       handle.cancel()
       return null
     }
@@ -206,8 +221,14 @@ function beginLocalProvisionalLaunch(
       ...(args.afterTabId ? { afterTabId: args.afterTabId } : {}),
       ...(args.activate !== undefined ? { activate: args.activate } : {})
     })
+    afterPendingTab(tab.id, (shown) => {
+      if (!shown || !useAppStore.getState().getTab(shown)) {
+        retirePosition(tab.id)
+      }
+    })
     return { ...handle, tab }
   } catch (error) {
+    retirePosition()
     // Why: a launch without its owning surface would strand a late publication.
     handle.cancel()
     throw error

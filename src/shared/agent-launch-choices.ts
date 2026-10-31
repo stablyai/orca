@@ -1,3 +1,4 @@
+import { isTuiAgent } from './tui-agent-config'
 import { isAgentSessionOptions } from './agent-session-record'
 import type { TuiAgent } from './tui-agent'
 import type { AgentPermissionChoice } from './tui-agent-permission-choice'
@@ -45,4 +46,23 @@ export function normalizeAgentModelOptionChoices(
         ...(Object.keys(options).length ? { options } : {})
       }
     : undefined
+}
+
+export const AGENT_LAUNCH_CHOICE_KEYS: ReadonlySet<string> = new Set([
+  'model',
+  'effort',
+  'permissionMode'
+])
+
+export function normalizeAgentLaunchChoices(value: unknown): AgentLaunchChoices {
+  const choices: AgentLaunchChoices = {}
+  if (value && typeof value === 'object' && !Array.isArray(value)) {
+    for (const [agent, entry] of Object.entries(value)) {
+      const normalized = normalizeAgentModelOptionChoices(entry)
+      if (isTuiAgent(agent) && normalized) {
+        choices[agent] = normalized
+      }
+    }
+  }
+  return choices
 }

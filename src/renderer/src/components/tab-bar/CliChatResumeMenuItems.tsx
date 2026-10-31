@@ -3,7 +3,7 @@ import { useConversationSwitchReadiness, runCliChatResume } from '@/lib/conversa
 import { isNativeChatEnabled } from '../../../../shared/structured-native-chat-launch-route'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
-import { DropdownMenuSeparator } from '@/components/ui/dropdown-menu'
+import { ContextMenuSeparator } from '@/components/ui/context-menu'
 import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { AiVaultSessionSurfaceSwitchMenuItems } from '../right-sidebar/AiVaultSessionSurfaceSwitchMenuItems'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
@@ -28,12 +28,12 @@ export function CliChatResumeMenuItems({
   }
   return (
     <>
-      {leadingSeparator ? <DropdownMenuSeparator /> : null}
+      {leadingSeparator ? <ContextMenuSeparator /> : null}
       <AiVaultSessionSurfaceSwitchMenuItems
         action="switch"
         switchLoading={!readiness.ready}
         switchExplanation={readiness.explanation}
-        menuKind="dropdown"
+        menuKind="context"
         tooltipSide="right"
         chatPending={readiness.pending}
         onResumeInNewChat={(event) => {

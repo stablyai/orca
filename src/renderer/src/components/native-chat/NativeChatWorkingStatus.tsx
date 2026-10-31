@@ -107,17 +107,19 @@ export function NativeChatWorkingStatus({
     )
   }
 
+  const active = !settled
   return (
     <div
       className={className}
-      data-native-chat-turn-status={settled ? 'settled' : 'active'}
+      data-native-chat-turn-status={active ? 'active' : 'settled'}
+      // Once settled, screen readers read the visible "Worked for…" text instead.
       aria-label={
-        key === 'interrupted'
-          ? label
-          : translate(
+        active
+          ? translate(
               'components.native-chat.status.responding',
               NATIVE_CHAT_TURN_STATUS_COPY.responding
             )
+          : undefined
       }
     >
       <span>{label}</span>

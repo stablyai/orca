@@ -5,6 +5,7 @@ import { setLocalPtyProvider } from '../ipc/pty/provider/registry'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { rmSync } from 'node:fs'
 import type { DaemonPtyAdapter } from './daemon-pty-adapter'
+import { formatTerminalStartFailure } from '../../shared/terminal-start-failure'
 import {
   createMockSubprocess,
   startDaemonAdapterHarness,
@@ -72,7 +73,11 @@ describe('DaemonPtyAdapter replacement exit races', () => {
         async (type: string, payload?: unknown) => {
           const response = await originalRequest(type, payload)
           if (type === 'createOrAttach') {
-            lastSubprocess._simulateExit(19)
+            lastSubprocess._simulateExit(256, {
+              kind: 'exited',
+              exitCode: 256,
+              initialOutputDiagnostic: 'git-bash-console-capacity'
+            })
             await waitFor(() =>
               [...(internals.pendingSpawnOperationsBySessionId.get(sessionId) ?? [])].some(
                 (operation) => (operation.exitsBySessionId.get(sessionId)?.length ?? 0) > 0
@@ -84,9 +89,11 @@ describe('DaemonPtyAdapter replacement exit races', () => {
       )
 
       if (adoption) {
-        await expect(
-          adoptStablePane(runtime, store, { ...pane, cols: 80, rows: 24 })
-        ).rejects.toThrow('agent_session_exited_during_start')
+        const error = await adoptStablePane(runtime, store, { ...pane, cols: 80, rows: 24 }).catch(
+          (caught: unknown) => caught
+        )
+        expect(error).toMatchObject({ message: 'agent_session_exited_during_start' })
+        expect(formatTerminalStartFailure(error)).toBeUndefined()
         expect(() =>
           runtime.resolveTerminalPane(`${pane.tabId}:${pane.leafId}`, pane.worktreeId)
         ).toThrow('terminal_not_found')
@@ -97,7 +104,12 @@ describe('DaemonPtyAdapter replacement exit races', () => {
 
       expect(result).toMatchObject({
         incarnationId: expect.any(String),
-        exitedBeforeSpawnReply: true
+        exitedBeforeSpawnReply: true,
+        exitCause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
       })
       expect(internals.activeSessionIds.has(sessionId)).toBe(false)
       expect(internals.sessionIncarnations.has(sessionId)).toBe(false)

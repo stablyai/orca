@@ -27,3 +27,17 @@ export function settleTabPtyBinding(
   }
   state.markUnverifiedPtyLoss(tabId)
 }
+
+/** A kept binding passes its exit options on; an ordinary exit keeps the two-argument call. */
+export function forwardAgentBackgroundExit(
+  onExit: ((ptyId: string, code: number, options?: PtyExitOptions) => void) | undefined,
+  ptyId: string,
+  code: number,
+  options?: PtyExitOptions
+): void {
+  if (options?.preserveRendererBinding) {
+    onExit?.(ptyId, code, options)
+  } else {
+    onExit?.(ptyId, code)
+  }
+}

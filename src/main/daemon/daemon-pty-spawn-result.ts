@@ -30,18 +30,14 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
       return created
     }
     let result = initialResult
-    const finalizeSpawnResult = (spawnResult: PtySpawnResult): PtySpawnResult => {
-      const exited = this.resultForExitBeforeSpawnReply(sessionId, result, operation)
-      return (
-        exited ??
-        (result.isNew && !historyRecovery.identityChanged
-          ? {
-              ...spawnResult,
-              startupCwdSource: effectiveCwd === opts.cwd ? 'request' : 'recovered-history'
-            }
-          : spawnResult)
-      )
-    }
+    const finalizeSpawnResult = (spawnResult: PtySpawnResult): PtySpawnResult =>
+      this.resultForExitBeforeSpawnReply(sessionId, result, operation) ?? {
+        ...spawnResult,
+        ...(!result.isNew ? { isReattach: true } : {}),
+        ...(result.isNew && !historyRecovery.identityChanged
+          ? { startupCwdSource: effectiveCwd === opts.cwd ? 'request' : 'recovered-history' }
+          : {})
+      }
     let historySeedSegments = restoreInfo ? getRecoveredHistorySeedSegments(restoreInfo) : null
     const adoptSpawnResultSession = async (spawnResult: CreateOrAttachResult): Promise<void> => {
       const requestedSessionId = sessionId
@@ -132,8 +128,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         ...daemonSpawnResultIdentity(result),
         pid,
         coldRestore: cachedRestore,
-        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-        ...(!result.isNew ? { isReattach: true } : {})
+        ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {})
       })
     }
 
@@ -226,8 +221,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
           pid,
           coldRestore,
           ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-          ...(providerSequence ? { providerSequence } : {}),
-          ...(!result.isNew ? { isReattach: true } : {})
+          ...(providerSequence ? { providerSequence } : {})
         })
       }
       return finalizeSpawnResult({
@@ -280,8 +274,7 @@ export abstract class DaemonPtySpawnResult extends DaemonPtySpawnRequest {
         ...daemonSpawnResultIdentity(result),
         pid,
         ...(providerWslDistro !== undefined ? { wslDistro: providerWslDistro } : {}),
-        ...(providerSequence ? { providerSequence } : {}),
-        ...(!result.isNew ? { isReattach: true } : {})
+        ...(providerSequence ? { providerSequence } : {})
       })
     }
 

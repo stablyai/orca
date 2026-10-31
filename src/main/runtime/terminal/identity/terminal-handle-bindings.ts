@@ -10,8 +10,6 @@ import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switc
 export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntimeWithBuildPtyTerminalSummary {
   protected abstract getLeafKey(tabId: string, leafId: string): string
 
-  protected abstract rejectWaitersForHandle(handle: string, code: string): void
-
   protected bindPtyIncarnationHandle(
     retained: PtyIncarnationHandleRecord,
     leaf: RuntimeLeafRecord
@@ -47,7 +45,6 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     }
     this.handles.delete(retained.handle)
     this.syntheticTerminalHandles.delete(retained.handle)
-    this.rejectWaitersForHandle(retained.handle, 'terminal_handle_stale')
   }
 
   protected clearPtyIncarnationHandles(): void {
@@ -133,7 +130,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
         existingRecord.runtimeId === this.runtimeId &&
         existingRecord.ptyId === pty.ptyId
       ) {
-        this.handleByPtyId.set(pty.ptyId, existingHandle)
+        this.setPtyHandle(pty.ptyId, existingHandle)
         return existingHandle
       }
     }
@@ -153,7 +150,7 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
       ptyId: pty.ptyId,
       ptyGeneration: 0
     })
-    this.handleByPtyId.set(pty.ptyId, handle)
+    this.setPtyHandle(pty.ptyId, handle)
     return handle
   }
 
@@ -196,7 +193,6 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     this.handleByLeafKey.delete(leafKey)
     this.handles.delete(handle)
     this.syntheticTerminalHandles.delete(handle)
-    this.rejectWaitersForHandle(handle, 'terminal_handle_stale')
   }
 
   protected adoptFirstPtyForLeafHandle(

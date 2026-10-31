@@ -1,5 +1,6 @@
 import {
   createStructuredAgentSessionStopStartingChild,
+  cutClosingStructuredAgentSession,
   type StructuredAgentSessionConversationLifetimeHost
 } from './structured-agent-session-conversation-lifetime-host'
 export type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-host-types'
@@ -248,17 +249,18 @@ export function createStructuredAgentSessionConversationLifetime(
       })
     },
     /** Close resources while retaining durable chat/history and personal unsent text for the next turn. */
-    close: (sessionId: string, cause: StructuredAgentSessionCloseCause): Promise<void> => {
-      switchCommands.revoke(sessionId)
-      const journal = sessions.get(sessionId)?.journal
-      if (journal) {
-        closeStructuredAgentSessionHandovers(journal)
-      }
-      // Abort outside serialization so hung startup cannot block close.
-      if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {
-        host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')
+    /** `admit` decides in the session lane, after any send admitted first; false throws. A close
+     *  that may yet be refused cuts no handover or start before then. */
+    close: (sessionId: string, cause: StructuredAgentSessionCloseCause, admit?: () => boolean) => {
+      if (!admit) {
+        switchCommands.revoke(sessionId)
+        cutClosingStructuredAgentSession(host, sessionId)
       }
       return serialize(sessionId, async () => {
+        if (admit) {
+          cutClosingStructuredAgentSession(host, sessionId, admit)
+          switchCommands.revoke(sessionId)
+        }
         readRefusals.forget(sessionId)
         if (deps().store.selectWritableRecord(sessionId).kind !== 'unreadable') {
           host.context().runtimeState.acquireAborts.abort(sessionId, 'closed while starting')

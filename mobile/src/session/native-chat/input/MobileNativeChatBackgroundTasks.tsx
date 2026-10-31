@@ -278,7 +278,7 @@ const styles = themedStyleSheet(() => ({
   },
   box: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.row,
+    borderRadius: radii.surface,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
     overflow: 'hidden'
@@ -382,7 +382,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center',
     justifyContent: 'center',
     paddingHorizontal: spacing.sm,
-    borderRadius: radii.button
+    borderRadius: radii.control
   },
   stopAll: {
     alignSelf: 'flex-start',

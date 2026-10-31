@@ -324,6 +324,7 @@ describe('launchAgentInNewTab', () => {
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     expect(result?.pasteDraftAfterLaunch).toBe(false)
+    await result?.terminalCompletion
     expect(mockCreateWebRuntimeAgentSessionTerminalWithLaunchDraft).toHaveBeenCalledWith(
       expect.objectContaining({
         launchAgent: 'claude',
@@ -354,32 +355,13 @@ describe('launchAgentInNewTab', () => {
     Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    launchAgentInNewTab({ requestId: 'request-12', agent: 'codex', worktreeId: 'wt-1' })
-
-    expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
-      worktreeId: 'wt-1',
-      environmentId: 'web-runtime',
-      agentSessionKind: 'fresh',
-      launchAgent: 'codex',
-      viewMode: 'terminal'
+    const result = launchAgentInNewTab({
+      requestId: 'request-12',
+      agent: 'codex',
+      worktreeId: 'wt-1'
     })
-  })
 
-  it('propagates the resolved terminal mode to paired web runtime launches', async () => {
-    mockIsWebRuntimeSessionActive.mockReturnValue(true)
-    store.settings = {
-      agentCmdOverrides: {},
-      agentDefaultArgs: {},
-      agentDefaultEnv: {},
-      activeRuntimeEnvironmentId: 'web-runtime',
-      experimentalNativeChat: true
-    }
-    // The client stamps a server's rows on arrival; focus alone never names the owner.
-    Object.assign(store.repos[0], { executionHostId: 'runtime:web-runtime' })
-    const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
-
-    launchAgentInNewTab({ requestId: 'request-13', agent: 'codex', worktreeId: 'wt-1' })
-
+    await result?.terminalCompletion
     expect(mockCreateWebRuntimeSessionTerminal.mock.calls[0]?.[0]).toMatchObject({
       worktreeId: 'wt-1',
       environmentId: 'web-runtime',
@@ -405,9 +387,7 @@ describe('launchAgentInNewTab', () => {
 
     await launchAgentInNewTab({ requestId: 'request-14', agent: 'claude', worktreeId: 'wt-1' })
       ?.terminalCompletion
-    expect(mockToastError).toHaveBeenCalledWith(
-      'Upgrade the remote Orca host before starting or resuming agent sessions.'
-    )
+    expect(mockToastError).toHaveBeenCalledWith(expect.stringMatching(/Claude.*try again/))
     expect(mockSetActiveTabType).not.toHaveBeenCalled()
   })
 
@@ -457,7 +437,7 @@ describe('launchAgentInNewTab', () => {
       launchPlatform: 'win32'
     })
 
-    expect(result).not.toHaveProperty('promptDeliveryResult')
+    expect(result?.promptDeliveryResult).toBeDefined()
     expect(queuedStartups()).toContainEqual(
       expect.objectContaining({
         command: "claude '--dangerously-skip-permissions'"
@@ -474,7 +454,7 @@ describe('launchAgentInNewTab', () => {
     )
   })
 
-  it('logs rejected non-deferred prompt delivery without exposing it to callers', async () => {
+  it('exposes rejected draft delivery while keeping its existing error observer', async () => {
     const error = new Error('paste failed')
     const originalConsole = console
     const consoleError = vi.fn()
@@ -493,8 +473,7 @@ describe('launchAgentInNewTab', () => {
         launchPlatform: 'win32'
       })
 
-      expect(result).not.toHaveProperty('promptDeliveryResult')
-      await new Promise((resolve) => setTimeout(resolve, 0))
+      await expect(result?.promptDeliveryResult).rejects.toBe(error)
       expect(consoleError).toHaveBeenCalledWith('Prompt delivery failed after launch', error)
     } finally {
       vi.stubGlobal('console', originalConsole)

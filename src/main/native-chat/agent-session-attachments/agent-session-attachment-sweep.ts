@@ -20,6 +20,7 @@ export const UNCLAIMED_ATTACHMENT_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000
 export type AgentSessionAttachmentSweepFacts = {
   /** Without a writable journal, only unfinished part files may be removed. */
   database: () => Database.Database | null
+  write: <T>(run: (db: Database.Database) => T) => T | undefined
   /** null means imports are incomplete; no chat claims can yet be judged orphaned. */
   recordedSessionIds: () => Pick<ReadonlySet<string>, 'has'> | null
   onUploadRemoved?: (uploadDir: string) => void
@@ -41,7 +42,7 @@ export async function sweepAgentSessionAttachments(
   }
   for (const uploadId of withDatabase(database, listUploadsBeingSwept) ?? []) {
     await remove(join(store.rootDir, uploadId))
-    withDatabase(database, (db) => finishUploadSweep(db, uploadId))
+    facts.write((db) => finishUploadSweep(db, uploadId))
   }
   for (const uploadId of await listDirectories(store.rootDir)) {
     if (store.isUploadInFlight(uploadId)) {
@@ -62,15 +63,15 @@ export async function sweepAgentSessionAttachments(
     // Whichever lands first wins: claims retain uploads, sweep marks reject later claims.
     if (
       ageMs <= UNCLAIMED_ATTACHMENT_MAX_AGE_MS ||
-      withDatabase(database, (db) => markUnclaimedUploadForSweep(db, uploadId, now)) !== true
+      facts.write((db) => markUnclaimedUploadForSweep(db, uploadId, now)) !== true
     ) {
       continue
     }
     await remove(uploadDir)
-    withDatabase(database, (db) => finishUploadSweep(db, uploadId))
+    facts.write((db) => finishUploadSweep(db, uploadId))
     removed.push(uploadDir)
   }
-  withDatabase(database, (db) =>
+  facts.write((db) =>
     pruneAgentSessionAttachmentClaims(db, {
       root: store.rootDir,
       recordedSessionIds: facts.recordedSessionIds()

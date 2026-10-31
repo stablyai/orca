@@ -3,8 +3,9 @@ import type { DaemonEndpointIdentity } from './daemon-hello-protocol'
 import type { TakePendingOutputResult } from './types'
 import type { HistoryCheckpointResult, HistoryRecoveryFreeze } from './history-manager'
 import type { ReadRunningWslDistros } from './daemon-wsl-bridge-exit'
+import type { DaemonPtyRouterExitEvent } from './daemon-pty-router-events'
 export type PendingDaemonSpawnOperation = {
-  exitsBySessionId: Map<string, { code: number; incarnationId?: string }[]>
+  exitsBySessionId: Map<string, Omit<DaemonPtyRouterExitEvent, 'id'>[]>
   ignoredExitIncarnationIds: Set<string>
   ignoreNextExit: boolean
 }

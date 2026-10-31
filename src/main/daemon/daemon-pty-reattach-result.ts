@@ -43,7 +43,6 @@ export function daemonPtyReattachResult(
     ...(reattachSnapshot.terminalOwner
       ? { snapshotTerminalOwner: reattachSnapshot.terminalOwner }
       : {}),
-    isReattach: true,
     isAlternateScreen: isAltScreen,
     // Snapshot ANSI lacks title frames; carry the title separately across relaunch.
     ...(reattachSnapshot.lastTitle ? { lastTitle: reattachSnapshot.lastTitle } : {}),

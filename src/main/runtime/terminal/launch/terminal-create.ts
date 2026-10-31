@@ -215,7 +215,7 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
           ;({ terminalHandle: preAllocatedHandle, tabId, leafId } = launch.surface)
           paneKey = dependencies.makePaneKey(tabId, leafId)
         }
-        this.assertCreatedPtyRegistrationAllowed(result.id, result.incarnationId)
+        this.assertCreatedPtyRegistrationAllowed(result)
         // Provider reattachment still needs this runtime's handle and workspace binding.
         if (!result.stablePaneOwner) {
           this.registerPreAllocatedHandleForPty(result.id, preAllocatedHandle)
@@ -237,7 +237,10 @@ export abstract class OrcaRuntimeWithCreateTerminal extends OrcaRuntimeWithTermi
               this.setPtyManagementTitleFromObservedTitle(pty, title, at)
             )
           }
-          recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
+          this.watchLaunchComposer(
+            result.id,
+            recordTerminalLaunchMetadata(pty, result, launch, launchOpts.command)
+          )
           if (!launch.adoptedStablePane) {
             this.rememberSavedTerminalLaunchResult(result.id, result)
           }

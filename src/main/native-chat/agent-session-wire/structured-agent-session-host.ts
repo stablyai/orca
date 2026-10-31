@@ -157,8 +157,8 @@ export class StructuredAgentSessionHost extends StructuredAgentSessionHostContex
     this.eventRecovery.handle(event)
 
   /** Release resources; user-close cancels cut turns, while eviction leaves their failure reportable. */
-  close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause) =>
-    this.lifetime.close(sessionId, cause)
+  close: lifetime.StructuredAgentSessionConversationLifetime['close'] = (sessionId, cause, admit) =>
+    this.lifetime.close(sessionId, cause, admit)
   switchToTerminal = async (sessionId: string, deadline?: AgentSessionSwitchDeadline) => {
     const budget = deadline ?? agentSessionSwitchDeadline()
     try {

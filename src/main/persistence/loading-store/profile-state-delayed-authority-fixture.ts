@@ -147,6 +147,22 @@ export async function fixture(legacyOpenCodeGoApiKey?: string) {
   return { store, authority, readState, directory, path }
 }
 
+export async function withReopenedProfileStore(
+  saved: { settings: { workspaceDir: string } },
+  filename: string,
+  inspect: (store: Store) => void | Promise<void>
+) {
+  const store = new Store({
+    serializedState: JSON.stringify(saved),
+    dataFile: join(saved.settings.workspaceDir, filename)
+  })
+  try {
+    await inspect(store)
+  } finally {
+    await store.freezeWritesAsync()
+  }
+}
+
 // Runtime spawns bind only a pane admitted before the process starts.
 export async function admitRuntimeSpawnPane(
   store: Store,
