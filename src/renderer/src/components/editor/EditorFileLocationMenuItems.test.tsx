@@ -79,6 +79,13 @@ describe('EditorFileLocationMenuItems', () => {
     expect(writeClipboardText).toHaveBeenCalledWith('src/file.ts')
   })
 
+  it('keeps the path actions but hides Copy File Name for a conflict review', () => {
+    renderMenu({ mode: 'conflict-review', filePath: '/repo', relativePath: 'Conflict Review' })
+    expect(screen.queryByRole('menuitem', { name: 'Copy File Name' })).toBeNull()
+    expect(screen.getByRole('menuitem', { name: 'Copy Path' })).toBeTruthy()
+    expect(screen.getByRole('menuitem', { name: 'Copy Relative Path' })).toBeTruthy()
+  })
+
   it.each([{ externalSshTargetId: 'remote' }, { runtimeEnvironmentId: 'paired-server' }])(
     'disables local reveal for a remote file: %j',
     (overrides) => {

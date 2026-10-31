@@ -209,7 +209,8 @@ async function renderMenu(
     repoConnectionId?: string | null
     runtimeEnvironmentId?: string | null
     externalSshTargetId?: string
-    mode?: 'edit' | 'check-details'
+    mode?: 'edit' | 'check-details' | 'conflict-review' | 'diff'
+    diffSource?: 'combined-uncommitted'
     unifiedTabId?: string
     filePath?: string
     relativePath?: string
@@ -219,6 +220,7 @@ async function renderMenu(
     runtimeEnvironmentId,
     externalSshTargetId,
     mode = 'edit',
+    diffSource,
     filePath = '/repo/foo.ts',
     relativePath = 'foo.ts',
     ...props
@@ -234,6 +236,7 @@ async function renderMenu(
       language: 'typescript',
       isDirty: false,
       mode,
+      diffSource,
       runtimeEnvironmentId,
       externalSshTargetId
     },
@@ -419,6 +422,21 @@ describe('EditorFileTabContextMenu reveal in file manager', () => {
     }
     onSelect()
     expect(writeClipboardText).toHaveBeenCalledExactlyOnceWith('foo.ts')
+  })
+
+  it.each([
+    ['a conflict review', { mode: 'conflict-review' }],
+    ['a combined diff', { mode: 'diff', diffSource: 'combined-uncommitted' }]
+  ] as const)('hides Copy File Name for %s tab on the worktree root', async (_label, overrides) => {
+    const tree = expandNode(
+      await renderMenu({ ...overrides, filePath: '/repo', relativePath: 'Conflict Review' })
+    )
+    const labels = findElementsByType(tree, 'ContextMenuItem').map((item) =>
+      extractText(item.props.children)
+    )
+
+    expect(labels).not.toContain('Copy File Name')
+    expect(labels).toEqual(expect.arrayContaining(['Copy Path', 'Copy Relative Path']))
   })
 
   it('reveals a local file through the shared reveal action', async () => {
