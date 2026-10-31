@@ -5,7 +5,8 @@ import {
   AddWslHostFormPanel,
   canAddWslDistro,
   hasWsl2Distro,
-  wsl1DistroReason
+  wsl1DistroReason,
+  wslDistroStateLabel
 } from './AddWslHostFormPanel'
 
 vi.mock('@/components/ui/dialog', () => ({
@@ -61,6 +62,15 @@ function render(props: Partial<Parameters<typeof AddWslHostFormPanel>[0]> = {}):
 }
 
 describe('AddWslHostFormPanel', () => {
+  it('shows Unknown, not Stopped, for a distro WSL could not vouch for, and adding starts it if needed', () => {
+    const unknown: WslHostDistro = { ...debian, state: 'unverifiable' }
+    expect(wslDistroStateLabel(unknown)).toBe('Unknown')
+    const html = render({ distros: [unknown], selectedDistro: 'Debian' })
+    expect(html).toContain('Adding it starts it if needed')
+    expect(html).not.toContain('Start and add')
+    expect(html).not.toContain('is stopped')
+  })
+
   it('says this build cannot run WSL hosts and offers nothing to add', () => {
     const html = render({ selectedDistro: 'Ubuntu', serverFilesMissing: true })
     expect(html).toContain('This build of Orca can’t run WSL hosts (server files missing).')

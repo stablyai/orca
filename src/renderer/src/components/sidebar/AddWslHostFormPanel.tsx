@@ -22,6 +22,9 @@ export function wslDistroStateLabel(distro: WslHostDistro): string {
   if (distro.environmentId) {
     return translate('auto.components.sidebar.AddWslHostFormPanel.added', 'Already a host')
   }
+  if (distro.state === 'unverifiable') {
+    return translate('auto.components.sidebar.AddWslHostFormPanel.unverifiable', 'Unknown')
+  }
   return distro.state === 'running'
     ? translate('auto.components.sidebar.AddWslHostFormPanel.running', 'Running')
     : translate('auto.components.sidebar.AddWslHostFormPanel.stopped', 'Stopped')
@@ -77,6 +80,7 @@ export function AddWslHostFormPanel({
   const wsl1Distro = distros.find((distro) => distro.version === 1)
   const noWsl2Distros = !loading && !serverFilesMissing && !error && !hasWsl2Distro(distros)
   const stopped = selected?.state === 'stopped' && canAddWslDistro(selected)
+  const unverifiable = selected?.state === 'unverifiable' && canAddWslDistro(selected)
   return (
     <>
       <DialogHeader>
@@ -178,6 +182,15 @@ export function AddWslHostFormPanel({
             {translate(
               'auto.components.sidebar.AddWslHostFormPanel.stoppedHint',
               '{{value0}} is stopped. Adding it starts it.',
+              { value0: selected.name }
+            )}
+          </p>
+        ) : null}
+        {unverifiable ? (
+          <p className="text-xs text-muted-foreground">
+            {translate(
+              'auto.components.sidebar.AddWslHostFormPanel.unverifiableHint',
+              'WSL didn’t say whether {{value0}} is running. Adding it starts it if needed.',
               { value0: selected.name }
             )}
           </p>

@@ -39,10 +39,10 @@ export function AddWslHostDialogBody({
     setError(null)
     onAddingChange(true)
     try {
-      // Start and add explicitly authorizes starting a stopped distro.
+      // Start and add explicitly authorizes starting a stopped (or unconfirmed) distro.
       const result = await addWslHostDistro({
         distro: selected.name,
-        startIfStopped: selected.state === 'stopped'
+        startIfStopped: selected.state !== 'running'
       })
       if (!result.ok) {
         setError(wslHostAddRefusalMessage(result))

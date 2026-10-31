@@ -5,7 +5,8 @@ export const WSL_HOST_STATUS_CHANNEL = 'wslHosts:statusChanged'
 
 export type WslHostDistro = {
   name: string
-  state: 'running' | 'stopped'
+  /** 'unverifiable': WSL's running list couldn't be read, so Orca can't say. */
+  state: 'running' | 'stopped' | 'unverifiable'
   /** WSL 1 runs no Linux kernel, so it cannot host orcad; null when the registry did not say. */
   version: 1 | 2 | null
   environmentId: string | null
