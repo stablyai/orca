@@ -22484,6 +22484,7 @@
       "editorSave": "Save File",
       "editorMarkdownPreview": "Show Markdown Preview",
       "editorToggleWordWrap": "Toggle Word Wrap",
+      "editorToggleDiffViewer": "Toggle Diff Viewer",
       "editorCopyContext": "Copy Context",
       "editorPreviousChange": "Go to Previous Change",
       "editorNextChange": "Go to Next Change",
