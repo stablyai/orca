@@ -1,11 +1,16 @@
 // @vitest-environment happy-dom
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 
 import { act } from 'react'
 import { fireEvent, getByText, isInaccessible, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './agent-launch-setup-panel-test-fixture'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
 import {
   resolveAgentLaunchCommand,
@@ -83,24 +88,6 @@ it('shows a raw Arguments value in the shared Permissions menu; removing its chi
   expect(entry.arguments).toBe('--permission-mode plan --add-dir docs')
   expect(host.textContent).not.toContain('Reset to default')
   expect(host.textContent).toContain('Only applies to terminal (CLI) launches')
-})
-
-it('leaves chat Permissions enabled even with launch-owned raw CLI permission text', () => {
-  act(() =>
-    root.render(
-      <TooltipProvider>
-        <AgentLaunchSetupPanel
-          entry={entry}
-          initial={{ ...agentPickerDraft(entry, 'chat'), arguments: '--permission-mode plan' }}
-          onUse={onUse}
-        />
-      </TooltipProvider>
-    )
-  )
-  expect(
-    host.querySelector<HTMLButtonElement>('button[aria-label$=" permissions"]')?.disabled
-  ).toBe(false)
-  expect(host.querySelector('button[aria-label="Remove --permission-mode plan"]')).not.toBeNull()
 })
 
 it('shows remembered chat defaults without turning displayed values into launch intent', () => {

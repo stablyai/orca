@@ -1,12 +1,17 @@
 // @vitest-environment happy-dom
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { readFileSync } from 'node:fs'
 import { z } from 'zod'
 import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './agent-launch-setup-panel-test-fixture'
 import { readPiRpcModelOptions } from '../../../../main/pi/rpc-options'
 
 import {

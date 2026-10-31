@@ -1,10 +1,9 @@
 import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
-import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import {
   canonicalSourceControlActionSelection,
   type SelectedSourceControlActionRecipe
 } from '../../../../shared/source-control-action-selection'
-import React from 'react'
 import { Info, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
 import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
 import { sourceControlPickerDraft } from '../settings/source-control-agent-launch-picker'

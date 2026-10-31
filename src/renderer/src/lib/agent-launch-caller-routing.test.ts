@@ -12,12 +12,12 @@ import {
   createLaunchFunnelStore,
   createdTabOptions,
   hostLaunchRequest,
+  queuedStartupPayload,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
 
 import type * as LaunchAdmissionModule from './structured-agent-session-launch-admission'
 import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
-import { queuedStartupPayload } from './agent-launch-funnel-test-harness'
 import { tokenizeStartupCommand } from '../../../shared/tui-agent-startup-shell'
 const store = createLaunchFunnelStore()
 const mockIsWebRuntimeSessionActive = vi.fn(() => false)

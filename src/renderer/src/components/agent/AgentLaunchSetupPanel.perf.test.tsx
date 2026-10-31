@@ -13,7 +13,13 @@ import * as choiceSettings from '../../../../shared/agent-choice-settings'
 import * as launchProfile from '../../../../shared/agent-launch-profile'
 import * as optionScanner from '../../../../shared/command-option-occurrence'
 import * as pickerCatalog from '../../../../shared/agent-launch-picker-catalog'
-import { AgentLaunchSetupPanel } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
 import {
   agentPickerDraft,
@@ -21,7 +27,6 @@ import {
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
 
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
 import { fetchCodexModelCatalogListing } from '../../lib/codex-model-catalog-reader-test-fixture'
 
 function observeSettingsWork() {
