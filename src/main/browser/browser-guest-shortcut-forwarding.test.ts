@@ -9,6 +9,7 @@ vi.mock('electron', () => ({
   webContents: { fromId: vi.fn() }
 }))
 
+import { getEffectiveKeybindingsForAction, parseKeybinding } from '../../shared/keybindings'
 import { setupGuestMouseWheelZoomForwarding } from './browser-guest-wheel-zoom'
 import { setupGuestShortcutForwarding } from './browser-guest-shortcut-forwarding'
 
@@ -171,7 +172,21 @@ describe('setupGuestShortcutForwarding', () => {
         isLocalRenderer: () => true,
         getKeybindings: () => keybindings
       })
-      const input = { key: 'X', code: 'KeyX', shift: true }
+      const binding = getEffectiveKeybindingsForAction(
+        'view.plugins',
+        process.platform,
+        keybindings
+      )[0]
+      const parsed = parseKeybinding(binding)
+      if (!parsed || !/^[A-Z]$/.test(parsed.key)) {
+        throw new Error(`Unexpected binding: ${binding}`)
+      }
+      const input = {
+        key: parsed.key,
+        code: `Key${parsed.key}`,
+        alt: parsed.alt,
+        shift: parsed.shift
+      }
       expect(triggerBeforeInput(input)).toHaveBeenCalledOnce()
       expect(triggerBeforeInput({ ...input, isAutoRepeat: true })).toHaveBeenCalledOnce()
       expect(rendererSendMock).toHaveBeenCalledOnce()
@@ -203,7 +218,8 @@ describe('setupGuestShortcutForwarding', () => {
       browserTabId,
       guest: makeGuest(),
       resolveRenderer: () => makeRenderer(),
-      isLocalRenderer: () => local
+      isLocalRenderer: () => local,
+      getKeybindings: () => ({ 'view.plugins': ['Mod+Shift+X'] })
     })
     for (const input of [
       { key: 'X', code: 'KeyX', shift: true, isComposing: true },
