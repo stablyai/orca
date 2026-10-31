@@ -388,7 +388,10 @@ it('keeps the stopped source when destination publication fails before retiremen
   expect(kill).not.toHaveBeenCalled()
 })
 
-it('does not acquire or retire a terminal whose physical stop is unproven', async () => {
+it.each([
+  ['its physical stop is unproven', false],
+  ['its agent is paused with Ctrl+Z, stopping nothing', true]
+] as const)('does not acquire or retire a terminal when %s', async (_case, paused) => {
   await savedTranscript()
   const { runtime, session } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
@@ -397,6 +400,7 @@ it('does not acquire or retire a terminal whose physical stop is unproven', asyn
   if (!source.presentation) {
     throw new Error('missing captured source')
   }
+  const layout = structuredClone(session().terminalLayoutsByTabId[TAB_ID])
   const acquisitions = rig.adapter.acquire.mock.calls.length
   const stop = vi.fn(async () => false)
   runtime.setPtyController({
@@ -405,6 +409,7 @@ it('does not acquire or retire a terminal whose physical stop is unproven', asyn
     stopAndWait: stop,
     getForegroundProcess: async () => null
   })
+  vi.spyOn(runtime, 'terminalAgentPaused').mockResolvedValue(paused)
   const result = await executeStructuredSessionSwitch(
     {
       sessionId: id,
@@ -421,9 +426,13 @@ it('does not acquire or retire a terminal whose physical stop is unproven', asyn
     'chat'
   )
   expect(result.status).toBe('refused')
-  expect(stop).toHaveBeenCalledOnce()
+  expect(stop).toHaveBeenCalledTimes(paused ? 0 : 1)
   expect(rig.adapter.acquire).toHaveBeenCalledTimes(acquisitions)
   expect(session().tabsByWorktree[WORKTREE_ID]?.some((tab) => tab.id === TAB_ID)).toBe(true)
+  if (paused) {
+    expect(result).toMatchObject({ refusal: { details: { reason: 'agentPaused' } } })
+    expect(session().terminalLayoutsByTabId[TAB_ID]).toEqual(layout)
+  }
 })
 
 it('reports a dispatched terminal with a lost answer as uncertain, preserving its source', async () => {

@@ -52,6 +52,10 @@ export async function stopStructuredSwitchTerminalSource(input: {
       input.consented
     )
   requireConsent()
+  // A paused agent (Ctrl+Z) is the user's to resume or quit: nothing is stopped and the tab stays.
+  if (await ctx.runtime.terminalAgentPaused(close.source.ptyId)) {
+    throw agentSessionRefusalError('agent_session_operation_invalid', { reason: 'agentPaused' })
+  }
   const awaitBoundary = input.boundary
     ? await armSwitchTurnBoundaryWait(
         input.boundary.source,

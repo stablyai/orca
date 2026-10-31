@@ -243,8 +243,7 @@ async function readPosixSteadyState(
 
 export async function confirmLocalPtyForegroundProcess(
   id: string,
-  decision = false,
-  observeSuspended?: (name: string | undefined) => void
+  decision = false
 ): Promise<string | null> {
   const proc = ptyProcesses.get(id)
   if (!proc) {
@@ -268,9 +267,6 @@ export async function confirmLocalPtyForegroundProcess(
     // Why: a fresh scan can outlive this PTY id; never publish identity from an exited or same-id-reusing session.
     if (ptyProcesses.get(id) !== proc) {
       return null
-    }
-    if (resolution.available) {
-      observeSuspended?.(resolution.suspendedAgentProcess)
     }
     if (windowsDecision) {
       const recognized = recognizeAgentProcessFromCommandLine(resolution.processName ?? '')

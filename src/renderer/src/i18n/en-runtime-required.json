@@ -1917,6 +1917,7 @@
           "terminalSwitchFailed": "{{agent}} could not switch to a terminal. Try again.",
           "writerUnconfirmed": "Orca could not confirm {{agent}} stopped. Check its open chats and terminals, then try this action again.",
           "sourceExitUnconfirmed": "Orca could not confirm {{agent}} stopped in this terminal. Quit {{agent}} here, then try this action again.",
+          "agentPaused": "{{agent}} is paused in this terminal. Resume it with fg or exit it, then switch.",
           "sourceKept": "{{agent}} opened successfully. The original tab was kept; continue in the new tab.",
           "sourceStopUnknown": "Orca could not confirm {{agent}} stopped. Check {{agent}} in the original terminal, then try switching again.",
           "changeInProgress": "{{agent}} is still finishing another change to this conversation. Try again in a moment.",

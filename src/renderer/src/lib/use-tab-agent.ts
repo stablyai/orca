@@ -60,18 +60,11 @@ export function useTabAgent(tab: TerminalTab): TerminalAgent | null {
     return activeLeafId && isTerminalLeafId(activeLeafId) ? makePaneKey(tab.id, activeLeafId) : null
   })
   const processAgent = useAppStore((s) =>
-    focusedPaneKey
-      ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ??
-        s.paneForegroundAgentByPaneKey[focusedPaneKey]?.suspendedAgent ??
-        null)
-      : null
+    focusedPaneKey ? (s.paneForegroundAgentByPaneKey[focusedPaneKey]?.agent ?? null) : null
   )
   const processShellForeground = useAppStore((s) =>
     focusedPaneKey
-      ? Boolean(
-          s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground &&
-          !s.paneForegroundAgentByPaneKey[focusedPaneKey]?.suspendedAgent
-        )
+      ? Boolean(s.paneForegroundAgentByPaneKey[focusedPaneKey]?.shellForeground)
       : false
   )
   // Why: a hibernated pane's session record is the freshest identity once PTY, hook, and process signals are all gone.

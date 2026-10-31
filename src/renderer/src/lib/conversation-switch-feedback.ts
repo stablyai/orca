@@ -36,6 +36,13 @@ export function conversationSwitchFailureText(
             values
           )
   }
+  if (reason === 'agentPaused') {
+    return translate(
+      'components.tab.bar.switch.agentPaused',
+      '{{agent}} is paused in this terminal. Resume it with fg or exit it, then switch.',
+      values
+    )
+  }
   if (reason === 'ownerUnproven' || reason === 'previousExitUnverifiable') {
     return translate(
       args.source

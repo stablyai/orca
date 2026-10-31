@@ -1,4 +1,3 @@
-import { resolveSuspendedAgentProcessFromPs } from './suspended-agent-process'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import { resolveOuterWrapperForegroundProcess } from '../../shared/foreground-wrapper-agent'
 import { unreadableArgvName, type ProcessTableRow } from '../../shared/process-table-snapshot'
@@ -38,7 +37,6 @@ export {
 export type AgentForegroundProcessResolution = {
   available: boolean
   processName: string | null
-  suspendedAgentProcess?: string
   /** Windows liveness anchor for an unambiguous recognized name; omitted for fallbacks and POSIX. */
   processId?: number
   /** Windows: the scan proved the caller's `anchorProcessId` is now a non-agent. */
@@ -174,11 +172,9 @@ export async function resolveAgentForegroundProcessWithAvailability(
     ) {
       return { available: false, processName: fallbackProcess }
     }
-    const suspendedAgentProcess = resolveSuspendedAgentProcessFromPs(rows, shellPid)
     return {
       available: true,
-      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess,
-      ...(suspendedAgentProcess ? { suspendedAgentProcess } : {})
+      processName: resolveAgentForegroundProcessFromPs(rows, shellPid) ?? fallbackProcess
     }
   } catch {
     // Why: a failed scan cannot prove fallback ownership; callers retain the last recognized agent.

@@ -229,9 +229,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           await vi.advanceTimersByTimeAsync(10_000)
 
           // Scope to this pane's pty id: a delayed confirm for another test's pane can fire during this advance.
-          expect(window.api.pty.inspectProcess).not.toHaveBeenCalledWith(ptyId, {
-            scanChildProcesses: true
-          })
+          expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
           expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
             agent: 'droid',
             routingRevoked: true,
@@ -274,9 +272,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           binding.sampleForegroundAgentOnFocus()
           await vi.advanceTimersByTimeAsync(10_000)
 
-          expect(window.api.pty.inspectProcess).not.toHaveBeenCalledWith(ptyId, {
-            scanChildProcesses: true
-          })
+          expect(window.api.pty.confirmForegroundProcess).not.toHaveBeenCalledWith(ptyId)
           expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
             agent: 'droid',
             routingRevoked: true,
@@ -307,10 +303,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           state: 'working',
           agentType: 'droid'
         }
-        vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-          foregroundProcess: 'droid',
-          hasChildProcesses: false
-        })
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
 
         binding.requestWindowsShiftEnterReconfirmation()
         await vi.advanceTimersByTimeAsync(200)
@@ -334,9 +327,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
         await vi.advanceTimersByTimeAsync(350)
         await flushAsyncTicks()
-        expect(window.api.pty.inspectProcess).toHaveBeenCalledWith(ptyId, {
-          scanChildProcesses: true
-        })
+        expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledWith(ptyId)
         expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
           agent: 'droid',
           agentEvidence: 'process-read',
@@ -372,10 +363,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
           state: 'working',
           agentType: 'pi'
         }
-        vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-          foregroundProcess: 'cmd.exe',
-          hasChildProcesses: false
-        })
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('cmd.exe')
 
         binding.sampleForegroundAgentOnFocus()
 
@@ -416,10 +404,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
       it('confirms daemon launch identity before restoring warm-reattach routing', async () => {
         vi.useFakeTimers()
-        vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-          foregroundProcess: 'droid',
-          hasChildProcesses: false
-        })
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('droid')
         const ptyId = 'pty-launch-identity-no-sample'
         const tabId = `tab-${ptyId}`
         mockStoreState.tabsByWorktree = { 'wt-1': [{ id: tabId, ptyId }] }
@@ -511,10 +496,7 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
 
       it('retires stale daemon launch identity when warm reattach finds the shell', async () => {
         vi.useFakeTimers()
-        vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-          foregroundProcess: 'powershell.exe',
-          hasChildProcesses: false
-        })
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('powershell.exe')
         const ptyId = 'pty-stale-daemon-launch-identity'
         const tabId = `tab-${ptyId}`
         mockStoreState.tabsByWorktree = { 'wt-1': [{ id: tabId, ptyId }] }
@@ -532,7 +514,9 @@ export function registerPtyConnectionForegroundAgentSamplingTests(): void {
         await flushAsyncTicks()
 
         // Assert the floor (initial read + two retries), not an exact count: an incidental droid reconfirm can add one more.
-        expect(vi.mocked(window.api.pty.inspectProcess).mock.calls.length).toBeGreaterThanOrEqual(3)
+        expect(
+          vi.mocked(window.api.pty.confirmForegroundProcess).mock.calls.length
+        ).toBeGreaterThanOrEqual(3)
         expect(mockStoreState.paneForegroundAgentByPaneKey[cacheKey]).toEqual({
           agent: null,
           shellForeground: true

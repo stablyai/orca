@@ -12,6 +12,7 @@ import { inspectPtyProviderProcess } from '../../providers/pty-process-inspectio
 import { inspectionShowsShellAlone } from '../run-terminal-shell-alone'
 import {
   assertCliConversationWritersExited,
+  posixAgentPausedBelow,
   posixCliWriterShellAlone,
   type CliWriterPane,
   type CliWriterTerminal
@@ -144,6 +145,21 @@ export abstract class OrcaRuntimeWithStructuredSessionCliWriterHost extends Orca
       return
     }
     await this.assertStructuredAdoptionTerminalWritersExited(record.provider, key.id)
+  }
+
+  /** Whether job control paused an agent in this pane (Ctrl+Z); Windows terminals have no such stop. */
+  async terminalAgentPaused(ptyId: string): Promise<boolean> {
+    if (process.platform === 'win32') {
+      return false
+    }
+    try {
+      const processes = await this.ptyController?.listProcesses?.(LOCAL_EXECUTION_HOST_ID)
+      const rootPid = processes?.find((candidate) => candidate.id === ptyId)?.rootProcessId
+      return !!rootPid && (await posixAgentPausedBelow(rootPid))
+    } catch {
+      // An unreadable process table proves nothing paused; the switch's own stop proof still applies.
+      return false
+    }
   }
 
   async assertStructuredAdoptionTerminalWritersExited(

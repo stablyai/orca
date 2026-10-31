@@ -156,10 +156,7 @@ describe('shell showing through a hibernation kill', () => {
   }> {
     vi.useFakeTimers()
     const { connectPanePty } = await import('./pty-connection')
-    vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-      foregroundProcess: 'zsh',
-      hasChildProcesses: false
-    })
+    vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('zsh')
     const dataCallbackRef: { current: ((data: string) => void) | null } = { current: null }
     const ptyId = 'pty-hibernating'
     const transport = createMockTransport(ptyId)
@@ -239,19 +236,19 @@ describe('shell showing through a hibernation kill', () => {
     'preserves the wake record when a pending confirmation settles with PTY %s',
     async (boundPtyId) => {
       const pane = await connectHibernatingPane(true)
-      const foreground = createDeferred<Awaited<ReturnType<typeof window.api.pty.inspectProcess>>>()
-      vi.mocked(window.api.pty.inspectProcess).mockReturnValue(foreground.promise)
+      const foreground = createDeferred<string | null>()
+      vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(foreground.promise)
 
       pane.finishCommand()
       await vi.advanceTimersByTimeAsync(350)
-      expect(window.api.pty.inspectProcess).toHaveBeenCalledExactlyOnceWith('pty-hibernating', {
-        scanChildProcesses: true
-      })
+      expect(window.api.pty.confirmForegroundProcess).toHaveBeenCalledExactlyOnceWith(
+        'pty-hibernating'
+      )
       pane.exitPty()
       pane.rebindPty(boundPtyId)
       await flushAsyncTicks()
       expect(mockStoreState.suppressedPtyExitIds).toEqual({})
-      foreground.resolve({ foregroundProcess: 'zsh', hasChildProcesses: false })
+      foreground.resolve('zsh')
       await flushAsyncTicks()
 
       // A detached transport rejects the stale read; a retained binding reaches shell cleanup.

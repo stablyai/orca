@@ -1,4 +1,3 @@
-import { resolveSuspendedAgentProcessFromPs } from '../../providers/suspended-agent-process'
 import type { IPty } from 'node-pty'
 import { isShellProcess } from '../../../shared/shell-process-detection'
 import {
@@ -71,9 +70,7 @@ export function resolveSpawnFileForegroundFromRows(
     ''
   )
   const selected = selectForegroundProcessCandidate(candidates, tree)
-  const suspendedAgentProcess = resolveSuspendedAgentProcessFromPs(rows, rootPid)
   return {
-    ...(suspendedAgentProcess ? { suspendedAgentProcess } : {}),
     available: name.length > 0,
     processName: selected
       ? resolveOuterWrapperForegroundProcess(selected.recognized, selected.candidate, tree)

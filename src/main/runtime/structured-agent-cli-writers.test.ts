@@ -8,6 +8,7 @@ import type { SleepingAgentSessionRecord } from '../../shared/agent-session-resu
 import type { EnrichedAgentHookEventPayload } from '../agent-hooks/server/server-types'
 import {
   assertCliConversationWritersExited,
+  posixAgentPausedBelow,
   posixCliWriterShellAlone,
   type CliWriterHost
 } from './structured-agent-cli-writers'
@@ -118,6 +119,21 @@ describe('execution-host conversation writer inspection', () => {
     ]) {
       snapshot.mockResolvedValue(rows)
       await expect(posixCliWriterShellAlone(10)).resolves.toBe(false)
+    }
+  })
+
+  it('finds an agent paused by Ctrl+Z below the pane, and only a paused agent', async () => {
+    const shell = { pid: 10, ppid: 1, stat: 'Ss', command: '-/bin/zsh -l' }
+    const job = { pid: 11, ppid: 10, stat: 'T', command: 'claude' }
+    snapshot.mockResolvedValue([shell, job])
+    await expect(posixAgentPausedBelow(10)).resolves.toBe(true)
+    for (const rows of [
+      [shell, { ...job, stat: 'S+' }],
+      [shell, { ...job, command: 'vim notes.txt' }],
+      [shell]
+    ]) {
+      snapshot.mockResolvedValue(rows)
+      await expect(posixAgentPausedBelow(10)).resolves.toBe(false)
     }
   })
 

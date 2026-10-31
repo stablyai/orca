@@ -162,12 +162,8 @@ export class LocalPtyProvider implements IPtyProvider {
         childProcessEvidence: 'unverifiable'
       }
     }
-    let suspendedAgentProcess: string | undefined
-    const foregroundProcess = await (options?.scanChildProcesses ||
-    (process.platform === 'win32' && options?.steadyState !== true)
-      ? confirmLocalPtyForegroundProcess(id, process.platform === 'win32', (name) => {
-          suspendedAgentProcess = name
-        })
+    const foregroundProcess = await (process.platform === 'win32' && options?.steadyState !== true
+      ? confirmLocalPtyForegroundProcess(id, true)
       : getLocalPtyForegroundProcess(id))
     // A steady-state poll never decides adoption or close, so it may read the cached process table.
     const childProcessEvidence = await inspectLocalPtyChildProcesses(
@@ -185,7 +181,6 @@ export class LocalPtyProvider implements IPtyProvider {
     }
     return {
       foregroundProcess,
-      ...(suspendedAgentProcess ? { suspendedAgentProcess } : {}),
       hasChildProcesses: childProcessEvidence !== 'no-children',
       childProcessEvidence
     }

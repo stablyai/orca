@@ -120,6 +120,8 @@ const REASON_WORDS = {
     launchPreparationFailed: { fact: 'launchPreparationFailed', action: 'retry' },
     conversationOpenInTerminal: { fact: 'conversationOpenInTerminal', action: 'actFirst' },
     conversationOpenElsewhere: { fact: 'conversationOpenElsewhere', action: 'actFirst' },
+    // Only a terminal switch sends this, and it words the refusal itself.
+    agentPaused: codeWords('actFirst'),
     attachFailed: codeWords('retry')
   },
   agent_session_ownership_unknown: {

@@ -22,7 +22,6 @@ export function createPaneForegroundProcessReader(deps: {
 
   return async (ptyId: string, requiresConfirmation: boolean) => {
     let processName: string | null = null
-    let suspendedAgentProcess: string | undefined
     let remoteEvidenceVerdict: 'live' | 'unverifiable' | 'exited' | null = null
     const expectedIncarnationId = deps.getExpectedIncarnationId?.() ?? null
     const options = expectedIncarnationId ? { expectedIncarnationId } : undefined
@@ -67,15 +66,9 @@ export function createPaneForegroundProcessReader(deps: {
         remoteEvidenceVerdict = admitted?.verdict ?? 'unverifiable'
         if (admitted?.verdict === 'live') {
           processName = admitted.processName
-          suspendedAgentProcess = admitted.suspendedAgentProcess
         }
       } else {
         processName = inspection.foregroundProcess
-        suspendedAgentProcess =
-          inspection.suspendedAgentProcess ??
-          (inspection.foregroundProcessEvidence?.verdict === 'live'
-            ? inspection.foregroundProcessEvidence.suspendedAgentProcess
-            : undefined)
       }
     } catch {
       // Missing legacy/injected-provider answers remain unverifiable remote verdicts.
@@ -83,7 +76,6 @@ export function createPaneForegroundProcessReader(deps: {
     }
     return {
       processName,
-      suspendedAgentProcess,
       remoteEvidenceVerdict,
       expectedIncarnationId,
       remote

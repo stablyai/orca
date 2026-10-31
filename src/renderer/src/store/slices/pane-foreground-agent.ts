@@ -8,8 +8,6 @@ export type PaneForegroundAgentEvidence = 'process-read' | 'launch-record'
 export type PaneForegroundAgentEntry = {
   /** Recognized agent process in the pane's foreground; null when unknown. */
   agent: TerminalAgent | null
-  /** Observed stopped job; independent of foreground byte routing. */
-  suspendedAgent?: TerminalAgent
   /** Where `agent` came from. Only 'process-read' is a live read; absent counts as unconfirmed,
    *  so a writer that omits it cannot make a sidebar row look process-backed. */
   agentEvidence?: PaneForegroundAgentEvidence
@@ -48,7 +46,6 @@ export const createPaneForegroundAgentSlice: StateCreator<
       if (
         current &&
         current.agent === entry.agent &&
-        current.suspendedAgent === entry.suspendedAgent &&
         current.agentEvidence === entry.agentEvidence &&
         current.routingTrusted === entry.routingTrusted &&
         current.routingRevoked === entry.routingRevoked &&

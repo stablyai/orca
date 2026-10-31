@@ -160,7 +160,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
       it('does not let a pending confirmation re-arm itself', async () => {
         vi.useFakeTimers()
         // Never resolves: the confirmation stays in flight for the whole test.
-        vi.mocked(window.api.pty.inspectProcess).mockReturnValue(new Promise(() => {}))
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockReturnValue(new Promise(() => {}))
         const ptyId = 'pty-pi-no-remint'
         const tabId = `tab-${ptyId}`
         const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({
@@ -219,14 +219,11 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
         async (outcome) => {
           vi.useFakeTimers()
           if (outcome === 'provider rejection') {
-            vi.mocked(window.api.pty.inspectProcess).mockRejectedValue(
+            vi.mocked(window.api.pty.confirmForegroundProcess).mockRejectedValue(
               new Error('inspection unavailable')
             )
           } else {
-            vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-              foregroundProcess: null,
-              hasChildProcesses: false
-            })
+            vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue(null)
           }
           const ptyId = `pty-pi-reconfirm-${outcome.replace(' ', '-')}`
           const tabId = `tab-${ptyId}`
@@ -261,10 +258,7 @@ export function registerPtyConnectionForegroundRoutingConfirmationTests(): void 
 
       it('replaces pending Pi routing when confirmation finds another agent', async () => {
         vi.useFakeTimers()
-        vi.mocked(window.api.pty.inspectProcess).mockResolvedValue({
-          foregroundProcess: 'codex',
-          hasChildProcesses: false
-        })
+        vi.mocked(window.api.pty.confirmForegroundProcess).mockResolvedValue('codex')
         const ptyId = 'pty-pi-reconfirm-codex'
         const tabId = `tab-${ptyId}`
         const { binding, cacheKey } = await connectRestoredPaneForForegroundSampling({

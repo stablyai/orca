@@ -14,6 +14,7 @@ import { getFreshShellForegroundSnapshot } from '../../shared/process-table-snap
 import { collectDescendantsFromIndex, getProcessTableIndex } from '../../shared/process-table-index'
 import { isShellProcess } from '../../shared/shell-process-detection'
 import { MACOS_LOGIN_PATH } from '../providers/macos-tcc-login-shell'
+import { resolveSuspendedAgentProcessFromPs } from '../providers/suspended-agent-process'
 import type { PtyIncarnationId } from '../../shared/pty-incarnation'
 import type { AgentProcessIdentity } from '../../shared/agent-process-presence'
 import { probeAgentProcessPresence } from '../../shared/agent-process-presence-probe'
@@ -67,6 +68,12 @@ export async function posixCliWriterShellAlone(rootPid: number): Promise<boolean
     // A session leader below the shell has left this terminal (a prompt's zpty worker); its jobs never do.
     collectDescendantsFromIndex(index, shell.pid, (row) => row.stat.includes('s')).length === 0
   )
+}
+
+/** An agent job control paused (Ctrl+Z) below the pane's root process. */
+export async function posixAgentPausedBelow(rootPid: number): Promise<boolean> {
+  const rows = await getFreshShellForegroundSnapshot()
+  return resolveSuspendedAgentProcessFromPs(rows, rootPid) !== null
 }
 
 /** Execution-host observations release a terminal writer; loss of evidence never does. */

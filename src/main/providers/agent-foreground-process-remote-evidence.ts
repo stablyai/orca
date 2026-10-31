@@ -1,4 +1,3 @@
-import { resolveSuspendedAgentProcessFromPs } from './suspended-agent-process'
 import { hasControllingTty } from '../../shared/posix-controlling-terminal'
 import { recognizeAgentProcessFromCommandLine } from '../../shared/agent-process-recognition'
 import type {
@@ -105,12 +104,10 @@ export function resolveRemoteForegroundEvidenceFromRows(
   if (candidate && !candidate.row.startTime) {
     return { ...metadata, verdict: 'unverifiable', reason: 'candidate_start_time_missing' }
   }
-  const suspendedAgentProcess = resolveSuspendedAgentProcessFromPs(rows, root.pid)
   return {
     ...metadata,
     verdict: 'live',
     processName: candidate?.name.processName ?? null,
-    ...(suspendedAgentProcess ? { suspendedAgentProcess } : {}),
     fence
   }
 }
