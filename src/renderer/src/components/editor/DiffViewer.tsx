@@ -337,6 +337,8 @@ export default function DiffViewer({
         ) : (
           <DiffEditor
             height="100%"
+            // Why: the overview ruler column is unpainted; it shows this surface, not the app's.
+            className="code-editor-backdrop"
             language={language}
             original={originalContent}
             modified={modifiedContent}

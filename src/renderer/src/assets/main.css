@@ -2410,6 +2410,11 @@ html.native-shell .app-layout {
   color-scheme: dark;
 }
 
+/* Why background only: Orca widgets inside Monaco (diff notes) keep the app's text colors. */
+:root[data-code-editor-theme] .code-editor-backdrop {
+  background-color: var(--code-editor-background);
+}
+
 /* Why: notebook cells paint their own code surface; Monaco's theme background would cover it. */
 .ipynb-code-surface .monaco-editor,
 .ipynb-code-surface .monaco-editor-background,
