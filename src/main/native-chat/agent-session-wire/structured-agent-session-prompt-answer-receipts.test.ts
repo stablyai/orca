@@ -1,3 +1,14 @@
+import {
+  agentSessionFormDraftContent,
+  initialAgentSessionFormDraft
+} from '../../../shared/agent-session-form'
+import {
+  acquireReadyCodexForTest,
+  adapterFor,
+  fakeCodex,
+  identityFor
+} from '../../codex/codex-structured-session-adapter-fixture'
+import { openTestAgentSessionRecordStore } from '../../runtime/agent-session-record-store-test-harness'
 import { beforeEach, describe, expect, it, type Mock } from 'vitest'
 import { AGENT_SESSION_MAX_NEW_OPERATION_AGE_MS } from '../../../shared/agent-session-host-authority'
 import {
@@ -9,15 +20,17 @@ import { encodeAgentSessionQuestionAnswers } from '../../../shared/agent-session
 import type { AgentSessionRecordStore } from '../../runtime/agent-session-record-store'
 import {
   openTestJournalHostDatabase,
+  closeTestJournalHostDatabase,
   SAVED_BY_NEWER_ORCA
 } from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
-import type { StructuredAgentSessionHost } from './structured-agent-session-host'
+import { StructuredAgentSessionHost } from './structured-agent-session-host'
 import {
   attach,
   CALLER,
   envelope,
   hostTestState,
+  replaceHostTestState,
   seedApproval
 } from './structured-agent-session-host-test-harness'
 import {
@@ -507,3 +520,133 @@ it.each(['form', 'url'] as const)(
     })
   }
 )
+
+it('saves and cold-reloads the complete typed form, resolution and immutable answer receipt without another provider reply', async () => {
+  await attach()
+  const codex = fakeCodex()
+  const provider = adapterFor(codex, { resumeThreadId: THREAD })
+  try {
+    await acquireReadyCodexForTest(provider, {
+      identity: identityFor(SESSION),
+      fence: store.getRecord(SESSION)!.lease.runtimeFence,
+      spawnToken: 'spawn-a',
+      events: acquire.mock.calls.at(-1)![0].events
+    })
+    answerPrompt.mockImplementation((input) => provider.answerPrompt(input))
+    codex.connections[0].handlers.onServerRequest?.({
+      id: 0,
+      method: 'mcpServer/elicitation/request',
+      params: {
+        threadId: THREAD,
+        turnId: 'turn-1',
+        mode: 'form',
+        message: 'Confirm the exact values',
+        requestedSchema: {
+          type: 'object',
+          properties: {
+            zero: { type: 'integer', minimum: 0, default: 0 },
+            no: { type: 'boolean', default: false },
+            empty: { type: 'string', default: '' },
+            spaces: { type: 'string', default: '  \n ' },
+            choice: {
+              type: 'string',
+              enum: ['red', 'blue'],
+              enumNames: ['Red', 'Blue'],
+              default: 'blue'
+            },
+            omitted: { type: 'string' }
+          },
+          required: ['zero', 'no', 'empty', 'spaces', 'choice']
+        }
+      }
+    })
+    await host.flushStreamedEvents(SESSION)
+    const prompt = journal()
+      .snapshot()
+      .items.find((item) => item.body.kind === 'approval')!
+    if (prompt.body.kind !== 'approval' || !prompt.body.form) {
+      throw new Error('Missing complete form')
+    }
+    const form = prompt.body.form
+    const content = agentSessionFormDraftContent(form, initialAgentSessionFormDraft(form))
+    expect(content).toEqual({ zero: 0, no: false, empty: '', spaces: '  \n ', choice: 'blue' })
+    const fields = { itemId: prompt.itemId, expectedRevision: prompt.revision, content }
+    const params = {
+      ...fields,
+      kind: 'approval' as const,
+      envelope: envelope('agentSession.respondTo:approval', fields)
+    }
+    const accepted = await host.respondToPrompt(CALLER, params)
+    expect(accepted).toMatchObject({ ok: true, value: { resolution: { formContent: content } } })
+    expect(codex.connections[0].replies).toEqual([
+      { id: 0, result: { action: 'accept', content, _meta: null } }
+    ])
+    const equalParams = { ...params, envelope: envelope('agentSession.respondTo:approval', fields) }
+    const equalAccepted = await host.respondToPrompt(CALLER, equalParams)
+    expect(equalAccepted).toMatchObject({
+      ok: true,
+      value: { resolution: { formContent: content } }
+    })
+    const saved = journal().item(prompt.itemId)!
+    const savedReceipt = receipt(params.envelope.clientOperationId)
+    expect(savedReceipt).toMatchObject({
+      verdict: 'readable',
+      receipt: {
+        result: { kind: 'prompt-answer', resolution: { formContent: content } }
+      }
+    })
+    const database = openTestJournalHostDatabase(root)
+    expect(
+      database.db.prepare("SELECT COUNT(*) AS n FROM journal_outcomes WHERE field = 'items'").get()
+        ?.n
+    ).toBeGreaterThan(0)
+
+    const old = host
+    old.stopDelivery()
+    const { lifetime, runtimeState } = old.collaboratorsForTests()
+    lifetime.idleSweep.dispose()
+    await runtimeState.stopLeaseRenewal()
+    runtimeState.currentEventSink(SESSION)?.close()
+    await journal().close()
+    await closeTestJournalHostDatabase(root)
+    expect(database.isClosed).toBe(true)
+    store = await openTestAgentSessionRecordStore(root)
+    host = new StructuredAgentSessionHost({
+      ...old.deps,
+      store,
+      journalDatabase: openTestJournalHostDatabase(root)
+    })
+    replaceHostTestState({ host, store })
+    const acquisitions = acquire.mock.calls.length
+    expect(
+      (await host.journalSnapshot(SESSION)).items.find((item) => item.itemId === saved.itemId)
+    ).toEqual(saved)
+    expect(promptBody(saved.itemId)).toEqual({
+      ...prompt.body,
+      resolution: saved.body.kind === 'approval' ? saved.body.resolution : undefined
+    })
+    expect(receipt(params.envelope.clientOperationId)).toEqual(savedReceipt)
+    expect(await host.respondToPrompt(CALLER, params)).toEqual({
+      ...accepted,
+      replayed: true,
+      cursor: expect.anything()
+    })
+    expect(await host.respondToPrompt(CALLER, equalParams)).toEqual({
+      ...equalAccepted,
+      replayed: true,
+      cursor: expect.anything()
+    })
+    // A cold stored lease is not fresh writer authority, even when its answer is already saved.
+    expect(
+      await host.respondToPrompt(CALLER, {
+        ...params,
+        envelope: envelope('agentSession.respondTo:approval', fields)
+      })
+    ).toMatchObject({ ok: false, refusal: { code: 'execution_owner_reconciling' } })
+    expect(answerPrompt).toHaveBeenCalledOnce()
+    expect(acquire).toHaveBeenCalledTimes(acquisitions)
+    expect(codex.connections[0].replies).toHaveLength(1)
+  } finally {
+    await provider.closeAll()
+  }
+})
