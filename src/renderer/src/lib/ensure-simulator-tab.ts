@@ -1,4 +1,5 @@
 import { useAppStore } from '@/store'
+import { findLonePaneSourceGroupId } from '@/store/slices/tabs/lone-pane-split-source'
 import { findReusableRightSplitGroupId } from './emulator-right-split-target'
 import { cancelPendingSimulatorPaneShutdown } from './simulator-pane-shutdown-scheduler'
 import { shouldShutdownSimulatorForPaneUnmountFromTabs } from './simulator-tab-shutdown'
@@ -142,7 +143,9 @@ export function ensureSimulatorTab(
     options?.placement === 'rightSplit' &&
     shouldSurface &&
     !reusableRightGroupId &&
-    !serverEnvironmentId
+    !serverEnvironmentId &&
+    // Why: with the area already split, rightSplit reuses or falls through — it never makes a third pane.
+    findLonePaneSourceGroupId(store, worktreeId, sourceGroupId) !== null
   const groupId = reusableRightGroupId ?? sourceGroupId
   const drawHere = (tabId?: string): string | null => {
     // Create directly in the split group; create-then-move can persist an intermediate state during HMR.
@@ -163,6 +166,7 @@ export function ensureSimulatorTab(
       label,
       targetGroupId: groupId,
       activate: reusableRightGroupId ? true : shouldSurface,
+      ...(reusableRightGroupId ? { placementFixed: true } : {}),
       ...hostOf(executionHostId)
     })
     if (reusableRightGroupId || shouldSurface) {

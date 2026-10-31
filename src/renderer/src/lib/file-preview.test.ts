@@ -316,7 +316,8 @@ describe('openFileInBrowserTab', () => {
     expect(mocks.createEmptySplitGroup).not.toHaveBeenCalled()
     expect(mocks.createBrowserTab).toHaveBeenCalledWith(
       ...docPreviewCall('/srv/repo/example.html', {
-        split: { sourceGroupId: 'group-1', splitDirection: 'right', activate: false }
+        split: { sourceGroupId: 'group-1', splitDirection: 'right', activate: false },
+        placementFixed: true
       })
     )
   })
@@ -333,6 +334,7 @@ describe('openFileInBrowserTab', () => {
     expect(mocks.createBrowserTab).toHaveBeenCalledWith('wt-1', 'file:///tmp/example.html', {
       title: 'example.html',
       split: { sourceGroupId: 'group-1', splitDirection: 'right', activate: true },
+      placementFixed: true,
       activate: true
     })
   })

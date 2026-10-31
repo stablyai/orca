@@ -20,6 +20,7 @@ import {
 } from '@/components/ui/dropdown-menu'
 import { getAgentCatalog, AgentIcon } from '@/lib/agent-catalog'
 import { useAppStore } from '@/store'
+import { findLonePaneSourceGroupId } from '@/store/slices/tabs/lone-pane-split-source'
 import { useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { useAgentMenuShortcutLabels } from './agent-menu-shortcut-labels'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -97,6 +98,9 @@ export function useTabAgentMenuLaunch({
         ...(draft ? agentPickerLaunchInputs(draft, pickerEntry) : {}),
         worktreeId,
         groupId,
+        // Why: once split, a panel's own + launches in that panel; a lone pane's + still opens beside it.
+        placementFixed:
+          findLonePaneSourceGroupId(useAppStore.getState(), worktreeId, groupId) === null,
         ...(prompt !== undefined ? { prompt } : {}),
         ...(promptDelivery !== undefined ? { promptDelivery } : {}),
         ...(launchSource !== undefined ? { launchSource } : {}),

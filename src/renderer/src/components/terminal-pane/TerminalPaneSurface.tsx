@@ -19,6 +19,7 @@ import { handleInternalTerminalFileDrop } from './terminal-drop-handler'
 import { TerminalQuickCommandEditorDialog } from './TerminalQuickCommandEditorDialog'
 import { TerminalPaneNativeChatPortal } from './TerminalPaneNativeChatPortal'
 import { TerminalPaneSleepingPortals } from './TerminalPaneSleepingPortals'
+import { LoneTerminalPaneWidthHandles } from './LoneTerminalPaneWidthHandles'
 import {
   TerminalPaneCodexRestartPortals,
   TerminalPaneMobileDriverPortals,
@@ -340,6 +341,7 @@ export function TerminalPaneSurface({
           }}
         />
       ) : null}
+      <LoneTerminalPaneWidthHandles controller={controller} />
       <TerminalPaneHeaderOverlay
         tabId={tabId}
         worktreeId={worktreeId}

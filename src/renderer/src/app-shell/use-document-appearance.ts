@@ -14,6 +14,7 @@ import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { applySinglePaneCapVariables } from './single-pane-cap-variables'
 
 export function useDocumentAppearance(): void {
   const theme = useAppStore((s) => s.settings?.theme)
@@ -31,6 +32,7 @@ export function useDocumentAppearance(): void {
   usePluginAppThemeSync()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
+  const singlePaneMaxWidth = useAppStore((s) => s.settings?.terminalSinglePaneMaxWidth)
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
   useEffect(() => {
@@ -69,4 +71,8 @@ export function useDocumentAppearance(): void {
       buildAppFontFamily(appFontFamily)
     )
   }, [appFontFamily])
+
+  useEffect(() => {
+    applySinglePaneCapVariables(document.documentElement, singlePaneMaxWidth)
+  }, [singlePaneMaxWidth])
 }

@@ -54,8 +54,9 @@ function open(linkContext = context()) {
   })
 }
 
-function browser(groupId: string, url = URL_TO_OPEN) {
+function browser(groupId: string, url = URL_TO_OPEN, extra: { placementFixed?: boolean } = {}) {
   return store.getState().createBrowserTab(WORKSPACE, url, {
+    ...extra,
     targetGroupId: groupId,
     executionHostId: 'local',
     browserRuntimeEnvironmentId: null,
@@ -404,7 +405,8 @@ describe('browser link placement and exact page activation', () => {
       groupsByWorktree: { [WORKSPACE]: [store.getState().groupsByWorktree[WORKSPACE]![0]!] },
       layoutByWorktree: { [WORKSPACE]: { type: 'leaf', groupId: 'a' } }
     })
-    const existing = browser('a')
+    // Why: pin the seed tab in 'a'; a lone pane otherwise opens its second tab beside it.
+    const existing = browser('a', URL_TO_OPEN, { placementFixed: true })
     expect(await open()).toMatchObject({
       status: 'opened',
       result: { browserWorkspaceId: existing.id, groupId: 'a' }

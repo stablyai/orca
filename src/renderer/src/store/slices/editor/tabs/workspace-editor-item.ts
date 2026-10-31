@@ -11,6 +11,7 @@ import {
   openEditorTabThroughLayoutOwner,
   sendReusedEditorTabToLayoutOwner
 } from './editor-tab-open-through-layout-owner'
+import { findLonePaneSourceGroupId } from '../../tabs/lone-pane-split-source'
 
 export function openWorkspaceEditorItem(
   state: AppState,
@@ -22,9 +23,14 @@ export function openWorkspaceEditorItem(
   targetGroupId?: string,
   selection: EditorTabSelection = 'focus',
   /** Where in its group a reopened tab goes back to. */
-  index?: number
+  index?: number,
+  placementFixed?: boolean
 ): string {
-  const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId)
+  // Why: a background open (CLI, phone) promises not to move the desktop, so no automatic placement.
+  const fixedPlacement = placementFixed || selection !== 'focus'
+  const resolvedGroupId = resolveEditorOpenTargetGroupId(state, worktreeId, targetGroupId, {
+    placementFixed: fixedPlacement
+  })
   if (resolvedGroupId) {
     const existing = state.findTabForEntityInGroup?.(
       worktreeId,
@@ -61,7 +67,8 @@ export function openWorkspaceEditorItem(
       ...(file ? { executionHostId: getOpenFileExecutionHostId(file) } : {}),
       ...(resolvedGroupId ? { targetGroupId: resolvedGroupId } : {}),
       ...(selection === 'none' ? { activate: false } : {}),
-      ...(selection === 'background' ? { recordFocus: false } : {})
+      ...(selection === 'background' ? { recordFocus: false } : {}),
+      ...(fixedPlacement ? { placementFixed: true } : {})
     })
   }
   // Switch point: main opens the tab under the window's proposed id and its frame draws it.
@@ -83,12 +90,20 @@ export function openWorkspaceEditorItem(
   return drawHere()?.id ?? fileId
 }
 export function getReplaceablePreviewFileId(
-  state: Pick<AppState, 'openFiles' | 'unifiedTabsByWorktree' | 'settings'>,
+  state: Pick<
+    AppState,
+    'openFiles' | 'unifiedTabsByWorktree' | 'layoutByWorktree' | 'groupsByWorktree' | 'settings'
+  >,
   worktreeId: string,
   targetGroupId: string | undefined
 ): string | null {
   // Why: callers resolve intent first, but this helper is shared by five open paths — keep it correct for a caller that doesn't.
   if (!areEditorPreviewTabsEnabled(state)) {
+    return null
+  }
+  // Why: this open is about to become a new right pane, so it replaces nothing — evicting here
+  // would delete the left pane's OpenFile and leave its tab with nothing behind it.
+  if (findLonePaneSourceGroupId(state, worktreeId, targetGroupId)) {
     return null
   }
   const tabsForWorktree = state.unifiedTabsByWorktree?.[worktreeId] ?? []
