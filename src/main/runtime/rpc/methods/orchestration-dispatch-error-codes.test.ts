@@ -124,6 +124,8 @@ describe('orchestration dispatch failure codes through RpcDispatcher', () => {
         task: task.id,
         from: COORDINATOR_HANDLE,
         agent: 'claude',
+        // Why: omitted placement is refused first; this case is an invalid --retry-of with placement restated.
+        worktree: 'current',
         retryOf: 'ctx_missing'
       })
     )
