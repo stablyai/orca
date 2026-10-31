@@ -2,6 +2,8 @@ import type { ElectronApplication } from '@stablyai/playwright-test'
 
 /** Per-launch options for `createRestartSession().launch`. */
 export type LaunchOptions = {
+  // Match legacy workspace fixtures; null leaves the application default in place.
+  sidebarBody?: 'conversations' | 'workspaces' | 'agents' | null
   extraArgs?: string[]
   // Attach stderr before firstWindow so startup guard/metrics logs cannot be missed.
   onStderr?: (chunk: string) => void

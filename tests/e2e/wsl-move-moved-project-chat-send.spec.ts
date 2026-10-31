@@ -18,7 +18,7 @@ import { tmpdir } from 'node:os'
 import { delimiter, dirname, join } from 'node:path'
 import type { Page } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
-import { waitForSessionReady } from './helpers/store'
+import { selectSidebarBody, waitForSessionReady } from './helpers/store'
 import { createRestartSession } from './helpers/orca-restart'
 import { buildFakeAgentCommandOverride } from './helpers/fake-agent-command-override'
 import { SUPPORTED, createChatOnHost } from './helpers/structured-claude-stub'
@@ -118,6 +118,7 @@ test("a moved project's existing chat still answers here after the move", async 
     launched = await session.launch()
     const { page } = launched
     await waitForSessionReady(page)
+    await selectSidebarBody(page, 'workspaces')
     const entry = page.getByTestId('wsl-moved-project')
     await expect(entry).toBeVisible({ timeout: 30_000 })
     await entry.getByTestId('wsl-moved-chat').click()

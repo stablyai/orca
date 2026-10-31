@@ -115,8 +115,17 @@ function folderRepo(): Repo {
   }
 }
 
+function visibleNavigationSettings(): GlobalSettings {
+  return {
+    ...getDefaultSettings('/tmp'),
+    showTasksButton: true,
+    showAutomationsButton: true,
+    showMobileButton: true
+  }
+}
+
 function setSidebarState({
-  settings = getDefaultSettings('/tmp'),
+  settings = visibleNavigationSettings(),
   repos = [gitRepo()]
 }: {
   settings?: GlobalSettings
@@ -226,7 +235,7 @@ describe('SidebarNav', () => {
   it('mounts the Agent Dashboard row only when its experiment is enabled', async () => {
     setSidebarState({
       settings: {
-        ...getDefaultSettings('/tmp'),
+        ...visibleNavigationSettings(),
         experimentalAgentDashboardPopout: true
       }
     })
@@ -240,7 +249,7 @@ describe('SidebarNav', () => {
     mocks.agentBucketCounts = { attention: 2, working: 3, done: 1, idle: 4 }
     setSidebarState({
       settings: {
-        ...getDefaultSettings('/tmp'),
+        ...visibleNavigationSettings(),
         experimentalAgentDashboardPopout: true,
         experimentalAgentDashboardShowIdle: true
       }
@@ -277,7 +286,7 @@ describe('SidebarNav', () => {
 
   it('opens Artifacts from the sidebar', async () => {
     setSidebarState({
-      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+      settings: { ...visibleNavigationSettings(), showArtifactsButton: true }
     })
     const container = await renderSidebarNav()
 
@@ -288,7 +297,7 @@ describe('SidebarNav', () => {
 
   it('hides Artifacts from its context menu', async () => {
     setSidebarState({
-      settings: { ...getDefaultSettings('/tmp'), showArtifactsButton: true }
+      settings: { ...visibleNavigationSettings(), showArtifactsButton: true }
     })
     const container = await renderSidebarNav()
     const row = getButtonByText(container, 'Artifacts')
@@ -357,7 +366,7 @@ describe('SidebarNav', () => {
   it('omits the Automations row when the sidebar setting is off', async () => {
     setSidebarState({
       settings: {
-        ...getDefaultSettings('/tmp'),
+        ...visibleNavigationSettings(),
         showAutomationsButton: false
       }
     })

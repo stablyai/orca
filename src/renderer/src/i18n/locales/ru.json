@@ -143,6 +143,9 @@
         "restartGaveUp_many": "Не удалось перезапустить сервер Orca в {{distro}} после {{count}} попыток"
       }
     },
+    "projectOrder": {
+      "saveFailed": "Не удалось сохранить порядок проектов"
+    },
     "agentSummary": {
       "state": {
         "waiting": "ожидание",
@@ -21292,7 +21295,10 @@
       "openActivity": "Посмотреть активность",
       "closeActivity": "Выключить просмотр активности",
       "projects": "Проекты",
-      "workspaces": "Рабочие пространства"
+      "workspaces": "Рабочие пространства",
+      "loadingChatAgents": "Загрузка агентов чата…",
+      "noChatAgents": "На этом сервере нет доступных агентов для чата",
+      "activity": "Активность"
     }
   },
   "runtimeRpc": {
@@ -23798,6 +23804,35 @@
       "image": "Пользовательский питомец",
       "bundle": "Пакет питомца"
     }
+  },
+  "projectConversations": {
+    "defaultGroupName": "Группа {{project}}",
+    "hideProject": "Скрыть проект из списка",
+    "hiddenProjects": "Скрытые проекты",
+    "keepFiles": "Файлы и история сохраняются",
+    "restoreProject": "Показать {{project}}",
+    "projectOptionsFor": "Действия с проектом {{project}}",
+    "visibilityFailed": "Не удалось сохранить видимость проекта. Обновите Orca или попробуйте ещё раз.",
+    "search": "Поиск чатов",
+    "projectOrder": "Порядок проектов",
+    "allChats": "Чаты",
+    "archived": "Архив",
+    "moveUp": "Выше",
+    "moveDown": "Ниже",
+    "noChats": "Пока нет чатов",
+    "loading": "Загрузка чатов…",
+    "noArchived": "Архив пуст",
+    "noMatching": "Чаты не найдены",
+    "untitled": "Чат без названия",
+    "unpin": "Открепить чат",
+    "pin": "Закрепить чат",
+    "restore": "Вернуть чат из архива",
+    "archive": "Архивировать чат",
+    "working": "Работает",
+    "needsYou": "Требуется ваше действие",
+    "showMore": "Показать больше",
+    "newChatInProject": "Новый чат в {{project}}",
+    "saveFailed": "Не удалось сохранить настройки чата. Обновите Orca или повторите попытку."
   },
   "diffComments": {
     "lineRangeMeta": "строки {{start}}-{{end}}",

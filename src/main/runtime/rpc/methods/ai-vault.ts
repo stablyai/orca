@@ -1,4 +1,9 @@
 import { prepareStructuredChatCliFork } from '../../../ai-vault/structured-chat-cli-fork'
+import { aiVaultOrchestrationChildSessionIds } from '../../../ai-vault/structured-conversation-navigation'
+import {
+  requestedAiVaultSessionDepth,
+  truncateAiVaultListResult
+} from '../../../../shared/ai-vault-session-depth'
 import {
   AiVaultSearchRequestSchema,
   AiVaultSearchStatusRequestSchema,
@@ -124,14 +129,36 @@ export const AI_VAULT_METHODS = [
         throw new Error(describeAiVaultScanError(String(error)))
       }
       // Web clients have no parent retagging, so stamp sessions with the runtime host they addressed.
-      const projected = projectStructuredAiVaultSessions(result, (agent) =>
-        clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent)
+      const projected = projectStructuredAiVaultSessions(
+        result,
+        (agent) => clientOpensStructuredChatFromHistory({ clientKind, clientCapabilities }, agent),
+        {
+          includeStructuredSessions: params.includeStructuredSessions,
+          ...(params.includeStructuredSessions
+            ? {
+                childSessionIds: aiVaultOrchestrationChildSessionIds(() =>
+                  runtime.getExistingOrchestrationDb()
+                )
+              }
+            : {})
+        }
       )
+      const limited = params.includeStructuredSessions
+        ? truncateAiVaultListResult(
+            projected,
+            requestedAiVaultSessionDepth(params),
+            params.scopePaths
+          )
+        : projected
       return conditionalAiVaultListResult(
         params.executionHostId
-          ? restampAiVaultListResult(projected, params.executionHostId)
-          : projected,
-        params.unlimited ? undefined : params.afterFingerprint,
+          ? restampAiVaultListResult(limited, params.executionHostId)
+          : limited,
+        params.includeStructuredSessions
+          ? (params.afterFingerprint ?? null)
+          : params.unlimited
+            ? undefined
+            : params.afterFingerprint,
         params.force
       )
     }

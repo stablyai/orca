@@ -33,6 +33,8 @@ export type AiVaultListRow =
   | { type: 'session'; groupKey: string; session: AiVaultSession }
 
 export function AiVaultVirtualRow({
+  conversationNavigation = false,
+  onOpenConversation,
   row,
   index,
   start,
@@ -70,6 +72,8 @@ export function AiVaultVirtualRow({
   onSelect,
   onPickSession
 }: {
+  conversationNavigation?: boolean
+  onOpenConversation?: (session: AiVaultSession) => void
   row: AiVaultListRow | undefined
   index: number
   start: number
@@ -166,7 +170,8 @@ export function AiVaultVirtualRow({
   // File viewing needs a conversation resource; Reveal/CWD retain their own path semantics.
   const canOpenLogInOrca = row.type === 'session' && canOpenAiVaultSessionLogInOrca(row.session)
   const searchResumeAllowed = searchHit ? canResumeAiVaultSearchHit(searchHit) : true
-  const searchPathAllowed = searchHit ? hasAiVaultSearchHitPath(searchHit) : true
+  const recordOnly = row.type === 'session' && row.session.source === 'structured-record'
+  const searchPathAllowed = !recordOnly && (searchHit ? hasAiVaultSearchHitPath(searchHit) : true)
   const usesLegacyResumeCommand = row.type === 'session' && !row.session.structuredSession
   const canBuildResumeStartup =
     row.type === 'session' &&
@@ -204,6 +209,8 @@ export function AiVaultVirtualRow({
         />
       ) : (
         <VaultSessionRow
+          compact={conversationNavigation}
+          onOpen={onOpenConversation ? () => onOpenConversation(row.session) : undefined}
           session={row.session}
           searchHit={searchHit}
           sourceHostLabel={searchHitHostLabels?.get(row.session.executionHostId)}
@@ -235,7 +242,7 @@ export function AiVaultVirtualRow({
           onJumpToOriginalPane={
             canJumpToOriginalPane ? () => onJumpToOriginalPane(row.session) : undefined
           }
-          resumeHidden={structuredSessionOpen}
+          resumeHidden={structuredSessionOpen || recordOnly}
           showJumpToWorktree={showJumpToWorktree}
           onJumpToWorktree={worktreeJumpId ? () => onJumpToWorktree(worktreeJumpId) : undefined}
           subagentResume={{ getState: getSessionResumeState, onResume }}
@@ -250,12 +257,12 @@ export function AiVaultVirtualRow({
               : undefined
           }
           onResumeInNewChat={
-            resumeInNewChatWorkspaceId
+            !recordOnly && resumeInNewChatWorkspaceId
               ? () => onResumeInNewChat(row.session, resumeInNewChatWorkspaceId)
               : undefined
           }
           onResumeInNewCli={
-            resumeInNewCliWorktreeId
+            !recordOnly && resumeInNewCliWorktreeId
               ? () => onResumeInNewCli(row.session, resumeInNewCliWorktreeId)
               : undefined
           }

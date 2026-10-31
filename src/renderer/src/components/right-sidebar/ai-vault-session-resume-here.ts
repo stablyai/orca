@@ -68,7 +68,7 @@ export function resumeAiVaultSessionHere(args: {
     if (structured.workspaceId !== here.workspaceId) {
       return false
     }
-    replace = () => revealInPlaceOf(here, structured)
+    replace = () => revealInPlaceOf(here, structured, session.executionHostId)
   } else if (
     actions.resumeInNewChatWorkspaceId === here.workspaceId &&
     adoptsCliConversations(session.agent)
@@ -162,8 +162,11 @@ function resumeInPlaceOf(
             owner.workspaceId !== here.workspaceId ||
             findChatTabWhere(owner.workspaceId, (tab) => tab.entityId === owner.sessionId)
           ownerShown = elsewhere
-            ? activateAiVaultStructuredSession({ structuredSession: owner })
-            : revealInPlaceOf(here, owner)
+            ? activateAiVaultStructuredSession({
+                structuredSession: owner,
+                executionHostId: session.executionHostId
+              })
+            : revealInPlaceOf(here, owner, session.executionHostId)
         }
         if (
           settlement?.kind === 'structured' &&
@@ -186,20 +189,23 @@ function resumeInPlaceOf(
 /** Reopens a closed chat in place of this one, which closes only once the reopened tab exists. */
 function revealInPlaceOf(
   here: AiVaultReplacement,
-  structured: NonNullable<AiVaultSession['structuredSession']>
+  structured: NonNullable<AiVaultSession['structuredSession']>,
+  executionHostId: AiVaultSession['executionHostId']
 ): Promise<void> {
-  return activateAiVaultStructuredSession({ structuredSession: structured }).then(() => {
-    // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
-    const reopened = findChatTabWhere(
-      here.workspaceId,
-      (tab) => tab.entityId === structured.sessionId
-    )
-    if (reopened) {
-      // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
-      insertUnifiedTabAfterAnchor(here.workspaceId, reopened.id, here.tabId)
-      closeReplacedChat(here)
+  return activateAiVaultStructuredSession({ structuredSession: structured, executionHostId }).then(
+    () => {
+      // Reported reopen success may lack a tab; replace this chat only when the reopened tab exists.
+      const reopened = findChatTabWhere(
+        here.workspaceId,
+        (tab) => tab.entityId === structured.sessionId
+      )
+      if (reopened) {
+        // Reveal appends to the group; take this chat's slot as a new chat does (a no-op across splits).
+        insertUnifiedTabAfterAnchor(here.workspaceId, reopened.id, here.tabId)
+        closeReplacedChat(here)
+      }
     }
-  })
+  )
 }
 
 function findChatTabWhere(workspaceId: string, matches: (tab: Tab) => boolean): Tab | undefined {

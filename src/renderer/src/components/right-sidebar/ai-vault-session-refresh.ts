@@ -6,7 +6,6 @@ import {
 } from '../../../../shared/ai-vault-types'
 import { aiVaultScanErrorText } from './ai-vault-scan-issue-copy'
 import type { ExecutionHostScope } from '../../../../shared/execution-host'
-import { useAppStore } from '@/store'
 import type { AiVaultSessionLimit } from './ai-vault-session-limit'
 import { AiVaultSessionPublicationGate } from './ai-vault-session-publication-gate'
 import { EMPTY_AI_VAULT_SESSIONS } from './ai-vault-session-identity'
@@ -22,12 +21,13 @@ import {
   cacheAiVaultSessionList,
   readCachedAiVaultSessionList
 } from './ai-vault-session-list-request'
-import {
-  getAgentSessionIdsKey,
-  resetAgentSessionIdsRefreshKeys
-} from './ai-vault-agent-session-refresh-key'
+import { resetAgentSessionIdsRefreshKeys } from './ai-vault-agent-session-refresh-key'
 import { useAiVaultAssociationObservation } from './ai-vault-association-observation'
 import { createBrowserUuid } from '@/lib/browser-uuid'
+import {
+  useAiVaultConversationRefresh,
+  useAiVaultProviderSessionRefresh
+} from './ai-vault-conversation-refresh'
 
 // Share the forced-rescan budget across remounts so session creation cannot amplify full scans.
 import {
@@ -51,7 +51,8 @@ type AiVaultRefreshArgs = { force?: boolean; background?: boolean; reuseLoadedDe
 export function useAiVaultSessionRefresh(
   scopePaths: readonly string[],
   executionHostScope: ExecutionHostScope,
-  sessionLimit: AiVaultSessionLimit
+  sessionLimit: AiVaultSessionLimit,
+  includeStructuredSessions = false
 ): {
   error: string | null
   loading: boolean
@@ -65,7 +66,9 @@ export function useAiVaultSessionRefresh(
   const { scan, applyScan } = useAppliedAiVaultScan()
   const associations = useAiVaultAssociationObservation(executionHostScope)
   const associationsRef = useRef(associations)
-  const scanResult = scan?.result ?? null
+  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths, includeStructuredSessions)}\n${sessionLimit}`
+  const visibleScan = includeStructuredSessions && scan?.scopeKey !== scanScopeKey ? null : scan
+  const scanResult = visibleScan?.result ?? null
   const sessions = scanResult?.sessions ?? EMPTY_AI_VAULT_SESSIONS
   const [loading, setLoading] = useState(false)
   const [failure, setFailure] = useState<{ scopeKey: string; cause: string } | null>(null)
@@ -83,7 +86,8 @@ export function useAiVaultSessionRefresh(
   const mountedRef = useRef(true)
   const publicationGateRef = useRef<AiVaultSessionPublicationGate>(undefined!)
   publicationGateRef.current ??= new AiVaultSessionPublicationGate()
-  const scanScopeKey = `${aiVaultSessionResultCacheKey(executionHostScope, scopePaths)}\n${sessionLimit}`
+  const includeStructuredSessionsRef = useRef(includeStructuredSessions)
+  includeStructuredSessionsRef.current = includeStructuredSessions
   // Kept through rescans so a repeat failure doesn't blink; shown only for the scope that failed.
   const error = failure?.scopeKey === scanScopeKey ? aiVaultScanErrorText(failure.cause) : null
   const scopePathsRef = useRef<readonly string[]>(scopePaths)
@@ -100,7 +104,8 @@ export function useAiVaultSessionRefresh(
     () =>
       `${aiVaultSessionResultCacheKey(
         executionHostScopeRef.current,
-        scopePathsRef.current
+        scopePathsRef.current,
+        includeStructuredSessionsRef.current
       )}\n${sessionLimitRef.current}`,
     []
   )
@@ -112,11 +117,16 @@ export function useAiVaultSessionRefresh(
         observation === associationsRef.current && associationRevision === observation.getSnapshot()
       const hostScope = executionHostScopeRef.current
       const selectedLimit = sessionLimitRef.current
-      const baseKey = aiVaultSessionResultCacheKey(hostScope, scopePathsRef.current)
+      const baseKey = aiVaultSessionResultCacheKey(
+        hostScope,
+        scopePathsRef.current,
+        includeStructuredSessionsRef.current
+      )
       const cachedResult =
         args.reuseLoadedDepth === true
           ? readCachedAiVaultSessionList({
               scopePaths: scopePathsRef.current,
+              includeStructuredSessions: includeStructuredSessionsRef.current,
               executionHostScope: hostScope,
               sessionLimit: selectedLimit
             })
@@ -169,6 +179,7 @@ export function useAiVaultSessionRefresh(
         scanKey === currentScanScopeKey() &&
         associationCurrent()
       const request = {
+        ...(includeStructuredSessionsRef.current ? { includeStructuredSessions: true } : {}),
         scopePaths: scopePathsRef.current,
         executionHostScope: hostScope,
         sessionLimit: selectedLimit
@@ -295,27 +306,9 @@ export function useAiVaultSessionRefresh(
 
   // Retry prior relay-readiness errors on host events; otherwise startup/reconnect failures can persist indefinitely.
   useAiVaultSessionHostRefreshEvents(error, refresh)
+  useAiVaultConversationRefresh(includeStructuredSessions, executionHostScope, refresh)
 
-  // In-app launches never blur; rescan on new provider session IDs, avoiding frequent state transitions.
-  const agentSessionIdsKey = useAppStore((s) => getAgentSessionIdsKey(s.agentStatusByPaneKey))
-  const seenAgentSessionIdsRef = useRef<Set<string> | null>(null)
-  useEffect(() => {
-    const ids = agentSessionIdsKey === '' ? [] : agentSessionIdsKey.split('\n')
-    // The mount refresh already covers sessions live at mount time.
-    if (seenAgentSessionIdsRef.current === null) {
-      seenAgentSessionIdsRef.current = new Set(ids)
-      return
-    }
-    const seen = seenAgentSessionIdsRef.current
-    const freshIds = ids.filter((id) => !seen.has(id))
-    if (freshIds.length === 0) {
-      return
-    }
-    for (const id of freshIds) {
-      seen.add(id)
-    }
-    requestForcedRescan()
-  }, [agentSessionIdsKey, requestForcedRescan])
+  useAiVaultProviderSessionRefresh(includeStructuredSessions, requestForcedRescan)
 
   const scopePending = scan?.scopeKey !== scanScopeKey && terminalScopeKey !== scanScopeKey
   return {
@@ -325,6 +318,6 @@ export function useAiVaultSessionRefresh(
     refresh,
     scanResult,
     sessions,
-    loadedSessionLimit: scan?.limit ?? null
+    loadedSessionLimit: visibleScan?.limit ?? null
   }
 }

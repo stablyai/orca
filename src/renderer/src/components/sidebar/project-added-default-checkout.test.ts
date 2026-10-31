@@ -173,7 +173,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'loaded_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('activates only the captured host default checkout when repo IDs collide', async () => {
@@ -217,6 +219,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      navigationIntent: 'user-open',
       executionHostId: 'runtime:env-1'
     })
   })
@@ -237,6 +240,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith(runtimeMain.id, {
+      navigationIntent: 'user-open',
       executionHostId: 'runtime:env-1'
     })
   })
@@ -254,6 +258,7 @@ describe('finishProjectAddWithDefaultCheckout', () => {
     })
 
     expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open',
       initialCwd: '/repo/packages/web'
     })
   })
@@ -270,7 +275,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       setHideDefaultBranchWorkspace: vi.fn()
     })
 
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('shows a hidden detected default checkout before activating it', async () => {
@@ -314,7 +321,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'detected_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('reveals detected sibling external worktrees when the default checkout is already loaded', async () => {
@@ -343,7 +352,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'loaded_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('does not refresh already-visible sibling external worktrees', async () => {
@@ -368,7 +379,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'loaded_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('does not flip visibility when the only hidden siblings are agent scratch', async () => {
@@ -388,7 +401,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
 
     expect(mocks.state.updateRepo).not.toHaveBeenCalled()
     expect(mocks.state.fetchWorktrees).not.toHaveBeenCalled()
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('does not repeat linked-worktree reveal after a hidden default checkout refresh', async () => {
@@ -433,7 +448,9 @@ describe('finishProjectAddWithDefaultCheckout', () => {
       result: 'opened_default_checkout',
       reason: 'detected_default_checkout'
     })
-    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo')
+    expect(mocks.activateAndRevealWorktree).toHaveBeenCalledWith('repo-1::/repo', {
+      navigationIntent: 'user-open'
+    })
   })
 
   it('reveals the project if showing sibling external worktrees fails', async () => {

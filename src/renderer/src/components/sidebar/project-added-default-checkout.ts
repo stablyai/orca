@@ -227,14 +227,11 @@ export async function openProjectDefaultCheckout({
       reason
     })
     const initialCwd = resolveInitialCwdForDefaultCheckout(defaultCheckout, selectedPath)
-    if (initialCwd || executionHostId) {
-      activateAndRevealWorktree(defaultCheckout.id, {
-        ...(initialCwd ? { initialCwd } : {}),
-        ...(executionHostId ? { executionHostId } : {})
-      })
-    } else {
-      activateAndRevealWorktree(defaultCheckout.id)
-    }
+    activateAndRevealWorktree(defaultCheckout.id, {
+      navigationIntent: 'user-open',
+      ...(initialCwd ? { initialCwd } : {}),
+      ...(executionHostId ? { executionHostId } : {})
+    })
     return
   }
 

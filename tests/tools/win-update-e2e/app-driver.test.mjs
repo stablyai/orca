@@ -10,6 +10,13 @@ function hiddenButton() {
   }
 }
 
+function workspaceSidebarTitle() {
+  return {
+    first: () => workspaceSidebarTitle(),
+    getAttribute: vi.fn().mockResolvedValue('workspaces')
+  }
+}
+
 const FEATURE_TIP_TITLES = ['Let agents drive Orca with the Orca CLI', 'Search every agent session']
 
 describe('dismissOverlays', () => {
@@ -68,7 +75,9 @@ describe('dismissOverlays', () => {
       }
       newWorkspace.first.mockReturnValue(newWorkspace)
       const page = {
-        locator: vi.fn().mockImplementation(() => hiddenButton()),
+        locator: vi.fn((selector) =>
+          selector === '[data-sidebar-section-title]' ? workspaceSidebarTitle() : hiddenButton()
+        ),
         getByRole: vi.fn((role, { name }) => {
           if (role === 'dialog') {
             return hiddenButton()
@@ -126,7 +135,9 @@ describe('dismissOverlays', () => {
       }
       terminalSurface.first.mockReturnValue(terminalSurface)
       const page = {
-        locator: vi.fn().mockImplementation(() => terminalSurface),
+        locator: vi.fn((selector) =>
+          selector === '[data-sidebar-section-title]' ? workspaceSidebarTitle() : terminalSurface
+        ),
         getByRole: vi.fn((role, { name }) => {
           if (role === 'dialog') {
             return name === 'Create worktree' ? composer : hiddenButton()
@@ -251,9 +262,12 @@ describe('dismissOverlays', () => {
     }
     unintendedDialogClose.first.mockReturnValue(unintendedDialogClose)
     const page = {
-      locator: vi.fn((selector) =>
-        selector.includes('dialog-close') ? unintendedDialogClose : terminalSurface
-      ),
+      locator: vi.fn((selector) => {
+        if (selector === '[data-sidebar-section-title]') {
+          return workspaceSidebarTitle()
+        }
+        return selector.includes('dialog-close') ? unintendedDialogClose : terminalSurface
+      }),
       getByRole: vi.fn((role, { name }) => {
         if (role === 'dialog') {
           if (name === 'Search every agent session') {

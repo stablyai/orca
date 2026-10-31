@@ -2,6 +2,19 @@ import type { Page } from '@stablyai/playwright-test'
 import { expect } from '@stablyai/playwright-test'
 import type { BrowserTabSummary, ExplorerFileSummary } from './runtime-types'
 
+export async function selectSidebarBody(
+  page: Page,
+  body: 'conversations' | 'workspaces' | 'agents'
+): Promise<void> {
+  await page.evaluate((selectedBody) => {
+    const store = window.__store
+    if (!store) {
+      throw new Error('E2E store is not ready')
+    }
+    store.getState().setSidebarBody(selectedBody)
+  }, body)
+}
+
 export async function getStoreState<T>(page: Page, selector: string): Promise<T> {
   return page.evaluate((selector) => {
     const store = window.__store

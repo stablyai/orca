@@ -18,6 +18,25 @@ function deps(overrides: Partial<Parameters<typeof activateAiVaultStructuredSess
 }
 
 describe('activateAiVaultStructuredSession', () => {
+  it('opens the exact stored record on its row host when there is no provider file or handle', async () => {
+    const parts = deps({
+      activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(false).mockReturnValue(true)
+    })
+    await activateAiVaultStructuredSession(
+      { ...structuredSession, executionHostId: 'runtime:saved-host' },
+      parts
+    )
+    expect(parts.reveal).toHaveBeenCalledExactlyOnceWith({
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target: { kind: 'environment', environmentId: 'saved-host' }
+    })
+    expect(parts.activate).toHaveBeenLastCalledWith({
+      worktreeId: 'workspace-1',
+      sessionId: 'session-1',
+      target: { kind: 'environment', environmentId: 'saved-host' }
+    })
+  })
   it('refreshes an unpublished structured tab before activating it', async () => {
     const parts = deps({
       activate: vi.fn().mockReturnValueOnce(false).mockReturnValueOnce(true)

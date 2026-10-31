@@ -1,6 +1,10 @@
+import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import { homedir } from 'node:os'
+import { EventEmitter } from 'node:events'
 import { join, sep } from 'node:path'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { agentSessionRecordFixture } from '../../shared/agent-session-record.test-fixture'
+import { setStructuredAgentSessionHost } from '../native-chat/agent-session-wire/structured-agent-session-registry'
 import type { AiVaultListResult, AiVaultSession } from '../../shared/ai-vault-types'
 import type * as CachedSessionListModule from '../ai-vault/cached-session-list'
 import type * as SessionParseCacheModule from '../ai-vault/session-scanner-parse-cache'
@@ -21,6 +25,7 @@ const mocks = vi.hoisted(() => ({
 vi.mock('electron', () => ({
   app: { on: vi.fn() },
   ipcMain: { handle: mocks.ipcHandle },
+  BrowserWindow: { getAllWindows: () => [] },
   shell: { trashItem: mocks.trashItem }
 }))
 
@@ -75,6 +80,100 @@ beforeEach(() => {
 })
 
 describe('listAiVaultSessions host routing', () => {
+  afterEach(() => setStructuredAgentSessionHost(null))
+
+  function installLocalRecord() {
+    const record = {
+      ...agentSessionRecordFixture(),
+      providerHandleChain: [],
+      conversationName: 'Local retained chat',
+      launchDirectory: '/repo'
+    }
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the list boundary reads only this catalog, and no provider is started.
+    setStructuredAgentSessionHost({
+      deps: {
+        store: {
+          listRecords: () => [record],
+          listConversations: () => [agentSessionConversationView(record)]
+        }
+      }
+    } as never)
+    return record
+  }
+
+  function handler() {
+    const callback = mocks.ipcHandle.mock.calls.find(
+      ([channel]) => channel === 'aiVault:listSessions'
+    )?.[1]
+    if (!callback) {
+      throw new Error('List handler not registered')
+    }
+    return callback
+  }
+
+  it('never adds local durable chats to a selected remote host or changes its conditional fingerprint', async () => {
+    installLocalRecord()
+    registerAiVaultHandlers({ scanRuntimeAiVaultSessions: mocks.scanRuntimeAiVaultSessions })
+    const fingerprint = 'a'.repeat(64)
+    mocks.scanRuntimeAiVaultSessions.mockResolvedValue({
+      ...result([session('runtime:remote-server', 'remote-chat')]),
+      fingerprint
+    })
+    const event = { sender: Object.assign(new EventEmitter(), { id: 1 }) }
+    const remote = await handler()(event, {
+      executionHostScope: 'runtime:remote-server',
+      includeStructuredSessions: true
+    })
+    expect(remote.sessions.map((row: AiVaultSession) => row.title)).not.toContain(
+      'Local retained chat'
+    )
+    expect(
+      remote.sessions.every(
+        (row: AiVaultSession) => row.executionHostId === 'runtime:remote-server'
+      )
+    ).toBe(true)
+    expect(remote.fingerprint).toBe(fingerprint)
+    mocks.scanRuntimeAiVaultSessions.mockResolvedValue({
+      sessions: [],
+      issues: [],
+      scannedAt: remote.scannedAt,
+      fingerprint,
+      unchanged: true
+    })
+    expect(
+      await handler()(event, {
+        executionHostScope: 'runtime:remote-server',
+        includeStructuredSessions: true,
+        afterFingerprint: fingerprint
+      })
+    ).toMatchObject({ sessions: [], fingerprint, unchanged: true })
+    expect(mocks.scanLocalSessions).not.toHaveBeenCalled()
+  })
+
+  it('projects newly created and renamed durable records over the same cached provider scan', async () => {
+    const record = installLocalRecord()
+    mocks.scanLocalSessions.mockResolvedValue(result([]))
+    registerAiVaultHandlers()
+    const event = { sender: Object.assign(new EventEmitter(), { id: 1 }) }
+    const first = await handler()(event, {
+      executionHostScope: 'local',
+      includeStructuredSessions: true
+    })
+    expect(first.sessions[0]).toMatchObject({
+      source: 'structured-record',
+      title: 'Local retained chat',
+      filePath: ''
+    })
+    record.conversationName = 'Renamed retained chat'
+    const renamed = await handler()(event, {
+      executionHostScope: 'local',
+      includeStructuredSessions: true
+    })
+    expect(renamed.sessions[0].title).toBe('Renamed retained chat')
+    expect(renamed.scannedAt).toBe(first.scannedAt)
+    expect(renamed.fingerprint).not.toBe(first.fingerprint)
+    expect(mocks.scanLocalSessions).toHaveBeenCalledTimes(1)
+  })
   it('routes local scope to the local scanner', async () => {
     await _internals.listAiVaultSessions({
       executionHostScope: 'local',

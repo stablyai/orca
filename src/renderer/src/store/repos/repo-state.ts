@@ -28,6 +28,7 @@ import type {
   FolderWorkspacePathStatus,
   FolderWorkspacePathStatusRequest
 } from '../../../../shared/folder-workspace-path-status'
+import type { ManualRepoOrderEntry } from '../../../../shared/ui-chrome-types'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WslMovedProject } from '../../../../shared/wsl-move/wsl-moved-project'
 import type { ConfirmedUnsavedDiscards } from '../slices/worktrees/teardown/removed-workspace-unsaved-files'
@@ -303,5 +304,8 @@ export type RepoSlice = {
     options?: { hostId?: ExecutionHostId }
   ) => Promise<boolean>
   setActiveRepo: (projectId: string | null) => void
-  reorderRepos: (orderedIds: string[]) => Promise<void>
+  reorderRepos: (
+    orderedIds: string[],
+    ownerOrder?: readonly ManualRepoOrderEntry[]
+  ) => Promise<void>
 }

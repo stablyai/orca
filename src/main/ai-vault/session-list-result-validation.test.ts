@@ -18,6 +18,27 @@ describe('parseAiVaultListResult', () => {
     ])
   })
 
+  it('keeps optional conversation evidence and degrades unknown future evidence without losing the row', () => {
+    const result = parseAiVaultListResult({
+      sessions: [
+        { ...validSession('empty'), conversationContent: 'empty' },
+        { ...validSession('present'), conversationContent: 'present' },
+        { ...validSession('unknown'), conversationContent: 'unknown' },
+        { ...validSession('future'), conversationContent: 'future-value' },
+        validSession('legacy')
+      ],
+      issues: [],
+      scannedAt: '2026-10-26T00:00:00Z'
+    })
+    expect(result.sessions.map((session) => session.conversationContent)).toEqual([
+      'empty',
+      'present',
+      'unknown',
+      undefined,
+      undefined
+    ])
+  })
+
   it('keeps valid sessions when another wire entry is malformed', () => {
     const parsed = parseAiVaultListResult({
       sessions: [validSession(), { id: 42 }],

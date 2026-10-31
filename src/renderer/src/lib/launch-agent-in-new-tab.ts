@@ -63,7 +63,11 @@ export function launchAgentInNewTabWithOutcome(
     activate
   } = args
   const store = useAppStore.getState()
-  const executionContext = resolveAgentLaunchExecutionContext(store, { worktreeId, launchPlatform })
+  const executionContext = resolveAgentLaunchExecutionContext(store, {
+    worktreeId,
+    launchPlatform,
+    executionHostId: args.selectedExecutionHostId
+  })
   if (!executionContext) {
     args.focusIntent?.cancel()
     return null

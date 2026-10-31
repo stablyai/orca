@@ -1,5 +1,6 @@
 import type { ElectronApplication } from '@stablyai/playwright-test'
 import { expect, test } from './helpers/orca-app'
+import { openFileExplorer } from './helpers/file-explorer'
 import { createRestartSession } from './helpers/orca-restart'
 import { startOrcadConvertHost } from './helpers/orcad-convert-host'
 import { seedRelayEraProfile, seedRelayEraTarget } from './helpers/orcad-upgrade-profile'
@@ -153,6 +154,7 @@ for (const selectedHost of ['A', 'B'] as const) {
       await expect
         .poll(() => page.evaluate(() => window.__store?.getState().activeWorkspaceExecutionHostId))
         .toBe(toRuntimeExecutionHostId(environment.id))
+      await openFileExplorer(page)
       await expect(page.getByText(`INITIAL_${selectedHost}.txt`, { exact: true })).toBeVisible()
       await expect(
         page.getByText(`INITIAL_${selectedHost === 'A' ? 'B' : 'A'}.txt`, { exact: true })

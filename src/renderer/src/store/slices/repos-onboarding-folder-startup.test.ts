@@ -106,7 +106,7 @@ describe('repo slice skipped-onboarding folder startup', () => {
     expect(worktreeActivation.activateAndRevealWorktree).toHaveBeenNthCalledWith(
       2,
       'folder-2::/folder',
-      { sidebarRevealBehavior: 'auto' }
+      { sidebarRevealBehavior: 'auto', navigationIntent: 'user-open' }
     )
   })
 })

@@ -1,3 +1,4 @@
+import { parseRoutableExecutionHostId } from '../../../shared/execution-host'
 import { toast } from 'sonner'
 import type { AiVaultSession } from '../../../shared/ai-vault-types'
 import { translate } from '@/i18n/i18n'
@@ -54,7 +55,8 @@ export const structuredSessionOpenFeedback: Pick<
 
 /** Read only structuredSession so history clicks and drag payloads follow the same reveal path. */
 export async function activateAiVaultStructuredSession(
-  session: Pick<AiVaultSession, 'structuredSession'>,
+  session: Pick<AiVaultSession, 'structuredSession'> &
+    Partial<Pick<AiVaultSession, 'executionHostId'>>,
   deps?: StructuredSessionActivationDeps,
   target?: RuntimeClientTarget
 ): Promise<boolean> {
@@ -63,6 +65,17 @@ export async function activateAiVaultStructuredSession(
     return false
   }
   const feedback = deps ?? structuredSessionOpenFeedback
+  if (!target && session.executionHostId) {
+    const host = parseRoutableExecutionHostId(session.executionHostId)
+    if (host?.kind === 'runtime') {
+      target = { kind: 'environment', environmentId: host.environmentId }
+    } else if (host?.kind === 'local') {
+      target = { kind: 'local' }
+    } else {
+      feedback.hostCannotOpen()
+      return true
+    }
+  }
   await openExistingStructuredSession(structured, {
     target,
     deps,

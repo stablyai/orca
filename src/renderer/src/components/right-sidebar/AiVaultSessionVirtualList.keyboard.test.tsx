@@ -18,6 +18,7 @@ import {
 import type { AiVaultSessionListGroup } from './ai-vault-session-filters'
 import type { AiVaultSessionListKeyboard } from './use-ai-vault-session-keyboard-navigation'
 import type { AiVaultResumeHere } from './ai-vault-session-resume-here'
+import { activateAiVaultStructuredSession } from '@/lib/activate-ai-vault-structured-session'
 import * as resumeHere from './ai-vault-session-resume-here'
 
 const VIEWPORT_PX = 600
@@ -192,6 +193,7 @@ function renderList(
     openSessionIds?: ReadonlySet<string>
     eligible?: (session: AiVaultSession) => boolean
     resumeHere?: AiVaultResumeHere
+    conversationNavigation?: boolean
   } = {}
 ) {
   const keyboard = createRef<AiVaultSessionListKeyboard>()
@@ -203,6 +205,7 @@ function renderList(
   const groups = options.groups ?? [{ key: 'all', label: null, sessions }]
   const list = (query: string) => (
     <AiVaultSessionVirtualList
+      conversationNavigation={options.conversationNavigation}
       query={query}
       groups={groups}
       collapsedGroups={options.collapsedGroups ?? new Set()}
@@ -268,6 +271,8 @@ function selectedTitle(): string | null {
 
 beforeEach(() => {
   toastError.mockClear()
+  vi.mocked(activateAiVaultStructuredSession).mockClear()
+  launch.settlement = { kind: 'structured', sessionId: 'new' }
   // Why: happy-dom has no layout; give the virtualizer a bounded viewport and fixed rows.
   vi.stubGlobal('ResizeObserver', NoopResizeObserver)
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(function (
@@ -292,6 +297,104 @@ afterEach(() => {
 })
 
 describe('Session History keyboard selection', () => {
+  it.each(['structured', 'adopted-here', 'adopted-elsewhere'] as const)(
+    'keeps the selected remote owner when reopening %s from /resume',
+    async (kind) => {
+      const workspaceId = 'folder:notes'
+      const owner = {
+        sessionId: 'picked-owner',
+        workspaceId: kind === 'adopted-elsewhere' ? 'folder:elsewhere' : workspaceId
+      }
+      const picked: AiVaultSession = {
+        ...session(0),
+        executionHostId: 'runtime:selected-host',
+        ...(kind === 'structured' ? { structuredSession: owner } : {})
+      }
+      useAppStore.setState(useAppStore.getInitialState(), true)
+      useAppStore.setState({
+        activeWorktreeId: workspaceId,
+        activeWorkspaceExecutionHostId: picked.executionHostId
+      })
+      useAppStore.getState().createUnifiedTab(workspaceId, 'agent-session', {
+        id: 'old',
+        entityId: 'old',
+        executionHostId: LOCAL_EXECUTION_HOST_ID,
+        agentSessionAgent: 'claude'
+      })
+      main = await drawTabsFromMain(useAppStore)
+      launch.settlement = {
+        kind: 'failed',
+        error: Object.assign(new Error('already adopted'), {
+          refusal: {
+            code: 'agent_session_conflict',
+            details: { reason: 'conversationHeldElsewhere', owner }
+          }
+        })
+      }
+      const { press } = renderList({
+        groups: [{ key: 'picked', label: null, sessions: [picked] }],
+        resumeHere: {
+          tabId: 'old',
+          workspaceId,
+          agent: 'claude',
+          dismiss: vi.fn(),
+          confirm: vi.fn()
+        }
+      })
+      press('Enter')
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 0))
+        await main?.settle()
+      })
+      expect(activateAiVaultStructuredSession).toHaveBeenCalledExactlyOnceWith({
+        structuredSession: owner,
+        executionHostId: picked.executionHostId
+      })
+      expect(toastError).not.toHaveBeenCalled()
+    }
+  )
+
+  it('opens an empty durable Gemini chat through stored-session activation even when legacy resume is unavailable', () => {
+    const saved = {
+      ...sessions[0]!,
+      source: 'structured-record' as const,
+      agent: 'gemini' as const,
+      filePath: '',
+      messageCount: 0,
+      previewMessages: [],
+      resumeCommand: '',
+      structuredSession: { sessionId: 'retained-gemini', workspaceId: 'folder:notes' }
+    }
+    const { press, calls } = renderList({
+      conversationNavigation: true,
+      eligible: () => false,
+      groups: [{ key: 'saved', label: null, sessions: [saved] }]
+    })
+    press('Enter')
+    expect(calls.onResume).toHaveBeenCalledExactlyOnceWith(saved, 'folder:notes')
+    expect(calls.onResumeInNewChat).not.toHaveBeenCalled()
+  })
+  it('opens a conversation from Enter, preferring its existing pane over a new launch', () => {
+    const { press, calls } = renderList({
+      conversationNavigation: true,
+      openSessionIds: new Set([sessions[0]!.id])
+    })
+    press('Enter')
+    expect(calls.onJumpToOriginalPane).toHaveBeenCalledExactlyOnceWith(sessions[0])
+    expect(calls.onResume).not.toHaveBeenCalled()
+    expect(calls.onResumeInNewChat).not.toHaveBeenCalled()
+    press('ArrowDown')
+    press('Enter')
+    expect(calls.onResumeInNewChat).toHaveBeenCalledExactlyOnceWith(sessions[1], 'own-s-1')
+  })
+
+  it('keeps unsupported conversation details available without silently launching a terminal', () => {
+    const { press, calls } = renderList({ conversationNavigation: true, eligible: () => false })
+    press('Enter')
+    expect(calls.onResume).not.toHaveBeenCalled()
+    expect(calls.onResumeInNewChat).not.toHaveBeenCalled()
+    expect(document.querySelector('[data-selected="true"]')).not.toBeNull()
+  })
   it('moves over sessions only, clamped, and a listed-twice session does not trap it', () => {
     const { press } = renderList({
       groups: [

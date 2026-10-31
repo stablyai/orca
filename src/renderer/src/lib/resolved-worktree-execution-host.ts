@@ -18,12 +18,14 @@ import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 function getResolvedFolderHost(
   state: WorktreeRuntimeOwnerState,
-  folderWorkspaceId: string
+  folderWorkspaceId: string,
+  executionHostId?: ExecutionHostId
 ): ExecutionHostId | null {
   const preferredHostId =
-    state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
+    executionHostId ??
+    (state.activeWorktreeId === folderWorkspaceKey(folderWorkspaceId)
       ? (state.activeWorkspaceExecutionHostId ?? undefined)
-      : undefined
+      : undefined)
   const folder = findIndexedFolderWorkspaceOwner(
     state.folderWorkspaces,
     folderWorkspaceId,
@@ -43,7 +45,10 @@ function getResolvedFolderHost(
   const restoredHost = parseExecutionHostId(
     state.restoredRuntimeHostIdByWorkspaceSessionKey?.[folderWorkspaceKey(folderWorkspaceId)]
   )
-  if (restoredHost?.kind === 'runtime') {
+  if (
+    restoredHost?.kind === 'runtime' &&
+    (!executionHostId || restoredHost.id === executionHostId)
+  ) {
     return restoredHost.id
   }
   return folder && (group || preferredHostId) ? (preferredHostId ?? LOCAL_EXECUTION_HOST_ID) : null
@@ -52,7 +57,8 @@ function getResolvedFolderHost(
 /** Require hydrated ownership: restored SSH worktrees can collide with local repo rows while catalogs load. */
 export function getResolvedExecutionHostIdForWorktree(
   state: WorktreeRuntimeOwnerState,
-  worktreeId: string | null | undefined
+  worktreeId: string | null | undefined,
+  executionHostId?: ExecutionHostId
 ): ExecutionHostId | null {
   if (!worktreeId) {
     return null
@@ -62,12 +68,13 @@ export function getResolvedExecutionHostIdForWorktree(
   }
   const scope = parseWorkspaceKey(worktreeId)
   if (scope?.type === 'folder') {
-    return getResolvedFolderHost(state, scope.folderWorkspaceId)
+    return getResolvedFolderHost(state, scope.folderWorkspaceId, executionHostId)
   }
   const preferredHostId =
-    state.activeWorktreeId === worktreeId
+    executionHostId ??
+    (state.activeWorktreeId === worktreeId
       ? (state.activeWorkspaceExecutionHostId ?? undefined)
-      : undefined
+      : undefined)
   return (
     resolveQualifiedWorktreeExecutionOwner(
       selectWorktreesByRepo(state),
