@@ -56,4 +56,6 @@ export type TabBarProps = {
   hoveredTabInsertion?: HoveredTabInsertion | null
   /** Floating workspace panels are rounded; skip tab top borders that clash with the curve. */
   tabStripChrome?: 'default' | 'floating-panel'
+  /** Overrides active-worktree visibility for strips shown outside the worktree switcher. */
+  stripShown?: boolean
 }

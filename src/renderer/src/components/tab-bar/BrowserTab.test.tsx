@@ -27,6 +27,8 @@ vi.mock('react', async () => {
   const actual = await vi.importActual<typeof ReactModule>('react')
   return {
     ...actual,
+    // Only the tab title label reads context here; null is its fixed-width default.
+    useContext: () => null,
     useEffect: () => {},
     // This shallow harness has no React dispatcher; favicon tests do not need persistent refs or event handlers.
     useRef: <T,>(initial: T) => ({ current: initial }),

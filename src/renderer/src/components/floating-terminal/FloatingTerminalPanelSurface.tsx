@@ -130,6 +130,7 @@ export function renderFloatingTerminalPanelSurface({
                   }
                   groupId={activeGroup?.id}
                   worktreeId={FLOATING_TERMINAL_WORKTREE_ID}
+                  stripShown={open}
                   expandedPaneByTabId={expandedPaneByTabId}
                   onActivate={model.commands.activateTerminal}
                   onClose={closeFloatingItemConfirmed}
@@ -181,6 +182,12 @@ export function renderFloatingTerminalPanelSurface({
                   tabStripChrome="floating-panel"
                 />
               </div>
+              {/* Keep a grab area even when the tab strip overflows. */}
+              <div
+                className="h-full w-16 shrink-0 select-none"
+                data-floating-terminal-drag-handle
+                aria-hidden
+              />
               <FloatingTerminalWindowControls
                 maximized={maximized}
                 onToggleMaximized={toggleMaximized}

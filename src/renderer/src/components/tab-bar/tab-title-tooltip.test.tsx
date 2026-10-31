@@ -204,8 +204,7 @@ function expectTabContainerWidth(markup: string, root: string): void {
   const widthClasses = 'w-[180px] min-w-[72px] min-[1280px]:w-[220px]'
   expect(container).toContain(widthClasses)
   expect(root).not.toContain('w-[180px]')
-  expect(root).not.toContain('min-w-[72px]')
-  expect(root).not.toContain('min-[1280px]:w-[220px]')
+  expect(root).toContain('w-full')
 }
 
 function expectTooltipContent(markup: string, text: string): void {
