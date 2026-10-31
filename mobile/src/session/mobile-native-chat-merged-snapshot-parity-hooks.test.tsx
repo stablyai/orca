@@ -10,7 +10,7 @@ import type {
   AgentSessionSubscribeEvent
 } from '../../../src/shared/agent-session-wire'
 import type { NativeChatMessage } from '../../../src/shared/native-chat-types'
-import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/structured-agent-session-coalescer'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../src/shared/agent-session/structured-agent-session-coalescer'
 import type { RpcClient } from '../transport/rpc-client'
 import { MobileNativeChatOverlay } from './MobileNativeChatOverlay'
 import { MobileNativeChatView } from './MobileNativeChatView'

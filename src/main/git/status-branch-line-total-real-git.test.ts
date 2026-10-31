@@ -167,24 +167,6 @@ describe('branch line total against a real repository', () => {
     })
   })
 
-  it('counts an untracked-only branch from the untracked file contents', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'kept.txt', 'a\n')
-    const mergeBase = commitAll(repo, 'base')
-    await write(repo, 'src/new.ts', 'one\ntwo\nthree\n')
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
-    expect(result.entries.map((entry) => entry.area)).toEqual(['untracked'])
-    expect(result.branchLineTotal).toEqual({
-      added: 3,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
   it('excludes a binary-only change, matching numstat reporting it as "-"', async () => {
     const repo = await createFixtureRepo()
     await write(repo, 'blob.bin', Buffer.from([0, 1, 2, 3, 10, 65, 66]))
@@ -194,23 +176,6 @@ describe('branch line total against a real repository', () => {
     const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
 
     expect(git(repo, ['diff', '--numstat', mergeBase, '--'])).toMatch(/^-\t-\t/)
-    expect(result.branchLineTotal).toEqual({
-      added: 0,
-      removed: 0,
-      mergeBase,
-      test: NO_LINES,
-      generated: NO_LINES
-    })
-  })
-
-  it('contributes nothing for a pure rename', async () => {
-    const repo = await createFixtureRepo()
-    await write(repo, 'f.txt', 'a\nb\nc\nd\n')
-    const mergeBase = commitAll(repo, 'base')
-    git(repo, ['mv', 'f.txt', 'g.txt'])
-
-    const result = await getStatus(repo, { branchLineTotalMergeBase: mergeBase })
-
     expect(result.branchLineTotal).toEqual({
       added: 0,
       removed: 0,

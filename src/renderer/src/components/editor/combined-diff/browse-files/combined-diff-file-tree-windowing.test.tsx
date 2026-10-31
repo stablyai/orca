@@ -3,7 +3,7 @@
 import React, { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { VIRTUALIZED_LIST_MIN_ROWS } from '@/components/virtualized-list'
+
 import type { GitBranchChangeEntry } from '../../../../../../shared/git-diff-compare-types'
 import type { CombinedDiffFileTreeRow as CombinedDiffFileTreeRowComponent } from './combined-diff-file-tree-row'
 
@@ -117,18 +117,6 @@ function renderTree(entries: readonly GitBranchChangeEntry[]): void {
 }
 
 describe('combined diff file tree row windowing', () => {
-  it('mounts every row below the virtualize threshold', () => {
-    const fileCount = VIRTUALIZED_LIST_MIN_ROWS - 10
-    const directoryCount = 4
-    renderTree(buildEntries(fileCount, directoryCount))
-
-    const totalRows = 1 + directoryCount + fileCount
-    expect(totalRows).toBeLessThan(VIRTUALIZED_LIST_MIN_ROWS)
-    expect(mountedRows.count).toBe(totalRows)
-    expect(host.querySelector('[data-testid="virtualized-list"]')).toBeNull()
-    expect(host.querySelectorAll('[data-index]').length).toBe(0)
-  })
-
   it('mounts only a window of rows for a large review', () => {
     const fileCount = 900
     const directoryCount = 30

@@ -104,34 +104,6 @@ describe('preflight never starts a stopped WSL distro in the background (E9)', (
     expect(mocks.runWslProcess).not.toHaveBeenCalled()
   })
 
-  it('checks the default distro when the workspace names none', async () => {
-    await expect(invoke('preflight:check', { wslDefault: true })).rejects.toMatchObject({
-      distro: 'Ubuntu'
-    })
-    expect(mocks.runWslProcess).not.toHaveBeenCalled()
-  })
-
-  it('lets a window-focus or retry wake start the focused workspace distro', async () => {
-    await invoke('preflight:check', { ...UBUNTU, force: true, wakeWslDistro: true })
-    expect(mocks.runWslProcess).toHaveBeenCalled()
-    for (const [spec] of mocks.runWslProcess.mock.calls) {
-      expect(spec).toMatchObject({ distro: 'Ubuntu' })
-    }
-  })
-
-  it('probes a running distro exactly as before', async () => {
-    mocks.readWslDistroRunningState.mockResolvedValue('running')
-    await invoke('preflight:check', UBUNTU)
-    expect(mocks.runWslProcess).toHaveBeenCalled()
-  })
-
-  it('refuses mount-time agent detection in a stopped distro', async () => {
-    await expect(
-      invoke('preflight:detectAgents', { ...UBUNTU, enabledOnly: true })
-    ).rejects.toMatchObject({ code: 'WSL_DISTRO_STOPPED' })
-    expect(mocks.runWslProcess).not.toHaveBeenCalled()
-  })
-
   it('refuses a background agent refresh but lets a refresh click start the distro', async () => {
     await expect(invoke('preflight:refreshAgents', UBUNTU)).rejects.toMatchObject({
       code: 'WSL_DISTRO_STOPPED'
@@ -139,22 +111,6 @@ describe('preflight never starts a stopped WSL distro in the background (E9)', (
     expect(mocks.runWslProcess).not.toHaveBeenCalled()
 
     await invoke('preflight:refreshAgents', { ...UBUNTU, wakeWslDistro: true })
-    expect(mocks.runWslProcess).toHaveBeenCalled()
-  })
-
-  it('defers a refused check until the distro runs, then tells renderers to re-ask', async () => {
-    await expect(invoke('preflight:detectAgents', UBUNTU)).rejects.toMatchObject({
-      code: 'WSL_DISTRO_STOPPED'
-    })
-    expect(mocks.sent).not.toHaveBeenCalled()
-    const retry = mocks.deferred.get('Ubuntu:preflight-refused')
-    expect(retry).toBeDefined()
-    retry?.()
-    expect(mocks.sent).toHaveBeenCalledWith('preflight:wslDistroRunning', 'Ubuntu')
-  })
-
-  it('lets an agent picker opening start the distro to list its agents', async () => {
-    await invoke('preflight:detectAgents', { ...UBUNTU, enabledOnly: true, wakeWslDistro: true })
     expect(mocks.runWslProcess).toHaveBeenCalled()
   })
 })

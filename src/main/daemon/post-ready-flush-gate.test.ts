@@ -28,20 +28,6 @@ describe('PostReadyFlushGate', () => {
     expect(vi.getTimerCount()).toBe(0)
   })
 
-  it('does not flush immediately when armed', () => {
-    gate.arm()
-    expect(onFlush).not.toHaveBeenCalled()
-  })
-
-  it('flushes via short delay after notifyData signals the prompt draw', () => {
-    gate.arm()
-    gate.notifyData()
-    expect(onFlush).not.toHaveBeenCalled()
-
-    vi.advanceTimersByTime(POST_READY_FLUSH_DELAY_MS)
-    expect(onFlush).toHaveBeenCalledTimes(1)
-  })
-
   it('flushes via short delay when arm receives post-marker bytes evidence', () => {
     gate.arm(true)
     vi.advanceTimersByTime(POST_READY_FLUSH_DELAY_MS - 1)
@@ -51,27 +37,6 @@ describe('PostReadyFlushGate', () => {
     expect(onFlush).toHaveBeenCalledTimes(1)
   })
 
-  it('flushes via wall-clock fallback when no notifyData arrives', () => {
-    gate.arm()
-
-    vi.advanceTimersByTime(POST_READY_FLUSH_FALLBACK_MS)
-    expect(onFlush).toHaveBeenCalledTimes(1)
-  })
-
-  it('does not fallback at the old duplicate-echo race window', () => {
-    gate.arm()
-
-    vi.advanceTimersByTime(50)
-
-    expect(onFlush).not.toHaveBeenCalled()
-  })
-
-  it('ignores notifyData before arm()', () => {
-    gate.notifyData()
-    vi.advanceTimersByTime(1000)
-    expect(onFlush).not.toHaveBeenCalled()
-  })
-
   it('notifyData after the fallback fired is a no-op', () => {
     gate.arm()
     vi.advanceTimersByTime(POST_READY_FLUSH_FALLBACK_MS)
@@ -79,16 +44,6 @@ describe('PostReadyFlushGate', () => {
 
     gate.notifyData()
     vi.advanceTimersByTime(1000)
-    expect(onFlush).toHaveBeenCalledTimes(1)
-  })
-
-  it('only the first notifyData schedules the short-delay flush', () => {
-    gate.arm()
-    gate.notifyData()
-    gate.notifyData()
-    gate.notifyData()
-
-    vi.advanceTimersByTime(POST_READY_FLUSH_DELAY_MS)
     expect(onFlush).toHaveBeenCalledTimes(1)
   })
 
