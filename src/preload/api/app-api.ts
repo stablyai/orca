@@ -27,6 +27,8 @@ export type AppApi = {
   restartAsAdministrator: () => Promise<void>
   /** Append filenames to this base: Vite /@fs in dev, file:// resources when packaged. */
   getFeatureWallAssetBaseUrl: () => Promise<string>
+  /** Desktop only: names installed renderer files edited after install once a chunk cannot load. */
+  explainUnloadableRendererChunk?: () => Promise<void>
   /** Uses app.exit(0), bypassing normal quit handling. */
   relaunch: () => Promise<void>
   /** Uses normal quit handling so daemon terminals survive for reattachment. */

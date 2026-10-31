@@ -21339,6 +21339,13 @@
       "dismiss": "J'ai compris"
     }
   },
+  "modifiedInstall": {
+    "title": "Réinstaller Orca",
+    "message": "Certains fichiers de l’application Orca ont été modifiés après son installation.",
+    "detail": "Certaines parties d’Orca ne peuvent pas se charger tant qu’il n’est pas réinstallé, et un redémarrage ne suffit pas. Fichiers modifiés ({{fileCount}}) : {{files}}\n\nRéinstallez Orca pour les restaurer. Vos espaces de travail et réglages sont conservés.",
+    "download": "Ouvrir la page de téléchargement",
+    "close": "Fermer"
+  },
   "rendererRecovery": {
     "reload": "Recharger",
     "copyCommands": "Copier les commandes",

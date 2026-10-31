@@ -21134,6 +21134,13 @@
       "dismiss": "Got it"
     }
   },
+  "modifiedInstall": {
+    "title": "Reinstall Orca",
+    "message": "Some of Orca’s app files were changed after it was installed.",
+    "detail": "Parts of Orca can’t load until it is reinstalled, and restarting won’t fix it. Changed files ({{fileCount}}): {{files}}\n\nReinstall Orca to restore them. Your workspaces and settings are kept.",
+    "download": "Open Download Page",
+    "close": "Close"
+  },
   "rendererRecovery": {
     "reload": "Reload",
     "copyCommands": "Copy Commands",
