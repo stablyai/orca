@@ -1,11 +1,12 @@
-import { createContext } from 'react'
-import { Animated, View } from 'react-native'
+import { createContext, useMemo, useRef } from 'react'
+import { Animated, Pressable, View } from 'react-native'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { assert, expect, it, vi } from 'vitest'
 import { MobileSessionHeader } from './MobileSessionHeader'
 import { MobileSessionSurface } from './MobileSessionSurface'
 import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-shape'
 import type { MobileSessionController } from './use-mobile-session-controller'
+import { useDetailCardSource, type DetailCardSource } from '../components/use-anchored-detail-card'
 import { useSessionTitleCard } from './use-session-title-card'
 import { AnchoredDetailCard } from '../components/AnchoredDetailCard'
 
@@ -35,6 +36,7 @@ vi.mock('react-native', () => {
     }
   }
   return {
+    AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
     View: 'View',
     Text: 'Text',
     Pressable: 'Pressable',
@@ -101,6 +103,7 @@ vi.mock('./MobileSessionHeaderMoreActionsSheet', () => ({
 }))
 vi.mock('./MobileSessionContentRow', () => ({ MobileSessionContentRow: () => null }))
 vi.mock('./MobileSessionSheets', () => ({ MobileSessionSheets: () => null }))
+vi.mock('./MobileSessionTabCardFooter', () => ({ MobileSessionTabCardFooter: () => null }))
 vi.mock('./MobileWorkerAutoCloseStrip', () => ({ MobileWorkerAutoCloseStrip: () => null }))
 vi.mock('../transport/use-workspace-client', () => ({
   WorkspaceServerContext: createContext(null)
@@ -119,9 +122,26 @@ const headerFields: Partial<MobileSessionController> = {
 const header = headerFields as MobileSessionController
 
 function Fixture() {
-  const details = useSessionTitleCard(true, false)
+  const details = useSessionTitleCard(true, false, [{ id: 'back' }])
+  const tabRef = useRef<View>(null)
+  const source = useMemo<DetailCardSource>(
+    () => ({
+      key: 'tab:back',
+      anchorRef: tabRef,
+      openerRef: tabRef,
+      barRef: details.barRef,
+      geometry: 'refresh'
+    }),
+    [details.barRef]
+  )
+  useDetailCardSource(details, source)
   return (
     <View>
+      <Pressable
+        ref={tabRef}
+        accessibilityLabel="Tab details"
+        onPress={() => details.toggleSource(source)}
+      />
       <MobileSessionHeader controller={header} details={details} />
       <View ref={details.layerRef} testID="layer" onLayout={details.onLayout}>
         {details.visual ? (
@@ -261,6 +281,67 @@ it('preserves title identity and current request across queued results and Back'
   act(() => renderer.unmount())
 })
 
+it.each([false, true])(
+  'closes pending and measured tab details before leaving, rail=%s',
+  (rail) => {
+    overlay.width = 667
+    overlay.height = 375
+    overlay.measure = null
+    leave.mockClear()
+    let renderer: ReactTestRenderer | undefined
+    act(() => {
+      renderer = create(<Screen rail={rail} />, {
+        createNodeMock: (node) => ({
+          measureInWindow: (done: (x: number, y: number, w: number, h: number) => void) => {
+            const props = node.props
+            if (
+              props &&
+              typeof props === 'object' &&
+              'testID' in props &&
+              props.testID === 'layer'
+            ) {
+              overlay.measure = () => done(0, 0, 667, 375)
+            } else {
+              done(80, 20, 40, 45)
+            }
+          }
+        })
+      })
+    })
+    assert(renderer)
+    const mounted = renderer
+    const root = mounted.root
+    const tap = () =>
+      act(() => root.findByProps({ accessibilityLabel: 'Tab details' }).props.onPress())
+    const back = () =>
+      act(() =>
+        (rail
+          ? root.findByProps({
+              accessibilityRole: 'button',
+              accessibilityLabel: 'Back to worktrees'
+            })
+          : root.findByProps({ hitSlop: 4 })
+        ).props.onPress()
+      )
+    tap()
+    const readMeasurement = (): (() => void) | null => overlay.measure
+    const stale = readMeasurement()
+    back()
+    act(() => stale?.())
+    expect(root.findAllByType(AnchoredDetailCard)).toHaveLength(0)
+    expect(leave).not.toHaveBeenCalled()
+    tap()
+    act(() => overlay.measure?.())
+    expect(root.findByType(AnchoredDetailCard).props.active).toBe(true)
+    act(() => overlay.motions.at(-1)?.()())
+    back()
+    expect(root.findByType(AnchoredDetailCard).props.active).toBe(false)
+    expect(leave).not.toHaveBeenCalled()
+    back()
+    expect(leave).toHaveBeenCalledTimes(1)
+    act(() => mounted.unmount())
+  }
+)
 it('releases an open card and pending measurements when the connected Duo header removes its title', () => {
   overlay.rail = true
   const pending: (() => void)[] = []

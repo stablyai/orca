@@ -602,6 +602,22 @@
       "chatRuntime": "Environnement de chat",
       "chatChoiceTitle": "Ouvrir en chat ou en CLI",
       "chatChoiceDescription": "Choisissez si chaque agent s’ouvre en chat ou dans sa CLI.",
+      "defaultSurfaceTitle": "Ouvrir les agents en",
+      "defaultSurfaceDescription": "Le choix par défaut pour les agents sur cet ordinateur.",
+      "defaultSurfaceChatDescription": "Messages enrichis, visuels et images.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "La CLI propre à chaque agent.",
+      "defaultSurfacePerAgent": "Choisir par agent",
+      "defaultSurfaceNowChat": "Les agents s'ouvrent désormais en chat",
+      "defaultSurfaceNowTerminal": "Les agents s'ouvrent désormais dans le terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} reste dans le terminal, comme vous l’avez choisi.",
+      "defaultSurfaceKeptTerminal_many": "{{agents}} restent dans le terminal, comme vous l’avez choisi.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} restent dans le terminal, comme vous l’avez choisi.",
+      "defaultSurfaceKeptChat_one": "{{agents}} reste en chat, comme vous l’avez choisi.",
+      "defaultSurfaceKeptChat_many": "{{agents}} restent en chat, comme vous l’avez choisi.",
+      "defaultSurfaceKeptChat_other": "{{agents}} restent en chat, comme vous l’avez choisi.",
+      "defaultSurfaceSetAllChat": "Tout mettre en Chat",
+      "defaultSurfaceSetAllTerminal": "Tout mettre en Terminal",
       "sameAsChoice": "Identique à {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7756,8 +7772,6 @@
           "dd6f0a1d45": "Compagnon",
           "0e89a574ae": "Compagnon animé flottant dans le coin inférieur droit.",
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "Activer Chat UI",
             "shellEnvNamesLabel": "Variables à transmettre depuis votre shell",
             "shellEnvNamePlaceholder": "Nom de la variable",
             "shellEnvNameAdd": "Ajouter",
@@ -7769,9 +7783,7 @@
             "shellEnvToggleLabel": "Activer l'utilisation de l'environnement de votre shell",
             "resumeTitle": "Reprendre automatiquement les discussions de travail après un redémarrage",
             "resumeCopy": "Lorsqu'Orca quitte ou installe une mise à jour, les discussions en cours reprennent automatiquement à la réouverture d'Orca.",
-            "resumeToggleLabel": "Activer la reprise automatique après un redémarrage",
-            "copy": "Les nouveaux agents pris en charge s’ouvrent dans un chat structuré. Les autres agents s’ouvrent dans un terminal ; les chats existants restent disponibles.",
-            "description": "Ouvrez les nouveaux agents pris en charge dans l'interface utilisateur de Chat."
+            "resumeToggleLabel": "Activer la reprise automatique après un redémarrage"
           },
           "agentDashboard": {
             "title": "Tableau de bord des agents",
@@ -9974,19 +9986,6 @@
             "051203d37c": "animal",
             "6b5a56ac35": "Compagnon animé flottant dans le coin inférieur droit.",
             "87d99e634b": "Compagnon",
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "natif",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "agent",
-              "description": "Ouvrez les nouveaux agents pris en charge dans l'interface utilisateur de Chat."
-            },
             "agentDashboard": {
               "title": "Tableau de bord des agents",
               "description": "Tableau Kanban pour surveiller les agents de tous les worktrees, dans la fenêtre ou en fenêtre indépendante.",
@@ -20638,18 +20637,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "Nouveau",
-      "title": "Le chat natif évolue",
-      "intro": "Les nouveaux chats des agents compatibles utilisent la vue améliorée. Pour alterner entre chat et CLI, ouvrez {{panel}} (barre latérale droite) :",
-      "resumeInNativeChat": "{{action}} ouvre une conversation CLI compatible dans le chat natif.",
-      "resumeInCli": "{{action}} copie un chat Claude/Codex dans une CLI neuve ; l'original reste intact.",
-      "gotIt": "Compris",
-      "leaveOff": "Laisser désactivé",
-      "enableNow": "Activer maintenant",
-      "enableError": "Impossible d'activer le mode chat.",
-      "manageInSettings": "Gérez Chat UI dans <link>Paramètres → Expérimental</link>."
-    },
     "voice": {
       "demoPrompt": "Relisez ce diff à la recherche de cas limites et ajoutez des tests pour tout ce que vous trouvez.",
       "startDictation": "Démarrer la dictée",
@@ -20721,7 +20708,26 @@
       "title": "Accédez à un worktree avec <shortcut>",
       "description": "Recherchez des worktrees, changez d’onglet, ajustez les paramètres ou créez un worktree, sans quitter le clavier."
     },
-    "gotIt": "Compris"
+    "gotIt": "Compris",
+    "chatUiHere": {
+      "title": "L'interface de chat est arrivée",
+      "offIntro": "Les agents peuvent désormais s'ouvrir sous forme de chat, avec des messages enrichis, des visuels et des images.",
+      "offTerminal": "Vous préférez le terminal ? Il reste entièrement pris en charge. Vos agents continuent de s'y ouvrir jusqu'à ce que vous choisissiez Chat.",
+      "onIntro": "L'interface de chat n'est plus expérimentale et fait désormais partie d'Orca. Vos agents continuent de s'ouvrir sous forme de chats, avec des messages enrichis, des visuels et des images.",
+      "onTerminal": "Le terminal reste lui aussi entièrement pris en charge. Vous pouvez y remettre n'importe quel agent à tout moment.",
+      "changeInSettings": "Modifiable à tout moment dans <link>Paramètres → Agents</link>.",
+      "stayInTerminal": "Rester dans le terminal",
+      "cta": "Utiliser l'interface de chat",
+      "saveFailed": "Impossible d'activer l'interface de chat. Choisissez Chat dans Paramètres → Agents.",
+      "demoTabTitle": "Expliquer la connexion",
+      "demoPrompt": "Explique comment fonctionne la connexion",
+      "demoReply": "La connexion commence dans {{file}} : le navigateur envoie à /login, le serveur vérifie le mot de passe et crée une session, puis vous redirige vers l’app. Voici le flux :",
+      "demoBrowser": "Navigateur",
+      "demoSession": "Session",
+      "demoApp": "App",
+      "demoPassword": "mot de passe",
+      "demoCookie": "cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "D'autres correspondances sont peut-être disponibles. Affinez votre recherche pour réduire les résultats.",

@@ -853,6 +853,20 @@
       "chatRuntime": "Chat runtime",
       "chatChoiceTitle": "Open as chat or CLI",
       "chatChoiceDescription": "Choose whether each agent opens as a chat or in its CLI.",
+      "defaultSurfaceTitle": "Open agents as",
+      "defaultSurfaceDescription": "The default for agents on this computer.",
+      "defaultSurfaceChatDescription": "Rich messages, visuals and images.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "Each agent’s own CLI.",
+      "defaultSurfacePerAgent": "Choose per agent",
+      "defaultSurfaceNowChat": "Agents now open as chats",
+      "defaultSurfaceNowTerminal": "Agents now open in the terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} stays in the terminal, as you set.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} stay in the terminal, as you set.",
+      "defaultSurfaceKeptChat_one": "{{agents}} stays as a chat, as you set.",
+      "defaultSurfaceKeptChat_other": "{{agents}} stay as chats, as you set.",
+      "defaultSurfaceSetAllChat": "Set all to Chat",
+      "defaultSurfaceSetAllTerminal": "Set all to Terminal",
       "sameAsChoice": "Same as {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7954,10 +7968,6 @@
           "dd6f0a1d45": "Pet",
           "0e89a574ae": "Floating animated pet in the bottom-right corner.",
           "nativeChat": {
-            "title": "Chat UI",
-            "description": "Open supported new agents in Chat UI.",
-            "copy": "Supported new agents open in structured chat. Other agents open in the terminal; existing chats stay available.",
-            "toggleLabel": "Toggle Chat UI",
             "resumeTitle": "Resume working chats automatically after a restart",
             "resumeCopy": "When Orca quits or installs an update, chats that were working are automatically resumed when Orca is reopened.",
             "resumeToggleLabel": "Toggle automatic resume after a restart",
@@ -10171,19 +10181,6 @@
             "051203d37c": "pet",
             "6b5a56ac35": "Floating animated pet in the bottom-right corner.",
             "87d99e634b": "Pet",
-            "nativeChat": {
-              "title": "Chat UI",
-              "description": "Open supported new agents in Chat UI.",
-              "grok": "grok",
-              "native": "native",
-              "chat": "chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "terminal",
-              "agent": "agent"
-            },
             "agentDashboard": {
               "title": "Agent Dashboard",
               "description": "Kanban board for monitoring agents across worktrees, in-window or as a pop-out.",
@@ -20701,18 +20698,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "New",
-      "title": "Native chat got an upgrade",
-      "leaveOff": "Leave Off",
-      "enableNow": "Enable Now",
-      "enableError": "Could not enable chat mode.",
-      "intro": "New chats with supported agents now open in the upgraded chat view. To move between chat and CLI, open {{panel}} in the right sidebar:",
-      "resumeInNativeChat": "{{action}} opens a supported CLI conversation in native chat.",
-      "resumeInCli": "{{action}} copies a Claude or Codex chat into a new CLI session. The original chat stays as it is.",
-      "gotIt": "Got It",
-      "manageInSettings": "Manage Chat UI in <link>Settings → Experimental</link>."
-    },
     "voice": {
       "demoPrompt": "Review this diff for edge cases and add tests for anything you find.",
       "startDictation": "Start dictation",
@@ -20784,7 +20769,26 @@
       "title": "Jump to a worktree with <shortcut>",
       "description": "Search worktrees, switch tabs, tweak settings, or spin up a new worktree, all without leaving the keyboard."
     },
-    "gotIt": "Got it"
+    "gotIt": "Got it",
+    "chatUiHere": {
+      "title": "Chat UI is here",
+      "offIntro": "Agents can now open as a chat, with rich messages, visuals and images.",
+      "offTerminal": "Prefer the terminal? It stays fully supported. Your agents keep opening there until you choose Chat.",
+      "onIntro": "Chat UI is out of Experimental and now part of Orca. Your agents keep opening as chats, with rich messages, visuals and images.",
+      "onTerminal": "The terminal stays fully supported too. Switch any agent back anytime.",
+      "changeInSettings": "Change anytime in <link>Settings → Agents</link>.",
+      "stayInTerminal": "Stay in terminal",
+      "cta": "Use Chat UI",
+      "saveFailed": "Could not turn on Chat UI. Choose Chat in Settings → Agents.",
+      "demoTabTitle": "Explain login",
+      "demoPrompt": "Map out how login works",
+      "demoReply": "Login starts in {{file}}: the browser posts to /login, the server checks the password and creates a session, then redirects you to the app. Here’s the flow:",
+      "demoBrowser": "Browser",
+      "demoSession": "Session",
+      "demoApp": "App",
+      "demoPassword": "password",
+      "demoCookie": "cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "More matches may be available. Refine your search to narrow the results.",

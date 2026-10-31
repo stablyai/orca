@@ -379,6 +379,20 @@
       "chatRuntime": "聊天运行时",
       "chatChoiceTitle": "以聊天或 CLI 打开",
       "chatChoiceDescription": "选择每个智能体以聊天还是其 CLI 打开。",
+      "defaultSurfaceTitle": "智能体打开方式",
+      "defaultSurfaceDescription": "这台电脑上智能体的默认打开方式。",
+      "defaultSurfaceChatDescription": "富文本消息、可视化内容和图片。",
+      "defaultSurfaceTerminal": "终端",
+      "defaultSurfaceTerminalDescription": "每个智能体自己的 CLI。",
+      "defaultSurfacePerAgent": "按智能体选择",
+      "defaultSurfaceNowChat": "智能体现在以聊天方式打开",
+      "defaultSurfaceNowTerminal": "智能体现在在终端中打开",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} 按你的设置继续在终端中打开。",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} 按你的设置继续在终端中打开。",
+      "defaultSurfaceKeptChat_one": "{{agents}} 按你的设置继续以聊天方式打开。",
+      "defaultSurfaceKeptChat_other": "{{agents}} 按你的设置继续以聊天方式打开。",
+      "defaultSurfaceSetAllChat": "全部设为聊天",
+      "defaultSurfaceSetAllTerminal": "全部设为终端",
       "sameAsChoice": "与 {{agent}} 相同 · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7241,8 +7255,6 @@
             "toggleLabel": "切换新卡片样式"
           },
           "nativeChat": {
-            "title": "Chat UI",
-            "toggleLabel": "切换 Chat UI",
             "shellEnvNamesLabel": "从 shell 传递的变量",
             "shellEnvNamePlaceholder": "变量名",
             "shellEnvNameAdd": "添加",
@@ -7254,9 +7266,7 @@
             "shellEnvToggleLabel": "切换使用 shell 环境",
             "resumeTitle": "重启后自动恢复工作聊天",
             "resumeCopy": "当 Orca 退出或安装更新时，重新打开 Orca 后，正在工作的聊天会自动恢复。",
-            "resumeToggleLabel": "重启后切换自动恢复",
-            "description": "在聊天 UI 中打开支持的新智能体。",
-            "copy": "支持的新智能体会在结构化聊天中打开。其他智能体在终端中打开；现有聊天仍可使用。"
+            "resumeToggleLabel": "重启后切换自动恢复"
           },
           "agentDashboard": {
             "title": "智能体仪表盘",
@@ -9410,19 +9420,6 @@
               "title": "新卡片样式",
               "worktree": "工作树",
               "worktrees": "工作树"
-            },
-            "nativeChat": {
-              "title": "Chat UI",
-              "grok": "grok",
-              "native": "原生",
-              "chat": "聊天",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "开放克劳德",
-              "omp": "奥普",
-              "terminal": "终端",
-              "agent": "智能体",
-              "description": "在聊天 UI 中打开支持的新智能体。"
             },
             "agentDashboard": {
               "title": "智能体仪表盘",
@@ -20235,18 +20232,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "新功能",
-      "title": "本机聊天已升级",
-      "intro": "受支持智能体的新聊天现在会在升级后的聊天视图中打开。要在聊天和 CLI 之间切换，请打开右侧边栏中的{{panel}}：",
-      "resumeInNativeChat": "{{action}}：在本机聊天中打开受支持的 CLI 对话。",
-      "resumeInCli": "{{action}}：将 Claude 或 Codex 聊天复制到新的 CLI 会话中。原始聊天保持不变。",
-      "gotIt": "知道了",
-      "leaveOff": "保持关闭",
-      "enableNow": "立即启用",
-      "enableError": "无法启用聊天模式。",
-      "manageInSettings": "在<link>设置 → 实验性</link>中管理 Chat UI。"
-    },
     "voice": {
       "demoPrompt": "查看此差异以了解边缘情况，并为您发现的任何内容添加测试。",
       "startDictation": "开始听写",
@@ -20318,7 +20303,26 @@
       "title": "使用 <shortcut> 跳转到工作树",
       "description": "搜索工作树、切换标签页、调整设置或创建工作树，全程无需离开键盘。"
     },
-    "gotIt": "知道了"
+    "gotIt": "知道了",
+    "chatUiHere": {
+      "title": "聊天界面来了",
+      "offIntro": "智能体现在可以以聊天方式打开，支持富文本消息、可视化内容和图片。",
+      "offTerminal": "更喜欢终端？终端将继续获得完整支持。在你选择聊天之前，智能体会继续在终端中打开。",
+      "onIntro": "聊天界面已结束实验阶段，正式成为 Orca 的一部分。你的智能体会继续以聊天方式打开，支持富文本消息、可视化内容和图片。",
+      "onTerminal": "终端同样会继续获得完整支持。你可以随时把任何智能体切换回终端。",
+      "changeInSettings": "可随时在<link>设置 → 智能体</link>中更改。",
+      "stayInTerminal": "继续使用终端",
+      "cta": "使用聊天界面",
+      "saveFailed": "无法开启聊天界面。请在“设置 → 智能体”中选择聊天。",
+      "demoTabTitle": "解释登录流程",
+      "demoPrompt": "梳理一下登录是怎么工作的",
+      "demoReply": "登录从 {{file}} 开始：浏览器提交到 /login，服务器检查密码并创建会话，然后将你重定向到应用。流程如下：",
+      "demoBrowser": "浏览器",
+      "demoSession": "会话",
+      "demoApp": "应用",
+      "demoPassword": "密码",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "可能还有更多匹配结果。请细化搜索以缩小范围。",

@@ -32,7 +32,6 @@ import { recordCreatedWorktreeLineage as recordCreatedWorktreeLineageState } fro
 import {
   deliverStartupFollowupPrompt,
   pasteWorktreeStartupDraftWhenReady,
-  waitForWorktreeStartupDraft,
   type StartupFollowupPromptOptions,
   type WorktreeStartupReadinessHost
 } from '../runtime-worktree-startup-readiness'
@@ -41,9 +40,7 @@ import {
   provisionWorktreeTerminals,
   type WorktreeTerminalProvisioningHost
 } from '../runtime-worktree-terminal-provisioning'
-import { readFreshComposerHold } from '../launched-agent-composer-readiness'
 import { waitForTerminalComposer } from '../terminal/wait/terminal-composer-lifetime'
-import { buildTerminalWaitText } from '../terminal-wait-tail-state'
 import {
   describeLaunchedAgentHost,
   readLaunchedAgentForeground,
@@ -51,6 +48,12 @@ import {
   type LaunchedAgentHost
 } from '../launched-agent-foreground'
 import { worktreeRowTarget } from '../../persistence/host-qualified-worktree-meta'
+import {
+  readPtyFreshComposerHold,
+  waitForFreshComposerOnPty,
+  watchLaunchComposer,
+  type FreshComposerPtyHost
+} from '../launch-composer-watch'
 
 export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntimeWithListManagedWorktrees {
   protected abstract toAgentSessionOptions(
@@ -232,34 +235,26 @@ export abstract class OrcaRuntimeWithActivateManagedWorktree extends OrcaRuntime
         signal
       },
       (target, stop) =>
-        waitForWorktreeStartupDraft(
-          { ...this.getWorktreeStartupReadinessHost(), getPtyId: () => target.ptyId },
-          handle,
-          agent,
-          {
-            timeoutMs,
-            requireComposerMarker,
-            // Every caller pastes and then presses Enter: a worker brief or a launch prompt.
-            submit: true,
-            signal: stop.signal,
-            isShellInFront: async (ownerPtyId) =>
-              (await this.readLaunchedAgentForeground(ownerPtyId, agent)) === 'shell',
-            accept: (readyPtyId) => {
-              const pty = this.ptysById.get(readyPtyId)
-              const hold = pty
-                ? readFreshComposerHold(
-                    buildTerminalWaitText(pty.tailBuffer, pty.tailPartialLine, pty.preview),
-                    this.readLiveTerminalScreenLines(readyPtyId)
-                  )
-                : null
-              if (hold === 'dialog' && stopOnDialog) {
-                stop.abort()
-              }
-              return hold === null
-            }
-          }
-        )
+        waitForFreshComposerOnPty(this.freshComposerPtyHost(), target.ptyId, agent, timeoutMs, {
+          requireComposerMarker,
+          stopOnDialog,
+          stop
+        })
     )
+  }
+
+  /** Hold submits to a fresh launch of `agent` until its composer is up (launch-composer-watch.ts). */
+  watchLaunchComposer(ptyId: string, agent: TuiAgent | null): void {
+    watchLaunchComposer(this.launchComposerReadyByPtyId, this.freshComposerPtyHost(), ptyId, agent)
+  }
+
+  private freshComposerPtyHost(): FreshComposerPtyHost {
+    return {
+      readiness: this.getWorktreeStartupReadinessHost(),
+      readForeground: (ptyId, agent) => this.readLaunchedAgentForeground(ptyId, agent),
+      readHold: (ptyId) =>
+        readPtyFreshComposerHold(this.ptysById.get(ptyId), this.readLiveTerminalScreenLines(ptyId))
+    }
   }
 
   /** What holds the terminal a launch started its agent in, read fresh from the execution host. */

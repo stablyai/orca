@@ -1,3 +1,4 @@
+import { EVERY_AGENT_CHAT } from '../../shared/native-chat/every-agent-chat.test-fixture'
 import './rpc/unused-default-rpc-methods.test-fixture'
 import { expect, it, vi } from 'vitest'
 import * as sessionCreate from './rpc/methods/structured-agent-session-create'
@@ -26,7 +27,7 @@ it('keeps a minted worker start unknown after one preamble handover without an e
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: launch-mode selection reads only getSettings on this store double.
   vi.spyOn(runtime, 'requireStore').mockReturnValue({
     getSettings: () => ({
-      experimentalNativeChat: true,
+      nativeChatProviders: EVERY_AGENT_CHAT,
       agentCmdOverrides: {},
       agentDefaultArgs: {},
       agentDefaultEnv: {}

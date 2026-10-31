@@ -1011,7 +1011,6 @@
 6 test-no-wall-clock:src/main/runtime/runtime-rpc-pairing-mode-persistence.test.ts
 11 test-no-wall-clock:src/main/runtime/runtime-rpc-relay-pairing.test.ts
 2 test-no-wall-clock:src/main/runtime/runtime-rpc-websocket-bind-host.test.ts
-1 test-no-wall-clock:src/main/runtime/runtime-worktree-agent-sources.test.ts
 4 test-no-wall-clock:src/main/runtime/runtime-worktree-structured-agent-rows-liveness.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-agent-install-refresh.test.ts
 1 test-no-wall-clock:src/main/runtime/structured-agent-launch-support.test.ts
@@ -1118,7 +1117,6 @@
 5 test-no-wall-clock:src/renderer/src/components/status-bar/inline-usage-bars.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
 2 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-antigravity-segment.test.tsx
-1 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-cursor-segment.test.tsx
 3 test-no-wall-clock:src/renderer/src/components/status-bar/status-bar-provider-menu-focus.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/workspace-space-worktree-row.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/tab-bar/TabBarCreateEntry.history.test.tsx

@@ -810,6 +810,20 @@
       "chatRuntime": "Chat-Laufzeit",
       "chatChoiceTitle": "Als Chat oder CLI öffnen",
       "chatChoiceDescription": "Lege fest, ob jeder Agent als Chat oder in seiner CLI geöffnet wird.",
+      "defaultSurfaceTitle": "Agenten öffnen als",
+      "defaultSurfaceDescription": "Die Standardeinstellung für Agenten auf diesem Computer.",
+      "defaultSurfaceChatDescription": "Formatierte Nachrichten, Grafiken und Bilder.",
+      "defaultSurfaceTerminal": "Terminal",
+      "defaultSurfaceTerminalDescription": "Die eigene CLI jedes Agenten.",
+      "defaultSurfacePerAgent": "Pro Agent wählen",
+      "defaultSurfaceNowChat": "Agenten öffnen sich jetzt als Chats",
+      "defaultSurfaceNowTerminal": "Agenten öffnen sich jetzt im Terminal",
+      "defaultSurfaceKeptTerminal_one": "{{agents}} bleibt wie eingestellt im Terminal.",
+      "defaultSurfaceKeptTerminal_other": "{{agents}} bleiben wie eingestellt im Terminal.",
+      "defaultSurfaceKeptChat_one": "{{agents}} bleibt wie eingestellt ein Chat.",
+      "defaultSurfaceKeptChat_other": "{{agents}} bleiben wie eingestellt Chats.",
+      "defaultSurfaceSetAllChat": "Alle auf Chat setzen",
+      "defaultSurfaceSetAllTerminal": "Alle auf Terminal setzen",
       "sameAsChoice": "Wie {{agent}} · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
@@ -7878,10 +7892,6 @@
           "dd6f0a1d45": "Haustier",
           "0e89a574ae": "Schwebendes animiertes Haustier unten rechts.",
           "nativeChat": {
-            "title": "Chat-Oberfläche",
-            "description": "Neue unterstützte Agenten in der Chat-Oberfläche öffnen.",
-            "copy": "Neue unterstützte Agenten öffnen sich im strukturierten Chat. Andere Agenten öffnen sich im Terminal; bestehende Chats bleiben verfügbar.",
-            "toggleLabel": "Chat-Oberfläche umschalten",
             "resumeTitle": "Laufende Chats nach einem Neustart automatisch fortsetzen",
             "resumeCopy": "Wenn Orca beendet oder ein Update installiert wird, werden zuvor laufende Chats beim erneuten Öffnen von Orca automatisch fortgesetzt.",
             "resumeToggleLabel": "Automatisches Fortsetzen nach einem Neustart umschalten",
@@ -10093,19 +10103,6 @@
             "051203d37c": "Haustier",
             "6b5a56ac35": "Schwebendes animiertes Haustier unten rechts.",
             "87d99e634b": "Haustier",
-            "nativeChat": {
-              "title": "Chat-Oberfläche",
-              "description": "Neue unterstützte Agenten in der Chat-Oberfläche öffnen.",
-              "grok": "grok",
-              "native": "nativ",
-              "chat": "Chat",
-              "claude": "claude",
-              "codex": "codex",
-              "openclaude": "openclaude",
-              "omp": "omp",
-              "terminal": "Terminal",
-              "agent": "Agent"
-            },
             "agentDashboard": {
               "title": "Agenten-Dashboard",
               "description": "Kanban-Board zur Überwachung von Agenten über mehrere Worktrees hinweg, im Fenster oder als separates Fenster.",
@@ -20397,18 +20394,6 @@
     }
   },
   "featureTips": {
-    "nativeChatUpgrade": {
-      "eyebrow": "Neu",
-      "title": "Der native Chat wurde verbessert",
-      "leaveOff": "Deaktiviert lassen",
-      "enableNow": "Jetzt aktivieren",
-      "enableError": "Der Chatmodus konnte nicht aktiviert werden.",
-      "intro": "Neue Chats mit unterstützten Agenten werden jetzt in der verbesserten Chatansicht geöffnet. Zum Wechseln zwischen Chat und CLI {{panel}} in der rechten Seitenleiste öffnen:",
-      "resumeInNativeChat": "{{action}} öffnet eine unterstützte CLI-Unterhaltung im nativen Chat.",
-      "resumeInCli": "{{action}} kopiert einen Claude- oder Codex-Chat in eine neue CLI-Sitzung. Der ursprüngliche Chat bleibt unverändert.",
-      "gotIt": "Verstanden",
-      "manageInSettings": "Chat-Oberfläche unter <link>Einstellungen → Experimentell</link> verwalten."
-    },
     "voice": {
       "demoPrompt": "Diesen Diff auf Sonderfälle prüfen und Tests für alle gefundenen Fälle hinzufügen.",
       "startDictation": "Diktat starten",
@@ -20480,7 +20465,26 @@
       "title": "Mit <shortcut> zu einem Worktree wechseln",
       "description": "Worktrees suchen, Tabs wechseln, Einstellungen anpassen oder einen neuen Worktree erstellen – alles per Tastatur."
     },
-    "gotIt": "Verstanden"
+    "gotIt": "Verstanden",
+    "chatUiHere": {
+      "title": "Die Chat-Oberfläche ist da",
+      "offIntro": "Agenten können jetzt als Chat geöffnet werden, mit formatierten Nachrichten, Grafiken und Bildern.",
+      "offTerminal": "Lieber das Terminal? Es wird weiterhin voll unterstützt. Deine Agenten öffnen sich dort, bis du Chat wählst.",
+      "onIntro": "Die Chat-Oberfläche ist nicht mehr experimentell und jetzt fester Teil von Orca. Deine Agenten öffnen sich weiterhin als Chats, mit formatierten Nachrichten, Grafiken und Bildern.",
+      "onTerminal": "Auch das Terminal wird weiterhin voll unterstützt. Jeder Agent lässt sich jederzeit zurückstellen.",
+      "changeInSettings": "Jederzeit unter <link>Einstellungen → Agenten</link> ändern.",
+      "stayInTerminal": "Im Terminal bleiben",
+      "cta": "Chat-Oberfläche nutzen",
+      "saveFailed": "Die Chat-Oberfläche konnte nicht aktiviert werden. Unter Einstellungen → Agenten „Chat“ wählen.",
+      "demoTabTitle": "Anmeldung erklären",
+      "demoPrompt": "Zeig mir, wie die Anmeldung funktioniert",
+      "demoReply": "Die Anmeldung beginnt in {{file}}: Der Browser sendet an /login, der Server prüft das Passwort und erstellt eine Sitzung, dann leitet er dich zur App weiter. So läuft es ab:",
+      "demoBrowser": "Browser",
+      "demoSession": "Sitzung",
+      "demoApp": "App",
+      "demoPassword": "Passwort",
+      "demoCookie": "Cookie"
+    }
   },
   "quickOpen": {
     "moreMatchesAvailable": "Möglicherweise sind weitere Treffer verfügbar. Die Suche verfeinern, um die Ergebnisse einzugrenzen.",
