@@ -22,8 +22,11 @@ export type TerminalQuickCommandPlaceholderResult =
   | { status: 'unsafe-path' }
 
 // Why: values are pasted into a shell line, so a file named `$(touch x).py` would run even inside
-// the documented `"${file}"` quoting. Apostrophes stay allowed: they are common and inert there.
+// the documented `"${file}"` quoting.
 const UNSAFE_PATH_VALUE = /[\p{Cc}$`"]/u
+
+// Why: inert inside plain double quotes, but they end `'${file}'` or chain a bare `${file}`.
+const UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES = /[';&|<>()]/
 
 const PLACEHOLDER_NAME_SET = new Set<string>(TERMINAL_QUICK_COMMAND_PLACEHOLDER_NAMES)
 
@@ -40,11 +43,14 @@ export function substituteTerminalQuickCommandPlaceholders(
   let missingFile = false
   let missingWorkspace = false
   let unsafePath = false
-  const usable = (value: string): string => {
-    unsafePath ||= UNSAFE_PATH_VALUE.test(value)
+  const usable = (value: string, offset: number): string => {
+    unsafePath ||=
+      UNSAFE_PATH_VALUE.test(value) ||
+      (UNSAFE_PATH_VALUE_OUTSIDE_DOUBLE_QUOTES.test(value) &&
+        !isPlainlyDoubleQuoted(command, offset))
     return value
   }
-  const next = command.replace(PLACEHOLDER_PATTERN, (match, name: string) => {
+  const next = command.replace(PLACEHOLDER_PATTERN, (match, name: string, offset: number) => {
     if (!isPlaceholderName(name)) {
       return match
     }
@@ -54,13 +60,13 @@ export function substituteTerminalQuickCommandPlaceholders(
         missingFile = true
         return match
       }
-      return usable(value)
+      return usable(value, offset)
     }
     if (!context.workspaceFolder) {
       missingWorkspace = true
       return match
     }
-    return usable(context.workspaceFolder)
+    return usable(context.workspaceFolder, offset)
   })
   if (missingFile) {
     return { status: 'missing-file' }
@@ -92,6 +98,15 @@ export function fileDirname(filePath: string): string {
     return filePath.slice(0, separator + 1)
   }
   return filePath.slice(0, separator)
+}
+
+// Why: nesting and escapes differ by shell, so only simple double quotes count as quoted.
+function isPlainlyDoubleQuoted(command: string, offset: number): boolean {
+  if (/['`]|\\"|\$\(/.test(command)) {
+    return false
+  }
+  const quotesBefore = command.slice(0, offset).match(/"/g)?.length ?? 0
+  return quotesBefore % 2 === 1
 }
 
 function isPlaceholderName(name: string): name is TerminalQuickCommandPlaceholderName {

@@ -116,6 +116,36 @@ describe('substituteTerminalQuickCommandPlaceholders', () => {
     ).toEqual({ status: 'unsafe-path' })
   })
 
+  it.each([
+    ["python '${file}'", "/repo/a'; id; echo '.py"],
+    ['python ${file}', "/repo/a'; id; echo '.py"],
+    ['python ${file}', '/repo/a;id;.py'],
+    ['python ${file}', '/repo/a&id&.py'],
+    ['python ${file}', '/repo/a|id.py'],
+    ['python ${file}', '/repo/(id).py'],
+    ['bash -c \'python "${file}"\'', "/repo/a'; id; echo '.py"],
+    ['echo "$(cat ${file})"', '/repo/a;id;.py'],
+    ['python \\"${file}', '/repo/a;id;.py']
+  ])('refuses %j when the path can leave its quoting: %j', (command, filePath) => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders(command, {
+        filePath,
+        relativePath: 'a.py',
+        workspaceFolder: '/repo'
+      })
+    ).toEqual({ status: 'unsafe-path' })
+  })
+
+  it('keeps paths with shell punctuation inside plain double quotes', () => {
+    expect(
+      substituteTerminalQuickCommandPlaceholders('python "${file}"', {
+        filePath: '/repo/app/(group)/R&D;notes.py',
+        relativePath: 'app/(group)/R&D;notes.py',
+        workspaceFolder: '/repo'
+      })
+    ).toEqual({ status: 'ok', command: 'python "/repo/app/(group)/R&D;notes.py"' })
+  })
+
   it('keeps paths with spaces and apostrophes', () => {
     expect(
       substituteTerminalQuickCommandPlaceholders('python "${file}"', {
