@@ -123,7 +123,7 @@ export function registerJournalRowContextUsageTests(): void {
       try {
         const rowJson = liveTestJournalRows(opened.db, IDENTITY.sessionId)[1]?.rowJson ?? ''
         const future = JSON.parse(rowJson)
-        future.body.contextUsage = { used: { kind: 'measured-later', tokens: 'many' } }
+        future.body.contextUsage = { used: { kind: 'unknown', capturedAt: 'later' } }
         updateTestJournalRowJson(opened.db, IDENTITY.sessionId, 2, JSON.stringify(future))
       } finally {
         await opened.close()

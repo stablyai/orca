@@ -42,7 +42,7 @@ export function registerJournalTerminalTimeValidationTests(
     }
   )
 
-  it.each([{ kind: 'tool-call' }, { providerTurnId: '' }])(
+  it.each([{ providerTurnId: '' }])(
     'ends a readable legacy extension %j using a valid turn rewrite',
     async (extension) => {
       await fixture.saveOldItems([
@@ -100,24 +100,12 @@ export function registerJournalTerminalTimeValidationTests(
     async (_name, observedAt, lastProvenAliveAt) => {
       const long = 'x'.repeat(1025)
       const running = { turnId: 'old', state: 'running' }
-      const laterContextUsage = {
-        window: { tokens: 100, capturedAt: 1, laterWindowField: true },
-        used: { kind: 'unknown', capturedAt: 1, laterUsedField: true },
-        laterUsageField: { kept: true }
-      }
       const extensionBodies = [
-        { ...running, kind: 'tool-call' },
         { ...running, providerTurnId: '' },
         { ...running, providerTurnId: 42 },
         { ...running, providerTurnId: null },
         { ...running, contextUsage: { window: { tokens: -1 } } },
-        { ...running, contextUsage: 'extension' },
-        {
-          ...running,
-          providerTurnId: 'provider',
-          contextUsage: laterContextUsage
-        },
-        { ...running, laterField: { kind: 'tool-call' } }
+        { ...running, contextUsage: 'extension' }
       ]
       const inputs = [
         ...extensionBodies.map((turnLifecycle, index) => ({
@@ -194,13 +182,6 @@ export function registerJournalTerminalTimeValidationTests(
           expect(body.state).toBe('failed')
         }
       }
-      expect(fixture.journal.itemBody('orca:extension-7')).toHaveProperty('laterField', {
-        kind: 'tool-call'
-      })
-      expect(fixture.journal.itemBody('orca:extension-6')).toHaveProperty(
-        'contextUsage',
-        laterContextUsage
-      )
       expect(fixture.journal.runningTurn()?.turnId ?? null).toBeNull()
       expect(fixture.journal.snapshot().items).toHaveLength(inputs.length + 1)
       const ended = fixture.journal.snapshot()

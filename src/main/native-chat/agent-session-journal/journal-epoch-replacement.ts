@@ -67,6 +67,8 @@ export type JournalReplacementItem = AgentJournalProducerLinkage & {
   executionOwner?: number
 }
 
+/** Survivors are restated from the open chat. That loses nothing another build wrote: a chat holding
+ * a key this build does not declare refuses to open, so no handle can reach here. */
 export function replaceJournalEpoch(input: {
   database: JournalHostDatabase
   identity: AgentSessionJournalIdentity

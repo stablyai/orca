@@ -59,14 +59,14 @@ export function registerJournalUnknownRowKindTests(): void {
     return journal.snapshot().items.map((entry) => entry.itemId)
   }
 
+  function rowEnvelope(epoch: string, seq: number) {
+    return { v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION, epoch, seq, fence: 1, ts: 5_000 + seq }
+  }
+
   function newerRow(epoch: string, seq: number, extra: Record<string, unknown> = {}) {
     return {
-      v: AGENT_SESSION_JOURNAL_SCHEMA_VERSION,
+      ...rowEnvelope(epoch, seq),
       kind: 'future-mark',
-      epoch,
-      seq,
-      fence: 1,
-      ts: 5_000 + seq,
       payload: { said: 'by a newer build', seq },
       ...extra
     }
@@ -196,7 +196,7 @@ export function registerJournalUnknownRowKindTests(): void {
 
     it('reads a known kind that fails its own checks as malformed', () => {
       const parsed = parseJournalRow(
-        JSON.stringify({ ...newerRow('epoch-1', 7), kind: 'item', itemId: 'x', revision: 1 })
+        JSON.stringify({ ...rowEnvelope('epoch-1', 7), kind: 'item', itemId: 'x', revision: 1 })
       )
       expect(parsed).toEqual({ ok: false, unreadable: false })
     })
@@ -263,7 +263,12 @@ export function registerJournalUnknownRowKindTests(): void {
       ['a later', 9]
     ])('fails the load and is kept when it names %s one', async (_name, seq) => {
       const epoch = await journalWithOneItem()
-      const tombstone = { ...newerRow(epoch, seq), kind: 'tombstone', itemId: 'gone', revision: 1 }
+      const tombstone = {
+        ...rowEnvelope(epoch, seq),
+        kind: 'tombstone',
+        itemId: 'gone',
+        revision: 1
+      }
       await expect(restartAfter((put) => put(3, JSON.stringify(tombstone)))).rejects.toMatchObject(
         UNLOADABLE
       )
