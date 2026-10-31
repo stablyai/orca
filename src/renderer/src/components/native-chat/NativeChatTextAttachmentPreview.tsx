@@ -1,9 +1,19 @@
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
+import {
+  useMemo,
+  useState,
+  useEffect,
+  useCallback,
+  useRef,
+  type PointerEvent,
+  type MouseEvent
+} from 'react'
+import { XIcon } from 'lucide-react'
 import { toast } from 'sonner'
 import { Button } from '@/components/ui/button'
 import {
   Sheet,
   SheetContent,
+  SheetClose,
   SheetHeader,
   SheetTitle,
   SheetDescription
@@ -15,6 +25,7 @@ import { useUiLanguageRevision } from '@/i18n/use-ui-language-revision'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { createAttachmentTextPreviewHook } from '../../../../shared/use-attachment-text-preview'
 import { ATTACHMENT_TEXT_COPY_MAX_BYTES } from '../../../../shared/attachment-text-source'
+import { formatAttachmentPreviewError } from './native-chat-text-attachment-error'
 import { createChatAttachmentReader } from './native-chat-text-attachment-read'
 import { chatTextAttachmentName } from '../../../../shared/native-chat-text-attachment-references'
 
@@ -44,7 +55,7 @@ export function NativeChatTextAttachmentPreview({
   type Navigation = 'first' | 'prev' | 'next' | 'last'
   type FieldCommit = PromiseWithResolvers<typeof display> & { ready?: true }
   const pendingCommit = useRef<FieldCommit | null>(null)
-  const [pressedNavigation, setPressedNavigation] = useState<Navigation | null>(null)
+  const pageInputRef = useRef<HTMLInputElement>(null)
   const [commitRevision, setCommitRevision] = useState(0)
   useEffect(() => {
     if (pendingCommit.current?.ready) {
@@ -52,13 +63,13 @@ export function NativeChatTextAttachmentPreview({
       pendingCommit.current = null
     }
   }, [commitRevision, display])
-  useEffect(() => {
-    setPressedNavigation(null)
-    return () => {
+  useEffect(
+    () => () => {
       pendingCommit.current?.resolve(null)
       pendingCommit.current = null
-    }
-  }, [source])
+    },
+    [source]
+  )
   const [pageInput, setPageInput] = useState<{
     source: typeof source
     display: typeof display
@@ -114,24 +125,33 @@ export function NativeChatTextAttachmentPreview({
     }
     return load(page, subpage < 0 ? Number.MAX_SAFE_INTEGER : withinPage ? subpage : 0)
   }
-  const clearPressedNavigation = () => setPressedNavigation(null)
   const atStart = !display || (display.page === 0 && display.subpage === 0)
   const atEnd =
     !display || (display.page + 1 === source.pageCount && display.subpage + 1 === display.subpages)
-  const navigationProps = (action: Navigation, disabled: boolean) => ({
-    disabled: pressedNavigation === action ? false : disabled,
-    onPointerDown: () => {
-      if (!disabled) {
-        setPressedNavigation(action)
+  const activationProps = (disabled: boolean, onActivate: () => void) => ({
+    disabled,
+    onPointerDown: (event: PointerEvent) => {
+      if (
+        !disabled &&
+        event.isPrimary &&
+        event.button === 0 &&
+        document.activeElement === pageInputRef.current
+      ) {
+        event.preventDefault()
       }
     },
-    onPointerCancel: clearPressedNavigation,
-    onBlur: clearPressedNavigation,
+    onMouseDown: (event: MouseEvent) => {
+      if (!disabled && event.button === 0 && document.activeElement === pageInputRef.current) {
+        event.preventDefault()
+      }
+    },
     onClick: () => {
-      setPressedNavigation(null)
-      void navigate(action)
+      pageInputRef.current?.blur()
+      onActivate()
     }
   })
+  const navigationProps = (action: Navigation, disabled: boolean) =>
+    activationProps(disabled, () => void navigate(action))
   const name =
     text === undefined
       ? chatTextAttachmentName(
@@ -140,8 +160,15 @@ export function NativeChatTextAttachmentPreview({
         )
       : translate('components.native-chat.composer.pastedTextLabel', 'Pasted text')
   const run = async (action: 'copy' | 'save') => {
+    if (pendingCommit.current) {
+      await pendingCommit.current.promise
+    } else {
+      setError('')
+    }
+    if (source.disposed) {
+      return
+    }
     setBusy(true)
-    setError('')
     try {
       if (action === 'copy') {
         const content = await source.copyText()
@@ -222,7 +249,7 @@ export function NativeChatTextAttachmentPreview({
         }
       }}
     >
-      <SheetContent className="flex w-full flex-col sm:max-w-2xl">
+      <SheetContent className="flex w-full flex-col sm:max-w-2xl" showCloseButton={false}>
         <SheetHeader>
           <SheetTitle>{name}</SheetTitle>
           <SheetDescription className="break-all">
@@ -242,8 +269,10 @@ export function NativeChatTextAttachmentPreview({
           <Button
             variant="outline"
             size="sm"
-            disabled={busy || source.size === null || copyTooLarge}
-            onClick={() => void run('copy')}
+            {...activationProps(
+              busy || source.size === null || copyTooLarge,
+              () => void run('copy')
+            )}
           >
             {translate(
               'components.native-chat.textAttachmentPreview.copyContents',
@@ -253,8 +282,7 @@ export function NativeChatTextAttachmentPreview({
           <Button
             variant="outline"
             size="sm"
-            disabled={busy || source.size === null}
-            onClick={() => void run('save')}
+            {...activationProps(busy || source.size === null, () => void run('save'))}
           >
             {translate('components.native-chat.textAttachmentPreview.saveFile', 'Save file')}
           </Button>
@@ -262,10 +290,10 @@ export function NativeChatTextAttachmentPreview({
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
+              {...activationProps(false, () => {
                 source.dispose()
                 onClose()
-              }}
+              })}
             >
               {translate('common.cancel', 'Cancel')}
             </Button>
@@ -282,7 +310,7 @@ export function NativeChatTextAttachmentPreview({
         {error ? (
           <div role="alert" className="px-4 text-sm">
             <p>{formatAttachmentPreviewError(error)}</p>
-            <Button variant="outline" size="sm" disabled={busy} onClick={retry}>
+            <Button variant="outline" size="sm" {...activationProps(busy, retry)}>
               {translate('common.retry', 'Retry')}
             </Button>
           </div>
@@ -304,6 +332,7 @@ export function NativeChatTextAttachmentPreview({
           <label>
             {translate('components.native-chat.textAttachmentPreview.page', 'Page')}{' '}
             <input
+              ref={pageInputRef}
               aria-label={translate(
                 'components.native-chat.textAttachmentPreview.attachmentPage',
                 'Attachment page'
@@ -341,64 +370,16 @@ export function NativeChatTextAttachmentPreview({
             {translate('components.native-chat.textAttachmentPreview.last', 'Last')}
           </Button>
         </div>
+        <SheetClose
+          className="absolute top-4 right-4 rounded-xs opacity-70 ring-offset-background transition-opacity hover:opacity-100 focus:ring-2 focus:ring-ring focus:ring-offset-2 focus:outline-hidden disabled:pointer-events-none [&_svg]:pointer-events-none [&_svg]:shrink-0 [&_svg:not([class*='size-'])]:size-4"
+          {...activationProps(false, () => {})}
+        >
+          <XIcon />
+          <span className="sr-only">
+            {translate('auto.components.ui.sheet.1189e9fe0a', 'Close')}
+          </span>
+        </SheetClose>
       </SheetContent>
     </Sheet>
   )
-}
-
-function formatAttachmentPreviewError(message: string): string {
-  switch (message) {
-    case 'Unreadable attachment reply. Try again.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.unreadableReply',
-        'Unreadable attachment reply. Try again.'
-      )
-    case 'Attachment changed or its reply was incomplete. Close it and try again.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.incompleteReply',
-        'Attachment changed or its reply was incomplete. Close it and try again.'
-      )
-    case 'This file cannot be previewed as text. Save it to open it in another app.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.notText',
-        'This file cannot be previewed as text. Save it to open it in another app.'
-      )
-    case 'Unable to open attachment. Try again.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.openFailed',
-        'Unable to open attachment. Try again.'
-      )
-    case 'This host cannot open text attachments yet. Update Orca on that host, then retry.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.hostUpdate',
-        'This host cannot open text attachments yet. Update Orca on that host, then retry.'
-      )
-    case 'This file is too large to copy. Save it instead.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.copyTooLarge',
-        'This file is too large to copy. Save it instead.'
-      )
-    case 'The attachment host is unavailable. Reconnect and retry.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.hostUnavailable',
-        'The attachment host is unavailable. Reconnect and retry.'
-      )
-    case 'Connection changed. Close this attachment and reopen it.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.connectionChanged',
-        'Connection changed. Close this attachment and reopen it.'
-      )
-    case 'Unable to read this attachment on its host. Reconnect and try again. The file may have been removed or changed.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.readFailed',
-        'Unable to read this attachment on its host. Reconnect and try again. The file may have been removed or changed.'
-      )
-    case 'Unable to export attachment. Try again.':
-      return translate(
-        'components.native-chat.textAttachmentPreview.exportError',
-        'Unable to export attachment. Try again.'
-      )
-    default:
-      return message
-  }
 }

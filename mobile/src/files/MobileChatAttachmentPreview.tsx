@@ -2,9 +2,18 @@ import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import type { Translate } from '../i18n/mobile-i18n'
 import { createMobileChatAttachmentReader } from './mobile-chat-attachment-read'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { useMemo, useState, useEffect, useCallback, useRef } from 'react'
-import { Pressable, ScrollView, Text, TextInput, View } from 'react-native'
+import { useMemo, useState, useEffect, useCallback, useRef, type MouseEvent } from 'react'
+import {
+  Platform,
+  Pressable,
+  ScrollView,
+  Text,
+  TextInput,
+  View,
+  type PointerEvent
+} from 'react-native'
 import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
 import { useWorkspaceClient } from '../transport/use-workspace-client'
@@ -26,6 +35,9 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
   useMobileColorScheme()
   const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
+  const keyboardHeight = useKeyboardOcclusion()
+  const [pageInputFocused, setPageInputFocused] = useState(false)
+  const keyboardLift = pageInputFocused ? keyboardHeight : 0
   const { client, state } = useWorkspaceClient(params.hostId)
   const router = useWorkspaceRouteHandoff()
   const clipboard = useClipboardWriter()
@@ -43,7 +55,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
   type Navigation = 'first' | 'prev' | 'next' | 'last'
   type FieldCommit = PromiseWithResolvers<typeof display> & { ready?: true }
   const pendingCommit = useRef<FieldCommit | null>(null)
-  const [pressedNavigation, setPressedNavigation] = useState<Navigation | null>(null)
+  const pageInputRef = useRef<TextInput>(null)
   const [commitRevision, setCommitRevision] = useState(0)
   useEffect(() => {
     if (pendingCommit.current?.ready) {
@@ -51,13 +63,13 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
       pendingCommit.current = null
     }
   }, [commitRevision, display])
-  useEffect(() => {
-    setPressedNavigation(null)
-    return () => {
+  useEffect(
+    () => () => {
       pendingCommit.current?.resolve(null)
       pendingCommit.current = null
-    }
-  }, [source])
+    },
+    [source]
+  )
   const [pageInput, setPageInput] = useState<{
     source: typeof source
     display: typeof display
@@ -124,6 +136,12 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
   // Reserve envelope space, then validate actual JSON escaping before publishing to the phone clipboard.
   const smallCopy = source.size !== null && source.size + 4096 <= MOBILE_BRIDGE_MAX_FRAME_BYTES
   const copy = async () => {
+    if (pendingCommit.current) {
+      await pendingCommit.current.promise
+    }
+    if (source.disposed) {
+      return
+    }
     setBusy(true)
     try {
       const text = await source.copyText()
@@ -146,45 +164,44 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
     }
   }
 
-  const action = (label: string, disabled: boolean, onPress: () => void) => (
+  const activationProps = (disabled: boolean, onActivate: () => void) => ({
+    onPointerDown: (event: PointerEvent) => {
+      if (
+        !disabled &&
+        event.nativeEvent.isPrimary &&
+        event.nativeEvent.button === 0 &&
+        pageInputRef.current?.isFocused()
+      ) {
+        event.preventDefault()
+      }
+    },
+    ...(Platform.OS === 'web'
+      ? {
+          onMouseDown: (event: MouseEvent) => {
+            if (!disabled && event.button === 0 && pageInputRef.current?.isFocused()) {
+              event.preventDefault()
+            }
+          }
+        }
+      : {}),
+    onPress: () => {
+      pageInputRef.current?.blur()
+      onActivate()
+    }
+  })
+  const action = (label: string, disabled: boolean, onActivate: () => void) => (
     <Pressable
       accessibilityRole="button"
       accessibilityState={{ disabled }}
       disabled={disabled}
-      onPress={onPress}
+      {...activationProps(disabled, onActivate)}
       style={[styles.backButton, disabled && styles.saveButtonDisabled]}
     >
       <Text style={styles.meta}>{label}</Text>
     </Pressable>
   )
-  const navigation = (label: string, name: Navigation, disabled: boolean) => {
-    const unavailable = pressedNavigation === name ? false : disabled
-    return (
-      <Pressable
-        accessibilityRole="button"
-        accessibilityState={{ disabled: unavailable }}
-        disabled={unavailable}
-        onPressIn={() => {
-          if (!disabled) {
-            setPressedNavigation(name)
-          }
-        }}
-        onTouchCancel={() => {
-          setPressedNavigation(null)
-        }}
-        onBlur={() => {
-          setPressedNavigation(null)
-        }}
-        onPress={() => {
-          setPressedNavigation(null)
-          void navigate(name)
-        }}
-        style={[styles.backButton, unavailable && styles.saveButtonDisabled]}
-      >
-        <Text style={styles.meta}>{label}</Text>
-      </Pressable>
-    )
-  }
+  const navigation = (label: string, name: Navigation, disabled: boolean) =>
+    action(label, disabled, () => void navigate(name))
   let segmentOffset = 0
   const segments = display?.segments.map((segment) => {
     const key = `${path}:${display.page}:${display.subpage}:${segmentOffset}`
@@ -196,7 +213,7 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
     )
   })
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingBottom: keyboardLift }]}>
       <SafeAreaView edges={['top']} style={styles.header}>
         <View style={styles.topBar}>
           {action(t('common.back', 'Back'), false, () => {
@@ -241,7 +258,12 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
       <ScrollView ref={scrollRef} style={styles.scroll} contentContainerStyle={styles.textContent}>
         {segments}
       </ScrollView>
-      <View style={[styles.topBar, { flexWrap: 'wrap', paddingBottom: insets.bottom }]}>
+      <View
+        style={[
+          styles.topBar,
+          { flexWrap: 'wrap', paddingBottom: keyboardHeight > 0 ? 0 : insets.bottom }
+        ]}
+      >
         {navigation(t('chat.textAttachmentPreview.first', 'First'), 'first', busy || !display)}
         {navigation(
           t('chat.textAttachmentPreview.prev', 'Prev'),
@@ -249,13 +271,18 @@ export function MobileChatAttachmentPreview({ params }: { params: MobileFilePrev
           busy || !display || (display.page === 0 && display.subpage === 0)
         )}
         <TextInput
+          ref={pageInputRef}
           accessibilityLabel={t('chat.textAttachmentPreview.attachmentPage', 'Attachment page')}
           style={[styles.meta, { fontSize: TEXT_INPUT_FONT_SIZE }]}
           keyboardType="number-pad"
           value={pageInput.draft ?? String((display?.page ?? 0) + 1)}
           editable={!busy}
           onChangeText={(value) => setPageInput({ source, display, draft: value })}
-          onBlur={commitPage}
+          onFocus={() => setPageInputFocused(true)}
+          onBlur={() => {
+            setPageInputFocused(false)
+            commitPage()
+          }}
         />
         <Text style={styles.meta}>
           / {source.pageCount}

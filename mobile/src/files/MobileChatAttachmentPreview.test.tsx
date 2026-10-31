@@ -60,6 +60,8 @@ vi.mock('react-native', () => ({
     }
   },
   Image: 'Image',
+  Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Keyboard: { addListener: () => ({ remove() {} }), metrics: () => undefined },
   Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   ScrollView: 'ScrollView',
@@ -660,7 +662,12 @@ it('commits mobile page drafts and resets only committed scroll presentation whi
   try {
     await act(async () => {
       tree = create(ui(), {
-        createNodeMock: (element) => (String(element.type) === 'ScrollView' ? { scrollTo } : null)
+        createNodeMock: (element) =>
+          String(element.type) === 'ScrollView'
+            ? { scrollTo }
+            : String(element.type) === 'TextInput'
+              ? { isFocused: () => false, blur: () => input().props.onBlur() }
+              : null
       })
     })
     const inputNode = input()
