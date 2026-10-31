@@ -118,7 +118,10 @@ export function resolveGitHubRepoOperationOwner(
   let repo: Repo | null = null
   if (repoId) {
     if (hostId) {
-      repo = candidates.find((row) => repoMatchesHostIdentity(row, repoId, hostId)) ?? null
+      repo =
+        candidates
+          .filter((row) => row.id === repoId)
+          .find((row) => repoMatchesHostIdentity(row, repoId, hostId)) ?? null
     } else if (args.sourceContext?.provider === 'github') {
       const matches = candidates.filter((row) => row.id === repoId)
       repo = matches.length === 1 ? matches[0] : null
