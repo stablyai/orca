@@ -18,7 +18,15 @@ const fixture = vi.hoisted(() => {
     gh: ReturnType<typeof vi.fn>
     apiUpdate: ReturnType<typeof vi.fn>
     preference: 'origin' | 'upstream'
-  } = { loads: [], requests: [], gh: vi.fn(), apiUpdate: vi.fn(), preference: 'upstream' }
+    store: ReturnType<typeof createTestStore> | null
+  } = {
+    loads: [],
+    requests: [],
+    gh: vi.fn(),
+    apiUpdate: vi.fn(),
+    preference: 'upstream',
+    store: null
+  }
   return state
 })
 
@@ -35,7 +43,8 @@ vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (selector: (state: unknown) => unknown) =>
       selector({ patchWorkItem: vi.fn(), patchProjectRowContent: vi.fn() }),
-    { getState: () => ({ recordFeatureInteraction: vi.fn() }) }
+    // Edits reach Tasks copies through the store the case created.
+    { getState: () => fixture.store?.getState() ?? { recordFeatureInteraction: vi.fn() } }
   )
 }))
 vi.mock('@/i18n/i18n', () => ({ translate: (_key: string, fallback: string) => fallback }))
@@ -82,7 +91,6 @@ import { getTaskSourceCacheScope } from '../../src/shared/task-source-context'
 import { listLabels, listAssignableUsers } from '../../src/main/github/issue-field-options'
 import { useRepoLabels, useRepoAssignees } from '../../src/renderer/src/hooks/useIssueMetadata'
 import { updateIssue } from '../../src/main/github/issue-update'
-import { materializeTaskPageItemList } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-pages'
 import {
   resetTaskPageGitHubMutationRegistryForTests,
   setTaskPageGitHubMutationQueryKey
@@ -135,6 +143,7 @@ const issueRepo = { owner: 'fork-owner', repo: 'widgets', host: 'github.com' }
 type MetadataArgs = { repoPath: string; ownerRepo?: GitHubOwnerRepo }
 
 beforeEach(() => {
+  fixture.store = null
   fixture.preference = 'upstream'
   fixture.loads = []
   fixture.requests = []
@@ -184,6 +193,8 @@ it.each([
     fixture.preference = preference
     expect(sourceFor('upstream')).toEqual(sourceContext)
     const store = createTestStore()
+    store.setState({ repos: [], recordFeatureInteraction: vi.fn() })
+    fixture.store = store
     const key = workItemsCacheKey(
       registeredRepo.id,
       36,
@@ -203,7 +214,7 @@ it.each([
     const target = { ...issueRepo, owner: openedItem === fork ? 'fork-owner' : 'upstream-owner' }
     let mutation: Promise<unknown> = Promise.resolve()
     runGHEditLabelToggle({
-      itemId: opened.id,
+      item: opened,
       itemNumber: opened.number,
       itemRepoId: opened.repoId,
       repoPath: registeredRepo.path,
@@ -220,7 +231,6 @@ it.each([
         return true
       },
       onLabelsChange: vi.fn(),
-      patchWorkItem: store.getState().patchWorkItem,
       patchProjectRowIfNeeded: vi.fn(),
       onMutated: vi.fn()
     })
@@ -274,11 +284,16 @@ it.each([
   'a $openedItem.title close only controls its own row while search lags (list=$listItem.title)',
   async ({ openedItem, listItem }) => {
     const target = { ...issueRepo, owner: openedItem === fork ? 'fork-owner' : 'upstream-owner' }
+    // A registered repo has a task record, which holds the confirmed close over a lagging search.
+    fixture.store = createTestStore()
+    fixture.store.setState({ repos: [registeredRepo], recordFeatureInteraction: vi.fn() })
+    const cache = fixture.store.getState().githubTaskCache
+    const binding = cache.capture(registeredRepo, sourceContext)
     let pending = Promise.resolve()
     runGHEditStateChange({
       newState: 'closed',
       localState: 'open',
-      itemId: fork.id,
+      item: openedItem,
       itemNumber: fork.number,
       itemRepoId: fork.repoId,
       repoPath: registeredRepo.path,
@@ -294,18 +309,13 @@ it.each([
         return pending
       },
       onStateChange: vi.fn(),
-      patchWorkItem: vi.fn(),
       patchProjectRowIfNeeded: vi.fn(),
       onMutated: vi.fn()
     })
     await pending
     expect(fixture.apiUpdate).toHaveBeenCalledWith(expect.objectContaining({ ownerRepo: target }))
-    const displayed = materializeTaskPageItemList({
-      networkItems: [listItem],
-      previousItems: [listItem],
-      queryKey: 'current-upstream-list'
-    })
-    expect(displayed[0]?.state).toBe(listItem.url === openedItem.url ? 'closed' : 'open')
+    const displayed = cache.projectItem(cache.acceptSearch([listItem], binding)[0])
+    expect(displayed.state).toBe(listItem.url === openedItem.url ? 'closed' : 'open')
   }
 )
 
@@ -385,13 +395,15 @@ it('keeps Project row metadata on the existing slug route', async () => {
 
 it('rolls back a rejected fork label without changing the upstream row', async () => {
   const store = createTestStore()
+  store.setState({ repos: [], recordFeatureInteraction: vi.fn() })
+  fixture.store = store
   const key = workItemsCacheKey(registeredRepo.id, 36, '', getTaskSourceCacheScope(sourceContext))
   store.setState({ workItemsCache: { [key]: { data: [upstream, fork], fetchedAt: 1 } } })
   fixture.gh.mockRejectedValueOnce(new Error('Fixture rejects label'))
   let pending = Promise.resolve(false)
   const observed: string[][][] = []
   runGHEditLabelToggle({
-    itemId: fork.id,
+    item: fork,
     itemNumber: fork.number,
     itemRepoId: fork.repoId,
     repoPath: registeredRepo.path,
@@ -416,13 +428,13 @@ it('rolls back a rejected fork label without changing the upstream row', async (
       return pending
     },
     onLabelsChange: vi.fn(),
-    patchWorkItem: store.getState().patchWorkItem,
     patchProjectRowIfNeeded: vi.fn(),
     onMutated: vi.fn()
   })
   expect(await pending).toBe(false)
+  // Without a task record, Tasks copies take only a confirmed change; the dialog keeps its own optimism.
   expect(observed).toEqual([
-    [[], ['fork-only-label']],
+    [[], []],
     [[], []]
   ])
 })

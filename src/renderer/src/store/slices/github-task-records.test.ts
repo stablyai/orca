@@ -167,7 +167,7 @@ function taskFacts(item: GitHubWorkItem) {
 function cachedBoard(store: ReturnType<typeof createTestStore>) {
   const cacheKey = projectViewCacheKey('organization', 'acme', 1, 'v')
   store.setState({
-    projectViewCache: { [cacheKey]: { data: board([freshBoardRow()]), fetchedAt: Date.now() } }
+    projectViewCache: { [cacheKey]: { data: board([freshBoardRow()]), fetchedAt: 1 } }
   })
   const shown = () =>
     boardFacts(

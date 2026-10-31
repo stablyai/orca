@@ -47,19 +47,25 @@ function runtimeRepoId(args: Pick<GitHubWorkItemLookupArgs, 'repoId' | 'sourceCo
   return getGitHubRuntimeRepoId(args.sourceContext, args.repoId)
 }
 
-export async function lookupGitHubWorkItemForSource(
-  args: GitHubWorkItemLookupArgs
-): Promise<GitHubWorkItem | null> {
+/** Issue readings feed the shared task records; pull requests never have one, so their lookups skip it. */
+async function captureTaskRecords(args: GitHubWorkItemLookupArgs) {
+  if (args.type === 'pr') {
+    return undefined
+  }
   const { useAppStore } = await import('@/store')
   const state = useAppStore.getState()
   const cache = state.githubTaskCache
-  const binding = cache?.capture(
-    getWorkItemRepo(state.repos ?? [], {
-      repoId: args.repoId,
-      repoHostId: args.sourceContext?.hostId
-    }),
-    args.sourceContext
-  )
+  const repo = getWorkItemRepo(state.repos ?? [], {
+    repoId: args.repoId,
+    repoHostId: args.sourceContext?.hostId
+  })
+  return cache && { cache, binding: cache.capture(repo, args.sourceContext) }
+}
+
+export async function lookupGitHubWorkItemForSource(
+  args: GitHubWorkItemLookupArgs
+): Promise<GitHubWorkItem | null> {
+  const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
@@ -80,7 +86,7 @@ export async function lookupGitHubWorkItemForSource(
           type: args.type
         })
   const row = item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
-  return row && cache ? cache.acceptSearch([row], binding)[0] : row
+  return row && records ? records.cache.acceptSearch([row], records.binding)[0] : row
 }
 
 export async function lookupGitHubWorkItemByOwnerRepoForSource(
@@ -89,16 +95,7 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   if (args.accepts?.() === false) {
     return null
   }
-  const { useAppStore } = await import('@/store')
-  const state = useAppStore.getState()
-  const cache = state.githubTaskCache
-  const binding = cache?.capture(
-    getWorkItemRepo(state.repos ?? [], {
-      repoId: args.repoId,
-      repoHostId: args.sourceContext?.hostId
-    }),
-    args.sourceContext
-  )
+  const records = await captureTaskRecords(args)
   const target = getGitHubSourceRuntimeTarget(args.sourceContext)
   const item =
     target.kind === 'environment'
@@ -140,7 +137,9 @@ export async function lookupGitHubWorkItemByOwnerRepoForSource(
   }
   const row = item ? ({ ...item, repoId: args.repoId } as GitHubWorkItem) : null
   // A canonical verification read publishes through its record, not as a search reading.
-  return row && cache && !args.accepts ? cache.acceptSearch([row], binding)[0] : row
+  return row && records && !args.accepts
+    ? records.cache.acceptSearch([row], records.binding)[0]
+    : row
 }
 
 export async function lookupGitHubWorkItemDetailsForSource(
