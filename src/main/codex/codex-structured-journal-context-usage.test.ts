@@ -9,7 +9,10 @@ import {
 } from '../../shared/agent-session-journal-types'
 import { codexProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 import { readAgentJournalTurn } from '../../shared/agent-session-turn-record'
-import { selectStructuredAgentContextUsage } from '../../shared/structured-agent-session-context-usage'
+import {
+  selectStructuredAgentContextUsage,
+  type StructuredAgentContextUsage
+} from '../../shared/structured-agent-session-context-usage'
 import type {
   JournalItemRow,
   JournalRow
@@ -294,7 +297,14 @@ describe('Codex context usage in the journal', () => {
 })
 
 it('metadata-barrier-class-confirmation', async () => {
-  const observations = []
+  const observations: {
+    type: 'agentMessage' | 'reasoning'
+    withUsage: boolean
+    joins: number
+    saves: number
+    bodyBytes: number
+    context: StructuredAgentContextUsage | null
+  }[] = []
   for (const type of ['agentMessage', 'reasoning'] as const) {
     for (const withUsage of [false, true]) {
       const r = await session()

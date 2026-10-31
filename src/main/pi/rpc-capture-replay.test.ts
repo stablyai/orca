@@ -381,7 +381,21 @@ it('replays captured compaction with its top-level usage and final full answer',
 })
 
 it('bounds named metadata work at N/10N with fixed content, duration and genuine boundaries', async () => {
-  const observations = []
+  const observations: {
+    channel: 'assistant' | 'reasoning'
+    n: 10 | 100
+    bodySize: 1000 | 10000
+    selectionVisits: number
+    fullMaterializations: number
+    assembledBytes: number
+    bodyEstimateCalls: number
+    prefinalTextCommits: number
+    committedTextInputs: number
+    attemptedTransitions: number
+    admittedTransitions: number
+    committedMetadataInputs: number
+    beforeFinal: number
+  }[] = []
   for (const channel of ['assistant', 'reasoning'] as const) {
     for (const [n, bodySize] of [
       [10, 1000],

@@ -10,7 +10,8 @@ import {
 import {
   AGENT_SESSION_TEXT_CHECKPOINT_MS,
   createAgentSessionDeltaCoalescer,
-  type AgentSessionDeltaCoalescerDeps
+  type AgentSessionDeltaCoalescerDeps,
+  type AgentSessionDeltaSnapshot
 } from '../agent-session-wire/agent-session-delta-coalescer'
 import { estimateStructuredAgentSessionItemBytes } from '../agent-session-wire/structured-agent-session-event-sink-estimate'
 import type { StructuredAgentSessionTransitionJournal } from '../agent-session-wire/structured-agent-session-transition'
@@ -158,7 +159,7 @@ export class ProviderTimelineTextStreams {
       ordered.push(stream)
       return releasing?.(stream) ?? true
     }
-    const snapshots = new Map(
+    const snapshots = new Map<string, AgentSessionDeltaSnapshot>(
       this.coalescer.dirty(selected).map(({ key, snapshot }) => [key, snapshot])
     )
     if (releasing) {
