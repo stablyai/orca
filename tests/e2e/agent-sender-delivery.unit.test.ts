@@ -2,23 +2,28 @@
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it } from 'vitest'
 import { useAppStore } from '@/store'
-import { createRuntimeAgentProjections } from '../../../main/runtime/construction/runtime-agent-projections'
-import { withSessionTabsSenderDelta } from '../../../main/runtime/rpc/methods/session-tabs-sender-delta'
-import { createSessionTabsRetirementProofDelta } from '../../../main/runtime/rpc/methods/session-tabs-retirement-proof-delta'
-import { MIRROR_LEAVES_STEP_1 } from '../../../main/runtime/runtime-leaf-record-projection.test-fixture'
+import { createRuntimeAgentProjections } from '../../src/main/runtime/construction/runtime-agent-projections'
+import { createSessionTabsStreamDelta } from '../../src/main/runtime/rpc/methods/session-tabs-sender-delta'
+import { MIRROR_LEAVES_STEP_1 } from '../../src/main/runtime/runtime-leaf-record-projection.test-fixture'
 import type {
   RuntimeLeafRecord,
   RuntimePtyWorktreeRecord
-} from '../../../main/runtime/runtime-terminal-state-records'
-import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
-import type { RuntimeSyncWindowGraphResult } from '../../../shared/runtime-session-contracts'
+} from '../../src/main/runtime/runtime-terminal-state-records'
+import type { RuntimeMobileSessionTabsResult } from '../../src/shared/runtime-types'
+import type { RuntimeSyncWindowGraphResult } from '../../src/shared/runtime-session-contracts'
+
+/** The sender part of a window graph reply, as main sends it. */
+type SenderGraphReply = Pick<
+  RuntimeSyncWindowGraphResult,
+  'agentSenderAssociations' | 'agentSenderRevision'
+>
 import {
   agentSenderIndexWorkForTest,
   selectAgentSenderAssociation
-} from './agent-sender-associations'
-import { agentSenderAliasWorkForTest } from './agent-sender-alias-projection'
-import { applyWebSessionTabsSnapshot } from './web-session-tabs-sync/snapshot-api'
-import { LOCAL_STRUCTURED_SESSION_OWNER } from './local-structured-session-owner'
+} from '@/runtime/agent-sender-associations'
+import { agentSenderAliasWorkForTest } from '@/runtime/agent-sender-alias-projection'
+import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
+import { LOCAL_STRUCTURED_SESSION_OWNER } from '@/runtime/local-structured-session-owner'
 import { useAgentMessageSenderView } from '@/components/native-chat/native-chat-agent-message-sender-view'
 import {
   initialStore,
@@ -75,26 +80,23 @@ function host(n: number) {
       }
     ).senders
   let senders = start()
-  const wire = <T,>(value: T): T => JSON.parse(JSON.stringify(value)) as T
+  const wire = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T
   let rowsSent = 0
-  const count = (publication: { associations: unknown[] } | undefined) => {
+  const count = (publication: { associations: readonly unknown[] } | undefined) => {
     rowsSent += publication?.associations.length ?? 0
   }
   /** The window's graph sync: it sends the revision it applied, and applies only rows. */
   const graphReply = () => {
     const base = useAppStore.getState().agentSenderPublicationsByHost.local?.['*']?.revision
-    return wire<RuntimeSyncWindowGraphResult>({
-      ...({} as RuntimeSyncWindowGraphResult),
-      ...senders.buildForGraph(base)
-    })
+    return wire<SenderGraphReply>(senders.buildForGraph(base))
   }
-  const applyGraph = (result: RuntimeSyncWindowGraphResult) => {
-    count(result.agentSenderAssociations as { associations: unknown[] } | undefined)
+  const applyGraph = (result: SenderGraphReply) => {
+    count(result.agentSenderAssociations)
     if (!result.agentSenderRevision) {
       useAppStore.getState().setAgentSenderPublication('local', result.agentSenderAssociations)
     }
   }
-  let stream = withSessionTabsSenderDelta(createSessionTabsRetirementProofDelta(undefined))
+  let stream = createSessionTabsStreamDelta(undefined)
   let version = 0
   /** One session-tab stream frame for a worktree, through that stream's encoder and the wire. */
   const frame = (worktree: string) =>
@@ -111,7 +113,7 @@ function host(n: number) {
       })
     )
   const applyFrame = (snapshot: RuntimeMobileSessionTabsResult) => {
-    count(snapshot.agentSenderAssociations as { associations: unknown[] } | undefined)
+    count(snapshot.agentSenderAssociations)
     useAppStore.setState(
       applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, LOCAL_STRUCTURED_SESSION_OWNER)
     )
@@ -135,7 +137,7 @@ function host(n: number) {
     applyFrame,
     deliverAll,
     reconnect: () => {
-      stream = withSessionTabsSenderDelta(createSessionTabsRetirementProofDelta(undefined))
+      stream = createSessionTabsStreamDelta(undefined)
     },
     replaceRuntime: () => {
       senders = start()

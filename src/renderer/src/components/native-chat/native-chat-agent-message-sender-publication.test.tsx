@@ -23,6 +23,8 @@ import {
   structuredAgentSessionTabId
 } from '../../../../shared/structured-agent-session-projection'
 import { testOrcaSessionId } from '../../../../shared/orca-session-address-test-fixture'
+import type { Tab } from '../../../../shared/tab-types'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 
 const publication = (
@@ -202,11 +204,14 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
 it('a located chat keeps its tab agent icon for a card saved without one', () => {
   const sessionId = testOrcaSessionId('33333333-3333-4333-8333-333333333333')
   const tab = makeTab({ id: 'chat-tab', worktreeId: 'workspace' })
-  const chat = {
+  const chat: Tab = {
     ...tab,
-    contentType: 'agent-session' as const,
+    groupId: 'group',
+    label: 'Chat',
+    customLabel: null,
+    contentType: 'agent-session',
     entityId: sessionId,
-    agentSessionAgent: 'gemini' as const
+    agentSessionAgent: 'gemini'
   }
   useAppStore.setState({
     unifiedTabsByWorktree: { workspace: [chat] },
@@ -239,7 +244,7 @@ it('a located chat keeps its tab agent icon for a card saved without one', () =>
   expect(hook.result.current).toEqual({ agentType: 'gemini' })
 })
 it('receives an authoritative remote publication on the same snapshot path as remote rows', () => {
-  const snapshot = {
+  const snapshot: RuntimeMobileSessionTabsResult = {
     worktree: 'workspace',
     publicationEpoch: 'host',
     snapshotVersion: 1,
@@ -248,7 +253,7 @@ it('receives an authoritative remote publication on the same snapshot path as re
     activeTabType: null,
     tabs: [],
     agentSenderAssociations: publication([{ ...association(0), identity: 'term_same' }])
-  } as const
+  }
   useAppStore.setState(applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, 'remote'))
   expect(
     selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', sender('term_same'))

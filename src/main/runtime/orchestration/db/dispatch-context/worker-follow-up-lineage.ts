@@ -36,15 +36,18 @@ export type WorkerLineage = {
   resource: WorkerTerminalResourceRow | undefined
 }
 
+/** The reads a lineage walk needs; the database itself, or a reader that memoizes them. */
+export type WorkerLineageReader = Pick<OrchestrationDb, 'db'> & {
+  getDispatchContextById(dispatchId: string): DispatchContextRow | undefined
+  getWorkerTerminalResourceByOwner(dispatchId: string): WorkerTerminalResourceRow | undefined
+  getWorkerTerminalResourceFormerlyOwnedBy(
+    dispatchId: string
+  ): WorkerTerminalResourceRow | undefined
+}
+
 /** A worker's newest Dispatch and resource, from any Dispatch it ran; follow-ups and `worker-start --terminal` both continue it. */
 export function resolveWorkerLineage(
-  db: Pick<
-    OrchestrationDb,
-    | 'db'
-    | 'getDispatchContextById'
-    | 'getWorkerTerminalResourceByOwner'
-    | 'getWorkerTerminalResourceFormerlyOwnedBy'
-  >,
+  db: WorkerLineageReader,
   dispatchId: string,
   followUp: (id: string) => DispatchContextRow | undefined = (id) => getFollowUpDispatch(db, id),
   cache?: Map<string, WorkerLineage>

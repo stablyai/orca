@@ -1,19 +1,23 @@
 import type { RuntimeCapability } from '../../../../shared/protocol-version'
 import { createSessionTabsRetirementProofDelta } from './session-tabs-retirement-proof-delta'
 import type { AgentSenderPublication } from '../../../../shared/agent-sender-associations'
+import type { RuntimeMobileSessionRetiredTerminalSurface } from '../../../../shared/runtime-types'
 
 type SenderCarrier = {
   worktree: string
   removed?: true
   agentSenderAssociations?: AgentSenderPublication
 }
+type StreamFrame = SenderCarrier & {
+  retiredTerminalSurfaces?: RuntimeMobileSessionRetiredTerminalSurface[]
+}
 
-export type SessionTabsSenderDelta = <TFrame extends SenderCarrier>(frame: TFrame) => TFrame
+type SessionTabsSenderDelta = <TFrame extends SenderCarrier>(frame: TFrame) => TFrame
 
 /** Send a worktree's sender scope once per stream revision instead of on every status tick. A
  *  frame without the field changes nothing on any client, so omission needs no capability; a new
  *  or reconnected stream starts empty and sends complete scopes. */
-export function createSessionTabsSenderDelta(): SessionTabsSenderDelta {
+function createSessionTabsSenderDelta(): SessionTabsSenderDelta {
   const delivered = new Map<string, string>()
   return <TFrame extends SenderCarrier>(frame: TFrame): TFrame => {
     const revision = frame.agentSenderAssociations?.revision
@@ -32,17 +36,11 @@ export function createSessionTabsSenderDelta(): SessionTabsSenderDelta {
   }
 }
 
-/** A stream's frame delta followed by its own sender delta, applied once per emitted frame. */
-export function withSessionTabsSenderDelta<TCarrier>(
-  inner: <TFrame extends TCarrier>(frame: TFrame) => TFrame
-): <TFrame extends TCarrier & SenderCarrier>(frame: TFrame) => TFrame {
-  const sender = createSessionTabsSenderDelta()
-  return <TFrame extends TCarrier & SenderCarrier>(frame: TFrame): TFrame => sender(inner(frame))
-}
-
 /** Each session-tab stream's frame deltas: retirement proofs, then sender scopes. */
 export function createSessionTabsStreamDelta(
   clientCapabilities: readonly RuntimeCapability[] | undefined
 ) {
-  return withSessionTabsSenderDelta(createSessionTabsRetirementProofDelta(clientCapabilities))
+  const proofs = createSessionTabsRetirementProofDelta(clientCapabilities)
+  const senders = createSessionTabsSenderDelta()
+  return <TFrame extends StreamFrame>(frame: TFrame): TFrame => senders(proofs(frame))
 }

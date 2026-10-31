@@ -27,7 +27,8 @@ export const agentSenderAliasWorkForTest = () => aliasVisits
 
 function part(
   id: string,
-  tabs: readonly Tab[],
+  // Terminal and chat buckets have different tab types; only identity and length are read here.
+  tabs: readonly unknown[],
   owner: readonly unknown[],
   build: () => Omit<AliasPart, 'key'>
 ): AliasPart {
