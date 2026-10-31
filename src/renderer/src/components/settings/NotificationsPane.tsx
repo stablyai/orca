@@ -38,6 +38,20 @@ export function NotificationsPane({
   const [macPermissionState, setMacPermissionState] = useMacNotificationPermissionState(
     notificationSettings.enabled
   )
+  // Why: mic-active detection only exists on macOS (see mic-active-status.ts); reuse the
+  // same platform readout notification-settings-copy.ts already fetches for this pane.
+  const [platform, setPlatform] = useState<NodeJS.Platform | null>(null)
+  useEffect(() => {
+    let cancelled = false
+    void window.api.notifications.getPermissionStatus().then((status) => {
+      if (!cancelled) {
+        setPlatform(status.platform)
+      }
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [])
 
   const updateNotificationSettings = async (
     updates: Partial<GlobalSettings['notifications']>
@@ -227,6 +241,31 @@ export function NotificationsPane({
         onToggle={() =>
           void updateNotificationSettings({
             suppressWhenFocused: !notificationSettings.suppressWhenFocused
+          })
+        }
+      />
+
+      <NotificationSettingToggle
+        label={translate(
+          'auto.components.settings.NotificationsPane.suppressMicActiveLabel',
+          'Suppress While Mic Active'
+        )}
+        description={
+          platform !== null && platform !== 'darwin'
+            ? translate(
+                'auto.components.settings.NotificationsPane.suppressMicActiveUnsupportedDescription',
+                'Skip the notification sound while your mic is in use (e.g. on a call). macOS only.'
+              )
+            : translate(
+                'auto.components.settings.NotificationsPane.suppressMicActiveDescription',
+                'Skip the notification sound while your mic is in use (e.g. on a call).'
+              )
+        }
+        checked={notificationSettings.suppressWhileMicActive}
+        disabled={!notificationSettings.enabled || (platform !== null && platform !== 'darwin')}
+        onToggle={() =>
+          void updateNotificationSettings({
+            suppressWhileMicActive: !notificationSettings.suppressWhileMicActive
           })
         }
       />

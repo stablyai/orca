@@ -257,7 +257,9 @@ function prepareMacDevElectronApp() {
   const requiredResourcePaths = [
     chromiumResourcePath,
     path.join(appPath, 'Contents', 'MacOS', 'orca-keyboard-layout'),
-    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint')
+    path.join(appPath, 'Contents', 'MacOS', 'orca-process-footprint'),
+    // Required so a bundle cached before this helper existed (or that failed to build it) retries next launch instead of silently disabling mic suppression.
+    path.join(appPath, 'Contents', 'MacOS', 'orca-mic-active-status')
   ]
 
   function copiedAppIsUsable() {
@@ -340,6 +342,25 @@ function prepareMacDevElectronApp() {
   } catch (error) {
     console.warn(
       `[orca-dev] notification-status helper build failed (permission card falls back to probes): ${error?.message ?? error}`
+    )
+  }
+
+  try {
+    execFileSync(
+      process.execPath,
+      [
+        path.join(repoRoot, 'config', 'scripts', 'build-mic-active-status-macos.mjs'),
+        '--bundle-id',
+        bundleId,
+        '--single-arch',
+        '--output',
+        path.join(appPath, 'Contents', 'MacOS', 'orca-mic-active-status')
+      ],
+      { stdio: 'inherit' }
+    )
+  } catch (error) {
+    console.warn(
+      `[orca-dev] mic-active-status helper build failed (suppress-while-mic-active will never suppress): ${error?.message ?? error}`
     )
   }
 
