@@ -5,6 +5,7 @@ import {
 import { nativeChatDraftPositions } from '@/components/native-chat/native-chat-composer-draft-memory'
 import { structuredAgentSessionTabId } from '../../../../shared/structured-agent-session-projection'
 import { afterPendingTab } from '@/runtime/layout-owner-pending-tabs'
+import { resolveWebSessionVisibleTabId } from '@/runtime/web-session-focus-intent'
 import type { NativeChatComposerFocusIntent } from '@/components/native-chat/use-native-chat-composer-reveal-focus'
 import type {
   AgentSessionLaunchPlan,
@@ -146,6 +147,10 @@ export function beginStructuredAgentSessionProvisionalLaunch(
         )
       }
     }
+    // A deferred launch's slot and its claim on the selection are both the user's at the action.
+    const visibleAtAction = args.deferPublication
+      ? resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId)
+      : undefined
     if (args.deferPublication && !args.target?.surfaceAddress) {
       args = {
         ...args,
@@ -161,8 +166,16 @@ export function beginStructuredAgentSessionProvisionalLaunch(
       worktreeId,
       executionHostId: owner.executionHostId,
       target: owner.target,
-      openAdmitted: (seedOptions) =>
-        open(
+      openAdmitted: (seedOptions) => {
+        // The host can answer after the user picked another tab; their newer selection wins.
+        if (
+          args.deferPublication &&
+          resolveWebSessionVisibleTabId(useAppStore.getState(), worktreeId) !== visibleAtAction
+        ) {
+          focusIntent?.cancel()
+          args = { ...args, activate: false }
+        }
+        return open(
           beginLocalProvisionalLaunch({
             ...args,
             target: {
@@ -173,7 +186,8 @@ export function beginStructuredAgentSessionProvisionalLaunch(
             },
             beforeOpen: undefined
           })
-        ),
+        )
+      },
       onHostDeclined: (target) => openDeclinedTerminal(args, worktreeId, target),
       ...(args.declinedOpensCallerSurface ? { declinedOpensCallerSurface: true as const } : {})
     })
