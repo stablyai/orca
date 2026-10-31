@@ -3,6 +3,7 @@
 import { act, cleanup, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { useState } from 'react'
 import { afterEach, beforeAll, describe, expect, it, vi } from 'vitest'
+import { CODEX_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-claude-codex'
 import { OMP_SESSION_OPTION_CATALOG } from '../../../../shared/agent-session-option-catalog-omp'
 import type { AcpThinkingOptionsFixtureModule } from '../../../../shared/acp-thinking-options.test-fixture-contract'
 import { structuredAgentSessionOptionView } from '../../../../shared/structured-agent-session-option-view'
@@ -86,64 +87,13 @@ vi.mock('@/components/ui/popover', () => ({
 
 import { NativeChatSessionOptionPickers } from './NativeChatSessionOptionPickers'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
+import { model, effort, unknownEffort, fast } from './native-chat-option-picker.test-fixture'
 
 const surface = {
   getSnapshot: vi.fn(() => []),
   setOption: vi.fn(),
   invokeAction: vi.fn(),
   subscribe: vi.fn(() => vi.fn())
-}
-
-function model(overrides: Partial<SessionOptionDescriptor> = {}): SessionOptionDescriptor {
-  return {
-    id: 'model',
-    label: 'Model',
-    category: 'model',
-    kind: {
-      type: 'select',
-      currentValue: 'opus',
-      choices: [
-        { value: 'opus', label: 'Opus 4.8' },
-        { value: 'sonnet', label: 'Sonnet 5' }
-      ]
-    },
-    valueSource: 'applied',
-    transport: 'catalog',
-    settable: true,
-    ...overrides
-  }
-}
-
-const EFFORT_CHOICES = [
-  { value: 'low', label: 'Low' },
-  { value: 'high', label: 'High' }
-]
-
-const effort: SessionOptionDescriptor = {
-  id: 'effort',
-  label: 'Effort',
-  category: 'thought_level',
-  kind: { type: 'select', currentValue: 'high', choices: EFFORT_CHOICES },
-  valueSource: 'applied',
-  transport: 'catalog',
-  settable: true
-}
-
-/** Only selects can truthfully have no current value; booleans require a baseline. */
-const unknownEffort: SessionOptionDescriptor = {
-  ...effort,
-  kind: { type: 'select', choices: EFFORT_CHOICES },
-  valueSource: 'unknown'
-}
-
-const fast: SessionOptionDescriptor = {
-  id: 'fastMode',
-  label: 'Fast mode',
-  category: 'mode',
-  kind: { type: 'boolean', currentValue: true },
-  valueSource: 'applied',
-  transport: 'catalog',
-  settable: true
 }
 
 const settle = (): Promise<void> => act(async () => {})
@@ -153,8 +103,8 @@ const pill = (name: string): HTMLElement => screen.getByRole('button', { name })
 const isOpen = (trigger: HTMLElement): boolean =>
   trigger.closest('[data-testid="picker-root"]')?.getAttribute('data-open') === 'true'
 
-const effortLevels = (): HTMLElement[] =>
-  within(screen.getByRole('radiogroup', { name: 'Effort' })).getAllByRole('radio')
+const effortSlider = (): HTMLElement => screen.getByRole('slider', { name: 'Effort' })
+const pickEffort = (key = 'Home'): boolean => fireEvent.keyDown(effortSlider(), { key })
 
 afterEach(() => cleanup())
 
@@ -209,7 +159,7 @@ describe('NativeChatSessionOptionPickers', () => {
       />
     )
     expect(isOpen(pill('Model Opus 4.8'))).toBe(true)
-    expect(effortLevels().every((level) => level.hasAttribute('disabled'))).toBe(true)
+    expect(effortSlider().hasAttribute('data-disabled')).toBe(true)
   })
 
   // Consume session-held requests even across composer remounts so prompts cannot reopen the picker.
@@ -627,7 +577,7 @@ describe('NativeChatSessionOptionPickers', () => {
     }
   )
 
-  it('makes the effort levels one tab stop, moves between them with the arrow keys, and sends the one picked', async () => {
+  it('uses one slider tab stop and commits exact supported effort IDs with the keyboard', async () => {
     const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
     render(
       <NativeChatSessionOptionPickers
@@ -636,29 +586,47 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    const [low, high] = effortLevels()
-    expect([low?.textContent, high?.textContent]).toEqual(['Low', 'High'])
-    expect([low?.getAttribute('aria-checked'), high?.getAttribute('aria-checked')]).toEqual([
-      'false',
-      'true'
-    ])
-    // Tab stops at the group, not at each level, and lands on the level in use.
-    expect(effortLevels().map((level) => level.tabIndex)).toEqual([-1, -1])
-    screen.getByRole('radiogroup', { name: 'Effort' }).focus()
-    await waitFor(() => expect(document.activeElement).toBe(high))
-
-    // An arrow key moves focus without writing: each write is a round trip to the agent.
-    fireEvent.keyDown(document.activeElement ?? document.body, { key: 'ArrowLeft' })
-    await waitFor(() => expect(document.activeElement).toBe(low))
-    high?.click()
-    expect(setOption).not.toHaveBeenCalled()
-
-    low?.click()
+    const slider = effortSlider()
+    expect(slider.tabIndex).toBe(0)
+    expect(slider.getAttribute('aria-valuemin')).toBe('0')
+    expect(slider.getAttribute('aria-valuemax')).toBe('1')
+    expect(slider.getAttribute('aria-valuetext')).toBe('High')
+    slider.focus()
+    pickEffort('ArrowLeft')
     await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low'))
   })
 
-  // Voice control targets what is on screen (WCAG 2.5.3), so the name is the visible text.
-  it('names a level by what it shows and describes it with the rest', () => {
+  it('previews supported effort steps while dragging and writes once on release', async () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[model(), effort]}
+        isWorking={false}
+        pickerRequest={{ id: 'effort', consume: () => {} }}
+      />
+    )
+    const root = effortSlider().closest('[data-slot="slider"]')
+    if (!(root instanceof HTMLElement)) {
+      throw new Error('Missing effort slider root')
+    }
+    root.getBoundingClientRect = () => new DOMRect(0, 0, 100, 16)
+    root.setPointerCapture = vi.fn()
+    root.hasPointerCapture = () => true
+    root.releasePointerCapture = vi.fn()
+    fireEvent.pointerDown(root, { pointerId: 1, clientX: 0, clientY: 8 })
+    expect(effortSlider().getAttribute('aria-valuetext')).toBe('Low')
+    expect(setOption).not.toHaveBeenCalled()
+    expect(isOpen(pill('Model Opus 4.8, Effort High'))).toBe(true)
+    fireEvent.pointerMove(root, { pointerId: 1, clientX: 100, clientY: 8 })
+    fireEvent.pointerMove(root, { pointerId: 1, clientX: 0, clientY: 8 })
+    expect(setOption).not.toHaveBeenCalled()
+    fireEvent.pointerUp(root, { pointerId: 1, clientX: 0, clientY: 8 })
+    await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low'))
+    expect(isOpen(pill('Model Opus 4.8, Effort High'))).toBe(false)
+  })
+
+  it('shows a compact effort label and exposes its provider description as the slider value', () => {
     render(
       <NativeChatSessionOptionPickers
         surface={surface}
@@ -668,10 +636,9 @@ describe('NativeChatSessionOptionPickers', () => {
             ...effort,
             kind: {
               type: 'select',
-              currentValue: 'medium',
+              currentValue: 'xhigh',
               choices: [
                 { value: 'low', label: 'Low', description: 'Quick answers' },
-                { value: 'medium', label: 'Medium' },
                 { value: 'xhigh', label: 'Extra high', description: 'Deepest reasoning' },
                 { value: 'max', label: 'Max' }
               ]
@@ -681,15 +648,81 @@ describe('NativeChatSessionOptionPickers', () => {
         isWorking={false}
       />
     )
-    const described = (name: string): string | null | undefined => {
-      const id = screen.getByRole('radio', { name }).getAttribute('aria-describedby')
-      return id ? document.getElementById(id)?.textContent : null
-    }
-    expect(described('Low')).toBe('Quick answers')
-    expect(described('Med')).toBe('Medium')
-    expect(described('XHigh')).toBe('Extra high Deepest reasoning')
-    expect(described('Max')).toBeNull()
-    expect(pill('Model Opus 4.8, Effort Med')?.textContent).toBe('Opus 4.8Med')
+    expect(effortSlider().getAttribute('aria-valuetext')).toBe('Extra high · Deepest reasoning')
+    expect(screen.queryByRole('radiogroup', { name: 'Effort' })).toBeNull()
+    expect(pill('Model Opus 4.8, Effort XHigh').textContent).toBe('Opus 4.8XHigh')
+  })
+
+  it('keeps the current effort passive and adjusts it only through the slider', async () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[model(), effort]}
+        isWorking={false}
+      />
+    )
+    expect(screen.queryByRole('button', { name: 'High' })).toBeNull()
+    fireEvent.click(screen.getAllByText('High')[0]!)
+    expect(setOption).not.toHaveBeenCalled()
+    expect(effortSlider().tabIndex).toBe(0)
+    expect(effortSlider().getAttribute('aria-valuetext')).toBe('High')
+    pickEffort('Home')
+    await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low'))
+  })
+
+  it('keeps an unlisted reported effort read-only through the actual snapshot pipeline', () => {
+    const state = applyStructuredAgentSessionOptions(
+      createStructuredAgentSessionOptionState('codex'),
+      CODEX_SESSION_OPTION_CATALOG,
+      {
+        models: [
+          {
+            id: 'account-model',
+            label: 'Account Model',
+            isDefault: true,
+            efforts: [
+              { value: 'low', label: 'Low' },
+              { value: 'high', label: 'High' }
+            ]
+          }
+        ],
+        current: { model: 'account-model', effort: 'unsupported-level', confirmed: ['effort'] }
+      }
+    )
+    const setOption = vi.fn()
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={structuredAgentSessionOptionSnapshot(state)}
+        isWorking={false}
+      />
+    )
+    expect(screen.queryByRole('slider', { name: 'Effort' })).toBeNull()
+    expect(screen.queryByRole('radio', { name: 'unsupported-level' })).toBeNull()
+    expect(screen.getAllByText('unsupported-level').length).toBeGreaterThan(0)
+    expect(setOption).not.toHaveBeenCalled()
+  })
+
+  it('keeps an unknown effort unreported until a supported choice is committed', async () => {
+    const setOption = vi.fn().mockResolvedValue({ snapshot: [] })
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, setOption }}
+        snapshot={[model(), unknownEffort]}
+        isWorking={false}
+      />
+    )
+    const group = screen.getByRole('radiogroup', { name: 'Effort' })
+    expect(screen.queryByRole('slider')).toBeNull()
+    expect(
+      within(group)
+        .getAllByRole('radio')
+        .every((radio) => radio.getAttribute('aria-checked') === 'false')
+    ).toBe(true)
+    expect(setOption).not.toHaveBeenCalled()
+    fireEvent.click(within(group).getByRole('radio', { name: 'High' }))
+    await waitFor(() => expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'high'))
   })
 
   it('shows concurrent model and effort picks and releases only the settled descriptor', async () => {
@@ -715,16 +748,14 @@ describe('NativeChatSessionOptionPickers', () => {
     const held = (): (string | null | undefined)[] => [
       screen.getByRole('listbox').getAttribute('aria-busy'),
       screen
-        .getByRole('radiogroup', { name: 'Effort' })
+        .getByRole('slider', { name: 'Effort' })
         .closest('[data-busy]')
         ?.getAttribute('aria-disabled')
     ]
     expect(held()).toEqual(['false', 'false'])
 
-    screen.getByRole('radio', { name: 'Low' }).click()
-    await waitFor(() =>
-      expect(screen.getByRole('radio', { name: 'Low' }).getAttribute('aria-checked')).toBe('true')
-    )
+    pickEffort()
+    await waitFor(() => expect(effortSlider().getAttribute('aria-valuetext')).toBe('Low'))
     expect(pill('Model Opus 4.8, Effort Low')).not.toBeNull()
     expect(held()).toEqual(['false', 'true'])
     screen.getByRole('option', { name: 'Sonnet 5' }).click()
@@ -733,13 +764,13 @@ describe('NativeChatSessionOptionPickers', () => {
       ['model', 'sonnet']
     ])
     await waitFor(() => expect(held()).toEqual(['true', 'true']))
-    screen.getByRole('radio', { name: 'High' }).click()
+    pickEffort('End')
     expect(setOption).toHaveBeenCalledTimes(2)
 
     // The snapshot is the truth once the write settles; here it still says High.
     await act(async () => settleWrite())
     await waitFor(() => expect(held()).toEqual(['true', 'false']))
-    expect(screen.getByRole('radio', { name: 'High' }).getAttribute('aria-checked')).toBe('true')
+    expect(effortSlider().getAttribute('aria-valuetext')).toBe('High')
     await act(async () => settleModel())
     await waitFor(() => expect(held()).toEqual(['false', 'false']))
   })
@@ -813,10 +844,7 @@ describe('NativeChatSessionOptionPickers', () => {
     const fastSwitch = screen.getByRole('switch', { name: 'Fast mode' })
     expect(fastSwitch).toHaveProperty('disabled', true)
     expect(fastSwitch.getAttribute('aria-checked')).toBe('false')
-    expect(effortLevels().map((level) => level.getAttribute('aria-checked'))).toEqual([
-      'false',
-      'false'
-    ])
-    expect(effortLevels().every((level) => level.hasAttribute('disabled'))).toBe(true)
+    expect(effortSlider().getAttribute('aria-valuetext')).toBe('—')
+    expect(effortSlider().hasAttribute('data-disabled')).toBe(true)
   })
 })

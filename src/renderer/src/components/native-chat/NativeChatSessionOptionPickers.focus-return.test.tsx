@@ -240,12 +240,50 @@ describe('session option picker focus', () => {
 
   it('opens on the option a slash command asked for, once', async () => {
     await renderComposer([model, effort], { id: 'effort', consume: () => {} })
-    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Low' }))
+    expect(document.activeElement).toBe(screen.getByRole('slider', { name: 'Effort' }))
 
     // The request is spent: opening by hand afterwards focuses the search as usual.
     await pressEscape()
     await openPicker()
     expect(document.activeElement).toBe(screen.getByRole('combobox'))
+  })
+
+  it('does not focus or change a pending effort when /effort reopens the picker', async () => {
+    let finish = () => {}
+    const setOption = vi.fn(
+      () =>
+        new Promise<{ snapshot: SessionOptionDescriptor[] }>((resolve) => {
+          finish = () => resolve({ snapshot: [] })
+        })
+    )
+    const view = (request: NativeChatOptionPickerRequest | null) => (
+      <TooltipProvider>
+        <NativeChatSessionOptionPickers
+          surface={{ ...surface, setOption }}
+          snapshot={[model, effort]}
+          isWorking={false}
+          pickerRequest={request}
+        />
+      </TooltipProvider>
+    )
+    const { rerender } = render(view(null))
+    await openPicker()
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Effort' }), { key: 'End' })
+    await settle()
+    expect(setOption).toHaveBeenCalledExactlyOnceWith('effort', 'high')
+    rerender(view({ id: 'effort', consume: () => {} }))
+    await settle()
+    const slider = screen.getByRole('slider', { name: 'Effort' })
+    expect(slider.closest('[aria-disabled="true"]')).not.toBeNull()
+    expect(document.activeElement).toBe(screen.getByRole('combobox'))
+    expect(slider.tabIndex).toBe(-1)
+    fireEvent.keyDown(slider, { key: 'Home' })
+    if (document.activeElement) {
+      fireEvent.keyDown(document.activeElement, { key: 'Home' })
+    }
+    expect(slider.getAttribute('aria-valuetext')).toBe('High')
+    expect(setOption).toHaveBeenCalledTimes(1)
+    await act(async () => finish())
   })
 
   it('stays open across a model, a speed and a switch pick, and closes into the message box on an effort pick', async () => {
@@ -260,7 +298,7 @@ describe('session option picker focus', () => {
     await settle()
     expect(screen.getByRole('dialog').contains(document.activeElement)).toBe(true)
 
-    fireEvent.click(screen.getByRole('radio', { name: 'High' }))
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Effort' }), { key: 'End' })
     await settle()
 
     expect(surface.setOption.mock.calls).toEqual([
@@ -301,7 +339,7 @@ describe('session option picker focus', () => {
     await renderComposer(structuredAgentSessionShownSnapshot(state))
     expect(structuredAgentSessionMessageSelection(state)).toEqual({ model: 'gpt-host' })
     await openPicker()
-    fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Effort' }), { key: 'Enter' })
     await settle()
     expect(surface.setOption).toHaveBeenCalledExactlyOnceWith('effort', 'low')
     expect(structuredAgentSessionMessageSelection(state)).toEqual({
@@ -310,53 +348,47 @@ describe('session option picker focus', () => {
     })
   })
 
-  it('closes on a press of the effort level already in use, without a write', async () => {
-    const messageBox = await renderComposer([model, effort])
+  it.each([
+    ['low', 'Home'],
+    ['high', 'End']
+  ])('keeps unchanged %s effort without a write or dismissal', async (value, key) => {
+    await renderComposer([
+      model,
+      {
+        ...effort,
+        kind: {
+          type: 'select',
+          currentValue: value,
+          choices: [
+            { value: 'low', label: 'Low' },
+            { value: 'high', label: 'High' }
+          ]
+        }
+      }
+    ])
     await openPicker()
-
-    fireEvent.click(screen.getByRole('radio', { name: 'Low' }))
+    fireEvent.keyDown(screen.getByRole('slider', { name: 'Effort' }), { key })
     await settle()
-
     expect(surface.setOption).not.toHaveBeenCalled()
-    expect(screen.queryByRole('dialog')).toBeNull()
-    expect(document.activeElement).toBe(messageBox)
+    expect(screen.getByRole('dialog')).toBeDefined()
   })
 
   // A level the picked model lacks is removed, and a removed element takes focus with it.
   it('moves focus from an option to the search when a model row is pressed', async () => {
     await renderComposer([model, effort])
     await openPicker()
-    screen.getByRole('radio', { name: 'High' }).focus()
+    screen.getByRole('slider', { name: 'Effort' }).focus()
 
     fireEvent.mouseDown(screen.getByRole('option', { name: /Sonnet 5/ }))
 
     expect(document.activeElement).toBe(screen.getByRole('combobox'))
   })
 
-  // The tooltip is the top layer, so Radix gives it the first Escape; one press still closes both.
-  it('closes on one Escape from a level whose tooltip is showing', async () => {
-    const levels: SessionOptionDescriptor = {
-      ...effort,
-      kind: {
-        type: 'select',
-        currentValue: 'xhigh',
-        choices: [
-          { value: 'medium', label: 'Medium' },
-          { value: 'xhigh', label: 'Extra high' }
-        ]
-      }
-    }
-    await renderComposer([model, levels])
+  it('closes on one Escape from the effort slider', async () => {
+    await renderComposer([model, effort])
     const trigger = await openPicker()
-    const level = screen.getByRole('radio', { name: 'XHigh' })
-    // The tooltip's own open/closed state must not replace the one the level is styled by.
-    expect(level.getAttribute('data-state')).toBe('on')
-    level.focus()
-    await settle()
-    expect(screen.getByRole('tooltip')).not.toBeNull()
-
+    screen.getByRole('slider', { name: 'Effort' }).focus()
     await pressEscape()
-
     expect(screen.queryByRole('dialog')).toBeNull()
     expect(document.activeElement).toBe(trigger)
   })
@@ -421,7 +453,7 @@ describe('session option picker focus', () => {
   it('focuses the effort for /effort once, not again after a prompt card', async () => {
     const { rerender } = render(<Session requestId="effort" />)
     await settle()
-    expect(document.activeElement).toBe(screen.getByRole('radio', { name: 'Low' }))
+    expect(document.activeElement).toBe(screen.getByRole('slider', { name: 'Effort' }))
 
     rerender(<Session requestId="effort" composerShown={false} />)
     await settle()

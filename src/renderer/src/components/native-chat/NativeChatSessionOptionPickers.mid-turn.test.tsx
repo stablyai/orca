@@ -98,7 +98,7 @@ it('picks effort during a running turn, saves it to the chat, and captures it on
   const trigger = screen.getByRole('button', { name: /Model Opus/ })
   expect(trigger).toHaveProperty('disabled', false)
   fireEvent.click(trigger)
-  fireEvent.click(await screen.findByRole('radio', { name: 'Low' }))
+  fireEvent.keyDown(await screen.findByRole('slider', { name: 'Effort' }), { key: 'Home' })
   await waitFor(() =>
     expect(
       rpc.call.mock.calls.some(

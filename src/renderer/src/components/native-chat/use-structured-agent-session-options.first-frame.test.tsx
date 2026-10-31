@@ -266,7 +266,7 @@ describe('a new chat picker’s first frame', () => {
     unmount()
   })
 
-  it('uses installed controls and keeps saved values through a quiet refresh', async () => {
+  it('keeps a saved effort read-only when a quiet refresh removes it from supported choices', async () => {
     mocks.coherent = true
     const child: AgentSessionOptionsResult = {
       models: [{ id: 'A', label: 'Old child A', isDefault: false, efforts: EFFORTS }],
@@ -312,8 +312,8 @@ describe('a new chat picker’s first frame', () => {
     )
     await waitFor(() =>
       expect(effort()).toMatchObject({
-        settable: true,
-        kind: { currentValue: 'low', choices: expect.arrayContaining([EFFORTS[1]]) }
+        settable: false,
+        kind: { currentValue: 'low', choices: [{ value: 'low', label: 'low' }] }
       })
     )
     expect(view.result.current.sendSource.optionStateRef.current.record.values).toMatchObject({

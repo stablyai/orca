@@ -112,10 +112,8 @@ it.each(['chat', 'terminal'] as const)(
         preferred === 'chat' ? 'sonnet' : 'opus'
       )
       expect(
-        getByRole(document.body, 'radio', {
-          name: preferred === 'chat' ? 'High' : 'Low'
-        }).getAttribute('data-state')
-      ).toBe('on')
+        getByRole(document.body, 'slider', { name: 'Effort' }).getAttribute('aria-valuetext')
+      ).toBe(preferred === 'chat' ? 'High' : 'Low')
       expect(getByRole(document.body, 'button', { name: 'Claude permissions' }).textContent).toBe(
         preferred === 'chat' ? 'Ask for approval' : 'Full access'
       )
@@ -762,9 +760,9 @@ it('retains the whole row draft after outside dismissal, menu remount and launch
   expect(argumentsText).toContain(token)
   const assertDraft = () => {
     expect(document.querySelector('[cmdk-item][data-current="true"]')?.textContent).toBe('sonnet')
-    expect(getByRole(document.body, 'radio', { name: 'High' }).getAttribute('data-state')).toBe(
-      'on'
-    )
+    expect(
+      getByRole(document.body, 'slider', { name: 'Effort' }).getAttribute('aria-valuetext')
+    ).toBe('High')
     expect(
       document.querySelector('button[aria-label="Claude permissions"]')?.textContent
     ).toContain('Full access')

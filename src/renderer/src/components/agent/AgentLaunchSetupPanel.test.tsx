@@ -215,7 +215,7 @@ it('keeps pending defaults disabled, selects resolved values without overrides, 
     false
   )
   expect(host.querySelector('[cmdk-item][data-current="true"]')?.textContent).toBe('Host model')
-  expect(host.querySelector('[role="radio"][data-state="on"]')?.textContent).toBe('Low')
+  expect(host.querySelector('[role="slider"]')?.getAttribute('aria-valuetext')).toBe('Low')
   expect(host.querySelector('button[aria-label$=" permissions"]')?.textContent).toBe(
     'Ask for approval'
   )
@@ -279,7 +279,7 @@ it('launches explicit model and effort picks when settled defaults have neither 
   fireEvent.click(
     [...host.querySelectorAll('[role="radio"]')].find((radio) => radio.textContent === 'High')!
   )
-  expect(host.querySelector('[role="radio"][data-state="on"]')?.textContent).toBe('High')
+  expect(host.querySelector('[role="slider"]')?.getAttribute('aria-valuetext')).toBe('High')
   fireEvent.click(
     [...host.querySelectorAll('button')].find((button) => button.textContent === 'Launch chat')!
   )
@@ -358,16 +358,8 @@ it('returns to concrete default model, effort and permission values by selecting
       )!
     )
   }
-  fireEvent.click(
-    [...host.querySelectorAll<HTMLElement>('[role="radio"]')].find(
-      (row) => row.textContent === 'High'
-    )!
-  )
-  fireEvent.click(
-    [...host.querySelectorAll<HTMLElement>('[role="radio"]')].find(
-      (row) => row.textContent === 'Low'
-    )!
-  )
+  fireEvent.keyDown(host.querySelector('[role="slider"]')!, { key: 'End' })
+  fireEvent.keyDown(host.querySelector('[role="slider"]')!, { key: 'Home' })
   select('Permissions', 'Full access')
   select('Permissions', 'Ask')
   act(() =>
