@@ -175,6 +175,37 @@ describe('getEditorPanelRenderModel read-only raw rendering (AI Vault View Log)'
   })
 })
 
+describe('getEditorPanelRenderModel line number toggle', () => {
+  it('offers the toggle for text and diff tabs', () => {
+    expect(renderModel({ activeFile: htmlFile(), fileContents: {} }).canToggleLineNumbers).toBe(
+      true
+    )
+    expect(
+      renderModel({
+        activeFile: markdownFile({ mode: 'diff', diffSource: 'unstaged' }),
+        fileContents: {}
+      }).canToggleLineNumbers
+    ).toBe(true)
+  })
+
+  it('withholds the toggle for binary edits, check details, and markdown preview', () => {
+    expect(
+      renderModel({
+        activeFile: htmlFile(),
+        fileContents: {
+          '/repo/mock.html': textContent({ isBinary: true })
+        }
+      }).canToggleLineNumbers
+    ).toBe(false)
+    expect(
+      renderModel({ activeFile: markdownFile({ mode: 'check-details' }) }).canToggleLineNumbers
+    ).toBe(false)
+    expect(
+      renderModel({ activeFile: markdownFile({ mode: 'markdown-preview' }) }).canToggleLineNumbers
+    ).toBe(false)
+  })
+})
+
 describe('getEditorPanelRenderModel markdown export affordance', () => {
   it('enables export for rendered markdown edit tabs', () => {
     expect(renderModel({}).canExportMarkdownToPdf).toBe(true)

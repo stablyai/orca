@@ -49,6 +49,7 @@ export function DiffSectionItem({
   handleSectionSaveRef
 }: DiffSectionItemProps): React.JSX.Element {
   const editorFontZoomLevel = useAppStore((s) => s.editorFontZoomLevel)
+  const editorLineNumbers = useAppStore((s) => s.settings?.editorLineNumbers !== false)
   const addDiffComment = useAppStore((s) => s.addDiffComment)
   const deleteDiffComment = useAppStore((s) => s.deleteDiffComment)
   const updateDiffComment = useAppStore((s) => s.updateDiffComment)
@@ -149,12 +150,16 @@ export function DiffSectionItem({
       return
     }
     lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(diffEditor, sideBySide)
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(
+      diffEditor,
+      sideBySide,
+      editorLineNumbers
+    )
     return () => {
       lineNumberOptionsSubRef.current?.dispose()
       lineNumberOptionsSubRef.current = null
     }
-  }, [sideBySide])
+  }, [editorLineNumbers, sideBySide])
 
   useDiffSectionFallbackCleanup({
     disposeDiffModels,
@@ -166,7 +171,11 @@ export function DiffSectionItem({
   const handleMount: DiffOnMount = (editor, _monaco) => {
     diffEditorRef.current = editor
     lineNumberOptionsSubRef.current?.dispose()
-    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(editor, sideBySide)
+    lineNumberOptionsSubRef.current = applyDiffEditorLineNumberOptions(
+      editor,
+      sideBySide,
+      editorLineNumbers
+    )
     const modified = editor.getModifiedEditor()
 
     // Wait for Monaco’s hidden-region layout; earlier full-file measurements make virtualized rows jump on remount.

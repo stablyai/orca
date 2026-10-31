@@ -1,5 +1,6 @@
 import { DiffTooLargeNotice } from './DiffTooLargeNotice'
 import { useEffect, useLayoutEffect, useRef } from 'react'
+import { useAppStore } from '@/store'
 import type { editor } from 'monaco-editor'
 import { lazyWithRetry as lazy } from '@/lib/lazy-with-retry'
 import { AlertCircle, RefreshCw } from 'lucide-react'
@@ -70,6 +71,7 @@ export function DiffSectionBody({
   onSaveLimitedDiff,
   onMount
 }: DiffSectionBodyProps): React.JSX.Element {
+  const editorLineNumbers = useAppStore((s) => s.settings?.editorLineNumbers !== false)
   const language = usePluginSyntaxLanguage(section.path, coreLanguage)
   const monacoTheme = useMonacoTheme(isDark)
   const renderLimit = section.largeDiffRenderLimit?.limited ? section.largeDiffRenderLimit : null
@@ -245,7 +247,7 @@ export function DiffSectionBody({
             ...PLUGIN_SYNTAX_EDITOR_OPTIONS,
             fontSize: diffEditorFontSize,
             fontFamily: editorFontFamily || 'monospace',
-            lineNumbers: 'on',
+            lineNumbers: editorLineNumbers ? 'on' : 'off',
             ...buildDiffEditorWordWrapOptions(diffWordWrap),
             ...buildDiffEditorWhitespaceOptions(diffShowWhitespace),
             automaticLayout: true,

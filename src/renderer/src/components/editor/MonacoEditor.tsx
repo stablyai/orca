@@ -111,6 +111,7 @@ export default function MonacoEditor({
   )
   const editorFontFamily = resolveEditorFontFamily(settings)
   const editorWordWrap = settings?.editorWordWrap
+  const editorLineNumbers = settings?.editorLineNumbers !== false
   const modelOwnerKey = useAppStore((state) => {
     const file = state.openFiles?.find((entry) => entry.id === fileId)
     return file
@@ -189,9 +190,10 @@ export default function MonacoEditor({
       fontSize: editorFontSize,
       fontFamily: editorFontFamily,
       ...buildFileEditorWordWrapOptions(editorWordWrap),
+      lineNumbers: editorLineNumbers ? 'on' : 'off',
       readOnly
     })
-  }, [editorFontFamily, editorFontSize, editorWordWrap, readOnly])
+  }, [editorFontFamily, editorFontSize, editorLineNumbers, editorWordWrap, readOnly])
 
   const decorations = useMonacoEditorDecorations({
     editorRef,
@@ -303,7 +305,7 @@ export default function MonacoEditor({
           ...buildFileEditorWordWrapOptions(editorWordWrap),
           fontSize: editorFontSize,
           fontFamily: editorFontFamily,
-          lineNumbers: 'on',
+          lineNumbers: editorLineNumbers ? 'on' : 'off',
           renderLineHighlight: 'line',
           automaticLayout: true,
           unicodeHighlight: {

@@ -88,6 +88,8 @@ export type GlobalSettings = GlobalSettingsBase & {
   editorFontFamily?: string
   /** Defaults on for profiles saved before file-editor wrapping became configurable. */
   editorWordWrap?: boolean
+  /** Defaults on for profiles saved before the line-number gutter became configurable. */
+  editorLineNumbers?: boolean
   /** Persisted opt-out for browser spellcheck noise in rich Markdown editing surfaces. */
   richMarkdownSpellcheckEnabled?: boolean
   /** Whether local markdown review note controls and the review panel are shown. */

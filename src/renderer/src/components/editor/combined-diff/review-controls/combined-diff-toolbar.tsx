@@ -1,5 +1,5 @@
 import type React from 'react'
-import { PanelLeftOpen, Space, Sparkles, WrapText } from 'lucide-react'
+import { ListOrdered, PanelLeftOpen, Space, Sparkles, WrapText } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
@@ -42,6 +42,7 @@ export function CombinedDiffToolbar({
   commitCompare,
   diffCommentCount,
   diffCommentsForWorktree,
+  diffLineNumbers,
   diffShowWhitespace,
   diffWordWrap,
   file,
@@ -58,6 +59,7 @@ export function CombinedDiffToolbar({
   sectionCount,
   setAllSectionsCollapsed,
   sideBySide,
+  toggleDiffLineNumbers,
   toggleDiffShowWhitespace,
   toggleDiffWordWrap,
   toggleSideBySide
@@ -68,6 +70,7 @@ export function CombinedDiffToolbar({
   commitCompare: NonNullable<OpenFile['commitCompare']> | null
   diffCommentCount: number
   diffCommentsForWorktree: DiffComment[]
+  diffLineNumbers?: boolean
   diffShowWhitespace: boolean | undefined
   diffWordWrap: boolean | undefined
   file: OpenFile
@@ -84,6 +87,7 @@ export function CombinedDiffToolbar({
   sectionCount: number
   setAllSectionsCollapsed: (collapsed: boolean) => void
   sideBySide: boolean
+  toggleDiffLineNumbers?: () => void
   toggleDiffShowWhitespace: () => void
   toggleDiffWordWrap: () => void
   toggleSideBySide: () => void
@@ -195,6 +199,20 @@ export function CombinedDiffToolbar({
             ? translate('auto.components.editor.CombinedDiffViewer.f786fd54e1', 'Inline')
             : translate('auto.components.editor.CombinedDiffViewer.ec5053c7f5', 'Side by Side')}
         </button>
+        {toggleDiffLineNumbers ? (
+          <button
+            className={`inline-flex h-6 items-center gap-1 rounded border border-border px-2 text-xs transition-colors hover:text-foreground ${
+              diffLineNumbers !== false ? 'bg-accent text-foreground' : 'text-muted-foreground'
+            }`}
+            onClick={toggleDiffLineNumbers}
+            aria-pressed={diffLineNumbers !== false}
+          >
+            <ListOrdered className="size-3.5" />
+            {diffLineNumbers !== false
+              ? translate('auto.components.editor.CombinedDiffViewer.linesOn', 'Lines On')
+              : translate('auto.components.editor.CombinedDiffViewer.linesOff', 'Lines Off')}
+          </button>
+        ) : null}
         <button
           className={`inline-flex h-6 items-center gap-1 rounded border border-border px-2 text-xs transition-colors hover:text-foreground ${
             diffWordWrap === true ? 'bg-accent text-foreground' : 'text-muted-foreground'

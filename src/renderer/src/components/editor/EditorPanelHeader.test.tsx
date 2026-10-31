@@ -1,15 +1,23 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot } from 'react-dom/client'
 import { renderToStaticMarkup } from 'react-dom/server'
 import type { ComponentProps } from 'react'
 import { describe, expect, it, vi } from 'vitest'
 import type { OpenFile } from '@/store/slices/editor'
 import { EditorPanelHeader } from './EditorPanelHeader'
 
+globalThis.IS_REACT_ACT_ENVIRONMENT = true
+
+const updateSettings = vi.hoisted(() => vi.fn())
+
 vi.mock('@/store', () => ({
   useAppStore: (selector: (state: Record<string, unknown>) => unknown) =>
     selector({
       activeGroupIdByWorktree: {},
       settings: {},
-      updateSettings: vi.fn()
+      updateSettings
     })
 }))
 
@@ -164,5 +172,48 @@ describe('EditorPanelHeader', () => {
         isMarkdown: true
       })
     ).not.toContain('data-artifact-publish')
+  })
+
+  it('renders the line numbers button and persists the off choice', () => {
+    updateSettings.mockClear()
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    act(() => {
+      root.render(<EditorPanelHeader {...baseProps} canToggleLineNumbers isDiffSurface={false} />)
+    })
+
+    const button = container.querySelector<HTMLButtonElement>(
+      'button[aria-label="Hide line numbers"]'
+    )
+    expect(button?.getAttribute('aria-pressed')).toBe('true')
+    expect(button?.className).toContain('bg-accent')
+
+    act(() => {
+      button?.click()
+    })
+    expect(updateSettings).toHaveBeenCalledWith({ editorLineNumbers: false })
+
+    act(() => root.unmount())
+    container.remove()
+  })
+
+  it('disables line numbers while a rich preview is showing', () => {
+    const html = renderHeader({
+      canToggleLineNumbers: true,
+      isDiffSurface: false,
+      isMarkdown: true,
+      effectiveToggleValue: 'rich'
+    })
+
+    expect(html).toContain('aria-label="Line numbers are available in source or diff mode"')
+    expect(html).toContain('disabled=""')
+    expect(html).toContain('aria-pressed="false"')
+  })
+
+  it('omits the line numbers button when the surface cannot toggle them', () => {
+    expect(renderHeader({ canToggleLineNumbers: false, isDiffSurface: false })).not.toContain(
+      'Hide line numbers'
+    )
   })
 })

@@ -9,7 +9,16 @@ type Disposable = {
   dispose: () => void
 }
 
-export function buildDiffEditorLineNumberOptions(sideBySide: boolean): DiffEditorLineNumberOptions {
+export function buildDiffEditorLineNumberOptions(
+  sideBySide: boolean,
+  showLineNumbers: boolean = true
+): DiffEditorLineNumberOptions {
+  if (!showLineNumbers) {
+    return {
+      original: 'off',
+      modified: 'off'
+    }
+  }
   return {
     original: sideBySide ? 'on' : 'off',
     modified: 'on'
@@ -18,9 +27,10 @@ export function buildDiffEditorLineNumberOptions(sideBySide: boolean): DiffEdito
 
 export function applyDiffEditorLineNumberOptions(
   diffEditor: editor.IStandaloneDiffEditor,
-  sideBySide: boolean
+  sideBySide: boolean,
+  showLineNumbers: boolean = true
 ): Disposable {
-  const lineNumberOptions = buildDiffEditorLineNumberOptions(sideBySide)
+  const lineNumberOptions = buildDiffEditorLineNumberOptions(sideBySide, showLineNumbers)
   const originalEditor = diffEditor.getOriginalEditor()
   const modifiedEditor = diffEditor.getModifiedEditor()
 
