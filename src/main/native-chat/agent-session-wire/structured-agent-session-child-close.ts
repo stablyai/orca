@@ -42,6 +42,12 @@ async function endClosedStructuredAgentSessionChild(
 ): Promise<void> {
   await context.endExitedChild(sessionId, child, {
     expected: true,
+    ...(child.reportedStartupFailure
+      ? {
+          startupFailure: child.reportedStartupFailure,
+          failure: child.reportedStartupFailure.failure
+        }
+      : {}),
     ...(closed === 'kill-delivered' ? { deathEvidenceKind: closed } : {}),
     reason: 'closed by Orca',
     ...(unanswered ? { startupUnanswered: true } : {})

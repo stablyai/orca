@@ -63,6 +63,7 @@ export function structuredClaudeLifecycleEvent(
       type: 'ended',
       sessionId: event.sessionId,
       reason: event.reason,
+      ...(event.startupFailure ? { startupFailure: event.startupFailure } : {}),
       ...(event.failure ? { failure: event.failure } : {}),
       cause: event.cause,
       ...(event.deathEvidenceKind ? { deathEvidenceKind: event.deathEvidenceKind } : {}),

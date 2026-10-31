@@ -1,3 +1,4 @@
+import { createProviderLaunchReport } from '../provider-process/provider-launch-report'
 import type { ChildProcessHandle } from '@orca/process-host/process-spec'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
 import { parseWslUncPath } from '../../shared/wsl-paths'
@@ -65,7 +66,8 @@ export function spawnCodexBackfillRecoveryProcess(
   })
   guardSupervisedProviderGroup(child, {
     site: BACKFILL_RECOVERY_KILL_SITE,
-    supervised: spawnSpec.supervised
+    supervised: spawnSpec.supervised,
+    report: createProviderLaunchReport(child, spawnSpec.supervised)
   })
   return { child, supervised: spawnSpec.supervised }
 }

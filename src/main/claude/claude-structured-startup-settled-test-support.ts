@@ -1,3 +1,6 @@
+import { createClaudeQueryOperation } from './claude-query-operation'
+import type { FakeConnection } from './claude-structured-session-test-contract'
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
 import type { StructuredAgentSessionProviderOpenResult } from '../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
 import type { ClaudeStructuredSessionAdapter } from './claude-structured-session-adapter'
 
@@ -40,4 +43,20 @@ export async function claudeStartupSettled(
   sessionId: string
 ): Promise<void> {
   await claudeOpened(adapter, sessionId)
+}
+
+export function ownFakeClaudeQuery(
+  connection: FakeConnection,
+  account?: AgentSessionAccountKind
+): void {
+  const operation = createClaudeQueryOperation(account)
+  operation.start({ initializationResult: connection.initializationResult })
+  connection.initializationResult = () => operation.result
+  Object.defineProperty(connection, 'startupFailure', { get: () => operation.failure })
+  connection.startupSettled = () =>
+    operation.result.then(
+      () => {},
+      () => {}
+    )
+  connection.rejectStartup = operation.reject
 }

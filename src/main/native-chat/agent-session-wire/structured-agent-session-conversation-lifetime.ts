@@ -2,7 +2,7 @@ import {
   createStructuredAgentSessionStopStartingChild,
   type StructuredAgentSessionConversationLifetimeHost
 } from './structured-agent-session-conversation-lifetime-host'
-import { retryableStructuredAgentSessionStart } from './structured-agent-session-start-retry'
+import { reportStructuredAgentStartupFailure } from './structured-agent-session-startup-report'
 // Open conversations at rest; never start agents for reads. Acquire serialization once because the queue is nonreentrant.
 
 export type { StructuredAgentSessionConversationLifetime } from './structured-agent-session-host-types'
@@ -36,10 +36,7 @@ import {
   type WorkspaceSleepCloseResult
 } from './structured-agent-session-workspace-sleep-stop'
 import type { StructuredAgentSessionExpiredStartup } from './structured-agent-session-startup-attempt'
-import {
-  providerStartupFailureFact,
-  structuredAgentSessionStartFailure
-} from './structured-agent-session-failure-text'
+import { structuredAgentSessionStartFailure } from './structured-agent-session-failure-text'
 import {
   oldestQueuedSubmission,
   recordStructuredAgentSessionStartFailure
@@ -223,22 +220,17 @@ export function createStructuredAgentSessionConversationLifetime(
         if (!session || !child || child.close || !sameProviderChild(child, failed)) {
           return
         }
-        const failure = providerStartupFailureFact(error)
-        // Persisted facts cannot retain the original error; log it here.
-        deps().logger.warn('a provider could not finish starting', {
-          scope: 'provider-open-failed',
-          sessionId,
-          failure: failure.kind,
-          ...failure.requestTimeout,
-          openMs,
-          error
-        })
         const { runtimeState: runtime } = host.context()
+        const { failure } = reportStructuredAgentStartupFailure({
+          child,
+          sessionId,
+          error,
+          openMs,
+          logger: deps().logger,
+          startupAttempts: runtime.startupAttempts,
+          startFlights: runtime.startFlights
+        })
         const owned = runtime.startFlights.ownsChild(sessionId, child)
-        if (owned) {
-          const retry = retryableStructuredAgentSessionStart(error)
-          runtime.startupAttempts.childFailed(sessionId, child, failure, retry)
-        }
         try {
           if (!owned) {
             const record = deps().store.getRecord(sessionId)

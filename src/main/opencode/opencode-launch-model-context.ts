@@ -1,3 +1,4 @@
+import { createProviderLaunchReport } from '../provider-process/provider-launch-report'
 import { randomBytes } from 'node:crypto'
 import { setTimeout as delay } from 'node:timers/promises'
 import { z } from 'zod'
@@ -79,7 +80,8 @@ export async function probeOpenCodeLaunchModelContext(options: {
   })
   guardSupervisedProviderGroup(child, {
     site: OPENCODE_PREFLIGHT_KILL_SITE,
-    supervised: spawnSpec.supervised
+    supervised: spawnSpec.supervised,
+    report: createProviderLaunchReport(child, spawnSpec.supervised)
   })
   const output = createOutputSink(4096)
   let childClosed = false

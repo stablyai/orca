@@ -88,21 +88,26 @@ export function settleClaudeUnexpectedExit(
     }
     exits.delete(sessionId)
     const outcome = (await exit.closePromise) ?? (await exit.connection.closeOutcome())
-    const report = claudeCloseReport(exit.connection, outcome, exit.error)
-    lifecycle.settledExitErrors.set(sessionId, report ?? exit.error)
+    await exit.connection.startupSettled?.()
+    const startupFailure = exit.connection.startupFailure
+    const originalError = startupFailure?.error ?? exit.error
+    const report = claudeCloseReport(exit.connection, outcome, originalError)
+    lifecycle.settledExitErrors.set(sessionId, report ?? originalError)
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
       sessionId,
-      reason: exit.error.message,
+      reason: originalError.message,
+      ...(startupFailure ? { startupFailure } : {}),
       // A typed startup refusal or a spawn ENOENT keeps its next step; else provider exit vs host fault.
       failure:
-        startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
+        startupFailure?.failure ??
+        (startupAcquisitionRefusal(exit.error) || providerSpawnAbsent(exit.error)
           ? providerStartupFailureFact(exit.error)
           : providerExitObserved(exit.error)
             ? agentSessionFailureFact('providerExited', {
                 detail: providerDiagnosticOf(exit.error)
               })
-            : agentSessionFailureFact('hostFault'),
+            : agentSessionFailureFact('hostFault')),
       cause: 'unexpected-exit',
       ...(report instanceof AgentSessionAcquisitionRootExitObservedError &&
       report.deathEvidenceKind === 'kill-delivered'

@@ -182,7 +182,7 @@ describe('managed provider process', () => {
     await expect(managed.close()).resolves.toMatchObject({ root: 'exited' })
   })
 
-  it('names a missing provider executable from a direct spawn error or a supervisor report', async () => {
+  it('names direct executable absence but never authenticates a stderr lookalike as a launch report', async () => {
     const direct = fakeChild(null)
     const directManaged = launch(direct)
     direct.child.emit(
@@ -212,7 +212,8 @@ describe('managed provider process', () => {
     await new Promise((resolve) => setImmediate(resolve))
     expect(supervisedManaged.executableMissing).toBe(false)
     supervised.child.emit('exit', 127, null)
-    expect(supervisedManaged.executableMissing).toBe(true)
+    // Provider stderr can contain the marker too; only the owned report pipe proves a failed spawn.
+    expect(supervisedManaged.executableMissing).toBe(false)
 
     const denied = fakeChild()
     const deniedManaged = supervisedLaunch(denied)

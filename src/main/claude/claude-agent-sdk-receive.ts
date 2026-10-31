@@ -1,3 +1,4 @@
+import type { Query } from '@anthropic-ai/claude-agent-sdk'
 import { withTimeout } from '../../shared/promise-timeout-fallback'
 
 /** A foreign empty reader must report a fault rather than hold process cleanup forever. */
@@ -43,5 +44,28 @@ export async function finishClaudeSdkReceive(input: {
   }
   if (inputFailure !== null) {
     throw inputFailure
+  }
+}
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === 'object' && value !== null
+}
+
+/** Pressure delays the next request, never delivery of a value already resolved by the SDK. */
+export async function readClaudeSdkMessages(input: {
+  query: Pick<Query, 'next'>
+  waitUntilReadable: () => Promise<void>
+  onMessage: (message: Record<string, unknown>) => void
+}): Promise<void> {
+  for (;;) {
+    await input.waitUntilReadable()
+    const next = await input.query.next()
+    if (next.done) {
+      return
+    }
+    if (!isRecord(next.value)) {
+      throw new Error('claude stream-json yielded a non-object message')
+    }
+    input.onMessage(next.value)
   }
 }

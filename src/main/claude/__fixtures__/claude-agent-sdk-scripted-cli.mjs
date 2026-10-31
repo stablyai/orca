@@ -90,7 +90,7 @@ const waitFor = (kind, requestId) => {
   return new Promise((resolve) => waiters.push({ kind, requestId, resolve }))
 }
 
-createInterface({ input: process.stdin }).on('line', (line) => {
+createInterface({ input: process.stdin }).on('line', async (line) => {
   let frame
   try {
     frame = JSON.parse(line)
@@ -102,6 +102,23 @@ createInterface({ input: process.stdin }).on('line', (line) => {
     settle('control_request', frame.request?.subtype)
     writeReport()
     if (process.env.ORCA_SDK_CONTRACT_IGNORE_CONTROL_REQUESTS) {
+      return
+    }
+    if (scenario.controlErrors?.[frame.request?.subtype]) {
+      while (scenario.controlErrorAfterFile && !existsSync(scenario.controlErrorAfterFile)) {
+        await delay(10)
+      }
+      for (const leading of scenario.controlResponseLeadingFrames?.[frame.request.subtype] ?? []) {
+        emit(leading)
+      }
+      emit({
+        type: 'control_response',
+        response: {
+          subtype: 'error',
+          request_id: frame.request_id,
+          error: scenario.controlErrors[frame.request.subtype]
+        }
+      })
       return
     }
     const response = {

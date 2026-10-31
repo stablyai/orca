@@ -60,6 +60,7 @@ export type ClaudeStructuredSessionEvent =
   | SessionAdapter.StructuredAgentSessionOptionsReportedEvent
   | {
       type: 'ended'
+      startupFailure?: SessionAdapter.StructuredAgentStartupFailure
       sessionId: string
       reason: string
       failure?: SubmissionRejectionFact

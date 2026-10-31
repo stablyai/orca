@@ -1,3 +1,4 @@
+import type { ProviderLaunchReport } from './provider-launch-report'
 import { hasUnambiguousStartTime } from '../pty-descendant-termination'
 import { recordSelfInitiatedTreeKill } from '../crash-reporting/self-initiated-tree-kill-log'
 import { setTimeout as delay } from 'node:timers/promises'
@@ -5,7 +6,7 @@ import { readPosixProcessRow, type ProcessRowRead } from './provider-process-row
 
 // POSIX supervisor SIGKILL can orphan its detached provider group; Orca must finish the stop.
 
-// The supervisor disconnects right after reporting, so this bounds only a wedged channel.
+// ACK retires the report pipe after commit; bound only an unavailable transport.
 const REPORT_END_WAIT_MS = 1_000
 const IDENTITY_READ_ATTEMPTS = 3
 const SECOND_BOUNDARY_MARGIN_MS = 50
@@ -19,6 +20,7 @@ export type ProviderGroupGuardDeps = {
   site: string
   /** Only a supervised POSIX spawn has a group to guard. */
   supervised: boolean
+  report?: ProviderLaunchReport
   readProcessRow?: (pid: number) => Promise<ProcessRowRead>
   signalGroup?: (pgid: number, signal: NodeJS.Signals | 0) => void
   now?: () => number
@@ -33,9 +35,7 @@ let warnedMissingChannel = false
 
 type GuardedChild = {
   readonly pid?: number
-  readonly connected: boolean
-  once(event: 'exit' | 'disconnect', listener: () => void): unknown
-  once(event: 'message', listener: (message: unknown) => void): unknown
+  once(event: 'exit', listener: () => void): unknown
 }
 
 function defaultSignalGroup(pgid: number, signal: NodeJS.Signals | 0): void {
@@ -86,7 +86,7 @@ export function guardSupervisedProviderGroup(
   if (!supervisorPid || !deps.supervised) {
     return false
   }
-  if (!hasReportChannel(child)) {
+  if (!deps.report) {
     // Warn once when an adapter drops the report channel instead of silently losing the guard.
     if (!warnedMissingChannel) {
       warnedMissingChannel = true
@@ -99,14 +99,13 @@ export function guardSupervisedProviderGroup(
   const proof = new AbortController()
   let channelClosed = false
   let onChannelClosed = (): void => {}
-  child.once('disconnect', () => {
+  void deps.report.closed.then(() => {
     channelClosed = true
     onChannelClosed()
   })
-  child.once('message', (message: unknown) => {
-    const pgid = reportedGroup(message)
-    if (pgid !== null) {
-      identity = proveReportedGroup(pgid, supervisorPid, deps, proof.signal)
+  const unsubscribe = deps.report.subscribe((record) => {
+    if (record.kind === 'spawned') {
+      identity = proveReportedGroup(record.pgid, supervisorPid, deps, proof.signal)
       void identity.then((proven) => proven && deps.onProven?.(proven))
     }
   })
@@ -123,6 +122,7 @@ export function guardSupervisedProviderGroup(
         })
   child.once('exit', () => {
     proof.abort()
+    unsubscribe()
     // Exit can be observed before the report is delivered.
     void untilChannelClosed()
       .then(() => identity)
@@ -166,21 +166,6 @@ async function proveReportedGroup(
 
 function sleepUnref(ms: number, signal: AbortSignal): Promise<void> {
   return delay(ms, undefined, { signal, ref: false })
-}
-
-function hasReportChannel(child: GuardedChild): boolean {
-  try {
-    return child.connected
-  } catch {
-    // Handle-less children can throw; observation must not fail the spawn.
-    return false
-  }
-}
-
-function reportedGroup(message: unknown): number | null {
-  const pgid =
-    typeof message === 'object' && message !== null && 'pgid' in message ? message.pgid : null
-  return typeof pgid === 'number' && Number.isSafeInteger(pgid) && pgid > 1 ? pgid : null
 }
 
 function isErrnoCode(error: unknown, code: string): boolean {

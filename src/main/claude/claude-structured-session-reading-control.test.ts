@@ -106,7 +106,9 @@ describe('Claude structured reading control', () => {
     claude.openConnection = async (launch, handlers = {}) => {
       const connection = await open(launch, handlers)
       claude.connections[0].closed = true
-      handlers.onExit?.(new Error('claude stream-json exited (code 1)'))
+      const error = new Error('claude stream-json exited (code 1)')
+      Object.defineProperty(connection, 'transportError', { value: error })
+      handlers.onExit?.(error)
       return connection
     }
     const adapter = adapterFor(claude)

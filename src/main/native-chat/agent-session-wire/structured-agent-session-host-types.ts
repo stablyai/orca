@@ -1,3 +1,4 @@
+import type { StructuredAgentStartupFailure } from './structured-agent-session-adapter'
 import type { AgentModelCatalogSource } from '../agent-model-catalog/agent-model-catalog-service-contract'
 import type { StructuredAgentSessionDeliveryLoop } from './structured-agent-session-delivery-loop'
 import type {
@@ -95,6 +96,7 @@ export type StructuredAgentSessionProviderChild = StructuredAgentSessionProvider
   readonly heldSends?: () => ReadonlySet<string> | undefined
   readonly exitObservation?: DeferredStructuredAgentSessionEventSink['exitObservation']
   close?: StructuredAgentSessionChildClose
+  reportedStartupFailure?: StructuredAgentStartupFailure
 }
 
 /** Writer death proof comes only from stopAgentSessionProviderRoot or observed exit. */

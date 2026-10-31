@@ -110,7 +110,15 @@ export type AgentSessionDispatchOutcome =
   /** Unsettled calls never authorize automatic resend. */
   | { state: 'unknown'; reason: string }
 
+/** Same-process only; persistence and remote payloads carry only the existing failure fact. */
+export type StructuredAgentStartupFailure = Readonly<{
+  error: Error
+  failure: SubmissionRejectionFact
+  initiator: 'startup-failure'
+}>
+
 export type StructuredAgentSessionEndedEvent = {
+  startupFailure?: StructuredAgentStartupFailure
   type: 'ended'
   sessionId: string
   /** Log only; failure supplies user-facing wording. */

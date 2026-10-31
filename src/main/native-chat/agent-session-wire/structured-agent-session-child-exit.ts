@@ -1,92 +1,43 @@
+import {
+  structuredAgentSessionEndedEventExit,
+  type StructuredAgentSessionChildExitContext,
+  type StructuredAgentSessionChildExitSession,
+  type StructuredAgentSessionChildExit
+} from './structured-agent-session-child-exit-contract'
+export {
+  structuredAgentSessionEndedEventExit,
+  type StructuredAgentSessionChildExitContext,
+  type StructuredAgentSessionChildExitSession,
+  type StructuredAgentSessionGenerationEnded,
+  type StructuredAgentSessionChildExit
+} from './structured-agent-session-child-exit-contract'
+import {
+  personallyClosingStartup,
+  reportStructuredAgentStartupFailure
+} from './structured-agent-session-startup-report'
 // First-hand writer death evidence ends the child record in finally. Attempt/report every bookkeeping step;
 // expected changes presentation, never whether the dead child remains recorded.
 
-import {
-  agentSessionFailureFact,
-  type SubmissionRejectionFact
-} from '../../../shared/agent-session-failure'
+import { agentSessionFailureFact } from '../../../shared/agent-session-failure'
 import { PROVIDER_EXIT_ROW_PREFIX } from '../../../shared/agent-session-stop-row-identity'
 import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
 import { structuredAgentSessionFailureWordsContext } from './structured-agent-session-send-preparation'
 import type { StructuredAgentSessionEndedEvent } from './structured-agent-session-adapter'
-import type {
-  StructuredAgentSessionHostSession,
-  StructuredAgentSessionProviderChild
-} from './structured-agent-session-host-types'
+import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import { recordProviderChildEnd } from './structured-agent-session-provider-child'
 import {
   releaseStoredStructuredAgentSessionOwnerAfterExit,
-  upgradeStoredStructuredAgentSessionOwnerExitEvidence,
-  type StructuredAgentSessionLeaseStore
+  upgradeStoredStructuredAgentSessionOwnerExitEvidence
 } from './structured-agent-session-lease-release'
-import type { StructuredAgentSessionSinkBarrier } from './structured-agent-session-event-sink'
 import {
   settleStructuredAgentSessionLeftovers,
-  type StructuredAgentSessionExitSettlement,
-  type StructuredAgentSessionLeftoverStore
+  type StructuredAgentSessionExitSettlement
 } from './structured-agent-session-leftover-settlement'
-import type { StaleStructuredAgentSessionStateJournal } from './structured-agent-session-stale-state-settlement'
 import {
   captureUnfinishedStructuredAgentSessionWork,
-  type DeadGenerationJournal,
   unfinishedStructuredAgentSessionWorkWasInterrupted
 } from './structured-agent-session-unfinished-work'
-import type { StructuredAgentSessionLogger } from './structured-agent-session-logger'
 import { evictStructuredAgentSession } from './structured-agent-session-eviction'
-import type { StructuredAgentSessionHostRuntimeState } from './structured-agent-session-host-runtime-state'
-import type { StructuredAgentSessionStartFlights } from './structured-agent-session-start-flight'
-import type { StructuredAgentSessionStartupAttempts } from './structured-agent-session-startup-attempt'
-
-export type StructuredAgentSessionChildExit = {
-  deathEvidenceKind?: 'kill-delivered'
-  heldSends?: ReadonlySet<string>
-  expected: boolean
-  /** Log only; failure supplies user-facing wording. */
-  reason: string
-  failure?: SubmissionRejectionFact
-  observedAt?: number
-  startupUnanswered?: true
-}
-
-export type StructuredAgentSessionChildExitSession = Pick<
-  StructuredAgentSessionHostSession,
-  'child' | 'lastEndedChild'
-> & { journal: DeadGenerationJournal & StaleStructuredAgentSessionStateJournal }
-
-export type StructuredAgentSessionGenerationEnded = (
-  sessionId: string,
-  options?: { restate?: boolean }
-) => void
-
-export type StructuredAgentSessionChildExitContext<
-  TSession extends StructuredAgentSessionChildExitSession = StructuredAgentSessionHostSession
-> = {
-  store: StructuredAgentSessionLeaseStore & StructuredAgentSessionLeftoverStore
-  sessions: Map<string, TSession>
-  flushLifecycle: (sessionId: string) => Promise<StructuredAgentSessionSinkBarrier>
-  publishStatus?: (sessionId: string) => void
-  /** Re-derive current work and wake queue without requiring a row; restate rebaselines moved fences. */
-  generationEnded: StructuredAgentSessionGenerationEnded
-  wakeDelivery?: (sessionId: string) => void
-  startupAttempts?: Pick<StructuredAgentSessionStartupAttempts, 'childEnded'>
-  /** Retain exits between background-start spawn and publication. */
-  startFlights?: Pick<StructuredAgentSessionStartFlights, 'deferExit' | 'ownsChild'>
-  abortBound?: (sessionId: string) => void
-  serialize: <T>(sessionId: string, task: () => Promise<T>) => Promise<T>
-  now: () => number
-  logger: StructuredAgentSessionLogger
-  /** Failed-start handed-over sends settle like queued work because none ran. */
-  holdUnrunSends?: (
-    sessionId: string,
-    fence: number,
-    cause: 'chatClosed' | 'hostRestarted'
-  ) => Promise<void>
-  /** Release sink/route now; absent defers cleanup to next attach. */
-  route?: {
-    runtimeState: Pick<StructuredAgentSessionHostRuntimeState, 'eventSinkFor' | 'discardEventSink'>
-    acknowledgeRelease: (sessionId: string) => Promise<void> | void
-  }
-}
 
 export function settleStructuredAgentSessionChildExit<
   TSession extends StructuredAgentSessionChildExitSession
@@ -117,19 +68,6 @@ export function settleStructuredAgentSessionChildExit<
   })
 }
 
-export function structuredAgentSessionEndedEventExit(
-  event: StructuredAgentSessionEndedEvent
-): StructuredAgentSessionChildExit {
-  return {
-    expected: event.cause === 'requested-close',
-    ...(event.deathEvidenceKind ? { deathEvidenceKind: event.deathEvidenceKind } : {}),
-    reason: event.reason,
-    ...(event.failure ? { failure: event.failure } : {}),
-    ...(event.observedAt === undefined ? {} : { observedAt: event.observedAt }),
-    ...(event.startupUnanswered ? { startupUnanswered: event.startupUnanswered } : {})
-  }
-}
-
 export async function endExitedStructuredAgentSessionChildUnderSerialize<
   TSession extends StructuredAgentSessionChildExitSession
 >(
@@ -142,6 +80,19 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   if (!session || session.child !== child) {
     return
   }
+  const projection = exit.startupFailure ?? child.reportedStartupFailure
+  if (projection && child.phase === 'starting') {
+    reportStructuredAgentStartupFailure({
+      ...context,
+      child,
+      sessionId,
+      error: projection.error,
+      projection
+    })
+  }
+  const startupFailed = Boolean(
+    projection && child.phase === 'starting' && !personallyClosingStartup(child)
+  )
   const close = child.close
   const expected = exit.expected && close?.failure?.kind !== 'hostFault'
   const failure = close?.failure?.kind === 'hostFault' ? close.failure : exit.failure
@@ -155,16 +106,19 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   }
   // Personal Stop cancels startup; host Stop fails it; preserve the close initiator.
   const startClose = expected && exitedDuringStartup ? close?.cause : undefined
-  const startFailure = expected
-    ? startClose === 'host-stop'
-      ? (exit.failure ?? close?.failure ?? agentSessionFailureFact('hostStopped'))
-      : undefined
-    : failure
+  const startFailure = startupFailed
+    ? projection?.failure
+    : expected
+      ? startClose === 'host-stop'
+        ? (exit.failure ?? close?.failure ?? agentSessionFailureFact('hostStopped'))
+        : undefined
+      : failure
   // Unanswered startup sends never ran: cancel on Stop, preserve personal text on quit/close, fail host stops.
   const unrunRejection =
     startClose === 'user-stop' ? agentSessionFailureFact('cancelled') : undefined
   const unrunHold =
     expected &&
+    !startupFailed &&
     exit.startupUnanswered &&
     close?.cause !== 'host-stop' &&
     close?.cause !== 'user-stop' &&
@@ -177,7 +131,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
   recordProviderChildEnd(session, {
     generation: child.generation,
     fence: child.fence,
-    cause: expected ? (close?.cause ?? 'evict') : 'exit',
+    cause: startupFailed ? 'exit' : expected ? (close?.cause ?? 'evict') : 'exit',
     reason: expected ? (close?.reason ?? null) : exit.reason,
     ...(startFailure ? { failure: startFailure } : {}),
     duringStartup: exitedDuringStartup,
@@ -225,11 +179,27 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
     }
     const unfinishedWork = captureUnfinishedStructuredAgentSessionWork(session.journal)
     // Quiet idle starts owe no failure row unless work was handed to them.
-    const startFailed =
+    let startFailed =
       exitedDuringStartup &&
-      (!expected || (startClose === 'host-stop' && unfinishedWork.hadUnsettledSubmissions))
+      (startupFailed ||
+        !expected ||
+        (startClose === 'host-stop' && unfinishedWork.hadUnsettledSubmissions))
     // Fold Stop before fallback turn-end classification.
-    await close?.recorded
+    await child.close?.recorded
+    // A personal close can arrive while the final input/journal barriers are pending.
+    if (personallyClosingStartup(child) && child.close) {
+      startFailed = false
+      recordProviderChildEnd(session, {
+        generation: child.generation,
+        fence: child.fence,
+        cause: child.close.cause,
+        reason: child.close.reason,
+        duringStartup: exitedDuringStartup,
+        rootGone: true,
+        endedAt: child.close.requestedAt,
+        ...(exit.deathEvidenceKind ? { deathEvidenceKind: exit.deathEvidenceKind } : {})
+      })
+    }
     const generation = child.generation ?? 'unknown'
     // Proven exit can refine earlier unverifiable rows.
     const watched = { ownerFence: child.fence, observedAt }
@@ -253,7 +223,7 @@ export async function endExitedStructuredAgentSessionChildUnderSerialize<
             watched,
             observation?.heldSends ?? exit.heldSends
           )),
-      ...(startFailure ? { exitFailure: startFailure } : {}),
+      ...(startFailure && !personallyClosingStartup(child) ? { exitFailure: startFailure } : {}),
       ...(startFailed && child.generation
         ? {
             exitedDuringStartup: {

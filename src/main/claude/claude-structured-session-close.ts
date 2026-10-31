@@ -135,12 +135,19 @@ async function finalizeClaudePublishedSession(
       callbackError ??= error
     }
   }
+  await session.connection.startupSettled?.()
   if (!session.closeEnded) {
     session.closeEnded = true
     const observedAt = Date.now()
     session.events?.observeExit?.(undefined, observedAt)
     const ended: ClaudeStructuredSessionEvent = {
       type: 'ended',
+      ...(session.connection.startupFailure
+        ? {
+            startupFailure: session.connection.startupFailure,
+            failure: session.connection.startupFailure.failure
+          }
+        : {}),
       sessionId: input.sessionId,
       reason: 'claude session closed',
       cause: 'requested-close',

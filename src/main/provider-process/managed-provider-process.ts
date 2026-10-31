@@ -1,3 +1,5 @@
+import { createProviderSourceCompletion } from './provider-source-completion'
+import { createProviderLaunchReport, type ProviderLaunchReport } from './provider-launch-report'
 import type { PipedChildProcess, PipedProcessSpawner } from '@orca/process-host/process-spec'
 import { spawnProcess } from '@orca/process-host'
 import { RetryableProcessExitProof } from '@orca/process-host/retryable-process-exit-proof'
@@ -13,7 +15,6 @@ import {
 } from './provider-process-teardown'
 import type { DescendantTreeVerdict } from '../pty-descendant-exit-verification'
 import { providerSpawnAbsence, type ProviderSpawnAbsence } from './provider-executable-missing'
-import { supervisedProviderSpawnFailure } from './provider-spawn-failure-report'
 import { guardSupervisedProviderGroup } from './provider-group-orphan-guard'
 import {
   acceptProviderWriterClose,
@@ -68,6 +69,8 @@ export type ManagedProviderProcess = {
   readonly executableMissing: boolean
   /** What that ENOENT proves absent; the working folder, not the CLI, when the cwd is gone. */
   readonly spawnAbsence: ProviderSpawnAbsence | null
+  readonly launchReport: ProviderLaunchReport
+  finishDiagnostics: () => Promise<void>
   /** The last 8 KiB of stderr, which the managed process drains so the child never blocks on it. */
   stderrTail(): string
   onExit(listener: (exit: ProviderProcessExit) => void): void
@@ -102,7 +105,12 @@ export function spawnManagedProviderProcess(
     detached: spec.detached,
     stdio: ['pipe', 'pipe', 'pipe', ...spec.groupReportStdio]
   })
-  guardSupervisedProviderGroup(child, { site: options.site, supervised: spec.supervised })
+  const launchReport = createProviderLaunchReport(child, spec.supervised)
+  guardSupervisedProviderGroup(child, {
+    site: options.site,
+    supervised: spec.supervised,
+    report: launchReport
+  })
   const listeners = new Set<(exit: ProviderProcessExit) => void>()
   let observed: ProviderProcessExit | null = null
   let spawnFailed = false
@@ -120,20 +128,23 @@ export function spawnManagedProviderProcess(
     }
   }
   // Drain stderr so a full pipe cannot block the child.
-  child.stderr.setEncoding('utf8').on('data', (chunk: string) => {
-    if (options.onStderrLine) {
-      const lines = (stderrLine + chunk).split('\n')
-      const pending = lines.pop() ?? ''
-      // Keep the prompt prefix until the complete line can be classified.
-      lines.forEach((line, index) => retainLine(line, index === 0 && lineCut))
-      lineCut = (lines.length === 0 && lineCut) || pending.length > lineMaxChars
-      stderrLine = pending.slice(0, lineMaxChars)
-    } else {
-      stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
-    }
-    options.onOutput?.()
+  const diagnostics = createProviderSourceCompletion(child.stderr, {
+    data: (chunk: string) => {
+      if (options.onStderrLine) {
+        const lines = (stderrLine + chunk).split('\n')
+        const pending = lines.pop() ?? ''
+        // Keep the prompt prefix until the complete line can be classified.
+        lines.forEach((line, index) => retainLine(line, index === 0 && lineCut))
+        lineCut = (lines.length === 0 && lineCut) || pending.length > lineMaxChars
+        stderrLine = pending.slice(0, lineMaxChars)
+      } else {
+        stderrTail = (stderrTail + chunk).slice(-STDERR_TAIL_MAX_CHARS)
+      }
+      options.onOutput?.()
+    },
+    end: () => retainLine(stderrLine, lineCut),
+    error: () => retainLine(stderrLine, lineCut)
   })
-  child.stderr.once('end', () => retainLine(stderrLine, lineCut))
   if (options.onOutput) {
     observeReaderOutput(child.stdout, options.onOutput)
   }
@@ -178,7 +189,8 @@ export function spawnManagedProviderProcess(
       absence = spec.supervised && direct === 'executable' ? null : direct
       return absence
     }
-    const reported = observed ? supervisedProviderSpawnFailure(observed.code, stderrTail) : null
+    const report = launchReport.record
+    const reported = report?.kind === 'failed' ? report : null
     if (!reported) {
       return null
     }
@@ -203,9 +215,11 @@ export function spawnManagedProviderProcess(
     exitProof.run(async () => {
       const known = knownWriterClose(tree)
       if (known && !options.acceptClose) {
+        launchReport.retire()
         return known
       }
       if (observed && !tree) {
+        launchReport.retire()
         const result: ProviderProcessCloseResult = { root: 'exited', tree: null }
         lastCloseResult ??= result
         return result
@@ -219,6 +233,9 @@ export function spawnManagedProviderProcess(
         tree,
         terminateTree
       })
+      if (result.root === 'exited' || result.killDelivered) {
+        launchReport.retire()
+      }
       lastCloseResult = {
         ...result,
         ...(lastCloseResult?.killDelivered || tree?.killDelivered ? { killDelivered: true } : {})
@@ -229,6 +246,8 @@ export function spawnManagedProviderProcess(
   return {
     child,
     supervised: spec.supervised,
+    launchReport,
+    finishDiagnostics: () => diagnostics.finish(),
     exitPromise,
     get exitStatus() {
       return observed
@@ -263,7 +282,11 @@ export function spawnManagedProviderProcess(
     close,
     closeWriter(tree) {
       const known = knownWriterClose(tree)
-      return known ? Promise.resolve(known) : close(tree)
+      if (known) {
+        launchReport.retire()
+        return Promise.resolve(known)
+      }
+      return close(tree)
     }
   }
 }

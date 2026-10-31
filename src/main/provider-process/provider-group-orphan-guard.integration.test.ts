@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it } from 'vitest'
 import { spawnProcess } from '@orca/process-host'
 import type { ChildProcess } from 'node:child_process'
+import { createProviderLaunchReport } from './provider-launch-report'
 import { createProviderSpawnSpec } from './provider-process-supervisor'
 import {
   guardSupervisedProviderGroup,
@@ -49,6 +50,7 @@ function launch(): {
   supervisor: ChildProcess
   proven: () => boolean
   swept: Promise<ProviderGroupSweepVerdict | 'unproven'>
+  reportClosed: Promise<void>
   pids: Promise<{ provider: number; grandchild: number }>
 } {
   const spec = createProviderSpawnSpec(
@@ -66,11 +68,13 @@ function launch(): {
     stdio: ['pipe', 'pipe', 'ignore', ...spec.groupReportStdio]
   })
   recordedPids.add(supervisor.pid!)
+  const report = createProviderLaunchReport(supervisor, spec.supervised)
   let identityProven = false
   const swept = new Promise<ProviderGroupSweepVerdict | 'unproven'>((resolve) =>
     guardSupervisedProviderGroup(supervisor, {
       site: 'test',
       supervised: spec.supervised,
+      report,
       onProven: () => {
         identityProven = true
       },
@@ -90,7 +94,7 @@ function launch(): {
       }
     })
   })
-  return { supervisor, proven: () => identityProven, swept, pids }
+  return { supervisor, reportClosed: report.closed, proven: () => identityProven, swept, pids }
 }
 
 afterEach(() => {
@@ -126,11 +130,10 @@ describe.runIf(process.platform !== 'win32')('provider group orphan guard', () =
   })
 
   it('closes the report channel while the provider still runs', async () => {
-    const { supervisor, pids } = launch()
-    const disconnected = new Promise<void>((resolve) => supervisor.once('disconnect', resolve))
+    const { reportClosed, pids } = launch()
     const { provider } = await pids
 
-    await disconnected
+    await reportClosed
     expect(alive(provider)).toBe(true)
   })
 })

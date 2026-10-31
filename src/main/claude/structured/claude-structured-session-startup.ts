@@ -2,12 +2,10 @@
 
 import type { AgentSessionAccountKind } from '../../../shared/agent-session-availability'
 import type { StructuredAgentSessionProviderOpenResult } from '../../native-chat/agent-session-wire/structured-agent-session-provider-open-contract'
-import { withProviderRequestTimeout } from '../../provider-process/provider-request-timeout'
 import type { ClaudeStreamJsonConnection } from '../claude-stream-json-connection'
 import { ClaudeSlashCommandCatalog } from '../claude-slash-command-catalog'
 import {
   claudeAuthDiagnostic,
-  claudeInitializationAuthError,
   readClaudeCapabilities,
   readClaudeReportedPermissionMode,
   readClaudeModels,
@@ -51,7 +49,7 @@ export type ClaudeStartupFacts = ClaudeInitializeFacts & {
   prepared: ReturnType<typeof prepareClaudeStructuredSessionAcquisitionOptions>
 }
 
-export const CLAUDE_INITIALIZE_TIMEOUT_MS = 60_000
+export { CLAUDE_INITIALIZE_TIMEOUT_MS } from '../claude-query-operation'
 
 export async function readClaudeStartupFacts(input: {
   connection: ClaudeStreamJsonConnection
@@ -63,42 +61,7 @@ export async function readClaudeStartupFacts(input: {
   requestTimeoutMs: number | undefined
   emit: (event: ClaudeStructuredSessionEvent) => void
 }): Promise<ClaudeInitializeFacts> {
-  let timer: ReturnType<typeof setTimeout> | undefined
-  const initialization = await Promise.race([
-    input.connection
-      .initializationResult()
-      .catch((error: unknown) => {
-        // The SDK may replace the child's own exit diagnostic with a generic closed-query error.
-        input.initProof.seen()
-        throw error
-      })
-      .then((result) => {
-        const authError = claudeInitializationAuthError(result, input.account)
-        if (authError) {
-          throw authError
-        }
-        return result
-      }),
-    input.initProof.promise.then(() => new Promise<never>(() => {})),
-    new Promise<never>((_resolve, reject) => {
-      timer = setTimeout(
-        () =>
-          reject(
-            withProviderRequestTimeout(
-              new Error(
-                `claude did not answer initialize within ${CLAUDE_INITIALIZE_TIMEOUT_MS}ms`
-              ),
-              { method: 'initialize', timeoutMs: CLAUDE_INITIALIZE_TIMEOUT_MS }
-            )
-          ),
-        CLAUDE_INITIALIZE_TIMEOUT_MS
-      )
-      timer.unref?.()
-    })
-  ]).finally(() => clearTimeout(timer))
-  if (input.connection.closed) {
-    throw new Error('claude session closed before startup completed')
-  }
+  const initialization = await input.connection.initializationResult()
   input.emit({
     type: 'options',
     sessionId: input.sessionId,

@@ -1,3 +1,5 @@
+import { Duplex, PassThrough } from 'node:stream'
+import { createProviderLaunchReport } from './provider-launch-report'
 import { EventEmitter } from 'node:events'
 import { describe, expect, it, vi } from 'vitest'
 import {
@@ -98,10 +100,15 @@ describe('sweepOrphanedProviderGroup', () => {
 class FakeSupervisor extends EventEmitter {
   pid = 777
   connected = true
+  incoming = new PassThrough()
+  outgoing = new PassThrough()
+  stdio = [null, null, null, Duplex.from({ readable: this.incoming, writable: this.outgoing })]
+  private source?: ReturnType<typeof createProviderLaunchReport>
+  get reportSource() {
+    return (this.source ??= createProviderLaunchReport(this, true))
+  }
   report(message: unknown): void {
-    this.emit('message', message)
-    this.connected = false
-    this.emit('disconnect')
+    this.incoming.end(`${JSON.stringify({ kind: 'spawned', ...Object(message) })}\n`)
   }
 }
 
@@ -114,6 +121,7 @@ function guard(
     guardSupervisedProviderGroup(child, {
       site: 'test',
       supervised: true,
+      report: child.reportSource,
       readProcessRow,
       signalGroup,
       onSwept: resolve
@@ -154,6 +162,7 @@ describe('guardSupervisedProviderGroup', () => {
       guardSupervisedProviderGroup(child, {
         site: 'test',
         supervised: true,
+        report: child.reportSource,
         readProcessRow,
         now: () => clock.now,
         sleep,
@@ -179,6 +188,7 @@ describe('guardSupervisedProviderGroup', () => {
       guardSupervisedProviderGroup(child, {
         site: 'test',
         supervised: true,
+        report: child.reportSource,
         readProcessRow,
         signalGroup,
         now: () => clock.now,
@@ -206,6 +216,7 @@ describe('guardSupervisedProviderGroup', () => {
       guardSupervisedProviderGroup(child, {
         site: 'test',
         supervised: true,
+        report: child.reportSource,
         readProcessRow,
         now: () => Date.now(),
         sleep,
@@ -225,6 +236,7 @@ describe('guardSupervisedProviderGroup', () => {
       guardSupervisedProviderGroup(child, {
         site: 'test',
         supervised: true,
+        report: child.reportSource,
         readProcessRow: async () => row({ ppid: 777 }),
         signalGroup,
         now: () => now,
@@ -245,6 +257,7 @@ describe('guardSupervisedProviderGroup', () => {
       guardSupervisedProviderGroup(child, {
         site: 'test',
         supervised: true,
+        report: child.reportSource,
         readProcessRow,
         now: () => Date.parse(STARTED) + 100,
         onSwept: resolve

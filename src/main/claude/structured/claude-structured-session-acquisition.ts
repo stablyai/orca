@@ -53,8 +53,6 @@ export async function acquireClaudeSession({
   let firstRootInit: sessionState.ClaudeSession['firstRootInit']
   let observedLeafUuid: string | null = null,
     expectedProviderSessionId: string | null = null
-  // Preserve the CLI diagnostic when SDK cleanup reports a generic error.
-  let childEnded: Error | null = null
   const initProof = createClaudeInitProof()
   const translator = createClaudeSessionJournalTranslator(
     input.events,
@@ -194,6 +192,7 @@ export async function acquireClaudeSession({
           pathToClaudeCodeExecutable: launch.pathToClaudeCodeExecutable,
           prefixArgs: launch.prefixArgs,
           options: launch.options,
+          account: launch.account,
           cwd: launch.cwd,
           env: {
             ...launch.env,
@@ -206,10 +205,6 @@ export async function acquireClaudeSession({
           onMessage,
           canUseTool,
           onUserDialog,
-          onFault: (error) => {
-            childEnded ??= error
-            initProof.reject(error)
-          },
           onExit: (error, exit) => {
             if (exit?.expected) {
               callbacks.finishClose(sessionId, attempt)
@@ -217,14 +212,18 @@ export async function acquireClaudeSession({
             }
             // Mark in place because the fault report may retain this error object.
             withObservedProviderExit(error)
-            childEnded ??= error
-            initProof.reject(error)
             callbacks.handleExit(sessionId, attempt, error)
           }
         }
       )
     )
     attempt.connection = connection
+    initProof.onRefusal = (error) => connection.rejectStartup?.(error)
+    try {
+      initProof.seen()
+    } catch (error) {
+      connection.rejectStartup?.(error instanceof Error ? error : new Error(String(error)))
+    }
     unbindContextUsage = bindClaudeContextUsageCapture(
       connection,
       translator,
@@ -233,18 +232,21 @@ export async function acquireClaudeSession({
     acquisitions.assertCurrent(sessionId, attempt)
     if (connection.pid === undefined) {
       // Await the spawn diagnostic instead of reporting only a missing PID.
-      await initProof.promise
+      await connection.initializationResult()
     }
     const process = await claudeProcessIdentity(
       { ...input, pid: connection.pid },
       deps.readProcessStartTime
-    ).catch((error: unknown) => {
-      throw childEnded ?? error
+    ).catch(async (error: unknown) => {
+      await connection.initializationResult()
+      throw error
     })
     acquisitions.assertCurrent(sessionId, attempt)
     if (connection.closed) {
+      // A failed initialize throws its original cause; only success can use physical diagnosis.
+      await connection.initializationResult()
       throw (
-        childEnded ??
+        connection.transportError ??
         new Error(`claude stream-json for session ${sessionId} exited while being acquired`)
       )
     }

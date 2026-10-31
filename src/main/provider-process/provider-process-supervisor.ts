@@ -1,5 +1,5 @@
 import { resolveProviderChildEnv, type ProviderProcessLaunch } from './provider-process-launch'
-import { PROVIDER_SPAWN_FAILURE_MARKER } from './provider-spawn-failure-report'
+import { PROVIDER_LAUNCH_REPORT_SCRIPT } from './provider-launch-report'
 
 /** Time the provider gets to exit on its own after its stdin ends, before SIGTERM. */
 export const PROVIDER_STDIN_END_GRACE_MS = 1_000
@@ -23,22 +23,14 @@ const [providerCommand, ...providerArgs] = process.argv.slice(1)
 // be PID 1 or a platform subreaper, so any other parent means no live owner.
 const ownerGone = () => process.ppid !== spec.ownerPid
 // Registered before the spawn, so a stop that lands while the provider starts still reaps it.
+let stopProviderGroup = () => { releaseReport(); report?.destroy(); process.exit(137) }
 for (const signal of ['SIGTERM', 'SIGINT', 'SIGHUP']) process.on(signal, () => stopProviderGroup(signal))
 // Orca can die before this runs; spawning then would start a provider nothing watches.
 if (ownerGone()) process.exit(1)
 const childEnv = { ...process.env, ...spec.nodeEnv }
 delete childEnv.ORCA_PROVIDER_SUPERVISOR_SPEC
 delete childEnv.ELECTRON_RUN_AS_NODE
-// The owner sees only this pid's exit; this marked last stderr line says the provider never started.
-const exitWithSpawnFailure = (error, thrown) => {
-  const report = { thrown, code: (error && error.code) || 'UNKNOWN', message: String(error && error.message) }
-  try { require('node:fs').writeSync(2, ${JSON.stringify(PROVIDER_SPAWN_FAILURE_MARKER)} + JSON.stringify(report) + '\\n') } catch {}
-  process.exit(127)
-}
-// Orca opens the report channel only when it will keep the group's identity. Linux children
-// inherit its fd, so /dev/null takes that slot and only this pid holds the channel.
-const reports = typeof process.send === 'function'
-const reportShield = reports ? require('node:fs').openSync('/dev/null', 'r') : null
+${PROVIDER_LAUNCH_REPORT_SCRIPT}
 let child
 try {
   child = spawn(providerCommand, providerArgs, {
@@ -48,24 +40,22 @@ try {
     detached: true
   })
 } catch (error) {
-  // Node throws most spawn failures (ENOEXEC, ENOTDIR, ...) rather than emitting them.
-  exitWithSpawnFailure(error, true)
+  void exitWithSpawnFailure(error, true)
 }
-// With the group's identity in Orca, a SIGKILL of this pid cannot orphan the group.
-if (reports) {
-  try { require('node:fs').closeSync(reportShield) } catch {}
-  const disconnect = () => { try { process.disconnect() } catch {} }
-  try {
-    if (child.pid) process.send({ pgid: child.pid }, disconnect)
-    else disconnect()
-  } catch { disconnect() }
-}
+if (reportShield !== null) { try { require('node:fs').closeSync(reportShield) } catch {} }
+if (!child) {
+  process.stdin.resume()
+} else {
+let spawned = false
+child.once('spawn', () => { spawned = true; sendReport({ kind: 'spawned', pgid: child.pid }) })
 let timer
 let ownerShutdownTimer
 let settling = false
 let providerExited = false
 const providerGroupExists = () => {
-  if (!child.pid) return false
+  if (!child.pid) {
+    return false
+  }
   try {
     process.kill(-child.pid, 0)
     return true
@@ -76,28 +66,40 @@ const providerGroupExists = () => {
 const waitForProviderGroupExit = async (timeoutMs, untilProviderExits = false) => {
   const deadline = Date.now() + timeoutMs
   while (providerGroupExists()) {
-    if (Date.now() >= deadline || (untilProviderExits && providerExited)) return false
+    if (Date.now() >= deadline || (untilProviderExits && providerExited)) {
+      return false
+    }
     await new Promise((resolve) => setTimeout(resolve, 25))
   }
   return true
 }
 const reapOwnedProviderGroup = async () => {
-  if (!child.pid) return false
+  if (!child.pid) {
+    return false
+  }
   try { process.kill(-child.pid, 'SIGKILL') } catch (error) {
-    if (error && error.code !== 'ESRCH') return false
+    if (error && error.code !== 'ESRCH') {
+      return false
+    }
   }
   return waitForProviderGroupExit(${PROVIDER_GROUP_REAP_TIMEOUT_MS})
 }
 const finishWithProviderOutcome = (code, signal) => {
-  if (!signal) return process.exit(code ?? 1)
+  if (!signal) {
+    return process.exit(code ?? 1)
+  }
   // Re-raise with the default action; this supervisor's own handler would swallow it.
   process.removeAllListeners(signal)
   process.kill(process.pid, signal)
 }
 // Every stop is the same: SIGTERM the group, SIGKILL it after its grace, and exit only once it is
 // gone. Whoever stops this pid judges the provider by it, so a dead supervisor means a dead group.
-const stopProviderGroup = (receivedSignal) => {
-  if (settling) return
+stopProviderGroup = (receivedSignal) => {
+  releaseReport()
+  report?.destroy()
+  if (settling) {
+    return
+  }
   settling = true
   clearInterval(timer)
   if (ownerShutdownTimer) clearTimeout(ownerShutdownTimer)
@@ -106,12 +108,16 @@ const stopProviderGroup = (receivedSignal) => {
   void waitForProviderGroupExit(spec.sigtermGraceMs, spec.lifetime === 'one-shot')
     .then((exited) => exited || reapOwnedProviderGroup())
     .then((reaped) => {
-      if (!reaped) return process.exit(1)
+      if (!reaped) {
+        return process.exit(1)
+      }
       finishWithProviderOutcome(137, receivedSignal)
     })
 }
 const scheduleOwnerShutdown = () => {
-  if (settling || ownerShutdownTimer) return
+  if (settling || ownerShutdownTimer) {
+    return
+  }
   // A normal close ends the provider's stdin first; allow it to flush and
   // exit before forcing the group, while still bounding an orphaned child.
   ownerShutdownTimer = setTimeout(() => stopProviderGroup(null), spec.stdinEndGraceMs)
@@ -144,33 +150,44 @@ const drainProviderOutput = () => {
   return Promise.race([drained, new Promise((resolve) => setTimeout(resolve, ${PROVIDER_OUTPUT_DRAIN_TIMEOUT_MS}))])
 }
 const reapProviderExit = async (code, signal) => {
-  if (settling) return
+  if (settling) {
+    return
+  }
   settling = true
   clearInterval(timer)
   if (ownerShutdownTimer) clearTimeout(ownerShutdownTimer)
-  if (!(await reapOwnedProviderGroup())) return process.exit(1)
+  if (!(await reapOwnedProviderGroup())) {
+    return process.exit(1)
+  }
   await drainProviderOutput()
+  await reportCommitted
   finishWithProviderOutcome(code, signal)
 }
 // An owner that is gone gets the close its owner would have asked for, made here on its behalf.
 timer = setInterval(() => {
-  if (!ownerGone()) return
+  if (!ownerGone()) {
+    return
+  }
   clearInterval(timer)
   process.stdin.unpipe(child.stdin)
   try { child.stdin.end() } catch {}
   // A one-shot's stdin end was its request, so only a stop is left to ask for.
-  if (spec.lifetime === 'one-shot' || spec.closeRequest !== 'stdin-end') return stopProviderGroup(null)
+  if (spec.lifetime === 'one-shot' || spec.closeRequest !== 'stdin-end') {
+    return stopProviderGroup(null)
+  }
   scheduleOwnerShutdown()
 }, 100)
 timer.unref()
 child.once('error', (error) => {
   clearInterval(timer)
-  exitWithSpawnFailure(error, false)
+  if (!spawned) void exitWithSpawnFailure(error, false)
+  else stopProviderGroup(null)
 })
 child.once('exit', (code, signal) => {
   providerExited = true
   void reapProviderExit(code, signal)
 })
+}
 `
 
 /** Session stdin-end requests close; one-shot stdin-end only completes the request. */
@@ -266,8 +283,8 @@ export function createProviderSpawnSpec(
   detached: boolean
   /** The child is the supervisor, whose SIGTERM stops the provider and then itself. */
   supervised: boolean
-  /** IPC group-report channel appended after stdin/stdout/stderr. */
-  groupReportStdio: [] | ['ipc']
+  /** Owned report pipe appended after stdin/stdout/stderr. */
+  groupReportStdio: [] | ['pipe']
 } {
   const childEnv = resolveProviderChildEnv(launch, baseEnv)
   const supervisor =
@@ -285,6 +302,6 @@ export function createProviderSpawnSpec(
     cwd: launch.cwd ?? process.cwd(),
     detached: platform !== 'win32',
     supervised: supervisor !== null,
-    groupReportStdio: supervisor ? ['ipc'] : []
+    groupReportStdio: supervisor ? ['pipe'] : []
   }
 }

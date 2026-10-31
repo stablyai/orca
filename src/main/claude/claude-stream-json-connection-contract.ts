@@ -1,3 +1,5 @@
+import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
+import type { StructuredAgentStartupFailure } from '../native-chat/agent-session-wire/structured-agent-session-adapter'
 import type { ProviderReceiveDisposition } from '../provider-process/provider-source-completion'
 import type { CanUseTool, OnUserDialog } from '@anthropic-ai/claude-agent-sdk'
 import type { ClaudeControlSurface } from './claude-agent-sdk-control-requests'
@@ -9,6 +11,7 @@ export type ClaudeStreamJsonLaunch = {
   pathToClaudeCodeExecutable: string
   prefixArgs?: readonly string[]
   options: ClaudeStructuredSdkOptions
+  account?: AgentSessionAccountKind
   cwd: string
   env?: Record<string, string>
   /** Delete these keys after merging inherited and launch env. */
@@ -42,6 +45,11 @@ export type ClaudeCloseOutcome = {
 }
 
 export type ClaudeStreamJsonConnection = ClaudeControlSurface & {
+  /** Physical/transport diagnosis; it cannot replace the original initialize result. */
+  readonly transportError?: Error | null
+  readonly startupFailure?: StructuredAgentStartupFailure
+  startupSettled?: () => Promise<void>
+  rejectStartup?: (error: Error) => void
   readonly pid: number | undefined
   readonly closed: boolean
   /** What the ladder has observed so far; read after a `close()` that returned false. */

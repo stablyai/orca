@@ -1,3 +1,4 @@
+import { createProviderLaunchReport } from '../provider-process/provider-launch-report'
 import { wslDistroForCommand } from '../../shared/wsl-paths'
 import { spawnProcess } from '@orca/process-host'
 import { withCliRuntimeOnPath } from '../../shared/node-cli-command-resolution'
@@ -119,7 +120,8 @@ function spawnSupervisedAgent(
   })
   guardSupervisedProviderGroup(child, {
     site: SOURCE_CONTROL_KILL_SITE,
-    supervised: spec.supervised
+    supervised: spec.supervised,
+    report: createProviderLaunchReport(child, spec.supervised)
   })
   return Object.assign(child, { supervised: spec.supervised })
 }

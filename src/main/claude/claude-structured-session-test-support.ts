@@ -1,3 +1,4 @@
+import { ownFakeClaudeQuery } from './claude-structured-startup-settled-test-support'
 import type { FakeConnection } from './claude-structured-session-test-contract'
 export type { FakeConnection } from './claude-structured-session-test-contract'
 import type {
@@ -107,7 +108,7 @@ export function fakeClaude(
           connection.closed = true
           handlers.onExit?.(new Error(options.exitBeforeInit))
           // The SDK rejects pending control requests once the transport ends.
-          throw new Error('Query closed before response received')
+          throw new Error(options.exitBeforeInit)
         }
         if (options.initProof === 'init') {
           emitCycleInit()
@@ -211,11 +212,13 @@ export function fakeClaude(
         receive: { state: 'complete' }
       }),
       close: async () => {
+        connection.rejectStartup?.(new Error('Query closed before response received'))
         connection.closeCount += 1
         connection.closed = true
         return options.unprovenCloseVerdict === undefined
       }
     }
+    ownFakeClaudeQuery(connection, launch.account)
     connections.push(connection)
     return connection
   }

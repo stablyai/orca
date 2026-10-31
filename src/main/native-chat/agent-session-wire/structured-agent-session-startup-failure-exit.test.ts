@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import {
   agentSessionLeaseFixture,
@@ -175,3 +176,53 @@ describe('a provider that ends before it finished starting', () => {
     )
   })
 })
+
+it.each(['before', 'during'] as const)(
+  'retains personal Stop precedence %s the final lifecycle barrier',
+  async (when) => {
+    const session: ReturnType<typeof startedSession> = startedSession()
+    const child: StructuredAgentSessionProviderChild = {
+      generation: GENERATION,
+      fence: 7,
+      phase: 'starting'
+    }
+    session.child = child
+    const context = contextFor(session)
+    const entered = Promise.withResolvers<void>()
+    const release = Promise.withResolvers<void>()
+    context.flushLifecycle = async () => {
+      entered.resolve()
+      await release.promise
+      return { ok: true }
+    }
+    const stop = () => {
+      child.close = {
+        cause: 'user-stop',
+        reason: null,
+        recorded: Promise.resolve(null),
+        requestedAt: session.journal.cursor()
+      }
+    }
+    if (when === 'before') {
+      stop()
+    }
+    const settling = settleStructuredAgentSessionChildExit(context, {
+      ...ended,
+      cause: 'requested-close',
+      startupFailure: {
+        error: new Error('original initialize refusal'),
+        failure: { kind: 'notSignedIn' },
+        initiator: 'startup-failure'
+      }
+    })
+    await entered.promise
+    if (when === 'during') {
+      stop()
+    }
+    release.resolve()
+    await settling
+    expect(session.appendLifecycleBatch).not.toHaveBeenCalled()
+    expect(session.lastEndedChild).toMatchObject({ cause: 'user-stop' })
+    expect(session.lastEndedChild?.failure).toBeUndefined()
+  }
+)

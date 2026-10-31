@@ -59,6 +59,7 @@ export function createClaudeJournalFailureHandler(input: {
   return (error) => {
     if (!input.attempt.published) {
       input.initProof.reject(error)
+      input.attempt.connection?.rejectStartup?.(error)
       return
     }
     const connection = input.attempt.connection

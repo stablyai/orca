@@ -118,7 +118,7 @@ describe('Claude host-awaited open', () => {
     const acquisition = await adapter.acquire(ACQUIRE)
     expect(acquisition).toMatchObject({ process: { pid: 4321 } })
     expect(acquisition.link).toBeUndefined()
-    expect(claude.connections[0].calls).toEqual([])
+    expect(claude.connections[0].calls).toEqual([{ subtype: 'initialize' }])
     expect(events.some((event) => event.type === 'options')).toBe(false)
 
     const open = claudeOpened(adapter, 'session-1')
