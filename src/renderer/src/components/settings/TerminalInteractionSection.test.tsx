@@ -6,9 +6,14 @@ import { createGlobalSettingsFixture } from '../../../../shared/global-settings-
 import { useAppStore } from '../../store'
 import { TerminalInteractionSection } from './TerminalInteractionSection'
 
+const i18nMock = vi.hoisted(() => ({
+  language: 'en',
+  translations: {} as Record<string, string>
+}))
+
 vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, defaultValue: string) => defaultValue,
-  i18n: { language: 'en' }
+  translate: (key: string, defaultValue: string) => i18nMock.translations[key] ?? defaultValue,
+  i18n: i18nMock
 }))
 
 vi.mock('@/i18n/localized-catalog', () => ({
@@ -22,6 +27,8 @@ describe('TerminalInteractionSection scroll on input', () => {
 
   afterEach(() => {
     cleanup()
+    i18nMock.language = 'en'
+    i18nMock.translations = {}
   })
 
   it('turns off jump-to-bottom on input from the settings switch', () => {
@@ -52,5 +59,21 @@ describe('TerminalInteractionSection scroll on input', () => {
     fireEvent.click(screen.getByRole('switch', { name: 'Scroll to Bottom on Input' }))
 
     expect(updateSettings).toHaveBeenCalledWith({ terminalScrollOnUserInput: true })
+  })
+
+  it('keeps the row visible for a localized search keyword', () => {
+    i18nMock.language = 'de'
+    i18nMock.translations = { 'components.settings.terminal.search.snap': 'einrasten' }
+    useAppStore.setState({ settingsSearchQuery: 'einrasten' })
+
+    render(
+      <TerminalInteractionSection
+        settings={createGlobalSettingsFixture()}
+        updateSettings={vi.fn()}
+        searchQuery="einrasten"
+      />
+    )
+
+    expect(screen.getByRole('switch', { name: 'Scroll to Bottom on Input' })).toBeTruthy()
   })
 })

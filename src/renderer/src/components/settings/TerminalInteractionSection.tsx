@@ -6,6 +6,7 @@ import { ScrollSpeedSlider } from './TerminalScrollSpeedSlider'
 import { SettingsSubsectionHeader, SettingsSwitchRow } from './SettingsFormControls'
 import { SearchableSetting } from './SearchableSetting'
 import { matchesSettingsSearch } from './settings-search'
+import { getTerminalScrollOnUserInputSearchEntry } from './terminal-pane-appearance-search'
 import { getTerminalRightClickToPasteSearchEntry } from './terminal-windows-search'
 import { OSC52_CLIPBOARD_SETTING_ID } from '../terminal-pane/osc52-clipboard-setting-anchor'
 import { isMacPlatform } from '../terminal-pane/terminal-link-open-hints'
@@ -184,28 +185,7 @@ export function TerminalInteractionSection({
           </div>
         </SearchableSetting>
 
-        <SearchableSetting
-          title={translate(
-            'components.settings.TerminalInteraction.scrollOnUserInput',
-            'Scroll to Bottom on Input'
-          )}
-          description={translate(
-            'components.settings.TerminalInteraction.scrollOnUserInputDescription',
-            'When you type or paste in a pane that is scrolled up, jump back to the latest output. Turn this off to keep your place in scrollback.'
-          )}
-          keywords={[
-            'terminal',
-            'scroll',
-            'typing',
-            'input',
-            'paste',
-            'jump',
-            'bottom',
-            'scrollback',
-            'snap',
-            'position'
-          ]}
-        >
+        <SearchableSetting {...getTerminalScrollOnUserInputSearchEntry()[0]}>
           <SettingsSwitchRow
             label={translate(
               'components.settings.TerminalInteraction.scrollOnUserInput',
