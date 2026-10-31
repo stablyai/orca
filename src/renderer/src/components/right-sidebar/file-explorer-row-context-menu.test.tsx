@@ -76,7 +76,10 @@ const fileNode: TreeNode = {
 
 function renderRevealItem(
   owner: Partial<
-    Pick<React.ComponentProps<typeof FileExplorerRowContextMenu>, 'connectionId' | 'node'>
+    Pick<
+      React.ComponentProps<typeof FileExplorerRowContextMenu>,
+      'connectionId' | 'node' | 'onCopyPaths' | 'selectionSize'
+    >
   > = {}
 ): ItemProps | undefined {
   renderToStaticMarkup(
@@ -134,8 +137,26 @@ describe('FileExplorerRowContextMenu host capabilities', () => {
       expect(labels).not.toContain('Copy')
       expect(labels).toContain('Copy Path')
       expect(labels).toContain('Copy Relative Path')
+      expect(labels).toContain('Copy File Name')
     }
   )
+
+  it('copies the file name through onCopyPaths', () => {
+    const onCopyPaths = vi.fn()
+    renderRevealItem({ onCopyPaths })
+    const item = items.list.find((candidate) =>
+      React.Children.toArray(candidate.children).includes('Copy File Name')
+    )
+    item?.onSelect?.()
+    expect(onCopyPaths).toHaveBeenCalledWith('name')
+  })
+
+  it('labels the name copy action in the plural for a multi-file selection', () => {
+    renderRevealItem({ selectionSize: 3 })
+    const labels = items.list.flatMap((item) => React.Children.toArray(item.children))
+    expect(labels).toContain('Copy File Names')
+    expect(labels).not.toContain('Copy File Name')
+  })
 
   it('reveals a local row through the shared reveal action', () => {
     const reveal = renderRevealItem()

@@ -3977,7 +3977,8 @@
             "1ba8492c5b": "Fermer",
             "68cc610e7f": "Renommer",
             "fdd29eb669": "Épingler l'onglet",
-            "8e9d603a09": "Détacher l'onglet"
+            "8e9d603a09": "Détacher l'onglet",
+            "copyFileName": "Copier le nom du fichier"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Paramètres de l'agent…",
@@ -13366,7 +13367,9 @@
             "clipboardStagingUnavailable": "Impossible de copier le fichier car le stockage temporaire d'Orca est indisponible",
             "revealInFinder": "Révéler dans le Finder",
             "openContainingFolder": "Ouvrir le dossier contenant",
-            "revealInFileExplorer": "Révéler dans l'explorateur de fichiers"
+            "revealInFileExplorer": "Révéler dans l'explorateur de fichiers",
+            "copyFileName": "Copier le nom du fichier",
+            "copyFileNames": "Copier les noms de fichiers"
           },
           "FileExplorerToolbar": {
             "d238264654": "Afficher les fichiers ignorés par Git",
@@ -16066,6 +16069,7 @@
           "4157f3cbf3": "Ouvrir l'aperçu Markdown",
           "269ce4842b": "Copier le chemin relatif",
           "7c08a1f990": "Copier le chemin",
+          "copyFileName": "Copier le nom du fichier",
           "84cdc0794b": "Renommer",
           "1bb1e226ec": "Renommer le fichier {{value0}}",
           "5447c4f68f": "Table des matières",

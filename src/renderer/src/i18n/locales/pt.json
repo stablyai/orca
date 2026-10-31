@@ -10577,7 +10577,9 @@
             "clipboardStagingUnavailable": "Não foi possível copiar o arquivo porque o armazenamento temporário do Orca não está disponível",
             "revealInFinder": "Mostrar no Finder",
             "openContainingFolder": "Abrir Pasta Contendo o Arquivo",
-            "revealInFileExplorer": "Mostrar no Explorador de Arquivos"
+            "revealInFileExplorer": "Mostrar no Explorador de Arquivos",
+            "copyFileName": "Copiar Nome do Arquivo",
+            "copyFileNames": "Copiar Nomes dos Arquivos"
           },
           "AiVaultPanel": {
             "resumeCommandCopied": "Comando para retomar copiado",
@@ -13021,7 +13023,8 @@
           "f0fd4174b5": "Abra a aba do arquivo para usar a edição rica de markdown",
           "a10d9b8337": "Abrir arquivo",
           "2076ecfc9c": "Alteração anterior",
-          "631dab0df3": "Próxima alteração"
+          "631dab0df3": "Próxima alteração",
+          "copyFileName": "Copiar Nome do Arquivo"
         },
         "RichMarkdownToolbar": {
           "e935c6b61e": "Imagem",
@@ -17034,7 +17037,8 @@
             "1ba8492c5b": "Fechar",
             "68cc610e7f": "Renomear",
             "fdd29eb669": "Fixar Aba",
-            "8e9d603a09": "Desafixar Aba"
+            "8e9d603a09": "Desafixar Aba",
+            "copyFileName": "Copiar Nome do Arquivo"
           },
           "TabBar": {
             "b1a132357f": "Nova aba",

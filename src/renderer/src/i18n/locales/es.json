@@ -3753,7 +3753,8 @@
             "1ba8492c5b": "Cerrar",
             "68cc610e7f": "Renombrar",
             "fdd29eb669": "Fijar pestaña",
-            "8e9d603a09": "Desanclar pestaña"
+            "8e9d603a09": "Desanclar pestaña",
+            "copyFileName": "Copiar nombre de archivo"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajustes de Agents…",
@@ -13142,7 +13143,9 @@
             "revealInFinder": "Revelar en Finder",
             "openContainingFolder": "Abrir carpeta contenedora",
             "revealInFileExplorer": "Revelar en el Explorador de archivos",
-            "clipboardStagingUnavailable": "No se pudo copiar el archivo porque el almacenamiento temporal de Orca no está disponible"
+            "clipboardStagingUnavailable": "No se pudo copiar el archivo porque el almacenamiento temporal de Orca no está disponible",
+            "copyFileName": "Copiar nombre de archivo",
+            "copyFileNames": "Copiar nombres de archivo"
           },
           "FileExplorerToolbar": {
             "d238264654": "Mostrar archivos ignorados por Git",
@@ -15842,6 +15845,7 @@
           "4157f3cbf3": "Abrir vista previa de Markdown",
           "269ce4842b": "Copiar ruta relativa",
           "7c08a1f990": "Copiar ruta",
+          "copyFileName": "Copiar nombre de archivo",
           "84cdc0794b": "Renombrar",
           "1bb1e226ec": "Cambiar el nombre del archivo {{value0}}",
           "5447c4f68f": "Tabla de contenido",

@@ -38,6 +38,15 @@ export function basename(path: string): string {
   return lastSeparatorIndex === -1 ? normalizedPath : normalizedPath.slice(lastSeparatorIndex + 1)
 }
 
+// Why: backslash is legal in POSIX file names, so it separates only on Windows paths.
+export function absolutePathBasename(path: string): string {
+  if (isWindowsAbsolutePathLike(path)) {
+    return basename(path)
+  }
+  const normalizedPath = path.replace(/\/+$/, '')
+  return normalizedPath.slice(normalizedPath.lastIndexOf('/') + 1)
+}
+
 export function dirname(path: string): string {
   const normalizedPath = stripTrailingSeparators(path)
 

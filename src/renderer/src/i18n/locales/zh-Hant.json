@@ -4135,7 +4135,8 @@
             "1ba8492c5b": "關閉",
             "68cc610e7f": "重新命名",
             "fdd29eb669": "固定分頁",
-            "8e9d603a09": "取消固定分頁"
+            "8e9d603a09": "取消固定分頁",
+            "copyFileName": "複製檔案名稱"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "代理程式設定…",
@@ -13277,7 +13278,9 @@
             "clipboardStagingUnavailable": "無法複製檔案，因為 Orca 的暫存不可用",
             "revealInFinder": "在 Finder 中顯示",
             "openContainingFolder": "開啟所在資料夾",
-            "revealInFileExplorer": "在檔案總管中顯示"
+            "revealInFileExplorer": "在檔案總管中顯示",
+            "copyFileName": "複製檔案名稱",
+            "copyFileNames": "複製檔案名稱"
           },
           "FileExplorerToolbar": {
             "d238264654": "顯示 Git 忽略的檔案",
@@ -15902,7 +15905,8 @@
           "f0fd4174b5": "開啟檔案分頁以使用 Markdown 富文字編輯",
           "a10d9b8337": "開啟檔案",
           "2076ecfc9c": "上一個變更",
-          "631dab0df3": "下一個變更"
+          "631dab0df3": "下一個變更",
+          "copyFileName": "複製檔案名稱"
         },
         "EditorPanelActionsMenu": {
           "fileActions": "檔案操作"

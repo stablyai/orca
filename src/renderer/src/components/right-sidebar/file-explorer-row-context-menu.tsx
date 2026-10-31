@@ -192,6 +192,18 @@ export function FileExplorerRowContextMenu({
           <ContextMenuShortcut>{copyRelativePathShortcutLabel}</ContextMenuShortcut>
         ) : null}
       </ContextMenuItem>
+      <ContextMenuItem onSelect={() => onCopyPaths('name')}>
+        <Copy />
+        {selectionSize > 1
+          ? translate(
+              'auto.components.right.sidebar.FileExplorerRow.copyFileNames',
+              'Copy File Names'
+            )
+          : translate(
+              'auto.components.right.sidebar.FileExplorerRow.copyFileName',
+              'Copy File Name'
+            )}
+      </ContextMenuItem>
       {!node.isDirectory && (
         <ContextMenuItem disabled={writesBlocked} onSelect={() => onDuplicate(node)}>
           <Files />

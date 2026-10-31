@@ -7,6 +7,7 @@ import { FileExplorerRow } from './FileExplorerRow'
 import { InlineInputRow, type InlineInput } from './file-explorer-inline-input-row'
 import { shouldShowIgnoredDecoration, STATUS_COLORS } from './status-display'
 import type { DirCache, FileExplorerOperationOwner, TreeNode } from './file-explorer-types'
+import type { FileExplorerCopyKind } from './file-explorer-selection'
 import type { FileExplorerRowProjection } from './file-explorer-row-projection'
 import type { RuntimeFileOperationArgs } from '@/runtime/runtime-file-client-types'
 import { getFileExplorerOperationExecutionHostId } from './file-explorer-operation-owner'
@@ -41,7 +42,7 @@ type FileExplorerVirtualRowsProps = {
   onDoubleClick: (node: TreeNode) => void
   onViewFile: (node: TreeNode) => void
   onContextMenuSelect: (node: TreeNode) => void
-  onCopyPaths: (node: TreeNode, pathKind: 'absolute' | 'relative') => void
+  onCopyPaths: (node: TreeNode, pathKind: FileExplorerCopyKind) => void
   onStartNew: (type: 'file' | 'folder', parentPath: string, depth: number) => void
   onStartRename: (node: TreeNode) => void
   onDuplicate: (node: TreeNode) => void

@@ -4279,7 +4279,8 @@
             "1ba8492c5b": "Close",
             "68cc610e7f": "Rename",
             "fdd29eb669": "Pin Tab",
-            "8e9d603a09": "Unpin Tab"
+            "8e9d603a09": "Unpin Tab",
+            "copyFileName": "Copy File Name"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent settings…",
@@ -13543,7 +13544,9 @@
             "clipboardStagingUnavailable": "Could not copy the file because Orca's temporary storage is unavailable",
             "revealInFinder": "Reveal in Finder",
             "openContainingFolder": "Open Containing Folder",
-            "revealInFileExplorer": "Reveal in File Explorer"
+            "revealInFileExplorer": "Reveal in File Explorer",
+            "copyFileName": "Copy File Name",
+            "copyFileNames": "Copy File Names"
           },
           "FileExplorerToolbar": {
             "d238264654": "Show Git Ignored Files",
@@ -16213,6 +16216,7 @@
           "4157f3cbf3": "Open Markdown Preview",
           "269ce4842b": "Copy Relative Path",
           "7c08a1f990": "Copy Path",
+          "copyFileName": "Copy File Name",
           "84cdc0794b": "Rename",
           "1bb1e226ec": "Rename file {{value0}}",
           "5447c4f68f": "Table of Contents",

@@ -4191,7 +4191,8 @@
             "1ba8492c5b": "Kapat",
             "68cc610e7f": "Yeniden Adlandır",
             "fdd29eb669": "Sekmeyi Sabitle",
-            "8e9d603a09": "Sekme Sabitlemesini Kaldır"
+            "8e9d603a09": "Sekme Sabitlemesini Kaldır",
+            "copyFileName": "Dosya Adını Kopyala"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Ajan ayarları…",
@@ -13441,7 +13442,9 @@
             "clipboardStagingUnavailable": "Orca'nın geçici depolaması kullanılamadığı için dosya kopyalanamadı",
             "revealInFinder": "Finder'da Göster",
             "openContainingFolder": "İçeren Klasörü Aç",
-            "revealInFileExplorer": "Dosya Gezgini'nde Göster"
+            "revealInFileExplorer": "Dosya Gezgini'nde Göster",
+            "copyFileName": "Dosya Adını Kopyala",
+            "copyFileNames": "Dosya Adlarını Kopyala"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git Tarafından Yok Sayılan Dosyaları Göster",
@@ -16108,7 +16111,8 @@
           "f0fd4174b5": "Zengin markdown düzenlemeyi kullanmak için dosya sekmesini açın",
           "a10d9b8337": "Dosyayı aç",
           "2076ecfc9c": "Önceki değişiklik",
-          "631dab0df3": "Sonraki değişiklik"
+          "631dab0df3": "Sonraki değişiklik",
+          "copyFileName": "Dosya Adını Kopyala"
         },
         "EditorPanelActionsMenu": {
           "fileActions": "Dosya işlemleri"

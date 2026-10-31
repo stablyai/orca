@@ -17,9 +17,13 @@ import {
 } from '@/lib/reveal-in-file-manager'
 import { isRevealOrEditorOpenBlocked } from '@/lib/local-path-open-guard'
 import { formatClipboardFilePath } from '@/lib/clipboard-file-path'
+import { absolutePathBasename } from '@/lib/path'
 import { TabWorkspaceLayoutMenuSection } from './TabWorkspaceLayoutMenuSection'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
-import { isVirtualEditorFile } from '@/store/slices/editor/tabs/editor-tab-content-type'
+import {
+  isVirtualEditorFile,
+  isWorktreeRootEditorFile
+} from '@/store/slices/editor/tabs/editor-tab-content-type'
 import { CloseSplitPaneMenuItem } from './CloseSplitPaneMenuItem'
 
 type EditorFileTabContextMenuProps = {
@@ -195,6 +199,19 @@ export function EditorFileTabContextMenu({
               'Copy Relative Path'
             )}
           </ContextMenuItem>
+          {!isWorktreeRootEditorFile(file) && (
+            <ContextMenuItem
+              inset
+              onSelect={() => {
+                void window.api.ui.writeClipboardText(absolutePathBasename(file.filePath))
+              }}
+            >
+              {translate(
+                'auto.components.tab.bar.EditorFileTabContextMenu.copyFileName',
+                'Copy File Name'
+              )}
+            </ContextMenuItem>
+          )}
           <ContextMenuSeparator />
           <ContextMenuItem
             inset

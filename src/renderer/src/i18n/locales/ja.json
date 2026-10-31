@@ -3685,7 +3685,8 @@
             "1ba8492c5b": "閉じる",
             "68cc610e7f": "名前を変更する",
             "fdd29eb669": "ピンタブ",
-            "8e9d603a09": "タブの固定を解除する"
+            "8e9d603a09": "タブの固定を解除する",
+            "copyFileName": "ファイル名をコピー"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agent 設定…",
@@ -12835,7 +12836,9 @@
             "clipboardStagingUnavailable": "Orca の一時ストレージが利用できないため、ファイルをコピーできませんでした",
             "revealInFinder": "Finderで表示",
             "openContainingFolder": "含まれているフォルダーを開く",
-            "revealInFileExplorer": "ファイルエクスプローラーで表示"
+            "revealInFileExplorer": "ファイルエクスプローラーで表示",
+            "copyFileName": "ファイル名をコピー",
+            "copyFileNames": "ファイル名をコピー"
           },
           "FileExplorerToolbar": {
             "d238264654": "Git で無視されたファイルを表示",
@@ -15449,6 +15452,7 @@
           "4157f3cbf3": "Markdown プレビューを開く",
           "269ce4842b": "相対パスをコピー",
           "7c08a1f990": "パスのコピー",
+          "copyFileName": "ファイル名をコピー",
           "84cdc0794b": "名前を変更する",
           "1bb1e226ec": "ファイル {{value0}} の名前を変更します",
           "5447c4f68f": "目次",

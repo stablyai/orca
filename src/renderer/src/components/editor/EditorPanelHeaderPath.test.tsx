@@ -99,6 +99,21 @@ describe('EditorPanelHeaderPath inline rename', () => {
     vi.stubGlobal('cancelAnimationFrame', vi.fn())
   })
 
+  it('copies the file name without directory prefixes', () => {
+    const writeClipboardText = vi.fn().mockResolvedValue(undefined)
+    Object.assign(window, { api: { ui: { writeClipboardText } } })
+    renderPath(baseFile({ filePath: '/repo/src/notes.md', relativePath: 'src/notes.md' }))
+
+    const pathRow = document.querySelector('.editor-header-path-row')
+    if (!pathRow) {
+      throw new Error('Missing editor header path row')
+    }
+    fireEvent.contextMenu(pathRow)
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Copy File Name' }))
+
+    expect(writeClipboardText).toHaveBeenCalledWith('notes.md')
+  })
+
   it('opens a field holding the whole name', () => {
     renderPath(baseFile())
     openRenameInput()

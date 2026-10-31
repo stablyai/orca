@@ -4216,7 +4216,8 @@
             "1ba8492c5b": "Schließen",
             "68cc610e7f": "Umbenennen",
             "fdd29eb669": "Tab anheften",
-            "8e9d603a09": "Tab lösen"
+            "8e9d603a09": "Tab lösen",
+            "copyFileName": "Dateinamen kopieren"
           },
           "QuickLaunchButton": {
             "348a04c1ad": "Agenten-Einstellungen…",
@@ -13455,7 +13456,9 @@
             "clipboardStagingUnavailable": "Die Datei konnte nicht kopiert werden, da der temporäre Speicher von Orca nicht verfügbar ist",
             "revealInFinder": "Im Finder anzeigen",
             "openContainingFolder": "Übergeordneten Ordner öffnen",
-            "revealInFileExplorer": "In File Explorer anzeigen"
+            "revealInFileExplorer": "In File Explorer anzeigen",
+            "copyFileName": "Dateinamen kopieren",
+            "copyFileNames": "Dateinamen kopieren"
           },
           "FileExplorerToolbar": {
             "d238264654": "Von Git ignorierte Dateien anzeigen",
@@ -16122,7 +16125,8 @@
           "f0fd4174b5": "Datei-Tab öffnen, um Markdown formatiert zu bearbeiten",
           "a10d9b8337": "Datei öffnen",
           "2076ecfc9c": "Vorherige Änderung",
-          "631dab0df3": "Nächste Änderung"
+          "631dab0df3": "Nächste Änderung",
+          "copyFileName": "Dateinamen kopieren"
         },
         "EditorPanelActionsMenu": {
           "fileActions": "Dateiaktionen"
