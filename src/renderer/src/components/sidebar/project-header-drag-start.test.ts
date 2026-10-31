@@ -71,6 +71,41 @@ describe('createProjectHeaderDragSession', () => {
     expect(session?.repo.id).toBe('repo-a')
   })
 
+  it("takes the bucket of the row that places the header in its group, not the anchor's", () => {
+    const header = document.createElement('div')
+    header.setAttribute('data-repo-header-drag-handle', '')
+    const scrollContainer = document.createElement('div')
+    document.body.append(scrollContainer, header)
+    const anchor = createRepo('repo-a')
+    const placedBy: Repo = {
+      ...createRepo('repo-a-paired', 'group-1'),
+      executionHostId: 'runtime:paired'
+    }
+
+    const session = createProjectHeaderDragSession({
+      event: {
+        button: 0,
+        pointerId: 1,
+        clientX: 10,
+        clientY: 20,
+        target: header,
+        currentTarget: header
+      } as unknown as React.PointerEvent<HTMLElement>,
+      repo: anchor,
+      projectGroupRepo: placedBy,
+      sidebarRepoHeaderIdsByBucket: new Map([
+        ['ungrouped', ['repo-u']],
+        ['group:group-1', ['repo-a', 'repo-b']]
+      ]),
+      getScrollContainer: () => scrollContainer
+    })
+
+    expect(session?.bucketKey).toBe('group:group-1')
+    expect(session?.sidebarRepoHeaderIds).toEqual(['repo-a', 'repo-b'])
+    expect(session?.repo).toBe(anchor)
+    expect(session?.projectGroupRepo).toBe(placedBy)
+  })
+
   it('arms a drag session when pressing the project icon svg (SVGElement target)', () => {
     const header = document.createElement('div')
     header.setAttribute('data-repo-header-drag-handle', '')

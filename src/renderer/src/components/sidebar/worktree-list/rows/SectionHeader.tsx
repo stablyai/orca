@@ -17,6 +17,7 @@ import type {
 } from '../../../../../../shared/worktree/types'
 import {
   getHeaderDragRepo,
+  getHeaderProjectGroupRepo,
   type GroupHeaderRow,
   type WorktreeGroupBy
 } from '../../../../../../shared/sidebar-list/row-types'
@@ -278,7 +279,8 @@ export function renderWorktreeSectionHeaderRow(args: {
           }
           onPointerDown={
             isDraggableRepoHeader && headerRepo
-              ? (event) => headerDrag.repoDrag.onHandlePointerDown(event, headerRepo)
+              ? (event) =>
+                  headerDrag.repoDrag.onHandlePointerDown(event, headerRepo, row.projectGroupRepo)
               : isDraggableProjectGroupHeader && projectGroupDragIdForHeader
                 ? (event) =>
                     headerDrag.projectGroupDrag.onHandlePointerDown(
@@ -385,6 +387,7 @@ export function renderWorktreeSectionHeaderRow(args: {
             {row.repo && ctx.groupBy === 'repo' ? (
               <RepoHeaderProjectActionsMenu
                 repo={row.repo}
+                projectGroupRepo={getHeaderProjectGroupRepo(row)}
                 label={label}
                 projectGroups={ctx.projectGroups}
                 actions={ctx.projectActions}

@@ -29,6 +29,7 @@ import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
 import { getRepositoryIconSectionId } from '@/components/settings/repository/repository-settings-targets'
 import { WslMoveProjectMenuItem } from '@/components/wsl-move/WslMoveProjectMenuItem'
+import { getProjectGroupJoinableRow } from '@/store/slices/project-group-owner-routing'
 import type { ProjectGroup } from '../../../../../../shared/project-group-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import type { WorktreeVisibilityDefaults } from '../../../../../../shared/global-settings-types'
@@ -83,17 +84,22 @@ export type RepoHeaderProjectActions = {
 // Memoized: the sidebar re-renders every header row when the active workspace changes.
 export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjectActionsMenu({
   repo,
+  projectGroupRepo,
   label,
   projectGroups,
   actions
 }: {
   repo: Repo
+  /** The member row whose Project Group places this header, when it is not `repo`. */
+  projectGroupRepo?: Repo
   label: string
   projectGroups: readonly ProjectGroup[]
   actions: RepoHeaderProjectActions
 }): React.JSX.Element {
   // Memoized: subscribe so a language change still repaints its labels.
   useTranslation()
+  // Why: group actions follow the row that put the project in its group, so they match where it is drawn.
+  const groupRepo = projectGroupRepo ?? repo
   return (
     <DropdownMenu modal={false}>
       <Tooltip>
@@ -165,8 +171,15 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
               {projectGroups.map((group) => (
                 <DropdownMenuItem
                   key={group.id}
-                  disabled={repo.projectGroupId === group.id}
-                  onSelect={() => actions.onMoveProjectToGroup(repo, group.id)}
+                  disabled={groupRepo.projectGroupId === group.id}
+                  onSelect={() =>
+                    actions.onMoveProjectToGroup(
+                      // Why: a group lives on one host, so move whichever of the two rows can join it.
+                      getProjectGroupJoinableRow([groupRepo, repo], projectGroups, group.id) ??
+                        groupRepo,
+                      group.id
+                    )
+                  }
                 >
                   <span className="max-w-48 truncate">{group.name}</span>
                 </DropdownMenuItem>
@@ -174,8 +187,8 @@ export const RepoHeaderProjectActionsMenu = React.memo(function RepoHeaderProjec
             </DropdownMenuSubContent>
           </DropdownMenuSub>
         ) : null}
-        {repo.projectGroupId ? (
-          <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(repo)}>
+        {groupRepo.projectGroupId ? (
+          <DropdownMenuItem onSelect={() => actions.onRemoveProjectFromGroup(groupRepo)}>
             <CircleX className="size-3.5" />
             {translate('auto.components.sidebar.WorktreeList.64e55f7f01', 'Remove from group')}
           </DropdownMenuItem>

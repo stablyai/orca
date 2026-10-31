@@ -24,7 +24,10 @@ import type { OrderedGroupEntry, WorktreeGroupEntry } from './worktree-group-ent
 import type { ProjectSectionModel } from '../project-section-grouping'
 import {
   appendProjectGroupSections,
-  getProjectGroupOccurrencePaths
+  getProjectGroupOccurrencePaths,
+  getProjectGroupCatalogHostIds,
+  getProjectSectionGroupRepo,
+  getProjectSectionMemberRepoIds
 } from './project-group-sections'
 import { getSidebarLineageChildren } from './pinned-section-worktrees'
 import { emitPinnedGroup } from './pinned-group-rows'
@@ -119,6 +122,11 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
   }
 
   const projectGroupPaths = getProjectGroupOccurrencePaths(projectGroups)
+  const groupCatalogHostIds = getProjectGroupCatalogHostIds(projectGroups)
+  const sectionMemberRepoIds =
+    groupBy === 'repo' && projectGroups.length > 0
+      ? getProjectSectionMemberRepoIds(repoMap, projectIndex)
+      : new Map<string, string[]>()
   const occurrencePlan = buildWorktreeOccurrencePlan({
     rows: worktrees,
     identityOf: getWorktreeHostIdentity,
@@ -154,10 +162,17 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
         groups.unshift([PINNED_GROUP_KEY, { label: '', items: pinned, repoIds: new Set() }])
       }
       return groups.map(([key, group]): SidebarOccurrenceSection => {
-        const revealPath =
-          groupBy === 'repo' && key !== PINNED_GROUP_KEY && group.repo?.projectGroupId
-            ? projectGroupPaths.get(group.repo.projectGroupId)
+        const sectionGroupId =
+          groupBy === 'repo' && key !== PINNED_GROUP_KEY
+            ? getProjectSectionGroupRepo(
+                group,
+                sectionMemberRepoIds.get(key) ?? [],
+                repoMap,
+                repoOrder,
+                groupCatalogHostIds
+              )?.projectGroupId
             : undefined
+        const revealPath = sectionGroupId ? projectGroupPaths.get(sectionGroupId) : undefined
         return {
           key,
           group,
@@ -291,7 +306,8 @@ export function planSidebarRows(inputs: SidebarRowPlanInputs) {
       projectGroups,
       folderWorkspaces: renderableFolderWorkspaces,
       projectOrderBy,
-      repoOrder
+      repoOrder,
+      sectionMemberRepoIds
     })
 
     return result

@@ -12,6 +12,7 @@ import {
   ipcOrRuntimeTargetForHostId
 } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
+import type { Repo } from '../../../../shared/repo-types'
 
 type ProjectGroupHostParts = Pick<ProjectGroup, 'connectionId' | 'executionHostId'>
 type ProjectGroupOwnerRecord = Pick<ProjectGroup, 'id' | 'connectionId' | 'executionHostId'>
@@ -89,4 +90,18 @@ export function isProjectGroupJoinableFromCatalog(
       return groupCatalog !== null && getRuntimeTargetHostId(groupCatalog) === catalogHostId
     })
   )
+}
+
+/** The first row whose own catalog can join the group, as the store guard decides. */
+export function getProjectGroupJoinableRow<
+  T extends Pick<Repo, 'connectionId' | 'executionHostId'>
+>(
+  rows: readonly T[],
+  projectGroups: readonly ProjectGroupOwnerRecord[],
+  groupId: string
+): T | undefined {
+  return rows.find((row) => {
+    const catalog = ipcOrRuntimeTargetForHostId(getRepoExecutionHostId(row))
+    return catalog !== null && isProjectGroupJoinableFromCatalog(projectGroups, groupId, catalog)
+  })
 }

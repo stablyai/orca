@@ -37,6 +37,8 @@ export type GroupHeaderRow = {
   count: number
   icon: SidebarHeaderIcon
   repo?: Repo
+  /** The member row whose Project Group places this section, when it is not `repo`. */
+  projectGroupRepo?: Repo
   projectGroup?: ProjectGroup | { id: null; name: 'Ungrouped'; tabOrder: number }
   projectGroupDepth?: number
   hostId?: ExecutionHostId
@@ -129,4 +131,9 @@ export type Row =
 /** The registration a project header reorders by, or none for a repeated copy. */
 export function getHeaderDragRepo(row: GroupHeaderRow): Repo | undefined {
   return row.repeated ? undefined : (row.anchorRepo ?? row.repo)
+}
+
+/** The registration whose Project Group places this header; a host's copy keeps the merged header's. */
+export function getHeaderProjectGroupRepo(row: GroupHeaderRow): Repo | undefined {
+  return row.projectGroupRepo ?? row.anchorRepo
 }
