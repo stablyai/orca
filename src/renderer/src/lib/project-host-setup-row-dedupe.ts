@@ -5,15 +5,33 @@ import type {
   ReadyProjectHostSetupOption
 } from './project-host-setup-options'
 
+export type SelectedProjectHostSetup = { projectHostSetupId: string; hostId: ExecutionHostId }
+
 /** Collapses ready setup rows to one per host, then one per checkout on a merged machine. */
 export function dedupeReadySetupRows(
   options: readonly ReadyProjectHostSetupOption[],
-  hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>
+  hostById: ReadonlyMap<ExecutionHostId, ExecutionHostRegistryEntry>,
+  selected?: SelectedProjectHostSetup | null
 ): ReadyProjectHostSetupOption[] {
-  return collapseMergedHostCheckouts(options.filter(dedupeByHost()), hostById)
+  return collapseMergedHostCheckouts(
+    selectedFirst(options, selected).filter(dedupeByHost()),
+    hostById
+  )
 }
 
-// Creation uses the first project+host setup, so display that same row; legacy duplicates (e.g. linked worktree projects) are otherwise identical and unreachable.
+// Per-host dedupe keeps the first row, so a host with several checkouts shows the selected one.
+function selectedFirst(
+  options: readonly ReadyProjectHostSetupOption[],
+  selected: SelectedProjectHostSetup | null | undefined
+): readonly ReadyProjectHostSetupOption[] {
+  const isSelected = (option: ReadyProjectHostSetupOption): boolean =>
+    option.id === selected?.projectHostSetupId && option.hostId === selected.hostId
+  return selected
+    ? [...options.filter(isSelected), ...options.filter((option) => !isSelected(option))]
+    : options
+}
+
+// One row per host; the project picker lists a host's other checkouts, so Run on only switches host.
 function dedupeByHost(): (option: ReadyProjectHostSetupOption) => boolean {
   const seenHosts = new Set<ExecutionHostId>()
   return (option) => {

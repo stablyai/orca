@@ -214,9 +214,11 @@ export function useComposerRuntimeTargetSelection(input: ComposerRuntimeTargetSe
         projectId: selectedRepoProjectId,
         projectHostSetups,
         eligibleRepos,
-        hosts: hostOptions
+        hosts: hostOptions,
+        selectedSetup:
+          selectedWorkspaceTarget.status === 'ready' ? selectedWorkspaceTarget.target : null
       }),
-    [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId]
+    [eligibleRepos, hostOptions, projectHostSetups, selectedRepoProjectId, selectedWorkspaceTarget]
   )
 
   const projectOptions = useMemo(

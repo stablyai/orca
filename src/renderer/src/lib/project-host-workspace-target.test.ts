@@ -206,25 +206,48 @@ describe('project-host workspace target resolution', () => {
     })
   })
 
-  it('canonicalizes a stale same-host setup id to the setup the picker shows', () => {
-    // Legacy drafts can name hidden duplicate setups; creation must use the canonical picker row/path.
-    const repos = [makeRepo('orca-main'), makeRepo('orca-worktree')]
-    const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-worktree'])]
+  it('canonicalizes a duplicate setup of the same checkout to the first one', () => {
+    const repos = [makeRepo('orca-main'), makeRepo('orca-twin')]
+    const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-twin'])]
     const projectHostSetups = [
       makeSetup('orca-main', 'github:stablyai/orca', 'local', 'orca-main'),
-      makeSetup('orca-worktree', 'github:stablyai/orca', 'local', 'orca-worktree')
+      makeSetup('orca-twin', 'github:stablyai/orca', 'local', 'orca-twin', {
+        path: '/repos/orca-main/'
+      })
     ]
 
     const resolution = resolveWorkspaceCreationTarget({
       eligibleRepos: repos,
       projects,
       projectHostSetups,
-      projectHostSetupId: 'orca-worktree'
+      projectHostSetupId: 'orca-twin'
     })
 
     expect(resolution).toMatchObject({
       status: 'ready',
       target: { projectHostSetupId: 'orca-main', repoId: 'orca-main', hostId: 'local' }
+    })
+  })
+
+  it('keeps an explicit setup for a second checkout of the project on the same host', () => {
+    // Two clones of one remote share a project; the picker lists each, so the chosen one must be created in.
+    const repos = [makeRepo('orca-main'), makeRepo('orca-review')]
+    const projects = [makeProject('github:stablyai/orca', ['orca-main', 'orca-review'])]
+    const projectHostSetups = [
+      makeSetup('orca-main', 'github:stablyai/orca', 'local', 'orca-main'),
+      makeSetup('orca-review', 'github:stablyai/orca', 'local', 'orca-review')
+    ]
+
+    const resolution = resolveWorkspaceCreationTarget({
+      eligibleRepos: repos,
+      projects,
+      projectHostSetups,
+      projectHostSetupId: 'orca-review'
+    })
+
+    expect(resolution).toMatchObject({
+      status: 'ready',
+      target: { projectHostSetupId: 'orca-review', repoId: 'orca-review', hostId: 'local' }
     })
   })
 

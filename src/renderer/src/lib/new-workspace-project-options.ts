@@ -6,11 +6,23 @@ import { isClipboardTextByteLengthOverLimit } from '../../../shared/clipboard-te
 import type { ExecutionHostRegistryEntry } from '../../../shared/execution-host-registry'
 import { getRepoExecutionHostId, type ExecutionHostId } from '../../../shared/execution-host'
 import {
+  buildProjectGroupingIndex,
+  isCheckoutScopedProjectSetup
+} from '../../../shared/project-section-grouping'
+import {
   getDuplicateProjectDetailsById,
   type ProjectSetupDirectory
 } from './new-workspace-duplicate-project-details'
 
 export const NEW_WORKSPACE_PROJECT_GROUP_OPTION_PREFIX = 'project-group:'
+const NEW_WORKSPACE_PROJECT_CHECKOUT_OPTION_PREFIX = 'project-checkout:'
+
+/** One of several same-host checkouts of a project; the sidebar shows each as its own section. */
+export type NewWorkspaceProjectCheckout = {
+  projectHostSetupId: string
+  hostId: ExecutionHostId
+  repoId: string
+}
 
 export type NewWorkspaceProjectOption =
   | {
@@ -20,6 +32,7 @@ export type NewWorkspaceProjectOption =
       displayName: string
       badgeColor: string
       detail: string
+      checkout?: NewWorkspaceProjectCheckout
     }
   | {
       kind: 'project-group'
@@ -85,18 +98,25 @@ export function buildNewWorkspaceProjectOptions(
 ): NewWorkspaceProjectOption[] {
   const { eligibleRepos } = input
   const { projects, projectHostSetups } = getProjectModel(input)
-  const eligibleRepoIds = new Set(eligibleRepos.map((repo) => repo.id))
+  const eligibleRepoById = new Map(eligibleRepos.map((repo) => [repo.id, repo]))
   const hostLabelById = new Map((input.hosts ?? []).map((host) => [host.id, host.label]))
   const liveHostIds = input.hosts ? new Set(input.hosts.map((host) => host.id)) : null
+  const groupingIndex = buildProjectGroupingIndex({ projects, projectHostSetups })
   const readySetupCountsByProjectId = new Map<string, number>()
   const setupDirectoriesByProjectId = new Map<string, ProjectSetupDirectory[]>()
+  const checkoutSetups: ProjectHostSetup[] = []
 
   for (const setup of projectHostSetups) {
     if (
       setup.setupState !== 'ready' ||
-      !eligibleRepoIds.has(setup.repoId) ||
+      !eligibleRepoById.has(setup.repoId) ||
       (liveHostIds && !liveHostIds.has(setup.hostId))
     ) {
+      continue
+    }
+    // Why: same-host checkouts of one remote share a project id; each stays selectable, as in the sidebar.
+    if (groupingIndex && isCheckoutScopedProjectSetup(setup, groupingIndex)) {
+      checkoutSetups.push(setup)
       continue
     }
     readySetupCountsByProjectId.set(
@@ -126,12 +146,74 @@ export function buildNewWorkspaceProjectOptions(
     hostLabelById
   )
 
-  return options
-    .map(({ detailSource: _detailSource, ...option }) => {
+  const projectById = new Map(projects.map((project) => [project.id, project]))
+  const checkoutOptions = checkoutSetups.flatMap((setup) => {
+    const project = projectById.get(setup.projectId)
+    return project
+      ? [
+          {
+            kind: 'project' as const,
+            id: getProjectCheckoutOptionId(setup),
+            projectId: project.id,
+            displayName: eligibleRepoById.get(setup.repoId)?.displayName || setup.displayName,
+            badgeColor: project.badgeColor,
+            detail: setup.path,
+            checkout: { projectHostSetupId: setup.id, hostId: setup.hostId, repoId: setup.repoId }
+          }
+        ]
+      : []
+  })
+
+  return [
+    ...options.map(({ detailSource: _detailSource, ...option }) => {
       const directoryDetail = duplicateProjectDetailsById.get(option.id)
       return directoryDetail ? { ...option, detail: directoryDetail } : option
-    })
-    .sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
+    }),
+    ...checkoutOptions
+  ].sort((a, b) => a.displayName.localeCompare(b.displayName) || a.detail.localeCompare(b.detail))
+}
+
+// Setup ids can repeat across hosts, so a checkout is keyed by both.
+function getCheckoutKey(projectHostSetupId: string, hostId: ExecutionHostId): string {
+  return JSON.stringify([hostId, projectHostSetupId])
+}
+
+function getProjectCheckoutOptionId(setup: Pick<ProjectHostSetup, 'id' | 'hostId'>): string {
+  return `${NEW_WORKSPACE_PROJECT_CHECKOUT_OPTION_PREFIX}${getCheckoutKey(setup.id, setup.hostId)}`
+}
+
+/** The picker row for the composer's resolved setup: its checkout row when it has one, else its project row. */
+export function getSelectedNewWorkspaceProjectOptionId(
+  options: readonly NewWorkspaceProjectOption[],
+  selectedProjectId: string | null,
+  projectHostSetupId: string | null | undefined,
+  hostId: ExecutionHostId | null | undefined
+): string | null {
+  const checkoutOption = options.find(
+    (option) =>
+      option.kind === 'project' &&
+      option.checkout !== undefined &&
+      option.checkout.projectHostSetupId === projectHostSetupId &&
+      option.checkout.hostId === hostId
+  )
+  return checkoutOption?.id ?? selectedProjectId
+}
+
+/** Setups a project row stands for; its checkout rows own the rest. */
+export function getProjectRowHostSetups(
+  options: readonly NewWorkspaceProjectOption[],
+  projectHostSetups: readonly ProjectHostSetup[]
+): readonly ProjectHostSetup[] {
+  const checkoutKeys = new Set(
+    options.flatMap((option) =>
+      option.kind === 'project' && option.checkout
+        ? [getCheckoutKey(option.checkout.projectHostSetupId, option.checkout.hostId)]
+        : []
+    )
+  )
+  return checkoutKeys.size === 0
+    ? projectHostSetups
+    : projectHostSetups.filter((setup) => !checkoutKeys.has(getCheckoutKey(setup.id, setup.hostId)))
 }
 
 function getProjectGroupOptionId(projectGroupId: string): string {

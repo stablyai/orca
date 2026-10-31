@@ -1,7 +1,8 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildNewWorkspaceProjectOptions,
-  findActionableFolderProjectGroup
+  findActionableFolderProjectGroup,
+  getProjectRowHostSetups
 } from './new-workspace-project-options'
 import type { ProjectGroup } from '../../../shared/project-group-types'
 import type { Project, ProjectHostSetup } from '../../../shared/project-types'
@@ -84,6 +85,32 @@ describe('buildNewWorkspaceProjectOptions', () => {
         badgeColor: '#111111',
         detail: 'stablyai/orca'
       }
+    ])
+  })
+
+  it('lists each same-host checkout and keeps the project row for its other hosts', () => {
+    const projectHostSetups = [
+      setup({ id: 'main-setup', repoId: 'main', path: '/code/orca' }),
+      setup({ id: 'review-setup', repoId: 'review', path: '/code/orca-review' }),
+      setup({ id: 'ssh-setup', hostId: 'ssh:builder', repoId: 'ssh-repo' })
+    ]
+    const options = buildNewWorkspaceProjectOptions({
+      projects: [project()],
+      projectHostSetups,
+      eligibleRepos: [
+        repo('main', { displayName: 'orca' }),
+        repo('review', { displayName: 'orca-review' }),
+        repo('ssh-repo', { connectionId: 'builder' })
+      ]
+    })
+
+    expect(options.map((option) => [option.displayName, option.detail])).toEqual([
+      ['orca', '/code/orca'],
+      ['orca', 'stablyai/orca'],
+      ['orca-review', '/code/orca-review']
+    ])
+    expect(getProjectRowHostSetups(options, projectHostSetups).map((entry) => entry.id)).toEqual([
+      'ssh-setup'
     ])
   })
 
