@@ -25,7 +25,6 @@ vi.mock('lucide-react-native', () => ({
 vi.mock('./MobileSourceControlHeader', () => ({ MobileSourceControlHeader: () => null }))
 vi.mock('./MobileSourceControlContent', () => ({ MobileSourceControlContent: () => null }))
 vi.mock('./MobileSourceControlModals', () => ({ MobileSourceControlModals: () => null }))
-vi.mock('./MobileSourceControlSegments', () => ({ MobileSourceControlSegments: () => null }))
 vi.mock('./MobileSourceControlBranchCard', () => ({ MobileSourceControlBranchCard: () => null }))
 vi.mock('./MobileGitHistoryList', () => ({ MobileGitHistoryList: () => null }))
 vi.mock('../components/pr-sidebar/MobilePrViewPanel', () => ({ MobilePrViewPanelBody: () => null }))

@@ -18,6 +18,7 @@ vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
   AppState: { currentState: 'active', addEventListener: () => ({ remove: () => {} }) },
+  Platform: { OS: 'ios' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   ScrollView: 'ScrollView',

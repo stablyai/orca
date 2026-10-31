@@ -19,12 +19,16 @@ import {
   resolveMobileSourceControlReviewInputs
 } from './mobile-source-control-primary-action'
 import { MobileSourceControlModals } from './MobileSourceControlModals'
-import { MobileSourceControlSegments } from './MobileSourceControlSegments'
+import { MobileSegmentedControl } from '../components/MobileSegmentedControl'
 import { MobileSourceControlBranchCard } from './MobileSourceControlBranchCard'
 import { MobileGitHistoryList } from './MobileGitHistoryList'
 import { styles } from './mobile-source-control-styles'
 import { hubStyles } from './mobile-source-control-hub-styles'
-import type { SourceControlHubTab } from './mobile-source-control-hub-tab'
+import {
+  SOURCE_CONTROL_HUB_TABS,
+  SOURCE_CONTROL_HUB_TAB_LABELS,
+  type SourceControlHubTab
+} from './mobile-source-control-hub-tab'
 import { buildMobilePrChipSummary, countUnresolvedReviewThreads } from './mobile-pr-chip-summary'
 import { MOBILE_COMPLETE_MERGE_ACTION_ID } from './mobile-source-control-conflict-actions'
 import { isMobileConflictAborting } from './mobile-source-control-conflict-abort'
@@ -253,6 +257,19 @@ export function MobileSourceControlPanel({
       onRefresh={onRefresh}
       onOpenPrWeb={prWebUrl ? () => openMobilePrUrl(prWebUrl) : undefined}
       prNumber={prWebNumber}
+      accessory={
+        <MobileSegmentedControl
+          segments={SOURCE_CONTROL_HUB_TABS.map((tab) => ({
+            value: tab,
+            label: SOURCE_CONTROL_HUB_TAB_LABELS[tab]
+          }))}
+          selected={activeTab}
+          onSelect={selectTab}
+          fill
+          tabs
+          style={hubStyles.segments}
+        />
+      }
     />
   )
 
@@ -296,8 +313,6 @@ export function MobileSourceControlPanel({
           {header}
         </SafeAreaView>
       )}
-
-      <MobileSourceControlSegments active={activeTab} onSelect={selectTab} />
 
       {/* Ready PRs duplicate the branch card; retain it only when needed to abort a conflict. */}
       {ready && (activeTab !== 'pr' || hasActiveConflict) ? (

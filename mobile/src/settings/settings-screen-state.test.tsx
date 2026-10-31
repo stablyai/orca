@@ -8,6 +8,14 @@ import { findAllByHostType } from '../test-support/react-test-renderer-host-node
 import { VoiceModelList } from '../components/VoiceModelList'
 import type { MobileSpeechModel, MobileSpeechSetup } from '../dictation/mobile-dictation-setup'
 
+vi.mock(
+  './settings-screen-frame',
+  async () => (await import('../test-support/settings-chrome-test-double')).settingsFrameDouble
+)
+vi.mock(
+  '../components/list/ListGroup',
+  async () => (await import('../test-support/settings-chrome-test-double')).listGroupDouble
+)
 vi.mock('react-native', () => ({
   View: 'View',
   Text: 'Text',

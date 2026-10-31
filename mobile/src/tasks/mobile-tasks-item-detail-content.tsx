@@ -25,9 +25,8 @@ import {
   renderMobileTasksItemFiles
 } from './mobile-tasks-item-review-sections'
 import { renderMobileTasksItemFieldEditors } from './mobile-tasks-item-field-editors'
-import { ListGroup, SectionHeader } from '../components/list/ListGroup'
+import { ListGroup, SectionHeader, ListRow } from '../components/list/ListGroup'
 import { MobileLoadErrorState, MobileStateView } from '../components/MobileStateView'
-import { ListRow } from '../components/list/ListRow'
 import type { ActionableTaskItem } from './mobile-tasks-project-workspace-types'
 import type { DetailPayload } from './mobile-tasks-provider-detail-types'
 

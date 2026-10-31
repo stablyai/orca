@@ -26,24 +26,29 @@ type Props<Value extends string> = {
   style?: StyleProp<ViewStyle>
   /** Shown but not pickable, e.g. while the value it sets is locked. */
   disabled?: boolean
+  /** The segments switch the content below, so screen readers hear tabs instead of radio buttons. */
+  tabs?: boolean
 }
 
-/** A pick-one pill control; each segment reads as a radio button. */
+/** A pick-one pill control; each segment reads as a radio button, or as a tab with `tabs`. */
 export function MobileSegmentedControl<Value extends string>(props: Props<Value>) {
   useMobileColorScheme()
   return (
     <View
       style={[styles.segmented, props.onSheet && styles.segmentedOnSheet, props.style]}
-      accessibilityRole="radiogroup"
+      accessibilityRole={props.tabs ? 'tablist' : 'radiogroup'}
     >
       {props.segments.map((segment) => {
         const active = segment.value === props.selected
         return (
           <Pressable
             key={segment.value}
-            accessibilityRole="radio"
-            aria-checked={active}
-            accessibilityState={{ disabled: props.disabled === true }}
+            accessibilityRole={props.tabs ? 'tab' : 'radio'}
+            aria-checked={props.tabs ? undefined : active}
+            accessibilityState={{
+              disabled: props.disabled === true,
+              ...(props.tabs ? { selected: active } : {})
+            }}
             disabled={props.disabled}
             accessibilityLabel={segment.accessibilityLabel ?? segment.label}
             testID={props.testIDPrefix ? `${props.testIDPrefix}${segment.value}` : undefined}
