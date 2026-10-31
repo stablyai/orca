@@ -1,7 +1,7 @@
 import { Image, Modal, Pressable, ScrollView, View } from 'react-native'
 import { X } from 'lucide-react-native'
 import { useWindowSafeAreaInsets } from '../../../layout/side-safe-area'
-import { colors, spacing } from '../../../theme/mobile-theme'
+import { colors, radii, spacing } from '../../../theme/mobile-theme'
 import { themedStyleSheet } from '../../../theme/themed-styles'
 import { useMobileColorScheme } from '../../../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../../../i18n/use-mobile-translation'
@@ -64,7 +64,7 @@ const styles = themedStyleSheet(() => ({
     position: 'absolute',
     right: spacing.lg,
     padding: spacing.sm,
-    borderRadius: 999,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgRaised
   }
 }))

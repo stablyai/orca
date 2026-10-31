@@ -7,13 +7,15 @@ import { promptSkillRefs } from './native-chat-prompt-document'
 import { useCallback } from 'react'
 import { completeNativeChatStructuredUserAction } from './native-chat-structured-user-action'
 import {
-  isStructuredAgentSessionComposerCommand,
-  isStructuredAgentSessionGoalCommand,
+  isStructuredAgentSessionHostCommand,
   structuredAgentSessionCommandChangesConversation
 } from '../../../../shared/structured-agent-session-composer'
 import type { AgentType } from '../../../../shared/agent-status-types'
 import { dispatchNativeChatStructuredComposerText } from './native-chat-structured-composer-dispatch'
-import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
+import type {
+  NativeChatComposerSendIntent,
+  NativeChatStructuredComposerTransport
+} from './native-chat-composer-types'
 import type { NativeChatComposerImageAttachment } from './NativeChatComposerField'
 import { nativeChatAttachImagesAgainReason } from './native-chat-image-reattach'
 import { nativeChatNoticeFromError } from './native-chat-composer-notice'
@@ -41,21 +43,10 @@ export type UseNativeChatStructuredComposerSendArgs = {
   setCaret: (caret: number) => void
 }
 
-/** A command the host runs itself (and `/goal` where the host sets goals), never a message. */
-function isNativeChatStructuredHostCommand(
-  text: string,
-  agent: AgentType,
-  transport: NativeChatStructuredComposerTransport
-): boolean {
-  return (
-    isStructuredAgentSessionComposerCommand(text, agent, transport.sessionCommands) ||
-    (transport.threadGoal !== undefined && isStructuredAgentSessionGoalCommand(text))
-  )
-}
-
 export type NativeChatStructuredComposerSend = (
   text: string,
-  attachments?: readonly NativeChatComposerImageAttachment[]
+  attachments?: readonly NativeChatComposerImageAttachment[],
+  intent?: NativeChatComposerSendIntent
 ) => Promise<void>
 
 /** Clear submitted composer content only after structured transport acceptance. */
@@ -70,7 +61,7 @@ export function useNativeChatStructuredComposerSend({
   setCaret
 }: UseNativeChatStructuredComposerSendArgs): NativeChatStructuredComposerSend {
   return useCallback<NativeChatStructuredComposerSend>(
-    async (text, attachments = imageAttachments): Promise<void> => {
+    async (text, attachments = imageAttachments, intent): Promise<void> => {
       // Picked commands must also wait for pending attachments to acquire paths.
       if (!structuredTransport || attachments.some((attachment) => attachment.pending)) {
         return
@@ -79,7 +70,10 @@ export function useNativeChatStructuredComposerSend({
         return
       }
       text = resolveNativeChatPastedText(draftScopeKey, text)
-      const hostCommand = isNativeChatStructuredHostCommand(text, agent, structuredTransport)
+      const hostCommand = isStructuredAgentSessionHostCommand(
+        text,
+        structuredTransport.threadGoal !== undefined
+      )
       // Blocked hosts cannot take turns/conversation commands; option commands only configure later turns.
       if (
         structuredTransport.sendBlockedReason !== undefined &&
@@ -121,7 +115,8 @@ export function useNativeChatStructuredComposerSend({
         structuredTransport,
         text,
         attachments,
-        promptSkillRefs(submitted.document)
+        promptSkillRefs(submitted.document),
+        intent
       )
         .then(({ accepted, error, refusedWhile, revealsTranscript }) => {
           if (!hostCommand || isCurrent()) {

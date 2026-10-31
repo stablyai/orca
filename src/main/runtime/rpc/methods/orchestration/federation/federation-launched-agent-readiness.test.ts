@@ -1,8 +1,13 @@
+import { terminalExitError } from '../../../../../../shared/terminal-start-failure'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { resolveWorkerStartReadinessTimeoutMs } from '../../../../../../shared/orchestration-timing-budgets'
 import { OrcaRuntimeService } from '../../../../orca-runtime'
 import { OrchestrationDb } from '../../../../orchestration/db'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
+import {
+  createTranscriptPane,
+  TRANSCRIPT_PANE_PTY_ID
+} from '../../../../agent-transcript-pane-test-harness'
 import { configureFederationWorkerRuntime } from './federation-runtime.test-support'
 
 const HANDLE = 'term_windows_worker'
@@ -16,6 +21,7 @@ describe('federated worker first dispatch readiness', () => {
     for (const db of databases.splice(0)) {
       db.close()
     }
+    vi.useRealTimers()
     vi.restoreAllMocks()
   })
 
@@ -92,6 +98,39 @@ describe('federated worker first dispatch readiness', () => {
     }
   )
 
+  it.each(['pi', 'codex', 'claude', 'opencode'] as const)(
+    'persists the %s execution-host failure without typing after recorded end',
+    async (agent) => {
+      const { runtime, handle } = await createTranscriptPane({
+        paneTitle: 'shell',
+        foregroundProcess: 'bash',
+        launchAgent: agent,
+        data: ''
+      })
+      const db = new OrchestrationDb(':memory:')
+      databases.push(db)
+      runtime.setOrchestrationDb(db)
+      configureFederationWorkerRuntime(runtime, handle)
+      vi.mocked(runtime.waitForTerminal).mockRestore()
+      runtime.onPtyExit(TRANSCRIPT_PANE_PTY_ID, 137, 'inc-1', { providerExitObserved: true })
+      vi.useFakeTimers()
+      const receipt = vi.fn()
+      void attach(runtime, { agent }).then(receipt)
+      await vi.waitFor(() => expect(receipt).toHaveBeenCalledOnce())
+      expect(receipt.mock.calls[0][0]).toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        lastError: 'terminal_exited'
+      })
+      expect(db.getRemoteDispatchAttachment('ctx_remote')).toMatchObject({
+        state: 'failed',
+        stage: 'agent_readiness',
+        last_error: 'terminal_exited'
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    }
+  )
+
   it('a reused --terminal keeps the tui-idle wait', async () => {
     const runtime = createWorkerHost()
     vi.spyOn(runtime, 'showManagedTerminalWorkspace').mockResolvedValue(
@@ -125,4 +164,47 @@ describe('federated worker first dispatch readiness', () => {
     })
     expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
   })
+  it.each(['fresh', 'reattach', 'adopted'] as const)(
+    'uses actual %s creation for the failed readiness receipt',
+    async (context) => {
+      const runtime = createWorkerHost()
+      const creation = {
+        handle: HANDLE,
+        ptyId: 'pty-created',
+        incarnationId: 'inc-created',
+        worktreeId: WORKTREE,
+        title: null,
+        ...(context === 'reattach' ? { isReattach: true as const } : {}),
+        ...(context === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
+      }
+      const original = vi.mocked(runtime.createManagedWorktree).getMockImplementation()!
+      vi.mocked(runtime.createManagedWorktree).mockImplementation(async (request) => {
+        request.onStartupTerminalCreated?.(creation)
+        return original(request)
+      })
+      vi.spyOn(runtime, 'getPtyLivenessVerdict').mockReturnValue({
+        status: 'exited',
+        incarnationId: 'inc-created',
+        cause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      vi.mocked(runtime.waitForFreshWorkerComposer).mockRejectedValue(
+        terminalExitError('timeout', {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        })
+      )
+      await expect(attach(runtime, { agent: 'opencode' })).resolves.toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        lastError:
+          context === 'fresh' ? expect.stringContaining('Close some Git Bash terminals') : 'timeout'
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    }
+  )
 })

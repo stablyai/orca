@@ -318,7 +318,7 @@ const styles = themedStyleSheet(() => ({
     minWidth: 64,
     height: 34,
     paddingHorizontal: spacing.md,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.surfaceBright,
     alignItems: 'center',
     justifyContent: 'center'
@@ -385,7 +385,7 @@ const styles = themedStyleSheet(() => ({
     alignSelf: 'flex-start',
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   secondaryButtonText: {

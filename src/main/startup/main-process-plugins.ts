@@ -6,10 +6,12 @@ import { app, BrowserWindow, net } from 'electron'
 import { performance } from 'node:perf_hooks'
 import { PluginService } from '../plugins/plugin-service'
 import { PluginKillListService } from '../plugins/catalog/plugin-kill-list-service'
+import { PluginInstallStatsService } from '../plugins/catalog/plugin-install-stats-service'
 import { PluginMarketplaceService } from '../plugins/catalog/plugin-marketplace-service'
 import { PluginMarketplaceInstaller } from '../plugins/catalog/plugin-marketplace-installer'
 import { PluginAutoUpdater } from '../plugins/catalog/plugin-auto-updater'
 import { PluginReleaseFirstSeenStore } from '../plugins/catalog/plugin-release-first-seen-store'
+import { PluginUpdateReviewNotices } from '../plugins/catalog/plugin-update-review-notices'
 import { isPluginAutoUpdateOn } from '../../shared/plugins/catalog/plugin-update-policy'
 import { PluginBundledBootstrapCoordinator } from '../plugins/plugin-bundled-bootstrap-coordinator'
 import { getPluginsDataDir } from '../plugins/plugin-discovery'
@@ -47,6 +49,20 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     pluginsDataDir: getPluginsDataDir(app.getPath('userData'))
   })
   await state.pluginKillListService.initialize()
+  state.pluginInstallStatsService = new PluginInstallStatsService({
+    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    // Why packaged only (like the safety list): dev and e2e runs must not reach the network unasked.
+    isFetchAllowed: () =>
+      store.getSettings().pluginSystemEnabled === true &&
+      (app.isPackaged || process.env.ORCA_PLUGIN_INSTALL_STATS === '1')
+  })
+  state.pluginInstallStatsService.onChanged(() => {
+    for (const window of BrowserWindow.getAllWindows()) {
+      if (!window.isDestroyed()) {
+        window.webContents.send('plugins:installCountsChanged')
+      }
+    }
+  })
   const pluginImageCache = new PluginImageCache(
     join(getPluginsDataDir(app.getPath('userData')), 'image-cache')
   )
@@ -122,6 +138,12 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     }
   })
   state.pluginAutoUpdater = pluginAutoUpdater
+  state.pluginUpdateReviewNotices = new PluginUpdateReviewNotices({
+    pluginsDataDir: getPluginsDataDir(app.getPath('userData')),
+    getHeld: () => pluginAutoUpdater.getHeldForReview(),
+    findName: (pluginKey) => pluginService.findValidPlugin(pluginKey)?.manifest.name ?? null,
+    isKillListed: (pluginKey) => Boolean(state.pluginKillListService?.find(pluginKey))
+  })
   // Why packaged only (like the safety list): dev and e2e runs must not update fixtures unasked.
   const autoUpdateScheduled = app.isPackaged || process.env.ORCA_PLUGIN_AUTO_UPDATE === '1'
   const syncPluginAutoUpdate = (runNow: boolean): void => {

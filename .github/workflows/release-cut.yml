@@ -697,8 +697,6 @@ jobs:
     with:
       ref: refs/tags/${{ needs.cut.outputs.tag }}
       runner: ubuntu-latest
-    secrets:
-      SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
 
   terminal-rendering-golden:
     needs: cut

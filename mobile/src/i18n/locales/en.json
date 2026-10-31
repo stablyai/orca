@@ -282,8 +282,9 @@
       "messages_other": "{{count}} messages",
       "currentWorktree": "current worktree",
       "resumeSession": "Resume agent session",
-      "userRole": "user",
-      "assistantRole": "assistant"
+      "hidePreview": "Hides the recent messages.",
+      "showPreview": "Shows the recent messages.",
+      "you": "You"
     },
     "panel": {
       "workspace": "Workspace",
@@ -304,7 +305,13 @@
       "skipped_other": "{{count}} transcripts skipped",
       "noSessions": "No agent sessions",
       "noSearchResults": "No sessions match your search.",
-      "emptyScope": "No past agent sessions in this scope."
+      "emptyScope": "No past agent sessions in this scope.",
+      "hideDetails": "Hide details",
+      "showDetails": "Show details",
+      "dismissNotice": "Dismiss",
+      "loading": "Loading agent sessions…",
+      "noMatches": "No matches",
+      "clearSearch": "Clear search"
     },
     "resumeTarget": {
       "runtimeUnavailable": "Resume from history is not available in runtime-hosted workspaces.",
@@ -478,40 +485,26 @@
     "appUpdateCard": {
       "title": "Orca {{version}} is available",
       "updateAccessibilityLabel": "Orca {{version}} is available, tap to update",
-      "updateHint": "Tap to update",
-      "dismissAccessibilityLabel": "Dismiss Orca {{version}} update"
-    },
-    "accountUsageCards": {
-      "sectionHeading": "Account usage",
-      "systemDefault": "System default",
-      "sessionWindow": "5h",
-      "weeklyWindow": "7d"
+      "dismissAccessibilityLabel": "Dismiss Orca {{version}} update",
+      "update": "Update"
     },
     "emptyState": {
       "openDesktopTitle": "Open Orca desktop",
       "openDesktopDescription": "Go to Settings → Mobile and generate a pairing QR code.",
       "scanCodeTitle": "Scan the code",
-      "scanCodeDescription": "Tap the button above to open the scanner. Point at the QR code on your screen.",
       "connectedTitle": "You're connected",
       "connectedDescription": "Your desktop will appear here. Everything is encrypted end-to-end.",
       "title": "Connect your desktop",
       "description": "Pair with Orca on your computer to check on your agents, jump into any terminal, and drive work from your phone.",
-      "pairDesktop": "Pair Desktop",
-      "stepsHeading": "How it works"
+      "pairDesktopButton": "Pair desktop",
+      "scanCodeBelowDescription": "Tap Pair desktop below, then point your camera at the QR code on your screen."
     },
     "listFooter": {
-      "resumeHeading": "Resume",
-      "tasksHeading": "Tasks",
-      "hostPickerTitle": "Open Tasks On"
+      "hostPickerTitle": "Open Tasks On",
+      "automationsHeading": "Automations",
+      "automationsHostPickerTitle": "Open Automations On"
     },
     "listHeader": {
-      "daysHours": "{{days}}d {{hours}}h",
-      "hoursMinutes": "{{hours}}h {{minutes}}m",
-      "minutes": "{{minutes}}m",
-      "title": "Welcome back",
-      "agentsSpawned": "Agents spawned",
-      "agentTime": "Agent time",
-      "prsCreated": "PRs created",
       "desktopsHeading": "Desktops"
     },
     "screen": {
@@ -521,10 +514,18 @@
       "removeHostTitle": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
     },
-    "tasksCard": {
-      "title": "Tasks",
-      "noSources": "No task sources connected",
-      "openProviderTasks": "Open {{provider}} tasks"
+    "bottomBar": {
+      "connectFirst": "Connect a desktop to start new work.",
+      "tasks": "Tasks",
+      "newWorkspace": "New workspace"
+    },
+    "desktops": {
+      "pairDesktop": "Pair a desktop"
+    },
+    "jumpBackIn": {
+      "heading": "Jump back in",
+      "lastOpened": "Last opened",
+      "connectToOpen": "Connect {{desktop}} to open"
     }
   },
   "hooks": {
@@ -551,18 +552,14 @@
       "creatingWorkspace": "Creating workspace…"
     },
     "hostScreenHeader": {
-      "workspaceOptions": "Workspace options",
-      "activeFilters_one": "Workspace options ({{count}} filter active)",
-      "activeFilters_other": "Workspace options ({{count}} filters active)",
       "backToHosts": "Back to hosts",
       "reconnect": "Reconnect",
       "floatingWorkspace": "Floating Workspace",
       "hideSidebar": "Hide sidebar",
       "accounts": "Accounts",
       "tasks": "Tasks",
-      "closeSearch": "Close search",
-      "searchWorkspaces": "Search workspaces",
-      "newWorkspace": "New workspace"
+      "moreActions": "More actions",
+      "automations": "Automations"
     },
     "hostScreenOverlays": {
       "deleteWorktree": "Delete Worktree",
@@ -573,10 +570,6 @@
       "primaryWorktreeDeleteHint": "Primary worktree — can't be deleted. Remove the project instead.",
       "removeHost": "Remove Host",
       "removeHostMessage": "Remove \"{{name}}\"? You can re-pair later."
-    },
-    "hostWorkspaceList": {
-      "searchPlaceholder": "Search workspaces…",
-      "searchWorkspaces": "Search workspaces"
     },
     "workspaceDetailsSheet": {
       "merged": "Merged",
@@ -658,7 +651,15 @@
       "backToOptions": "Back to Workspace options",
       "workspaceOptions": "Workspace options",
       "syncedAcrossDevices": "Synced across your devices",
-      "clearFilters": "Clear filters"
+      "done": "Done",
+      "reset": "Reset"
+    },
+    "hostBottomBar": {
+      "workspaceOptions": "Workspace options",
+      "activeFilters_one": "Workspace options ({{count}} filter active)",
+      "activeFilters_other": "Workspace options ({{count}} filters active)",
+      "searchWorkspaces": "Search workspaces",
+      "newWorkspace": "New workspace"
     }
   },
   "webShell": {
@@ -686,7 +687,8 @@
       "agentSessionHistory": "Agent Session History",
       "changes": "Changes",
       "pullRequest": "Pull Request",
-      "workspace": "Workspace"
+      "workspace": "Workspace",
+      "automations": "Automations"
     }
   },
   "notifications": {
@@ -932,7 +934,6 @@
       "discardTitle": "Discard File",
       "discardMessage": "Discard changes to \"{{filePath}}\"? This cannot be undone.",
       "discard": "Discard",
-      "actionsTitle": "Review Actions",
       "stageableFiles_one": "{{count}} reviewed unstaged files can be staged",
       "stageableFiles_other": "{{count}} reviewed unstaged files can be staged",
       "sendNotes": "Send Notes",
@@ -1030,11 +1031,6 @@
       "addNoteOnLine": "Add note on line {{number}}",
       "editNoteOnLine": "Edit note on line {{number}}"
     },
-    "homeQuickActions": {
-      "title": "Quick Actions",
-      "pairDesktop": "Pair Desktop",
-      "newWorkspace": "New Workspace"
-    },
     "hostCard": {
       "worktreeAccessibilitySummary": "{{summary}}, {{activeCount}} active",
       "pairingInvalid": "Pairing invalid",
@@ -1094,9 +1090,6 @@
     "workspaceNameInput": {
       "placeholder": "Workspace name"
     },
-    "newWorkspaceFab": {
-      "newWorkspace": "New workspace"
-    },
     "newWorkspaceSetupScriptField": {
       "label": "Setup script",
       "hooks": "HOOKS",
@@ -1113,14 +1106,15 @@
     "newWorktreeFormSheet": {
       "createWorktree": "Create worktree",
       "noProjectsFound": "No projects found",
-      "nameOrCreateFrom": "Name or 'Create From'",
       "workspaceName": "Workspace name",
       "agent": "Agent",
       "connectTargetFirst": "Connect target first",
-      "advanced": "Advanced",
       "note": "Note",
       "notePlaceholder": "Write a note",
-      "connectTarget": "Connect target"
+      "connectTarget": "Connect target",
+      "options": "Options",
+      "createWorkspace": "Create workspace",
+      "startFrom": "Start from"
     },
     "newWorktreeModal": {
       "remoteRepository": "Remote repository"
@@ -1134,7 +1128,8 @@
       "project": "Project",
       "selectProject": "Select a project",
       "runOn": "Run on",
-      "selectRunTarget": "Select a run target"
+      "selectRunTarget": "Select a run target",
+      "where": "Where"
     },
     "protocolBlockScreen": {
       "updateMobileTitle": "Update Orca Mobile",
@@ -1170,19 +1165,21 @@
       "derivedFromName": "Derived from name"
     },
     "smartWorkspaceSourceDrawer": {
-      "title": "Name or 'Create From'",
       "crossRepoMessage": "This item lives in {{owner}}/{{repo}}.",
       "switchRepo": "Switch to {{repoName}}",
       "connectRepository": "Connect the repository to search sources.",
       "gitHubRemoteRequired": "This SSH repo needs a GitHub remote to list issues and PRs.",
       "noResults": "No results found.",
       "typeWorkspaceName": "Type a workspace name in the field below.",
-      "searchPlaceholder": "Type a name or search a source"
+      "searchPlaceholder": "Type a name or search a source",
+      "workspaceName": "Workspace name",
+      "startFrom": "Start from"
     },
     "smartWorkspaceSourceField": {
-      "optional": "[Optional]",
       "openSelectedSource": "Open selected source",
-      "searchPlaceholder": "Type a name or search a source"
+      "searchPlaceholder": "Type a name or search a source",
+      "optionalLabel": "Optional",
+      "clearSelectedSource": "Clear selected source"
     },
     "smartWorkspaceSourceRow": {
       "useName": "Use \"{{name}}\"",
@@ -1286,6 +1283,15 @@
       "title": "Something went wrong",
       "tryAgain": "Try again",
       "home": "Home"
+    },
+    "pullDownMenu": {
+      "close": "Close menu"
+    },
+    "bottomSearchBar": {
+      "closeSearch": "Close search"
+    },
+    "sheetHeader": {
+      "close": "Close"
     }
   },
   "pullRequest": {
@@ -1557,7 +1563,6 @@
       "title": "Branch for this worktree",
       "existing": "Existing branch",
       "existingHint": "New commits go on this branch.",
-      "new": "New branch",
       "newHint": "Create a new local branch",
       "newName": "New branch name",
       "automaticName": "Automatic name",
@@ -1601,13 +1606,19 @@
       "backToSession": "Back to session",
       "title": "Files",
       "truncatedList": "{{worktreeLabel}} - Showing first 5000",
-      "emptyState": "No files found"
+      "emptyState": "No files found",
+      "filterPlaceholder": "Filter files",
+      "noMatches": "No matches",
+      "noMatchesHint": "Only folders you have opened are searched.",
+      "clearFilter": "Clear filter"
     },
     "fileMarkdownPreview": {
       "viewSource": "View Markdown source",
       "viewPreview": "View rendered Markdown preview",
       "copyLoadedSource": "Copy loaded Markdown source",
-      "copySource": "Copy Markdown source"
+      "copySource": "Copy Markdown source",
+      "previewMode": "Preview",
+      "sourceMode": "Source"
     },
     "fileMediaPreview": {
       "loadFailed": "Unable to load media",
@@ -1807,11 +1818,11 @@
       "previewLabel": "{{title}} preview"
     },
     "header": {
+      "workspaceDetailsHint": "Shows the full workspace name and where it is",
       "showSidebar": "Show sidebar",
       "backToWorktrees": "Back to worktrees",
       "terminalTitle": "Terminal",
       "reconnectToDesktop": "Reconnect to desktop",
-      "openFileExplorer": "Open file explorer",
       "openSourceControl": "Open source control",
       "moreActions": "More session actions",
       "terminalLayout": "Terminal layout",
@@ -1864,8 +1875,7 @@
       "tabStatus": "{{title}}, {{status}}",
       "newTab": "New tab",
       "quickCommandsUpdateRequired": "Desktop update required for quick commands",
-      "checkingCapabilities": "Checking desktop capabilities — try again in a moment",
-      "terminalLayout": "Terminal layout"
+      "checkingCapabilities": "Checking desktop capabilities — try again in a moment"
     },
     "terminalInputActions": {
       "sendingImage": "Sending image",
@@ -1925,9 +1935,6 @@
       "chooseAgentTitle": "Choose Agent",
       "title": "Quick Commands",
       "editorDescription": "Save terminal commands or agent prompts for quick access."
-    },
-    "quickCommandsTabButton": {
-      "quickCommands": "Quick commands"
     },
     "aiVaultResumeLaunch": {
       "createFailed": "Failed to create terminal",
@@ -2128,6 +2135,9 @@
     },
     "terminalRecords": {
       "defaultTitle": "Terminal"
+    },
+    "tabCard": {
+      "editor": "Editor"
     },
     "terminalTabAgent": {
       "newBrowser": "New Browser",
@@ -2540,7 +2550,11 @@
       "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
       "saveEditedMessage": "Save edited message",
-      "sendMessage": "Send message"
+      "sendMessage": "Send message",
+      "sendQueue": "Queue",
+      "sendSteer": "Steer",
+      "sendQueueHint": "Runs after the current turn",
+      "sendSteerHint": "Goes into what the agent is doing now"
     },
     "composerAttachments": {
       "file": "File",
@@ -2600,12 +2614,13 @@
       "modelFullAccessLabel": "Model, {{value}}, full access",
       "modelLabel": "Model, {{value}}",
       "permissionsLabel": "Permissions, {{value}}",
-      "closePicker": "Close picker",
       "backToModels": "Back to models",
       "agentWorking": "Agent is working",
       "settingsLocked": "Model settings unlock when this turn finishes.",
       "dispatchUnconfirmed": "Sent to the agent — not confirmed",
-      "permissions": "Permissions"
+      "permissions": "Permissions",
+      "applying": "Applying…",
+      "optionsSection": "Options"
     },
     "sessionOptionRows": {
       "defaultMarker": "Default",
@@ -2697,7 +2712,10 @@
       "stoppedManually": "Stopped manually",
       "compaction": "Context compacted",
       "contextCleared": "Context cleared",
-      "plan": "Plan"
+      "plan": "Plan",
+      "permissionDenied": "{{agent}} denied permission. View details.",
+      "safetyReview": "{{agent}} reported a safety review warning. View details.",
+      "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
     },
     "nativeChatProse": {
       "attachedImage": "Attached image",
@@ -3133,7 +3151,8 @@
       "title": "Source Control",
       "openNumberedPrWeb": "Open pull request #{{number}} on the web",
       "openPrWeb": "Open pull request on the web",
-      "refresh": "Refresh source control"
+      "refresh": "Refresh source control",
+      "moreActions": "More source control actions"
     },
     "modals": {
       "actionsTitle": "Source Control",
@@ -3511,33 +3530,26 @@
       "noMoreProjects": "No more projects.",
       "chooseView": "Choose Project View",
       "view": "Project View",
-      "unsupportedLayout": "Orca doesn't support this GitHub Project layout yet.",
-      "sort": "Project Sort"
+      "unsupportedLayout": "Orca doesn't support this GitHub Project layout yet."
     },
     "githubViewControls": {
-      "source": "Source: {{source}}",
-      "sort": "Sort: {{sort}}",
-      "fields": "Fields: {{fields}}",
       "openView": "Open view in GitHub"
     },
     "itemActions": {
       "creating": "Creating...",
-      "createWorkspace": "Create Workspace",
       "copyLinearLink": "Copy Linear link",
       "copyGitHubLink": "Copy GitHub link",
       "mergePullRequest": "Merge pull request",
       "mergeConflicts": "GitHub reports merge conflicts.",
       "mergeMergeRequest": "Merge merge request",
-      "changeStatus": "Change status"
+      "changeStatus": "Change status",
+      "copyLink": "Copy link",
+      "startWorkspace": "Start workspace",
+      "moreActions": "More actions"
     },
     "itemDetailContent": {
       "pipelineJobs_one": "{{count}} jobs",
       "pipelineJobs_other": "{{count}} jobs",
-      "type": "Type",
-      "status": "Status",
-      "assignee": "Assignee",
-      "project": "Project",
-      "assignees": "Assignees",
       "description": "Description",
       "checks": "Checks",
       "rerunFailed": "Rerun failed",
@@ -3551,7 +3563,14 @@
       "subIssueTitle": "Sub-issue title",
       "addSubIssue": "Add sub-issue",
       "discussion": "Discussion",
-      "noComments": "No comments."
+      "noComments": "No comments.",
+      "details": "Details",
+      "type": "Type",
+      "status": "Status",
+      "assignee": "Assignee",
+      "project": "Project",
+      "priority": "Priority",
+      "assignees": "Assignees"
     },
     "itemDetailDrawer": {
       "refreshDetails": "Refresh details"
@@ -3594,17 +3613,8 @@
     "linearList": {
       "changeStatusFrom": "Change status from {{status}}"
     },
-    "linearViewControls": {
-      "groupLabel": "Group: {{group}}",
-      "orderLabel": "Order: {{order}}",
-      "displayButton": "Display"
-    },
     "listDisplayPickers": {
-      "linearViewTitle": "Linear View",
-      "linearGroupTitle": "Group Linear Issues",
-      "linearOrderTitle": "Order Linear Issues",
-      "displayPropertiesTitle": "Display Properties",
-      "sortTasksTitle": "Sort Tasks"
+      "displayPropertiesTitle": "Display Properties"
     },
     "listSurface": {
       "updateDesktopTitle": "Update Orca desktop",
@@ -3755,7 +3765,10 @@
     "providerControls": {
       "projectMergeRequests": "Project MRs",
       "myTodos": "My Todos",
-      "sort": "Sort: {{sortLabel}}"
+      "reposLabel": "Repositories: {{repos}}",
+      "filterCount": "Filter · {{count}}",
+      "filter": "Filter",
+      "filterLabel": "Filter and display"
     },
     "providerItemList": {
       "previousPage": "Previous page",
@@ -3764,10 +3777,10 @@
       "page": "Page {{page}}",
       "pageOfTotal": "Page {{page}} of {{total}}",
       "nextPage": "Next page",
-      "intoBranch": "into {{base}}"
+      "intoBranch": "into {{base}}",
+      "kindAndStatus": "{{kind}}, {{status}}"
     },
     "providerPickers": {
-      "taskSource": "Task Source",
       "repos": "Repositories",
       "repoDescription": "Choose which repositories to query.",
       "allRepositories": "All repositories",
@@ -3797,8 +3810,7 @@
       "refreshJira": "Refresh Jira issues",
       "title": "Tasks",
       "newGitHubIssue": "New GitHub issue",
-      "newLinearIssue": "New Linear issue",
-      "connectLinear": "Connect Linear"
+      "newLinearIssue": "New Linear issue"
     },
     "searchControl": {
       "projectPlaceholder": "Search project view...",
@@ -3809,22 +3821,18 @@
       "title": "Create Workspace",
       "repository": "Repository",
       "selectRepository": "Select a repository",
-      "sshConnection": "SSH Connection",
       "remoteRepository": "Remote repository",
-      "connecting": "Connecting...",
-      "connect": "Connect",
       "workspaceName": "Workspace Name",
-      "optional": "[Optional]",
       "agent": "Agent",
       "connectFirst": "Connect repository first",
       "detectingAgents": "Detecting agents...",
       "advanced": "Advanced",
       "startFrom": "Start from",
       "defaultBranch": "Default branch",
-      "createFrom": "Create from {{branch}}",
       "addRepository": "Add a Git repository before creating a Linear workspace.",
       "repositoryNotFound": "Repository not found.",
-      "connectRepository": "Connect Repository"
+      "connectRepository": "Connect Repository",
+      "optionalLabel": "Optional"
     },
     "workspaceOptionPickers": {
       "baseBranchTitle": "Start From",
@@ -3892,8 +3900,6 @@
       "allSites": "All sites",
       "allRepos": "All repos",
       "updatedSort": "Updated",
-      "fieldDescending": "{{field}} desc",
-      "fieldAscending": "{{field}} asc",
       "viewOrder": "View order",
       "selectedFields": "{{selected}}/{{total}} fields",
       "fields": "Fields",
@@ -3912,9 +3918,6 @@
       "openState": "Open",
       "allSites": "All sites",
       "all": "All",
-      "list": "List",
-      "noGrouping": "No grouping",
-      "priority": "Priority",
       "allWorkspaces": "All workspaces",
       "workspace": "Workspace",
       "allTeams": "All teams",
@@ -3961,6 +3964,30 @@
       "pageUnreachable": "Page {{page}} is beyond what GitHub search can return.",
       "loadPageFailed": "Page {{page}} could not be loaded from GitHub.",
       "noMoreResults": "No more results on page {{page}}."
+    },
+    "filterSheet": {
+      "sortBy": "Sort by",
+      "issueSource": "Issue source",
+      "issueSourceRow": "Upstream or origin",
+      "view": "View",
+      "projectView": "Project view",
+      "projectItems_one": "{{count}} item",
+      "projectItems_other": "{{count}} items",
+      "chooseView": "Choose",
+      "showOnRows": "Show on rows",
+      "projectFields": "Project fields",
+      "workspace": "Workspace",
+      "linearWorkspace": "Linear workspace",
+      "layout": "Layout",
+      "groupBy": "Group by",
+      "orderBy": "Order by",
+      "displayProperties": "Display properties",
+      "title": "Filter & display",
+      "done": "Done",
+      "jqlReplacesPreset": "Your JQL search replaces the Show preset. Clear the search to pick one again."
+    },
+    "jiraViewControls": {
+      "jqlSearch": "JQL search"
     }
   },
   "terminal": {
@@ -4014,6 +4041,213 @@
     },
     "terminalKeyRail": {
       "ctrlC": "Ctrl+C"
+    }
+  },
+  "automations": {
+    "mobile": {
+      "baseBranchOptional": "Base branch (optional)",
+      "workspaceSetupScript": "Workspace setup script",
+      "useProjectSettings": "Use project settings",
+      "runSetupScript": "Run setup script",
+      "skipSetupScript": "Skip setup script",
+      "reuseAgentSession": "Reuse agent session",
+      "extraAgentArguments": "Extra agent arguments",
+      "precheckCommandOptional": "Precheck command (optional)",
+      "precheckTimeoutSeconds": "Precheck timeout (seconds)",
+      "missedRunGraceMinutes": "Missed-run grace (minutes)",
+      "choose": "Choose…",
+      "allAutomations": "All automations",
+      "runOnSchedule": "Run {{name}} on schedule",
+      "schedule": "Schedule",
+      "nextRun": "Next run",
+      "noNextScheduledRun": "No next scheduled run",
+      "agent": "Agent",
+      "project": "Project",
+      "unavailable": "Unavailable",
+      "workspace": "Workspace",
+      "newWorkspacePerRun": "New workspace per run",
+      "instructions": "Instructions",
+      "runNow": "Run now",
+      "edit": "Edit",
+      "viewAllRuns": "View all runs",
+      "deleteAutomation": "Delete automation",
+      "savedAgent": "{{agent}} (saved)",
+      "chooseAProjectSetUpOnThisHost": "Choose a project set up on this host.",
+      "editAutomation": "Edit automation",
+      "newAutomation": "New automation",
+      "cancel": "Cancel",
+      "editorStep": "{{step}} of 3 · {{section}}",
+      "retryProjectLoading": "Retry project loading",
+      "loadingProjects": "Loading projects…",
+      "name": "Name",
+      "projectAndHostSetup": "Project and host setup",
+      "savedTarget": "Saved target",
+      "useAnExistingWorkspace": "Use an existing workspace",
+      "existingWorkspace": "Existing workspace",
+      "savedWorkspace": "Saved workspace",
+      "loadMoreWorkspaces": "Load more workspaces",
+      "thisHostSWorkspaceInventoryIsIncompleteRefreshOrLoadMoreWorkspaces": "This host’s workspace inventory is incomplete. Refresh or load more workspaces.",
+      "agentDetecting": "Agent · detecting…",
+      "installAndEnableAnAgentOnThisHostThenRetry": "Install and enable an agent on this host, then retry.",
+      "hideAdvancedOptions": "Hide advanced options",
+      "advancedOptions": "Advanced options",
+      "chooseAnAgent": "Choose an agent",
+      "back": "Back",
+      "continue": "Continue",
+      "saveChanges": "Save changes",
+      "createAutomation": "Create automation",
+      "loadingAutomations": "Loading automations…",
+      "letYourAgentsWorkOnASchedule": "Let your agents work on a schedule",
+      "createAnAutomationToRunATaskOnThisHost": "Create an automation to run a task on this host.",
+      "nextDate": "Next: {{date}}",
+      "lastResult": "Last: {{status}} · {{date}}",
+      "latestResultNotReported": "Latest result not reported",
+      "sshTarget": " · SSH {{target}}",
+      "automations": "Automations",
+      "runs": "Runs",
+      "reconnectToThisHostToRefreshOrMakeChangesSavedInformationRemainsAvailableBelow": "Reconnect to this host to refresh or make changes. Saved information remains available below.",
+      "refresh": "Refresh",
+      "recentRuns": "Recent runs",
+      "automation": "Automation",
+      "outcome": "Outcome",
+      "allOutcomes": "All outcomes",
+      "inProgress": "In progress",
+      "completed": "Completed",
+      "couldNotStart": "Could not start",
+      "skipped": "Skipped",
+      "deleteAutomationTitle": "Delete automation?",
+      "deleteRetained": "Delete “{{name}}” and its retained runs?",
+      "couldNotVerifyTheOriginalAgentPaneReconnectAndTryAgain": "Could not verify the original agent pane. Reconnect and try again.",
+      "theOriginalAgentPaneIsNoLongerAvailableToOpenSavedOutputRemainsHere": "The original agent pane is no longer available to open. Saved output remains here.",
+      "allRuns": "All runs",
+      "thisRunIsNoLongerInTheHostSRetainedHistoryLastSavedInformationRemainsBelow": "This run is no longer in the host’s retained history. Last saved information remains below.",
+      "scheduledFor": "Scheduled for",
+      "started": "Started",
+      "trigger": "Trigger",
+      "notCreated": "Not created",
+      "projectHost": "Project host",
+      "notRecorded": "Not recorded",
+      "run": "Run",
+      "output": "Output",
+      "noOutput": "No output content available.",
+      "capturedTruncated": "Captured {{date}} · Output truncated by host",
+      "capturedDate": "Captured {{date}}",
+      "theOriginalAgentPaneIsUnavailableSavedOutputRemainsHere": "The original agent pane is unavailable. Saved output remains here.",
+      "openAgent": "Open agent",
+      "retryHistory": "Retry history",
+      "loadingRuns": "Loading runs…",
+      "noMatchingRunsInTheLoadedHistoryLoadMoreToContinue": "No matching runs in the loaded history. Load more to continue.",
+      "noMatchingRunsYet": "No matching runs yet.",
+      "runSummary": "{{title}}, {{status}}, {{date}}",
+      "scheduled": "Scheduled",
+      "loading": "Loading…",
+      "loadMoreRuns": "Load more runs",
+      "hourly": "Hourly",
+      "daily": "Daily",
+      "weekdays": "Weekdays",
+      "weekly": "Weekly",
+      "customCronOrRRULE": "Custom cron or RRULE",
+      "cadence": "Cadence",
+      "cronOrRRULE": "Cron or RRULE",
+      "minuteFromHHMM": "Minute (from HH:MM)",
+      "timeHHMM24Hour": "Time (HH:MM, 24 hour)",
+      "useATimeSuchAs0900": "Use a time such as 09:00.",
+      "day": "Day",
+      "timeZone": "Time zone",
+      "runsOnTheSelectedHostKeepThatHostAvailableAtTheScheduledTime": "Runs on the selected host. Keep that host available at the scheduled time.",
+      "host": "Host",
+      "pairedHost": "Paired host",
+      "selectedServerUnavailable": "Selected server (unavailable)",
+      "addANameInstructionsAndAnAgent": "Add a name, instructions and an agent.",
+      "chooseAnExistingWorkspace": "Choose an existing workspace.",
+      "checkTheExtraAgentArguments": "Check the extra agent arguments.",
+      "enterAValidCronOrRRULESchedule": "Enter a valid cron or RRULE schedule.",
+      "enterAValidTimeZoneSuchAsAmericaLosAngeles": "Enter a valid time zone, such as America/Los_Angeles.",
+      "missedRunGraceMustBeZeroOrAPositiveNumberOfMinutes": "Missed-run grace must be zero or a positive number of minutes.",
+      "precheckTimeoutRange": "Precheck timeout must be between 1 and {{maximum}} seconds.",
+      "outcomeUnknown": "The host may have applied this action. Refresh to check before trying again.",
+      "ownerChanged": "This automation's host changed. Reload it before continuing.",
+      "targetRemoved": "This automation's SSH host was removed, so it cannot run. Delete it or re-add that host.",
+      "fencingRequired": "This automation is pinned to an SSH host, so the request must name the host it expects.",
+      "invalidDestination": "That host is no longer available on this authority. Pick a host and try again.",
+      "agentDiscoveryUnavailable": "Agent discovery is unavailable for this project host. Saved agent choices are preserved.",
+      "agentVerificationUnavailable": "This host cannot verify agents for this project. Update the host and try again.",
+      "hostUnavailable": "Automations are unavailable on this host. Update Orca on that host and reconnect.",
+      "hostUnreachable": "Could not reach this host. Reconnect, then refresh to check its current state.",
+      "actionFailed": "Could not complete this action on the host. Refresh and try again.",
+      "pending": "Pending",
+      "starting": "Starting",
+      "dispatched": "Dispatched",
+      "skippedPrecheck": "Skipped · precheck",
+      "skippedMissedSchedule": "Skipped · missed schedule",
+      "skippedHostUnavailable": "Skipped · host unavailable",
+      "skippedSignInNeeded": "Skipped · sign-in needed",
+      "unknownResult": "Unknown result",
+      "notReported": "Not reported",
+      "searchOptions": "Search options",
+      "scheduleAgentWorkAndViewRuns": "Schedule agent work and view runs",
+      "task": "Task",
+      "review": "Review"
+    },
+    "orphanIssues": {
+      "hostReselection": "Edit this automation and reselect its host before running it.",
+      "malformed": "Its stored host record is incomplete.",
+      "projectMissing": "Its project no longer exists, so its host cannot be resolved.",
+      "projectUnverified": "Its project could not be checked from here, so its host is unconfirmed.",
+      "scheduledElsewhere": "It is stored here but scheduled against a remote runtime.",
+      "targetMissing": "Its SSH host is no longer registered.",
+      "targetReplaced": "Its SSH host was removed and re-added, so it must be re-adopted.",
+      "workspaceHostAmbiguous": "Its workspace spans more than one host, so it has no single owner."
+    },
+    "runFailures": {
+      "noDispatchHost": "No Orca window was available to launch the automation.",
+      "unevaluableSchedule": "Orca could not evaluate this automation and skipped the occurrence.",
+      "noRunnableHost": "This automation has no host to run on.",
+      "wslMoveInProgress": "This automation's project is moving to its WSL host, so Orca skipped this run. Runs resume when the move finishes.",
+      "wslMoveOwnedByHost": "This automation's project now runs on its WSL host, which runs this automation there. Orca no longer runs this local copy.",
+      "missedGraceWindow": "This run was past its missed-run grace window when Orca next checked.",
+      "targetMissing": "The automation host is no longer registered, so this automation has nowhere to run.",
+      "targetReplaced": "The automation host was removed and re-registered, so this automation must be re-adopted before it can run.",
+      "workspaceHostAmbiguous": "The automation workspace spans more than one host, so Orca cannot tell which one to run it on.",
+      "legacyTwinHosts": "This automation was saved before Orca tracked which host it runs on, and its project is on more than one host. Open the automation and pick the host it should run on.",
+      "targetUnavailable": "Automation run target is no longer available.",
+      "remoteSchedulingUnavailable": "Remote-server automation scheduling is not available from this Orca client yet. Run this automation on the remote server or update Orca when durable remote scheduling is available.",
+      "projectSetupMissing": "Project is not set up on the selected automation host anymore.",
+      "targetSetupMismatch": "Automation run target no longer matches the selected project host setup.",
+      "repoUnavailable": "Repository for the selected automation host is no longer available.",
+      "repoDetached": "Repository is no longer attached to the selected automation host.",
+      "projectPathChanged": "Project path for the selected automation host has changed.",
+      "automationChanged": "The automation changed before this run could launch.",
+      "destinationChanged": "The automation destination changed before this run could launch.",
+      "hooksReviewBlocked": "The agent is waiting for someone to review new or changed hooks (\"Hooks need review\"). Open this run and trust them, or remove them. Scheduled runs keep going and succeed once nothing needs review.",
+      "agentNeverStarted": "Automation agent never started after the prompt was submitted.",
+      "agentNoCompletion": "Automation agent did not report completion.",
+      "watchTimedOut": "Orca stopped watching this run after 6h without a completion signal.",
+      "projectSetupState": {
+        "notSetUp": "The project is not set up on the selected automation host.",
+        "settingUp": "The project is still being set up on the selected automation host.",
+        "error": "Project setup failed on the selected automation host.",
+        "unsupported": "The selected automation host does not support this project."
+      },
+      "wslDistroStopped": "The WSL distro {{distro}} is stopped, so this scheduled run did not start it. Start the distro or use Run now; later runs go ahead while it runs."
+    }
+  },
+  "auto": {
+    "components": {
+      "automations": {
+        "automation": {
+          "schedule": {
+            "label": {
+              "086a5a9fe2": "Invalid schedule",
+              "ba20c92073": "Custom schedule",
+              "a95afb7483": "Hourly at :{{minute}}",
+              "280ccd2701": "Daily at {{time}}",
+              "3f1422adc1": "Weekdays at {{time}}",
+              "cc71e252ba": "{{day}}s at {{time}}"
+            }
+          }
+        }
+      }
     }
   }
 }

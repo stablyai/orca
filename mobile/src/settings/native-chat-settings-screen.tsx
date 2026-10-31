@@ -1,4 +1,4 @@
-import { View, Text, Pressable, ScrollView, Switch } from 'react-native'
+import { View, Text, Pressable, ScrollView } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useRouter } from 'expo-router'
 import { ChevronLeft } from 'lucide-react-native'
@@ -7,6 +7,7 @@ import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileDefaultSessionViewPreference } from '../session/use-mobile-default-session-view-preference'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { MobileSwitch } from '../components/MobileSwitch'
 
 export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => void }) {
   useMobileColorScheme()
@@ -58,15 +59,13 @@ export default function NativeChatSettingsScreen({ onBack }: { onBack?: () => vo
                   : t('settings.nativeChatSettingsScreen.off', 'Off')}
               </Text>
             </View>
-            <Switch
+            <MobileSwitch
               accessibilityLabel={t(
                 'settings.nativeChatSettingsScreen.openInChatUi',
                 'Open sessions in Chat UI'
               )}
               value={chatDefault}
               onValueChange={(next) => setDefaultView(next ? 'chat' : 'terminal')}
-              trackColor={{ false: colors.bgRaised, true: colors.textSecondary }}
-              thumbColor={colors.textPrimary}
             />
           </View>
         </View>
@@ -90,7 +89,7 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: spacing.sm
@@ -116,7 +115,7 @@ const styles = themedStyleSheet(() => ({
   },
   section: {
     backgroundColor: colors.bgPanel,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   sectionTopGap: {

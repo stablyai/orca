@@ -24,7 +24,7 @@ import { resolveAgentStartupPlanInputs } from '../../shared/agent-startup-plan-i
 import { agentStartedTelemetry } from '../agent-launch/agent-started-telemetry'
 import { terminalShellOverrideRefusal } from './terminal-shell-override-host-support'
 import {
-  resolveLocalProjectRuntimeForWorktreeId,
+  resolvePlainTerminalProjectRuntime,
   resolvePlainTerminalPtyOptions
 } from '../local-project-runtime-resolution'
 import {
@@ -83,7 +83,13 @@ export async function resolveAgentTerminalCreateOptions(
       opts.shellOverride && store
         ? plannedAgent || opts.launchRuntime
           ? agentLaunchProjectRuntime(store, workspace, plannedAgent ?? opts.launchAgent)
-          : resolveLocalProjectRuntimeForWorktreeId(store, workspace.id)
+          : resolvePlainTerminalProjectRuntime(
+              store,
+              workspace.id,
+              workspace,
+              opts.tabId,
+              workspace.connectionId
+            )
         : undefined,
     cwd: resolveTerminalStartupCwd(workspace.path, opts.cwd) ?? workspace.path,
     workspacePath: workspace.path
@@ -258,7 +264,9 @@ function resolveQoderLaunchCommand(
       store,
       store.getSettings(),
       workspace.id,
-      launch.shellOverride
+      launch.shellOverride,
+      workspace,
+      launch.tabId
     )
   }
   // Where the process runs: a `\\wsl$` cwd first, then a WSL shell, as the spawn decides it.

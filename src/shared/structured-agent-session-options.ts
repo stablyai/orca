@@ -33,7 +33,7 @@ export {
 export function structuredAgentSessionOptionCatalog(
   seed: AgentSessionOptionCatalog,
   result: AgentSessionOptionsResult,
-  agent?: StructuredAgentSessionOptionRecord['agent']
+  agent: StructuredAgentSessionOptionRecord['agent']
 ): AgentSessionOptionCatalog {
   const models: CatalogModel[] = result.models.map((model) =>
     discoveredModel(model, result.fastModeSupport?.supported === true, agent)
@@ -70,7 +70,6 @@ export type StructuredAgentSessionOptionState = {
   reportedPermissionMode?: string | null
   permissionOwnSupported?: boolean | null
   reportedEffort?: string
-  pendingId: string | null
   listingInProgress?: boolean
   fastModeRestricted?: boolean
 }
@@ -85,8 +84,7 @@ export function createStructuredAgentSessionOptionState(
     catalogSource: seedCatalog ? 'seed' : null,
     record: createStructuredAgentSessionOptionRecord(agent),
     acceptedInputSources: {},
-    permissionMode: null,
-    pendingId: null
+    permissionMode: null
   }
 }
 
@@ -258,14 +256,14 @@ export function commitStructuredAgentSessionOption(
     state = { ...state, reportedEffort: undefined }
   }
   if (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID) {
-    return { ...state, permissionMode: value, reportedPermissionMode: undefined, pendingId: null }
+    return { ...state, permissionMode: value, reportedPermissionMode: undefined }
   }
   if (!state.catalog) {
     return state
   }
   const decoded = decodeStructuredAgentSessionOptionValue(id, value)
   if (decoded === null) {
-    return { ...state, pendingId: null }
+    return state
   }
   // Keep other picks after a model change; the host reconciles independent values.
   state.record.values[id] = { value: decoded, source: 'dispatched' }
@@ -274,8 +272,7 @@ export function commitStructuredAgentSessionOption(
     acceptedInputSources:
       state.acceptedInputSources === undefined
         ? undefined
-        : { ...state.acceptedInputSources, [id]: origin },
-    pendingId: null
+        : { ...state.acceptedInputSources, [id]: origin }
   }
 }
 

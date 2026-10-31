@@ -85,13 +85,19 @@ export type EditorFilesSlice = {
     onShown?: (result: EditorOpenResult | null) => void
   ) => EditorOpenResult | null
   openNewMarkdownInActiveWorkspace: (groupId: string) => Promise<void>
+  acquireEditorFileOperationProvenance: (
+    file: OpenFile,
+    selected?: OpenFile['operationProvenance']
+  ) => OpenFile & {
+    operationProvenance: NonNullable<OpenFile['operationProvenance']>
+  }
   /** Creates a plugin's new-file type at the active workspace root and opens it. */
   openNewPluginFileInActiveWorkspace: (
     newFile: { pluginKey: string; id: string; title: string; extension: string },
     groupId?: string
   ) => Promise<void>
-  /** Creates an untitled file of `extension` holding `content` at the active workspace root. */
-  openSampleFileInActiveWorkspace: (sample: { extension: string; content: string }) => Promise<void>
+  /** Opens an empty `untitled<extension>` at the active workspace root. */
+  openBlankFileInActiveWorkspace: (extension: string) => Promise<void>
   // Why: sequences openFile/setMarkdownViewMode/reveal around an async Monaco remount. See docs/markdown-internal-link-opening-design.md.
   activateMarkdownLink: (
     rawHref: string | undefined,
@@ -113,7 +119,7 @@ export type EditorFilesSlice = {
       | 'runtimeEnvironmentId'
       | 'externalSshTargetId'
     > &
-      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly'>>,
+      Partial<Pick<OpenFile, 'terminalArtifactGrantId' | 'readOnly' | 'operationProvenance'>>,
     options?: { anchor?: string | null; targetGroupId?: string; sourceFileId?: string }
   ) => void
   makePreviewFilePermanent: (fileId: string, tabId?: string) => void

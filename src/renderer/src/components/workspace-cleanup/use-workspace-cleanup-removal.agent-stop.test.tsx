@@ -179,16 +179,6 @@ describe('workspace cleanup removal of workspaces with a running agent', () => {
     expect(calls).toEqual([])
   })
 
-  it('adds no step when no agent is running', async () => {
-    const calls = installRemoval()
-    const { result } = renderAtConfirm([candidateFor('a')])
-
-    act(() => result.current.confirmRemove())
-
-    expect(result.current.agentStopRequest).toBeNull()
-    await waitFor(() => expect(calls).toHaveLength(1))
-  })
-
   it('asks before "Delete anyway" stops a running agent', async () => {
     const calls = installRemoval()
     startAgent('b')

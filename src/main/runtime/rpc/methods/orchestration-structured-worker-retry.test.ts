@@ -39,7 +39,9 @@ beforeEach(async () => {
   db = new OrchestrationDb(':memory:')
 })
 afterEach(async () => {
-  releaseStructuredWorkerSession('dispatch-retry')
+  for (const { sessionId } of structuredWorkerIdentities.list()) {
+    releaseStructuredWorkerSession(sessionId)
+  }
   setStructuredAgentSessionHost(null)
   await rig.dispose()
   db.close()

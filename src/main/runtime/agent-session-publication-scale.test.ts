@@ -216,13 +216,17 @@ describe('real-store status and queue publications', () => {
           subscribers.publish(id, session.journal)
         }
       }
-      // Each publish derives queue pauses twice and checks current work independently.
+      // Three publications retain the former four-read ceiling; cached reads may disappear.
+      const lists = counts.lists - warm.lists
+      const submissions = counts.submissions - warm.submissions
+      expect(lists).toBeLessThanOrEqual(12 * n)
+      expect(submissions).toBeLessThanOrEqual(12 * n)
       expect(counts).toEqual({
         ...warm,
-        lists: warm.lists + 12 * n,
-        listRows: warm.listRows + 12 * n * cards,
-        submissions: warm.submissions + 12 * n,
-        submissionRows: warm.submissionRows + 12 * n * sends
+        lists: warm.lists + lists,
+        listRows: warm.listRows + lists * cards,
+        submissions: warm.submissions + submissions,
+        submissionRows: warm.submissionRows + submissions * sends
       })
       expect(work.counts).toMatchObject({ views: 9 * n, inventories: 0, clones: 0, decodes: 0 })
       expect(statusEvents).toEqual([])

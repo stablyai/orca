@@ -1,9 +1,11 @@
 import { z } from 'zod'
 import {
   isPlausiblePluginIconSvg,
-  parsePluginIconThemeArtifact
+  parsePluginIconThemeArtifact,
+  pluginIconThemeIconRefs
 } from '../artifacts/plugin-icon-theme-artifact'
 import { parsePluginLanguagePackArtifact } from '../artifacts/plugin-language-pack-artifact'
+import type { EnglishSourceLookup } from '../languages/plugin-translation-string-policy'
 import {
   parsePluginGrammarArtifact,
   parsePluginLanguageConfiguration
@@ -34,11 +36,7 @@ function iconSvgErrors(read: PluginArtifactTextReader, themeText: string | null)
   } catch {
     return []
   }
-  const paths = new Set([
-    ...Object.values(artifact.icons),
-    ...Object.values(artifact.fileNames),
-    ...Object.values(artifact.fileExtensions)
-  ])
+  const paths = new Set(pluginIconThemeIconRefs(artifact))
   return [...paths].flatMap((path) => {
     const svg = read(path)
     if (svg === null) {
@@ -81,7 +79,9 @@ function check(read: PluginArtifactTextReader, path: string, parse: (text: strin
  */
 export function strictPluginArtifactErrors(
   manifest: PluginManifest,
-  read: PluginArtifactTextReader
+  read: PluginArtifactTextReader,
+  // Why optional: the packaged CLI ships no English catalog, so it checks only source-free rules.
+  english?: EnglishSourceLookup
 ): string[] {
   const c = manifest.contributes
   const themeErrors = THEME_POINTS.flatMap((point) =>
@@ -94,7 +94,7 @@ export function strictPluginArtifactErrors(
   )
   const packErrors = c.languagePacks.flatMap((pack) => {
     const error = check(read, pack.path, (text) => {
-      const parsed = parsePluginLanguagePackArtifact(text, 'strict')
+      const parsed = parsePluginLanguagePackArtifact(text, 'strict', english)
       if (!parsed.ok) {
         throw new Error(parsed.error)
       }

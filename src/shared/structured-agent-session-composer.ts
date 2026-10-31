@@ -134,6 +134,14 @@ export function isStructuredAgentSessionComposerCommand(
   )
 }
 
+/** Host actions send no message; /goal is an action only on hosts that set goals. */
+export function isStructuredAgentSessionHostCommand(text: string, hostSetsGoals: boolean): boolean {
+  return (
+    isStructuredAgentSessionComposerCommand(text) ||
+    (hostSetsGoals && isStructuredAgentSessionGoalCommand(text))
+  )
+}
+
 export function prepareStructuredAgentSessionComposerCommand(
   _agent: AgentType,
   _reported?: readonly AgentSessionSlashCommand[]

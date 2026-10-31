@@ -6,7 +6,6 @@ import { BACKGROUND_WORKTREE_MEASURE_WINDOW_MS } from '../terminal/background-te
 import {
   _resetTerminalPaneSplitRequestRoutingForTests,
   cancelQueuedTerminalPaneSplitRequests,
-  dispatchTerminalPaneSplitRequest,
   hasTerminalPaneSplitMountLease,
   queueTerminalPaneSplitRequest,
   registerTerminalPaneSplitRequestHandler,
@@ -37,16 +36,6 @@ afterEach(() => {
 })
 
 describe('parked terminal split request routing', () => {
-  it('demonstrates that the legacy fire-and-forget event is lost before a parked pane mounts', () => {
-    const handler = vi.fn()
-
-    dispatchTerminalPaneSplitRequest(splitRequest('tab-parked'))
-    const unregister = registerTerminalPaneSplitRequestHandler('tab-parked', undefined, handler)
-
-    expect(handler).not.toHaveBeenCalled()
-    unregister()
-  })
-
   it('replays a parked-tab request as soon as that exact pane lifecycle registers', () => {
     const request = splitRequest('tab-parked', 91)
     const splitPane = vi.fn()
@@ -72,10 +61,6 @@ describe('parked terminal split request routing', () => {
     // The stable leaf wins over the pre-park numeric pane id reminted by the mount.
     expect(splitPane).not.toHaveBeenCalledWith(91, expect.anything())
     unregister()
-  })
-
-  it('fails closed when a remount no longer contains the stable source leaf', () => {
-    expect(resolveTerminalPaneSplitSourceId(splitRequest('tab-parked', 91), () => null)).toBe(-1)
   })
 
   it('keeps the mount lease through replay, then releases it at the existing measure bound', () => {

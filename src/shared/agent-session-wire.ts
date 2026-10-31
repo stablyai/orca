@@ -322,7 +322,7 @@ export type AgentSessionAttachResult = {
   tabId?: string
 }
 
-/** Only queue-if-active callers with queued-messages.v1 receive this draft arm; non-waiting states occur only on settled-draft replays. */
+/** Only queue-if-active callers with queued-messages.v2 receive this draft arm; non-waiting states occur only on settled-draft replays. */
 export type AgentSessionQueuedSendReceipt = {
   messageId: string
   position: number
@@ -373,6 +373,8 @@ export type AgentSessionModelOption = {
   description?: string
   isDefault: boolean
   defaultEffort?: string
+  /** Transient display declaration; null is observed unknown, absence supplies no evidence. */
+  declaredDefaultEffort?: string | null
   efforts: AgentSessionOptionChoice[]
   /** Provider catalog fact. Absent means the host could not determine support. */
   supportsFastMode?: boolean
