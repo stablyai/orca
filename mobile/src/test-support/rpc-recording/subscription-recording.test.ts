@@ -438,13 +438,13 @@ describe('actual stream result partitions', () => {
             expect(run.actions).not.toContain('unmount')
             expect(run.reads.at(-1)).toMatchObject(
               operation === 'session.live-worktree-name'
-                ? { name: 'Feature Work', resolution: 'present', crash: null }
+                ? { name: 'Feature Work', resolution: 'present', crash: captureValue(null) }
                 : {
                     messageIds: [],
                     status: 'error',
                     hasMore: false,
                     error: 'the reply could not be read (unrecognised-message)',
-                    crash: null
+                    crash: captureValue(null)
                   }
             )
             expect(run.requests).toHaveLength(operation === 'session.live-worktree-name' ? 1 : 0)

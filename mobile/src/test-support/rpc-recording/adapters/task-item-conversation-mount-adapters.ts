@@ -200,7 +200,11 @@ export function taskItemConversationMountAdapters(
   function commentReview(item: Record<string, unknown>, payload: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
-        useHook: (model) =>
+        useHook: (
+          model: Parameters<
+            typeof import('../../../tasks/use-mobile-tasks-hosted-comment-review-actions').useMobileTasksHostedCommentReviewActions
+          >[0]
+        ) =>
           load<typeof import('../../../tasks/use-mobile-tasks-hosted-comment-review-actions')>(
             'use-mobile-tasks-hosted-comment-review-actions.tsx'
           ).useMobileTasksHostedCommentReviewActions(model),
@@ -232,7 +236,11 @@ export function taskItemConversationMountAdapters(
   function replyMerge(item: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
-        useHook: (model) =>
+        useHook: (
+          model: Parameters<
+            typeof import('../../../tasks/use-mobile-tasks-github-reply-merge-actions').useMobileTasksGithubReplyMergeActions
+          >[0]
+        ) =>
           load<typeof import('../../../tasks/use-mobile-tasks-github-reply-merge-actions')>(
             'use-mobile-tasks-github-reply-merge-actions.tsx'
           ).useMobileTasksGithubReplyMergeActions(model),

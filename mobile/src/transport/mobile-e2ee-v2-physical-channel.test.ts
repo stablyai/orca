@@ -133,7 +133,10 @@ async function authenticate(ctx: ReturnType<typeof setup>): Promise<void> {
   await ctx.channel.handleMessage(Buffer.from(response).toString('base64'))
 }
 
-function assertReleasedPhysicalChannel(channel: MobileE2EEV2PhysicalChannel): void {
+function assertReleasedPhysicalChannel(channel: unknown): void {
+  if (!(channel instanceof MobileE2EEV2PhysicalChannel)) {
+    throw new Error('physical channel dispose receiver changed')
+  }
   const queue = channel['outboundQueue']
   if (!queue || typeof queue.evidence !== 'function') {
     throw new Error('physical channel queue diagnostic seam changed')

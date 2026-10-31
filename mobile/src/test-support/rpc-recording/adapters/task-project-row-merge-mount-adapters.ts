@@ -205,7 +205,7 @@ export function taskProjectRowMergeMountAdapters(
       typeof import('../../../tasks/use-mobile-tasks-project-file-merge-actions')
     >('use-mobile-tasks-project-file-merge-actions.tsx').useMobileTasksProjectFileMergeActions
     return mountModelHook(modules, context, {
-      useHook: (model) => useActions(model),
+      useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),
       fixture: {
         ...boardFixture,
         projectRowItem: PR_ROW,

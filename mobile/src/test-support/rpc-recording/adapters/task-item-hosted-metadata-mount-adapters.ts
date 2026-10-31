@@ -198,7 +198,11 @@ export function taskItemHostedMetadataMountAdapters(
   function hostedMetadata(item: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
-        useHook: (model) =>
+        useHook: (
+          model: Parameters<
+            typeof import('../../../tasks/use-mobile-tasks-hosted-metadata-actions').useMobileTasksHostedMetadataActions
+          >[0]
+        ) =>
           load<typeof import('../../../tasks/use-mobile-tasks-hosted-metadata-actions')>(
             'use-mobile-tasks-hosted-metadata-actions.tsx'
           ).useMobileTasksHostedMetadataActions(model),

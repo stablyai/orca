@@ -35,6 +35,7 @@ vi.mock('react-native', () => ({
   )
 }))
 vi.mock('lucide-react-native', () => ({
+  Search: () => null,
   Check: () => null,
   X: () => null,
   UserPlus: () => null,

@@ -4,8 +4,16 @@ import type { PRComment } from '../../../../../shared/github/comment-types'
 // @vitest-environment happy-dom
 import PullRequestPage from '@/components/pull-request-page/page/surface'
 import GitHubItemDialog from '../open-dialog/github-item-dialog'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
-import { patchCachedWorkItemBody } from './work-item-details-cache'
+import type {
+  GitHubWorkItemDetails,
+  GitHubWorkItem
+} from '../../../../../shared/github/work-item-types'
+import {
+  patchCachedWorkItemBody,
+  getWorkItemDetailsCacheKey,
+  touchWorkItemDetailsCache,
+  workItemDetailsCache
+} from './work-item-details-cache'
 import { listLabels } from '../../../../../main/github/issue-field-options'
 import { useRepoLabels } from '@/hooks/useGitHubRepoMetadata'
 import { GitHubWorkItemTargetContext } from './github-work-item-target-context'
@@ -19,16 +27,10 @@ import { act } from 'react'
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { WorkItemDetails } from '../../../../../shared/rpc-contract/github-repo-work-item-params'
 import { getWorkItemDetails } from '../../../../../main/github/work-item-details'
 import { _resetOriginGitHubApiRepositoryCache } from '../../../../../main/github/github-api-repository'
 import { useGitHubWorkItemDetails } from './use-github-work-item-details'
-import {
-  getWorkItemDetailsCacheKey,
-  touchWorkItemDetailsCache,
-  workItemDetailsCache
-} from './work-item-details-cache'
 
 type Published = {
   onCommentAdded: (comment: PRComment) => void

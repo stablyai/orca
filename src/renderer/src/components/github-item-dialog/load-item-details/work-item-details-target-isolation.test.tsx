@@ -3,7 +3,10 @@ import type * as GitRunner from '../../../../../main/git/runner'
 import type { GitHubRepoContext } from '../../../../../main/github/github-repository-identity'
 import type { PRComment } from '../../../../../shared/github/comment-types'
 // @vitest-environment happy-dom
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItemDetails,
+  GitHubWorkItem
+} from '../../../../../shared/github/work-item-types'
 import { listLabels } from '../../../../../main/github/issue-field-options'
 import { useRepoLabels } from '@/hooks/useGitHubRepoMetadata'
 import { GitHubWorkItemTargetContext } from './github-work-item-target-context'
@@ -18,7 +21,6 @@ import {
 import { createRoot } from 'react-dom/client'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import type { TaskSourceContext } from '../../../../../shared/task-source-context'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
 import { WorkItemDetails } from '../../../../../shared/rpc-contract/github-repo-work-item-params'
 import { getWorkItemDetails } from '../../../../../main/github/work-item-details'
 import { _resetOriginGitHubApiRepositoryCache } from '../../../../../main/github/github-api-repository'

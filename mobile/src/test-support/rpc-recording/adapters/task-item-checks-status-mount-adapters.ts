@@ -182,7 +182,7 @@ export function taskItemChecksStatusMountAdapters(
       typeof import('../../../tasks/use-mobile-tasks-github-check-file-actions')
     >('use-mobile-tasks-github-check-file-actions.tsx').useMobileTasksGithubCheckFileActions
     return mountModelHook(modules, context, {
-      useHook: (model) => useActions(model),
+      useHook: (model: Parameters<typeof useActions>[0]) => useActions(model),
       fixture: {
         actionItem: GITHUB_PR_ITEM,
         detailPayload: githubDetailPayload(),
@@ -227,7 +227,11 @@ export function taskItemChecksStatusMountAdapters(
   function hostedStatus(item: Record<string, unknown>) {
     return (context: Parameters<MountAdapter>[0]) =>
       mountModelHook(modules, context, {
-        useHook: (model) =>
+        useHook: (
+          model: Parameters<
+            typeof import('../../../tasks/use-mobile-tasks-gitlab-github-status-actions').useMobileTasksGitlabGithubStatusActions
+          >[0]
+        ) =>
           load<typeof import('../../../tasks/use-mobile-tasks-gitlab-github-status-actions')>(
             'use-mobile-tasks-gitlab-github-status-actions.tsx'
           ).useMobileTasksGitlabGithubStatusActions(model),

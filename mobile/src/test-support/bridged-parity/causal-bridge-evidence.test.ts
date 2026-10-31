@@ -124,10 +124,16 @@ function physical(recording: Recording) {
     throw new Error('Missing physical requests')
   }
   return rows.map((row) => {
-    if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.json !== 'string') {
+    if (
+      !row ||
+      typeof row !== 'object' ||
+      Array.isArray(row) ||
+      typeof row.json !== 'string' ||
+      typeof row.name !== 'string'
+    ) {
       throw new Error('Missing serialized request')
     }
-    return { ...row, frame: JSON.parse(row.json) }
+    return { ...row, name: row.name, json: row.json, frame: JSON.parse(row.json) }
   })
 }
 function senders(recording: Recording): AttemptObservation[] {
@@ -258,7 +264,8 @@ describe('actual page, host and tracker contracts', () => {
         const sent = pairs[0].readToShell()
         const opens = sent.filter((frame) => frame.type === 'subscribe')
         const closes = sent.filter(
-          (frame) => frame.type === 'cancel' && frame.target === 'subscription'
+          (frame): frame is Extract<typeof frame, { type: 'cancel' }> =>
+            frame.type === 'cancel' && frame.target === 'subscription'
         )
         expect(opens).toHaveLength(2)
         expect(closes).toHaveLength(2)

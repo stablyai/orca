@@ -619,26 +619,44 @@ it.each([10, 100])(
         }
       }
       await f.select(selected)
-      expect(f.renderer.root.find((node) => node.type === 'TaskDetail').props.body).toBe('fork')
+      expect(
+        f.renderer.root.find((node) => {
+          const type: unknown = node.type
+          return type === 'TaskDetail'
+        }).props.body
+      ).toBe('fork')
     }
     // No hidden list attempt or status frame crosses the actual RpcClient boundary, hence no downstream gh/provider page can be admitted.
     expect(f.client.requests).toEqual([])
     await act(async () => f.read().setItemCommentDraft('visible comment'))
     let comment!: Promise<void>
     await act(async () => {
-      comment = f.renderer.root.find((node) => node.type === 'Comment').props.onPress()
+      comment = f.renderer.root
+        .find((node) => {
+          const type: unknown = node.type
+          return type === 'Comment'
+        })
+        .props.onPress()
     })
     await f.answer({
       ok: true,
       comment: { id: 'visible', body: 'visible comment', author: 'me', createdAt: '' }
     })
     await comment
-    expect(f.renderer.root.find((node) => node.type === 'Comment').children).toContain(
-      'visible comment'
-    )
+    expect(
+      f.renderer.root.find((node) => {
+        const type: unknown = node.type
+        return type === 'Comment'
+      }).children
+    ).toContain('visible comment')
     let close!: Promise<void>
     await act(async () => {
-      close = f.renderer.root.find((node) => node.type === 'CloseReopen').props.onPress()
+      close = f.renderer.root
+        .find((node) => {
+          const type: unknown = node.type
+          return type === 'CloseReopen'
+        })
+        .props.onPress()
     })
     await f.answer({ ok: true })
     await close

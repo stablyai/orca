@@ -1,8 +1,11 @@
-import { getRepoExecutionHostId, toRuntimeExecutionHostId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  toRuntimeExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'

@@ -6129,7 +6129,42 @@
                 "workspaceId": "linear-workspace"
               }
             ]
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "linear.listIssues#1.native-1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-3",
+                "identifier": "ENG-3",
+                "title": "An assigned issue",
+                "url": "",
+                "state": {
+                  "name": "In Progress",
+                  "type": "started",
+                  "color": "#111"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 2,
+                "updatedAt": "2020-01-02T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          },
+          "site": "linear.listIssues#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "linear-assigned-listed"
@@ -6184,7 +6219,42 @@
                 "workspaceId": "linear-workspace"
               }
             ]
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "linear.listIssues#1.native-1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-2",
+                "identifier": "ENG-2",
+                "title": "An assigned issue",
+                "url": "",
+                "state": {
+                  "name": "Todo",
+                  "type": "unstarted",
+                  "color": "#000"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 0,
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          },
+          "site": "linear.listIssues#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "linear-assigned"
@@ -12036,7 +12106,37 @@
                 }
               ]
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "gitlab.listWorkItems#1.native-1",
+          "params": {
+            "page": 1,
+            "perPage": 50,
+            "repo": "id:repo-1",
+            "state": "opened"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue:4",
+                  "type": "issue",
+                  "number": 4,
+                  "title": "A GitLab issue",
+                  "state": "opened",
+                  "url": "",
+                  "labels": [],
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "author": null
+                }
+              ]
+            }
+          },
+          "site": "gitlab.listWorkItems#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "load-settled"
@@ -12637,7 +12737,35 @@
               "originalIsBinary": false,
               "modifiedIsBinary": false
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "github.prFileContents#1.native-1",
+          "params": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "path": "src/index.ts",
+            "prNumber": 12,
+            "repo": "id:repo-1",
+            "status": "modified",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
+            }
+          },
+          "site": "github.prFileContents#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "expand-settled"
@@ -13153,7 +13281,31 @@
             "result": {
               "ok": true
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "gitlab.updateMR#1.native-1",
+          "params": {
+            "iid": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "addLabels": ["triage"],
+              "title": "Renamed"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          },
+          "site": "gitlab.updateMR#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "update-gitlab-settled"
@@ -14083,7 +14235,35 @@
               "originalIsBinary": false,
               "modifiedIsBinary": false
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "github.prFileContents#1.native-1",
+          "params": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
+            }
+          },
+          "site": "github.prFileContents#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "expand-settled"
@@ -18443,7 +18623,59 @@
             "result": {
               "updated": true
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "worktree.set#1.native-1",
+          "params": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastSeenDiffIdentity": "identity-1",
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "updated": true
+            }
+          },
+          "site": "worktree.set#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "persisted"
@@ -18521,7 +18753,60 @@
               "code": "worktree_locked",
               "message": "Workspace is locked"
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "worktree.set#1.native-1",
+          "params": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastSeenDiffIdentity": "identity-1",
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_locked",
+              "message": "Workspace is locked"
+            }
+          },
+          "site": "worktree.set#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "rolled-back"
@@ -21842,7 +22127,32 @@
                 "isActive": true
               }
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1.native-1",
+          "params": {
+            "worktree": "id:wt-1",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          },
+          "site": "session.tabs.createTerminal#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "created"

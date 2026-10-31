@@ -71,7 +71,7 @@ export function useMobileTasksItemDetailMetadataEffects<
     const canPublish = claimPublication(actionItem)
     const loadRepositoryList = async <T,>(
       send: (
-        selected: typeof client,
+        selected: NonNullable<typeof client>,
         exact: {
           ownerRepo?: import('../../../src/shared/github/pull-request-types').GitHubOwnerRepo
         },

@@ -1,5 +1,8 @@
 import type { PRComment } from '../../../../../shared/github/comment-types'
-import type { GitHubWorkItem } from '../../../../../shared/github/work-item-types'
+import type {
+  GitHubWorkItem,
+  GitHubWorkItemDetails
+} from '../../../../../shared/github/work-item-types'
 import type { WorkItemDetailsCacheEntry } from './work-item-details-cache'
 import {
   GitHubWorkItemTargetError,
@@ -7,7 +10,6 @@ import {
   requireGitHubWorkItemTargetDetails,
   type GitHubWorkItemTarget
 } from '../../../../../shared/github/work-item-target'
-import type { GitHubWorkItemDetails } from '../../../../../shared/github/work-item-types'
 import {
   WORK_ITEM_DETAILS_UNAVAILABLE_MESSAGE,
   touchWorkItemDetailsCache,

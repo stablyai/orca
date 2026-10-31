@@ -101,9 +101,31 @@ describe('other detail providers', () => {
       }
     }
     const fixture = await mount(github)
+    expect(fixture.transport.requests.map((request) => request.method)).toEqual(['status.get'])
+    await fixture.transport.answer(success({ capabilities: [] }))
+    expect(fixture.transport.requests.map((request) => request.method)).toEqual([
+      'status.get',
+      'github.workItemDetails'
+    ])
+    expect(fixture.transport.pending()).toHaveLength(1)
+    expect(fixture.transport.pending()[0].method).toBe('github.workItemDetails')
+    expect(fixture.transport.requests[1]).toMatchObject({
+      method: 'github.workItemDetails',
+      params: { repo: 'id:repo', number: 12, type: 'pr' }
+    })
     await fixture.transport.answer(success({ body: 'GitHub body', item: github.source }))
-    expect(fixture.transport.requests).toHaveLength(1)
-    expect(fixture.state()).toMatchObject({ loading: false, payload: { provider: 'github' } })
+    expect(fixture.transport.pending()).toHaveLength(0)
+    expect(fixture.state()).toMatchObject({
+      loading: false,
+      payload: { provider: 'github', body: 'GitHub body' }
+    })
+    expect(fixture.state().actionItem).toBe(github)
+    await fixture.rerender()
+    expect(fixture.transport.requests.map((request) => request.method)).toEqual([
+      'status.get',
+      'github.workItemDetails'
+    ])
+    expect(fixture.transport.pending()).toHaveLength(0)
     const issue = {
       id: 'linear-1',
       identifier: 'ENG-1',
@@ -117,14 +139,14 @@ describe('other detail providers', () => {
     }
     const linear: ActionableTaskItem = { ...gitlab, provider: 'linear', source: issue }
     await fixture.select(linear)
-    expect(fixture.transport.requests.slice(1).map((request) => request.method)).toEqual([
+    expect(fixture.transport.requests.slice(2).map((request) => request.method)).toEqual([
       'linear.getIssue',
       'linear.issueComments'
     ])
     await fixture.transport.answer((request) =>
       success(request.method === 'linear.issueComments' ? [] : issue)
     )
-    expect(fixture.transport.requests).toHaveLength(3)
+    expect(fixture.transport.requests).toHaveLength(4)
     expect(fixture.state()).toMatchObject({ loading: false, payload: { provider: 'linear' } })
     expect(fixture.state().actionItem).toBe(linear)
   })

@@ -167,7 +167,11 @@ describe('actual publication and device replies', () => {
         )
       expect(sent.map((frame) => frame.type)).toEqual(['subscribe', 'request', 'cancel'])
       expect(sent[0]).toMatchObject({ method: 'runtime.clientEvents.subscribe', params: null })
-      expect(sent[2]).toMatchObject({ id: sent[0].id })
+      const opening = sent[0]
+      if (opening?.type !== 'subscribe') {
+        throw new Error('Missing original subscription opening')
+      }
+      expect(sent[2]).toMatchObject({ id: opening.id })
       const last = terminal(recording)
       expect(last.state).toEqual({ labels: ['label'] })
       expect(last.effects).toEqual([
@@ -192,7 +196,13 @@ describe('actual publication and device replies', () => {
         throw new Error('Missing actual publication bytes/effect')
       }
       const frames = last.payloads.map((row) => {
-        if (!row || typeof row !== 'object' || Array.isArray(row) || typeof row.json !== 'string') {
+        if (
+          !row ||
+          typeof row !== 'object' ||
+          Array.isArray(row) ||
+          typeof row.json !== 'string' ||
+          typeof row.ordinal !== 'number'
+        ) {
           throw new Error('Missing frame')
         }
         return { frame: JSON.parse(row.json), ordinal: row.ordinal }
@@ -205,7 +215,12 @@ describe('actual publication and device replies', () => {
       expect(frames[0].frame.params).toBeNull()
       expect(frames[2].frame).toMatchObject({ ...options.envelope, params })
       const effect = last.effects[0]
-      if (!effect || typeof effect !== 'object' || Array.isArray(effect)) {
+      if (
+        !effect ||
+        typeof effect !== 'object' ||
+        Array.isArray(effect) ||
+        typeof effect.ordinal !== 'number'
+      ) {
         throw new Error('Missing original effect')
       }
       expect(effect.ordinal).toBeLessThan(frames[0].ordinal)

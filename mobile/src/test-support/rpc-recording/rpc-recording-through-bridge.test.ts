@@ -323,7 +323,22 @@ async function probeCase(
             : { ok: false, error: probeFailure(partition, lifecycle) }
         )
       })
-      expect(effects).toEqual([])
+      expect(effects).toEqual(
+        allowed
+          ? [
+              {
+                name: 'reply-salvage',
+                value: captureValue({
+                  operation: 'github.pr-assignable-users',
+                  method: 'github.listAssignableUsers',
+                  variant: 'pr-assignable-users',
+                  droppedPaths: ['0.avatarUrl'],
+                  droppedCount: 1
+                })
+              }
+            ]
+          : []
+      )
     } else if (source.operation === 'tasks.item-detail-github') {
       expect(checkpoint.state.loading).toBe(false)
       expect(checkpoint.state.error).toBe(allowed ? '' : probeFailure(partition, lifecycle))
