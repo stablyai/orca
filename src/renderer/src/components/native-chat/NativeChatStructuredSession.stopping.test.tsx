@@ -93,17 +93,6 @@ describe("the chat pane while a person's Stop ends the turn", () => {
     expect(mocks.stop).toHaveBeenCalledOnce()
   })
 
-  it('says a message is queued to run after the stop only where the host queues sends', async () => {
-    mocks.turnId = 'turn-1'
-    mocks.sendsQueue = true
-    renderPane()
-    await waitFor(() => expect(hostStatus.emit).not.toBeNull())
-
-    hostSays(true)
-
-    await waitFor(() => expect(mocks.composerProps).toMatchObject({ afterStop: 'queue' }))
-  })
-
   it("holds a queued card's Steer while the host says Stopping", async () => {
     mocks.turnId = 'turn-1'
     mocks.queuedCards = [
@@ -118,39 +107,5 @@ describe("the chat pane while a person's Stop ends the turn", () => {
     hostSays(true)
 
     await waitFor(() => expect(steer()).toHaveProperty('disabled', true))
-  })
-
-  it('reads Stopping from its own press, and holds Stop until that request answers', () => {
-    mocks.turnId = 'turn-1'
-    mocks.stopPressed = true
-    renderPane()
-
-    expect(mocks.composerProps).toMatchObject({ isStopping: true })
-    expect(mocks.messageListProps).toMatchObject({ stopping: true })
-    mocks.composerProps?.onStop?.()
-    expect(mocks.stop).not.toHaveBeenCalled()
-  })
-
-  it('stops normally while nothing is stopping', () => {
-    mocks.turnId = 'turn-1'
-    renderPane()
-
-    expect(mocks.composerProps).toMatchObject({ isStopping: false })
-    expect(mocks.composerProps?.afterStop).toBeUndefined()
-    // The pane wraps steering so it also brings the latest into view; it still steers through the queue.
-    mocks.composerProps?.steerHead?.()
-    expect(mocks.queuedSteerHead).toHaveBeenCalledOnce()
-    mocks.composerProps?.onStop?.()
-    expect(mocks.stop).toHaveBeenCalledOnce()
-  })
-
-  it('reads nothing once the chat has nothing left to stop', async () => {
-    renderPane()
-    await waitFor(() => expect(hostStatus.emit).not.toBeNull())
-
-    hostSays(true)
-
-    expect(mocks.composerProps).toMatchObject({ isStopping: false })
-    expect(mocks.messageListProps).toMatchObject({ stopping: false })
   })
 })

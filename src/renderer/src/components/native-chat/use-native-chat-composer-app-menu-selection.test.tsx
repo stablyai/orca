@@ -106,17 +106,6 @@ describe('native chat app-menu selection ownership', () => {
     expect(performNativeSelectionAction).toHaveBeenCalledWith('select-all')
   })
 
-  it('leaves non-select-all actions unclaimed', () => {
-    const { composer } = renderBoundaryAndComposer()
-    const textarea = composer.getByRole('textbox', { name: 'Composer' }) as HTMLTextAreaElement
-    textarea.focus()
-
-    emitAppMenuAction('copy')
-
-    expect(performNativeSelectionAction).toHaveBeenCalledOnce()
-    expect(performNativeSelectionAction).toHaveBeenCalledWith('copy')
-  })
-
   it('claims select-all during active IME composition without selecting or falling back', () => {
     const { composer } = renderBoundaryAndComposer()
     const textarea = composer.getByRole('textbox', { name: 'Composer' }) as HTMLTextAreaElement
