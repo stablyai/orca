@@ -16,8 +16,8 @@ import {
   createCopilotServerLocator,
   spawnCopilotServer
 } from '../copilot-inline-completion/copilot-server-process'
-import { resolveAuthorizedPath } from './filesystem-auth'
-import { isDescendantOrEqual } from './filesystem-path-containment'
+import { resolveAuthorizedPath } from './filesystem/filesystem-auth'
+import { isDescendantOrEqual } from './filesystem/filesystem-path-containment'
 
 const STATUS_CHANNEL = 'copilotCompletion:status'
 
