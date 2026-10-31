@@ -41,6 +41,15 @@ describe('Jira IPC parameters', () => {
     expect(normalizeJiraIssueUpdate({})).toEqual({})
   })
 
+  it('preserves edit-screen fields and their shaping keys', () => {
+    const updates = {
+      fields: { customfield_10050: 'Logs in', customfield_10060: null },
+      userFieldKeys: ['customfield_10070'],
+      richTextFieldKeys: ['customfield_10050']
+    }
+    expect(normalizeJiraIssueUpdate(updates)).toEqual(updates)
+  })
+
   it.each([
     null,
     [],
@@ -58,7 +67,11 @@ describe('Jira IPC parameters', () => {
     { labelOperations: [] },
     { labelOperations: 1 },
     { labelOperations: { add: 'label' } },
-    { labelOperations: { remove: [1] } }
+    { labelOperations: { remove: [1] } },
+    { fields: [] },
+    { fields: null },
+    { userFieldKeys: 'customfield_10070' },
+    { richTextFieldKeys: [1] }
   ])('rejects malformed edits before they reach Jira: %j', (value) => {
     expect(normalizeJiraIssueUpdate(value)).toBeNull()
   })

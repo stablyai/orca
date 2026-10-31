@@ -22052,6 +22052,23 @@
       "truncated": "Some favourites could not be listed. Manage your favourites in Jira to narrow the list.",
       "clear": "Clear Jira favourite",
       "activeLabel": "Jira favourites: {{name}}"
+    },
+    "editFields": {
+      "none": "None",
+      "searchOptions": "Search options...",
+      "noOptions": "No options match your search.",
+      "editDescription": "Edit description",
+      "editInJira": "Edit in Jira",
+      "descriptionLossy": "This description has content Orca cannot write back yet, such as images or mentions.",
+      "descriptionLabel": "Description",
+      "cancel": "Cancel",
+      "saveDescription": "Save",
+      "required": "{{field}} is required.",
+      "invalid": "Enter a valid value for {{field}}.",
+      "save": "Save {{field}}",
+      "commaSeparated": "Comma-separated values",
+      "title": "Fields",
+      "retry": "Retry"
     }
   },
   "workspaceSpace": {

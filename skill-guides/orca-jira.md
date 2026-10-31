@@ -44,6 +44,7 @@ Issue and metadata commands accept `--site <id>` to target one connected Jira si
 ```bash
 ORCA jira connection [--json]
 ORCA jira issue <key> [--site <id>] [--json]
+ORCA jira field list <key> [--site <id>] [--json]
 ORCA jira list [--filter assigned|reported|all|done] [--limit <n>] [--site <id>] [--json]
 ORCA jira search <jql> [--limit <n>] [--site <id>] [--json]
 ORCA jira create --project <idOrKey> --type <issueTypeId> --title <text> [--body <text> | --body-file <path|->] [--fields-json <json>] [--user-field <key>...] [--site <id>] [--json]
@@ -63,6 +64,16 @@ ORCA jira label add <key> --label <name>... [--site <id>] [--json]
 ORCA jira label rm <key> --label <name>... [--site <id>] [--json]
 ORCA jira label set <key> --label <name> [--label <name>...] [--site <id>] [--json]
 ```
+
+## Custom Fields
+
+`jira issue` returns Orca's standard issue fields only. To read custom fields (`customfield_*`) and the other fields on the issue's edit screen, run:
+
+```bash
+ORCA jira field list ENG-123 --json
+```
+
+Each field has its id (`key`), `name`, `schema`, a normalized `value`, and `rawValue` exactly as Jira returns it (an ADF document for Jira Cloud rich text). Jira lists only the fields this account can edit, so an empty result does not mean the issue has no custom fields.
 
 ## Discovery Before Writes
 

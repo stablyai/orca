@@ -18,6 +18,7 @@ import JiraIssueWorkspace from '../JiraIssueWorkspace'
 const runtimeMocks: {
   jiraAddIssueCommentForTarget: Mock<typeof RuntimeJiraClient.jiraAddIssueCommentForTarget>
   jiraGetIssueForTarget: Mock<typeof RuntimeJiraClient.jiraGetIssueForTarget>
+  jiraGetIssueEditFieldsForTarget: Mock<typeof RuntimeJiraClient.jiraGetIssueEditFieldsForTarget>
   jiraIssueCommentsForTarget: Mock<typeof RuntimeJiraClient.jiraIssueCommentsForTarget>
   jiraListAssignableUsersForTarget: Mock<typeof RuntimeJiraClient.jiraListAssignableUsersForTarget>
   jiraListPrioritiesForTarget: Mock<typeof RuntimeJiraClient.jiraListPrioritiesForTarget>
@@ -26,6 +27,8 @@ const runtimeMocks: {
 } = vi.hoisted(() => ({
   jiraAddIssueCommentForTarget: vi.fn<typeof RuntimeJiraClient.jiraAddIssueCommentForTarget>(),
   jiraGetIssueForTarget: vi.fn<typeof RuntimeJiraClient.jiraGetIssueForTarget>(),
+  jiraGetIssueEditFieldsForTarget:
+    vi.fn<typeof RuntimeJiraClient.jiraGetIssueEditFieldsForTarget>(),
   jiraIssueCommentsForTarget: vi.fn<typeof RuntimeJiraClient.jiraIssueCommentsForTarget>(),
   jiraListAssignableUsersForTarget:
     vi.fn<typeof RuntimeJiraClient.jiraListAssignableUsersForTarget>(),
@@ -191,6 +194,7 @@ beforeEach(() => {
   runtimeMocks.jiraGetIssueForTarget.mockImplementation(async () =>
     jiraIssue(editState.serverTitle)
   )
+  runtimeMocks.jiraGetIssueEditFieldsForTarget.mockResolvedValue(null)
   runtimeMocks.jiraIssueCommentsForTarget.mockResolvedValue([])
   runtimeMocks.jiraListTransitionsForTarget.mockResolvedValue([])
   runtimeMocks.jiraListPrioritiesForTarget.mockResolvedValue([])

@@ -21560,6 +21560,23 @@
       "siteMismatch": "お気に入りの Jira サイトのプロジェクトを選択するか、プロジェクトフィルターをクリアしてください。",
       "truncated": "一部のお気に入りを表示できませんでした。リストを絞り込むには、Jira でお気に入りを管理してください。",
       "unsupported": "お気に入りを使用するには Jira ホストを更新してください。"
+    },
+    "editFields": {
+      "none": "なし",
+      "searchOptions": "オプションを検索...",
+      "noOptions": "検索に一致するオプションはありません。",
+      "editDescription": "説明を編集",
+      "editInJira": "Jira で編集",
+      "descriptionLossy": "この説明には、画像やメンションなど Orca がまだ書き戻せない内容が含まれています。",
+      "descriptionLabel": "説明",
+      "cancel": "キャンセル",
+      "saveDescription": "保存",
+      "required": "{{field}} は必須です。",
+      "invalid": "{{field}} に有効な値を入力してください。",
+      "save": "{{field}} を保存",
+      "commaSeparated": "カンマ区切りの値",
+      "title": "フィールド",
+      "retry": "再試行"
     }
   },
   "updates": {

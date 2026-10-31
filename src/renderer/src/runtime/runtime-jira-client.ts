@@ -38,6 +38,7 @@ import {
   jiraListTransitionsForTarget
 } from './runtime-jira-detail-client'
 export {
+  jiraGetIssueEditFieldsForTarget,
   jiraGetIssueForTarget,
   jiraUpdateIssueForTarget,
   jiraAddIssueCommentForTarget,

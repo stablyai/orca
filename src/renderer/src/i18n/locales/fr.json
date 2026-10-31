@@ -22291,6 +22291,23 @@
       "siteMismatch": "Choisissez un projet sur le site Jira du favori, ou effacez le filtre de projets.",
       "truncated": "Certains favoris n'ont pas pu être listés. Gérez vos favoris dans Jira pour réduire la liste.",
       "unsupported": "Mettez à jour l'hôte Jira pour utiliser les favoris."
+    },
+    "editFields": {
+      "none": "Aucun",
+      "searchOptions": "Rechercher des options...",
+      "noOptions": "Aucune option ne correspond à votre recherche.",
+      "editDescription": "Modifier la description",
+      "editInJira": "Modifier dans Jira",
+      "descriptionLossy": "Cette description contient du contenu qu’Orca ne peut pas encore réécrire, comme des images ou des mentions.",
+      "descriptionLabel": "Description",
+      "cancel": "Annuler",
+      "saveDescription": "Enregistrer",
+      "required": "{{field}} est obligatoire.",
+      "invalid": "Saisissez une valeur valide pour {{field}}.",
+      "save": "Enregistrer {{field}}",
+      "commaSeparated": "Valeurs séparées par des virgules",
+      "title": "Champs",
+      "retry": "Réessayer"
     }
   },
   "updates": {

@@ -2,6 +2,7 @@ import { JIRA_IMAGE_CAPABILITY } from '../../../shared/jira/jira-attachment-imag
 import { migrateLegacyJiraImages } from './runtime-jira-image-cache'
 import type {
   JiraComment,
+  JiraEditField,
   JiraIssue,
   JiraIssueUpdate,
   JiraMutationResult,
@@ -14,7 +15,10 @@ import {
   callRuntimeRpc,
   runtimeEnvironmentSupportsCapability
 } from './runtime-rpc-client'
-import { JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY } from '../../../shared/jira/jira-detail-capabilities'
+import {
+  JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY,
+  JIRA_TRANSITION_FIELDS_RUNTIME_CAPABILITY
+} from '../../../shared/jira/jira-detail-capabilities'
 import { RuntimeRpcCallError } from './runtime-rpc-result'
 import { readRuntimeJiraPayload } from './runtime-jira-payload-stream'
 
@@ -84,6 +88,13 @@ export async function jiraUpdateIssueForTarget(
       'Update the remote Orca server to submit required transition fields, or complete the transition in Jira.'
     )
   }
+  if (target.kind === 'environment' && updates.fields) {
+    await assertRuntimeEnvironmentCapability(
+      target.environmentId,
+      JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY,
+      'Update the remote Orca server to edit these Jira fields, or edit them in Jira.'
+    )
+  }
   const args = { key, updates, siteId: siteId ?? undefined }
   return target.kind === 'environment'
     ? callRuntimeRpc<JiraMutationResult>(target, 'jira.updateIssue', args, { timeoutMs: 30_000 })
@@ -148,6 +159,29 @@ export async function jiraListPrioritiesForTarget(
         { timeoutMs: 30_000 }
       )
     : window.api.jira.listPriorities(siteId ? { siteId } : undefined)
+}
+
+/** Returns null when a remote host predates edit-screen fields, so callers hide them. */
+export async function jiraGetIssueEditFieldsForTarget(
+  target: RuntimeClientTarget,
+  key: string,
+  siteId?: string | null
+): Promise<JiraEditField[] | null> {
+  if (
+    target.kind === 'environment' &&
+    !(await runtimeEnvironmentSupportsCapability(
+      target.environmentId,
+      JIRA_ISSUE_EDIT_FIELDS_RUNTIME_CAPABILITY
+    ))
+  ) {
+    return null
+  }
+  const args = { key, siteId: siteId ?? undefined, strict: true }
+  return target.kind === 'environment'
+    ? callRuntimeRpc<JiraEditField[]>(target, 'jira.getIssueEditFields', args, {
+        timeoutMs: 30_000
+      })
+    : window.api.jira.getIssueEditFields(args)
 }
 
 export async function jiraListTransitionsForTarget(

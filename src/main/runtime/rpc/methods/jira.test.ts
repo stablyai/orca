@@ -319,6 +319,23 @@ it('forwards strict reads and optional status filters while accepting older requ
   expect(jiraListIssues).toHaveBeenLastCalledWith('all', undefined, undefined, undefined, undefined)
 })
 
+it('reads raw edit-field values only when the caller asks for them', async () => {
+  const jiraGetIssueEditFields = vi.fn().mockResolvedValue([])
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Only the runtime identity and edit-field read are invoked by these requests.
+  const runtime = {
+    getRuntimeId: () => 'host-a',
+    jiraGetIssueEditFields
+  } as unknown as OrcaRuntimeService
+  const dispatcher = new RpcDispatcher({ runtime, methods: JIRA_METHODS })
+  const request = { key: 'ABC-3', siteId: 'site-1', strict: true }
+  await dispatcher.dispatch(makeRequest('jira.getIssueEditFields', request))
+  expect(jiraGetIssueEditFields).toHaveBeenLastCalledWith('ABC-3', 'site-1', true, undefined)
+  await dispatcher.dispatch(
+    makeRequest('jira.getIssueEditFields', { ...request, includeRaw: true })
+  )
+  expect(jiraGetIssueEditFields).toHaveBeenLastCalledWith('ABC-3', 'site-1', true, true)
+})
+
 describe('Jira title generation RPC', () => {
   it('binds generation and stop to the authenticated device across one-shot sockets', async () => {
     const generate = vi.fn().mockResolvedValue({ success: true, summary: 'Title' })

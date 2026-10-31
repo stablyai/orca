@@ -10,10 +10,16 @@ import type { HandlerContext } from './dispatch'
 import { getOptionalStringFlag } from './flags'
 import { RuntimeClientError } from './runtime-client'
 
+type JiraTargetOptions = {
+  siteFlag?: string
+  // Runtime capability the command needs beyond verified Jira agent access.
+  capability?: string
+}
+
 export function resolveJiraTarget(
   context: HandlerContext,
   input: string,
-  options?: { siteFlag?: string }
+  options?: JiraTargetOptions
 ): Promise<{ site: JiraSite; siteId: string; key: string }>
 export function resolveJiraTarget(
   context: HandlerContext
@@ -21,7 +27,7 @@ export function resolveJiraTarget(
 export async function resolveJiraTarget(
   context: HandlerContext,
   input?: string,
-  options: { siteFlag?: string } = {}
+  options: JiraTargetOptions = {}
 ): Promise<{ site: JiraSite; siteId: string; key?: string }> {
   const parsed = input === undefined ? null : parseJiraIssueUrl(input)
   if (input !== undefined && !parsed && !JIRA_ISSUE_KEY_PATTERN.test(input.trim())) {
@@ -40,6 +46,12 @@ export async function resolveJiraTarget(
     throw new RuntimeClientError(
       'incompatible_runtime',
       'Update Orca on the execution host to use verified Jira commands.'
+    )
+  }
+  if (options.capability && !runtime.result.capabilities.includes(options.capability)) {
+    throw new RuntimeClientError(
+      'incompatible_runtime',
+      'Update Orca on the execution host to use this Jira command.'
     )
   }
   const { result: status } = await context.client.call<JiraConnectionStatus>('jira.status')

@@ -11,6 +11,7 @@ export const JIRA_HANDLER_GROUP: HandlerGroup = {
     'jira project list',
     'jira project types',
     'jira project fields',
+    'jira field list',
     'jira comment list',
     'jira comment add',
     'jira status list',

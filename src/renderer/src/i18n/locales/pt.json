@@ -22290,6 +22290,23 @@
       "truncated": "Alguns favoritos não puderam ser listados. Gerencie seus favoritos no Jira para reduzir a lista.",
       "clear": "Limpar favorito do Jira",
       "activeLabel": "Favoritos do Jira: {{name}}"
+    },
+    "editFields": {
+      "none": "Nenhum",
+      "searchOptions": "Pesquisar opções...",
+      "noOptions": "Nenhuma opção corresponde à pesquisa.",
+      "editDescription": "Editar descrição",
+      "editInJira": "Editar no Jira",
+      "descriptionLossy": "Esta descrição tem conteúdo que o Orca ainda não consegue gravar de volta, como imagens ou menções.",
+      "descriptionLabel": "Descrição",
+      "cancel": "Cancelar",
+      "saveDescription": "Salvar",
+      "required": "{{field}} é obrigatório.",
+      "invalid": "Insira um valor válido para {{field}}.",
+      "save": "Salvar {{field}}",
+      "commaSeparated": "Valores separados por vírgulas",
+      "title": "Campos",
+      "retry": "Tentar novamente"
     }
   },
   "workspaceSpace": {
