@@ -49,6 +49,7 @@ export type AutomationCreateDestinationInput = {
 
 export type AutomationCreateDestinationState = {
   control: AutomationCreateDestinationControl
+  hasUnsavedChanges: boolean
   check: (projectId: string) => AutomationCreateDestinationCheck
 }
 
@@ -88,12 +89,14 @@ export function useAutomationCreateDestination(
     projects
   } = input
   const [captured, setCaptured] = useState<AutomationCreateDestination | null>(null)
+  const [initialHostStableKey, setInitialHostStableKey] = useState<string | null>(null)
   const [reason, setReason] = useState<AutomationCreateDestinationChoiceReason>('unselected')
 
   // Reset capture during render under change guards so a prior dialog’s owner never paints and updates converge.
   if (!open && (captured !== null || reason !== 'unselected')) {
     setCaptured(null)
     setReason('unselected')
+    setInitialHostStableKey(null)
   }
   if (open && !captured) {
     // Keep resolving until the first capture so late hydration can supply the intended host.
@@ -103,6 +106,7 @@ export function useAutomationCreateDestination(
     const resolved = resolveAutomationCreateDestination(entry)
     if (resolved.status === 'ready') {
       setCaptured(resolved)
+      setInitialHostStableKey(resolved.entry.stableKey)
     } else if (resolved.reason !== reason) {
       setReason(resolved.reason)
     }
@@ -180,6 +184,7 @@ export function useAutomationCreateDestination(
   )
 
   return {
+    hasUnsavedChanges: captured !== null && captured.entry.stableKey !== initialHostStableKey,
     control: useMemo(
       () => ({ entries, resolution, onSelect, projects: eligibleProjects }),
       [eligibleProjects, entries, onSelect, resolution]
