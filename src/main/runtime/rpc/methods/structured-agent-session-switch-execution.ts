@@ -127,15 +127,8 @@ async function switchToChat(
   deadline: AgentSessionSwitchDeadline,
   keepSource: (settle: () => void) => void
 ): Promise<AgentSessionSwitchResult> {
-  const {
-    host,
-    execution,
-    create,
-    sourceEvidence,
-    createIdentity,
-    providerSessionId,
-    conversation
-  } = prepared
+  const { host, execution, create, sourceEvidence, createIdentity } = prepared
+  const { providerSessionId, conversation } = prepared
   deadline.check()
   let replacedBy: string | undefined
   const source = 'source' in execution ? execution.source : undefined
@@ -195,7 +188,8 @@ async function switchToChat(
       boundary: before && stopped ? { source: before, stopped } : undefined,
       keepSource: (settle) => keepSource(() => settle(replacedBy)),
       consented: execution.consented,
-      agent: [create?.agent, host.deps.store.getRecord(sessionId)?.provider].find(isAiVaultAgent)
+      agent: [create?.agent, host.deps.store.getRecord(sessionId)?.provider].find(isAiVaultAgent),
+      providerSessionId
     })
   }
   if (create) {

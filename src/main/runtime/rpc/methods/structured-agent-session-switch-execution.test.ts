@@ -1,8 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises'
-import { join } from 'node:path'
 import * as cliTranscript from '../../../ai-vault/structured-chat-cli-fork'
-import { structuredAgentRuntimeMetadata } from '../../structured-agent-runtime-metadata'
-import { agentSessionProviderHandleChainHead } from '../../../../shared/agent-session-provider-handle'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,
@@ -25,10 +21,15 @@ import {
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
 import {
+  keptSourceTerminal,
+  savedTranscript,
+  startSwitchFromKeptTerminal,
+  switchFromKeptTerminal
+} from './structured-agent-session-switch-execution.test-fixture'
+import {
   TerminalNotPlacedError,
   TerminalRevealUnconfirmedError
 } from '../../session-tabs/terminal-not-placed-error'
-import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
 import { refusedMobileSessionTabClose } from '../../mobile-session-tab-close-outcome'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../../shared/agent-session-switch-execution'
 import { DaemonRequestTimeoutError } from '../../../daemon/daemon-errors'
@@ -58,66 +59,6 @@ afterEach(async () => {
   await rig.dispose()
   vi.restoreAllMocks()
 })
-async function savedTranscript(sessionId = id) {
-  await rig.host.switchToChat(sessionId)
-  await rig.host.switchToTerminal(sessionId)
-  const record = rig.store.getRecord(sessionId)!
-  const head = agentSessionProviderHandleChainHead(record.providerHandleChain)!
-  const codexHome = join(rig.root, 'codex-account')
-  const sessions = join(codexHome, 'sessions')
-  await mkdir(sessions, { recursive: true })
-  const filePath = join(sessions, 'switch-source.jsonl')
-  const nativeId = head.handle.nativeId
-  await writeFile(
-    filePath,
-    `${[
-      { type: 'session_meta', payload: { id: nativeId } },
-      {
-        timestamp: '2026-10-26T12:00:00Z',
-        type: 'event_msg',
-        payload: { type: 'task_started', turn_id: 'cli-turn' }
-      },
-      {
-        type: 'event_msg',
-        payload: {
-          type: 'user_message',
-          message: 'A terminal prompt'
-        }
-      },
-      {
-        timestamp: '2026-10-26T12:00:01Z',
-        type: 'event_msg',
-        payload: { type: 'task_complete', turn_id: 'cli-turn' }
-      }
-    ]
-      .map((row) => JSON.stringify(row))
-      .join('\n')}\n`
-  )
-  vi.spyOn(cliTranscript, 'resolveStructuredChatCliSource').mockResolvedValue({
-    host: rig.host,
-    record,
-    head,
-    agent: 'codex',
-    cwd: rig.root,
-    providerSessionId: nativeId,
-    requireCurrent: vi.fn(),
-    metadata: structuredAgentRuntimeMetadata('codex')!
-  })
-  const readable: AiVaultPrepareSessionResumeResult = {
-    useRealCodexHome: false,
-    cliForkSource: {
-      agent: 'codex',
-      sourceAgent: 'codex',
-      sessionId: nativeId,
-      filePath,
-      cwd: rig.root,
-      codexHome,
-      executionHostPlatform: process.platform
-    }
-  }
-  vi.spyOn(cliTranscript, 'prepareStructuredChatCliTranscript').mockResolvedValue(readable)
-  return readable
-}
 
 it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
   'uses ordinary exact physical exit and source placement, retaining siblings: %s',
@@ -152,7 +93,7 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
         )
       ).toMatchObject({ ok: true })
     }
-    await savedTranscript(sessionId)
+    await savedTranscript(rig, sessionId)
     const { runtime, session, setSession } = setupMainOwnedWorkspace({ split: shape === 'split' })
     const incarnationId = '11111111-1111-4111-8111-111111111111'
     runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
@@ -310,7 +251,7 @@ it.each(['single', 'split', 'other-workspace', 'reselected'] as const)(
 )
 
 it('keeps the stopped source when destination publication fails before retirement', async () => {
-  await savedTranscript()
+  await savedTranscript(rig)
   const { runtime, session } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
   runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
@@ -392,7 +333,7 @@ it.each([
   ['its physical stop is unproven', false],
   ['its agent is paused with Ctrl+Z, stopping nothing', true]
 ] as const)('does not acquire or retire a terminal when %s', async (_case, paused) => {
-  await savedTranscript()
+  await savedTranscript(rig)
   const { runtime, session } = setupMainOwnedWorkspace()
   const incarnationId = '11111111-1111-4111-8111-111111111111'
   runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
@@ -578,7 +519,7 @@ it.each([
 )
 
 it('re-issuing a switch whose first answer was lost adopts the terminal it started', async () => {
-  await savedTranscript()
+  await savedTranscript(rig)
   const { runtime, session } = setupMainOwnedWorkspace()
   vi.spyOn(runtime, 'resolveTerminalWorkspaceLaunchScope').mockResolvedValue({
     id: WORKTREE_ID,
@@ -639,91 +580,8 @@ it('re-issuing a switch whose first answer was lost adopts the terminal it start
   ).toEqual([TAB_ID, lost.tabId].sort())
 })
 
-/** A whole-tab terminal→chat switch whose stop keeps the pane for the replace; records main's settlements. */
-async function switchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
-  const started = startSwitchFromKeptTerminal(options)
-  return { ...started, result: await started.result }
-}
-
-type KeptTerminalSwitchOptions = {
-  beforeStop?: () => Promise<void>
-  afterStop?: (runtime: ReturnType<typeof setupMainOwnedWorkspace>['runtime']) => Promise<void>
-}
-
-/** A whole-tab terminal whose stop keeps the pane; records main's settlements for it. */
-function keptSourceTerminal(options: KeptTerminalSwitchOptions = {}) {
-  const { runtime } = setupMainOwnedWorkspace()
-  const incarnationId = '11111111-1111-4111-8111-111111111111'
-  runtime.registerPty(PTY_A, WORKTREE_ID, null, { tabId: TAB_ID, leafId: LEAF_A, incarnationId })
-  const source = runtime.resolveTerminalPane(`${TAB_ID}:${LEAF_A}`, WORKTREE_ID)
-  if (!source.presentation) {
-    throw new Error('missing captured source')
-  }
-  const settled = vi.fn()
-  runtime.setNotifier({
-    settleStoppedSwitchSource: settled,
-    closeTerminal: () => {},
-    worktreesChanged: () => {},
-    reposChanged: () => {},
-    activateWorktree: () => {},
-    createTerminal: () => {},
-    splitTerminal: () => {},
-    renameTerminal: () => {},
-    focusTerminal: () => {},
-    terminalFitOverrideChanged: () => {},
-    terminalDriverChanged: () => {}
-  })
-  runtime.setPtyController({
-    write: () => true,
-    kill: () => false,
-    stopAndWait: async () => {
-      await options.beforeStop?.()
-      await runtime.onPtyExit(PTY_A, 0, incarnationId, { hostExitConfirmed: true })
-      await options.afterStop?.(runtime)
-      return true
-    },
-    getForegroundProcess: async () => null
-  })
-  const stoppedSource = {
-    worktreeId: WORKTREE_ID,
-    tabId: TAB_ID,
-    leafId: LEAF_A,
-    ptyId: PTY_A,
-    incarnationId,
-    // A switch stopped it, and the stopped pane names the agent.
-    switched: { agent: 'codex' as const }
-  }
-  return {
-    runtime,
-    source: { ...source, presentation: source.presentation },
-    incarnationId,
-    settled,
-    stoppedSource
-  }
-}
-
-function startSwitchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
-  const { runtime, source, incarnationId, settled, stoppedSource } = keptSourceTerminal(options)
-  const result = executeStructuredSessionSwitch(
-    {
-      sessionId: id,
-      execution: {
-        invocationId: 'kept-source',
-        source: {
-          terminal: source.handle,
-          expectedIncarnationId: incarnationId,
-          originalPresentation: source.presentation
-        }
-      }
-    },
-    { runtime },
-    'chat'
-  )
-  return { result, settled, stoppedSource }
-}
-
 it('settles a kept source once when the switch fails after stopping it', async () => {
-  const readable = await savedTranscript()
+  const readable = await savedTranscript(rig)
   const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
   prepare.mockReset()
   prepare.mockResolvedValueOnce(readable).mockResolvedValue({ useRealCodexHome: false })
@@ -736,7 +594,7 @@ it('settles a kept source once when the switch fails after stopping it', async (
 })
 
 it('settles a kept source once when its tab became a split after the stop', async () => {
-  await savedTranscript()
+  await savedTranscript(rig)
   const { result, settled, stoppedSource } = await switchFromKeptTerminal({
     afterStop: async (runtime) => {
       expect(
@@ -756,7 +614,7 @@ it('settles a kept source once when its tab became a split after the stop', asyn
 })
 
 it('settles a replaced source naming its chat, so the window waits for that replace', async () => {
-  await savedTranscript()
+  await savedTranscript(rig)
   const { result, settled, stoppedSource } = await switchFromKeptTerminal()
   expect(result).toEqual({ status: 'completed', sessionId: id })
   expect(settled).toHaveBeenCalledExactlyOnceWith({ ...stoppedSource, replacedBySessionId: id })
@@ -771,7 +629,7 @@ function holdUntilReleased() {
 }
 
 it('settles a kept source once at the deadline while work after the stop is still running', async () => {
-  const readable = await savedTranscript()
+  const readable = await savedTranscript(rig)
   const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
   const work = holdUntilReleased()
   prepare.mockReset()
@@ -797,7 +655,7 @@ it('settles a kept source once at the deadline while work after the stop is stil
 })
 
 it('settles a kept source at once when its stop is proven only after the deadline', async () => {
-  await savedTranscript()
+  await savedTranscript(rig)
   const stop = holdUntilReleased()
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout'] })
   try {

@@ -40,8 +40,9 @@ export async function stopStructuredSwitchTerminalSource(input: {
   keepSource: (settle: (replacedBy: string | undefined) => void) => void
   /** False: the client left consent to this host, so a replying agent is refused, not stopped. */
   consented?: boolean
-  /** The stopped agent, named by the pane the window keeps on screen. */
+  /** The stopped agent and its conversation, named by the pane kept on screen. */
   agent?: AiVaultAgent
+  providerSessionId?: string | null
 }): Promise<void> {
   const { ctx, host, sessionId, close, deadline } = input
   // Checked where the stop is admitted (before the Escape, at its write, and before the exit), so
@@ -92,7 +93,11 @@ export async function stopStructuredSwitchTerminalSource(input: {
     // The window decides whether the stopped pane is still there; a chat that replaced it is
     // named so the window waits for that replace's own pass.
     input.keepSource((replacedBy) =>
-      close.settleStoppedSource({ replacedBySessionId: replacedBy, agent: input.agent })
+      close.settleStoppedSource({
+        replacedBySessionId: replacedBy,
+        agent: input.agent,
+        providerSessionId: input.providerSessionId ?? undefined
+      })
     )
   } catch {
     host.deps.logger.warn('switch source exit was not confirmed', {

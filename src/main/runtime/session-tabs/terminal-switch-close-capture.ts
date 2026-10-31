@@ -8,6 +8,15 @@ import {
 import { OrcaRuntimeWithExplicitTerminalTabClose } from './explicit-terminal-tab-close'
 import type { AiVaultAgent } from '../../../shared/ai-vault-types'
 export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRuntimeWithExplicitTerminalTabClose {
+  /** Whether a handle names a process a switch stopped and left: an attach is answered exited. */
+  isStoppedSwitchSourceHandle(handle: string): boolean {
+    const ptyId = this.handles.get(handle)?.ptyId
+    return Boolean(
+      ptyId &&
+      this.stoppedSwitchSources.stoppedProcess(ptyId, this.ptysById.get(ptyId)?.incarnationId)
+    )
+  }
+
   captureTerminalSwitchClose(
     handle: string,
     incarnation: string,
@@ -113,11 +122,25 @@ export abstract class OrcaRuntimeWithTerminalSwitchCloseCapture extends OrcaRunt
        * once, only after proof of the stop; a replace's chat names itself, so the window settles
        * only once that chat is there and its replace has had its pass.
        */
-      settleStoppedSource: (switched?: { replacedBySessionId?: string; agent?: AiVaultAgent }) => {
+      settleStoppedSource: (switched?: {
+        replacedBySessionId?: string
+        agent?: AiVaultAgent
+        providerSessionId?: string
+      }) => {
         if (!keptStopped || stoppedSourceSettled) {
           return
         }
         stoppedSourceSettled = true
+        // Nothing replaced the stopped pane: main's fact, which every viewer's frame carries.
+        if (switched?.agent && switched.providerSessionId && !switched.replacedBySessionId) {
+          this.stoppedSwitchSources.record(source, {
+            ptyId: addressedPty,
+            incarnationId: incarnation,
+            agent: switched.agent,
+            providerSessionId: switched.providerSessionId
+          })
+          this.touchMobileSessionTabsForWorktree(source.worktreeId, { immediate: true })
+        }
         this.notifier?.settleStoppedSwitchSource?.({
           worktreeId: source.worktreeId,
           tabId: source.tabId,

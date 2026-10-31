@@ -28,6 +28,7 @@ import {
   terminalTitleBlocksExplicitAgentStatus
 } from './runtime-worktree-status-projection'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
+import { stoppedSwitchSourcePty } from './session-tabs/stopped-switch-source-facts'
 
 export function projectRuntimeMobileSessionTabs(
   snapshot: RuntimeMobileSessionTabsSnapshot,
@@ -254,7 +255,7 @@ export function projectRuntimeMobileSessionTabs(
           paneKey,
           connected: true
         })
-      : livePty
+      : (livePty ?? stoppedSwitchSourcePty(tab, host.ptysById))
     const terminalHandle = terminalPty ? host.issuePtyHandle(terminalPty) : null
     const projectedAgentStatus =
       agentStatus ??
@@ -293,6 +294,7 @@ export function projectRuntimeMobileSessionTabs(
       ...(tab.ptyId ? { ptyId: tab.ptyId } : {}),
       // Bind identity to the handle's live owner, never a stale persisted surface.
       ...(terminalPty?.incarnationId ? { incarnationId: terminalPty.incarnationId } : {}),
+      ...(tab.stoppedSwitchSource ? { stoppedSwitchSource: tab.stoppedSwitchSource } : {}),
       ...(tab.terminalTheme ? { terminalTheme: tab.terminalTheme } : {}),
       ...(launchAgent ? { launchAgent } : {}),
       ...clientAgentStatus,

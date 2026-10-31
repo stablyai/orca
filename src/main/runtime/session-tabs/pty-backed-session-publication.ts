@@ -19,10 +19,13 @@ import {
   mergeMobileSessionTabGroups
 } from '../mobile-session-tab-merge'
 import { SwitchSlotAnchors } from './switch-slot-anchors'
+import { StoppedSwitchSourceFacts } from './stopped-switch-source-facts'
 
 export abstract class OrcaRuntimeWithPublishPtyBackedMobileSessionTerminal extends OrcaRuntimeWithHasLiveOrPersistedServeOrSshOwnedPtyBinding {
   /** Where switches put their destinations, for each destination's life (memory only). */
   readonly switchSlotAnchors = new SwitchSlotAnchors()
+  /** Panes a switch stopped with proof and nothing replaced (memory only). */
+  readonly stoppedSwitchSources = new StoppedSwitchSourceFacts()
   protected abstract markPaneLiveTitlesDirty(): void
   protected abstract getPtyManualTitle(
     ...args: Parameters<PtyTerminalSummaryMethods['getPtyManualTitle']>

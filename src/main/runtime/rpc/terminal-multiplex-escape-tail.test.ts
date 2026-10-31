@@ -42,6 +42,7 @@ describe('terminal.multiplex pending-escape-tail threading (#7329)', () => {
       const cleanups = new Map<string, () => void>()
       const runtime = stubRuntime({
         resolveLiveLeafForHandle: vi.fn().mockReturnValue({ ptyId: 'pty-1' }),
+        isStoppedSwitchSourceHandle: () => false,
         readTerminal: vi.fn().mockResolvedValue({ tail: [], truncated: false }),
         serializeTerminalBuffer: vi.fn().mockResolvedValue({
           data: 'user@host:~$ ',
