@@ -19,11 +19,26 @@ export function deferHiddenAgentResume(
     session.deps.isVisibleRef.current ||
     session.hiddenAgentResumeReleased
   ) {
-    // Why consume: a disposed or visible pane never takes the hidden-deferral path, so nothing
-    // would ever spend its wake mark — a later sweep would then read the stale mark as ownership
-    // and skip a record whose pane has no live PTY and no resume in flight.
     if (recordEntry && (session.disposed || session.deps.isVisibleRef.current)) {
+      // Why consume: a disposed or visible pane never takes the hidden-deferral path, so nothing
+      // would ever spend its wake mark — a later sweep would then read the stale mark as ownership
+      // and skip a record whose pane has no live PTY and no resume in flight.
       takeSleepingAgentWakeRequest(recordEntry.record)
+      if (!session.disposed) {
+        // Why the hold: the visible restore runs async after this bypass, and before it binds a
+        // PTY the sweep would see no mark, no live PTY and fork a duplicate. The predicate owns
+        // exactly the attempt's in-flight window and reads false once it settles without binding,
+        // so a refused or failed restore leaves no stale ownership behind.
+        const paneKey = recordEntry.paneKey
+        holdPaneResumeUntilShown(
+          paneKey,
+          () =>
+            !session.disposed &&
+            session.transport.getPtyId() === null &&
+            (session.transportConnectInFlightSince !== null ||
+              pendingSpawnByPaneKey.has(session.pendingSpawnKey))
+        )
+      }
     }
     return false
   }
