@@ -14,3 +14,20 @@ export function effectiveWorkspaceView(state: {
 }): RendererView {
   return state.settings?.experimentalThreads ? state.activeView : workspaceView(state.activeView)
 }
+
+/** Sections remember a workspace destination without owning its live selection. */
+export function desktopWorkspaceContextView(state: {
+  activeView: RendererView
+  previousViewBeforeSettings?: RendererView
+  previousViewBeforeTasks?: RendererView
+  settings?: { experimentalThreads?: boolean } | null
+}): RendererView {
+  let view = state.activeView
+  if (view === 'settings') {
+    view = state.previousViewBeforeSettings ?? 'terminal'
+  }
+  if (view === 'tasks') {
+    view = state.previousViewBeforeTasks ?? 'terminal'
+  }
+  return effectiveWorkspaceView({ activeView: view, settings: state.settings })
+}

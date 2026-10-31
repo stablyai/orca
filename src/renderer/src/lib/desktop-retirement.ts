@@ -1,0 +1,70 @@
+import type { AppState } from '@/store/types'
+import {
+  captureDesktopNavigation,
+  canPresentDesktopNavigation,
+  hasNewerDesktopSelection
+} from './desktop-navigation-request'
+import { desktopWorkspaceContextView, effectiveWorkspaceView } from './renderer-view'
+
+/** Retirement observes the original target; removal and acknowledgement never need a page claim. */
+export function captureDesktopRetirement(state: AppState, worktreeId: string, groupId: string) {
+  const group = state.groupsByWorktree[worktreeId]?.find((entry) => entry.id === groupId)
+  return {
+    navigation: captureDesktopNavigation(state),
+    hostId: state.activeWorkspaceExecutionHostId,
+    worktreeId,
+    groupId,
+    context: desktopWorkspaceContextView(state),
+    selectedTabId: group?.activeTabId ?? null,
+    foregroundTabId:
+      effectiveWorkspaceView(state) === 'terminal' && state.activeWorktreeId === worktreeId
+        ? (state.getActiveTab(worktreeId)?.id ?? null)
+        : null
+  }
+}
+export type DesktopRetirement = ReturnType<typeof captureDesktopRetirement>
+
+export function protectsEmptyWorkbench(state: AppState, retirement?: DesktopRetirement): boolean {
+  const context = desktopWorkspaceContextView(state)
+  const rawContext = desktopWorkspaceContextView({
+    activeView: state.activeView,
+    previousViewBeforeSettings: state.previousViewBeforeSettings,
+    previousViewBeforeTasks: state.previousViewBeforeTasks,
+    settings: { experimentalThreads: true }
+  })
+  return (
+    context === 'empty-workbench' ||
+    (rawContext === 'empty-workbench' &&
+      !!retirement &&
+      (retirement.context === 'empty-workbench' ||
+        captureDesktopNavigation(state).experimentalGeneration !==
+          retirement.navigation.experimentalGeneration))
+  )
+}
+
+export function canRepairRetiredSelection(state: AppState, retirement: DesktopRetirement): boolean {
+  if (protectsEmptyWorkbench(state, retirement)) {
+    return false
+  }
+  return !hasNewerDesktopSelection(
+    state,
+    retirement.navigation,
+    retirement.worktreeId,
+    retirement.groupId
+  )
+}
+
+export function canReplaceRetiredForeground(
+  state: AppState,
+  retirement: DesktopRetirement,
+  retiredTabId: string
+): boolean {
+  return (
+    retirement.foregroundTabId === retiredTabId &&
+    canPresentDesktopNavigation(retirement.navigation) &&
+    effectiveWorkspaceView(state) === 'terminal' &&
+    state.activeWorktreeId === retirement.worktreeId &&
+    state.activeGroupIdByWorktree[retirement.worktreeId] === retirement.groupId &&
+    state.activeWorkspaceExecutionHostId === retirement.hostId
+  )
+}

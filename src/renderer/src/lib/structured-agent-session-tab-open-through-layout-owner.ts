@@ -70,7 +70,7 @@ export function openAgentSessionTabThroughLayoutOwner(
       }
       // As the window's own open: the chat is selected in its group; the focused group stays.
       const current = useAppStore.getState()
-      navigateDesktopTab(shownId, { worktreeId, request })
+      navigateDesktopTab(shownId, { worktreeId, request, scope: 'workspace' })
       current.setActiveTabType('agent-session', worktreeId)
     },
     drawHere: () => open.drawHere().id

@@ -1,8 +1,4 @@
 import { useCallback, useMemo, useRef, useState } from 'react'
-import {
-  appendToNativeChatComposerDraft,
-  readNativeChatComposerDraft
-} from '../native-chat/native-chat-composer-draft-store'
 import { useNativeChatComposerRevealFocus } from '../native-chat/use-native-chat-composer-reveal-focus'
 import { Plus } from 'lucide-react'
 import { useAppStore } from '@/store'
@@ -30,8 +26,7 @@ import { useThreadProjects } from './use-thread-projects'
 import {
   changeThreadDraftProject,
   requestThreadProjectAdd,
-  threadDraftScopeKey,
-  useThreadDraft
+  threadDraftScopeKey
 } from './thread-navigation'
 import { sendNewThread } from './thread-actions'
 import { useThreadLaunchChoices } from './use-thread-launch-choices'
@@ -85,18 +80,9 @@ export function NewThread({
             setSending(false)
             return false
           }
-          void launch.settlement.then((result) => {
+          void launch.settlement.then(() => {
             sent.current = false
             setSending(false)
-            if (
-              !launch.ownsPrompt() &&
-              useThreadDraft.getState().draft?.draftId === draftId &&
-              !readNativeChatComposerDraft(threadDraftScopeKey()).text &&
-              (result.kind === 'failed' ||
-                (result.kind === 'cancelled' && result.sessionId === null))
-            ) {
-              appendToNativeChatComposerDraft(threadDraftScopeKey(), { text })
-            }
           })
           return true
         } catch {

@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { beginDesktopNavigation, navigateDesktopTab } from '@/lib/desktop-navigation'
 import { useCallback } from 'react'
 import { toast } from 'sonner'
 import { useAppStore } from '../store'
@@ -25,8 +27,7 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
     createTab,
     openNewBrowserTabInActiveWorkspace,
     openNewMarkdownInActiveWorkspace,
-    openNewTerminalTabInActiveWorkspace,
-    setActiveTabType
+    openNewTerminalTabInActiveWorkspace
   } = controller
   const handleNewTab = useCallback(
     (shellOverride?: string) => {
@@ -37,6 +38,11 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
         useAppStore.getState().activeGroupIdByWorktree[activeWorktreeId] ??
         useAppStore.getState().groupsByWorktree[activeWorktreeId]?.[0]?.id
       const runtimeEnvironmentId = getActiveWorktreeRuntimeEnvironmentId(activeWorktreeId)
+      if (!isWebRuntimeSessionActive(runtimeEnvironmentId) && !shellOverride && targetGroupId) {
+        void openNewTerminalTabInActiveWorkspace(targetGroupId)
+        return
+      }
+      const navigation = isFloatingWorkspaceId(activeWorktreeId) ? null : beginDesktopNavigation()
       if (isWebRuntimeSessionActive(runtimeEnvironmentId)) {
         void createWebRuntimeSessionTerminal(
           {
@@ -44,23 +50,21 @@ export function useTerminalCreateActions(controller: TerminalColdActivationContr
             environmentId: runtimeEnvironmentId,
             targetGroupId,
             shell: shellOverride,
-            activate: true
+            activate: true,
+            navigation
           },
           { userAct: true }
         )
         return
       }
-      if (!shellOverride && targetGroupId) {
-        void openNewTerminalTabInActiveWorkspace(targetGroupId)
-        return
-      }
       const tabId = createBrowserUuid()
-      createTab(activeWorktreeId, undefined, shellOverride, { id: tabId })
-      setActiveTabType('terminal', activeWorktreeId)
+      createTab(activeWorktreeId, undefined, shellOverride, { id: tabId, activate: false })
       persistAgentLaunchTabOrder(activeWorktreeId, tabId)
-      focusTerminalTabSurface(tabId)
+      if (navigateDesktopTab(tabId, { worktreeId: activeWorktreeId, request: navigation })) {
+        focusTerminalTabSurface(tabId)
+      }
     },
-    [activeWorktreeId, createTab, openNewTerminalTabInActiveWorkspace, setActiveTabType]
+    [activeWorktreeId, createTab, openNewTerminalTabInActiveWorkspace]
   )
 
   const handleNewSimulatorTab = useCallback(() => {

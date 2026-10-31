@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { beginDesktopNavigation, navigateDesktopTab } from '@/lib/desktop-navigation-request'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
 import { focusTerminalTabSurface } from '@/lib/focus-terminal-tab-surface'
@@ -17,6 +19,7 @@ export function createActiveWorkspaceTerminalActions(
       if (!worktreeId) {
         return
       }
+      const navigation = isFloatingWorkspaceId(worktreeId) ? null : beginDesktopNavigation(state)
       const workspaceScope = parseWorkspaceKey(worktreeId)
       const worktreeRoute =
         worktreeId === FLOATING_TERMINAL_WORKTREE_ID || workspaceScope?.type === 'folder'
@@ -36,7 +39,8 @@ export function createActiveWorkspaceTerminalActions(
             worktreeId,
             environmentId: runtimeEnvironmentId,
             targetGroupId: groupId,
-            activate: true
+            activate: true,
+            navigation
           },
           { userAct: true }
         )
@@ -45,9 +49,8 @@ export function createActiveWorkspaceTerminalActions(
       if (isWebClientLocation() && worktreeId !== FLOATING_TERMINAL_WORKTREE_ID) {
         return
       }
-      const terminal = get().createTab(worktreeId, groupId)
-      get().setActiveTab(terminal.id)
-      get().setActiveTabType('terminal', worktreeId)
+      const terminal = get().createTab(worktreeId, groupId, undefined, { activate: false })
+      const presented = navigateDesktopTab(get(), terminal.id, { worktreeId, request: navigation })
       const latest = get()
       const currentTerminals = latest.tabsByWorktree[worktreeId] ?? []
       const currentEditors = latest.openFiles.filter((file) => file.worktreeId === worktreeId)
@@ -67,7 +70,9 @@ export function createActiveWorkspaceTerminalActions(
       }
       // Why: Cmd+J shares the titlebar-button creation path, so append the new terminal after mixed editor/browser tabs, not first.
       get().setTabBarOrder(worktreeId, [...base.filter((id) => id !== terminal.id), terminal.id])
-      focusTerminalTabSurface(terminal.id)
+      if (presented) {
+        focusTerminalTabSurface(terminal.id)
+      }
     }
   }
 }

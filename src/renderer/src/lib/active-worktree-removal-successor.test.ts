@@ -91,7 +91,8 @@ describe('active worktree removal successor', () => {
     expect(activateAndRevealWorktree).toHaveBeenCalledOnce()
     expect(activateAndRevealWorktree).toHaveBeenCalledWith(recent.id, {
       revealInSidebar: false,
-      executionHostId: 'local'
+      executionHostId: 'local',
+      navigation: expect.objectContaining({ experimental: true })
     })
     // Orca picked the successor, not the user: no switch that could start a stopped distro.
     expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[1]).not.toHaveProperty(
@@ -113,7 +114,8 @@ describe('active worktree removal successor', () => {
     expect(result).toEqual({ ok: true })
     expect(activateAndRevealWorktree).toHaveBeenCalledWith(recent.id, {
       revealInSidebar: false,
-      executionHostId: 'local'
+      executionHostId: 'local',
+      navigation: expect.objectContaining({ experimental: true })
     })
   })
 
@@ -135,7 +137,8 @@ describe('active worktree removal successor', () => {
 
     expect(activateAndRevealWorktree).toHaveBeenCalledWith(main.id, {
       revealInSidebar: false,
-      executionHostId: 'local'
+      executionHostId: 'local',
+      navigation: expect.objectContaining({ experimental: true })
     })
   })
 

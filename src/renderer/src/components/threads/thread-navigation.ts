@@ -1,3 +1,4 @@
+import { effectiveWorkspaceView } from '@/lib/renderer-view'
 import { requestNativeChatComposerFocus } from '../native-chat/use-native-chat-composer-reveal-focus'
 import { create } from 'zustand'
 import type { AgentPickerDraft } from '../../../../shared/agent-launch-picker'
@@ -13,6 +14,7 @@ import {
 } from '@/lib/desktop-navigation'
 import { EMPTY_THREAD_IDS } from '../native-chat/structured-session-summary-store'
 import {
+  appendToNativeChatComposerDraft,
   readNativeChatComposerDraft,
   deleteNativeChatComposerDraft
 } from '../native-chat/native-chat-composer-draft-store'
@@ -29,8 +31,10 @@ export type ThreadPage = ThreadDraft | { kind: 'thread'; tabId: string; worktree
 // Content survives navigation; only the app route decides whether compose is foreground.
 export const useThreadDraft = create<{
   draft: ThreadDraft | null
+  unallocated: number
+  submittedUse: number
   projectRequest: { request: DesktopNavigationRequest; draftId: string | null } | null
-}>(() => ({ draft: null, projectRequest: null }))
+}>(() => ({ draft: null, projectRequest: null, unallocated: 0, submittedUse: 0 }))
 
 let browserDraftAddress: string | undefined
 
@@ -79,23 +83,62 @@ export function changeThreadDraftProject(draftId: string, projectKey: string): v
   }
 }
 
-export function consumeThreadDraft(submitted: ThreadDraft): void {
-  const current = useThreadDraft.getState().draft
-  if (
-    current?.draftId === submitted.draftId &&
-    current.projectKey === submitted.projectKey &&
-    current.launchDraft === submitted.launchDraft &&
-    !readNativeChatComposerDraft(threadDraftScopeKey()).text
-  ) {
-    useThreadDraft.setState({
-      draft: { kind: 'new', projectKey: current.projectKey, draftId: createBrowserUuid() }
-    })
+/** Each unallocated capture keeps this address until its own allocation or definitive outcome. */
+export function captureThreadDraftSubmission(text: string) {
+  const submitted = useThreadDraft.getState().draft
+  const use = useThreadDraft.getState().submittedUse + 1
+  if (submitted) {
+    useThreadDraft.setState((state) => ({ unallocated: state.unallocated + 1, submittedUse: use }))
+  }
+  let released = false
+  const release = (allocated: boolean): void => {
+    if (released) {
+      return
+    }
+    released = true
+    if (!submitted || useThreadDraft.getState().draft?.draftId !== submitted.draftId) {
+      return
+    }
+    useThreadDraft.setState((state) => ({ unallocated: state.unallocated - 1 }))
+    if (allocated) {
+      queueMicrotask(() => {
+        const state = useThreadDraft.getState()
+        const current = state.draft
+        if (
+          state.unallocated === 0 &&
+          state.submittedUse === use &&
+          current?.draftId === submitted.draftId &&
+          current.projectKey === submitted.projectKey &&
+          current.launchDraft === submitted.launchDraft &&
+          !readNativeChatComposerDraft(threadDraftScopeKey()).text
+        ) {
+          useThreadDraft.setState({
+            draft: { kind: 'new', projectKey: current.projectKey, draftId: createBrowserUuid() }
+          })
+        }
+      })
+    }
+  }
+  return {
+    allocated: () => release(true),
+    finish: (recover: boolean) => {
+      if (
+        !released &&
+        recover &&
+        submitted &&
+        useThreadDraft.getState().draft?.draftId === submitted.draftId &&
+        !readNativeChatComposerDraft(threadDraftScopeKey()).text
+      ) {
+        appendToNativeChatComposerDraft(threadDraftScopeKey(), { text })
+      }
+      release(false)
+    }
   }
 }
 
 export function discardThreadDraft(): void {
   deleteNativeChatComposerDraft(threadDraftScopeKey())
-  useThreadDraft.setState({ draft: null, projectRequest: null })
+  useThreadDraft.setState({ draft: null, projectRequest: null, unallocated: 0, submittedUse: 0 })
   const request = beginDesktopNavigation()
   commitDesktopNavigation(request, () => useAppStore.getState().setActiveView('terminal'))
 }
@@ -144,7 +187,7 @@ export function activeThreadSelection(state: PageState): ThreadPage {
     : undefined
   return resolveDesktopThreadPage({
     enabled: state.settings?.experimentalThreads === true,
-    activeView: state.activeView,
+    activeView: effectiveWorkspaceView(state),
     worktreeId,
     tabId: group?.activeTabId,
     hidden: worktreeId ? desktopThreadIds(state, worktreeId) : EMPTY_THREAD_IDS,

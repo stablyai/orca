@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
+import { beginDesktopNavigation, navigateDesktopTab } from '@/lib/desktop-navigation'
 import type { TuiAgent } from '../../../shared/tui-agent'
 import {
   deliverLaunchPromptToAgentTab,
@@ -21,6 +23,15 @@ export async function createWebRuntimeSessionTerminal(
   args: CreateWebRuntimeSessionTerminalArgs,
   options: { notifyFailure?: boolean; userAct?: boolean } = {}
 ): Promise<WebRuntimeTerminalCreateOutcome> {
+  args = {
+    ...args,
+    navigation:
+      args.navigation === undefined && options.userAct && args.activate !== false
+        ? isFloatingWorkspaceId(args.worktreeId)
+          ? null
+          : beginDesktopNavigation()
+        : args.navigation
+  }
   if (options.userAct && !(await startStoppedWslHostForUserAct(args.environmentId))) {
     // The start already told the user why; the host is still stopped.
     return { status: 'failed', message: stoppedWslHostMessage(args.environmentId) }
@@ -34,6 +45,13 @@ export async function createWebRuntimeSessionTerminal(
     notifyWebRuntimeTerminalCreateFailure(created.outcome.message, {
       environmentId: args.environmentId ?? null,
       worktreeId: args.worktreeId
+    })
+  }
+  if (args.activate !== false && args.navigation && created.hostTabId) {
+    navigateDesktopTab(toWebTerminalSurfaceTabId(created.hostTabId), {
+      worktreeId: args.worktreeId,
+      request: args.navigation,
+      scope: 'workspace'
     })
   }
   return created.outcome

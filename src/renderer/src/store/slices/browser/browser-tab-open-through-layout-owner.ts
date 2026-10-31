@@ -65,7 +65,7 @@ export function openBrowserTabThroughLayoutOwner(
       if (!foreground) {
         return
       }
-      navigateDesktopTab(get(), shownId, { worktreeId, request: request! })
+      navigateDesktopTab(get(), shownId, { worktreeId, request: request!, scope: 'workspace' })
       const groupId = get().unifiedTabsByWorktree[worktreeId]?.find(
         (t) => t.id === shownId
       )?.groupId

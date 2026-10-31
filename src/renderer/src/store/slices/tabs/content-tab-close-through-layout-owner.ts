@@ -1,9 +1,10 @@
+import { openDesktopWorkbench } from '@/lib/desktop-navigation-request'
 import {
-  beginDesktopNavigation,
-  openDesktopWorkbench,
-  canPresentDesktopNavigation,
-  type DesktopNavigationRequest
-} from '@/lib/desktop-navigation-request'
+  captureDesktopRetirement,
+  canRepairRetiredSelection,
+  canReplaceRetiredForeground,
+  type DesktopRetirement
+} from '@/lib/desktop-retirement'
 import { desktopThreadIds } from '@/components/threads/desktop-tab-projection'
 // Main decides content closes; wait for its frame before cleanup and selection, preserving refused tabs and notifying close waiters.
 
@@ -34,12 +35,12 @@ function selectAfterClose(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'worktreeId' | 'groupId'>,
   nextActiveTabId: string | null,
-  navigation: DesktopNavigationRequest | null
+  retirement: DesktopRetirement
 ): void {
-  if (!navigation || !canPresentDesktopNavigation(navigation)) {
+  const state = get()
+  if (!canRepairRetiredSelection(state, retirement)) {
     return
   }
-  const state = get()
   const worktreeId = tab.worktreeId
   if ((state.unifiedTabsByWorktree[worktreeId] ?? []).some((entry) => entry.id === tab.id)) {
     return
@@ -57,8 +58,8 @@ function selectAfterClose(
   if (next && group?.activeTabId !== next) {
     state.activateTab(next, { worktreeId, preservePreview: true, recordFocus: false })
   }
-  if (!next && worktreeId === state.activeWorktreeId) {
-    openDesktopWorkbench(get(), worktreeId, navigation)
+  if (!next && canReplaceRetiredForeground(get(), retirement, tab.id)) {
+    openDesktopWorkbench(get(), worktreeId, retirement.navigation)
   }
   // Activation focuses the tab's group; the user's focused group stays, and shows its surface.
   if (activeGroupId) {
@@ -79,7 +80,7 @@ export type ContentTabClose = {
   /** The window's own cleanup once main's frame dropped the tab, before the selection moves. */
   closed?: () => void
   /** Lands an emptied active worktree on the welcome screen; true when it did. */
-  landIfEmptied?: () => boolean
+  landIfEmptied?: (retirement: DesktopRetirement) => boolean
 }
 
 /** Return false for kinds/layouts main does not own, allowing caller-local close. */
@@ -87,7 +88,7 @@ export function closeContentTabThroughLayoutOwner(
   get: () => AppState,
   tab: Pick<Tab, 'id' | 'entityId' | 'worktreeId' | 'groupId' | 'contentType'>,
   close: ContentTabClose,
-  request?: DesktopNavigationRequest | null
+  captured?: DesktopRetirement
 ): boolean {
   // Today's close of a twin's tab closes its tab-bar entry as today too.
   if (!closesThroughLayoutOwner(tab.contentType) || closingAsToday.has(tab.id)) {
@@ -97,21 +98,13 @@ export function closeContentTabThroughLayoutOwner(
   if (isTabClosePending(tab.id)) {
     return true
   }
-  const origin = get()
-  const navigation =
-    request === undefined
-      ? origin.activeView === 'terminal' &&
-        origin.activeWorktreeId === tab.worktreeId &&
-        origin.getActiveTab(tab.worktreeId)?.id === tab.id
-        ? beginDesktopNavigation(origin)
-        : null
-      : request
+  const retirement = captured ?? captureDesktopRetirement(get(), tab.worktreeId, tab.groupId)
   // A close of a tab still opening goes once main answered the open.
   if (isPendingTab(tab.id)) {
     afterPendingTab(tab.id, () => {
       const drawn = get().unifiedTabsByWorktree[tab.worktreeId]?.find((e) => e.id === tab.id)
       if (drawn) {
-        closeContentTabThroughLayoutOwner(get, drawn, close, navigation)
+        closeContentTabThroughLayoutOwner(get, drawn, close, retirement)
       }
     })
     return true
@@ -121,8 +114,8 @@ export function closeContentTabThroughLayoutOwner(
     // Waiters first: a closeFile's content cleanup must not undo the selection.
     settle(tab.id)
     close.closed?.()
-    if (navigation && canPresentDesktopNavigation(navigation) && !close.landIfEmptied?.()) {
-      selectAfterClose(get, tab, close.nextActiveTabId, navigation)
+    if (!close.landIfEmptied?.(retirement)) {
+      selectAfterClose(get, tab, close.nextActiveTabId, retirement)
     }
   }
   const closeAsToday = (): void => {

@@ -1,3 +1,9 @@
+import { effectiveWorkspaceView } from './renderer-view'
+import {
+  captureDesktopNavigation,
+  canPresentDesktopNavigation,
+  type DesktopNavigationRequest
+} from './desktop-navigation-request'
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
 import { getRepoMapFromState } from '@/store/selectors'
@@ -32,6 +38,7 @@ type SuccessorState = Pick<
   | 'activeWorktreeId'
   | 'activeWorkspaceExecutionHostId'
   | 'activeView'
+  | 'settings'
   | 'activePendingCreationId'
 >
 
@@ -40,6 +47,7 @@ type RemovedActiveRow = {
   hostId: ExecutionHostId | null
   repoId: string
   ownerHostIds: ExecutionHostId[]
+  navigation?: DesktopNavigationRequest
 }
 
 function findListedRow(
@@ -114,9 +122,14 @@ function listedActiveRow(state: SuccessorState): RemovedActiveRow | null {
     : null
 }
 
+function eligibleRemovalView(state: SuccessorState): boolean {
+  const view = effectiveWorkspaceView(state)
+  return view === 'terminal' || view === 'empty-workbench'
+}
+
 function isSelectionEmptyTerminalView(state: SuccessorState): boolean {
   return (
-    state.activeView === 'terminal' &&
+    eligibleRemovalView(state) &&
     state.activePendingCreationId === null &&
     state.activeWorktreeId === null
   )
@@ -134,10 +147,10 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
   const observe = (): RemovedActiveRow | null => {
     const state = store.getState()
     const row =
-      state.activeView === 'terminal' && state.activePendingCreationId === null
+      eligibleRemovalView(state) && state.activePendingCreationId === null
         ? listedActiveRow(state)
         : null
-    return row && !isScoped(row) ? row : null
+    return row && !isScoped(row) ? { ...row, navigation: captureDesktopNavigation(state) } : null
   }
   witness = observe()
   const unsubscribeIntent = subscribeWorktreeDeselectionIntent((scope, entering) => {
@@ -162,7 +175,7 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       next.activeWorktreeId === prev.activeWorktreeId &&
       next.activeWorkspaceExecutionHostId === prev.activeWorkspaceExecutionHostId &&
       selectWorktreesByRepo(next) === selectWorktreesByRepo(prev) &&
-      next.activeView === prev.activeView &&
+      effectiveWorkspaceView(next) === effectiveWorkspaceView(prev) &&
       next.activePendingCreationId === prev.activePendingCreationId
     ) {
       return
@@ -173,13 +186,13 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
         next.activeWorkspaceExecutionHostId !== prev.activeWorkspaceExecutionHostId)
     const navigated =
       selectionChanged ||
-      next.activeView !== prev.activeView ||
+      effectiveWorkspaceView(next) !== effectiveWorkspaceView(prev) ||
       next.activePendingCreationId !== prev.activePendingCreationId
     if (navigated) {
       witness = null
       generation += 1
     }
-    if (next.activeView !== 'terminal' || next.activePendingCreationId !== null) {
+    if (!eligibleRemovalView(next) || next.activePendingCreationId !== null) {
       return
     }
     if (next.activeWorktreeId !== null) {
@@ -211,6 +224,8 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
       const state = store.getState()
       if (
         scheduled !== generation ||
+        !removed.navigation ||
+        !canPresentDesktopNavigation(removed.navigation) ||
         !isSelectionEmptyTerminalView(state) ||
         findListedRow(state, removed.id, removed.hostId)
       ) {
@@ -222,7 +237,8 @@ export function installActiveWorktreeRemovalSuccessor(store = useAppStore): () =
         // Keep successor focus from replacing the removed row's spatial context.
         activateAndRevealWorktree(successor.id, {
           revealInSidebar: false,
-          executionHostId: successor.hostId
+          executionHostId: successor.hostId,
+          navigation: removed.navigation
         })
       }
     })

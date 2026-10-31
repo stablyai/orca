@@ -1,3 +1,4 @@
+import { canPresentDesktopNavigation } from '@/lib/desktop-navigation-request'
 import { buildDefaultTerminalOptions } from '@/lib/pane-manager/pane-terminal-options'
 import { createAgentSessionKeyboardOptions } from './agent-session-keyboard-capability'
 import type { RuntimeRpcResponse } from '../../../shared/runtime-rpc-envelope'
@@ -68,8 +69,11 @@ export async function createWebRuntimeSessionTerminalResult(
   const intentOwner = captureWebSessionIntentOwner(environmentId)
   const callEnvironment = captureRuntimeEnvironmentCall(environmentId, intentOwner.pairingRevision)
 
+  const maySelect = (): boolean =>
+    args.navigation === undefined ||
+    (!!args.navigation && canPresentDesktopNavigation(args.navigation))
   let workspaceSelectionRollback: WebRuntimeSessionWorkspaceSelectionRollback | null = null
-  if (args.selectWorktree !== false) {
+  if (args.selectWorktree !== false && maySelect()) {
     const previous = readActiveWorkspaceSelection()
     selectWebRuntimeSessionWorktree(args.worktreeId, environmentId)
     workspaceSelectionRollback = {
@@ -245,7 +249,12 @@ export async function createWebRuntimeSessionTerminalResult(
         groupId: args.targetGroupId
       })
     }
-    if (args.activate !== false && createdTabId && matchesWebSessionIntentOwner(intentOwner)) {
+    if (
+      args.activate !== false &&
+      maySelect() &&
+      createdTabId &&
+      matchesWebSessionIntentOwner(intentOwner)
+    ) {
       // Intent lets reconciliation focus this new terminal instead of sticky-keeping the previous tab.
       recordWebSessionFocusIntent(intentOwner, args.worktreeId, createdTabId, createdLeafId)
     }
@@ -267,7 +276,7 @@ export async function createWebRuntimeSessionTerminalResult(
         {
           groupId: args.targetGroupId,
           afterTabId: args.afterTabId,
-          activate: args.activate !== false
+          activate: args.activate !== false && maySelect()
         }
       )
     }
@@ -291,7 +300,7 @@ export async function createWebRuntimeSessionTerminalResult(
         hostTabId: webTerminalPlacementParentTabId(createdTabId)
       })
     }
-    if (!hostCreated && workspaceSelectionRollback) {
+    if (!hostCreated && workspaceSelectionRollback && maySelect()) {
       restoreActiveWorkspaceSelection(workspaceSelectionRollback)
     }
     // Accepted creation must not report failure and invite duplicate agent retries with new operation IDs.

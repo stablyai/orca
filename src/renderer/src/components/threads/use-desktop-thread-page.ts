@@ -1,3 +1,4 @@
+import { effectiveWorkspaceView } from '@/lib/renderer-view'
 import { useMemo } from 'react'
 import { useShallow } from 'zustand/react/shallow'
 import { useAppStore } from '@/store'
@@ -9,11 +10,12 @@ export function useDesktopThreadPage(): ThreadPage {
   const [enabled, activeView, worktreeId, groups, groupId] = useAppStore(
     useShallow((s) => {
       const enabled = s.settings?.experimentalThreads === true
-      const relevant = enabled && s.activeView === 'terminal'
+      const view = effectiveWorkspaceView(s)
+      const relevant = enabled && view === 'terminal'
       const worktreeId = s.activeWorktreeId
       return [
         enabled,
-        s.activeView,
+        view,
         worktreeId,
         relevant && worktreeId ? s.groupsByWorktree[worktreeId] : undefined,
         relevant && worktreeId ? s.activeGroupIdByWorktree[worktreeId] : undefined

@@ -19,7 +19,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 import {
   useThreadDraft,
   enterThreadDraft,
-  consumeThreadDraft,
+  captureThreadDraftSubmission,
   requestThreadProjectAdd
 } from './thread-navigation'
 
@@ -88,34 +88,41 @@ export function sendNewThread(
   })
   const selection = useThreadDraft.getState().draft
   const request = beginDesktopNavigation(state, true)
+  const submission = captureThreadDraftSubmission(text)
   let openedTabId: string | undefined
-  const launch = beginStructuredAgentSessionProvisionalLaunch({
-    plan,
-    hooks: {},
-    target: { worktreeId: project.worktree.id, executionHostId: project.hostId },
-    activate: false,
-    onOpened: (tab) => {
-      openedTabId = tab.id
-      queueMicrotask(() => {
-        if (selection) {
-          consumeThreadDraft(selection)
-        }
-      })
-      afterPendingTab(tab.id, (shown) => {
-        if (!shown || !canPresentDesktopNavigation(request) || selection?.kind !== 'new') {
-          return
-        }
-        const visible = useAppStore.getState().getTab(shown)
-        if (visible) {
-          selectThread(visible, request)
-        }
-      })
+  try {
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan,
+      hooks: {},
+      target: { worktreeId: project.worktree.id, executionHostId: project.hostId },
+      activate: false,
+      onOpened: (tab) => {
+        openedTabId = tab.id
+        submission.allocated()
+        afterPendingTab(tab.id, (shown) => {
+          if (!shown || !canPresentDesktopNavigation(request) || selection?.kind !== 'new') {
+            return
+          }
+          const visible = useAppStore.getState().getTab(shown)
+          if (visible) {
+            selectThread(visible, request)
+          }
+        })
+      }
+    })
+    if (!launch) {
+      submission.finish(false)
+      return null
     }
-  })
-  return (
-    launch && {
-      ...launch,
-      ownsPrompt: () => !!openedTabId
-    }
-  )
+    void launch.settlement.then((result) => {
+      submission.finish(
+        !openedTabId &&
+          (result.kind === 'failed' || (result.kind === 'cancelled' && result.sessionId === null))
+      )
+    })
+    return { ...launch, ownsPrompt: () => !!openedTabId }
+  } catch (error) {
+    submission.finish(false)
+    throw error
+  }
 }

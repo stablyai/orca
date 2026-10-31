@@ -1,3 +1,5 @@
+import { isFloatingWorkspaceId } from '../../../../shared/floating-workspace-worktree'
+import { beginDesktopNavigation, navigateDesktopTab } from '@/lib/desktop-navigation'
 import { useAppStore } from '@/store'
 import { createWebRuntimeSessionTerminal } from '@/runtime/web-runtime-terminal-creation'
 import { isWebRuntimeSessionActive } from '@/runtime/web-runtime-session-environment'
@@ -20,6 +22,7 @@ export function createNewTerminalTab(
     return
   }
   const state = useAppStore.getState()
+  const navigation = isFloatingWorkspaceId(activeWorktreeId) ? null : beginDesktopNavigation(state)
   const worktreeRoute = resolveTerminalWorktreeRoute(state, activeWorktreeId)
   if (!worktreeRoute) {
     options?.onSettled?.(false)
@@ -36,7 +39,8 @@ export function createNewTerminalTab(
         shell: shellOverride,
         ...(options?.startupCwd ? { cwd: options.startupCwd } : {}),
         ...(options?.command ? { command: options.command } : {}),
-        activate: true
+        activate: true,
+        navigation
       },
       { userAct: true, ...(onSettled ? { notifyFailure: false } : {}) }
     )
@@ -51,10 +55,11 @@ export function createNewTerminalTab(
   const tabId = createBrowserUuid()
   state.createTab(activeWorktreeId, undefined, shellOverride, {
     id: tabId,
+    activate: false,
     ...(options?.startupCwd ? { startupCwd: options.startupCwd } : {}),
     ...(options?.command ? { pendingStartup: { command: options.command } } : {})
   })
-  state.setActiveTabType('terminal', activeWorktreeId)
+  navigateDesktopTab(tabId, { worktreeId: activeWorktreeId, request: navigation })
   // Save visual order with the new terminal last or fallback ordering puts terminals first.
   persistAgentLaunchTabOrder(activeWorktreeId, tabId)
   options?.onSettled?.(true)

@@ -7,6 +7,7 @@ import {
   type DesktopNavigationRequest
 } from './desktop-navigation-request'
 export {
+  captureDesktopNavigation,
   presentDesktopWorkspace,
   canPresentDesktopNavigation,
   commitDesktopNavigation,

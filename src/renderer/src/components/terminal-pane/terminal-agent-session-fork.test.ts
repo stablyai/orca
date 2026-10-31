@@ -292,7 +292,8 @@ describe('forkAgentSessionFromPane', () => {
       )
       expect(mockWriteClipboardText).toHaveBeenCalledOnce()
       expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-        sidebarRevealBehavior: 'auto'
+        sidebarRevealBehavior: 'auto',
+        navigation: expect.objectContaining({ id: expect.any(Number) })
       })
     }
   )
@@ -417,7 +418,8 @@ describe('forkAgentSessionFromPane', () => {
     )
     expect(mockLaunchAgentInNewTab).not.toHaveBeenCalled()
     expect(mockActivateAndRevealWorktree).toHaveBeenCalledWith('wt-fork', {
-      sidebarRevealBehavior: 'auto'
+      sidebarRevealBehavior: 'auto',
+      navigation: expect.objectContaining({ id: expect.any(Number) })
     })
     expect(mockWriteClipboardText).toHaveBeenCalledWith(
       expect.stringContaining('Assistant: here is the current plan')

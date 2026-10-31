@@ -1,3 +1,4 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation'
 import { toast } from 'sonner'
 import type { ManagedPane } from '@/lib/pane-manager/pane-manager'
 import { launchAgentInNewTab } from '@/lib/launch-agent-in-new-tab'
@@ -34,10 +35,6 @@ export type PreparedAgentSessionFork = {
   agent: TuiAgent | null
   worktreeId: string
   pane: ManagedPane
-}
-
-function buildForkWorkspaceName(sourceName: string): string {
-  return slugifyForWorkspaceName(`${sourceName}-fork`) || 'session-fork'
 }
 
 function resolveTuiAgent(value: string | null | undefined): TuiAgent | null {
@@ -189,6 +186,7 @@ function forkCreationHostId(
 
 export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Promise<boolean> {
   const store = useAppStore.getState()
+  const navigation = beginDesktopNavigation(store)
   const sourceWorktree = store.getKnownWorktreeById(fork.worktreeId)
   if (!sourceWorktree) {
     toast.error(
@@ -211,7 +209,8 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     )
     return false
   }
-  const forkName = buildForkWorkspaceName(sourceWorktree.displayName || sourceBranch)
+  const forkName =
+    slugifyForWorkspaceName(`${sourceWorktree.displayName || sourceBranch}-fork`) || 'session-fork'
   let created: Awaited<ReturnType<typeof store.createWorktree>>
   try {
     created = await store.createWorktree(
@@ -257,7 +256,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   const forkWorktreeId = created.worktree.id
 
   if (!fork.agent) {
-    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto', navigation })
     return copyAgentSessionForkContext(fork)
   }
   const agentSessionLaunchPlan = planAgentSessionLaunch(useAppStore.getState(), {
@@ -274,6 +273,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
   })
   const result = launchAgentInNewTab({
     agent: fork.agent,
+    navigation,
     worktreeId: forkWorktreeId,
     prompt: fork.prompt,
     promptDelivery: 'draft',
@@ -296,7 +296,7 @@ export async function startAgentSessionFork(fork: PreparedAgentSessionFork): Pro
     (settled.kind !== 'terminal' && settled.kind !== 'structured') ||
     (delivery && !(await newAgentPromptOutcome({ delivery })).delivered)
   ) {
-    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto' })
+    activateAndRevealWorktree(forkWorktreeId, { sidebarRevealBehavior: 'auto', navigation })
     return copyAgentSessionForkContext(fork)
   }
   notifyForkOpened()

@@ -1,3 +1,5 @@
+import { beginDesktopNavigation } from '@/lib/desktop-navigation-request'
+import { runAsAutomaticDeselection } from '@/store/active-worktree-deselection-intent'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
 import { installActiveWorktreeRemovalSuccessor } from '@/lib/active-worktree-removal-successor'
@@ -144,3 +146,70 @@ describe('deleting the active workspace', () => {
     expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[0]).toBe(main.id)
   })
 })
+
+it.each(['thread-draft', 'empty-workbench', 'terminal'] as const)(
+  'removes the actual row after Settings OFF/Back with retained route=%s',
+  async (view) => {
+    const store = setup()
+    Object.assign(window.api, { ephemeralVm: { listRuntimes: vi.fn().mockResolvedValue([]) } })
+    store.setState({
+      settings: { ...store.getState().settings!, experimentalThreads: false },
+      activeView: view
+    })
+    store.getState().openSettingsPage()
+    store.getState().closeSettingsPage()
+    expect(await forget(store, active)).toEqual({ ok: true })
+    await Promise.resolve()
+    expect(store.getState().activeWorktreeId).toBeNull()
+    expect(activateAndRevealWorktree).toHaveBeenCalledExactlyOnceWith(sibling.id, {
+      revealInSidebar: false,
+      executionHostId: 'local',
+      navigation: expect.objectContaining({ experimental: true })
+    })
+  }
+)
+it.each(['thread-draft', 'empty-workbench'] as const)(
+  'setting-only wake admits the actual removal at unchanged route/W: %s',
+  async (view) => {
+    const store = setup()
+    Object.assign(window.api, { ephemeralVm: { listRuntimes: vi.fn().mockResolvedValue([]) } })
+    store.setState({
+      activeView: view,
+      settings: { ...store.getState().settings!, experimentalThreads: true }
+    })
+    store.setState({ settings: { ...store.getState().settings!, experimentalThreads: false } })
+    expect(await forget(store, active)).toEqual({ ok: true })
+    await Promise.resolve()
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls[0]?.[0]).toBe(sibling.id)
+  }
+)
+it.each(['empty-workbench', 'newer-draft', 'user-clear'] as const)(
+  'queued retirement revalidates current effective context: %s',
+  async (input) => {
+    const store = setup()
+    store.setState({
+      activeView: 'empty-workbench',
+      settings: { ...store.getState().settings!, experimentalThreads: true }
+    })
+    const clear = () =>
+      store.setState({
+        worktreesByRepo: { repo1: [sibling, main] },
+        activeWorktreeId: null,
+        activeWorkspaceExecutionHostId: null
+      })
+    if (input === 'user-clear') {
+      store.getState().setActiveWorktree(null)
+      clear()
+    } else {
+      runAsAutomaticDeselection(clear)
+    }
+    if (input === 'newer-draft') {
+      beginDesktopNavigation(store.getState(), true)
+      store.setState({ activeView: 'thread-draft' })
+    }
+    await Promise.resolve()
+    expect(vi.mocked(activateAndRevealWorktree).mock.calls.length).toBe(
+      input === 'empty-workbench' ? 1 : 0
+    )
+  }
+)

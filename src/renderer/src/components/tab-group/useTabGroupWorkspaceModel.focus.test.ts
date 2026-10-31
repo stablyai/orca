@@ -271,13 +271,21 @@ describe('useTabGroupWorkspaceModel terminal activation focus', () => {
     const { useTabGroupWorkspaceModel } = await import('./useTabGroupWorkspaceModel')
     const model = useTabGroupWorkspaceModel({ groupId: 'group-1', worktreeId: 'wt-1' })
 
+    storeBox.state!.getTab = (id: string) =>
+      id === mocks.createTab.mock.lastCall?.[3]?.id
+        ? { id, worktreeId: 'wt-1', groupId: 'group-1', contentType: 'terminal' }
+        : null
     model.commands.newTerminalWithShell('zsh')
     await vi.waitFor(() => expect(mocks.createTab).toHaveBeenCalled())
 
     expect(mocks.createTab).toHaveBeenCalledWith('wt-1', 'group-1', 'zsh', {
-      id: expect.any(String)
+      id: expect.any(String),
+      activate: false
     })
-    expect(mocks.setActiveTab).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3].id)
+    expect(mocks.activateTab).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3].id, {
+      worktreeId: 'wt-1'
+    })
+    expect(mocks.focusTerminalTabSurface).toHaveBeenCalledWith(mocks.createTab.mock.calls[0][3].id)
   })
 
   it('returns keyboard focus to the active split pane leaf when a terminal tab is activated', async () => {

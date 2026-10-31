@@ -12,7 +12,10 @@ export function setThreadTestPage(state: {
 }) {
   if ('selection' in state) {
     beginDesktopNavigation()
-    useThreadDraft.setState({ draft: state.selection?.kind === 'new' ? state.selection : null })
+    useThreadDraft.setState({
+      draft: state.selection?.kind === 'new' ? state.selection : null,
+      unallocated: 0
+    })
     useAppStore.setState({
       activeView:
         state.selection?.kind === 'new'

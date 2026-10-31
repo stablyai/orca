@@ -4,7 +4,6 @@ import { act, cleanup, fireEvent, render, screen, waitFor } from '@testing-libra
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { promptEditor } from '../native-chat/native-chat-prompt-editor.test-support'
 import { makeWorktree } from '@/store/slices/worktrees-slice-test-fixtures'
-import type { StructuredAgentLaunchSettlement } from '@/lib/structured-agent-launch-settlement'
 import { clearNativeChatComposerDraftsForTests } from '../native-chat/native-chat-composer-draft-store'
 
 const mocks = vi.hoisted(() => ({ projects: vi.fn(), send: vi.fn() }))
@@ -98,45 +97,6 @@ it('focuses the real composer after capabilities arrive, while modal and project
   expect(screen.getByRole('button', { name: 'Choose project' }).textContent).toBe('B')
 })
 
-it.each<{ result: StructuredAgentLaunchSettlement; restore: boolean }>([
-  { result: { kind: 'structured', sessionId: 'accepted-A' }, restore: false },
-  { result: { kind: 'visibility-unknown', sessionId: 'accepted-A' }, restore: false },
-  { result: { kind: 'failed', error: new Error('refused') }, restore: true },
-  { result: { kind: 'cancelled', sessionId: null }, restore: true },
-  { result: { kind: 'cancelled', sessionId: 'accepted-A' }, restore: false }
-])(
-  'keeps project B navigation after $result.kind settlement of A, restoring only proven unsent input',
-  async ({ result, restore }) => {
-    let settle: (value: StructuredAgentLaunchSettlement) => void = () => {}
-    mocks.send.mockReturnValue({
-      ownsPrompt: () => false,
-      settlement: new Promise<StructuredAgentLaunchSettlement>((resolve) => {
-        settle = resolve
-      })
-    })
-    render(<Draft />)
-    const composer = screen.getByRole('textbox', {
-      name: 'Ask for changes, or ask anything about this project'
-    })
-    act(() => promptEditor(composer).commands.insertContent('Prompt for A'))
-    fireEvent.keyDown(composer, { key: 'Enter', code: 'Enter' })
-    await waitFor(() =>
-      expect(mocks.send).toHaveBeenCalledWith(projects[0], 'Prompt for A', {
-        agent: 'claude',
-        launchOptions: undefined
-      })
-    )
-    fireEvent.click(screen.getByRole('button', { name: 'Choose project' }))
-    fireEvent.click(screen.getByRole('option', { name: 'B' }))
-    await act(async () => settle(result))
-    expect(activeThreadSelection(useAppStore.getState())).toMatchObject({
-      projectKey: 'local|B',
-      draftId: 'one'
-    })
-    await waitFor(() => expect(composer.textContent).toBe(restore ? 'Prompt for A' : ''))
-  }
-)
-
 it.each(['refused', 'thrown'] as const)(
   'retains the actual composer input when launch is %s before admission',
   async (outcome) => {
@@ -155,28 +115,6 @@ it.each(['refused', 'thrown'] as const)(
     expect(activeThreadSelection(useAppStore.getState())).toMatchObject({ projectKey: 'local|A' })
   }
 )
-
-it('cannot restore a failed older draft into a different new draft', async () => {
-  let settle: (value: StructuredAgentLaunchSettlement) => void = () => {}
-  mocks.send.mockReturnValue({
-    ownsPrompt: () => false,
-    settlement: new Promise<StructuredAgentLaunchSettlement>((resolve) => {
-      settle = resolve
-    })
-  })
-  render(<Draft />)
-  act(() => promptEditor(screen.getByRole('textbox')).commands.insertContent('Old prompt'))
-  fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Enter' })
-  await waitFor(() => expect(mocks.send).toHaveBeenCalledOnce())
-  act(() =>
-    setThreadTestPage({
-      selection: { kind: 'new', projectKey: 'local|B', draftId: 'two' }
-    })
-  )
-  act(() => promptEditor(screen.getByRole('textbox')).commands.insertContent('New prompt'))
-  await act(async () => settle({ kind: 'failed', error: new Error('refused') }))
-  expect(screen.getByRole('textbox').textContent).toBe('New prompt')
-})
 
 it.each([20, 200])(
   'keeps the loading headline without rescanning %i repos on unrelated writes',

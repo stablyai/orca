@@ -1,3 +1,4 @@
+import type { DesktopRetirement } from '@/lib/desktop-retirement'
 // Main frames drop tab/record before reply; then run window cleanup from captured drawn state for reopen history, host pages and document grants.
 
 import type { BrowserPage, BrowserWorkspace } from '../../../../../shared/browser-workspace-types'
@@ -43,7 +44,7 @@ export function closeBrowserTabThroughLayoutOwner(
   browserTabId: string,
   reason: 'user' | 'cleanup',
   closeHere: (drawn?: DrawnBrowserTab) => void,
-  landIfEmptied?: () => boolean
+  landIfEmptied?: (retirement: DesktopRetirement) => boolean
 ): boolean {
   const state = get()
   const entry = Object.values(state.unifiedTabsByWorktree)

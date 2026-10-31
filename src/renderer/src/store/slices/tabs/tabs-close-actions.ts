@@ -1,3 +1,8 @@
+import {
+  emptiedWorktreeLandingPatch,
+  landsOnEmptiedWorktree,
+  landOnEmptiedWorktree
+} from './emptied-worktree-landing'
 import { reopenChatTab } from './reopen-chat-tab'
 import { desktopThreadIds } from '@/components/threads/desktop-tab-projection'
 import { retireRemovedNativeChatDraftPositions } from '@/components/native-chat/native-chat-draft-cache'
@@ -29,7 +34,6 @@ import { settleAttentionRemovedBy } from '../workspace-attention/attention-remov
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
 import { closeContentTabThroughLayoutOwner } from './content-tab-close-through-layout-owner'
 import { isEditorTabContentType } from '../editor/tabs/editor-tab-content-type'
-import type { AppState } from '../../types'
 import { isTuiAgent } from '../../../../../shared/tui-agent-config'
 import { forgetDesktopCreatedServerTab } from '@/lib/desktop-created-server-tabs'
 
@@ -212,7 +216,10 @@ export function createTabsCloseActions(
           // An editor close lands through closeFile, which owns its content.
           ...(isEditorTabContentType(tab.contentType) || opts?.preserveWorktreeSelection
             ? {}
-            : { landIfEmptied: () => landOnEmptiedWorktree(set, get, worktreeId) }),
+            : {
+                landIfEmptied: (retirement) =>
+                  landOnEmptiedWorktree(set, get, worktreeId, retirement)
+              }),
           // A chat tab owns its markers; nothing else retires them.
           ...(tab.contentType === 'agent-session'
             ? {
@@ -239,73 +246,4 @@ export function createTabsCloseActions(
       return { closedTabId: tabId, wasLastTab, worktreeId }
     }
   }
-}
-
-// Last user-close lands on welcome; failed-create cleanup preserves selection.
-type LandingState = Pick<
-  AppState,
-  | 'activeWorktreeId'
-  | 'unifiedTabsByWorktree'
-  | 'tabsByWorktree'
-  | 'browserTabsByWorktree'
-  | 'openFiles'
-  | 'activeTabIdByWorktree'
-  | 'activeBrowserTabIdByWorktree'
-  | 'activeFileIdByWorktree'
-  | 'activeTabTypeByWorktree'
->
-
-function landsOnEmptiedWorktree(
-  current: LandingState,
-  worktreeId: string,
-  remainingTabs: number
-): boolean {
-  return (
-    current.activeWorktreeId === worktreeId &&
-    remainingTabs === 0 &&
-    (current.tabsByWorktree[worktreeId] ?? []).length === 0 &&
-    (current.browserTabsByWorktree[worktreeId] ?? []).length === 0 &&
-    !current.openFiles.some((file) => file.worktreeId === worktreeId)
-  )
-}
-
-function emptiedWorktreeLandingPatch(current: LandingState, worktreeId: string) {
-  return {
-    activeWorktreeId: null,
-    activeWorkspaceKey: null,
-    activeWorkspaceExecutionHostId: null,
-    activeTabId: null,
-    activeBrowserTabId: null,
-    activeFileId: null,
-    activeTabType: 'terminal' as const,
-    activeTabIdByWorktree: { ...current.activeTabIdByWorktree, [worktreeId]: null },
-    activeBrowserTabIdByWorktree: { ...current.activeBrowserTabIdByWorktree, [worktreeId]: null },
-    activeFileIdByWorktree: { ...current.activeFileIdByWorktree, [worktreeId]: null },
-    activeTabTypeByWorktree: {
-      ...current.activeTabTypeByWorktree,
-      [worktreeId]: 'terminal' as const
-    }
-  }
-}
-
-type LandingSet = (update: (state: AppState) => Partial<AppState>) => void
-
-/** After main's frame dropped a closed tab: lands when that emptied the active worktree. */
-export function landOnEmptiedWorktree(
-  set: LandingSet,
-  get: () => AppState,
-  worktreeId: string
-): boolean {
-  const state = get()
-  if (
-    !landsOnEmptiedWorktree(
-      state,
-      worktreeId,
-      (state.unifiedTabsByWorktree[worktreeId] ?? []).length
-    )
-  ) {
-    return false
-  }
-  set((current) => emptiedWorktreeLandingPatch(current, worktreeId))
-  return true
 }

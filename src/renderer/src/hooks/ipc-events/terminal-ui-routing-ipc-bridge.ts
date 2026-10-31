@@ -1,3 +1,4 @@
+import { effectiveWorkspaceView } from '@/lib/renderer-view'
 import {
   beginDesktopNavigation,
   commitDesktopNavigation,
@@ -170,8 +171,8 @@ export function registerTerminalUiRoutingIpcBridge(unsubs: (() => void)[]): void
         !userInitiated &&
         tab?.contentType === 'agent-session' &&
         (store.activeWorktreeId !== worktreeId ||
-          store.activeView === 'thread-draft' ||
-          store.activeView === 'empty-workbench')
+          effectiveWorkspaceView(store) === 'thread-draft' ||
+          effectiveWorkspaceView(store) === 'empty-workbench')
       ) {
         return
       }

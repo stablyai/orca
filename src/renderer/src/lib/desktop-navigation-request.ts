@@ -1,4 +1,4 @@
-import { workspaceView, type RendererView } from './renderer-view'
+import { desktopWorkspaceContextView, workspaceView, type RendererView } from './renderer-view'
 import { isFloatingWorkspaceId } from '../../../shared/floating-workspace-worktree'
 import {
   desktopThreadIds,
@@ -14,30 +14,80 @@ export type DesktopNavigationRequest = {
 }
 let sequence = 0
 let experimentalGeneration = 0
-let latest = 0
+type CommittedSelection = {
+  id: number
+  worktreeId: string
+  groupId: string
+  tabId: string
+  executionHostId?: string
+}
+let latest: { id: number; selection: CommittedSelection | null } = { id: 0, selection: null }
+
+/** Maintenance observes interaction authority; it never starts a new interaction. */
+export function captureDesktopNavigation(
+  state: Pick<AppState, 'activeView'>
+): DesktopNavigationRequest {
+  return { originView: state.activeView, id: latest.id, experimental: true, experimentalGeneration }
+}
+
+/** A verified semantic destination can protect a live slot; a frame fallback cannot. */
+export function hasNewerDesktopSelection(
+  state: AppState,
+  captured: DesktopNavigationRequest,
+  worktreeId: string,
+  groupId: string
+): boolean {
+  const target = latest.selection
+  return (
+    !!target &&
+    target.id > captured.id &&
+    target.worktreeId === worktreeId &&
+    target.groupId === groupId &&
+    state.getTab(target.tabId)?.worktreeId === worktreeId &&
+    state.getTab(target.tabId)?.executionHostId === target.executionHostId &&
+    state.getTab(target.tabId)?.groupId === groupId &&
+    state.groupsByWorktree[worktreeId]?.find((group) => group.id === groupId)?.activeTabId ===
+      target.tabId
+  )
+}
+
+function recordSelection(
+  request: DesktopNavigationRequest,
+  tab: { worktreeId: string; groupId: string; id: string; executionHostId?: string }
+): void {
+  if (request.id === latest.id) {
+    latest.selection = {
+      id: request.id,
+      worktreeId: tab.worktreeId,
+      groupId: tab.groupId,
+      tabId: tab.id,
+      executionHostId: tab.executionHostId
+    }
+  }
+}
 
 /** Ordinary completions keep their established behavior until an experimental interaction supersedes them. */
 export function beginDesktopNavigation(
   state: AppState,
   destinationIsExperimental = false
 ): DesktopNavigationRequest {
-  latest = ++sequence
+  latest = { id: ++sequence, selection: latest.selection }
   const selected = state.activeWorktreeId ? state.getActiveTab?.(state.activeWorktreeId) : null
   const experimental =
     state.settings?.experimentalThreads === true &&
     (destinationIsExperimental ||
-      state.activeView === 'thread-draft' ||
-      state.activeView === 'empty-workbench' ||
+      desktopWorkspaceContextView(state) === 'thread-draft' ||
+      desktopWorkspaceContextView(state) === 'empty-workbench' ||
       (!!selected && desktopThreadIds(state, selected.worktreeId).has(selected.id)))
   if (experimental) {
     experimentalGeneration++
   }
-  return { originView: state.activeView, id: latest, experimental, experimentalGeneration }
+  return { originView: state.activeView, id: latest.id, experimental, experimentalGeneration }
 }
 
 export function canPresentDesktopNavigation(request: DesktopNavigationRequest): boolean {
   return request.experimental
-    ? request.id === latest
+    ? request.id === latest.id
     : request.experimentalGeneration === experimentalGeneration
 }
 
@@ -61,7 +111,7 @@ export function presentDesktopWorkspace(
 ): void {
   if (state.activeView === 'settings' && request.originView !== 'settings') {
     state.setActiveView(view, request.originView)
-  } else if (request.id === latest || workspaceView(state.activeView) === 'terminal') {
+  } else if (request.id === latest.id || workspaceView(state.activeView) === 'terminal') {
     if (state.activeView !== view) {
       state.setActiveView(view)
     }
@@ -74,7 +124,8 @@ export function navigateDesktopTab(
   options?: {
     worktreeId?: string
     preservePreview?: boolean
-    request?: DesktopNavigationRequest
+    request?: DesktopNavigationRequest | null
+    scope?: 'workspace'
   }
 ): boolean {
   const tab = state.getTab(tabId)
@@ -89,11 +140,15 @@ export function navigateDesktopTab(
     return true
   }
   const request =
-    options?.request ??
-    beginDesktopNavigation(state, desktopThreadIds(state, tab.worktreeId).has(tab.id))
+    options?.request === undefined
+      ? beginDesktopNavigation(state, desktopThreadIds(state, tab.worktreeId).has(tab.id))
+      : options.request
+  if (!request) {
+    return false
+  }
   return commitDesktopNavigation(request, () => {
     if (options) {
-      const { request: _request, ...activation } = options
+      const { request: _request, scope: _scope, ...activation } = options
       if (activation.worktreeId !== undefined || activation.preservePreview !== undefined) {
         state.activateTab(tabId, activation)
       } else {
@@ -101,6 +156,10 @@ export function navigateDesktopTab(
       }
     } else {
       state.activateTab(tabId)
+    }
+    recordSelection(request, tab)
+    if (options?.scope === 'workspace' && state.activeWorktreeId !== tab.worktreeId) {
+      return
     }
     presentDesktopWorkspace(state, request)
     if (
@@ -156,6 +215,12 @@ export function openDesktopWorkbench(
       request,
       group?.activeTabId && hidden.has(group.activeTabId) && !next ? 'empty-workbench' : 'terminal'
     )
+    if (next && group) {
+      const tab = state.getTab(next)
+      if (tab) {
+        recordSelection(request, tab)
+      }
+    }
     if (next && group && next !== group.activeTabId) {
       state.activateTab(next, { worktreeId })
       state.focusGroup(worktreeId, group.id)
