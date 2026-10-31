@@ -104,6 +104,8 @@ async function continueUnreadMail(
       db,
       unread.map((message) => message.id)
     )
+    // A report replayed while it started may have cleared the marker the restored mail needs.
+    markUnreadFollowUpMail(db, dispatchId)
   }
   passHeldWorkerMail(runtime, db, followUpId)
 }

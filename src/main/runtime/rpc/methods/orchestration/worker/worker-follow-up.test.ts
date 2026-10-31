@@ -8,7 +8,10 @@ import {
   readWorkerResumeSession
 } from '../../../../orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { captureMovedWorkerResumeSessions } from './worker-resume-session-capture'
-import { continueAllUnreadWorkerMail } from '../messaging/settled-worker-follow-through'
+import {
+  continueAllUnreadWorkerMail,
+  continueUnreadWorkerMail
+} from '../messaging/settled-worker-follow-through'
 import { createOrchestrationWorkerReleaseHarness } from './worker-release.test-support'
 
 // A send to a finished terminal worker, through the same worker-start the coordinator would run.
@@ -196,6 +199,26 @@ describe('a follow-up to a finished terminal worker', () => {
     expect(h.db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(0)
     expect(h.db.getUnreadMessages(`dispatch:${followUp.id}`)).toHaveLength(0)
     expect(h.db.getUnreadMessages(`run:${h.activeRunId}`)).toHaveLength(0)
+  })
+
+  it('keeps the mail a failed follow-up took when a replayed report ran during its start', async () => {
+    h.setup()
+    const { taskId, dispatchId } = await h.startWorker()
+    await send(dispatchId, 'DO NOT PUSH')
+    h.settle(taskId, dispatchId, 'succeeded')
+    vi.mocked(h.runtime.sendTerminalAgentPrompt).mockImplementationOnce(async () => {
+      // The replay finds no unread mail, since the start took it, and clears the marker.
+      continueUnreadWorkerMail(h.runtime, h.db, dispatchId)
+      throw new Error('prompt lost')
+    })
+
+    continueAllUnreadWorkerMail(h.runtime, h.db)
+
+    await vi.waitFor(() => expect(getFollowUpDispatch(h.db, dispatchId)).toBeDefined())
+    const failed = getFollowUpDispatch(h.db, dispatchId)!.id
+    await vi.waitFor(() =>
+      expect(h.db.getUnreadMessages(`dispatch:${failed}`)).toMatchObject([{ body: 'DO NOT PUSH' }])
+    )
   })
 
   it('keeps the mail a failed follow-up took, says so, and delivers it with the retry', async () => {
