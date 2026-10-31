@@ -20477,8 +20477,6 @@
         "inlineVisualsCopy": "Let the agent show charts, diagrams and mockups inside its replies. Applies to newly started chats.",
         "inlineVisualsToggleLabel": "Toggle inline visuals",
         "followUpBehaviorCopy": "Messages sent while the agent works wait as cards until the turn ends. Cmd/Ctrl+Enter sends one into the running turn.",
-        "followUpSteer": "Steer",
-        "followUpQueue": "Queue",
         "behaviorTitle": "Behavior",
         "resumeSearchUpdate": "update",
         "resumeSearchRelaunch": "relaunch",

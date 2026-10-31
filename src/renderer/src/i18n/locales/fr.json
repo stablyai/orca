@@ -20400,8 +20400,6 @@
       "nativeChat": {
         "followUpBehaviorTitle": "Mettre les messages suivants en file d’attente",
         "followUpBehaviorCopy": "Les messages envoyés pendant que l’agent travaille attendent sous forme de cartes jusqu’à la fin du tour. Cmd/Ctrl+Entrée en envoie un dans le tour en cours.",
-        "followUpSteer": "Envoyer maintenant",
-        "followUpQueue": "Mettre en file d’attente",
         "inlineVisualsTitle": "Visuels intégrés",
         "inlineVisualsCopy": "Laissez l'agent afficher des graphiques, des diagrammes et des maquettes dans ses réponses. S'applique aux nouveaux chats.",
         "inlineVisualsToggleLabel": "Activer/désactiver les visuels intégrés",

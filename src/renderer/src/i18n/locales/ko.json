@@ -19594,8 +19594,6 @@
       "nativeChat": {
         "followUpBehaviorTitle": "후속 메시지를 대기열에 추가",
         "followUpBehaviorCopy": "Agent가 작업하는 동안 보낸 메시지는 턴이 끝날 때까지 카드로 대기합니다. Cmd/Ctrl+Enter를 누르면 메시지 하나를 진행 중인 턴에 보냅니다.",
-        "followUpSteer": "지금 보내기",
-        "followUpQueue": "대기열에 추가",
         "inlineVisualsTitle": "인라인 시각 자료",
         "inlineVisualsCopy": "에이전트가 답변 안에 차트, 다이어그램, 목업을 표시하도록 합니다. 새로 시작한 채팅에 적용됩니다.",
         "inlineVisualsToggleLabel": "인라인 시각 자료 전환",

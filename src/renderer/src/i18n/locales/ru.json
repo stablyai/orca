@@ -20852,8 +20852,6 @@
         "inlineVisualsCopy": "Агент сможет показывать графики, схемы и макеты прямо в ответах. Применяется к новым чатам.",
         "inlineVisualsToggleLabel": "Включить визуализации в чате",
         "followUpBehaviorCopy": "Сообщения, отправленные во время работы агента, ждут в виде карточек до конца хода. Cmd/Ctrl+Enter отправляет одно сообщение в текущий ход.",
-        "followUpSteer": "Направить",
-        "followUpQueue": "В очередь",
         "behaviorTitle": "Поведение",
         "resumeSearchUpdate": "обновление",
         "resumeSearchRelaunch": "перезапуск",

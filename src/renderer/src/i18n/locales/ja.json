@@ -19594,8 +19594,6 @@
       "nativeChat": {
         "followUpBehaviorTitle": "フォローアップをキューに入れる",
         "followUpBehaviorCopy": "Agent の作業中に送信したメッセージは、ターンが終わるまでカードとして待機します。Cmd/Ctrl+Enter で 1 件を実行中のターンに送信します。",
-        "followUpSteer": "今すぐ送信",
-        "followUpQueue": "キューに入れる",
         "inlineVisualsTitle": "インライン表示",
         "inlineVisualsCopy": "Agent が返信内でグラフ、図、モックアップを表示できるようにします。新しく開始したチャットに適用されます。",
         "inlineVisualsToggleLabel": "インライン表示を切り替え",
