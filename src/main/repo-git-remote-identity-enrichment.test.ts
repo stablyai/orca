@@ -168,7 +168,7 @@ describe('enrichMissingRepoGitRemoteIdentities', () => {
 
   it.each([
     ['with the distro Git', '1', 'Ubuntu'],
-    ['with host Git, as before, while WSL hosts are off', '', undefined]
+    ['with host Git, as before, while WSL hosts are off', '0', undefined]
   ])('probes a drive project whose runtime is WSL %s', async (_case, gate, distro) => {
     vi.mocked(probeGitRemoteIdentity).mockResolvedValue(resolvedProbe)
     const { repo, store } = drivePathRepoUnderWslRuntime()

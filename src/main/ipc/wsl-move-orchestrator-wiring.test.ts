@@ -204,6 +204,7 @@ afterEach(() => vi.unstubAllEnvs())
 
 describe('WSL move orchestrator wiring', () => {
   it('stays dark with the gate closed: nothing read, nothing listed', async () => {
+    vi.stubEnv(WSL_HOSTS_INTERNAL_GATE_ENV, '0')
     host.statuses = [
       { distro: 'Ubuntu', state: 'ready', environmentId: 'wsl:Ubuntu', detail: null }
     ]

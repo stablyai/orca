@@ -36,7 +36,7 @@ afterEach(() => {
 
 describe('WSL hosts gate', () => {
   it('flag-off with nothing saved: closed, exactly as before', () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     configureWslHostsGate(facts(false, false))
 
     expect(wslHostsGateState()).toBe('closed')
@@ -50,7 +50,7 @@ describe('WSL hosts gate', () => {
     ['a saved host', facts(true, false)],
     ['a move journal entry', facts(false, true)]
   ])('serves %s behind a closed gate without opening it', (_label, saved) => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     configureWslHostsGate(saved)
 
     expect(wslHostsGateState()).toBe('serve-only')
@@ -61,7 +61,7 @@ describe('WSL hosts gate', () => {
   })
 
   it('treats unreadable saved state as absent', () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     configureWslHostsGate({
       hasSavedWslHost: () => {
         throw new Error('unreadable')
@@ -86,12 +86,12 @@ describe('WSL hosts gate', () => {
   })
 
   it('is closed before startup configures it', () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     expect(wslHostsGateState()).toBe('closed')
   })
 
   it('stamps window argv only in serve-only', () => {
-    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+    vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
     configureWslHostsGate(facts(false, false))
     expect(wslHostsWindowArguments()).toEqual([])
 
@@ -135,7 +135,7 @@ describe('WSL hosts gate', () => {
     })
 
     it('is not read, and changes nothing, behind a closed internal gate', () => {
-      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', undefined)
+      vi.stubEnv('ORCA_INTERNAL_WSL_HOSTS', '0')
       const policy = vi.fn(() => 'block' as const)
       configureWslHostsGate({ ...facts(true, false), policy })
 
@@ -171,8 +171,8 @@ describe('WSL hosts gate', () => {
   describe('publishing the resolved state to child processes', () => {
     it.each([
       ['open', '1', facts(false, false), undefined],
-      ['serve-only', undefined, facts(true, false), undefined],
-      ['closed', undefined, facts(false, false), undefined],
+      ['serve-only', '0', facts(true, false), undefined],
+      ['closed', '0', facts(false, false), undefined],
       ['closed', '1', facts(false, false), 'block' as const],
       ['serve-only', '1', facts(false, true), 'block' as const]
     ])('publishes %s', (state, gateEnv, saved, policy) => {
@@ -185,7 +185,7 @@ describe('WSL hosts gate', () => {
     // A relaunch or the updater's installer inherits the parent's value; main must recompute.
     it.each([
       ['closed', '1', 'open', true],
-      ['open', undefined, 'closed', false]
+      ['open', '0', 'closed', false]
     ])(
       'ignores a stale inherited %s and overwrites it',
       (inherited, gateEnv, recomputed, serving) => {

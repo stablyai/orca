@@ -41,7 +41,7 @@ const distroFor = (cwd: string): string | undefined =>
 
 describe('project runtime Git routing on the real Store', () => {
   it.each([
-    ['the WSL hosts gate is closed', '', 'win32'],
+    ['the WSL hosts gate is closed', '0', 'win32'],
     ['not on Windows', '1', 'linux']
   ])('installs no router, and drops one, when %s', async (_case, gate, platform) => {
     const { store } = await fixture()
