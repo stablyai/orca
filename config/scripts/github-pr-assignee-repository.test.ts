@@ -57,8 +57,10 @@ vi.mock('@/components/ui/popover', () => ({
   PopoverContent: vi.fn(),
   PopoverTrigger: vi.fn()
 }))
+vi.mock('@/hooks/useGitHubRepoMetadata', () => ({
+  useRepoAssignees: () => ({ data: [], loading: false, error: null })
+}))
 vi.mock('@/hooks/useIssueMetadata', () => ({
-  useRepoAssignees: () => ({ data: [], loading: false, error: null }),
   useImmediateMutation: () => ({
     isPending: () => false,
     run: (_key: string, spec: { mutate: () => Promise<unknown> }) => {
