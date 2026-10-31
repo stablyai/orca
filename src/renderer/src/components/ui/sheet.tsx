@@ -7,10 +7,25 @@ import { cva, type VariantProps } from 'class-variance-authority'
 
 import { cn } from '@/lib/utils'
 import { handleImeOverlayEscape } from '@/lib/ime-overlay-escape'
+import { useGatedOverlayOpen } from '@/lib/overlay-allowed-context'
 import { translate } from '@/i18n/i18n'
 
-function Sheet({ ...props }: React.ComponentProps<typeof SheetPrimitive.Root>) {
-  return <SheetPrimitive.Root data-slot="sheet" {...props} />
+function Sheet({
+  open,
+  defaultOpen,
+  onOpenChange,
+  ...props
+}: React.ComponentProps<typeof SheetPrimitive.Root>) {
+  // Why: stay controlled while gating; parent `open` still restores the sheet when Tasks returns.
+  const gated = useGatedOverlayOpen(open, onOpenChange, defaultOpen)
+  return (
+    <SheetPrimitive.Root
+      data-slot="sheet"
+      {...props}
+      open={gated.open}
+      onOpenChange={gated.onOpenChange}
+    />
+  )
 }
 
 function SheetClose({ ...props }: React.ComponentProps<typeof SheetPrimitive.Close>) {
