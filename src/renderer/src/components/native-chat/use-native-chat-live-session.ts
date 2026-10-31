@@ -82,13 +82,13 @@ export function useNativeChatLiveSession(
   const [hookState, hookStateStartedAt, hookHasWorkingSubagents] = useNativeChatHookStatus(paneKey)
 
   const latestEnabled = useRef(enabled)
+  // Read, not a dependency: the source key below already changes with the pane.
+  const latestPaneKey = useRef(paneKey)
   // Fence late frames before passive cleanup closes the previous stream.
   useLayoutEffect(() => {
     latestEnabled.current = enabled
-  }, [enabled])
-  // Read, not a dependency: the source key below already changes with the pane.
-  const latestPaneKey = useRef(paneKey)
-  latestPaneKey.current = paneKey
+    latestPaneKey.current = paneKey
+  }, [enabled, paneKey])
   const latestSessionId = useRef<string | null>(sessionId)
   latestSessionId.current = sessionId
   // Owner flips can retain sessionId; transport identity must also fence stale pagination.
