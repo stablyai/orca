@@ -19,7 +19,7 @@ import { getPluginsDataDir } from '../plugins/plugin-discovery'
 import { bundledPluginRootForApp } from '../plugins/plugin-bundled-bootstrap'
 import { approveBundledPluginsFromStore } from '../plugins/plugin-bundled-approval'
 import { resolvePluginHostEntryPath } from '../plugins/workers/plugin-host-process'
-import { applyPluginConsent } from '../plugins/plugin-enablement'
+import { applyPluginConsent, revokePluginConsent } from '../plugins/plugin-enablement'
 import { clearRemovedPluginSettings } from '../plugins/plugin-removal-settings'
 import { clearPluginFrameStorage } from '../plugins/panels/plugin-frame-guest-sessions'
 import { bindPluginRpcServices } from './main-process-plugin-rpc'
@@ -102,7 +102,14 @@ export async function initializeMainProcessPlugins(runtime: OrcaRuntimeService):
     userDataPath: app.getPath('userData'),
     hostVersion: pluginHostVersion(app.getVersion()),
     blockedPluginReason: (pluginKey) => state.pluginKillListService?.reason(pluginKey) ?? null,
-    imageCache: pluginImageCache
+    imageCache: pluginImageCache,
+    revokeConsent: async (pluginKey) => {
+      // Why throw: an install that cannot drop the old approval must not publish.
+      if (!state.pluginService) {
+        throw new Error('plugin service is not running')
+      }
+      await revokePluginConsent({ store, pluginService: state.pluginService, pluginKey })
+    }
   })
   const bundledPluginRoot = bundledPluginRootForApp(app)
   state.pluginService = new PluginService({

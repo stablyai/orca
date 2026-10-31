@@ -49,6 +49,22 @@ export async function applyPluginConsent(input: {
   await pluginService.reconcileActivationState()
 }
 
+/** Drops a plugin's recorded approval without disabling it, so it waits for review. */
+export async function revokePluginConsent(input: {
+  store: Store
+  pluginService: PluginService
+  pluginKey: string
+}): Promise<void> {
+  const { store, pluginService, pluginKey } = input
+  const consents = normalizePluginConsents(store.getSettings().pluginConsents)
+  if (!(pluginKey in consents)) {
+    return
+  }
+  delete consents[pluginKey]
+  store.updateSettings({ pluginConsents: consents }, { notifyListeners: true })
+  await pluginService.reconcileActivationState()
+}
+
 /** Enabling cannot bypass missing/stale consent. */
 export async function applyPluginEnablement(input: {
   store: Store
