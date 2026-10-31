@@ -85,9 +85,11 @@ it('publishes the stopped source to every viewer when a switch fails after its p
     }
   })
   // An older client reattaching to that exact process is answered exited, not left waiting.
-  expect(row?.status === 'ready' && kept.runtime.isStoppedSwitchSourceHandle(row.terminal)).toBe(
-    true
-  )
+  expect(
+    row?.type === 'terminal' &&
+      row.status === 'ready' &&
+      kept.runtime.isStoppedSwitchSourceHandle(row.terminal)
+  ).toBe(true)
   // The retry from the stopped pane replaces it in place; the fact dies with the row.
   vi.mocked(cliTranscript.prepareStructuredChatCliTranscript).mockResolvedValue(readable)
   const retry = kept.runtime.resolveTerminalPane(

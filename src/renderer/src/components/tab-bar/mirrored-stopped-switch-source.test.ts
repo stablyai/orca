@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import type { AppState } from '@/store/types'
+import type { RuntimeEnvironmentStatus } from '@/store/slices/runtime-status-types'
 import { WORKTREE_ID, makeState } from './tab-session-history-fixtures.test-fixture'
 import { makeTerminalTab } from '../worktree-jump-palette-test-fixtures'
 import { resolveCliChatResumeSource } from './cli-chat-resume-source'
@@ -47,7 +47,7 @@ function surface(fact?: StoppedSwitchSourceFact, handle = 'handle-1'): TerminalS
 function pairedClient(): void {
   makeState({}, { executionHostId: HOST })
   useAppStore.setState({
-    tabsByWorktree: { [WORKTREE_ID]: [makeTerminalTab(TAB, WORKTREE_ID)] },
+    tabsByWorktree: { [WORKTREE_ID]: [makeTerminalTab(TAB, WORKTREE_ID, 'Terminal')] },
     terminalLayoutsByTabId: {
       [TAB]: {
         root: { type: 'leaf', leafId: LEAF },
@@ -56,7 +56,7 @@ function pairedClient(): void {
         ptyIdsByLeafId: { [LEAF]: BOUND }
       }
     },
-    runtimeStatusByEnvironmentId: new Map([
+    runtimeStatusByEnvironmentId: new Map<string, RuntimeEnvironmentStatus>([
       [
         'server-1',
         {
@@ -77,7 +77,7 @@ function pairedClient(): void {
           }
         }
       ]
-    ]) as AppState['runtimeStatusByEnvironmentId']
+    ])
   })
 }
 

@@ -48,23 +48,31 @@ const {
   }
 })
 
-type Listing = { ok: true; result: { tabs: Record<string, unknown>[] } }
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+/** Main's listing reply with the fact on every terminal row while the host holds one. */
+function withHostFact(reply: unknown): unknown {
+  if (!hostFact || !isRecord(reply) || !isRecord(reply.result)) {
+    return reply
+  }
+  const result = reply.result
+  const tabs = Array.isArray(result.tabs)
+    ? result.tabs.map((tab: unknown) =>
+        isRecord(tab) ? { ...tab, stoppedSwitchSource: hostFact } : tab
+      )
+    : result.tabs
+  return { ...reply, result: { ...result, tabs } }
+}
 
 function stampHostRows(): void {
   const harnessCall = runtimeCall.getMockImplementation()
   runtimeCall.mockImplementation(async (request: { method: string }) => {
-    const reply = (
-      request.method === 'session.tabs.list'
-        ? readyHostSessionInventoryResponse('terminal-1')
-        : await harnessCall?.(request)
-    ) as Listing
-    const listing =
-      request.method === 'session.tabs.activate' || request.method === 'session.tabs.list'
-    if (!listing || !hostFact) {
-      return reply
+    if (request.method === 'session.tabs.list') {
+      return withHostFact(readyHostSessionInventoryResponse('terminal-1'))
     }
-    const tabs = reply.result.tabs.map((tab) => ({ ...tab, stoppedSwitchSource: hostFact }))
-    return { ...reply, result: { ...reply.result, tabs } }
+    const reply: unknown = await harnessCall?.(request)
+    return request.method === 'session.tabs.activate' ? withHostFact(reply) : reply
   })
 }
 

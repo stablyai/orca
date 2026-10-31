@@ -14,7 +14,8 @@ it.skipIf(process.platform === 'win32')(
     runtime.setPtyController({
       write: () => true,
       kill: () => false,
-      listProcesses: () => new Promise(() => {})
+      listProcesses: () => new Promise(() => {}),
+      getForegroundProcess: async () => null
     })
     let settled: boolean | undefined
     void runtime.terminalAgentPaused('pty-1').then((paused) => {
