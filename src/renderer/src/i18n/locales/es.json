@@ -4572,6 +4572,13 @@
             },
             "mainWorktree": "worktree principal",
             "detached": "desacoplado"
+          },
+          "CopilotStatusSegment": {
+            "badge": "Copilot",
+            "signedInAs": "GitHub Copilot",
+            "signIn": "Haz clic para iniciar sesión en GitHub Copilot",
+            "deviceCode": "Código de inicio de sesión de Copilot {{code}} copiado: pégalo en el navegador.",
+            "signInFailed": "No se pudo iniciar sesión en Copilot"
           }
         }
       },

@@ -5,7 +5,12 @@ import {
   resolveIndexedWorktreeOwner
 } from './worktree-runtime-owner-index'
 import { resolveWorktreeExecutionHost } from '../../../shared/worktree-execution-host-resolution'
-import { getRepoExecutionHostId, getRepoSshConnectionId } from '../../../shared/execution-host'
+import {
+  getRepoExecutionHostId,
+  getRepoSshConnectionId,
+  LOCAL_EXECUTION_HOST_ID,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
 import type { Repo } from '../../../shared/repo-types'
 import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../shared/constants'
 import { getRepoIdFromWorktreeId } from '../../../shared/worktree/id'
@@ -196,4 +201,46 @@ export function getConnectionIdForWorktreeCopy(
     { repoId: row.repoId, hostId: row.hostId ?? hostId }
   )
   return resolution.kind === 'resolved' ? resolution.connectionId : undefined
+}
+
+/**
+ * True only when the file provably lives on this machine. `getConnectionIdForFileFromState` answers
+ * `null` for a `runtime:` host too (no nested SSH target), so a null connection is not enough to
+ * hand the path to a locally spawned process; unresolved, SSH and runtime hosts are all false.
+ * Ported from stablyai/orca#24031 onto the selector-based owner resolution.
+ */
+export function isFileOnLocalHostFromState(
+  state: ConnectionOwnerState,
+  worktreeId: string | null,
+  filePath: string
+): boolean {
+  if (!worktreeId || getConnectionIdForFileFromState(state, worktreeId, filePath) !== null) {
+    return false
+  }
+  const parsedWorkspaceKey = parseWorkspaceKey(worktreeId)
+  if (parsedWorkspaceKey?.type === 'folder') {
+    const pinnedHost = selectFolderWorkspaces(state).find(
+      (workspace) => workspace.id === parsedWorkspaceKey.folderWorkspaceId
+    )?.executionHostId
+    const host = parseExecutionHostId(pinnedHost)
+    return !host || host.kind === 'local'
+  }
+  const worktreeResolution = resolveIndexedWorktreeOwner(selectWorktreesByRepo(state), worktreeId)
+  if (worktreeResolution.kind === 'ambiguous') {
+    return false
+  }
+  const worktree = worktreeResolution.kind === 'resolved' ? worktreeResolution.owner : undefined
+  const repoId = worktree?.repoId ?? getRepoIdFromWorktreeId(worktreeId)
+  const resolution = resolveWorktreeExecutionHost(
+    {
+      byId: (id) => resolveIndexedRepoOwner(state.repos, id),
+      byHost: (id, hostId) => findIndexedRepoOwnerForHost(state.repos, id, hostId)
+    },
+    { repoId, hostId: worktree?.hostId ?? null }
+  )
+  return (
+    !worktree?.runtimeOwnerEnvironmentId?.trim() &&
+    resolution.kind === 'resolved' &&
+    resolution.hostId === LOCAL_EXECUTION_HOST_ID
+  )
 }
