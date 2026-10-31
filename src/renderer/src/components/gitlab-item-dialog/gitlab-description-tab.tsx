@@ -316,6 +316,7 @@ export function GitLabDescriptionTab({ item, state, detailsEditing, reviewAction
           ) : null}
           <CommentMarkdown
             content={details.body}
+            gitlabImageSources={details.imageSources ?? {}}
             variant="document"
             className="min-w-0 max-w-full overflow-hidden break-words text-[13px] leading-relaxed [&_a]:break-all [&_code]:break-words [&_pre]:max-w-full"
           />

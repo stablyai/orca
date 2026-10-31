@@ -11,17 +11,24 @@ import {
 import { mapRepoPathArg } from './runtime-repo-selector-params'
 import { hasRuntimeRpcErrorCode } from '../../../shared/runtime-rpc-error-code'
 
+export const GITLAB_RPC_TIMEOUT_MS = 30_000
+
 export type GitLabApi = NonNullable<PreloadApi['gl']>
 
 type GitLabApiResult<K extends keyof GitLabApi> = Awaited<ReturnType<GitLabApi[K]>>
 
 export type RuntimeGitLabTransport = {
-  call: <Result>(method: WebGitLabRuntimeMethod, params?: unknown) => Promise<Result>
+  call: <Result>(
+    method: WebGitLabRuntimeMethod,
+    params?: unknown,
+    signal?: AbortSignal
+  ) => Promise<Result>
   supportsCapability: (capability: RuntimeCapability) => Promise<boolean>
 }
 
 /** The `gl` API spoken over runtime RPC to the server that owns the repo. */
 export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLabApi {
+  const detailControllers = new Map<string, AbortController>()
   const route = <Result>(method: WebGitLabRuntimeMethod, args?: unknown): Promise<Result> =>
     transport.call<Result>(method, mapRepoPathArg(args))
 
@@ -60,9 +67,37 @@ export function createRuntimeGitLabApi(transport: RuntimeGitLabTransport): GitLa
       }),
     todos: (args) => route<GitLabApiResult<'todos'>>(GITLAB_WEB_RPC_METHODS.todos, args),
     // Why: the owner guard names a host as this client sees it; the server resolves the repo itself.
-    // A remote host gates its own polls; `background` is a local IPC hint only.
-    workItemDetails: ({ repoOwnerExecutionHostId: _owner, background: _background, ...args }) =>
-      route<GitLabApiResult<'workItemDetails'>>(GITLAB_WEB_RPC_METHODS.workItemDetails, args),
+    // A remote host gates its own polls; background is a local IPC hint only.
+    workItemDetails: async ({
+      repoOwnerExecutionHostId: _owner,
+      background: _background,
+      requestToken,
+      ...args
+    }) => {
+      if (!requestToken) {
+        return route<GitLabApiResult<'workItemDetails'>>(
+          GITLAB_WEB_RPC_METHODS.workItemDetails,
+          args
+        )
+      }
+      detailControllers.get(requestToken)?.abort()
+      const controller = new AbortController()
+      detailControllers.set(requestToken, controller)
+      try {
+        return await transport.call<GitLabApiResult<'workItemDetails'>>(
+          GITLAB_WEB_RPC_METHODS.workItemDetails,
+          mapRepoPathArg(args),
+          controller.signal
+        )
+      } finally {
+        if (detailControllers.get(requestToken) === controller) {
+          detailControllers.delete(requestToken)
+        }
+      }
+    },
+    cancelWorkItemDetails: async ({ requestToken }) => {
+      detailControllers.get(requestToken)?.abort()
+    },
     closeMR: (args) =>
       route<GitLabApiResult<'closeMR'>>(GITLAB_WEB_RPC_METHODS.closeMR, {
         ...args,

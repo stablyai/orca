@@ -2,16 +2,16 @@ import type { Context } from 'react'
 import type { OperationExposure, operationModuleLoader } from './operation-module-loader'
 import type { RpcClientContextValue } from '../../transport/rpc-client-context-contract'
 
-export const HOST_CLIENT_CONTEXT_LOCAL = 'Ctx'
+export const HOST_CLIENT_CONTEXT_LOCAL = 'RpcClientContext'
 
 const RECORDER_HOST_CLIENT_CONTEXT = 'recorderHostClientContext'
 
-const HOST_CLIENT_CONTEXT_MODULE = 'mobile/src/transport/client-context.tsx'
+const HOST_CLIENT_CONTEXT_MODULE = 'mobile/src/transport/rpc-client-react-context.ts'
 
-// Centralize the private context name: type checking cannot see exposure strings, so adapter-seam.test.ts pins it against product source.
+// Expose the shared context binding so recordings mount the same provider as product hooks.
 export const hostClientContextExposure: OperationExposure = [
-  'client-context.tsx',
-  `\nexports.${RECORDER_HOST_CLIENT_CONTEXT} = ${HOST_CLIENT_CONTEXT_LOCAL};`
+  'rpc-client-react-context.ts',
+  `\nexports.${RECORDER_HOST_CLIENT_CONTEXT} = exports.${HOST_CLIENT_CONTEXT_LOCAL};`
 ]
 
 export function loadHostClientContext(

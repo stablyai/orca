@@ -246,9 +246,11 @@ describe('OrcaRuntimeService', () => {
       'ssh-1',
       undefined,
       {},
-      { includeReviewDetails: undefined }
+      undefined
     )
-    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, {
+      includeReviewDetails: false
+    })
     expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
       '/remote/repo',
       8,
@@ -454,9 +456,11 @@ describe('OrcaRuntimeService', () => {
       null,
       undefined,
       localGitOptions,
-      { includeReviewDetails: undefined }
+      undefined
     )
-    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, false)
+    await runtime.getGitLabRepoWorkItemDetails(TEST_REPO_ID, 8, 'mr', undefined, {
+      includeReviewDetails: false
+    })
     expect(getGitLabWorkItemDetailsMock).toHaveBeenLastCalledWith(
       TEST_REPO_PATH,
       8,

@@ -110,17 +110,20 @@ export async function getProjectRefForRemoteWithSignature(
     projectRefCache.delete(cacheKey)
   }
 
-  return runProjectRefProbeOnce(`${cacheKey}\0${configSignature ?? ''}`, (ownsKey) =>
-    resolveProjectRefForRemote(
-      repoPath,
-      remoteName,
-      knownHosts,
-      connectionId,
-      cacheKey,
-      ownsKey,
-      localGitOptions,
-      configSignature
-    )
+  return runProjectRefProbeOnce(
+    `${cacheKey}\0${configSignature ?? ''}`,
+    (ownsKey) =>
+      resolveProjectRefForRemote(
+        repoPath,
+        remoteName,
+        knownHosts,
+        connectionId,
+        cacheKey,
+        ownsKey,
+        localGitOptions,
+        configSignature
+      ),
+    localGitOptions.signal
   )
 }
 
@@ -145,6 +148,7 @@ async function resolveProjectRefForRemote(
       {
         repoPath,
         connectionId,
+        ...(localGitOptions.signal ? { signal: localGitOptions.signal } : {}),
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
       },
@@ -182,6 +186,7 @@ async function resolveProjectRefForRemote(
       return partial
     }
   } catch (error) {
+    localGitOptions.signal?.throwIfAborted()
     // Failed SSH and transient probes do not establish a stable non-GitLab remote.
     if (connectionId || isTransientGitProbeError(error)) {
       return null
@@ -204,10 +209,12 @@ export function glabRepoExecOptions(
   repoPath: string,
   connectionId?: string | null,
   localGitOptions: LocalGitExecOptions = {}
-): { cwd?: string; wslDistro?: string; admissionTier?: GitAdmissionTier } {
+): { cwd?: string; wslDistro?: string; admissionTier?: GitAdmissionTier; signal?: AbortSignal } {
+  const cancellation = localGitOptions.signal ? { signal: localGitOptions.signal } : {}
   return connectionId
-    ? {}
+    ? cancellation
     : {
+        ...cancellation,
         cwd: repoPath,
         ...(localGitOptions.wslDistro ? { wslDistro: localGitOptions.wslDistro } : {}),
         ...(localGitOptions.admissionTier ? { admissionTier: localGitOptions.admissionTier } : {})
@@ -258,6 +265,7 @@ async function isGlabConfiguredForRemoteHost(
     }
     return true
   } catch (error) {
+    localGitOptions.signal?.throwIfAborted()
     const execLike = error as { stdout?: unknown; stderr?: unknown; message?: unknown }
     const output =
       [execLike.stdout, execLike.stderr, execLike.message]

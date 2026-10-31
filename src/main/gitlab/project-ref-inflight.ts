@@ -9,8 +9,9 @@ export function clearProjectRefInFlight(): void {
 
 export async function runProjectRefProbeOnce(
   cacheKey: string,
-  createProbe: (ownsKey: () => boolean) => Promise<ProjectRef | null>
+  createProbe: (ownsKey: () => boolean) => Promise<ProjectRef | null>,
+  signal?: AbortSignal
 ): Promise<ProjectRef | null> {
   // Retire wedged probes so later retries can discover recovered hosts.
-  return runCoalescedProbe(projectRefInFlight, cacheKey, createProbe)
+  return runCoalescedProbe(projectRefInFlight, cacheKey, createProbe, undefined, signal)
 }

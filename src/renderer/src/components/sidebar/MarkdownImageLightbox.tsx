@@ -2,9 +2,12 @@ import React from 'react'
 import { PanZoomImageDialog } from '@/components/editor/PanZoomImageDialog'
 import { cn } from '@/lib/utils'
 import { translate } from '@/i18n/i18n'
+import { markdownImageSize, MarkdownSizedImage } from './markdown-image-size'
 
 type ExpandableMarkdownImageProps = {
   src: string | undefined
+  width?: number | string
+  height?: number | string
   alt?: string
   className?: string
   triggerClassName?: string
@@ -27,6 +30,8 @@ type ExpandableMarkdownImageProps = {
 /** Delegate lightbox focus, Escape and focus restoration to the shared pan/zoom dialog. */
 export function ExpandableMarkdownImage({
   src,
+  width,
+  height,
   alt,
   className,
   triggerClassName,
@@ -50,6 +55,7 @@ export function ExpandableMarkdownImage({
     }
     onOpenChange?.(nextOpen)
   }
+  const size = markdownImageSize(width, height)
   const label =
     alt?.trim() || translate('auto.components.sidebar.MarkdownImageLightbox.image', 'Image')
 
@@ -57,9 +63,9 @@ export function ExpandableMarkdownImage({
     <>
       <button
         ref={triggerRef}
-        style={triggerStyle}
         type="button"
         {...triggerAttributes}
+        style={{ ...size.style, ...triggerStyle }}
         className={cn(
           'my-3 block max-w-full cursor-zoom-in border-0 bg-transparent p-0 text-left focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring',
           triggerClassName
@@ -79,8 +85,10 @@ export function ExpandableMarkdownImage({
         }
       >
         {src ? (
-          <img
+          <MarkdownSizedImage
             src={src}
+            width={size.style.width ? '100%' : size.width}
+            height={height}
             alt={alt ?? ''}
             className={cn(className, 'pointer-events-none')}
             onError={onError}

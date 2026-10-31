@@ -193,6 +193,19 @@ describe('getWorkItemDetails', () => {
       }
     )
     expect(checks).toEqual({ ...details, files: [], reviewers: [], approvalState: undefined })
+    glabExecFileAsyncMock.mockClear()
+    const checksWithImages = await getWorkItemDetails(
+      '/repo',
+      12,
+      'mr',
+      undefined,
+      undefined,
+      undefined,
+      {},
+      { includeReviewDetails: false, includeImages: true }
+    )
+    expect(checksWithImages).toEqual({ ...checks, imageSources: {} })
+
     expect(glabExecFileAsyncMock.mock.calls.map(([args]) => args.at(-1)).sort()).toEqual([
       'projects/g%2Fp/merge_requests/12',
       'projects/g%2Fp/merge_requests/12/discussions?per_page=100',

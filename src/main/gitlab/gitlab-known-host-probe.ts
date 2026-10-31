@@ -9,6 +9,7 @@ import type { GitAdmissionTier } from '../git/command-runner/git-exec-options'
 export type LocalGitExecOptions = {
   wslDistro?: string
   admissionTier?: GitAdmissionTier
+  signal?: AbortSignal
 }
 
 const GLAB_KNOWN_HOSTS_TIMEOUT_MS = 10_000
@@ -173,8 +174,12 @@ export async function getGlabKnownHosts(
     return [...DEFAULT_GITLAB_HOSTS]
   }
   // Retire wedged probes so later retries can discover recovered auth.
-  return runCoalescedProbe(knownHostsInFlightByExecutionContext, key, (ownsKey) =>
-    probeGlabKnownHosts(key, ownsKey, connectionId, localGitOptions)
+  return runCoalescedProbe(
+    knownHostsInFlightByExecutionContext,
+    key,
+    (ownsKey) => probeGlabKnownHosts(key, ownsKey, connectionId, localGitOptions),
+    undefined,
+    localGitOptions.signal
   )
 }
 
@@ -188,6 +193,7 @@ async function probeGlabKnownHosts(
     // Isolate native, WSL and connection probe state; bound each auth subprocess.
     const { stdout, stderr } = await glabExecFileAsync(['auth', 'status'], {
       timeout: GLAB_KNOWN_HOSTS_TIMEOUT_MS,
+      ...(localGitOptions.signal ? { signal: localGitOptions.signal } : {}),
       // Native probes must not cache default-distro auth; connection-keyed API calls retain that same fallback.
       ...(connectionId ? {} : { allowDefaultWslFallback: false }),
       ...(!connectionId && localGitOptions.wslDistro
@@ -208,6 +214,7 @@ async function probeGlabKnownHosts(
     }
     return merged
   } catch (error) {
+    localGitOptions.signal?.throwIfAborted()
     if (ownsKey()) {
       const { stdout, stderr } = extractExecError(error)
       const hosts = isCompletedGlabFailure(error)

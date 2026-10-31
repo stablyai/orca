@@ -23,7 +23,10 @@ describe('the adapter directory', () => {
     // Exposure uses module-private names without type checking; pin declarations so renames fail here instead of during recording.
     const [, source] = hostClientContextExposure
     const declaration = `const ${HOST_CLIENT_CONTEXT_LOCAL} = createContext`
-    const context = readFileSync(join(root, 'mobile/src/transport/client-context.tsx'), 'utf8')
+    const context = readFileSync(
+      join(root, 'mobile/src/transport/rpc-client-react-context.ts'),
+      'utf8'
+    )
     expect(context.split(declaration).length - 1).toBe(1)
     const copies = [engine, directory]
       .flatMap((from) =>

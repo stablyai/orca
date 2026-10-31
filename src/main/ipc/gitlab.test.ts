@@ -1,3 +1,4 @@
+import { EventEmitter } from 'node:events'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Store } from '../persistence'
 import type { Repo } from '../../shared/repo-types'
@@ -214,6 +215,50 @@ describe('GitLab IPC handlers', () => {
 
     await details(null, args)
     expect(getWorkItemDetailsMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('keeps a details request cancellable until its guarded read settles', async () => {
+    const sender = Object.assign(new EventEmitter(), { id: 37 })
+    const event = { sender }
+    const started = Promise.withResolvers<void>()
+    getWorkItemDetailsMock.mockImplementation(
+      (
+        _repo,
+        _iid,
+        _type,
+        _preference,
+        _connection,
+        _project,
+        _options,
+        request: { signal: AbortSignal }
+      ) => {
+        started.resolve()
+        return new Promise((_resolve, reject) => {
+          request.signal.addEventListener('abort', () => reject(request.signal.reason), {
+            once: true
+          })
+        })
+      }
+    )
+    registerGitLabHandlers(
+      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: The handlers read only the accessors implemented by storeWithRepos.
+      storeWithRepos([repo()]) as Store
+    )
+    const details = ipcHandlers.get('gitlab:workItemDetails')!
+    const cancel = ipcHandlers.get('gitlab:cancelWorkItemDetails')!
+    const pending = details(event, {
+      repoPath: '/local/orca',
+      iid: 8,
+      type: 'mr',
+      background: true,
+      includeImages: true,
+      requestToken: 'guarded-preview'
+    })
+    const rejected = expect(pending).rejects.toMatchObject({ name: 'AbortError' })
+    await started.promise
+    await cancel(event, { requestToken: 'guarded-preview' })
+    await rejected
+    expect(sender.listenerCount('destroyed')).toBe(0)
   })
 
   it('resolves repoId and source host context before listing work items', async () => {
@@ -628,7 +673,7 @@ describe('GitLab IPC handlers', () => {
       null,
       undefined,
       localGitOptions,
-      { includeReviewDetails: undefined }
+      { includeImages: undefined, includeReviewDetails: undefined }
     )
     await ipcHandlers.get('gitlab:workItemDetails')?.(null, {
       repoPath: '/local/orca',
@@ -644,7 +689,7 @@ describe('GitLab IPC handlers', () => {
       null,
       undefined,
       localGitOptions,
-      { includeReviewDetails: false }
+      { includeImages: undefined, includeReviewDetails: false }
     )
     expect(closeMRMock).toHaveBeenCalledWith(
       '/local/orca',

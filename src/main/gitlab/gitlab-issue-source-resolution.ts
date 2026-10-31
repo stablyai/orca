@@ -37,6 +37,8 @@ async function getIssueProjectRefWithSignature(
     connectionId,
     localGitOptions
   )
+  // Observe cancellation even when upstream wins and origin is never awaited.
+  void originPromise.catch(() => {})
   if (await shouldProbeGitRemote(repoPath, 'upstream', connectionId, localGitOptions)) {
     const upstream = await getProjectRefForRemoteWithSignature(
       initialSignature,

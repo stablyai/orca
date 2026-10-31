@@ -13,6 +13,7 @@ import {
   isGitHubUserAttachmentVideoLink
 } from './comment-markdown-github-attachment-media'
 import { ExpandableMarkdownImage } from './MarkdownImageLightbox'
+import { MarkdownSizedImage } from './markdown-image-size'
 import { MarkdownGitHubCallout } from '@/components/markdown-github-callout'
 import { readGitHubCalloutKind } from '@/lib/remark-github-callouts'
 
@@ -228,6 +229,7 @@ export function createCompactCommentMarkdownComponents(
   } satisfies Components
 }
 
+/** Preserve sanitized image dimensions in document previews and lightboxes. */
 export function createDocumentCommentMarkdownComponents(
   onLinkClick?: CommentMarkdownLinkClickHandler,
   renderCodeBlock?: DocumentCodeBlockRenderer
@@ -293,7 +295,7 @@ export function createDocumentCommentMarkdownComponents(
         </blockquote>
       )
     },
-    img: ({ alt, src }) => {
+    img: ({ alt, src, width, height }) => {
       if (isGitHubUserAttachmentUrl(src)) {
         // Private attachments need GitHub session cookies; top-level links reach authenticated tabs when inline loads fail.
         return <GitHubUserAttachmentImage src={src} alt={alt} />
@@ -309,8 +311,10 @@ export function createDocumentCommentMarkdownComponents(
           'cursor-pointer'
         ].join(' ')
         return (
-          <img
+          <MarkdownSizedImage
             src={src}
+            width={width}
+            height={height}
             alt={alt ?? ''}
             className={imageClassName}
             onClick={(e) => handleMarkdownImageClick(e, src, onLinkClick)}
@@ -321,6 +325,8 @@ export function createDocumentCommentMarkdownComponents(
         <ExpandableMarkdownImage
           src={src}
           alt={alt}
+          width={width}
+          height={height}
           className="max-h-96 max-w-full rounded-md object-contain outline outline-1 outline-black/10 dark:outline-white/10"
         />
       )

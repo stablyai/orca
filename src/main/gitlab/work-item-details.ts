@@ -4,6 +4,7 @@ import type {
   GitLabWorkItemDetails
 } from '../../shared/gitlab-types'
 import type { IssueSourcePreference } from '../../shared/repo-types'
+import { loadGitLabImages } from './attachment-images'
 import { mapIssueToWorkItem, mapMRToWorkItem } from './mappers'
 import { mapGitLabUser, type GitLabRawUser } from './gitlab-assignable-user-mapping'
 import { encodedProject } from './project-path-encoding'
@@ -22,6 +23,13 @@ import {
   type LocalGitExecOptions,
   type ProjectRef
 } from './gl-utils'
+
+export type GitLabDetailPreviewOptions = {
+  includeReviewDetails?: boolean
+  includeImages?: boolean
+  maxReplyBytes?: number
+  signal?: AbortSignal
+}
 
 type GitLabRawIssue = Parameters<typeof mapIssueToWorkItem>[0] & {
   description?: string | null
@@ -45,29 +53,64 @@ export async function getWorkItemDetails(
   connectionId?: string | null,
   projectRefOverride?: ProjectRef | null,
   localGitOptions: LocalGitExecOptions = {},
-  options: { includeReviewDetails?: boolean } = {}
+  previewOptions: GitLabDetailPreviewOptions = {}
 ): Promise<GitLabWorkItemDetails | null> {
   // Retain the list row's selected project to avoid same-number fork/upstream collisions.
+  previewOptions.signal?.throwIfAborted()
+  const executionOptions = previewOptions.signal
+    ? { ...localGitOptions, signal: previewOptions.signal }
+    : localGitOptions
   const projectRef =
     projectRefOverride ??
     (
       await resolveIssueSource(
         repoPath,
         preference,
-        await getGlabKnownHosts(connectionId, localGitOptions),
+        await getGlabKnownHosts(connectionId, executionOptions),
         connectionId,
-        localGitOptions
+        executionOptions
       )
     ).source
   if (!projectRef) {
     return null
   }
-  await acquire()
+  previewOptions.signal?.throwIfAborted()
+  await acquire(undefined, previewOptions.signal)
   try {
-    if (type === 'issue') {
-      return await fetchIssueDetails(repoPath, projectRef, iid, connectionId, localGitOptions)
+    const details =
+      type === 'issue'
+        ? await fetchIssueDetails(repoPath, projectRef, iid, connectionId, executionOptions)
+        : await fetchMRDetails(
+            repoPath,
+            projectRef,
+            iid,
+            connectionId,
+            executionOptions,
+            previewOptions
+          )
+    if (!details || !previewOptions.includeImages) {
+      return details
     }
-    return await fetchMRDetails(repoPath, projectRef, iid, connectionId, localGitOptions, options)
+    const imageBudget =
+      previewOptions.maxReplyBytes === undefined
+        ? undefined
+        : Math.max(
+            0,
+            previewOptions.maxReplyBytes -
+              Buffer.byteLength(JSON.stringify({ ...details, imageSources: {} }))
+          )
+    const imageSources = await loadGitLabImages(
+      [details.body, ...details.comments.map((comment) => comment.body)],
+      repoPath,
+      projectRef,
+      connectionId,
+      executionOptions,
+      imageBudget
+    ).catch((error) => {
+      console.warn('[gitlab] Attachment previews unavailable:', error)
+      return {}
+    })
+    return { ...details, imageSources }
   } catch {
     return null
   } finally {

@@ -100,6 +100,24 @@ describe('native chat math', () => {
     view.unmount()
   })
 
+  it('preserves math and authenticated GitLab image dimensions in the same document', () => {
+    const src = '/uploads/0123456789abcdef0123456789abcdef/screen.png'
+    const data = 'data:image/png;base64,abc123'
+    const node = document.createElement('div')
+    node.innerHTML = renderToStaticMarkup(
+      <CommentMarkdown
+        content={`$x^2$\n\n![screen](${src}){width=258 height=118}`}
+        math
+        variant="document"
+        gitlabImageSources={{ [src]: data }}
+      />
+    )
+    expect(annotations(node)).toContain('x^2')
+    expect(node.querySelector('img')?.getAttribute('src')).toBe(data)
+    expect(node.querySelector('img')?.getAttribute('width')).toBe('258')
+    expect(node.querySelector('img')?.getAttribute('height')).toBe('118')
+  })
+
   it('centers standalone raw double dollars while keeping prose and converted variables inline', () => {
     const source = String.raw`The proxy is:
 $$V\approx\frac{a}{b}$$

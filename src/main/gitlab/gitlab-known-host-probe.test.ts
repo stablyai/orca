@@ -285,3 +285,55 @@ describe('getGlabKnownHosts', () => {
     expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
   })
 })
+
+it('cancels a cold auth probe without aborting a shared reader or caching failure', async () => {
+  _resetKnownHostsCache()
+  glabExecFileAsyncMock.mockReset()
+  let completeShared: (value: { stdout: string; stderr: string }) => void = () => {}
+  glabExecFileAsyncMock.mockImplementation((_args, options: { signal?: AbortSignal }) => {
+    const signal = options.signal
+    if (!signal) {
+      return new Promise((resolve) => {
+        completeShared = resolve
+      })
+    }
+    return new Promise((_resolve, reject) => {
+      signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+    })
+  })
+  const shared = getGlabKnownHosts()
+  const controller = new AbortController()
+  const abandoned = getGlabKnownHosts(undefined, { signal: controller.signal })
+  const rejected = expect(abandoned).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await rejected
+  expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+  completeShared({ stdout: '✓ Logged in to gitlab.example.com as user', stderr: '' })
+  expect(await shared).toContain('gitlab.example.com')
+  expect(await getGlabKnownHosts()).toContain('gitlab.example.com')
+  expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+})
+
+it('does not back off a fresh auth probe after cancelling the previous reader', async () => {
+  _resetKnownHostsCache()
+  glabExecFileAsyncMock.mockReset()
+  glabExecFileAsyncMock
+    .mockImplementationOnce((_args, options: { signal?: AbortSignal }) => {
+      const signal = options.signal
+      if (!signal) {
+        throw new Error('Missing discovery cancellation')
+      }
+      return new Promise((_resolve, reject) => {
+        signal.addEventListener('abort', () => reject(signal.reason), { once: true })
+      })
+    })
+    .mockResolvedValue({ stdout: '✓ Logged in to gitlab.recovered.example as user', stderr: '' })
+  const controller = new AbortController()
+  const abandoned = getGlabKnownHosts(undefined, { signal: controller.signal })
+  const rejected = expect(abandoned).rejects.toMatchObject({ name: 'AbortError' })
+  controller.abort()
+  await rejected
+
+  expect(await getGlabKnownHosts()).toContain('gitlab.recovered.example')
+  expect(glabExecFileAsyncMock).toHaveBeenCalledTimes(2)
+})
