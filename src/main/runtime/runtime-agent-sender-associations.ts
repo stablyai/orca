@@ -37,13 +37,15 @@ export class RuntimeAgentSenderAssociations {
   private principals: AgentSenderPrincipal[] = []
   private historyReads = 0
   private chatReads = 0
-  private readonly work = { lineageReads: 0, chatRecords: 0 }
+  private readonly work = { lineageReads: 0, chatRecords: 0, leafVisits: 0, ptyVisits: 0 }
   workForTest() {
     return {
       historyReads: this.historyReads,
       chatReads: this.chatReads,
       lineageReads: this.work.lineageReads,
-      chatRecords: this.work.chatRecords
+      chatRecords: this.work.chatRecords,
+      leafVisits: this.work.leafVisits,
+      ptyVisits: this.work.ptyVisits
     }
   }
   /** The process each handle was first seen running; a respawn that kept the handle is not it. */
@@ -78,7 +80,18 @@ export class RuntimeAgentSenderAssociations {
 
   /** The scope a client frame carries; remembered so a refresh republishes only changed worktrees. */
   buildForFrame(worktreeId: string): AgentSenderPublication {
-    const scope = this.build(worktreeId)
+    this.build()
+    return this.framedScope(worktreeId)
+  }
+
+  /** One refresh for a synchronous pass that frames many worktrees: each reads that one result. */
+  buildForFramePass(): (worktreeId: string) => AgentSenderPublication {
+    this.build()
+    return (worktreeId) => this.framedScope(worktreeId)
+  }
+
+  private framedScope(worktreeId: string): AgentSenderPublication {
+    const scope = this.publisher.scope(worktreeId)
     this.framed.set(worktreeId, scope)
     return scope
   }
@@ -115,6 +128,7 @@ export class RuntimeAgentSenderAssociations {
       })
     }
     for (const leaf of this.deps.getLeaves()) {
+      this.work.leafVisits++
       if (leaf.ptyId) {
         terminal(
           this.deps.issueLeafHandle(leaf),
@@ -125,6 +139,7 @@ export class RuntimeAgentSenderAssociations {
       }
     }
     for (const pty of ptys.values()) {
+      this.work.ptyVisits++
       const paneKey = this.deps.paneOf(pty).paneKey
       if (paneKey && !panes.has(paneKey)) {
         terminal(this.deps.issuePtyHandle(pty), paneKey, pty.worktreeId, pty.ptyId)

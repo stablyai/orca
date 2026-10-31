@@ -58,8 +58,9 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
     if (this.mobileSessionTabListeners.size === 0) {
       return
     }
-    for (const snapshot of this.mobileSessionTabsByWorktree.values()) {
-      const result = this.toMobileSessionTabsFrame(snapshot)
+    for (const result of this.toMobileSessionTabsFrames(
+      this.mobileSessionTabsByWorktree.values()
+    )) {
       const changeSequence = ++this.mobileSessionTabsChangeSequence
       for (const subscription of this.mobileSessionTabListeners) {
         subscription.listener(
@@ -78,6 +79,17 @@ export abstract class OrcaRuntimeWithScheduleMobileSessionTabsChanged extends Or
       ...this.toMobileSessionTabsResult(snapshot),
       agentSenderAssociations: this.agentProjections.senders.buildForFrame(snapshot.worktree)
     }
+  }
+
+  /** Frames for many worktrees in one pass, from one sender refresh rather than one per frame. */
+  protected toMobileSessionTabsFrames(
+    snapshots: Iterable<RuntimeMobileSessionTabsSnapshot>
+  ): RuntimeMobileSessionTabsResult[] {
+    const senderScope = this.agentProjections.senders.buildForFramePass()
+    return [...snapshots].map((snapshot) => ({
+      ...this.toMobileSessionTabsResult(snapshot),
+      agentSenderAssociations: senderScope(snapshot.worktree)
+    }))
   }
 
   protected getMobileSessionTabsForWorktree(

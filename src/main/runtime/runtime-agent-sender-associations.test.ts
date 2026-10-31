@@ -43,6 +43,11 @@ const leaf = (id: string) =>
   `${(Number(id.replace('tab-', '')) + 1).toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
 const pane = (id: string) => `${id}:${leaf(id)}`
 const handle = (i: number) => `term_tab-${i}`
+/** History, chat and lineage reads; the live-terminal walk is counted by its own pass test. */
+const identityReads = (h: { projection: { workForTest(): Record<string, number> } }) => {
+  const { leafVisits: _leaves, ptyVisits: _ptys, ...reads } = h.projection.workForTest()
+  return reads
+}
 function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   const db = new OrchestrationDb(':memory:')
   const run = db.createRun({
@@ -318,7 +323,7 @@ it.each([100, 1000])(
     const first = h.projection.build()
     const other = h.projection.buildForFrame('other')
     expect(first.associations.some((r) => r.identity === `dispatch:${chain[0].id}`)).toBe(true)
-    const settled = h.projection.workForTest()
+    const settled = identityReads(h)
     const sent = h.db.insertMessage({
       from: handle(0),
       to: 'recipient',
@@ -331,14 +336,14 @@ it.each([100, 1000])(
     h.leaves[0].lastOutputAt = 100
     expect(h.projection.build()).toBe(first)
     expect(h.projection.build('other')).toBe(other)
-    expect(h.projection.workForTest()).toEqual(settled)
+    expect(identityReads(h)).toEqual(settled)
     expect(h.projection.changedScopes(['other', 'workspace'])).toEqual([])
     // Settling a worker is an identity fact: it rebuilds once.
     h.db.db
       .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
       .run(chain[0].id)
     h.projection.build()
-    expect(h.projection.workForTest().historyReads).toBe(settled.historyReads + 1)
+    expect(identityReads(h).historyReads).toBe(settled.historyReads + 1)
   }
 )
 
@@ -351,19 +356,19 @@ it.each([100, 1000])(
     expect(
       first.associations.filter((r) => r.identity.startsWith('orca_session_id:')).length
     ).toBeGreaterThanOrEqual(n)
-    const settled = h.projection.workForTest()
+    const settled = identityReads(h)
     // A record write that leaves its location, /clear successor and tab alone, as lease
     // renewals and receipts do, rebuilds nothing.
     for (let i = 0; i < 5; i++) {
       await store.setConversationName(`chat-0000${i}`, `renamed ${i}`)
       expect(h.projection.build()).toBe(first)
     }
-    expect(h.projection.workForTest()).toEqual(settled)
+    expect(identityReads(h)).toEqual(settled)
     await store.setSessionTabVisibility('chat-00000', false)
     const closed = h.projection.build()
     expect(closed.associations.some((r) => r.identity === 'orca_session_id:chat-00000')).toBe(false)
     // One rebuild, which reads each open chat once (none here has a /clear predecessor).
-    expect(h.projection.workForTest()).toEqual({
+    expect(identityReads(h)).toEqual({
       ...settled,
       chatReads: settled.chatReads + 1,
       chatRecords: settled.chatRecords + store.listVisibleSessionIds().length
@@ -396,7 +401,7 @@ it('keeps the last good publication when a read fails and retries on the next id
   h.worker(1)
   expect(h.projection.build()).toBe(good)
   expect(h.projection.build()).toBe(good)
-  expect(h.projection.workForTest().historyReads).toBe(2)
+  expect(identityReads(h).historyReads).toBe(2)
   vi.mocked(h.db.db.prepare).mockRestore()
   const third = h.worker(2)
   expect(h.located(`dispatch:${third.id}`)).toBe(pane('tab-2'))
