@@ -4,23 +4,18 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   closeTestJournalHostDatabases,
-  insertTestJournalRow,
   openTestJournalHostDatabase,
   publishTestJournalEpoch
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
-import { applyJournalRow, createJournalReducerState } from './journal-reducer'
 import type { JournalRow } from './journal-row-schema'
 import { restoreJournal } from './journal-open'
 import { journalOutcomeSource } from './journal-outcome-format'
-import { JournalOutcomeConversion } from './journal-outcome-conversion'
+import { publishJournalOutcomeEpoch } from './journal-outcome-write'
+import { JournalOutcomeRebuild } from './journal-outcome-rebuild'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import { JournalMaintenanceRunner } from './journal-state-backfill'
-import {
-  activeJournalGenerations,
-  ownJournalMaintenance,
-  requestJournalMaintenance
-} from './journal-maintenance'
+import { JOURNAL_LAGGING_CHAT_SQL, JournalMaintenanceRunner } from './journal-state-backfill'
+import { ownJournalMaintenance, requestJournalMaintenance } from './journal-maintenance'
 import { clearJournalSavedState } from './journal-saved-state'
 import { expectProjectionMatches, projectionWriter } from './journal-projection-test-support'
 
@@ -84,20 +79,22 @@ function runner(between?: (rests: number) => void | Promise<void>, now?: () => n
   return created
 }
 
-function seedLegacy(sessionId: string, items: number, chatEpoch = epoch) {
-  const state = createJournalReducerState(sessionId, chatEpoch)
-  database.transaction((db) => {
-    publishTestJournalEpoch(db, sessionId, chatEpoch)
-    for (let seq = 1; seq <= items + 1; seq++) {
-      const row = seq === 1 ? epochRow(chatEpoch) : item(seq, chatEpoch)
-      insertTestJournalRow(db, sessionId, row)
-      applyJournalRow(state, row)
-    }
-  })
-  return state
+/** An outcome-only chat whose disposable cache is gone, so the runner owes it a rebuild. */
+function seedLagging(sessionId: string, items: number, chatEpoch = epoch) {
+  return database
+    .transaction((db) => {
+      publishTestJournalEpoch(db, sessionId, chatEpoch)
+      const rows = Array.from({ length: items + 1 }, (_, index) =>
+        index === 0 ? epochRow(chatEpoch) : item(index + 1, chatEpoch)
+      )
+      const publication = publishJournalOutcomeEpoch(db, sessionId, chatEpoch, rows)
+      clearJournalSavedState(db, sessionId)
+      return publication
+    })
+    .adopt()
 }
 
-function converted(sessionId: string, chatEpoch = epoch): boolean {
+function cached(sessionId: string, chatEpoch = epoch): boolean {
   const source = journalOutcomeSource(database.db, sessionId, chatEpoch)
   const loaded = restoreJournal(database.db, sessionId)
   return source !== null && loaded?.projectionThrough === source.through
@@ -106,37 +103,44 @@ function converted(sessionId: string, chatEpoch = epoch): boolean {
 const count = (sql: string, ...args: (string | number)[]) =>
   database.db.prepare(`SELECT COUNT(*) AS n FROM ${sql}`).get(...args)?.n
 
+function insertRetiredGeneration(db: JournalHostDatabase['db'], keys: number): void {
+  const retired = Number(
+    db
+      .prepare('INSERT INTO journal_outcome_generations (session_id, epoch) VALUES (?, ?)')
+      .run('gone', 'gone-epoch').lastInsertRowid
+  )
+  const insert = db.prepare(`INSERT INTO journal_outcomes
+    (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
+    VALUES (?, 1, 'aliases', ?, 1, 's0000000000000001:0000000000000000', ?, 0)`)
+  for (let index = 0; index < keys; index++) {
+    insert.run(retired, JSON.stringify(`k${index}`), JSON.stringify([`k${index}`, 'v']))
+  }
+}
+
 // Mutation killed: skipping the two startup sweeps in run().
 it('sweeps retired generations and orphaned caches before serving chats', async () => {
-  seedLegacy('kept', 3)
+  seedLagging('kept', 3)
   await runner().pass()
-  expect(converted('kept')).toBe(true)
+  expect(cached('kept')).toBe(true)
   database.transaction((db) => {
-    const retired = db
-      .prepare('INSERT INTO journal_outcome_attempts (session_id, epoch) VALUES (?, ?)')
-      .run('kept', epoch).lastInsertRowid
-    db.prepare(`INSERT INTO journal_outcomes
-      (generation, seq, field, entry_key, ordinal, value_json, deleted)
-      VALUES (?, 1, '$', '"epoch"', 's0000000000000001:0000000000000000', '"epoch-1"', 0)`).run(
-      Number(retired)
-    )
+    insertRetiredGeneration(db, 1)
     db.prepare(`INSERT INTO journal_state (session_id, epoch, generation, through_seq, version,
       state_json) VALUES ('gone', 'gone-epoch', 0, 0, 1, '{}')`).run()
     db.prepare(`INSERT INTO journal_items (session_id, epoch, item_id, ordinal, item_json)
       VALUES ('gone', 'gone-epoch', 'x', 's1', '{}')`).run()
   })
   await runner().pass()
-  expect(count('journal_outcome_attempts')).toBe(1)
+  expect(count('journal_outcome_generations')).toBe(1)
   expect(count('journal_state WHERE session_id = ?', 'gone')).toBe(0)
   expect(count('journal_items WHERE session_id = ?', 'gone')).toBe(0)
-  expect(converted('kept')).toBe(true)
+  expect(cached('kept')).toBe(true)
 })
 
 // Mutations killed: serving chats concurrently (`void this.serve`), and a skipped chat stopping
 // the runner (`this.stopped = true` where serve skips a busy chat).
-it('converts closed chats one at a time, skipping a busy one while the pass continues', async () => {
+it('rebuilds closed chats one at a time, skipping a busy one while the pass continues', async () => {
   for (const sessionId of ['a', 'b', 'c']) {
-    seedLegacy(sessionId, 70)
+    seedLagging(sessionId, 70)
   }
   const busy = ownJournalMaintenance(database.db, 'b', epoch)
   let live = 0
@@ -165,18 +169,18 @@ it('converts closed chats one at a time, skipping a busy one while the pass cont
   })
   const maintenance = runner()
   await maintenance.pass()
-  await vi.waitFor(() => expect(converted('c')).toBe(true))
-  expect(converted('a')).toBe(true)
-  expect(journalOutcomeSource(database.db, 'b', epoch)).toBeNull()
+  await vi.waitFor(() => expect(cached('c')).toBe(true))
+  expect(cached('a')).toBe(true)
+  expect(cached('b')).toBe(false)
   expect(most).toBe(1)
   busy?.release()
   await maintenance.pass()
-  expect(converted('b')).toBe(true)
+  expect(cached('b')).toBe(true)
 })
 
-// Mutation killed: conversion reading no rows past the tip it first saw (`this.through < 81`).
-it('converts an open chat that keeps writing, taking each row written between pages', async () => {
-  const rig = projectionWriter(database, seedLegacy('session-1', 80))
+// Mutation killed: the rebuild reading no outcomes past the tip it first saw.
+it('rebuilds an open chat that keeps writing, taking each record written between pages', async () => {
+  const rig = projectionWriter(database, seedLagging('session-1', 80))
   rigs.push(rig)
   await runner(async (rests) => {
     if (rests === 3 || rests === 6) {
@@ -184,7 +188,7 @@ it('converts an open chat that keeps writing, taking each row written between pa
     }
   }).pass()
   expect(rig.state().lastSequence).toBe(83)
-  expect(converted('session-1')).toBe(true)
+  expect(cached('session-1')).toBe(true)
   expectProjectionMatches(database, rig.state())
   await rig.writer.enqueue((seq, ts) => ({ ...item(seq), ts }))
   expectProjectionMatches(database, rig.state())
@@ -192,73 +196,106 @@ it('converts an open chat that keeps writing, taking each row written between pa
 
 // Mutation killed: rest() continuing after stop (`return true` instead of `this.current() !== null`).
 it('stops between pages, releasing the chat, and a later runner finishes it', async () => {
-  seedLegacy('session-1', 80)
+  seedLagging('session-1', 80)
   const maintenance = runner((rests) => {
     if (rests === 3) {
       maintenance.stop()
     }
   })
   await maintenance.pass()
-  expect(journalOutcomeSource(database.db, 'session-1', epoch)).toBeNull()
-  expect(activeJournalGenerations.size).toBe(0)
+  expect(cached('session-1')).toBe(false)
   ownJournalMaintenance(database.db, 'session-1', epoch)?.release()
   await runner().pass()
-  expect(converted('session-1')).toBe(true)
+  expect(cached('session-1')).toBe(true)
 })
 
 // Mutation killed: dropping the catch-up's epoch check before each page.
-it('abandons a conversion whose epoch is replaced mid-way, then converts the new epoch', async () => {
-  seedLegacy('session-1', 80)
+it('abandons a rebuild whose epoch is replaced mid-way, then rebuilds the new epoch', async () => {
+  seedLagging('session-1', 80)
   const first = runner((rests) => {
     if (rests === 3) {
-      database.transaction((db) => {
-        publishTestJournalEpoch(db, 'session-1', 'epoch-2')
-        insertTestJournalRow(db, 'session-1', epochRow('epoch-2'))
-        insertTestJournalRow(db, 'session-1', item(2, 'epoch-2'))
-      })
+      seedLagging('session-1', 1, 'epoch-2')
     }
   })
   await first.pass()
   expect(first.parked.size).toBe(0)
   expect(count('journal_outcome_epochs WHERE epoch = ?', epoch)).toBe(0)
   await runner().pass()
-  expect(converted('session-1', 'epoch-2')).toBe(true)
-  expect(count('journal_outcome_attempts')).toBe(1)
+  expect(cached('session-1', 'epoch-2')).toBe(true)
+  expect(count('journal_outcome_generations')).toBe(1)
 })
 
-// Mutations killed: removing the parked check in serve(), and keying the park by chat alone so
-// a new row cannot re-arm it.
-it('parks content it cannot convert until the chat writes again, then delivers it', async () => {
-  seedLegacy('session-1', 40)
-  const page = vi.spyOn(JournalOutcomeConversion.prototype, 'page').mockReturnValueOnce('parked')
+// Records are only ever added, so a deterministic failure is a fact of its epoch's records: the
+// park is keyed by them, never by the newest sequence. Mutations killed: removing the parked check in
+// serve(), and keying the park by the chat's newest sequence, which every write would re-arm.
+it('parks a rebuild its records cannot pass while the chat keeps writing, serving other chats, until a new epoch', async () => {
+  const rig = projectionWriter(database, seedLagging('session-1', 40))
+  rigs.push(rig)
+  seedLagging('other', 5)
+  database.db
+    .prepare(`INSERT INTO journal_outcomes
+      (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
+      SELECT generation, 2, 'aliases', '"k"', 1, 's0000000000000002:0000000000000099', '["k",5]', 0
+      FROM journal_outcome_epochs WHERE session_id = 'session-1'`)
+    .run()
+  const page = vi.spyOn(JournalOutcomeRebuild.prototype, 'page')
   const maintenance = runner()
   await maintenance.pass()
   expect([...maintenance.parked.keys()]).toEqual(['session-1'])
-  const attempts = page.mock.calls.length
+  expect(cached('other')).toBe(true)
+  const attempts = () =>
+    page.mock.instances.filter((rebuild) => rebuild.sessionId === 'session-1').length
+  expect(attempts()).toBe(1)
+  for (let write = 0; write < 5; write++) {
+    // Each write finds the cache behind and asks the runner again.
+    await rig.writer.enqueue((seq, ts) => ({ ...item(seq), ts }))
+    maintenance.request('session-1')
+    await maintenance.pass(false)
+  }
   await maintenance.pass()
-  expect(page.mock.calls.length).toBe(attempts)
-  insertTestJournalRow(database.db, 'session-1', item(42))
-  await maintenance.pass()
-  expect(page.mock.calls.length).toBeGreaterThan(attempts)
-  expect(converted('session-1')).toBe(true)
-  expect(restoreJournal(database.db, 'session-1')?.state.items.has('item-42')).toBe(true)
+  expect(attempts()).toBe(1)
+  seedLagging('session-1', 3, 'epoch-2')
+  maintenance.request('session-1')
+  await maintenance.pass(false)
+  expect(cached('session-1', 'epoch-2')).toBe(true)
 })
 
 // Mutation killed: classifying a storage error as content (always parking).
 it('backs off a storage failure instead of parking it, and retries once it is due', async () => {
-  seedLegacy('session-1', 10)
+  seedLagging('session-1', 10)
   let clock = 0
-  vi.spyOn(JournalOutcomeConversion.prototype, 'page').mockImplementationOnce(() => {
+  vi.spyOn(JournalOutcomeRebuild.prototype, 'page').mockImplementationOnce(() => {
     throw Object.assign(new Error('disk I/O error'), { code: 'ERR_SQLITE_ERROR', errcode: 10 })
   })
   const maintenance = runner(undefined, () => clock)
   await maintenance.pass()
   expect(maintenance.parked.size).toBe(0)
   await maintenance.pass()
-  expect(journalOutcomeSource(database.db, 'session-1', epoch)).toBeNull()
+  expect(cached('session-1')).toBe(false)
   clock += 4_000
   await maintenance.pass()
-  expect(converted('session-1')).toBe(true)
+  expect(cached('session-1')).toBe(true)
+})
+
+// The requested chat's lookup reads its own row by key; the whole-database list is for the periodic
+// pass only. The plan is the same at N and 10N chats.
+it('looks a requested chat up by its key, not by scanning chats, at N and 10N', () => {
+  const plan = () =>
+    database.db
+      .prepare(`EXPLAIN QUERY PLAN ${JOURNAL_LAGGING_CHAT_SQL}`)
+      .all(1, 'chat-0')
+      .map((row) => String(row.detail))
+  for (const chats of [10, 100]) {
+    database.transaction((db) => {
+      for (let index = 0; index < chats; index++) {
+        publishTestJournalEpoch(db, `chat-${chats}-${index}`, epoch)
+        publishJournalOutcomeEpoch(db, `chat-${chats}-${index}`, epoch, [epochRow()])
+      }
+    })
+    const steps = plan()
+    expect(steps.some((step) => /^SEARCH e USING INDEX .*\(session_id=\?\)/.test(step))).toBe(true)
+    expect(steps.filter((step) => step.startsWith('SCAN'))).toEqual([])
+  }
 })
 
 /** The production runner on fake timers: started, woken by requests, never driven by hand. */
@@ -276,52 +313,40 @@ const sqliteFailure = () =>
 
 // Mutation killed: request() scheduling only when no timer is pending (the periodic one always is).
 it('serves a request within its delay after the first pass, not at the next periodic pass', async () => {
-  seedLegacy('session-1', 10)
+  seedLagging('session-1', 10)
   started()
   await vi.advanceTimersByTimeAsync(60_000)
-  expect(converted('session-1')).toBe(true)
+  expect(cached('session-1')).toBe(true)
   database.transaction((db) => clearJournalSavedState(db, 'session-1'))
-  expect(converted('session-1')).toBe(false)
+  expect(cached('session-1')).toBe(false)
   // A write that finds the cache behind asks the database's runner.
   requestJournalMaintenance(database.db, 'session-1')
   await vi.advanceTimersByTimeAsync(999)
-  expect(converted('session-1')).toBe(false)
+  expect(cached('session-1')).toBe(false)
   await vi.advanceTimersByTimeAsync(1)
-  expect(converted('session-1')).toBe(true)
+  expect(cached('session-1')).toBe(true)
 })
 
 // Mutation killed: the end-of-pass periodic reschedule replacing the sooner retry timer.
 it('retries a storage failure in the periodic pass at its backoff, not at the next pass', async () => {
-  seedLegacy('session-1', 10)
-  vi.spyOn(JournalOutcomeConversion.prototype, 'page').mockImplementationOnce(() => {
+  seedLagging('session-1', 10)
+  vi.spyOn(JournalOutcomeRebuild.prototype, 'page').mockImplementationOnce(() => {
     throw sqliteFailure()
   })
   const maintenance = started()
   await vi.advanceTimersByTimeAsync(60_000)
   expect(maintenance.parked.size).toBe(0)
-  expect(journalOutcomeSource(database.db, 'session-1', epoch)).toBeNull()
+  expect(cached('session-1')).toBe(false)
   await vi.advanceTimersByTimeAsync(3_999)
-  expect(journalOutcomeSource(database.db, 'session-1', epoch)).toBeNull()
+  expect(cached('session-1')).toBe(false)
   await vi.advanceTimersByTimeAsync(1)
-  expect(converted('session-1')).toBe(true)
+  expect(cached('session-1')).toBe(true)
 })
 
 // Mutation killed: serve() ending a chat's turn when its load swept a retired page instead.
 it('keeps serving a chat whose load first sweeps retired generations', async () => {
-  seedLegacy('session-1', 10)
-  database.transaction((db) => {
-    const retired = Number(
-      db
-        .prepare('INSERT INTO journal_outcome_attempts (session_id, epoch) VALUES (?, ?)')
-        .run('gone', 'gone-epoch').lastInsertRowid
-    )
-    const insert = db.prepare(`INSERT INTO journal_outcomes
-      (generation, seq, field, entry_key, ordinal, value_json, deleted)
-      VALUES (?, 1, 'aliases', ?, 's0000000000000001:0000000000000000', '["k","v"]', 0)`)
-    for (let index = 0; index < 100; index++) {
-      insert.run(retired, JSON.stringify(`k${index}`))
-    }
-  })
+  seedLagging('session-1', 10)
+  database.transaction((db) => insertRetiredGeneration(db, 100))
   started()
   // A request runs no startup sweep, so the chat's own load meets the retired pages.
   requestJournalMaintenance(database.db, 'session-1')
@@ -331,5 +356,5 @@ it('keeps serving a chat whose load first sweeps retired generations', async () 
       'journal_outcomes WHERE generation NOT IN (SELECT generation FROM journal_outcome_epochs)'
     )
   ).toBe(0)
-  expect(converted('session-1')).toBe(true)
+  expect(cached('session-1')).toBe(true)
 })

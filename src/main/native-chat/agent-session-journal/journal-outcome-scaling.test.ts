@@ -8,20 +8,19 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session-jour
 import type { SqliteStatement } from '../../sqlite/sqlite-statement'
 import {
   closeTestJournalHostDatabases,
-  insertTestJournalRow,
   openTestJournalHostDatabase
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { restoreJournal } from './journal-open'
 import type { JournalRow } from './journal-row-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
-import { JournalOutcomeConversion } from './journal-outcome-conversion'
+import { JournalOutcomeRebuild } from './journal-outcome-rebuild'
 import { sweepJournalOutcomePage } from './journal-outcome-cleanup'
 import { JOURNAL_OUTCOME_PAGE_BYTES, JOURNAL_OUTCOME_PAGE_ROWS } from './journal-outcome-table'
 import { readJournalOutcomeGroups } from './journal-read-row'
 import { applyJournalRow, type JournalReducerState } from './journal-reducer'
 import { isolateJournalTransition } from './journal-reducer-transition'
-import { sweepJournalSavedState } from './journal-saved-state'
+import { clearJournalSavedState, sweepJournalSavedState } from './journal-saved-state'
 import { JournalMaintenanceRunner } from './journal-state-backfill'
 import {
   projectionBase as base,
@@ -30,8 +29,7 @@ import {
   projectionSessionId as sessionId,
   projectionWriter,
   seedOutcomeRows,
-  seedProjectionRows,
-  unpacedCatchUp
+  seedProjectionRows
 } from './journal-projection-test-support'
 
 // N/10N contracts: each counts statements (prepare and exec), rows read and rows and bytes
@@ -285,50 +283,90 @@ it('appends a streamed revision, a Codex plan update and an acceptance with the 
   ])
 })
 
-it('opens a converted chat from its cache without reading an outcome or input row at N and 10N', () => {
+it('opens a new chat from its cache without reading an outcome or input row at N and 10N', () => {
   for (const size of [N, 10 * N]) {
     const { database, rig } = outcomeChat(size, `open-${size}`)
     const watched = watch(database)
     expect(restoreJournal(database.db, sessionId)?.projectionThrough).toBe(rig.state().lastSequence)
     expect(watched.rowsRead('journal_outcomes')).toBe(0)
-    // Only the founding row, which fences the outcome format.
+    // Only the marker row, which the epoch's outcome summary must agree with.
     expect(watched.rowsRead('journal_rows')).toBe(1)
     watched.stop()
   }
 })
 
-it('converts one page and publishes with the same bounded work at N and 10N', async () => {
+/** An existing chat of `size` sends in its input rows, then three writes as outcome records. */
+async function prefixChat(size: number, label: string) {
+  const database = databaseFor(label)
+  const rig = projectionWriter(database, seedProjectionRows(database, historyOf(size)))
+  rigs.push(rig)
+  const watched = watch(database)
+  await rig.writer.enqueue(revision('answer', message('x'.repeat(4_096), 'assistant'), 1))
+  const first = watched.take()
+  await rig.writer.enqueue(revision('answer', message('y'.repeat(4_096), 'assistant'), 2))
+  const streamed = watched.take()
+  await rig.writer.enqueue(revision(providerItemId, message('send'), 1))
+  const accepted = watched.take()
+  watched.stop()
+  return { database, rig, first, streamed, accepted }
+}
+
+it('writes to an existing chat without reading its prefix or keeping a cache, the same at N and 10N', async () => {
+  const small = await prefixChat(N, 'prefix-append-small')
+  const large = await prefixChat(10 * N, 'prefix-append-large')
+  for (const key of ['first', 'streamed', 'accepted'] as const) {
+    expectSameWork(small[key], large[key])
+  }
+  // The first write appends the marker, then the item's record and the three scalars it changed.
+  expect(small.first.writes).toStrictEqual([
+    ['journal_outcomes INSERT', 4],
+    ['journal_rows INSERT', 1]
+  ])
+  expect(small.streamed.writes).toStrictEqual([['journal_outcomes INSERT', 2]])
+  expect(large.rig.state().submissions.get('send')?.dispatchState).toBe('accepted')
+})
+
+it("opens an existing chat reading main's prefix rows and only its records, at N and 10N", async () => {
   const measure = async (size: number) => {
-    const database = databaseFor(`convert-${size}`)
-    seedProjectionRows(database, historyOf(size))
-    const conversion = new JournalOutcomeConversion(database, sessionId, epoch)
+    const { database, rig } = await prefixChat(size, `prefix-open-${size}`)
     const watched = watch(database)
-    expect(conversion.page()).toBe('advanced')
-    const page = watched.take()
-    let step = conversion.page()
-    for (; step === 'advanced'; step = conversion.page()) {
-      /* The rest of the input. */
-    }
-    expect(step).toBe('verify')
-    expect(await conversion.verify(unpacedCatchUp)).toBe(true)
-    watched.take()
-    expect(conversion.page()).toBe('current')
-    const publication = watched.take()
+    const loaded = restoreJournal(database.db, sessionId)
+    const work = watched.take()
     watched.stop()
-    conversion.close()
-    expect(journalOutcomeSource(database.db, sessionId, epoch)?.through).toBe(4 * size + 2)
-    return { page, publication }
+    expect(loaded?.state.lastSequence).toBe(rig.state().lastSequence)
+    return { work, prefix: historyOf(size).length }
   }
   const small = await measure(N)
   const large = await measure(10 * N)
-  // One page of input rows, and the founding row the outcome source reads.
-  expect(small.page.read.journal_rows).toBe(JOURNAL_OUTCOME_PAGE_ROWS + 1)
-  expect(small.page.bytes).toBeLessThan(JOURNAL_OUTCOME_PAGE_BYTES)
-  expectSameWork(small.page, large.page)
-  expectSameWork(small.publication, large.publication)
-  // Publication reads the founding row twice, to fence and to rewrite it, and no history.
-  expect(small.publication.read.journal_rows).toBe(2)
-  expect(small.publication.read.journal_outcomes ?? 0).toBe(0)
+  for (const { work, prefix } of [small, large]) {
+    // The prefix rows main folds, plus the marker: checked against the outcome summary, and met
+    // again on the prefix's last page.
+    expect(work.read.journal_rows).toBe(prefix + 2)
+  }
+  expect(large.work.read.journal_outcomes).toBe(small.work.read.journal_outcomes)
+})
+
+it('rebuilds a cache one bounded page at a time with the same work at N and 10N', () => {
+  const measure = (size: number) => {
+    const { database } = outcomeChat(size, `rebuild-${size}`)
+    database.transaction((db) => clearJournalSavedState(db, sessionId))
+    const source = journalOutcomeSource(database.db, sessionId, epoch)
+    if (!source) {
+      throw new Error('missing outcomes')
+    }
+    const rebuild = new JournalOutcomeRebuild(database, sessionId, epoch, source)
+    expect(rebuild.page()).toBe('advanced')
+    const watched = watch(database)
+    expect(rebuild.page()).toBe('advanced')
+    const work = watched.take()
+    watched.stop()
+    rebuild.close()
+    return work
+  }
+  const small = measure(N)
+  expect(small.read.journal_outcomes).toBe(JOURNAL_OUTCOME_PAGE_ROWS)
+  expect(small.bytes).toBeLessThan(JOURNAL_OUTCOME_PAGE_BYTES)
+  expectSameWork(small, measure(10 * N))
 })
 
 it('runs a background pass with nothing to do without reading history at N and 10N', async () => {
@@ -356,10 +394,10 @@ it('sweeps a retired generation one bounded page per transaction at N and 10N', 
   const measure = (size: number) => {
     const { database } = outcomeChat(size, `sweep-${size}`)
     // A replacement generation retires the published one.
-    database.db.exec(`INSERT INTO journal_outcome_attempts (session_id, epoch)
+    database.db.exec(`INSERT INTO journal_outcome_generations (session_id, epoch)
       VALUES ('${sessionId}', '${epoch}')`)
     database.db.exec(`UPDATE journal_outcome_epochs SET generation =
-      (SELECT MAX(generation) FROM journal_outcome_attempts)`)
+      (SELECT MAX(generation) FROM journal_outcome_generations)`)
     const watched = watch(database)
     expect(sweepJournalOutcomePage(database)).toBe(true)
     const work = watched.take()
@@ -415,48 +453,6 @@ it('sweeps an orphaned cache from its per-chat row with indexed deletes at N and
   const small = measure(N)
   expect(small.writes).toStrictEqual([['journal_items DELETE', 32]])
   expectSameWork(small, measure(10 * N))
-})
-
-it('verifies a conversion again reading only the outcomes written since its last verify at N and 10N', async () => {
-  const measure = async (size: number) => {
-    const database = databaseFor(`verify-${size}`)
-    const rows = historyOf(size)
-    seedProjectionRows(database, rows)
-    const conversion = new JournalOutcomeConversion(database, sessionId, epoch)
-    const until = (wanted: string) => {
-      let step = conversion.page()
-      for (; step === 'advanced'; step = conversion.page()) {
-        /* The rest of the input. */
-      }
-      expect(step).toBe(wanted)
-    }
-    until('verify')
-    expect(await conversion.verify(unpacedCatchUp)).toBe(true)
-    database.transaction((db) => {
-      for (let index = 1; index <= 3; index++) {
-        insertTestJournalRow(
-          db,
-          sessionId,
-          revision(
-            'answer',
-            message(`Answer ${index}`, 'assistant'),
-            index
-          )(rows.length + index, 100_000)
-        )
-      }
-    })
-    until('verify')
-    const watched = watch(database)
-    expect(await conversion.verify(unpacedCatchUp)).toBe(true)
-    const work = watched.take()
-    watched.stop()
-    until('current')
-    conversion.close()
-    return work
-  }
-  const small = await measure(N)
-  expect(small.read.journal_rows ?? 0).toBe(0)
-  expectSameWork(small, await measure(10 * N))
 })
 
 /** Reducer nodes the draft reaches to fold `row` onto `state`, without adopting it. */

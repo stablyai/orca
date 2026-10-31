@@ -13,7 +13,8 @@ import {
   openTestJournalHostDatabase,
   liveTestJournalRows,
   deleteTestJournalRow,
-  seedLegacyTestJournal
+  seedLegacyTestJournal,
+  pinTestJournalInputMode
 } from './journal-host-database-test-support'
 
 export function registerJournalSequenceReplayTests(
@@ -261,6 +262,7 @@ export function registerJournalSequenceReplayTests(
         now: fixture.tick
       })
       const journal = await fixture.open()
+      pinTestJournalInputMode(journal)
       for (let index = 0; index < 4; index += 1) {
         await journal.appendItem(fixture.item(index), fixture.body(`m${index}`), {
           fence: 1,

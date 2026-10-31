@@ -10,10 +10,11 @@ import { fields } from './journal-state-schema'
 import { journalOutcomeSource } from './journal-outcome-format'
 import { decodeJournalOutcome, type JournalOutcome } from './journal-outcome-codec'
 import { publishJournalProjection } from './journal-state-cache-test-support'
-import type { JournalReducerState } from './journal-reducer'
+import { applyJournalRow, type JournalReducerState } from './journal-reducer'
 import { restoreJournal, type JournalLoad } from './journal-open'
 import { serializeJournalRow, type JournalRow } from './journal-row-schema'
 import {
+  insertJournalRow,
   iterateJournalEpochRows,
   publishJournalSessionEpoch,
   readJournalSessionEpoch,
@@ -233,7 +234,7 @@ export function readTestJournalOutcomes(
     return []
   }
   return db
-    .prepare(`SELECT seq, field, entry_key, ordinal, value_json, deleted FROM journal_outcomes
+    .prepare(`SELECT seq, field, entry_key, format, ordinal, value_json, deleted FROM journal_outcomes
     WHERE generation = ? ORDER BY seq, field, entry_key`)
     .all(source.generation)
     .map(decodeJournalOutcome)
@@ -264,7 +265,25 @@ export function readTestQueueChanges(
   })
 }
 
-/** Legacy input fixtures must not race the background format conversion. */
+/** Input fixtures stand for a chat an older build wrote and goes on writing: writes to its input
+ * epoch stay input rows, as that build's writer stored them, so the input reader meets writer-made
+ * rows. An epoch this build founds (rollover, replacement) is written as this build writes it. */
 export function pinTestJournalInputMode(journal: AgentSessionJournal): void {
-  journal['projection'].close()
+  const projection = journal['projection']
+  const prepare = projection.prepare.bind(projection)
+  projection.close()
+  projection.prepare = (db, rows, savedAt) => {
+    const state = journal['state']
+    if (journalOutcomeSource(db, state.sessionId, state.epoch)) {
+      return prepare(db, rows, savedAt)
+    }
+    for (const row of rows) {
+      insertJournalRow(db, state.sessionId, row, savedAt)
+    }
+    return () => {
+      for (const row of rows) {
+        applyJournalRow(state, row, savedAt)
+      }
+    }
+  }
 }

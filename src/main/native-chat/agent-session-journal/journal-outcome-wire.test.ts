@@ -11,15 +11,13 @@ import { AGENT_JOURNAL_THREAD_SCOPE } from '../../../shared/agent-session-journa
 import { readAgentSessionHistory } from '../agent-session-wire/agent-session-history-page'
 import { projectJournalBatch } from '../agent-session-wire/agent-session-journal-batch'
 import { readJournalOutcomeGroups } from './journal-read-row'
-import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import { journalOutcomeSource } from './journal-outcome-format'
 import {
   projectionEpoch as epoch,
   projectionEpochRow,
   projectionSessionId as sessionId,
   projectionBase as base,
-  seedProjectionRows,
-  finishCatchUp
+  seedOutcomeRows
 } from './journal-projection-test-support'
 import type { JournalRow } from './journal-row-schema'
 
@@ -53,22 +51,23 @@ it('keeps sparse sequence groups whole across catch-up, lookahead, history limit
       body: { kind: 'status', text: `revision ${seq}` }
     })
   }
-  seedProjectionRows(database, rows)
+  seedOutcomeRows(database, rows)
   const journal = await journals.open({ identity, stateDirectory: root })
   const before = { epoch, sequence: 1 }
   const old = journal.readSince(before)
   if (!old.ok) {
-    throw new Error('legacy read failed')
+    throw new Error('dense read failed')
   }
   const expected = projectJournalBatch({
     rows: old.rows,
     snapshot: journal.snapshot(),
     afterSequence: 1
   })
-  await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, epoch))
+  // Retention keeps a key's first and latest records, leaving whole sequences without any.
+  database.db.prepare('DELETE FROM journal_outcomes WHERE seq BETWEEN 3 AND 29').run()
   const source = journalOutcomeSource(database.db, sessionId, epoch)
   if (!source) {
-    throw new Error('conversion did not publish')
+    throw new Error('missing outcome records')
   }
   const sparse = readJournalOutcomeGroups(database.db, epoch, source, 1)
   expect(sparse.length).toBeLessThan(old.rows.length)

@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -13,7 +14,12 @@ import {
 import type { JournalHostDatabase } from './journal-host-database'
 import { restoreJournal } from './journal-open'
 import type { JournalReducerState } from './journal-reducer'
-import { OUTCOME_FORMAT_1_COLLECTIONS, outcomeFormat1Scalars } from './journal-outcome-format-1'
+import {
+  OUTCOME_FORMAT_1_COLLECTIONS,
+  outcomeFormat1Scalars,
+  outcomeFormat1Stored,
+  outcomeFormat1StoredScalars
+} from './journal-outcome-format-1'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import { finishCatchUp } from './journal-projection-test-support'
 import { JOURNAL_STATE_CODEC_VERSION } from './journal-state-codec'
@@ -24,9 +30,9 @@ const fixture = z
     sessionId: z.string(),
     epoch: z.string(),
     through: z.number(),
-    founding: z.string(),
+    marker: z.string(),
     outcomes: z.array(
-      z.tuple([z.number(), z.string(), z.string(), z.string(), z.string(), z.number()])
+      z.tuple([z.number(), z.string(), z.string(), z.number(), z.string(), z.string(), z.number()])
     ),
     expected: z.record(z.string(), z.unknown())
   })
@@ -45,13 +51,19 @@ beforeEach(async () => {
   database = openTestJournalHostDatabase(root)
   database.transaction((db) => {
     publishTestJournalEpoch(db, sessionId, epoch)
-    insertTestJournalRowJson(db, sessionId, 1, fixture.founding)
-    db.prepare(`INSERT INTO journal_outcome_attempts (generation, session_id, epoch)
+    insertTestJournalRowJson(db, sessionId, 1, fixture.marker)
+    db.prepare(`INSERT INTO journal_outcome_generations (generation, session_id, epoch)
       VALUES (?, ?, ?)`).run(GENERATION, sessionId, epoch)
-    db.prepare(`INSERT INTO journal_outcome_epochs (session_id, epoch, generation, format, through_seq)
-      VALUES (?, ?, ?, 1, ?)`).run(sessionId, epoch, GENERATION, fixture.through)
+    db.prepare(`INSERT INTO journal_outcome_epochs
+      (session_id, epoch, generation, format, through_seq, prefix_seq) VALUES (?, ?, ?, 1, ?, 0)`).run(
+      sessionId,
+      epoch,
+      GENERATION,
+      fixture.through
+    )
     const insert = db.prepare(`INSERT INTO journal_outcomes
-      (generation, seq, field, entry_key, ordinal, value_json, deleted) VALUES (?, ?, ?, ?, ?, ?, ?)`)
+      (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
     for (const outcome of fixture.outcomes) {
       insert.run(GENERATION, ...outcome)
     }
@@ -127,7 +139,7 @@ it('reads the checked-in format-1 outcomes into the same chat, every field and s
   expect(
     new Set(stored.filter(([, field]) => field === '$').map(([, , key]) => JSON.parse(key)))
   ).toEqual(new Set(scalars))
-  expect(stored.some(([, , , , , deleted]) => deleted === 1)).toBe(true)
+  expect(stored.some(([, , , , , , deleted]) => deleted === 1)).toBe(true)
 
   const state = restored()
   expect(plain(state)).toEqual(fixture.expected)
@@ -154,14 +166,46 @@ it('rebuilds only the disposable cache when its codec changes, leaving the outco
   expect(outcomes()).toEqual(before)
 })
 
-it('refuses a field format 1 does not define as written by a newer Orca', () => {
+function insertOutcome(field: string, key: string, json: string, format = 1): void {
   database.db
     .prepare(`INSERT INTO journal_outcomes
-      (generation, seq, field, entry_key, ordinal, value_json, deleted)
-      VALUES (?, ?, 'futureField', '"k"', 's0000000000000021:0000000000000099', '["k",1]', 0)`)
-    .run(GENERATION, fixture.through)
-  expect(restoreJournal(database.db, sessionId)).toMatchObject({
-    newer: { sequence: 1 },
-    damage: null
-  })
+      (generation, seq, field, entry_key, format, ordinal, value_json, deleted)
+      VALUES (?, ?, ?, ?, ?, 's0000000000000021:0000000000000099', ?, 0)`)
+    .run(GENERATION, fixture.through, field, key, format, json)
+}
+
+const newer = { newer: { sequence: 1 }, damage: null }
+
+it('refuses a field format 1 does not define as written by a newer Orca', () => {
+  insertOutcome('futureField', '"k"', '["k",1]')
+  expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
+})
+
+it('refuses a newer chat before using a cache that would otherwise match', async () => {
+  await finishCatchUp(new JournalProjectionCatchUp(database, sessionId, epoch))
+  expect(restoreJournal(database.db, sessionId)?.projectionThrough).toBe(fixture.through)
+  insertOutcome('receipts', '"client-9"', '["client-9",{}]', 2)
+  database.db.prepare('UPDATE journal_outcome_epochs SET format = 2').run()
+
+  expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
+})
+
+it('refuses a record of a newer format even when the epoch summary was not raised', () => {
+  insertOutcome('receipts', '"client-9"', '["client-9",{}]', 2)
+  expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
+})
+
+it('keeps the stored format 1 schemas exactly as they shipped', () => {
+  // These schemas define what format 1 records mean. Any change here, including in a shared schema
+  // they use, is a new format with its own records and decoder: never edit format 1 in place.
+  const fingerprint = createHash('sha256')
+    .update(
+      JSON.stringify(
+        Object.entries({ ...outcomeFormat1Stored, $: outcomeFormat1StoredScalars }).map(
+          ([field, schema]) => [field, z.toJSONSchema(schema, { unrepresentable: 'any' })]
+        )
+      )
+    )
+    .digest('hex')
+  expect(fingerprint).toBe('21fac800b984d60917e6df11b047782abe8050174f050ef13bee28e0d96c6fe7')
 })

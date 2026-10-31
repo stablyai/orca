@@ -91,14 +91,10 @@ export function expectProjectionMatches(
   if (!source) {
     throw new Error('expected canonical outcomes')
   }
-  const rebuilt = rebuildJournalOutcomes(
-    database.db,
-    state.sessionId,
-    state.epoch,
-    source.generation,
-    source.through
-  )
-  expect(encodeJournalState(rebuilt)).toStrictEqual(encodeJournalState(state))
+  if (source.prefix === 0) {
+    const rebuilt = rebuildJournalOutcomes(database.db, state.sessionId, state.epoch, source)
+    expect(encodeJournalState(rebuilt)).toStrictEqual(encodeJournalState(state))
+  }
   const restored = restoreJournal(database.db, state.sessionId)
   expect(restored?.damage).toBeNull()
   expect(restored?.newer).toBeNull()
@@ -115,7 +111,7 @@ export const unpacedCatchUp: JournalCatchUpPacing = {
 export async function finishCatchUp(runner: JournalProjectionCatchUp): Promise<void> {
   try {
     for (let pages = 0; pages < 20_000; pages++) {
-      expect(await runner.load(unpacedCatchUp)).toBe('ready')
+      expect(runner.load(unpacedCatchUp)).toBe('ready')
       const step = runner.page()
       if (step === 'current') {
         return

@@ -28,7 +28,6 @@ import {
   expectProjectionMatches,
   finishCatchUp,
   projectionBase,
-  projectionEpoch,
   projectionEpochRow,
   projectionSessionId,
   projectionWriter,
@@ -239,8 +238,9 @@ it.each(['claude', 'codex'] as const)(
 )
 
 // One row may remove an item, add another, then re-create the first above its tombstone: the
-// re-created item moves after the new one, live and saved alike, written or converted.
-it.each(['written', 'converted'] as const)(
+// re-created item moves after the new one, live and saved alike, whether the first came from the
+// chat's records or from its frozen input prefix.
+it.each(['written', 'over a prefix'] as const)(
   'keeps live order for a key deleted and re-created around a new key in one %s row',
   async (path) => {
     const item = (itemId: string, revision: number) => ({
@@ -256,16 +256,12 @@ it.each(['written', 'converted'] as const)(
       settlementId: 'reorder',
       mutations: [{ kind: 'tombstone', itemId: 'x', revision: 2 }, item('y', 1), item('x', 3)]
     }
-    if (path === 'converted') {
-      const state = seedProjectionRows(database, [projectionEpochRow, first, batch])
-      expect([...state.items.keys()]).toEqual(['y', 'x'])
-      await finishCatchUp(
-        new JournalProjectionCatchUp(database, projectionSessionId, projectionEpoch)
-      )
-      expectProjectionMatches(database, state)
-      return
-    }
-    const rig = projectionWriter(database, seedOutcomeRows(database, [projectionEpochRow, first]))
+    const rig = projectionWriter(
+      database,
+      path === 'written'
+        ? seedOutcomeRows(database, [projectionEpochRow, first])
+        : seedProjectionRows(database, [projectionEpochRow, first])
+    )
     disposals.push(() => rig.projection.close())
     await rig.writer.enqueue((seq, ts) => ({ ...batch, seq, ts }))
     expect([...rig.state().items.keys()]).toEqual(['y', 'x'])

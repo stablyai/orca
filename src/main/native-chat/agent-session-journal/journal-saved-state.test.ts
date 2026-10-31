@@ -113,7 +113,7 @@ it('round trips the complete replayed reducer, including insertion order and und
     'journal_sessions',
     'journal_outcomes',
     'journal_outcome_epochs',
-    'journal_outcome_attempts'
+    'journal_outcome_generations'
   ]) {
     expect(
       database.db
@@ -247,16 +247,7 @@ it('round trips the complete replayed reducer, including insertion order and und
   if (!source) {
     throw new Error('missing outcomes')
   }
-  expectSameState(
-    rebuildJournalOutcomes(
-      database.db,
-      identity.sessionId,
-      epoch,
-      source.generation,
-      source.through
-    ),
-    state
-  )
+  expectSameState(rebuildJournalOutcomes(database.db, identity.sessionId, epoch, source), state)
   const restored = requireState(readJournalSavedState(database.db, identity.sessionId, epoch))
   expectSameState(restored, state)
   expect(restored.derivedTurnScope.scopeFor(text('next'))).toEqual({

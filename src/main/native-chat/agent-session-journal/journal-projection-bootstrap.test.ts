@@ -6,15 +6,11 @@ import { codexProviderHandle } from '../../../shared/agent-session-provider-hand
 import {
   closeTestJournalHostDatabases,
   openTestJournalHostDatabase,
-  liveTestJournalRows,
-  publishTestJournalEpoch,
-  insertTestJournalRow
+  liveTestJournalRows
 } from './journal-host-database-test-support'
 import type { JournalHostDatabase } from './journal-host-database'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
-import { journalOutcomeSource } from './journal-outcome-format'
-import { sweepJournalOutcomePage } from './journal-outcome-cleanup'
-import { restoreJournal } from './journal-open'
+import { readJournalRowsAfterCursor, restoreJournal } from './journal-open'
 import { parseJournalRow } from './journal-row-schema'
 import type { JournalRow } from './journal-row-schema'
 import { publishNewEpoch } from './journal-epoch-rollover'
@@ -37,7 +33,7 @@ let root: string
 let database: JournalHostDatabase
 const rigs: ReturnType<typeof projectionWriter>[] = []
 beforeEach(async () => {
-  root = await mkdtemp(join(tmpdir(), 'orca-journal-outcomes-conversion-'))
+  root = await mkdtemp(join(tmpdir(), 'orca-journal-outcome-prefix-'))
   database = openTestJournalHostDatabase(root)
   vi.spyOn(console, 'warn').mockImplementation(() => {})
 })
@@ -59,90 +55,57 @@ const item = (seq: number, itemId = 'stream'): JournalRow => ({
   body: { kind: 'status', text: `revision ${seq}` }
 })
 
-it('publishes a compact generation only at a verified input tail, sweeps interruptions, and cancels on epoch replacement', async () => {
+const tombstone = (seq: number, itemId: string): JournalRow => ({
+  ...base(seq),
+  kind: 'tombstone',
+  itemId,
+  revision: seq
+})
+
+it("keeps an existing chat's rows byte for byte, starts its records after one appended marker, and reopens prefix plus records as live", async () => {
+  // A prefix holding a, b, c, d; then b changes in place, a is deleted, c is deleted and recreated,
+  // and e is new: the live map reads b, d, c, e.
   seedProjectionRows(database, [
     projectionEpochRow,
-    ...Array.from({ length: 70 }, (_, i) => item(i + 2))
+    ...['a', 'b', 'c', 'd'].map((id, index) => item(index + 2, id))
   ])
-  database.db.prepare('UPDATE journal_rows SET ts = ts + 500 WHERE seq > 1').run()
   const original = liveTestJournalRows(database.db, sessionId)
-  const initial = restoreJournal(database.db, sessionId)!.state
-  const interrupted = new JournalProjectionCatchUp(database, sessionId, epoch)
-  expect(await interrupted.load(unpacedCatchUp)).toBe('ready')
-  expect(interrupted.page()).toBe('advanced')
-  interrupted.close()
-  expect(journalOutcomeSource(database.db, sessionId, epoch)).toBeNull()
-  expect(liveTestJournalRows(database.db, sessionId)).toEqual(original)
-  while (sweepJournalOutcomePage(database)) {
-    /* Bounded cleanup pages. */
-  }
-  expect(database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n).toBe(0)
-  const rig = projectionWriter(database, initial)
+  const rig = projectionWriter(database, restoreJournal(database.db, sessionId)!.state)
   rigs.push(rig)
-  const conversion = new JournalProjectionCatchUp(database, sessionId, epoch)
-  expect(await conversion.load(unpacedCatchUp)).toBe('ready')
-  expect(conversion.page()).toBe('advanced')
-  await rig.writer.enqueue((seq, ts) => ({ ...item(seq), ts }))
-  expect(journalOutcomeSource(database.db, sessionId, epoch)).toBeNull()
-  const fullFold = restoreJournal(database.db, sessionId)!.state
-  await finishCatchUp(conversion)
-  expectProjectionMatches(database, fullFold)
-  expect(encodeJournalState(fullFold)).toEqual(encodeJournalState(rig.state()))
-  expect(database.db.prepare('SELECT COUNT(*) AS n FROM journal_outcomes').get()?.n).toBeLessThan(
-    40
-  )
-  // Conversion retains the complete original input history; only the founding version changes.
-  expect(liveTestJournalRows(database.db, sessionId)).toHaveLength(original.length + 1)
-
-  const cancelledEpoch = 'interrupted-epoch'
-  database.transaction((db) => {
-    publishTestJournalEpoch(db, sessionId, cancelledEpoch)
-    insertTestJournalRow(db, sessionId, { ...projectionEpochRow, epoch: cancelledEpoch })
-    insertTestJournalRow(db, sessionId, { ...item(2), epoch: cancelledEpoch })
-  })
-  const repairing = new JournalProjectionCatchUp(database, sessionId, cancelledEpoch)
-  expect(await repairing.load(unpacedCatchUp)).toBe('ready')
-  repairing.page()
-  let published = false
-  publishNewEpoch({
-    database,
-    identity: {
-      sessionId,
-      workspaceId: 'ws',
-      hostId: 'host',
-      agent: 'codex',
-      providerHandle: codexProviderHandle('thread-1')
-    },
-    epoch: 'replacement',
-    reason: 'handle_forked',
-    fence: 2,
-    now: 20_000,
-    queue: {
-      cards: [],
-      receipt: {
-        write: () => {},
-        committed: () => {
-          // The receipt finalizes before the fallible publication step, as on main.
-          expect(published).toBe(false)
-        }
-      }
-    },
-    onPublished: () => {
-      published = true
-    }
-  })
-  expect(repairing.page()).toBe('retired')
-  expect(restoreJournal(database.db, sessionId)?.state.epoch).toBe('replacement')
-  while (sweepJournalOutcomePage(database)) {
-    /* Retired generations are paged too. */
-  }
+  await rig.writer.enqueue((seq, ts) => ({ ...item(seq, 'b'), ts }))
+  // The first record holds only the row's own transition, never a snapshot of the prefix.
   expect(
     database.db
-      .prepare(
-        'SELECT COUNT(*) AS n FROM journal_outcomes WHERE generation NOT IN (SELECT generation FROM journal_outcome_epochs)'
-      )
-      .get()?.n
-  ).toBe(0)
+      .prepare(`SELECT field, entry_key, ordinal FROM journal_outcomes
+      WHERE field != '$'`)
+      .all()
+  ).toEqual([{ field: 'items', entry_key: '"b"', ordinal: 'b' }])
+  for (const row of [
+    (seq: number) => tombstone(seq, 'a'),
+    (seq: number) => tombstone(seq, 'c'),
+    (seq: number) => item(seq, 'c'),
+    (seq: number) => item(seq, 'e')
+  ]) {
+    await rig.writer.enqueue((seq, ts) => ({ ...row(seq), ts }))
+  }
+
+  const rows = liveTestJournalRows(database.db, sessionId)
+  expect(rows.slice(0, original.length)).toEqual(original)
+  expect(rows).toHaveLength(original.length + 1)
+  // Shipped readers refuse the marker wherever it sits; it was never written over a row.
+  expect(rows.at(-1)?.seq).toBe(original.length + 1)
+  expect(parseJournalRow(rows.at(-1)!.rowJson)).toEqual({ ok: false, unreadable: true })
+  expect([...rig.state().items.keys()]).toEqual(['b', 'd', 'c', 'e'])
+  expectProjectionMatches(database, rig.state())
+  expect(database.db.prepare('SELECT COUNT(*) AS n FROM journal_state').get()?.n).toBe(0)
+
+  // Catch-up pages the prefix rows, then the record groups, each sequence once.
+  const read = (after: number, limit?: number) =>
+    readJournalRowsAfterCursor(database.db, sessionId, epoch, after, limit).map((row) => row.seq)
+  expect(read(0)).toEqual([1, 2, 3, 4, 5, 6, 7, 8, 9, 10])
+  expect(read(3, 4)).toEqual([4, 5, 6, 7])
+  expect(read(5, 2)).toEqual([6, 7])
+  expect(read(7)).toEqual([8, 9, 10])
 })
 
 it('fences cached opens and every writer before mutation, while the old parser refuses the founding row', async () => {
@@ -181,7 +144,7 @@ it('opens a chat whole while its cache rebuild is between pages, then from the f
   rigs.push(rig)
   database.transaction((db) => clearJournalSavedState(db, sessionId))
   const rebuild = new JournalProjectionCatchUp(database, sessionId, epoch)
-  expect(await rebuild.load(unpacedCatchUp)).toBe('ready')
+  expect(rebuild.load(unpacedCatchUp)).toBe('ready')
   expect(rebuild.page()).toBe('advanced')
   expect(rebuild.page()).toBe('advanced')
   const copied = database.db.prepare('SELECT COUNT(*) AS n FROM journal_items').get()?.n
