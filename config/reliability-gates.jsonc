@@ -9093,7 +9093,18 @@
           ]
         }
       ],
-      "evidenceRuns": [],
+      "evidenceRuns": [
+        {
+          "date": "2026-07-09",
+          "runner": "local",
+          "platform": "macos",
+          "command": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/renderer/src/components/terminal/terminal-tab-actions-kill-all.test.ts src/main/ipc/pty-management.test.ts",
+          "currentCommand": "pnpm exec vitest run --config config/vitest.config.ts src/renderer/src/components/shared/kill-all-terminal-surfaces.test.ts src/renderer/src/components/shared/useDaemonActions.test.tsx src/main/ipc/pty/pty-management.test.ts",
+          "result": "passed",
+          "durationSeconds": 1.18,
+          "summary": "4 test files and 27 tests passed locally, including the existing daemon handler contract and a real 100-terminal Zustand cleanup fixture. Historical four-file record only: its date, result, duration and 27-test count describe the original command. currentCommand maps the three surviving roots; that three-file invocation was not rerun here, and this record does not restore the removed routing alarms."
+        }
+      ],
       "runtimeBudget": {
         "p95Seconds": 10,
         "scope": "focused renderer/main unit and performance-count tests"
