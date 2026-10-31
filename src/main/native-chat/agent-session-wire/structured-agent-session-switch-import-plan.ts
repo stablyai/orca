@@ -19,7 +19,14 @@ import {
 
 export type PreparedSwitchRead = Extract<PreparedLegacyImport, { ok: true }>
 
-export function lastUserItem(items: readonly JournalReplacementItem[]) {
+/**
+ * The prompt that opened a read's latest turn: its first user row where the read marks turns (a
+ * steer stays under it), none if that row fell outside the read, else the last user row.
+ */
+export function latestTurnUserItem({ items, latestTurnOpener }: PreparedSwitchRead) {
+  if (latestTurnOpener !== undefined) {
+    return items.find((item) => agentJournalItemKey(item.identity) === latestTurnOpener)
+  }
   return items.findLast((item) => item.body.kind === 'message' && item.body.role === 'user')
 }
 
@@ -34,7 +41,7 @@ export function planSwitchTranscriptAdditions(input: {
 }): JournalReplacementItem[] {
   const { prepared } = input
   const items = prepared.items
-  const user = lastUserItem(items)
+  const user = latestTurnUserItem(prepared)
   const userKey = user && agentJournalItemKey(user.identity)
   const latest = prepared.latestTurn
   const interrupted =

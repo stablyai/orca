@@ -34,6 +34,7 @@ import { createLegacyIdentityTracker } from './journal-legacy-identity'
 import { createPiTranscriptCollector } from './journal-pi-active-branch'
 import { readGrokTurnLifecycle } from '../transcript-grok-turn-lifecycle'
 import { createNewestItemWindow } from './journal-newest-item-window'
+import { createLatestTurnOpenerTracker } from './journal-legacy-turn-opener'
 import type { JournalReplacementItem } from './journal-epoch-replacement'
 import type { JournalPayloadLimits } from './journal-payload-bounds'
 import type { AgentSessionJournal } from './journal-store'
@@ -97,29 +98,21 @@ export async function prepareLegacyTranscriptImport(input: {
   }
 
   try {
-    const { items, consumedBytes, latestTurn, turnStates, latestTurnAmbiguous } =
-      await decodeReplacementItems({
-        filePath,
-        piAfterEntry: input.piAfterEntry,
-        transcriptAgent,
-        agent: input.agent,
-        sessionId: input.sessionId,
-        source: options.source,
-        codexSessionsDirs: options.source?.conversationStore
-          ? [options.source.conversationStore]
-          : options.codexSessionsDirs,
-        signal: options.signal,
-        decodedMessageIdentities: options.decodedMessageIdentities,
-        limits
-      })
-    return {
-      ok: true,
-      items,
-      sourceEmpty: consumedBytes === 0,
-      turnStates,
-      ...(latestTurn ? { latestTurn } : {}),
-      ...(latestTurnAmbiguous ? { latestTurnAmbiguous } : {})
-    }
+    const { items, consumedBytes, ...turns } = await decodeReplacementItems({
+      filePath,
+      piAfterEntry: input.piAfterEntry,
+      transcriptAgent,
+      agent: input.agent,
+      sessionId: input.sessionId,
+      source: options.source,
+      codexSessionsDirs: options.source?.conversationStore
+        ? [options.source.conversationStore]
+        : options.codexSessionsDirs,
+      signal: options.signal,
+      decodedMessageIdentities: options.decodedMessageIdentities,
+      limits
+    })
+    return { ok: true, items, sourceEmpty: consumedBytes === 0, ...turns }
   } catch (err) {
     return { ok: false, error: err instanceof Error ? err.message : String(err) }
   }
@@ -191,6 +184,7 @@ async function decodeReplacementItems(input: {
   latestTurn?: NativeChatTurnLifecycle
   turnStates: ReadonlyMap<string, NativeChatTurnLifecycle>
   latestTurnAmbiguous?: true
+  latestTurnOpener?: string | null
 }> {
   const source = input.source
     ? adoptedTranscriptSourceObserver({
@@ -219,9 +213,12 @@ async function decodeReplacementItems(input: {
   const loose =
     input.agent === 'claude' ? nativeChatTurnLifecycleDecoderForAgent(input.agent, false) : null
   let latestTurnAmbiguous = false
+  // Pi's collector projects its rows after every boundary is read, so it supplies no opener.
+  const opener = createLatestTurnOpenerTracker(input.agent !== 'pi')
   const observe = (line: string, fallbackId: string) => {
     const next = lifecycle?.(line, fallbackId)
     if (next) {
+      opener.observe(next, latestTurn)
       latestTurn =
         next.state === 'working' || !latestTurn ? next : { ...next, turnId: latestTurn.turnId }
       turnStates.set(latestTurn.turnId, latestTurn)
@@ -262,16 +259,18 @@ async function decodeReplacementItems(input: {
         const message = TRANSCRIPT_DECODERS[input.transcriptAgent](line, fallbackId)
         if (message) {
           retained.push(
-            toItem(
-              message,
-              recordId || input.decodedMessageIdentities
-                ? {
-                    provider: 'legacy',
-                    agent: input.agent,
-                    sessionId: input.sessionId,
-                    recordId: recordId ?? message.id
-                  }
-                : tracker.identify(line, currentLineIndex)
+            opener.seen(
+              toItem(
+                message,
+                recordId || input.decodedMessageIdentities
+                  ? {
+                      provider: 'legacy',
+                      agent: input.agent,
+                      sessionId: input.sessionId,
+                      recordId: recordId ?? message.id
+                    }
+                  : tracker.identify(line, currentLineIndex)
+              )
             )
           )
         }
@@ -304,6 +303,7 @@ async function decodeReplacementItems(input: {
       items: retained.items(),
       consumedBytes,
       turnStates,
+      ...opener.evidence(latestTurn, retained.items()),
       ...(latestTurn ? { latestTurn } : {}),
       ...(ambiguous ? { latestTurnAmbiguous: true as const } : {})
     }

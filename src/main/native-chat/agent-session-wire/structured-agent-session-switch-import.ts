@@ -16,7 +16,7 @@ import type { AgentSessionJournal } from '../agent-session-journal/journal-store
 import { prepareLegacyTranscriptImport } from '../agent-session-journal/journal-legacy-import'
 import type { JournalReplacementItem } from '../agent-session-journal/journal-epoch-replacement'
 import {
-  lastUserItem,
+  latestTurnUserItem,
   planSwitchTranscriptAdditions,
   switchLifecycleRecord,
   switchTranscriptMutations,
@@ -105,7 +105,7 @@ export async function captureSwitchStoppedCliTurn(
   const piAfterEntry =
     retained && piHistoryCut(retained.journal, source, retained.resumeCursor).entry
   const prepared = await prepare(source, deadline, piAfterEntry)
-  const user = lastUserItem(prepared.items)
+  const user = latestTurnUserItem(prepared)
   if (!user || (prepared.latestTurn && prepared.latestTurn.state !== 'working')) {
     return undefined
   }

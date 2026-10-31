@@ -32,5 +32,8 @@ export type PreparedLegacyImport =
       turnStates?: ReadonlyMap<string, NativeChatTurnLifecycle>
       /** The open latest turn ended on a row only a legacy format calls complete: outcome unknown. */
       latestTurnAmbiguous?: true
+      /** The latest turn's first user row, from the boundary that opened it; null if not retained.
+       *  Absent where the read marks no turns in line order. */
+      latestTurnOpener?: string | null
     }
   | { ok: false; error: string }

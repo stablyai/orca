@@ -464,3 +464,46 @@ it.each(['adopted-active', 'retained-archive'] as const)(
     })
   }
 )
+
+it('names the prompt that opened Claude’s latest turn, never a later user row inside it', async () => {
+  const rows = claudeRecording.trimEnd().split('\n')
+  const first = JSON.parse(rows[0]!)
+  // Rows Claude writes as user rows inside the running turn, which don't open one of their own.
+  const inTurn = (uuid: string, text: string) =>
+    JSON.stringify({ ...first, uuid, message: { role: 'user', content: [{ type: 'text', text }] } })
+  const filePath = join(root, 'claude.jsonl')
+  const source = { agent: 'claude' as const, sessionId: claudeRecordingId, filePath }
+  const opener = agentJournalItemKey({
+    provider: 'claude',
+    sessionId: claudeRecordingId,
+    uuid: first.uuid
+  })
+  const caveat = inTurn(
+    'caveat-1',
+    '<local-command-caveat>Caveat: local output</local-command-caveat>'
+  )
+  await writeFile(filePath, `${[...rows.slice(0, 3), caveat].join('\n')}\n`)
+  // The stop capture, as every first adoption and retained stop takes it.
+  expect(await captureSwitchStoppedCliTurn(source, true, deadline)).toMatchObject({
+    turnId: first.uuid,
+    userItemKey: opener
+  })
+  // The shared import: the interruption notice ends that turn, and its record names the prompt.
+  const notice = inTurn('notice-1', '[Request interrupted by user for tool use]')
+  await writeFile(filePath, `${[...rows.slice(0, 3), notice].join('\n')}\n`)
+  const journal = await journals.open({
+    ...options(),
+    identity: {
+      ...options().identity,
+      agent: 'claude',
+      providerHandle: claudeProviderHandle(claudeRecordingId, null)
+    }
+  })
+  await catchUpSwitchedCliTranscript({ journal, source, fence: 1, deadline })
+  const records = journal
+    .snapshot()
+    .items.flatMap(({ body }) => (body.kind === 'turn' ? [body] : []))
+  expect(records).toEqual([
+    expect.objectContaining({ turnId: first.uuid, state: 'interrupted', userItemId: opener })
+  ])
+})

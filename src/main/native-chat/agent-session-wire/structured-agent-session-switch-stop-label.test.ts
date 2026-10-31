@@ -453,6 +453,47 @@ describe('Codex: a Stop and switch into the chat after Codex wrote its own abort
     expectInterruptedOnCOnly(reopened, stopped.turnId, prompts)
   })
 
+  it.each(['retained', 'first adoption'] as const)(
+    'names the prompt that opened a turn stopped after a steer, not the steer (%s)',
+    async (path) => {
+      const rows = await recording()
+      const thread = payload(rows[0]!, 'id')
+      const source = { agent: 'codex' as const, sessionId: thread, filePath }
+      // C's prompt P, then a steer S Codex added to the running turn, then Stop.
+      const p = String(dig(json(rows[14]!), 'payload', 'item', 'id'))
+      const steer = rows[14]!.replaceAll(p, 'c-steer-item')
+      await writeFile(filePath, `${[...rows.slice(0, 15), steer].join('\n')}\n`)
+      const key = (recordId: string) =>
+        agentJournalItemKey({ provider: 'legacy', agent: 'codex', sessionId: thread, recordId })
+      const journal = await open(`codex-steer-stop-${path}`, 'codex', thread)
+      const retained = path === 'retained' ? { journal } : undefined
+      if (retained) {
+        await chatSentTurn(journal, thread, rows.slice(1, 7))
+      }
+      const stopped = await captureSwitchStoppedCliTurn(source, true, deadline, retained)
+      // The read names P by its transcript line; the resting import later keys it by its item.
+      const read = key(`transcript:${p}`)
+      expect(stopped).toMatchObject({ turnId: payload(rows[12]!, 'turn_id'), userItemKey: read })
+      if (!retained) {
+        const adopted = withSwitchStoppedTurn(
+          { ok: true, items: [...stopped!.baseline.items] },
+          stopped!
+        )
+        const record = adopted.ok
+          ? adopted.items?.findLast(({ body }) => body.kind === 'turn')
+          : null
+        expect(record?.body).toMatchObject({ state: 'interrupted', userItemId: read })
+        return
+      }
+      await commitSwitchStoppedCliTurn({ journal, stopped: stopped!, fence: 1 })
+      await refresh(journal, source, stopped)
+      expect(turns(journal).find((body) => body.turnId === stopped!.turnId)?.userItemId).toBe(
+        key(p)
+      )
+      expect(shownTurns(journal).turnOf(key('c-steer-item'))).toBe(key(p))
+    }
+  )
+
   /** The chat's A, then what the CLI wrote after it, imported at rest. */
   async function importedAfterA(name: string, cli: string[]) {
     const rows = await recording()
