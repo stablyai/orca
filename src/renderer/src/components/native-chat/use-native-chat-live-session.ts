@@ -23,6 +23,7 @@ import { useNativeChatHookStatus } from './use-native-chat-hook-status'
 import { useNativeChatAssembledMessages } from './use-native-chat-assembled-messages'
 import { createNativeChatReadRetryTimer } from './native-chat-read-retry-timer'
 import { openNativeChatTranscriptStream } from './native-chat-stream-teardown'
+import { takeNativeChatOpenWake } from './native-chat-open-wake'
 
 export type { NativeChatLiveSession, ReadState } from './native-chat-live-session-contract'
 
@@ -140,6 +141,7 @@ export function useNativeChatLiveSession(
     replaceList(appendMergerRef.current, [])
     setAppended([])
     setHasMore(false)
+    const wakeWslDistro = takeNativeChatOpenWake(sourceKey)
 
     // Seed independently for silent streams, but never overwrite an authoritative frame.
     function loadSession(attempt: number): void {
@@ -147,7 +149,9 @@ export function useNativeChatLiveSession(
         return
       }
       void transport
-        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined)
+        .readSession(agent, activeSessionId, limitRef.current, transcriptPath ?? undefined, {
+          wakeWslDistro
+        })
         .then((result) => {
           if (cancelled || !latestEnabled.current || frameArrived) {
             return
@@ -188,7 +192,8 @@ export function useNativeChatLiveSession(
         agent,
         sessionId,
         transcriptPath: transcriptPath ?? undefined,
-        limit: limitRef.current
+        limit: limitRef.current,
+        wakeWslDistro
       },
       (frame) => {
         if (cancelled || !latestEnabled.current) {
@@ -255,7 +260,10 @@ export function useNativeChatLiveSession(
     const loadedCount = read.messages.length
     setLoadingEarlier(true)
     const promise = transport
-      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined)
+      // Paging is the user's own click.
+      .readSession(agent, sessionId, nextLimit, transcriptPath ?? undefined, {
+        wakeWslDistro: true
+      })
       .then((result): NativeChatOlderPageResult => {
         if (
           !latestEnabled.current ||
