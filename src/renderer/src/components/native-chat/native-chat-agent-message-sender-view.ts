@@ -4,6 +4,7 @@ import type { AppState } from '@/store/types'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { resolveAgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
+import { agentMessageSavedKind } from '../../../../shared/agent-session/agent-message-presentation'
 
 export function useAgentMessageSenderView(
   sender: AgentMessageSender | undefined,
@@ -14,7 +15,7 @@ export function useAgentMessageSenderView(
   const address = sender?.party.address
   const sessionId = sender?.party.orcaSessionId
   const handle = sender?.party.terminalHandle
-  const savedAgent = sender?.agent
+  const savedAgent = agentMessageSavedKind(sender)
   const targetKind = target?.kind
   const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
   const stableTarget = useMemo<RuntimeClientTarget | undefined>(
@@ -52,5 +53,5 @@ export function useAgentMessageSenderView(
     },
     [address, sessionId, handle, savedAgent, chatWorktreeId, stableTarget, dispatchId]
   )
-  return useAgentMessageSenderSource(locate, sender?.agent)
+  return useAgentMessageSenderSource(locate, savedAgent)
 }

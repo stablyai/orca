@@ -40,6 +40,7 @@ import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import {
   agentMessageSenderOpens,
+  agentMessageSenderReplacedOnHandle,
   agentMessageSenderUnavailableText,
   GONE_TERMINAL_SENDER_CLICK,
   resolveAgentMessageSenderTarget
@@ -278,6 +279,26 @@ it.each([
   ['claude', 'codex', false]
 ] as const)('treats %s and %s as one agent: %s, in both directions', (a, b, same) => {
   expect([sameAgentIdentity(a, b), sameAgentIdentity(b, a)]).toEqual([same, same])
+})
+
+it('reads a saved "unknown" kind as no kind: the live row draws, and nothing vetoes it', async () => {
+  const sender = terminal('term_0', 'unknown')
+  // Older host: no publication, so the window's own lookup places the terminal.
+  expect(card(sender)).toEqual({
+    avatar: expect.objectContaining({ agentType: 'claude', dot: 'working' }),
+    link: true
+  })
+  expect(
+    agentMessageSenderReplacedOnHandle(useAppStore.getState(), sender, 'local', 'term_0')
+  ).toBe(false)
+  useAppStore.getState().setAgentSenderPublication('local', publication([row('term_0', 0)]))
+  expect(card(sender)).toEqual({
+    avatar: expect.objectContaining({ agentType: 'claude', dot: 'working' }),
+    link: true
+  })
+  await open(sender)
+  expect(mocks.activatePane).toHaveBeenCalledWith('workspace', 'tab-0', status(0).paneKey)
+  expect(mocks.toastInfo).not.toHaveBeenCalled()
 })
 
 it('keeps a published OMP card over its Pi-launched terminal live and opening', async () => {

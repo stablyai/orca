@@ -57,6 +57,13 @@ export function agentMessageSenderLabel(facts: {
   )
 }
 
+/** The kind the card saved, when it names one; a saved "unknown" proves nothing, so it is none. */
+export function agentMessageSavedKind(
+  sender: Pick<AgentMessageSender, 'agent'> | undefined
+): AgentMessageSender['agent'] {
+  return sender?.agent === 'unknown' ? undefined : sender?.agent
+}
+
 /** A Dispatch address names work, not a pane; every other sender address can be opened. */
 export function agentMessageSenderCanOpen(sender: AgentMessageSender): boolean {
   return !sender.party.address.startsWith('dispatch:')

@@ -7,7 +7,10 @@ import {
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { sameAgentIdentity } from '../../../../shared/agent-title-owner'
-import { agentMessageSenderCanOpen } from '../../../../shared/agent-session/agent-message-presentation'
+import {
+  agentMessageSavedKind,
+  agentMessageSenderCanOpen
+} from '../../../../shared/agent-session/agent-message-presentation'
 import {
   readAgentMessageSenderRow,
   type SenderLocation
@@ -49,7 +52,10 @@ function knownDifferent(saved: string | undefined, row: string | undefined): boo
 function replacedAt(state: AppState, sender: AgentMessageSender, location: SenderLocation) {
   return (
     !sender.party.orcaSessionId &&
-    knownDifferent(sender.agent, readAgentMessageSenderRow(state, location)?.agentType)
+    knownDifferent(
+      agentMessageSavedKind(sender),
+      readAgentMessageSenderRow(state, location)?.agentType
+    )
   )
 }
 
