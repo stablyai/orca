@@ -98,10 +98,7 @@ function toolResultBlock(record: Record<string, unknown>): NativeChatToolResultB
   }
 }
 
-// Agent-taken screenshots ride inside tool_result content as image parts; the
-// text still flattens to the tool-result block above, and each image part
-// additionally promotes to an image-ref. Pure (no I/O): base64 stays inline as
-// a data: URL and a later hydration stage persists it to the image cache.
+// Keep tool-result images beside their text until the RPC cache persists their bytes.
 function toolResultBlocks(record: Record<string, unknown>): NativeChatBlock[] {
   const blocks: NativeChatBlock[] = [toolResultBlock(record)]
   const content = record.content

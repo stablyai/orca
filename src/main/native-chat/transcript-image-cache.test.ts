@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto'
+import { crc32 } from 'node:zlib'
 import {
   existsSync,
   linkSync,
@@ -13,7 +14,7 @@ import {
 import type * as NodeFs from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterAll, describe, expect, it, vi } from 'vitest'
 import type { NativeChatMessage } from '../../shared/native-chat-types'
 import { supportsPosixFileModes } from '../daemon/daemon-private-file-modes'
 import {
@@ -32,7 +33,16 @@ vi.mock('node:fs', async (importOriginal) => {
 
 const PNG_1PX =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='
+const PNG_BLUE =
+  'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR4AWNgYPj/HwADAgH/FAeIXAAAAABJRU5ErkJggg=='
 const DATA_URL = `data:image/png;base64,${PNG_1PX}`
+const cacheDirs: string[] = []
+
+afterAll(() => {
+  for (const dir of cacheDirs) {
+    rmSync(dir, { recursive: true, force: true })
+  }
+})
 
 function messageWithUrl(url: string): NativeChatMessage {
   return {
@@ -48,10 +58,52 @@ function messageWithUrl(url: string): NativeChatMessage {
 }
 
 function freshCacheDir(): string {
-  return mkdtempSync(join(tmpdir(), 'nnc-img-'))
+  const dir = mkdtempSync(join(tmpdir(), 'nnc-img-'))
+  cacheDirs.push(dir)
+  return dir
+}
+
+function pngWithComment(comment: string, source = PNG_1PX): string {
+  const image = Buffer.from(source, 'base64')
+  const chunk = Buffer.from(`tEXtComment\0${comment}${'padding'.repeat(10)}`)
+  const length = Buffer.alloc(4)
+  length.writeUInt32BE(chunk.length - 4)
+  const checksum = Buffer.alloc(4)
+  checksum.writeUInt32BE(crc32(chunk))
+  return Buffer.concat([
+    image.subarray(0, -12),
+    length,
+    chunk,
+    checksum,
+    image.subarray(-12)
+  ]).toString('base64')
 }
 
 describe('hydrateNativeChatImageRefs', () => {
+  it('keeps distinct screenshots separate when their message IDs, lengths and suffixes match', () => {
+    const cacheDir = freshCacheDir()
+    const firstImage = pngWithComment('screenshot')
+    const secondImage = pngWithComment('screenshot', PNG_BLUE)
+    expect(firstImage.length).toBe(secondImage.length)
+    expect(firstImage.slice(-64)).toBe(secondImage.slice(-64))
+
+    const [first] = hydrateNativeChatImageRefs(
+      [messageWithUrl(`data:image/png;base64,${firstImage}`)],
+      { cacheDir }
+    )
+    const [second] = hydrateNativeChatImageRefs(
+      [messageWithUrl(`data:image/png;base64,${secondImage}`)],
+      { cacheDir }
+    )
+    const a = first?.blocks[1]
+    const b = second?.blocks[1]
+    if (a?.type !== 'image-ref' || !a.path || b?.type !== 'image-ref' || !b.path) {
+      throw new Error('expected cached screenshot paths')
+    }
+    expect(readFileSync(b.path).toString('base64')).toBe(secondImage)
+    expect(b.path).not.toBe(a.path)
+  })
+
   it('persists data: bytes to the cache and rewrites to a path ref', async () => {
     const cacheDir = freshCacheDir()
     const [hydrated] = await hydrateNativeChatImageRefs([messageWithUrl(DATA_URL)], { cacheDir })
@@ -101,15 +153,35 @@ describe('hydrateNativeChatImageRefs', () => {
 
   it('rewrites a remembered entry whose cache file was removed', async () => {
     const cacheDir = freshCacheDir()
-    const [first] = await hydrateNativeChatImageRefs([messageWithUrl(DATA_URL)], { cacheDir })
+    const message = messageWithUrl(DATA_URL)
+    const [first] = await hydrateNativeChatImageRefs([message], { cacheDir })
     const ref = first.blocks[1]
     if (ref.type !== 'image-ref' || !ref.path) {
       throw new Error('expected a hydrated path ref')
     }
     rmSync(ref.path)
-    const [second] = await hydrateNativeChatImageRefs([messageWithUrl(DATA_URL)], { cacheDir })
+    const [second] = await hydrateNativeChatImageRefs([message], { cacheDir })
     expect(second.blocks[1]).toEqual(ref)
     expect(readFileSync(ref.path).toString('base64')).toBe(PNG_1PX)
+  })
+
+  it('does not reuse a memoized path when the same block gets different bytes', () => {
+    const cacheDir = freshCacheDir()
+    const message = messageWithUrl(DATA_URL)
+    const [first] = hydrateNativeChatImageRefs([message], { cacheDir })
+    const image = message.blocks[1]
+    if (image?.type !== 'image-ref') {
+      throw new Error('expected a source image')
+    }
+    const updated = pngWithComment('updated')
+    image.url = `data:image/png;base64,${updated}`
+    const [second] = hydrateNativeChatImageRefs([message], { cacheDir })
+    const path = second?.blocks[1]
+    if (path?.type !== 'image-ref' || !path.path) {
+      throw new Error('expected a new cached image')
+    }
+    expect(path).not.toEqual(first?.blocks[1])
+    expect(readFileSync(path.path).toString('base64')).toBe(updated)
   })
 
   it('falls back to rename where the volume has no hard links', async () => {
@@ -148,11 +220,33 @@ describe('hydrateNativeChatImageRefs', () => {
     expect(b.blocks).toEqual(local.blocks)
   })
 
-  it('leaves oversized payloads inline instead of caching (fail-open)', async () => {
+  it('caches a payload at the byte limit', () => {
     const cacheDir = freshCacheDir()
-    const big = `data:image/png;base64,${'A'.repeat(NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES + 1)}`
-    const [hydrated] = await hydrateNativeChatImageRefs([messageWithUrl(big)], { cacheDir })
-    expect(hydrated.blocks[1]).toEqual({ type: 'image-ref', url: big })
+    const data = Buffer.alloc(NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES).toString('base64')
+    const [hydrated] = hydrateNativeChatImageRefs(
+      [messageWithUrl(`data:image/png;base64,${data}`)],
+      { cacheDir }
+    )
+    const ref = hydrated?.blocks[1]
+    if (ref?.type !== 'image-ref' || !ref.path) {
+      throw new Error('expected an image at the size limit to be cached')
+    }
+    expect(statSync(ref.path).size).toBe(NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES)
+  })
+
+  it('refuses oversized payloads before allocating their decoded bytes', () => {
+    const cacheDir = freshCacheDir()
+    const data = Buffer.alloc(NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES + 1).toString('base64')
+    const url = `data:image/png;base64,${data}`
+    const decode = vi.spyOn(Buffer, 'from')
+    try {
+      const [hydrated] = hydrateNativeChatImageRefs([messageWithUrl(url)], { cacheDir })
+      expect(hydrated?.blocks[1]).toEqual({ type: 'image-ref', url })
+      expect(readdirSync(cacheDir)).toEqual([])
+      expect(decode).not.toHaveBeenCalledWith(data, 'base64')
+    } finally {
+      decode.mockRestore()
+    }
   })
 
   it('leaves malformed data: urls inline (fail-open)', async () => {

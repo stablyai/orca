@@ -11,6 +11,7 @@ import {
 import { readdir } from 'node:fs/promises'
 import { join } from 'node:path'
 import { getAppEnvironment } from '../../shared/app-environment'
+import { base64DecodedByteLength } from '../../shared/agent-session-attachments'
 import type {
   NativeChatBlock,
   NativeChatImageRefBlock,
@@ -23,8 +24,7 @@ import {
   tightenPathMode
 } from '../daemon/daemon-private-file-modes'
 
-// Per-image persist cap. Screenshots are 100KB–3MB in practice; 8 MiB bounds a
-// runaway capture without touching real ones. Maintainer-adjustable (#23246).
+// Bound transient decoding and disk use per screenshot.
 export const NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES = 8 * 1024 * 1024
 const CACHE_DIR_NAME = 'native-chat-images'
 const CACHE_FILE_NAME = /^[0-9a-f]{64}\.(png|jpg|gif|webp|bmp|ico)$/
@@ -64,25 +64,16 @@ function parseInlineImage(url: string): { mimeType: string; bytes: Buffer } | nu
     return null
   }
   const payload = match[2].replace(/\s/g, '')
-  if (payload.length === 0 || payload.length % 4 !== 0 || !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)) {
+  if (
+    payload.length === 0 ||
+    payload.length % 4 !== 0 ||
+    base64DecodedByteLength(payload) > NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES ||
+    !/^[A-Za-z0-9+/]*={0,2}$/.test(payload)
+  ) {
     return null
   }
   const bytes = Buffer.from(payload, 'base64')
-  if (bytes.length === 0 || bytes.length > NATIVE_CHAT_IMAGE_CACHE_MAX_BYTES) {
-    return null
-  }
-  return { mimeType, bytes }
-}
-
-let cacheDirOverride: string | undefined
-
-/** Test-only: redirect the image cache (pass no arg to restore userData). */
-export function setNativeChatImageCacheDirForTests(dir?: string): void {
-  cacheDirOverride = dir
-}
-
-function defaultCacheDir(): string {
-  return cacheDirOverride ?? join(getAppEnvironment().getPath('userData'), CACHE_DIR_NAME)
+  return bytes.length > 0 ? { mimeType, bytes } : null
 }
 
 function isInlineImageRef(block: NativeChatBlock): block is NativeChatImageRefBlock {
@@ -129,13 +120,7 @@ export function pruneNativeChatImageCacheIfDue(
   return pruneNativeChatImageCache(cacheDir, now).catch(() => {})
 }
 
-/**
- * Persist inline (data:) image bytes to the host image cache and rewrite the
- * refs to cache paths. Content-hash naming makes writes idempotent across
- * re-reads; private modes apply because screenshots are the user's pixels.
- * Fail-open: anything unparseable, oversized, or unwritable keeps its inline
- * URL, which desktop still renders (mobile shows its placeholder instead).
- */
+/** Cache inline images as host paths; a cache failure keeps desktop's inline fallback. */
 export function hydrateNativeChatImageRefs(
   messages: readonly NativeChatMessage[],
   options: { cacheDir?: string } = {}
@@ -143,8 +128,9 @@ export function hydrateNativeChatImageRefs(
   if (!messages.some((message) => message.blocks.some(isInlineImageRef))) {
     return [...messages]
   }
-  const cacheDir = options.cacheDir ?? defaultCacheDir()
+  let cacheDir: string
   try {
+    cacheDir = options.cacheDir ?? join(getAppEnvironment().getPath('userData'), CACHE_DIR_NAME)
     ensurePrivateDir(cacheDir)
   } catch {
     // An unwritable cache must not take the transcript down; the refs stay inline.
@@ -157,28 +143,16 @@ export function hydrateNativeChatImageRefs(
     }
     return {
       ...message,
-      blocks: message.blocks.map((block, index) =>
-        hydrateBlock(block, cacheDir, `${cacheDir}\0${message.id}\0${index}`)
-      )
+      blocks: message.blocks.map((block) => hydrateBlock(block, cacheDir))
     }
   })
 }
 
-// Why: every snapshot, replacement and append re-reads the same screenshots; remembering
-// where a transcript block already landed skips re-decoding and re-hashing megabytes each time.
-const MAX_HYDRATED_REFS = 256
-const hydratedRefPaths = new Map<string, { path: string; touchedAt: number }>()
-
-function rememberHydratedRef(key: string, filePath: string, touchedAt: number): void {
-  hydratedRefPaths.delete(key)
-  hydratedRefPaths.set(key, { path: filePath, touchedAt })
-  if (hydratedRefPaths.size > MAX_HYDRATED_REFS) {
-    const oldest = hydratedRefPaths.keys().next().value
-    if (oldest !== undefined) {
-      hydratedRefPaths.delete(oldest)
-    }
-  }
-}
+// Weak keys reuse unchanged blocks without retaining images after their transcript is released.
+const hydratedRefPaths = new WeakMap<
+  NativeChatImageRefBlock,
+  { url: string; cacheDir: string; path: string; touchedAt: number }
+>()
 
 function touchCacheEntry(filePath: string, now: number): number {
   const seconds = now / 1000
@@ -215,38 +189,39 @@ function publishCacheEntry(filePath: string, bytes: Buffer): void {
   }
 }
 
-function hydrateBlock(block: NativeChatBlock, cacheDir: string, refKey: string): NativeChatBlock {
+function hydrateBlock(block: NativeChatBlock, cacheDir: string): NativeChatBlock {
   if (!isInlineImageRef(block)) {
     return block
   }
   try {
     const url = block.url ?? ''
-    // Transcript records are immutable, so length plus tail is enough to catch a reused id.
-    const memoKey = `${refKey}\0${url.length}\0${url.slice(-64)}`
-    const remembered = hydratedRefPaths.get(memoKey)
-    if (remembered && existsSync(remembered.path)) {
-      const now = Date.now()
-      const touchedAt =
-        now - remembered.touchedAt > TOUCH_INTERVAL_MS
-          ? touchCacheEntry(remembered.path, now)
-          : remembered.touchedAt
-      rememberHydratedRef(memoKey, remembered.path, touchedAt)
-      return { type: 'image-ref', path: remembered.path, ...(block.alt ? { alt: block.alt } : {}) }
-    }
-    const parsed = parseInlineImage(url)
-    if (!parsed) {
-      return block
-    }
-    const digest = createHash('sha256').update(parsed.bytes).digest('hex')
-    const filePath = join(cacheDir, `${digest}.${extensionForMimeType(parsed.mimeType)}`)
+    const remembered = hydratedRefPaths.get(block)
     const now = Date.now()
-    if (existsSync(filePath)) {
-      touchCacheEntry(filePath, now)
+    let filePath: string
+    if (
+      remembered?.url === url &&
+      remembered.cacheDir === cacheDir &&
+      existsSync(remembered.path)
+    ) {
+      filePath = remembered.path
+      if (now - remembered.touchedAt > TOUCH_INTERVAL_MS) {
+        remembered.touchedAt = touchCacheEntry(filePath, now)
+      }
     } else {
-      publishCacheEntry(filePath, parsed.bytes)
+      const parsed = parseInlineImage(url)
+      if (!parsed) {
+        return block
+      }
+      const digest = createHash('sha256').update(parsed.bytes).digest('hex')
+      filePath = join(cacheDir, `${digest}.${extensionForMimeType(parsed.mimeType)}`)
+      if (existsSync(filePath)) {
+        touchCacheEntry(filePath, now)
+      } else {
+        publishCacheEntry(filePath, parsed.bytes)
+      }
+      tightenPathMode(filePath, PRIVATE_FILE_MODE)
+      hydratedRefPaths.set(block, { url, cacheDir, path: filePath, touchedAt: now })
     }
-    tightenPathMode(filePath, PRIVATE_FILE_MODE)
-    rememberHydratedRef(memoKey, filePath, now)
     return {
       type: 'image-ref',
       path: filePath,

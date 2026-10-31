@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { decodeClaudeTranscriptLine } from './transcript-line-decoders-claude'
 import { claudeContentBlocks } from './transcript-record-blocks'
+import { foldToolMessages } from '../../shared/native-chat/tools/native-chat-tool-fold'
 
 // Agent-taken screenshots ride inside tool_result content as Anthropic image
 // blocks. The text output still flattens to the tool-result block; each image
@@ -70,6 +71,56 @@ describe('tool_result image promotion', () => {
 })
 
 describe('tool_result screenshot records', () => {
+  it.each([false, true])(
+    'keeps image-only tool output paired with its call with isMeta=%s',
+    (isMeta) => {
+      const image = {
+        type: 'image',
+        source: { type: 'base64', media_type: 'image/png', data: 'iVBORw0KGgo=' }
+      }
+      const result = decodeClaudeTranscriptLine(
+        JSON.stringify({
+          type: 'user',
+          uuid: 'image-only',
+          isMeta,
+          message: {
+            role: 'user',
+            content: [{ type: 'tool_result', tool_use_id: 'capture', content: [image] }]
+          }
+        }),
+        'fallback'
+      )
+      if (!result) {
+        throw new Error('expected an image-only tool result')
+      }
+      const folded = foldToolMessages([
+        {
+          id: 'call',
+          role: 'assistant',
+          blocks: [{ type: 'tool-call', name: 'screenshot', callId: 'capture', input: {} }],
+          timestamp: null,
+          source: 'transcript'
+        },
+        result
+      ])
+
+      expect(folded).toMatchObject([
+        {
+          id: 'call',
+          blocks: [
+            { type: 'tool-call', callId: 'capture' },
+            { type: 'tool-result', callId: 'capture', output: '' }
+          ]
+        },
+        {
+          id: 'image-only',
+          role: 'tool',
+          blocks: [{ type: 'image-ref', url: 'data:image/png;base64,iVBORw0KGgo=' }]
+        }
+      ])
+    }
+  )
+
   it('decode as tool output, not a user bubble', () => {
     const line = JSON.stringify({
       type: 'user',
