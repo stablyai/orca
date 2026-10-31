@@ -1,7 +1,8 @@
 import { useCombinedDiffExtent } from '../../use-combined-diff-extent'
 import {
   publishCombinedDiffMeasurements,
-  scrollCombinedDiffTo
+  observeCombinedDiffOffset,
+  scrollCombinedDiffToOffset
 } from '../../combined-diff-extent-dom'
 import { useCombinedDiffFocusRange } from '../../use-combined-diff-focus-range'
 import { useLayoutEffect } from 'react'
@@ -54,12 +55,9 @@ export function useCombinedDiffVirtualizer({
     overscan: COMBINED_DIFF_OVERSCAN,
     initialOffset: () => scrollOffsetRef.current,
     // Mark virtualizer scrolls so their events cannot be mistaken for user intent.
-    scrollToFn: (offset, options, instance) => {
-      publishCombinedDiffMeasurements(instance)
-      if (instance.scrollElement) {
-        scrollCombinedDiffTo(instance.scrollElement, offset + (options.adjustments ?? 0))
-      }
-    },
+    observeElementOffset: observeCombinedDiffOffset,
+    scrollToFn: (offset, options, instance) =>
+      scrollCombinedDiffToOffset(instance, offset + (options.adjustments ?? 0)),
     // Prebuild keys per section change because TanStack requests every key on each measurement pass.
     getItemKey: (index) => rowKeys[index] ?? `${index}:${generation}`
   })

@@ -1,7 +1,8 @@
 import { useCombinedDiffExtent } from '@/components/editor/use-combined-diff-extent'
 import {
   publishCombinedDiffMeasurements,
-  scrollCombinedDiffTo,
+  observeCombinedDiffOffset,
+  scrollCombinedDiffToOffset,
   scrollCombinedDiffToIndex
 } from '@/components/editor/combined-diff-extent-dom'
 import { useCombinedDiffFocusRange } from '@/components/editor/use-combined-diff-focus-range'
@@ -244,12 +245,9 @@ function PRFilesCombinedDiffSections({
   const virtualizer = useVirtualizer({
     rangeExtractor,
     onChange: (instance) => publishCombinedDiffMeasurements(instance, sections),
-    scrollToFn: (offset, options, instance) => {
-      publishCombinedDiffMeasurements(instance)
-      if (instance.scrollElement) {
-        scrollCombinedDiffTo(instance.scrollElement, offset + (options.adjustments ?? 0))
-      }
-    },
+    observeElementOffset: observeCombinedDiffOffset,
+    scrollToFn: (offset, options, instance) =>
+      scrollCombinedDiffToOffset(instance, offset + (options.adjustments ?? 0)),
     count: sections.length,
     getScrollElement: () => scrollContainerRef.current,
     estimateSize: (index) => {

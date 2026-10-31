@@ -47,9 +47,10 @@ function fixture(heights: number[], initial = 0) {
     writes,
     project,
     position: () => position,
-    input: (value: number) => {
+    input: (value: number, beforeScroll?: () => void) => {
       owner.input()
       position = value
+      beforeScroll?.()
       owner.scrolled()
     }
   }
@@ -111,6 +112,57 @@ it('maps ordinary growth above the viewport, leaves spanning growth stable, and 
   }
   f.owner.publish(items([1400, 21000], ['replaced', 'new-model']))
   expect(f.position()).toBe(20)
+})
+
+it.each([0, 30, 500])(
+  'preserves the saved point through preceding shrink to %i and later growth',
+  (height) => {
+    const f = fixture([670, 20000], 27)
+    const saved = f.owner.capture(1, 32)
+    expect(saved?.gap).toBe(675)
+    if (!saved) {
+      throw new Error('Expected the following-file anchor')
+    }
+    f.owner.restore(saved)
+    f.owner.publish(items([height, 20000]))
+    expect(f.position()).toBe(0)
+    expect((f.owner.item(1)?.start ?? 0) + 32 - f.position()).toBe(675)
+    f.owner.publish(items([870, 20000]))
+    expect(f.position()).toBe(227)
+    expect((f.owner.item(1)?.start ?? 0) + 32 - f.position()).toBe(675)
+  }
+)
+
+it('consumes leading slack once when a same-source publication precedes the scroll listener', () => {
+  const f = fixture([670, 20000], 27)
+  const saved = f.owner.capture(1, 32)
+  if (!saved) {
+    throw new Error('Expected the following-file anchor')
+  }
+  f.owner.restore(saved)
+  const layout = items([30, 20000])
+  f.owner.publish(layout)
+  expect(f.owner.item(1)?.start).toBe(643)
+  f.input(200, () => f.owner.publish(layout))
+  expect(f.position()).toBe(0)
+  expect(f.owner.item(1)?.start).toBe(443)
+  f.owner.scrolled()
+  expect(f.owner.item(1)?.start).toBe(443)
+  expect(f.writes).toEqual([0, 0])
+})
+
+it('restores a negative saved offset with leading slack and exports it without a new saved field', () => {
+  const f = fixture([30, 20000])
+  f.owner.importView({ scrollTop: 0, anchor: { key: '1', offset: -643 } })
+  expect(f.owner.item(1)?.start).toBe(643)
+  const state = f.owner.exportView()
+  expect(state.anchor).toMatchObject({ key: '1', offset: -643 })
+  const restored = fixture([])
+  restored.owner.importView(state)
+  restored.owner.publish(items([30, 20000]))
+  expect(restored.owner.item(1)?.start).toBe(643)
+  restored.owner.publish(items([870, 20000]))
+  expect(restored.position()).toBe(227)
 })
 
 it('consumes slack on manual scrolling and drops removed identities without a deferred writer', () => {

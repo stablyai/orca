@@ -1,4 +1,4 @@
-import type { VirtualItem, Virtualizer } from '@tanstack/react-virtual'
+import { observeElementOffset, type VirtualItem, type Virtualizer } from '@tanstack/react-virtual'
 import { CombinedDiffExtent } from './combined-diff-extent'
 import { getCombinedDiffFocusOwner } from './combined-diff-overflow'
 import { COMBINED_DIFF_ROW_SELECTOR } from './combined-diff-viewport'
@@ -10,10 +10,12 @@ const owners = new WeakMap<HTMLElement, ReturnType<typeof createOwner>>()
 
 function createOwner(viewport: HTMLElement) {
   let mark: ((offset: number) => void) | undefined
+  let offsetChanged: (() => void) | undefined
+  let projectedLeading = 0
   const extent = new CombinedDiffExtent({
     position: () => viewport.scrollTop,
     height: () => viewport.clientHeight,
-    project: (items, height) => {
+    project: (items, height, leading) => {
       const content = viewport.querySelector<HTMLElement>('[data-combined-diff-extent]')
       const prefix = prefixHeight(viewport)
       if (content) {
@@ -22,9 +24,13 @@ function createOwner(viewport: HTMLElement) {
       viewport.querySelectorAll<HTMLElement>(COMBINED_DIFF_ROW_SELECTOR).forEach((row) => {
         const item = items[Number(row.dataset.index)]
         if (item) {
-          row.style.top = `${item.start - prefix}px`
+          row.style.top = `${item.start + leading - prefix}px`
         }
       })
+      if (leading !== projectedLeading) {
+        projectedLeading = leading
+        offsetChanged?.()
+      }
     },
     write: (offset) => {
       mark?.(offset)
@@ -35,7 +41,33 @@ function createOwner(viewport: HTMLElement) {
     extent,
     setMark: (next: typeof mark) => {
       mark = next
+    },
+    setOffsetChanged: (next: typeof offsetChanged) => {
+      offsetChanged = next
     }
+  }
+}
+
+export function observeCombinedDiffOffset(
+  instance: Virtualizer<HTMLDivElement, Element>,
+  callback: (offset: number, isScrolling: boolean) => void
+): (() => void) | undefined {
+  const viewport = instance.scrollElement
+  if (!viewport) {
+    return undefined
+  }
+  const extent = getCombinedDiffExtent(viewport)
+  const notify = (scrolling: boolean): void =>
+    callback(Math.max(0, extent.logicalScrollTop() - prefixHeight(viewport)), scrolling)
+  owners.get(viewport)?.setOffsetChanged(() => notify(instance.isScrolling))
+  const disconnect = observeElementOffset(instance, (_offset, scrolling) => {
+    // Consume physical input before a virtualizer publication can reuse the old anchor.
+    extent.scrolled()
+    notify(scrolling)
+  })
+  return () => {
+    disconnect?.()
+    owners.get(viewport)?.setOffsetChanged(undefined)
   }
 }
 
@@ -91,6 +123,18 @@ export function publishCombinedDiffMeasurements(
 
 export function scrollCombinedDiffTo(viewport: HTMLElement, target: number): boolean {
   return getCombinedDiffExtent(viewport).navigate(target)
+}
+
+export function scrollCombinedDiffToOffset(
+  instance: Virtualizer<HTMLDivElement, Element>,
+  offset: number
+): void {
+  publishCombinedDiffMeasurements(instance)
+  const viewport = instance.scrollElement
+  if (viewport) {
+    const extent = getCombinedDiffExtent(viewport)
+    extent.navigate(offset + prefixHeight(viewport) + extent.leadingSlack)
+  }
 }
 
 export function scrollCombinedDiffToIndex(

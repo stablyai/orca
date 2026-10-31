@@ -21,19 +21,27 @@ export class CombinedDiffExtent {
   private depth = 0
   private target = 0
   revision = 0
+  leadingSlack = 0
   trailingSlack = 0
 
   constructor(
     private readonly view: {
       position: () => number
       height: () => number
-      project: (items: readonly VirtualItem[], height: number) => void
+      project: (items: readonly VirtualItem[], height: number, leading: number) => void
       write: (position: number) => void
     }
   ) {}
 
   item(index: number): VirtualItem | undefined {
-    return this.items[index]
+    const item = this.items[index]
+    return item && this.leadingSlack
+      ? { ...item, start: item.start + this.leadingSlack, end: item.end + this.leadingSlack }
+      : item
+  }
+
+  logicalScrollTop(): number {
+    return this.target - this.leadingSlack
   }
 
   capture(index: number, offset: number): CombinedDiffItemAnchor | null {
@@ -42,7 +50,7 @@ export class CombinedDiffExtent {
   }
 
   private topAnchor(priority?: VirtualItem['key']): CombinedDiffItemAnchor | null {
-    const position = this.view.position()
+    const position = this.view.position() - this.leadingSlack
     const priorityIndex = priority === undefined ? undefined : this.indices.get(priority)
     const focused = priorityIndex === undefined ? undefined : this.items[priorityIndex]
     let low = 0
@@ -73,7 +81,7 @@ export class CombinedDiffExtent {
       if (this.pendingImport && this.applyImport()) {
         return
       }
-      this.project(this.view.position())
+      this.project(this.logicalScrollTop())
       return
     }
     this.source = items
@@ -93,7 +101,7 @@ export class CombinedDiffExtent {
       if (this.pendingImport && this.applyImport()) {
         return
       }
-      this.project(this.view.position())
+      this.project(this.logicalScrollTop())
       return
     }
     const anchor = this.anchor ?? this.topAnchor(priority)
@@ -123,7 +131,7 @@ export class CombinedDiffExtent {
     if (!this.depth) {
       const target = this.position(this.anchor)
       const naturalMax = Math.max(0, (this.items.at(-1)?.end ?? 0) - this.view.height())
-      this.apply(target ?? Math.min(this.view.position(), naturalMax))
+      this.apply(target ?? Math.min(this.view.position() - this.leadingSlack, naturalMax))
     }
   }
 
@@ -135,13 +143,18 @@ export class CombinedDiffExtent {
 
   private project(target: number): void {
     const extent = this.items.at(-1)?.end ?? 0
+    this.leadingSlack = Math.max(0, -target)
     this.trailingSlack = Math.max(0, target - Math.max(0, extent - this.view.height()))
-    this.view.project(this.items, extent + this.trailingSlack)
+    this.view.project(
+      this.items,
+      extent + this.leadingSlack + this.trailingSlack,
+      this.leadingSlack
+    )
   }
 
   private apply(target: number): boolean {
     this.target = Math.max(0, target)
-    this.project(this.target)
+    this.project(target)
     const before = this.view.position()
     if (before !== this.target) {
       this.view.write(this.target)
@@ -156,10 +169,11 @@ export class CombinedDiffExtent {
     const anchor = this.anchor ?? this.topAnchor()
     const index = anchor ? (this.indices.get(anchor.key) ?? -1) : -1
     const item = this.items[index]
+    const position = this.view.position() - this.leadingSlack
     const fallbackKeys: string[] = []
     for (let next = index + 1; next < this.items.length; next += 1) {
       const candidate = this.items[next]!
-      if (candidate.start >= this.view.position() + this.view.height()) {
+      if (candidate.start >= position + this.view.height()) {
         break
       }
       fallbackKeys.push(String(candidate.key))
@@ -170,7 +184,7 @@ export class CombinedDiffExtent {
         anchor && item && typeof anchor.key === 'string'
           ? {
               key: anchor.key,
-              offset: this.view.position() - item.start,
+              offset: position - item.start,
               fallbackKeys
             }
           : null
@@ -242,7 +256,8 @@ export class CombinedDiffExtent {
   navigate(target: number): boolean {
     this.pendingImport = null
     const extent = this.items.at(-1)?.end ?? 0
-    const next = Math.max(0, Math.min(Math.max(0, extent - this.view.height()), target))
+    const max = this.leadingSlack + Math.max(0, extent - this.view.height()) + this.trailingSlack
+    const next = Math.max(0, Math.min(max, target)) - this.leadingSlack
     this.anchor = null
     const changed = this.apply(next)
     this.anchor = this.topAnchor()
@@ -259,8 +274,7 @@ export class CombinedDiffExtent {
     if (position !== this.target) {
       this.input()
     }
-    this.target = position
-    this.project(position)
+    this.apply(position - this.leadingSlack)
   }
 
   invalidate(key: VirtualItem['key']): void {
