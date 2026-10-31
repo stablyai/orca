@@ -159,8 +159,8 @@ it('keeps a local section label while an ordinary SSH raw twin has no exact Repo
   const catalog = buildProjectSectionCatalog(
     {
       repos: [local],
-      projects: projection.projects,
-      setups: projection.setups,
+      projects: [...projection.projects],
+      setups: [...projection.setups],
       projectOrderBy: 'manual'
     },
     [],

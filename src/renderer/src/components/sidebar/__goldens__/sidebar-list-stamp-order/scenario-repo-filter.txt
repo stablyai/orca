@@ -99,8 +99,8 @@ ITEM rowKey=pinned:|orca::/w/feat-c depth=2 groupDepth=0 lastChild=true children
 ITEM rowKey=pinned:|lab::/w/gitlab-mr depth=1 groupDepth=0 lastChild=true children=0 showProject=true placement=pinned owning=project:repo:lab parent=pinned:|orca::/w/feat-a
 HEADER key=project-group:pg-work label="Work" count=2 tone="text-foreground" icon=FolderTree projectGroup=pg-work projectGroupDepth=0
 HEADER key=project:p-orca label="orca" count=2 tone="text-foreground" icon=FolderTree repo=orca projectGroupDepth=1
-ITEM rowKey=project:p-orca:|orca::/orca depth=0 groupDepth=1 children=0 placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
-ITEM rowKey=project:p-orca:|orca::/w/Zeta depth=0 groupDepth=1 lastChild=true children=0 placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
+ITEM rowKey=project:p-orca:|orca::/orca depth=0 groupDepth=1 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
+ITEM rowKey=project:p-orca:|orca::/w/Zeta depth=0 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
 HEADER key=project-group:pg-nested label="Nested" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-nested projectGroupDepth=1
 HEADER key=project:repo:lab label="lab" count=1 tone="text-foreground" icon=FolderTree repo=lab projectGroupDepth=2
 ITEM rowKey=project:repo:lab:|lab::/lab depth=0 groupDepth=2 lastChild=true children=0 placement=natural owning=project:repo:lab path=project-group:pg-work>project-group:pg-nested>project:repo:lab
@@ -150,12 +150,12 @@ ITEM rowKey=pinned:|orca::/w/feat-c depth=2 groupDepth=0 lastChild=true children
 ITEM rowKey=pinned:|lab::/w/gitlab-mr depth=1 groupDepth=0 lastChild=true children=0 showProject=true placement=pinned owning=project:repo:lab parent=pinned:|orca::/w/feat-a
 HEADER key=project-group:pg-work label="Work" count=2 tone="text-foreground" icon=FolderTree projectGroup=pg-work projectGroupDepth=0
 HEADER key=project:p-orca label="orca" count=6 tone="text-foreground" icon=FolderTree repo=orca projectGroupDepth=1
-ITEM rowKey=project:p-orca:|orca::/orca depth=0 groupDepth=1 children=0 placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
-ITEM rowKey=project:p-orca:|orca::/w/feat-a depth=0 groupDepth=1 children=2 lineageKey=lineage:orca::/w/feat-a placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
-ITEM rowKey=project:p-orca:|orca::/w/feat-b depth=1 groupDepth=1 children=1 lineageKey=lineage:orca::/w/feat-b placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-a
-ITEM rowKey=project:p-orca:|orca::/w/feat-c depth=2 groupDepth=1 lastChild=true children=0 placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-b
-ITEM rowKey=project:p-orca:|lab::/w/gitlab-mr depth=1 groupDepth=1 lastChild=true children=0 showProject=true placement=natural owning=project:repo:lab path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-a
-ITEM rowKey=project:p-orca:|orca::/w/Zeta depth=0 groupDepth=1 lastChild=true children=0 placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
+ITEM rowKey=project:p-orca:|orca::/orca depth=0 groupDepth=1 children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
+ITEM rowKey=project:p-orca:|orca::/w/feat-a depth=0 groupDepth=1 children=2 lineageKey=lineage:orca::/w/feat-a hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
+ITEM rowKey=project:p-orca:|orca::/w/feat-b depth=1 groupDepth=1 children=1 lineageKey=lineage:orca::/w/feat-b hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-a
+ITEM rowKey=project:p-orca:|orca::/w/feat-c depth=2 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-b
+ITEM rowKey=project:p-orca:|lab::/w/gitlab-mr depth=1 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" showProject=true placement=natural owning=project:repo:lab path=project-group:pg-work>project:p-orca parent=project:p-orca:|orca::/w/feat-a
+ITEM rowKey=project:p-orca:|orca::/w/Zeta depth=0 groupDepth=1 lastChild=true children=0 hostLabel="Local Linux" placement=natural owning=project:p-orca path=project-group:pg-work>project:p-orca
 HEADER key=project-group:pg-nested label="Nested" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-nested projectGroupDepth=1
 HEADER key=project:repo:lab label="lab" count=1 tone="text-foreground" icon=FolderTree repo=lab projectGroupDepth=2
 ITEM rowKey=project:repo:lab:|lab::/lab depth=0 groupDepth=2 lastChild=true children=0 placement=natural owning=project:repo:lab path=project-group:pg-work>project-group:pg-nested>project:repo:lab

@@ -140,6 +140,27 @@ describe('recent project rank scan budget', () => {
         count: 32,
         icon: { kind: 'project' },
         repo: group.repo,
+        displayRepo: repoMap.get(group.label),
+        contextRepo: repoMap.get(group.label),
+        projectScope: {
+          key,
+          catalogHostId: 'local',
+          registrations: [
+            {
+              id: group.label,
+              projectId: `repo:${group.label}`,
+              hostId: 'local',
+              repoId: group.label,
+              path: `/${group.label}`,
+              displayName: group.label,
+              setupState: 'ready',
+              setupMethod: 'legacy-repo',
+              createdAt: 0,
+              updatedAt: 0
+            }
+          ],
+          context: { repoId: group.label, hostId: 'local', setupId: group.label }
+        },
         projectGroupDepth: 1
       }))
     )

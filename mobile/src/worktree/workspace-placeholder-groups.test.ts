@@ -4,6 +4,7 @@ import { projectHostSetupProjectionFromRepos } from '../../../src/shared/project
 import { buildMobileProjectSectionCatalog } from '../../../src/shared/mobile-project-sections-contract'
 import { NO_WORKSPACE_ROW_FILTERS } from '../../../src/shared/workspace-view/workspace-row-filters'
 import { buildSections, type Worktree } from './workspace-list-sections'
+import { buildProjectSectionCatalog } from './project-section-catalog'
 
 function worktree(overrides: Partial<Worktree> = {}): Worktree {
   const worktreePath = join('/tmp', 'orca', 'worktrees', 'feature')
@@ -52,11 +53,7 @@ it.each(['repository', 'host', 'folder'] as const)(
     const served = buildMobileProjectSectionCatalog(repos, projection, 'manual', undefined, {
       projectGroupingMode: mode
     })
-    const catalog = {
-      repos: served.repos,
-      grouping: { projects: served.projects, projectHostSetups: served.setups },
-      projectOrderBy: 'manual' as const
-    }
+    const catalog = buildProjectSectionCatalog(served, [], null, null)
     const row = worktree({ repoId: 'same', repo: 'App', path: '/local/feature', hostId: 'local' })
     const build = (query = '') =>
       buildSections(

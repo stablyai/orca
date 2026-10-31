@@ -385,11 +385,17 @@ it.each([100, 1000])(
           let visits = 0
           for (const group of index.groups) {
             const iterator = group.registrations[Symbol.iterator].bind(group.registrations)
-            group.registrations[Symbol.iterator] = function* () {
-              for (const setup of { [Symbol.iterator]: iterator }) {
-                visits++
-                yield setup
+            group.registrations[Symbol.iterator] = () => {
+              const values = iterator()
+              const next = values.next.bind(values)
+              values.next = (...args: Parameters<typeof values.next>) => {
+                const result = next(...args)
+                if (!result.done) {
+                  visits++
+                }
+                return result
               }
+              return values
             }
           }
           hostReads = 0
@@ -416,12 +422,18 @@ it.each([100, 1000])(
             let editMatcherBuilds = 0
             let editTokenVisits = 0
             const previousIterator = previous[Symbol.iterator].bind(previous)
-            previous[Symbol.iterator] = function* () {
+            previous[Symbol.iterator] = () => {
               editMatcherBuilds++
-              for (const id of { [Symbol.iterator]: previousIterator }) {
-                editTokenVisits++
-                yield id
+              const values = previousIterator()
+              const next = values.next.bind(values)
+              values.next = (...args: Parameters<typeof values.next>) => {
+                const result = next(...args)
+                if (!result.done) {
+                  editTokenVisits++
+                }
+                return result
               }
+              return values
             }
             visits = 0
             hostReads = 0
@@ -475,12 +487,18 @@ it.each([100, 1000])(
             let matcherBuilds = 0
             let matcherTokenVisits = 0
             const nextIterator = next[Symbol.iterator].bind(next)
-            next[Symbol.iterator] = function* () {
+            next[Symbol.iterator] = () => {
               matcherBuilds++
-              for (const id of { [Symbol.iterator]: nextIterator }) {
-                matcherTokenVisits++
-                yield id
+              const values = nextIterator()
+              const next = values.next.bind(values)
+              values.next = (...args: Parameters<typeof values.next>) => {
+                const result = next(...args)
+                if (!result.done) {
+                  matcherTokenVisits++
+                }
+                return result
               }
+              return values
             }
             visits = 0
             hostReads = 0

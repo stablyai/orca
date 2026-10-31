@@ -90,7 +90,7 @@ ITEM rowKey=pinned:ssh:gpu-vm|shared::/w/same depth=0 groupDepth=0 lastChild=tru
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
 HEADER key=project:p-orca label="orca" count=1 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0
-ITEM rowKey=project:p-orca:|orca-ssh::/orca-ssh depth=0 groupDepth=0 lastChild=true children=0 placement=natural owning=project:p-orca
+ITEM rowKey=project:p-orca:|orca-ssh::/orca-ssh depth=0 groupDepth=0 lastChild=true children=0 hostLabel="GPU VM" placement=natural owning=project:p-orca
 HEADER key=repo:api label="Unknown" count=0 tone="text-foreground" icon=FolderTree projectGroupDepth=0
 PENDING key=pending:creation-1 creation=creation-1
 SECTION repo:api: -
@@ -134,8 +134,8 @@ ITEM rowKey=pinned:ssh:gpu-vm|shared::/w/same depth=0 groupDepth=0 lastChild=tru
 HEADER key=project-group:pg-remote-folders label="Remote folders" count=1 tone="text-foreground" icon=FolderTree projectGroup=pg-remote-folders projectGroupDepth=0
 FOLDER key=folder-workspace:ssh:gpu-vm|folder:fw-remote projectGroup=pg-remote-folders depth=0 groupDepth=1
 HEADER key=project:p-orca label="orca" count=2 tone="text-foreground" icon=FolderTree repo=orca-ssh projectGroupDepth=0
-ITEM rowKey=project:p-orca:|orca-ssh::/orca-ssh depth=0 groupDepth=0 children=0 placement=natural owning=project:p-orca
-ITEM rowKey=project:p-orca:ssh:gpu-vm|orca-ssh::/w/remote-x depth=0 groupDepth=0 lastChild=true children=0 placement=natural owning=project:p-orca
+ITEM rowKey=project:p-orca:|orca-ssh::/orca-ssh depth=0 groupDepth=0 children=0 hostLabel="GPU VM" placement=natural owning=project:p-orca
+ITEM rowKey=project:p-orca:ssh:gpu-vm|orca-ssh::/w/remote-x depth=0 groupDepth=0 lastChild=true children=0 hostLabel="GPU VM" placement=natural owning=project:p-orca
 HEADER key=repo:api label="Unknown" count=0 tone="text-foreground" icon=FolderTree projectGroupDepth=0
 PENDING key=pending:creation-1 creation=creation-1
 HEADER key=repo:shared label="Unknown" count=1 tone="text-foreground" icon=FolderTree projectGroupDepth=0

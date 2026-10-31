@@ -86,6 +86,12 @@ vi.mock('react-native', () => ({
   TextInput: 'TextInput',
   View: 'View'
 }))
+vi.mock('react-native-reanimated', () => {
+  const Easing: Pick<typeof import('react-native-reanimated').Easing, 'bezier'> = {
+    bezier: (_x1, _y1, _x2, _y2) => ({ factory: () => (t) => t })
+  }
+  return { Easing }
+})
 vi.mock(
   'lucide-react-native',
   () =>
