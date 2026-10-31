@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
+import { resolveAgentForegroundProcessFromPs } from '../providers/agent-foreground-process'
 import type { ProcessTableRow } from '../../shared/process-table-snapshot'
 import type * as ProcessTableSnapshotReader from '../../shared/process-table-snapshot-reader'
 import {
@@ -54,18 +55,43 @@ describe('confirmRootShellHasNoChildrenFromProcessTable (the POSIX exit proof)',
     expect(await confirmRootShellHasNoChildrenFromProcessTable(100)).toBe(false)
   })
 
-  it('exempts the configured login child after exec, never the temporary bash trampoline', async () => {
+  it('recognizes the recorded login-wrapper agent and proves shell-alone only after its exit', async () => {
+    // Recorded argv/ancestry; identifiers, paths and TTY/stat are fixture values, and exit is derived.
+    const host = {
+      ...LOGIN,
+      pid: 99,
+      tty: '?',
+      command:
+        '/placeholder/orca/daemon-host/macos/terminal-host-placeholder/app.noindex/Orca Terminal Host.app/Contents/MacOS/orca-terminal-host'
+    }
     const login = {
       ...LOGIN,
+      ppid: host.pid,
       command:
-        '/usr/bin/login -flpq me /bin/bash --noprofile --norc -p -c export SHELL="$1"; shift; exec -l -- "$@" orca-tcc-login /bin/zsh /bin/zsh -l'
+        '/usr/bin/login -flpq placeholder-user /bin/bash --noprofile --norc -p -c export SHELL="$1"; shift; exec -l -- "$@" orca-tcc-login /bin/zsh /bin/zsh -l'
     }
-    strictCapture.mockResolvedValue([login, SHELL])
-    expect(await confirmRootShellHasNoChildrenFromProcessTable(100)).toBe(
+    const shell = { ...SHELL, command: '-/bin/zsh -l' }
+    const agent = {
+      pid: 102,
+      ppid: shell.pid,
+      tty: shell.tty,
+      stat: 'S+',
+      command:
+        'claude --plugin-dir /placeholder/orca-agent-view --dangerously-skip-permissions --effort high --resume placeholder-session'
+    }
+    const liveTree = [host, login, { ...shell, stat: 'S' }, agent]
+    expect(resolveAgentForegroundProcessFromPs(liveTree, login.pid)).toBe('claude')
+    strictCapture.mockResolvedValue(liveTree)
+    expect(await confirmRootShellHasNoChildrenFromProcessTable(login.pid)).toBe(false)
+
+    const afterAgentExit = [host, login, shell]
+    expect(resolveAgentForegroundProcessFromPs(afterAgentExit, login.pid)).toBeNull()
+    strictCapture.mockResolvedValue(afterAgentExit)
+    expect(await confirmRootShellHasNoChildrenFromProcessTable(login.pid)).toBe(
       process.platform === 'darwin'
     )
-    strictCapture.mockResolvedValue([login, { ...SHELL, command: '/bin/bash' }])
-    expect(await confirmRootShellHasNoChildrenFromProcessTable(100)).toBe(false)
+    strictCapture.mockResolvedValue([host, login, { ...shell, command: '/bin/bash' }])
+    expect(await confirmRootShellHasNoChildrenFromProcessTable(login.pid)).toBe(false)
   })
 
   it('proves nothing from a capture with a malformed row', async () => {
