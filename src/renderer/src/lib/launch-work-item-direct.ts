@@ -11,9 +11,7 @@ import {
   unavailableAgentErrorMessage,
   workspaceActivationErrorMessage
 } from '@/lib/launch-work-item-direct-messages'
-import type { TuiAgent } from '../../../shared/tui-agent'
 import type { GitPushTarget } from '../../../shared/worktree/types'
-import type { buildDirectWorkItemAgentStartupPlan } from '@/lib/launch-work-item-direct-agent'
 import { buildDirectWorkItemStartupOpts } from '@/lib/launch-work-item-direct-agent'
 import {
   getDirectWorkItemIdentity,
@@ -33,10 +31,7 @@ import {
   finishDirectWorkItemPrompt
 } from '@/lib/launch-work-item-direct-agent-routing'
 import { prepareDirectWorkItemAgentLaunch } from '@/lib/launch-work-item-direct-route-preparation'
-import {
-  planAgentSessionLaunch,
-  type AgentSessionLaunchPlan
-} from '@/lib/agent-session-launch-plan'
+import { planAgentSessionLaunch } from '@/lib/agent-session-launch-plan'
 import { newAgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 
 /** Create/activate a workspace and deliver work-item context to its agent. Setup decisions, unresolved repos or unavailable agents fall back to the modal; paste failures retain the usable workspace and surface a notice. */
@@ -46,6 +41,12 @@ export async function launchWorkItemDirect(
   const { item, repoId, openModalFallback, baseBranch } = args
   const { telemetrySource, launchSource, agentOverride } = args
   let agentArgs = args.agentArgs
+  let creationAccepted = false
+  const reportFailure = (message: string): false => {
+    toast.error(message)
+    args.onFailureNotified?.()
+    return false
+  }
   try {
     if (args.signal?.aborted) {
       return 'cancelled'
@@ -150,149 +151,122 @@ export async function launchWorkItemDirect(
       return false
     }
 
-    let worktreeId: string,
-      worktreePath = ''
-    let primaryTabId: string | null
-    let startupPlan = null as ReturnType<typeof buildDirectWorkItemAgentStartupPlan>['startupPlan']
-    let effectiveAgent: TuiAgent | null = null
-    let draftLaunchedNatively = false
-    let plan: AgentSessionLaunchPlan | null = null
-    let structuredLaunchCompleted = false
-    let startupPlanFailed = false
-    try {
-      if (args.signal?.aborted) {
-        return 'cancelled'
-      }
-      const result = await store.createWorktree(
-        repoId,
-        workspaceName,
-        resolvedBaseBranch,
-        finalSetupDecision,
-        undefined,
-        telemetrySource,
-        workspaceIntentName?.displayName ?? item.title,
-        itemType === 'issue' && itemNumber ? itemNumber : undefined,
-        itemType === 'pr' && itemNumber ? itemNumber : undefined,
-        resolvedPushTarget,
-        undefined,
-        item.linearIdentifier,
-        resolvedBranchNameOverride,
-        undefined,
-        itemType === 'mr' && itemNumber ? itemNumber : undefined,
-        gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
-        undefined,
-        undefined,
-        undefined,
-        item.linearWorkspaceId,
-        item.linearOrganizationUrlKey,
-        undefined,
-        undefined,
-        undefined,
-        resolvedCompareBaseRef,
-        { executionHostId: context.executionHostId }
-      )
-      if (args.signal?.aborted) {
-        return 'cancelled'
-      }
-      worktreeId = result.worktree.id
-      worktreePath = result.worktree.path
-
-      const launchPreparation = await prepareDirectWorkItemAgentLaunch({
-        worktreeId,
-        worktreePath,
-        repoId,
-        agentOverride,
-        agentLaunchPreferences: args.agentLaunchPreferences,
-        agentArgs: args.agentArgs,
-        ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
-        resolveAgentArgs: args.resolveAgentArgs,
-        resolveSessionOptions: args.resolveSessionOptions,
-        launchChoice: args.launchChoice,
-        sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
-        repoConnectionId: context.repoConnectionId,
-        repoHost: repo,
-        latestStore: useAppStore.getState(),
-        draftContent,
-        promptDelivery,
-        launchPlatform: args.launchPlatform,
-        repoLaunchHost: context.repoLaunchHost,
-        repoProjectRuntime: context.repoProjectRuntime,
-        planLaunch: planAgentSessionLaunch,
-        requestId,
-        preflightPlan
-      })
-      if (args.signal?.aborted) {
-        return 'cancelled'
-      }
-      if (launchPreparation.unavailable) {
-        activateAndRevealWorktree(worktreeId, {
-          sidebarRevealBehavior: 'auto',
-          setup: result.setup
-        })
-        toast.error(unavailableAgentErrorMessage())
-        return false
-      }
-      agentArgs = launchPreparation.agentArgs
-      effectiveAgent = launchPreparation.effectiveAgent
-      startupPlan = launchPreparation.startupPlan
-      draftLaunchedNatively = launchPreparation.draftLaunchedNatively
-      startupPlanFailed = launchPreparation.startupPlanFailed
-      plan = launchPreparation.plan
-
-      const activationHolder: { value: ReturnType<typeof activateAndRevealWorktree> } = {
-        value: false
-      }
-      const revealWorkspace = (): boolean => {
-        activationHolder.value = activateAndRevealWorktree(worktreeId, {
-          sidebarRevealBehavior: 'auto',
-          setup: result.setup,
-          defaultTabs: result.defaultTabs,
-          ...(launchPreparation.structuredLaunch
-            ? { providesInitialSurface: true }
-            : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource))
-        })
-        return activationHolder.value !== false
-      }
-      const structuredResult = beginDirectWorkItemStructuredLaunch({
-        plan,
-        primaryTabId: null,
-        beforeOpen: revealWorkspace,
-        declinedTerminal: {
-          ...(agentArgs !== undefined ? { agentArgs } : {}),
-          sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
-          ...(args.launchPlatform ? { launchPlatform: args.launchPlatform } : {}),
-          ...(launchSource ? { launchSource } : {})
-        }
-      })
-      if (!structuredResult.structuredLaunch) {
-        revealWorkspace()
-      }
-      const activation = activationHolder.value
-      if (!activation) {
-        // Report a workspace disappearing between create and activation rather than silently drop its draft.
-        toast.error(workspaceActivationErrorMessage())
-        return false
-      }
-      structuredLaunchCompleted = structuredResult.completed
-      primaryTabId = structuredResult.completed
-        ? structuredResult.primaryTabId
-        : activation.primaryTabId
-    } catch (error) {
-      if (args.signal?.aborted) {
-        return 'cancelled'
-      }
-      const message = error instanceof Error ? error.message : 'Failed to create workspace.'
-      toast.error(message)
-      return false
+    if (args.signal?.aborted) {
+      return 'cancelled'
     }
+    creationAccepted = true
+    args.onCreateAccepted?.()
+    const result = await store.createWorktree(
+      repoId,
+      workspaceName,
+      resolvedBaseBranch,
+      finalSetupDecision,
+      undefined,
+      telemetrySource,
+      workspaceIntentName?.displayName ?? item.title,
+      itemType === 'issue' && itemNumber ? itemNumber : undefined,
+      itemType === 'pr' && itemNumber ? itemNumber : undefined,
+      resolvedPushTarget,
+      undefined,
+      item.linearIdentifier,
+      resolvedBranchNameOverride,
+      undefined,
+      itemType === 'mr' && itemNumber ? itemNumber : undefined,
+      gitLabIssueNumber({ ...item, type: itemType, number: itemNumber }),
+      undefined,
+      undefined,
+      undefined,
+      item.linearWorkspaceId,
+      item.linearOrganizationUrlKey,
+      undefined,
+      undefined,
+      undefined,
+      resolvedCompareBaseRef,
+      { executionHostId: context.executionHostId }
+    )
+    const worktreeId = result.worktree.id
+    const worktreePath = result.worktree.path
+
+    const launchPreparation = await prepareDirectWorkItemAgentLaunch({
+      worktreeId,
+      worktreePath,
+      repoId,
+      agentOverride,
+      agentLaunchPreferences: args.agentLaunchPreferences,
+      agentArgs: args.agentArgs,
+      ...(args.sessionOptions ? { sessionOptions: args.sessionOptions } : {}),
+      resolveAgentArgs: args.resolveAgentArgs,
+      resolveSessionOptions: args.resolveSessionOptions,
+      launchChoice: args.launchChoice,
+      sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+      repoConnectionId: context.repoConnectionId,
+      repoHost: repo,
+      latestStore: useAppStore.getState(),
+      draftContent,
+      promptDelivery,
+      launchPlatform: args.launchPlatform,
+      repoLaunchHost: context.repoLaunchHost,
+      repoProjectRuntime: context.repoProjectRuntime,
+      planLaunch: planAgentSessionLaunch,
+      requestId,
+      preflightPlan
+    })
+    if (launchPreparation.unavailable) {
+      activateAndRevealWorktree(worktreeId, {
+        sidebarRevealBehavior: 'auto',
+        setup: result.setup,
+        defaultTabs: result.defaultTabs
+      })
+      return reportFailure(unavailableAgentErrorMessage())
+    }
+    agentArgs = launchPreparation.agentArgs
+    const { effectiveAgent, startupPlan, draftLaunchedNatively, startupPlanFailed, plan } =
+      launchPreparation
+
+    const activationHolder: { value: ReturnType<typeof activateAndRevealWorktree> } = {
+      value: false
+    }
+    const revealWorkspace = (): boolean => {
+      activationHolder.value = activateAndRevealWorktree(worktreeId, {
+        sidebarRevealBehavior: 'auto',
+        setup: result.setup,
+        defaultTabs: result.defaultTabs,
+        ...(launchPreparation.structuredLaunch
+          ? { providesInitialSurface: true }
+          : buildDirectWorkItemStartupOpts(effectiveAgent, startupPlan, launchSource))
+      })
+      return activationHolder.value !== false
+    }
+    const structuredResult = beginDirectWorkItemStructuredLaunch({
+      plan,
+      primaryTabId: null,
+      beforeOpen: revealWorkspace,
+      declinedTerminal: {
+        ...(agentArgs !== undefined ? { agentArgs } : {}),
+        sessionOptionsYieldToAgentArgs: args.sessionOptionsYieldToAgentArgs,
+        ...(args.launchPlatform ? { launchPlatform: args.launchPlatform } : {}),
+        ...(launchSource ? { launchSource } : {})
+      }
+    })
+    if (!structuredResult.structuredLaunch) {
+      revealWorkspace()
+    }
+    const activation = activationHolder.value
+    if (!activation) {
+      // Report a workspace disappearing between create and activation rather than silently drop its draft.
+      return reportFailure(workspaceActivationErrorMessage())
+    }
+    const primaryTabId = structuredResult.completed
+      ? structuredResult.primaryTabId
+      : activation.primaryTabId
 
     store.setSidebarOpen(true)
 
-    if (structuredLaunchCompleted) {
+    if (structuredResult.completed) {
       return true
     }
 
-    return finishDirectWorkItemPrompt({
+    const completed = finishDirectWorkItemPrompt({
       primaryTabId,
       effectiveAgent,
       promptDelivery,
@@ -301,7 +275,14 @@ export async function launchWorkItemDirect(
       draftLaunchedNatively,
       startupPlanFailed
     })
+    if (!completed) {
+      args.onFailureNotified?.()
+    }
+    return completed
   } catch (error) {
+    if (creationAccepted) {
+      return reportFailure(error instanceof Error ? error.message : 'Failed to create workspace.')
+    }
     if (args.signal?.aborted) {
       return 'cancelled'
     }

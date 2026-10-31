@@ -6,7 +6,6 @@ import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import * as preflight from './launch-work-item-direct-preflight'
 import * as inventory from './agent-detection-target-inventory'
 import * as draft from './launch-work-item-direct-draft'
-import * as preparation from './launch-work-item-direct-route-preparation'
 import * as delivery from './agent-launch-prompt-delivery'
 import { resolveDirectSetupDecision } from './launch-work-item-direct-preflight'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
@@ -179,7 +178,7 @@ describe('direct work item setup preparation', () => {
     readDirectSetupRequest(useAppStore.getState().modalData.directSetup).choose('run')
   }
 
-  it.each(['pr', 'project', 'detection', 'draft', 'plan', 'create', 'agent-preparation'] as const)(
+  it.each(['pr', 'project', 'detection', 'draft', 'plan'] as const)(
     'suppresses a late cancelled %s rejection through the original launch',
     async (stage) => {
       const gate = Promise.withResolvers<never>()
@@ -218,17 +217,6 @@ describe('direct work item setup preparation', () => {
           reached = () => plan.mock.calls.length > 0
           break
         }
-        case 'create':
-          mocks.createWorktree.mockReturnValueOnce(gate.promise)
-          reached = () => mocks.createWorktree.mock.calls.length > 0
-          break
-        case 'agent-preparation': {
-          const prepare = vi
-            .spyOn(preparation, 'prepareDirectWorkItemAgentLaunch')
-            .mockReturnValueOnce(gate.promise)
-          reached = () => prepare.mock.calls.length > 0
-          break
-        }
       }
       hostMocks.checkRuntimeHooks.mockResolvedValue({ hasHooks: true, hooks })
       const launch = launchWorkItemDirect({
@@ -244,9 +232,7 @@ describe('direct work item setup preparation', () => {
       expect(mocks.toastError).not.toHaveBeenCalled()
       expect(args.openModalFallback).not.toHaveBeenCalled()
       expect(mocks.pasteDraftWhenAgentReady).not.toHaveBeenCalled()
-      expect(mocks.createWorktree).toHaveBeenCalledTimes(
-        ['create', 'agent-preparation'].includes(stage) ? 1 : 0
-      )
+      expect(mocks.createWorktree).not.toHaveBeenCalled()
     }
   )
 

@@ -414,7 +414,8 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onStart).toHaveBeenCalledWith({
       agent: 'codex',
       commandInput: 'Fix the bug',
-      agentArgs: '--model gpt-5'
+      agentArgs: '--model gpt-5',
+      onFailureNotified: expect.any(Function)
     })
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)

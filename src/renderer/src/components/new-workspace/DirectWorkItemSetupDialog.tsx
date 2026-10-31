@@ -10,7 +10,7 @@ import {
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import type { DirectWorkItemSetupRequest } from '@/lib/direct-work-item-setup'
-import { SetupCommandPreview } from './NewWorkspaceComposerAdvancedSection'
+import { SetupCommandPreview } from './SetupCommandPreview'
 import { WorkspaceSetupChoice } from './WorkspaceSetupChoice'
 
 export function DirectWorkItemSetupDialog({
@@ -48,12 +48,11 @@ export function DirectWorkItemSetupDialog({
       <DialogContent surface="security" scrollable className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle>
-            {translate('auto.components.NewWorkspaceComposerCard.runSetup', 'Run setup')} ·{' '}
-            {request.repoName}
+            {translate('components.newWorkspace.directSetup.run', 'Run setup')} · {request.repoName}
           </DialogTitle>
           <DialogDescription>
             {translate(
-              'auto.components.NewWorkspaceComposerCard.9a70e4859e',
+              'components.newWorkspace.directSetup.description',
               'Choose whether to run setup before creating this workspace.'
             )}
           </DialogDescription>
@@ -69,18 +68,20 @@ export function DirectWorkItemSetupDialog({
               )}
             </p>
             <Button variant="outline" disabled={checking} onClick={() => void retry()}>
-              {translate('common.retry', 'Retry')}
+              {translate('components.newWorkspace.directSetup.retry', 'Retry')}
             </Button>
           </div>
         )}
         <WorkspaceSetupChoice
+          runLabel={translate('components.newWorkspace.directSetup.run', 'Run setup')}
+          skipLabel={translate('components.newWorkspace.directSetup.skip', 'Skip setup')}
           decision={null}
           onChange={request.choose}
           disabled={checking || inspection.kind !== 'needs-modal'}
         />
         <DialogFooter>
           <Button variant="ghost" onClick={request.cancel}>
-            {translate('common.cancel', 'Cancel')}
+            {translate('components.newWorkspace.directSetup.cancel', 'Cancel')}
           </Button>
         </DialogFooter>
       </DialogContent>

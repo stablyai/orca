@@ -19648,7 +19648,14 @@
     },
     "newWorkspace": {
       "agentOptional": "에이전트 [선택 사항]",
-      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요."
+      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "이 워크스페이스를 만들기 전에 설정을 실행할지 여부를 선택하세요.",
+        "cancel": "취소",
+        "retry": "다시 시도"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "다른 이슈 변경이 진행 중입니다."

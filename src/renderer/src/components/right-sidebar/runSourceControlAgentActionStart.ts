@@ -48,8 +48,11 @@ export type RunSourceControlAgentActionStartArgs = {
   launchSource: LaunchSource
   recoveryContext?: RuntimeGitContext | null
   signal?: AbortSignal
+  onCreateAccepted?: () => void
   onStart?: (args: {
     signal?: AbortSignal
+    onCreateAccepted?: () => void
+    onFailureNotified?: () => void
     agentLaunchPreferences?: AgentLaunchPreferences
     agent: TuiAgent
     commandInput: string
@@ -91,6 +94,7 @@ export async function runSourceControlAgentActionStart({
   launchSource,
   recoveryContext,
   signal,
+  onCreateAccepted,
   onStart,
   onSaveAgentDefault,
   onLaunchAccepted,
@@ -182,6 +186,10 @@ export async function runSourceControlAgentActionStart({
   if (onStart) {
     const result = await onStart({
       signal,
+      onCreateAccepted,
+      onFailureNotified: () => {
+        launchFailureNotified = true
+      },
       agentLaunchPreferences,
       agent: selectedAgent,
       commandInput: trimmedCommandInput,

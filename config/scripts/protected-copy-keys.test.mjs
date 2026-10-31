@@ -91,6 +91,56 @@ import { plain } from '../plain/Plain'
     })
   })
 
+  it('keeps the actual direct Setup security contribution source-owned', async () => {
+    const { collectSourceFiles } = await import('./verify-localization-catalog.mjs')
+    const root = process.cwd()
+    const directory = path.join(root, 'src/renderer/src/components/new-workspace')
+    const sources = new Map(
+      (await collectSourceFiles(root, directory)).map((file) => [file, readFileSync(file, 'utf8')])
+    )
+    const english = JSON.parse(
+      readFileSync(path.join(root, 'src/renderer/src/i18n/locales/en.json'), 'utf8')
+    )
+    const paths = new Set()
+    const flatten = (value, prefix = '') => {
+      for (const [key, child] of Object.entries(value)) {
+        const full = prefix ? `${prefix}.${key}` : key
+        paths.add(full)
+        if (typeof child === 'object' && child !== null) {
+          flatten(child, full)
+        }
+      }
+    }
+    flatten(english)
+    const contribution = collectProtectedCopyKeys(sources, paths)
+    expect(contribution.keys.length).toBeGreaterThan(0)
+    expect(contribution.prefixes).toEqual([])
+    expect(
+      contribution.keys.every(
+        (key) =>
+          key.startsWith('components.newWorkspace.directSetup.') ||
+          key === 'components.newWorkspace.setupCheckFailed'
+      )
+    ).toBe(true)
+    const { collectKeyLiterals } = await import('./verify-localization-extraction.mjs')
+    const { isProtectedCopyPath } =
+      await import('../../src/shared/plugins/languages/plugin-protected-copy.ts')
+    const dialog = sources.get(path.join(directory, 'DirectWorkItemSetupDialog.tsx'))
+    const evidence = collectKeyLiterals(dialog, { literals: new Set(), dynamicPrefixes: new Set() })
+    expect(
+      [...evidence.literals]
+        .filter((key) => paths.has(key))
+        .every((key) => contribution.keys.includes(key) && isProtectedCopyPath(key))
+    ).toBe(true)
+    for (const name of ['SetupCommandPreview.tsx', 'WorkspaceSetupChoice.tsx']) {
+      const copy = collectKeyLiterals(sources.get(path.join(directory, name)), {
+        literals: new Set(),
+        dynamicPrefixes: new Set()
+      })
+      expect([...copy.literals].filter((key) => paths.has(key))).toEqual([])
+    }
+  })
+
   it('keeps dynamic key heads only when they are specific', () => {
     const sources = sourcesFrom({
       'Dialog.tsx': '<SecuritySurface>{translate(`trust.${id}`)}{translate(`trust.reasons.${x}`)}'

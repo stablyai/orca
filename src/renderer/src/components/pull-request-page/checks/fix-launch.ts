@@ -35,6 +35,8 @@ export async function saveFixChecksActionDefault(
 
 export async function startFixChecksFromDialog(args: {
   signal?: AbortSignal
+  onCreateAccepted?: () => void
+  onFailureNotified?: () => void
   targetRepoId: string | null
   item: GitHubWorkItem
   agent: Parameters<typeof launchWorkItemDirect>[0]['agentOverride']
@@ -51,6 +53,8 @@ export async function startFixChecksFromDialog(args: {
   }
   return await launchWorkItemDirect({
     signal: args.signal,
+    onCreateAccepted: args.onCreateAccepted,
+    onFailureNotified: args.onFailureNotified,
     item: { ...args.item, repoId: args.targetRepoId, pasteContent: args.commandInput },
     repoId: args.targetRepoId,
     launchSource: 'task_page',

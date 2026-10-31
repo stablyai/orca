@@ -20215,7 +20215,14 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [optional]",
-      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen."
+      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
+      "directSetup": {
+        "run": "Run setup",
+        "skip": "Skip setup",
+        "description": "Auswählen, ob die Einrichtung vor dem Erstellen dieses Arbeitsbereichs ausgeführt werden soll.",
+        "cancel": "Abbrechen",
+        "retry": "Erneut versuchen"
+      }
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Eine weitere Issue-Änderung ist in Bearbeitung."
