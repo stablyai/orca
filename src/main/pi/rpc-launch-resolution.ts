@@ -26,6 +26,7 @@ import {
 } from '../native-chat/structured-agent-command-resolution'
 import type { StructuredAgentLaunchPartResolver } from '../runtime/agent-session/launch/structured-agent-launch-composition'
 import { isWindowsProcessStartTimeAvailable } from '../windows/windows-process-table'
+import { piRpcSeededLaunch } from './rpc-launch-seeds'
 import { sessionIdFromFileName } from '../ai-vault/session-scanner-accumulator'
 import {
   PI_RPC_SESSION_ENV_TO_DELETE,
@@ -43,6 +44,8 @@ export type PiRpcResolvedLaunch = PiRpcLaunchOptions & {
   replacement?: 'unsaved' | 'restore-failed'
   /** Conversation files, newest first; empty for a new conversation. */
   lineage?: readonly string[]
+  /** Model and effort the launch flags already applied; the RPC picker must not write them again. */
+  launchIntent?: Readonly<Record<string, string>>
 }
 export type PiRpcLaunchPartDeps = {
   resolveCommand?: typeof resolveCliCommand
@@ -221,11 +224,16 @@ export function piRpcLaunchPart(
           })
         ))
     )()
+    // A new conversation starts on the seeded pick; a resumed or forked one keeps its own.
+    const seeded = sessionFile || forkFile ? null : piRpcSeededLaunch(record.options, prefixArgs)
     return {
       launch: {
         command,
-        prefixArgs,
+        prefixArgs: seeded ? seeded.configuredArgs : prefixArgs,
         fullAccess: deps.resolveFullAccess?.() ?? true,
+        ...(seeded && seeded.extraArgs.length > 0
+          ? { extraArgs: seeded.extraArgs, launchIntent: seeded.launchIntent }
+          : {}),
         previous,
         ...(sessionFile || forkFile
           ? { lineage: piConversationFiles(record.providerHandleChain) }
