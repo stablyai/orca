@@ -57,13 +57,19 @@ export function useFileExplorerAutoReveal({
       return
     }
 
-    // Markdown previews own concrete files and sync selection; diff/conflict surfaces do not.
+    // Sync previews and working-tree diffs with disk files, excluding historical diffs and conflicts.
     const activeFile = openFiles.find((f) => f.id === activeFileId)
-    if (
-      !activeFile ||
-      activeFile.worktreeId !== activeWorktreeId ||
-      (activeFile.mode !== 'edit' && activeFile.mode !== 'markdown-preview')
-    ) {
+    if (!activeFile || activeFile.worktreeId !== activeWorktreeId) {
+      return
+    }
+
+    const isWorkingTreeDiff =
+      activeFile.mode === 'diff' &&
+      (activeFile.diffSource === 'staged' || activeFile.diffSource === 'unstaged')
+    const isSupportedMode =
+      activeFile.mode === 'edit' || activeFile.mode === 'markdown-preview' || isWorkingTreeDiff
+
+    if (!isSupportedMode) {
       return
     }
 
