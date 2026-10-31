@@ -1,9 +1,7 @@
 import type { Editor, EditorEvents } from '@tiptap/core'
 import type { EditorView } from '@tiptap/pm/view'
 
-type Destination = { top: number; left?: number }
-type Scroll = () => Destination | void
-type Navigation = { scroll: Scroll; destination: Destination | void }
+type Scroll = () => void
 type Handoff = { source: EventTarget | null; top: number; left: number; id: number }
 const owners = new WeakMap<HTMLElement, RichMarkdownViewport>()
 const views = new WeakMap<EditorView, RichMarkdownViewport>()
@@ -19,9 +17,9 @@ export function richMarkdownViewport(container: HTMLElement) {
         window.requestAnimationFrame(callback)
       }
     },
-    scroll: (scroll: Scroll, smooth = false): void => {
+    scroll: (scroll: Scroll): void => {
       if (owner) {
-        owner.scroll(scroll, smooth)
+        owner.scroll(scroll)
       } else {
         scroll()
       }
@@ -44,17 +42,10 @@ export function scrollRichMarkdownElementIntoView(
   const scrollContainer = container
   const viewport = richMarkdownViewport(scrollContainer)
   viewport.scroll(() => {
-    const rect = element.getBoundingClientRect()
-    const bounds = scrollContainer.getBoundingClientRect()
-    const top = scrollContainer.scrollTop + rect.top - bounds.top - scrollContainer.clientTop
-    const target =
-      options.block === 'center' ? top + (rect.height - scrollContainer.clientHeight) / 2 : top
-    if (!viewport.current() || !scrollContainer.contains(element)) {
-      return
+    if (viewport.current() && scrollContainer.contains(element)) {
+      element.scrollIntoView(options)
     }
-    element.scrollIntoView(options)
-    return { top: target }
-  }, options.behavior === 'smooth')
+  })
 }
 
 export function handleRichMarkdownViewportReveal(view: EditorView, reason?: string): boolean {
@@ -72,7 +63,6 @@ export function attachRichMarkdownViewport(
 class RichMarkdownViewport {
   private active = true
   private pending: Handoff | null = null
-  private navigation: Navigation | null = null
   private methodDepth = 0
   private frames = new Set<number>()
   private nextId = 0
@@ -119,7 +109,6 @@ class RichMarkdownViewport {
     this.window.addEventListener('pointerdown', this.userInput, true)
     this.window.addEventListener('wheel', this.userInput, { capture: true, passive: true })
     this.window.addEventListener('touchstart', this.userInput, { capture: true, passive: true })
-    container.addEventListener('scrollend', this.scrollend)
     editor.on('transaction', this.transaction)
   }
 
@@ -145,18 +134,12 @@ class RichMarkdownViewport {
     this.frames.add(id)
   }
 
-  scroll(scroll: Scroll, smooth: boolean): void {
+  scroll(scroll: Scroll): void {
     if (!this.current()) {
       return
     }
-    const navigation: Navigation = { scroll, destination: undefined }
-    navigation.destination = scroll()
-    if (!this.current()) {
-      return
-    }
-    this.navigation = smooth && navigation.destination ? navigation : null
+    scroll()
     this.observeWrite()
-    this.scrollend()
   }
 
   private observeWrite = (): void => {
@@ -190,9 +173,6 @@ class RichMarkdownViewport {
       return
     }
     if (event.target !== this.dom) {
-      if (event.target instanceof Node && this.container.contains(event.target)) {
-        this.navigation = null
-      }
       return
     }
     if (this.methodDepth || !pending) {
@@ -205,15 +185,8 @@ class RichMarkdownViewport {
     ) {
       return
     }
-    const navigation = this.navigation
     if (this.container.scrollTop !== pending.top || this.container.scrollLeft !== pending.left) {
       this.container.scrollTo({ top: pending.top, left: pending.left, behavior: 'instant' })
-    }
-    // Native caret reveal cancels smooth scrolling even when the viewport does not move.
-    if (navigation && this.navigation === navigation && this.current()) {
-      navigation.destination = navigation.scroll()
-      this.observeWrite()
-      this.scrollend()
     }
   }
 
@@ -225,33 +198,12 @@ class RichMarkdownViewport {
         this.sample(active)
       }
     } else if (!['Shift', 'Control', 'Alt', 'Meta'].includes(event.key)) {
-      this.userInput(event)
+      this.userInput()
     }
   }
 
-  private userInput = (event: Event): void => {
+  private userInput = (): void => {
     this.pending = null
-    if (event.isTrusted) {
-      this.navigation = null
-    }
-  }
-
-  private scrollend = (): void => {
-    const destination = this.navigation?.destination
-    if (!destination) {
-      return
-    }
-    const top = Math.max(
-      0,
-      Math.min(destination.top, this.container.scrollHeight - this.container.clientHeight)
-    )
-    if (
-      Math.abs(this.container.scrollTop - top) <= 1 &&
-      (destination.left === undefined ||
-        Math.abs(this.container.scrollLeft - destination.left) <= 1)
-    ) {
-      this.navigation = null
-    }
   }
 
   private transaction = ({
@@ -259,7 +211,6 @@ class RichMarkdownViewport {
     appendedTransactions
   }: EditorEvents['transaction']): void => {
     if (transaction.scrolledIntoView || appendedTransactions.some((tr) => tr.scrolledIntoView)) {
-      this.navigation = null
       this.observeWrite()
     }
   }
@@ -267,7 +218,6 @@ class RichMarkdownViewport {
   retire = (): void => {
     this.active = false
     this.pending = null
-    this.navigation = null
     if (owners.get(this.container) === this) {
       owners.delete(this.container)
     }
@@ -287,7 +237,6 @@ class RichMarkdownViewport {
     this.window.removeEventListener('pointerdown', this.userInput, true)
     this.window.removeEventListener('wheel', this.userInput, true)
     this.window.removeEventListener('touchstart', this.userInput, true)
-    this.container.removeEventListener('scrollend', this.scrollend)
     this.editor.off('transaction', this.transaction)
     for (const id of this.frames) {
       this.window.cancelAnimationFrame(id)

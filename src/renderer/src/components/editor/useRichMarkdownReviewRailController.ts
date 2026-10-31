@@ -127,9 +127,8 @@ export function useRichMarkdownReviewRailController({
           if (container !== scrollContainerRef.current) {
             return
           }
-          viewport.scroll(
-            () => centerReviewNoteCard(container, notePositionsRef.current, commentId),
-            motionSafeScrollBehavior() === 'smooth'
+          viewport.scroll(() =>
+            centerReviewNoteCard(container, notePositionsRef.current, commentId)
           )
         })
       })
@@ -199,8 +198,7 @@ export function useRichMarkdownReviewRailController({
         if (viewport.current() && container === scrollContainerRef.current && !editor.isDestroyed) {
           container.scrollTo({ top, behavior: motionSafeScrollBehavior() })
         }
-        return { top }
-      }, motionSafeScrollBehavior() === 'smooth')
+      })
       pulseRichMarkdownSourceRange({ from: bounds.from, to: bounds.to })
     },
     [editorRef, markdownSourceLineOffsetRef, pulseRichMarkdownSourceRange, scrollContainerRef]
@@ -264,7 +262,7 @@ function centerReviewNoteCard(
   container: HTMLDivElement | null,
   positions: RichMarkdownReviewNotePosition[],
   commentId: string
-): { top: number } | void {
+): void {
   const card = container?.querySelector<HTMLElement>(
     `[data-rich-markdown-review-note-id="${CSS.escape(commentId)}"]`
   )
@@ -280,5 +278,4 @@ function centerReviewNoteCard(
   const targetTop = cardTop - Math.max(0, (container.clientHeight - cardHeight) / 2)
   const top = Math.max(0, targetTop)
   container.scrollTo({ top, behavior: motionSafeScrollBehavior() })
-  return { top }
 }

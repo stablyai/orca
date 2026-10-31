@@ -201,29 +201,28 @@ describe('rich Markdown live viewport', () => {
   })
 
   it.each([true, false])(
-    'continues the real smooth anchor writer after native focus (reset=%s) until superseded',
+    'keeps the cancel point without resuming the real smooth anchor writer (reset=%s)',
     (reset) => {
       const f = fixture()
       const heading = document.createElement('h2')
       f.editor.view.dom.append(heading)
-      let headingTop = 1700
+      const headingTop = 1700
       vi.spyOn(heading, 'getBoundingClientRect').mockImplementation(
         () => new DOMRect(0, headingTop - f.container.scrollTop, 200, 30)
       )
       const anchor = vi.spyOn(heading, 'scrollIntoView').mockImplementation(() => {})
       scrollRichMarkdownElementIntoView(heading, { block: 'start', behavior: 'smooth' })
       f.container.scrollTop = 600
-      headingTop = 1800
       f.nativeReturn(undefined, reset)
       expect(f.container.scrollTop).toBe(600)
-      expect(anchor).toHaveBeenCalledTimes(2)
-      // An interrupted animation's late completion must not retire the resumed operation.
+      expect(anchor).toHaveBeenCalledTimes(1)
+      // Completion and later returns cannot replay the interrupted request.
       f.container.dispatchEvent(new Event('scrollend'))
       f.nativeReturn(undefined, reset)
-      expect(anchor).toHaveBeenCalledTimes(3)
+      expect(anchor).toHaveBeenCalledTimes(1)
       f.navigate(0)
       f.nativeReturn()
-      expect(anchor).toHaveBeenCalledTimes(3)
+      expect(anchor).toHaveBeenCalledTimes(1)
       expect(f.container.scrollTop).toBe(0)
 
       scrollRichMarkdownElementIntoView(heading, { block: 'start', behavior: 'smooth' })
@@ -233,7 +232,7 @@ describe('rich Markdown live viewport', () => {
       control.focus()
       const controlTop = f.container.scrollTop
       f.nativeReturn(undefined, reset, control)
-      expect(anchor).toHaveBeenCalledTimes(4)
+      expect(anchor).toHaveBeenCalledTimes(2)
       expect(f.container.scrollTop).toBe(controlTop)
     }
   )
