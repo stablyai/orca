@@ -1,17 +1,12 @@
 import type { NativeChatSkillDiscoverySnapshot } from '../../../src/shared/native-chat/input/native-chat-picker-items'
+import { MobileStateView } from '../components/MobileStateView'
 import { useCallback, useMemo } from 'react'
 import { nativeChatTaskListPredecessors } from '../../../src/shared/native-chat/input/native-chat-task-list-history'
 import {
   MobileNativeChatDisclosureContext,
   useMobileNativeChatDisclosures
 } from './native-chat/transcript/mobile-native-chat-disclosure-store'
-import {
-  ActivityIndicator,
-  type NativeScrollEvent,
-  type NativeSyntheticEvent,
-  Text,
-  View
-} from 'react-native'
+import { type NativeScrollEvent, type NativeSyntheticEvent, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import type { AskAnswerSelection } from '../../../src/shared/native-chat-ask-answer'
@@ -23,7 +18,7 @@ import type {
 } from '../../../src/shared/native-chat-turn-status'
 import type { NativeChatTurnJournal } from '../../../src/shared/native-chat-turn-membership'
 import type { NativeChatResolvedPrompt } from '../../../src/shared/native-chat-resolution-receipt'
-import { colors } from '../theme/mobile-theme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { styles } from './mobile-native-chat-view-styles'
 import { MobileNativeChatEmptyStateView } from './MobileNativeChatEmptyStateView'
@@ -218,6 +213,7 @@ export function MobileNativeChatView({
   keyboardInset = 0
 }: Props): React.JSX.Element {
   useMobileColorScheme()
+  const t = useMobileTranslation()
   const insets = useSafeAreaInsets()
   const bottomPad = keyboardInset > 0 ? keyboardInset + insets.bottom : insets.bottom
   const { fontScale, pinchGesture } = useMobileNativeChatPinchGesture()
@@ -338,9 +334,10 @@ export function MobileNativeChatView({
   return (
     <View style={[styles.root, { paddingBottom: bottomPad }]}>
       {status === 'loading' && messages.length === 0 ? (
-        <View style={styles.center}>
-          <ActivityIndicator color={colors.textSecondary} />
-        </View>
+        <MobileStateView
+          loading
+          title={t('session.nativeChatView.loading', 'Loading conversation…')}
+        />
       ) : (
         <GestureHandlerRootView style={styles.listWrap}>
           <MobileNativeChatDisclosureContext.Provider value={disclosures}>

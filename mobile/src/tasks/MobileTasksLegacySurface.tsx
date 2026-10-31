@@ -1,4 +1,6 @@
 import { useState } from 'react'
+import { describeLoadError } from '../components/load-error-description'
+import { mobileTasksListShowsError } from './mobile-tasks-list-state'
 import type { ConnectionPresentationModel } from './use-mobile-tasks-connection-presentation'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import {
@@ -115,9 +117,9 @@ export function MobileTasksLegacySurface({ model }: { model: ConnectionPresentat
     <SafeAreaView style={styles.container} edges={['top']}>
       {renderMobileTasksChrome(model)}
 
-      {error ? (
+      {error && !mobileTasksListShowsError(model) ? (
         <View style={styles.errorBanner}>
-          <Text style={styles.errorText}>{error}</Text>
+          <Text style={styles.errorText}>{describeLoadError(error, t).message}</Text>
         </View>
       ) : null}
 

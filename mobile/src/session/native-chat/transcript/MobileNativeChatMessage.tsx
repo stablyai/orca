@@ -339,11 +339,13 @@ function MobileNativeChatMessageImpl({
         {isChatTurn && !agentFrom ? (
           <View style={styles.meta}>
             {copyText.length > 0 ? (
-              <MobileSourceCopyButton
-                key={message.id}
-                text={copyText}
-                accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
-              />
+              <View style={styles.metaCopy}>
+                <MobileSourceCopyButton
+                  key={message.id}
+                  text={copyText}
+                  accessibilityLabel={t('chat.message.copyMessage', 'Copy message')}
+                />
+              </View>
             ) : null}
             <MobileNativeChatMessageTime timestamp={message.timestamp} fontScale={fontScale} />
           </View>

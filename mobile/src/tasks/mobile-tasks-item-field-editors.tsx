@@ -14,7 +14,7 @@ import {
   Check
 } from './mobile-tasks-dependencies'
 import { styles } from './mobile-tasks-legacy-styles'
-import { SectionHeader } from '../components/list/SectionHeader'
+import { SectionHeader } from '../components/list/ListGroup'
 
 export function renderMobileTasksItemFieldEditors(model: ConnectionPresentationModel) {
   const {

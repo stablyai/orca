@@ -15,9 +15,8 @@ import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { TaskProviderLogo } from './TaskProviderLogo'
 import { TextField } from './composer-input/TextField'
-import { LIST_LEADING_INSET, ListGroup } from './list/ListGroup'
+import { LIST_LEADING_INSET, ListGroup, SectionHeader } from './list/ListGroup'
 import { ListRow } from './list/ListRow'
-import { SectionHeader } from './list/SectionHeader'
 
 type Props = {
   composer: MobileComposerSource

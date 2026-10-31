@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { FlatList, StyleSheet, View } from 'react-native'
 
-import { triggerSelection } from '../platform/haptics'
 import { colors, radii, spacing } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
@@ -94,10 +93,7 @@ export function PickerListDrawer<T extends PickerListItem>({
             subtitle={item.detail || undefined}
             leading={renderIcon ? (renderIcon(item) ?? null) : undefined}
             selected={item.id === selectedId}
-            onPress={() => {
-              triggerSelection()
-              closeThenSelect(item)
-            }}
+            onPress={() => closeThenSelect(item)}
           />
         )}
       />

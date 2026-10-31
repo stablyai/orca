@@ -32,6 +32,14 @@ const state = vi.hoisted(
     session: null
   })
 )
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
@@ -72,7 +80,11 @@ vi.mock('lucide-react-native', () => ({
 }))
 // Reanimated needs native modules; the eased height is not under test.
 vi.mock('../components/AutoHeight', () => ({
-  AutoHeight: ({ children }: { children: unknown }) => children
+  AutoHeight: ({ children, open = true }: { children: unknown; open?: boolean }) =>
+    open ? children : null
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
 }))
 const notifications = vi.hoisted(() => ({
   error: vi.fn(),

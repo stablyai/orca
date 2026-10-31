@@ -21,6 +21,12 @@ export default defineConfig({
         replacement: fileURLToPath(
           new URL('./src/test-support/expo-crypto-node.ts', import.meta.url)
         )
+      },
+      {
+        find: 'expo-haptics',
+        replacement: fileURLToPath(
+          new URL('./src/test-support/expo-haptics-node.ts', import.meta.url)
+        )
       }
     ]
   },

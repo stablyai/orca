@@ -1,4 +1,5 @@
 import { formatAgentTypeLabel } from '../../../src/shared/agent-type-label'
+import { describeLoadError } from '../components/load-error-description'
 import type { NativeChatEmptyStateCopy } from '../../../src/shared/native-chat/native-chat-empty-state'
 import { isRootAgentJournalItem } from '../../../src/shared/agent-session-journal-producer'
 import { stripNoiseMessages } from '../../../src/shared/native-chat/native-chat-noise'
@@ -78,7 +79,7 @@ export function mobileNativeChatEmptyState(
       return mobileNativeChatEmptyStateCopy('empty', agentLabel)
     case 'error': {
       const copy = mobileNativeChatEmptyStateCopy('error', agentLabel)
-      return error ? { ...copy, subtitle: error } : copy
+      return error ? { ...copy, subtitle: describeLoadError(error, translate).message } : copy
     }
     default:
       return null

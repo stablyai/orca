@@ -21,7 +21,6 @@
     "panel": {
       "all": "Tümü",
       "emptyScope": "Bu kapsamda geçmiş ajan oturumu yok.",
-      "loadFailed": "Yüklenemedi",
       "missingResumeId": "Bu oturumun devam ettirme kimliği eksik.",
       "noSearchResults": "Aramanızla eşleşen oturum yok.",
       "noSessions": "Ajan oturumu yok",
@@ -658,7 +657,6 @@
       "loadingDiff": "Diff yükleniyor…",
       "loadingReview": "İnceleme yükleniyor…",
       "noReviewableChanges": "İncelenebilir Değişiklik Yok",
-      "retryLabel": "İncelemeyi yeniden yükle",
       "reviewUnavailable": "İnceleme Kullanılamıyor",
       "selectFile": "İncelemek için bir dosya seçin.",
       "tooLargeMessage": "Bu diff, mobil önizleme için çok büyük.",
@@ -852,10 +850,8 @@
       "selectRunTarget": "Çalıştırma yerini seçin"
     },
     "prSidebar": {
-      "loadFailed": "Bir sorun oluştu.",
       "loading": "Pull request yükleniyor…",
-      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil.",
-      "retryLoading": "Pull request'i yüklemeyi yeniden dene"
+      "notPermitted": "İzin verilmiyor — GitHub hesabınız bağlı değil."
     },
     "protocolBlockScreen": {
       "backToHosts": "Sunucular bölümüne dön",
@@ -3079,7 +3075,6 @@
       "waitingForDesktop": "Masaüstü bekleniyor…"
     },
     "panel": {
-      "loadFailedTitle": "Yüklenemedi",
       "unavailableTitle": "Kaynak Kontrolü Kullanılamıyor"
     },
     "prChip": {
@@ -3907,8 +3902,7 @@
       "noFilterMatches": "Filtrelerle eşleşen çalışma alanı yok",
       "noMatches": "Eşleşen çalışma alanı yok",
       "reopen": "Güncellemek için yeniden açın",
-      "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor.",
-      "retrying": "worktree.ps tamamlanamadı ({{error}}) — otomatik olarak yeniden deneniyor"
+      "reopenDetail": "Bu sunucu, çalışma alanlarını bu sayfanın henüz tanımadığı bir biçimde listeliyor."
     },
     "workspaceListSections": {
       "all": "Tümü",

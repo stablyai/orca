@@ -130,10 +130,14 @@ vi.mock('./mobile-tasks-dependencies', async () => {
     useMobileColorScheme: () => 'light'
   }
 })
+vi.mock('../transport/host-client-hooks', () => ({ useForceReconnect: () => null }))
 vi.mock('./mobile-tasks-legacy-styles', () => ({ styles: {} }))
 vi.mock('./mobile-tasks-legacy-foundation', () => ({ LINEAR_LIMIT: 100 }))
 vi.mock('./mobile-tasks-screen-chrome', () => ({ renderMobileTasksChrome: () => null }))
-vi.mock('./mobile-tasks-list-surface', () => ({ renderMobileTasksListSurface: () => null }))
+// The list draws the load error itself now; the stub shows it so the check still reads what the user sees.
+vi.mock('./mobile-tasks-list-surface', () => ({
+  renderMobileTasksListSurface: (model: { error: string }) => model.error
+}))
 vi.mock('./mobile-tasks-search-control', () => ({
   mobileTasksSearchVisible: () => true,
   renderMobileTasksSearchControl: () => null
@@ -207,6 +211,8 @@ function Tasks() {
       taskStateHydrated: true,
       provider: 'linear',
       linearConnected: true,
+      linearIssuesForView: [],
+      sortedItems: [],
       linearFilter: 'all',
       selectedLinearWorkspaceId: 'w',
       selectedLinearTeamIds: new Set<string>(),
@@ -218,6 +224,7 @@ function Tasks() {
       setError,
       setLoading,
       setRefreshing: () => {},
+      setTaskListSettled: () => {},
       setItems: () => {}
     }),
     [clientRef, loadGenerationRef, setError, setLoading]

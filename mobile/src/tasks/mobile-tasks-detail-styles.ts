@@ -60,8 +60,9 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     color: colors.textMuted,
     marginTop: 2
   },
+  // Lines the header up with the row text of the groups below it.
   itemHeader: {
-    paddingHorizontal: spacing.xs,
+    paddingHorizontal: LIST_ROW_PADDING,
     marginBottom: spacing.md,
     gap: 2
   },
@@ -76,9 +77,9 @@ export const mobileTasksDetailStyles = themedStyleSheet(() => ({
     color: colors.textSecondary
   },
   itemTitle: {
-    fontSize: 17,
+    fontSize: 16,
     fontWeight: '600',
-    lineHeight: 22,
+    lineHeight: 21,
     color: colors.textPrimary
   },
   itemMeta: {

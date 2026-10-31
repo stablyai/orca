@@ -17,6 +17,14 @@ const router = vi.hoisted(() => ({
 vi.mock('expo-router', () => ({ useRouter: () => router, usePathname: () => '/' }))
 
 // Mock RN hosts as strings: Vitest cannot parse React Native Flow, but panel structure stays real.
+vi.mock('../platform/use-reduced-motion', () => ({ useReducedMotionEnabled: () => true }))
+vi.mock('react-native-reanimated', () => ({
+  Easing: { bezier: () => (t: number) => t },
+  default: { View: 'AnimatedView' },
+  useSharedValue: (initial: number) => ({ value: initial }),
+  useAnimatedStyle: () => ({}),
+  withTiming: (to: number) => to
+}))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
   Animated: { View: 'View' },
@@ -44,11 +52,16 @@ vi.mock('lucide-react-native', () => ({
   Search: 'Icon',
   SearchX: 'Icon',
   TriangleAlert: 'Icon',
+  WifiOff: 'Icon',
   X: 'Icon'
 }))
 // Reanimated needs native modules; the eased height is not under test.
 vi.mock('../components/AutoHeight', () => ({
-  AutoHeight: ({ children }: { children: unknown }) => children
+  AutoHeight: ({ children, open = true }: { children: unknown; open?: boolean }) =>
+    open ? children : null
+}))
+vi.mock('../components/DisclosureChevron', () => ({
+  DisclosureChevron: ({ children }: { children: unknown }) => children
 }))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 // Mock Metro PNG requires; no client means session list never renders here.
