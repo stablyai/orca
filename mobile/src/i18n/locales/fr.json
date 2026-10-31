@@ -1003,7 +1003,13 @@
       "empty": "Aucun raccourci personnalisé défini pour le moment.",
       "removeShortcut": "Supprimer {{label}}",
       "resetDefaults": "Rétablir les valeurs par défaut",
-      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial"
+      "resetDescription": "Afficher toutes les touches de raccourci intégrées dans l'ordre initial",
+      "moreKeys": "PLUS DE TOUCHES",
+      "moreKeysDescription": "Ces touches se trouvent sous ⋯ dans la rangée de touches du terminal. Activez ou désactivez les touches pour les afficher ou les masquer, puis maintenez la poignée pour les réordonner. Les touches déjà présentes dans la rangée, comme Échap ou les flèches, ne figurent pas sous ⋯.",
+      "directionPad": "PAVÉ DIRECTIONNEL",
+      "showDirectionPad": "Afficher le pavé directionnel",
+      "showDirectionPadDescription": "Épingler le pavé de flèches dans la barre latérale. Sinon, la barre affiche les touches fléchées.",
+      "showShortcut": "Afficher le raccourci {{label}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "Utiliser une réinitialisation des limites de débit ?",
@@ -1435,14 +1441,6 @@
     "hostPendingCreationRow": {
       "creatingWorkspace": "Création de l'espace de travail…"
     },
-    "hostRailActions": {
-      "accounts": "Comptes",
-      "closeSearch": "Fermer la recherche",
-      "floatingWorkspace": "Espace de travail flottant",
-      "newWorkspace": "Nouvel espace de travail",
-      "searchWorkspaces": "Rechercher des espaces de travail",
-      "tasks": "Tâches"
-    },
     "hostScreenHeader": {
       "accounts": "Comptes",
       "activeFilters_many": "Options des espaces de travail ({{count}} filtres actifs)",
@@ -1455,7 +1453,8 @@
       "reconnect": "Reconnecter",
       "searchWorkspaces": "Rechercher des espaces de travail",
       "tasks": "Tâches",
-      "workspaceOptions": "Options des espaces de travail"
+      "workspaceOptions": "Options des espaces de travail",
+      "newWorkspace": "Nouvel espace de travail"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "Supprimer « {{name}} » ({{branch}}) ?",
@@ -1896,7 +1895,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Masquer le clavier",
-      "sendKey": "Envoyer {{label}}"
+      "sendKey": "Envoyer {{label}}",
+      "modifierHint": "S’applique à la touche suivante. Touchez deux fois pour la maintenir active.",
+      "typeCharacter": "Saisir {{character}}",
+      "interrupt": "Interrompre le terminal",
+      "keysModeLabel": "Mode touches : la saisie va directement au terminal. Passer en mode message",
+      "messageModeLabel": "Mode message : écrivez, puis envoyez. Passer en mode touches",
+      "keysMode": "Touches",
+      "messageMode": "Message",
+      "moreKeys": "Plus de touches et d’actions",
+      "showKeyboard": "Afficher le clavier"
     },
     "activeContent": {
       "createTab": "Créer un onglet",
@@ -2024,7 +2032,10 @@
     "commandDock": {
       "liveInputHint": "Le texte saisi est envoyé directement au terminal actif.",
       "liveInputLabel": "Saisie en direct dans le terminal",
-      "sendCommand": "Envoyer la commande"
+      "sendCommand": "Envoyer la commande",
+      "messageAgentPlaceholder": "Message à {{agent}}",
+      "writeCommandPlaceholder": "Écrivez une commande, puis envoyez-la",
+      "theAgent": "l'agent"
     },
     "contentRow": {
       "dismissCreationWarning": "Ignorer l'avertissement de création de l'espace de travail"
@@ -2199,13 +2210,19 @@
       "requestFailed": "Échec de la requête : {{method}}"
     },
     "header": {
+      "workspaceDetailsHint": "Affiche le nom complet de l'espace de travail et son emplacement",
       "backToWorktrees": "Retour aux worktrees",
       "moreActions": "Autres actions de la session",
       "openFileExplorer": "Ouvrir l'explorateur de fichiers",
       "openSourceControl": "Ouvrir le contrôle de code source",
       "reconnectToDesktop": "Se reconnecter à l'ordinateur",
       "showSidebar": "Afficher la barre latérale",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Disposition du terminal",
+      "fileExplorer": "Explorateur de fichiers",
+      "sourceControl": "Contrôle de code source",
+      "newTab": "Nouvel onglet",
+      "quickCommands": "Commandes rapides"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historique des agents",
@@ -2406,10 +2423,8 @@
       "terminal": "Terminal",
       "terminalName": "Nom du terminal",
       "unsavedMarkdown": "Modifications Markdown non enregistrées",
-      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet."
-    },
-    "sideRail": {
-      "backToWorktrees": "Retour aux worktrees"
+      "urlPrompt": "Saisissez une URL ou laissez le champ vide pour un nouvel onglet.",
+      "allowAutoClose": "Autoriser la fermeture automatique"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "Aucun agent IA activé n'a été détecté sur l'hôte de cet espace de travail.",
@@ -2426,7 +2441,8 @@
       "checkingCapabilities": "Vérification des fonctionnalités de l'ordinateur — réessayez dans un instant",
       "newTab": "Nouvel onglet",
       "quickCommandsUpdateRequired": "Mettez à jour Orca sur l'ordinateur pour utiliser les commandes rapides",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "Disposition du terminal"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Effacer le terminal",
@@ -2689,6 +2705,56 @@
       "waitForStart": "Attendez que l'agent ait fini de démarrer.",
       "waitForTurn": "Attendez que l'agent ait fini de répondre, ou arrêtez-le.",
       "waitMoment": "Patientez un instant."
+    },
+    "workerAutoClose": {
+      "running": "Agent d’orchestration temporaire · Se ferme 2 minutes après la fin",
+      "finished": "Agent d’orchestration temporaire terminé · Se ferme dans {{countdown}}",
+      "keepOpen": "Garder ouvert"
+    },
+    "terminalLayoutSheet": {
+      "title": "Disposition du terminal",
+      "oneTerminal": "Un terminal",
+      "selected": "Sélectionné",
+      "auto": "Automatique",
+      "autoHint": "Diviser selon l’espace disponible",
+      "sideBySide": "Côte à côte",
+      "sideBySideHint": "Deux colonnes, même lorsque la barre latérale est ouverte",
+      "stacked": "Empilés",
+      "stackedHint": "Deux rangées quelle que soit l’orientation",
+      "selectedHint": "Sélectionné · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "Impossible d’enregistrer la disposition",
+      "saveFailedMessage": "Cette disposition s’applique pour le moment. Sélectionnez-la à nouveau pour réessayer de l’enregistrer."
+    },
+    "terminalArrowPad": {
+      "label": "Touches fléchées",
+      "hint": "Touchez un côté pour une pression ou maintenez et faites glisser pour répéter",
+      "up": "Haut",
+      "down": "Bas",
+      "left": "Gauche",
+      "right": "Droite"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Envoyer {{label}}",
+      "paste": "Coller",
+      "sending": "Envoi…",
+      "photo": "Photo",
+      "file": "Fichier",
+      "desktopWidth": "Largeur bureau",
+      "phoneWidth": "Largeur téléphone",
+      "keys": "Touches",
+      "combos": "Combinaisons",
+      "yourKeys": "Vos touches",
+      "deleteKeyHint": "Appuyez longuement pour supprimer cette touche",
+      "addCustomKey": "Ajouter une touche personnalisée",
+      "addKey": "Ajouter une touche"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, actif",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, touchez pour activer",
+      "inputPane": "{{title}} · Saisie"
     }
   },
   "settings": {
@@ -2886,7 +2952,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "Indexés : {{count}}"
+      "stagedCount": "Indexés : {{count}}",
+      "completingMerge": "Finalisation…",
+      "completeMerge": "Terminer la fusion"
     },
     "branchCompare": {
       "commits_many": "{{count}} commits",
@@ -3340,6 +3408,13 @@
       "branchUnavailable": "État de la branche indisponible",
       "commitFailed": "Échec du commit",
       "waitingForDesktop": "En attente de l'ordinateur…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Mettez à jour Orca sur l’ordinateur qui exécute cet espace de travail pour résoudre les conflits de fusion depuis votre téléphone.",
+      "markResolved": "Marquer comme résolu",
+      "keepFile": "Conserver le fichier",
+      "keepDeletion": "Conserver la suppression",
+      "completeMergeFailed": "Impossible de terminer la fusion"
     }
   },
   "tasks": {
@@ -4018,6 +4093,15 @@
       "inProgress": "En cours",
       "inReview": "En revue",
       "pinned": "Épinglés"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Croix directionnelle haut",
+      "left": "Croix directionnelle gauche",
+      "right": "Croix directionnelle droite",
+      "down": "Croix directionnelle bas",
+      "hint": "Envoie une touche fléchée. Maintenez pour répéter."
     }
   }
 }

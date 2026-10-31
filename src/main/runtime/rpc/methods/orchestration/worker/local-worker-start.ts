@@ -36,12 +36,15 @@ import { prepareLocalWorkerStart } from './worker-start-validation'
 import { deliverAndSettleWorkerStartReadiness } from './worker-start-readiness-settlement'
 import type { WorkerStartMutation } from './worker-start-mutation'
 import { prepareWorkerStartCard } from '../../../../orchestration/worker-start-card'
+import { rebindReusedStructuredWorker } from '../../orchestration-structured-worker-session'
 
 export async function startLocalWorker(args: {
   params: WorkerStartInput
   runtime: OrcaRuntimeService
   db: OrchestrationDb
-  run: RunRow
+  /** Called only once effect-free validation passes, so a refused start binds no new Run. */
+  bindRun: () => RunRow
+  taskDeps: string[] | undefined
   coordinator: OrchestrationCallerIdentity | null
   callerSession?: OrchestrationSessionCaller
   existingTask?: TaskRow
@@ -51,7 +54,7 @@ export async function startLocalWorker(args: {
   /** Set when a worker starts its own helper; the helper reports to this Dispatch. */
   helperCreator?: DispatchContextRow
 }): Promise<unknown> {
-  const { runtime, db, run, coordinator, callerSession, orchestrationMutation } = args
+  const { runtime, db, coordinator, callerSession, orchestrationMutation } = args
   const recordStart = prepareWorkerStartCard(runtime, callerSession)
   // `--terminal` names a party: a chat by its `/clear` root address, as its Dispatch does.
   const terminal = args.params.terminal && resolveDispatchAssigneeParty(args.params.terminal, db)
@@ -133,8 +136,10 @@ export async function startLocalWorker(args: {
   const hostMode = resolveWorkerStartModeOnHost(runtime, args.mode, resolvedWorktree?.id, agent)
   let mode = chatWorkerMode(await hostMode, chat)
 
+  const run = args.bindRun()
   const started = createLocalWorkerStartDispatch(args, {
     params,
+    run,
     requestedWorktree,
     createsWorktree,
     mode,
@@ -211,6 +216,7 @@ export async function startLocalWorker(args: {
         : await waitForWorkerAgentReady(runtime, terminalHandle, {
             agent,
             reusesTerminal: Boolean(params.terminal),
+            creation: placed.terminalCreation,
             timeoutMs: params.timeoutMs ?? 60_000
           })
     if (wait) {
@@ -228,10 +234,11 @@ export async function startLocalWorker(args: {
         )
       }
     }
-    // A chat has no pane or process; its Dispatch names it by its Orca session ID alone.
-    const terminalAuthority = chat
-      ? CHAT_WORKER_AUTHORITY
-      : requireWorkerAuthority(runtime, terminalHandle)
+    // A structured worker's chat keeps the pane and process its custody is held under.
+    const terminalAuthority =
+      terminal && terminal.terminalHandle === null
+        ? CHAT_WORKER_AUTHORITY
+        : requireWorkerAuthority(runtime, terminalHandle)
     db.prepareStartingWorkerAuthority({
       dispatchId: started.dispatch.id,
       handle: terminalHandle,
@@ -241,6 +248,9 @@ export async function startLocalWorker(args: {
       setupState: setupReceipt.state,
       terminalOwnership: params.terminal ? 'external' : 'created'
     })
+    if (chat) {
+      rebindReusedStructuredWorker(runtime, terminalHandle, db)
+    }
 
     result = await deliverAndSettleWorkerStartReadiness({
       runtime,

@@ -109,9 +109,10 @@ function spawnSupervisedAgent(
   const childEnv = installedFallback
     ? policy.spawnEnv({ ...spawnEnv })
     : withCliRuntimeOnPath(input.binary, guestNativeSpawnEnv(spawnEnv))
+  const home = childEnv.HOME ?? homedir()
   const context = {
     command: input.binary,
-    homePath: homedir(),
+    homePath: isAbsolute(home) ? home : home ? `${cwd}/${home}` : cwd,
     platform: process.platform,
     runtimePathBase: policy.filterPath(childEnv.PATH ?? process.env.PATH ?? null),
     acceptPath: policy.acceptPath

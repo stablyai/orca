@@ -7,8 +7,10 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
 
   var shadow = host.attachShadow({ mode: 'closed' });
 
+  // The top layer paints the outline above modal dialogs, popovers and fullscreen elements.
   var overlay = document.createElement('div');
-  overlay.style.cssText = 'position:fixed;top:0;left:0;width:100vw;height:100vh;pointer-events:none;z-index:2147483647;';
+  overlay.popover = 'manual';
+  overlay.style.cssText = 'position:fixed;inset:0;width:100vw;height:100vh;max-width:none;max-height:none;margin:0;padding:0;border:0;background:transparent;overflow:visible;pointer-events:none;';
   shadow.appendChild(overlay);
 
   // A light border and dark shadow keep the outline legible on arbitrary page backgrounds.
@@ -79,7 +81,33 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     }
   }
 
-  host.addEventListener('mousemove', onPointerMove);
+  // Later top-layer content stacks above the outline until it is shown again.
+  function raiseOverlay(e) {
+    if (e.type === 'toggle' && e.newState !== 'open') return;
+    overlay.hidePopover();
+    overlay.showPopover();
+  }
+
+  // Top-layer content covers the host and a modal dialog makes it inert, so the page gets that input directly.
+  var PRESS_EVENTS = ['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'dblclick', 'auxclick', 'click', 'contextmenu'];
+  function onPress(e) {
+    // Page-scripted clicks and keyboard activation (click detail 0, contextmenu button -1) keep their default.
+    if (!e.isTrusted || (e.type === 'click' && e.detail === 0) || (e.type === 'contextmenu' && e.button === -1)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+    if ((e.type === 'click' || e.type === 'contextmenu') && grab.onPick) grab.onPick(e);
+  }
+
+  function stopPointerInput() {
+    window.removeEventListener('mousemove', onPointerMove, true);
+    PRESS_EVENTS.forEach(function(type) { window.removeEventListener(type, onPress, true); });
+  }
+
+  overlay.showPopover();
+  window.addEventListener('toggle', raiseOverlay, true);
+  window.addEventListener('fullscreenchange', raiseOverlay, true);
+  window.addEventListener('mousemove', onPointerMove, true);
+  PRESS_EVENTS.forEach(function(type) { window.addEventListener(type, onPress, true); });
 
   var selectedAttribute = ${JSON.stringify(BROWSER_GRAB_SELECTED_ATTRIBUTE)};
   var selectedEl = null;
@@ -125,13 +153,13 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
     previousSelectedValue = null;
   }
 
-  window.__orcaGrab = {
+  var grab = window.__orcaGrab = {
     host: host,
     extractPayload: extractPayload,
     getCurrentElement: function() { return currentEl; },
     // Release pointer events while preserving the selection outline for the copy menu.
     freezeHighlight: function(selectionId) {
-      host.removeEventListener('mousemove', onPointerMove);
+      stopPointerInput();
       host.style.pointerEvents = 'none';
       host.style.cursor = 'default';
       // Capture scrolls so selection tracking includes nested scroll containers.
@@ -157,8 +185,12 @@ export const GRAB_GUEST_OVERLAY_SCRIPT = `  var host = document.createElement('d
         }
       }
     },
+    // Set by awaitClick to receive the next pick.
+    onPick: null,
     cleanup: function() {
-      host.removeEventListener('mousemove', onPointerMove);
+      stopPointerInput();
+      window.removeEventListener('toggle', raiseOverlay, true);
+      window.removeEventListener('fullscreenchange', raiseOverlay, true);
       stopTrackingSelection();
       try { host.remove(); } catch(e) {}
       delete window.__orcaGrab;

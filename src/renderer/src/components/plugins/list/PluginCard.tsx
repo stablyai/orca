@@ -1,5 +1,6 @@
 import { BadgeCheck, Check } from 'lucide-react'
 import { translate } from '@/i18n/i18n'
+import { pluginOfficialLabel } from '../presentation/plugin-official-label'
 import { Badge } from '../../ui/badge'
 import { PluginCardArt, type PluginArtPalette } from './PluginCardArt'
 import type { PluginListEntry } from './plugin-list-entries'
@@ -91,10 +92,7 @@ export function PluginCard({
             <BadgeCheck
               className="plugin-security-chrome size-3.5 shrink-0 text-muted-foreground"
               role="img"
-              aria-label={translate(
-                'auto.components.pluginCatalog.PluginListRow.official',
-                'Official'
-              )}
+              aria-label={pluginOfficialLabel()}
             />
           ) : null}
         </div>

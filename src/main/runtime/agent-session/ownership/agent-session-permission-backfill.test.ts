@@ -9,13 +9,17 @@ import {
   seedTestAgentSessionRecordStore,
   seedTestAgentSessionStoreFromNewerBuild
 } from '../../agent-session-record-store-test-harness'
-import { openTestJournalHostDatabase } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 
 let root: string
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), 'orca-permission-backfill-'))
 })
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 

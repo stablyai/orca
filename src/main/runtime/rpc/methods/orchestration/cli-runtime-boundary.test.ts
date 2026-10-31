@@ -1,5 +1,4 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
 import type { RpcContext } from '../../core'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
 import type { OrchestrationDb } from '../../../orchestration/db'
@@ -94,14 +93,8 @@ describe('orchestration CLI/runtime boundary', () => {
     expect(db.getDispatchContext(child.id)?.assignee_handle).toBe('term_worker')
   })
 
-  it.each([null, 15])('CLI argv preserves worker commands (%s minutes)', async (interval) => {
-    const store = partialRuntimeStore({
-      getSettings: () => ({
-        orchestrationHeartbeatsEnabled: interval !== null,
-        orchestrationHeartbeatIntervalMinutes: interval ?? 5
-      })
-    })
-    ;({ db, ctx } = h.setup(true, store))
+  it('CLI argv preserves worker commands', async () => {
+    ;({ db, ctx } = h.setup())
     const { runtime } = ctx
     process.env.ORCA_TERMINAL_HANDLE = 'term_coord'
     vi.stubEnv('ORCA_PAIRING_CODE', '')
@@ -154,18 +147,12 @@ describe('orchestration CLI/runtime boundary', () => {
       result.preamble,
       expect.anything()
     )
-    if (interval === null) {
-      expect(result.preamble).not.toMatch(/heartbeat/i)
-    } else {
-      expect(result.preamble).toContain('Send a heartbeat every 15 minutes')
-    }
     for (const command of [
       '--type worker_done',
       '--outcome succeeded',
       '--outcome failed',
       'orchestration ask --from',
-      '--type escalation',
-      'orchestration check --terminal'
+      '--type escalation'
     ]) {
       expect(result.preamble).toContain(command)
     }

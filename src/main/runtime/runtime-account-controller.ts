@@ -122,6 +122,31 @@ export class RuntimeAccountController {
     }
   }
 
+  getStreamSnapshot(): AccountsSnapshot {
+    const { claudeAccounts, codexAccounts, rateLimits } = this.requireServices()
+    return {
+      ...this.streamDataAccountsSnapshot(),
+      claude: claudeAccounts.listAccounts(),
+      codex: codexAccounts.listAccounts(),
+      rateLimits: rateLimits.getState()
+    }
+  }
+
+  private streamDataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
+    const snapshot: Pick<AccountsSnapshot, 'opencode' | 'devin'> = {}
+    if (hasAppEnvironment()) {
+      const service = getManagedDataAccountService()
+      for (const provider of ['opencode', 'devin'] as const) {
+        try {
+          snapshot[provider] = service.list(provider)
+        } catch {
+          // Optional unavailable evidence must not swallow another provider's committed change.
+        }
+      }
+    }
+    return snapshot
+  }
+
   dataAccountsSnapshot(): Pick<AccountsSnapshot, 'opencode' | 'devin'> {
     if (!hasAppEnvironment()) {
       return {}
@@ -251,11 +276,11 @@ export class RuntimeAccountController {
   onChanged(listener: (snapshot: AccountsSnapshot) => void): () => void {
     const services = this.requireServices()
     const unsubscribeData = hasAppEnvironment()
-      ? getManagedDataAccountService().onChanged(() => listener(this.getSnapshot()))
+      ? getManagedDataAccountService().onChanged(() => listener(this.getStreamSnapshot()))
       : () => {}
     const unsubscribeUsage = services.rateLimits.onStateChange((rateLimits) => {
       listener({
-        ...this.dataAccountsSnapshot(),
+        ...this.streamDataAccountsSnapshot(),
         claude: services.claudeAccounts.listAccounts(),
         codex: services.codexAccounts.listAccounts(),
         rateLimits

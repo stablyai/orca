@@ -1,6 +1,6 @@
 import { closeSync, constants, openSync, readSync } from 'node:fs'
 import { access, open, stat } from 'node:fs/promises'
-import { dirname, join } from 'node:path'
+import { dirname } from 'node:path'
 
 const NATIVE_EXECUTABLE_MAGIC = [
   [0x7f, 0x45, 0x4c, 0x46], // ELF
@@ -49,7 +49,7 @@ export async function installedCliRuntimeDirectory(
   acceptPath: (path: string) => boolean
 ): Promise<string | null> {
   const directory = dirname(command)
-  const node = join(directory, 'node')
+  const node = `${directory}/node`
   if (!acceptPath(node)) {
     return null
   }

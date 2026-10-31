@@ -19,6 +19,40 @@ function getElementScrollBounds(container: HTMLElement, element: Element): Sideb
   }
 }
 
+function getRevealTargetBounds(
+  container: HTMLElement,
+  element: Element
+): SidebarRevealBounds | null {
+  const bounds = getElementScrollBounds(container, element)
+  if (
+    !element.hasAttribute('data-worktree-id') &&
+    !element.hasAttribute('data-worktree-card-surface')
+  ) {
+    return bounds
+  }
+  const first = element.firstElementChild
+  const scope = first?.hasAttribute('data-worktree-context-menu-scope')
+    ? first
+    : first?.firstElementChild
+  const surface = element.hasAttribute('data-worktree-card-surface')
+    ? element
+    : first?.hasAttribute('data-worktree-card-surface')
+      ? first
+      : scope?.hasAttribute('data-worktree-context-menu-scope')
+        ? scope.firstElementChild
+        : null
+  if (!surface?.hasAttribute('data-worktree-card-surface')) {
+    return null
+  }
+  const boundary = surface.lastElementChild
+  return boundary?.hasAttribute('data-worktree-lineage-children')
+    ? {
+        start: bounds.start,
+        end: Math.min(bounds.end, getElementScrollBounds(container, boundary).start)
+      }
+    : bounds
+}
+
 export function getScrollTopToRevealBounds(
   container: HTMLElement,
   bounds: SidebarRevealBounds,
@@ -46,9 +80,13 @@ export function revealElementInScrollContainer(
   if (!container.contains(element)) {
     return false
   }
+  const bounds = getRevealTargetBounds(container, element)
+  if (!bounds) {
+    return false
+  }
   const nextScrollTop = getScrollTopToRevealBounds(
     container,
-    getElementScrollBounds(container, element),
+    bounds,
     WORKTREE_SIDEBAR_REVEAL_TOP_INSET
   )
   if (nextScrollTop === null) {

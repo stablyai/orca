@@ -243,7 +243,7 @@ const styles = themedStyleSheet(() => ({
   backButton: {
     width: 36,
     height: 36,
-    borderRadius: 18,
+    borderRadius: radii.control,
     alignItems: 'center',
     justifyContent: 'center',
     marginBottom: spacing.sm
@@ -281,7 +281,7 @@ const styles = themedStyleSheet(() => ({
     backgroundColor: colors.textPrimary,
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center',
     marginBottom: spacing.sm
   },
@@ -294,7 +294,7 @@ const styles = themedStyleSheet(() => ({
     width: '100%',
     paddingHorizontal: spacing.xl,
     paddingVertical: spacing.sm + 2,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     alignItems: 'center'
   },
   secondaryButtonText: {

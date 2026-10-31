@@ -1,5 +1,5 @@
 import { homedir } from 'node:os'
-import { delimiter, dirname, isAbsolute, join } from 'node:path'
+import { delimiter, dirname, isAbsolute, join, resolve } from 'node:path'
 import { firstWindowsPathEnvKey, isNativeExecutable } from './cli-runtime-pairing-inputs'
 import { getFnmDefaultAliasDirectories } from './fnm-default-alias-dirs'
 import { getNvmVersionDirectories, nvmVersionDirectories } from './nvm-version-directories'
@@ -36,6 +36,14 @@ function splitPath(
     .filter(Boolean)
 }
 
+/** Like execvp, relative and empty PATH entries search from the launch cwd. */
+export function pathEnvRelativeTo(pathEnv: string | undefined, cwd: string): string | undefined {
+  return pathEnv
+    ?.split(delimiter)
+    .map((entry) => (isAbsolute(entry) ? entry : resolve(cwd, entry)))
+    .join(delimiter)
+}
+
 function* firstRunnable(
   platform: NodeJS.Platform,
   directories: string[],
@@ -60,32 +68,36 @@ function findFirstExecutable(
   return runCliFsReadsSync(firstRunnable(platform, directories, executableNames))
 }
 
-function getBaseVersionManagerDirectories(platform: NodeJS.Platform, homePath: string): string[] {
+function getBaseVersionManagerDirectories(
+  platform: NodeJS.Platform,
+  homePath: string,
+  appendPath: typeof join = join
+): string[] {
   const directories = [
-    join(homePath, '.volta', 'bin'),
-    join(homePath, '.asdf', 'shims'),
-    ...getFnmDefaultAliasDirectories(platform, homePath),
-    join(homePath, '.local', 'share', 'mise', 'shims')
+    appendPath(homePath, '.volta', 'bin'),
+    appendPath(homePath, '.asdf', 'shims'),
+    ...getFnmDefaultAliasDirectories(platform, homePath, appendPath),
+    appendPath(homePath, '.local', 'share', 'mise', 'shims')
   ]
 
   if (platform === 'win32') {
     // Native Windows Claude installs here; GUI launches may lack the user PATH entry.
-    directories.push(join(homePath, '.local', 'bin'))
-    directories.push(join(homePath, 'AppData', 'Roaming', 'npm'))
-    directories.push(join(homePath, 'AppData', 'Local', 'pnpm'))
-    directories.push(join(homePath, 'AppData', 'Local', 'Yarn', 'bin'))
+    directories.push(appendPath(homePath, '.local', 'bin'))
+    directories.push(appendPath(homePath, 'AppData', 'Roaming', 'npm'))
+    directories.push(appendPath(homePath, 'AppData', 'Local', 'pnpm'))
+    directories.push(appendPath(homePath, 'AppData', 'Local', 'Yarn', 'bin'))
   } else {
-    directories.push(join(homePath, '.local', 'bin'))
+    directories.push(appendPath(homePath, '.local', 'bin'))
     // pnpm global bins vary by platform, unlike npm’s ~/.local/bin.
     if (platform === 'darwin') {
-      directories.push(join(homePath, 'Library', 'pnpm'))
+      directories.push(appendPath(homePath, 'Library', 'pnpm'))
     } else {
-      directories.push(join(homePath, '.local', 'share', 'pnpm'))
+      directories.push(appendPath(homePath, '.local', 'share', 'pnpm'))
     }
-    directories.push(join(homePath, '.yarn', 'bin'))
+    directories.push(appendPath(homePath, '.yarn', 'bin'))
   }
 
-  directories.push(join(homePath, '.bun', 'bin'))
+  directories.push(appendPath(homePath, '.bun', 'bin'))
   return directories
 }
 
@@ -107,11 +119,15 @@ function getVersionManagerDirectories(
 }
 
 // Share native/WSL ordering: version-manager bins must precede system Homebrew/npm/snap installs.
-function* cliInstallDirectories(platform: NodeJS.Platform, homePath: string): CliFsReads<string[]> {
+function* cliInstallDirectories(
+  platform: NodeJS.Platform,
+  homePath: string,
+  appendPath: typeof join = join
+): CliFsReads<string[]> {
   return [
-    ...(yield* nvmVersionDirectories(homePath)),
-    ...getBaseVersionManagerDirectories(platform, homePath),
-    ...getSystemCliInstallDirectories(platform, homePath)
+    ...(yield* nvmVersionDirectories(homePath, appendPath)),
+    ...getBaseVersionManagerDirectories(platform, homePath, appendPath),
+    ...getSystemCliInstallDirectories(platform, homePath, appendPath)
   ]
 }
 
@@ -254,10 +270,14 @@ export function* installedCliCandidates(
   homePath: string,
   acceptPath: (path: string) => boolean
 ): CliFsReads<string[]> {
-  const reads = cliInstallDirectories(platform, homePath)
+  // Keep the frozen HOME/cwd prefix: lexical normalization can change symlink traversal.
+  const appendPath: typeof join = (prefix, ...suffix) => `${prefix}/${suffix.join('/')}`
+  const reads = cliInstallDirectories(platform, homePath, appendPath)
   let step = reads.next()
   while (!step.done) {
     step = reads.next(acceptPath(step.value.path) ? yield step.value : null)
   }
-  return [...new Set(step.value.map((directory) => join(directory, command)))].filter(acceptPath)
+  return [...new Set(step.value.map((directory) => appendPath(directory, command)))].filter(
+    acceptPath
+  )
 }

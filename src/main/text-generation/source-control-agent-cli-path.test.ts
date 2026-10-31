@@ -6,6 +6,7 @@ import { join, relative } from 'node:path'
 import * as processHost from '@orca/process-host'
 import type { ProcessSpec } from '@orca/process-host/process-spec'
 const { runProcess } = processHost
+import { installedNamingHomeContract } from './source-control-agent-cli-home.test-fixture'
 import { discoverModelsLocal } from './commit-message-model-discovery'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import {
@@ -223,6 +224,7 @@ describe.skipIf(process.platform === 'win32')('installed one-shot naming CLI', (
   )
 
   installedNamingScalingContract(() => root, fixture, readEvents, lookupMessage)
+  installedNamingHomeContract(() => root, fixture, readEvents)
 })
 
 function readEvents(): AttemptEvent[] {

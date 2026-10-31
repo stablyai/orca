@@ -14,8 +14,7 @@ import { gitFastForward, gitFetch, gitPull, gitPullRebaseFromBase, gitPush } fro
 
 const REBASE_OPERATION_OPTIONS = {
   cwd: '/repo',
-  terminationBarrier: true,
-  captureWslLoginShellOutput: true
+  terminationBarrier: true
 }
 
 describe('git remote operations', () => {

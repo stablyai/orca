@@ -7,7 +7,8 @@ import { join } from 'node:path'
  * Exception: a newly discovered CLI with sibling node may prepend that dir only to its child PATH for runtime pairing (#10932). */
 export function getSystemCliInstallDirectories(
   platform: NodeJS.Platform,
-  homePath: string
+  homePath: string,
+  appendPath: typeof join = join
 ): string[] {
   // Both lookup and seeded system blocks cover POSIX only; Windows installer paths remain outside this fallback.
   if (platform === 'win32') {
@@ -25,10 +26,10 @@ export function getSystemCliInstallDirectories(
   }
   directories.push(
     '/nix/var/nix/profiles/default/bin',
-    join(homePath, '.nix-profile', 'bin'),
-    join(homePath, '.opencode', 'bin'),
-    join(homePath, '.vite-plus', 'bin'),
-    join(homePath, '.grok', 'bin')
+    appendPath(homePath, '.nix-profile', 'bin'),
+    appendPath(homePath, '.opencode', 'bin'),
+    appendPath(homePath, '.vite-plus', 'bin'),
+    appendPath(homePath, '.grok', 'bin')
   )
   if (platform === 'darwin') {
     // MacPorts last, matching the seed; ungated since a lookup miss costs the same stat as the seed's `port` gate.

@@ -142,11 +142,7 @@ beforeEach(async () => {
   rig = await createRestTestRig({ idleSweep: { intervalMs: 3_600_000 } })
   setStructuredAgentSessionHost(rig.host)
   const runtime = new OrcaRuntimeService()
-  vi.spyOn(runtime, 'getClientSettings').mockImplementation(
-    () =>
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the RPC gate reads only this one setting.
-      ({ experimentalNativeChat: true }) as ReturnType<OrcaRuntimeService['getClientSettings']>
-  )
+
   dispatcher = new RpcDispatcher({ runtime, methods: STRUCTURED_AGENT_SESSION_METHODS })
 })
 

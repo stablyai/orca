@@ -119,11 +119,20 @@ export function MobileNativeChatSessionOptionPickers({
     wasOpen.current = open
   }, [open, controller.optionSurface])
   const { snapshot, pendingId } = controller
+  const hasControls = snapshot.some((descriptor) => descriptor.settable)
+  const canOpen = !sendInFlight && pendingId === null && hasControls
+  useEffect(() => {
+    if (open && !hasControls) {
+      onNavigate(null)
+    }
+  }, [open, hasControls, onNavigate])
   const model = snapshot.find((descriptor) => descriptor.category === 'model')
   const permission = snapshot.find(
     (descriptor) => descriptor.id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
   )
-  const activeDescriptor = snapshot.find((descriptor) => descriptor.id === presentation?.page)
+  const activeDescriptor = hasControls
+    ? snapshot.find((descriptor) => descriptor.id === presentation?.page)
+    : undefined
   const permissionView = activeDescriptor !== undefined && activeDescriptor === permission
   const showWorkingNotice =
     (model !== undefined || permission !== undefined) &&
@@ -171,6 +180,7 @@ export function MobileNativeChatSessionOptionPickers({
     if (
       descriptor !== permission &&
       descriptor.valueSource !== 'unknown' &&
+      descriptor.valueSource !== 'default' &&
       descriptor.kind.type === 'select' &&
       descriptor.kind.currentValue === value
     ) {
@@ -218,8 +228,11 @@ export function MobileNativeChatSessionOptionPickers({
                 value: primary
               })
         }
-        disabled={busy || (!model && permission?.settable === false)}
+        disabled={!canOpen}
         onPress={() => {
+          if (!canOpen) {
+            return
+          }
           onDrawerOpen(home.id)
           Keyboard.dismiss()
         }}

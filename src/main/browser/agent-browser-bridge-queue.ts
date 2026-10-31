@@ -1,61 +1,28 @@
 import type { BrowserTabSwitchResult } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
-import { AgentBrowserBridgeShutdown } from './agent-browser-bridge-shutdown'
+import { AgentBrowserBridgeActionEffects } from './agent-browser-bridge-action-effects'
 import { ORCA_TAB_SESSION_PREFIX } from './agent-browser-orphan-sweep'
 import type {
   EnqueueTargetedCommandOptions,
   ResolvedBrowserCommandTarget
 } from './agent-browser-bridge-types'
 import { runWithRemoteCliPageAdmission } from './remote-cli-page-admission'
+import { runWithActionEffects } from './agent-browser-action-effects'
 import { AGENT_BROWSER_CLEANUP_TIMEOUT_MS } from './agent-browser-bridge-types'
 import { releaseHeldPageInput } from './guest-direct-key-input'
+import { onBrowserJavaScriptDialogOpened } from './browser-javascript-dialogs'
 import {
-  getBrowserJavaScriptDialog,
-  onBrowserJavaScriptDialogOpened
-} from './browser-javascript-dialogs'
-import type { BrowserJavaScriptDialog } from '../../shared/browser-javascript-dialog'
+  assertNoJavaScriptDialog,
+  dialogAnswerHint,
+  quoteDialogMessage
+} from './agent-browser-dialog-errors'
 import {
   captureRemoteCliBrowserRevocation,
   captureRemoteCliBrowserScope,
   runOutsideRemoteCliBrowserScope
 } from '../runtime/desktop-browser-bridge/remote-cli-browser-scope'
 
-const DIALOG_MESSAGE_QUOTE_MAX_CHARS = 500
-
-// Page-controlled text, so quote it and keep it short.
-function quoteDialogMessage({ message }: BrowserJavaScriptDialog): string {
-  return JSON.stringify(
-    message.length > DIALOG_MESSAGE_QUOTE_MAX_CHARS
-      ? `${message.slice(0, DIALOG_MESSAGE_QUOTE_MAX_CHARS)}…`
-      : message
-  )
-}
-
-function dialogAnswerHint(dialog: BrowserJavaScriptDialog, browserPageId: string): string {
-  const page = `--page ${browserPageId}`
-  return dialog.type === 'prompt'
-    ? `Answer it with \`orca dialog accept ${page} --text <answer>\` or \`orca dialog dismiss ${page}\``
-    : `Answer it with \`orca dialog accept ${page}\` or \`orca dialog dismiss ${page}\``
-}
-
-// Commands block until the page's dialog closes, so agents must answer it first.
-function assertNoJavaScriptDialog(
-  webContentsId: number,
-  browserPageId: string,
-  admit: (id: number) => void
-): void {
-  const open = getBrowserJavaScriptDialog(webContentsId)
-  if (open) {
-    // A host must not read a dialog on a page it may not drive.
-    admit(webContentsId)
-    throw new BrowserError(
-      'browser_dialog_open',
-      `A JavaScript ${open.type} is open on this page: ${quoteDialogMessage(open)}. ${dialogAnswerHint(open, browserPageId)}, then retry.`
-    )
-  }
-}
-
-export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown {
+export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeActionEffects {
   // Serialize tab switches behind commands targeting the current tab.
   async tabSwitch(
     index: number | undefined,
@@ -95,6 +62,19 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     return this.enqueueTargetedCommand(worktreeId, undefined, execute)
   }
 
+  /** A command that acts on the page; an agent's gets the effects it caused added to its result. */
+  protected enqueuePageAction<T>(
+    worktreeId: string | undefined,
+    browserPageId: string | undefined,
+    execute: (sessionName: string, target: ResolvedBrowserCommandTarget) => Promise<T>,
+    options: EnqueueTargetedCommandOptions = {}
+  ): Promise<T> {
+    return this.enqueueTargetedCommand(worktreeId, browserPageId, execute, {
+      ...options,
+      reportEffects: options.reportEffects !== false
+    })
+  }
+
   protected async enqueueTargetedCommand<T>(
     worktreeId: string | undefined,
     browserPageId: string | undefined,
@@ -117,6 +97,8 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
     assertNoJavaScriptDialog(webContentsId, pageId, assertNotRevoked)
     const sessionName = `${ORCA_TAB_SESSION_PREFIX}${pageId}`
     const agentCommand = this.browserManager.beginAgentCommand(pageId)
+    // Decided at enqueue: a queued command runs under the caller of the command ahead of it.
+    const reportEffects = options.reportEffects === true && agentCommand.agent
 
     // A dialog blocks the page until it is answered. A command still waiting never runs; one
     // already running answers its caller now and keeps its turn until it ends, so nothing overtakes it.
@@ -159,11 +141,16 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
                   }
                 }
                 running = true
+                const act = (): Promise<T> =>
+                  reportEffects
+                    ? runWithActionEffects(
+                        this.actionEffectsHost(worktreeId, pageId, session),
+                        () => execute(session, target)
+                      )
+                    : execute(session, target)
                 return origin.bridged
-                  ? this.runHostCommand(session, target.webContentsId, gate, origin, () =>
-                      execute(session, target)
-                    )
-                  : execute(session, target)
+                  ? this.runHostCommand(session, target.webContentsId, gate, origin, act)
+                  : act()
               },
               options
             )
@@ -267,7 +254,11 @@ export abstract class AgentBrowserBridgeQueue extends AgentBrowserBridgeShutdown
         queue = []
         this.commandQueues.set(sessionName, queue)
       }
-      queue.push({ execute: () => runOutsideRemoteCliBrowserScope(work), resolve, reject })
+      queue.push({
+        execute: () => runOutsideRemoteCliBrowserScope(work),
+        resolve,
+        reject
+      })
       void this.processQueue(sessionName)
     })
   }

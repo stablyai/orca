@@ -84,30 +84,23 @@ describe('orchestration.check on a re-attached Dispatch', () => {
       code: 'consumer_fenced',
       message: expect.stringContaining('no longer owns its Dispatch')
     })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
   })
 
-  it('hands the live worker a fresh Delivery with the same unread mail', async () => {
+  it('leaves mail the replaced process already took in the live worker history', async () => {
     const dispatchId = attachedDispatchWithMail()
-    const staleDelivery = (await check(PANE_A)).deliveryId
+    await check(PANE_A)
     reattach(dispatchId)
 
-    const live = await check(PANE_B)
-    expect(live.deliveryId).not.toBe(staleDelivery)
-    expect(live.replayed).toBe(false)
-    expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
-
-    await check(PANE_B, { ack: live.deliveryId })
-    expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual([])
+    expect(await check(PANE_B)).toMatchObject({ deliveryId: null, count: 0 })
+    const history = await check(PANE_B, { all: true })
+    expect(history.messages.map((message) => message.subject)).toEqual(['do the work'])
   })
 
   it('keeps serving a worker whose process restarted without a re-attach', async () => {
     attachedDispatchWithMail()
     const first = await check(PANE_A)
 
-    const replay = await check(PANE_A)
-    expect(replay.deliveryId).toBe(first.deliveryId)
-    expect(replay.replayed).toBe(true)
+    expect(await check(PANE_A)).toMatchObject({ deliveryId: null, count: 0 })
     await expect(check(PANE_A, { ack: first.deliveryId })).resolves.toMatchObject({
       acknowledged: first.deliveryId
     })
@@ -117,6 +110,12 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     const dispatchId = attachedDispatchWithMail()
     await check(PANE_A)
     reattach(dispatchId)
+    db.insertMessage({
+      from: 'term_coord',
+      to: `dispatch:${dispatchId}`,
+      subject: 'next step',
+      runId: db.getDispatchContextById(dispatchId)!.run_id
+    })
 
     await expect(check(PANE_A)).rejects.toMatchObject({
       code: 'consumer_fenced',
@@ -125,8 +124,7 @@ describe('orchestration.check on a re-attached Dispatch', () => {
     expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toHaveLength(1)
 
     const live = await check(PANE_B)
-    expect(live.messages.map((message) => message.subject)).toEqual(['do the work'])
-    await check(PANE_B, { ack: live.deliveryId })
+    expect(live.messages.map((message) => message.subject)).toEqual(['next step'])
     expect(db.getUnreadMessages(`dispatch:${dispatchId}`)).toEqual([])
   })
 

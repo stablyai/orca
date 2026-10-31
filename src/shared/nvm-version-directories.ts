@@ -30,18 +30,18 @@ const NVM_ALIAS_CHAIN_LIMIT = 10
 
 /** Resolves `alias/default` to an installed version directory name, or null. */
 function* resolveNvmDefaultVersion(
-  nvmVersionsDir: string,
-  installed: string[]
+  aliasDir: string,
+  installed: string[],
+  appendPath: typeof join
 ): CliFsReads<string | null> {
-  const aliasDir = join(nvmVersionsDir, '..', '..', 'alias')
-  let token = yield* readNvmAlias(join(aliasDir, 'default'))
+  let token = yield* readNvmAlias(aliasDir, 'default', appendPath)
   const seen = new Set<string>()
   for (let hop = 0; token && hop < NVM_ALIAS_CHAIN_LIMIT; hop += 1) {
     if (seen.has(token)) {
       return null
     }
     seen.add(token)
-    const next = yield* readNvmAlias(join(aliasDir, token))
+    const next = yield* readNvmAlias(aliasDir, token, appendPath)
     if (!next) {
       break
     }
@@ -58,10 +58,14 @@ function* resolveNvmDefaultVersion(
   return matchNvmVersion(token, installed)
 }
 
-function* readNvmAlias(aliasPath: string): CliFsReads<string | null> {
-  // Reject literal traversal cheaply; join normalizes it away. Real containment comes from matchNvmVersion returning only installed readdir entries,
-  // so arbitrary alias tokens can never add foreign paths to PATH.
-  if (aliasPath.includes('..')) {
+function* readNvmAlias(
+  aliasDir: string,
+  token: string,
+  appendPath: typeof join
+): CliFsReads<string | null> {
+  const aliasPath = appendPath(aliasDir, token)
+  // Installed roots may contain traversal; only the catalog-owned alias token is restricted.
+  if ((appendPath === join ? aliasPath : token).includes('..')) {
     return null
   }
   const contents = yield { kind: 'file', path: aliasPath }
@@ -85,8 +89,11 @@ function matchNvmVersion(token: string, installed: string[]): string | null {
 }
 
 /** nvm's bin dirs, default alias first; yields its reads so async callers stay off the event loop. */
-export function* nvmVersionDirectories(homePath: string): CliFsReads<string[]> {
-  const nvmVersionsDir = join(homePath, '.nvm', 'versions', 'node')
+export function* nvmVersionDirectories(
+  homePath: string,
+  appendPath: typeof join = join
+): CliFsReads<string[]> {
+  const nvmVersionsDir = appendPath(homePath, '.nvm', 'versions', 'node')
   const entries = yield { kind: 'dirs', path: nvmVersionsDir }
   if (!Array.isArray(entries)) {
     return []
@@ -95,11 +102,15 @@ export function* nvmVersionDirectories(homePath: string): CliFsReads<string[]> {
 
   // Prefer nvm default when login probing fails. Freshest installs often have no CLIs and mismatched native ABIs (#10932);
   // keep other installed versions as fallbacks so their CLIs remain reachable.
-  const preferred = yield* resolveNvmDefaultVersion(nvmVersionsDir, installed)
+  const preferred = yield* resolveNvmDefaultVersion(
+    appendPath(homePath, '.nvm', 'alias'),
+    installed,
+    appendPath
+  )
   const ordered = preferred
     ? [preferred, ...installed.filter((entry) => entry !== preferred)]
     : installed
-  return ordered.map((entry) => join(nvmVersionsDir, entry, 'bin'))
+  return ordered.map((entry) => appendPath(nvmVersionsDir, entry, 'bin'))
 }
 
 export function getNvmVersionDirectories(homePath: string): string[] {
