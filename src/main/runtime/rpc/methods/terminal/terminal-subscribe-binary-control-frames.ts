@@ -5,7 +5,7 @@ import {
 } from '../../../../../shared/terminal-stream-protocol'
 import { isTerminalInputLockedForClient, sendTerminalStreamInput } from './terminal-input-delivery'
 import type { TerminalSubscriptionArgs } from './terminal-subscribe-types'
-import { updateViewportForClient } from './terminal-viewport-update'
+import { chainPassiveDesktopResize, updateViewportForClient } from './terminal-viewport-update'
 
 type TerminalSubscribeBinaryControlState = {
   isClosed: () => boolean
@@ -79,10 +79,11 @@ export function registerTerminalSubscribeBinaryControlFrames(
         }
       }
       controls.setDesktopClaimTail(
-        controls
-          .getDesktopClaimTail()
-          .then(async (priorClaimed) => {
-            const result = await updateViewportForClient(
+        chainPassiveDesktopResize(
+          controls.getDesktopClaimTail(),
+          supportsDesktopViewportClaims,
+          () =>
+            updateViewportForClient(
               runtime,
               ptyId,
               remoteDesktopSubscriptionKey,
@@ -92,9 +93,7 @@ export function registerTerminalSubscribeBinaryControlFrames(
               'register',
               !supportsDesktopViewportClaims
             )
-            return supportsDesktopViewportClaims ? priorClaimed && result.applied : result.applied
-          })
-          .catch(() => false)
+        )
       )
       return
     }

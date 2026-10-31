@@ -69,6 +69,9 @@ vi.mock('./BrowserLinkRoutingSetting', () => ({
 vi.mock('./BrowserLinkRoutingModifierSetting', () => ({
   BrowserLinkRoutingModifierSetting: () => <span>Modifier row</span>
 }))
+vi.mock('./BrowserLinkRoutingBackgroundSetting', () => ({
+  BrowserLinkRoutingBackgroundSetting: () => <span>Background links row</span>
+}))
 vi.mock('./BrowserTerminalLinkActionsSetting', () => ({
   BrowserTerminalLinkActionsSetting: () => <span>Terminal links row</span>
 }))
@@ -116,6 +119,10 @@ it('keeps targeted search visibility', () => {
   render(<BrowserPane settings={getDefaultSettings('/synthetic')} updateSettings={vi.fn()} />)
   expect(screen.getByRole('textbox')).toBeTruthy()
   expect(screen.queryByText('Cookies row')).toBeNull()
+  fake.query = 'google'
+  cleanup()
+  render(<BrowserPane settings={getDefaultSettings('/synthetic')} updateSettings={vi.fn()} />)
+  expect(screen.getByText('Cookies row')).toBeTruthy()
 })
 
 it('rebuilds metadata in the next render after the language changes', () => {

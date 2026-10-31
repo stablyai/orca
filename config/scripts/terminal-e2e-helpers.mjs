@@ -1,27 +1,6 @@
 #!/usr/bin/env node
-/**
- * Terminal E2E helpers for agent-browser + CDP testing against a running Orca
- * dev build. Encapsulates patterns discovered during manual terminal testing:
- *
- *   - CDP key events do NOT work with xterm.js (canvas-based renderer)
- *   - ClipboardEvent paste simulation does NOT work
- *   - Direct PTY write via `window.api.pty.write(id, data)` DOES work
- *   - PTY IDs are sequential integers starting from 1
- *   - The visible terminal's PTY ID must be discovered (not guessed)
- *
- * Usage:
- *   import { OrcaTerminal } from './terminal-e2e-helpers.mjs'
- *
- *   const term = new OrcaTerminal(9444)       // CDP port
- *   await term.connect()
- *   const ptyId = await term.discoverActivePtyId()
- *   await term.send(ptyId, 'echo hello\r')
- *   const screenshot = await term.screenshot()
- *   await term.waitForOutput(ptyId, 'hello')
- *
- * Or run directly:
- *   node config/scripts/terminal-e2e-helpers.mjs --port 9444 --command 'echo hello'
- */
+// Inject commands through PTY API and discover active ID with marker probes; probing sends Ctrl+C to candidate panes and interrupts their commands.
+// Run node config/scripts/terminal-e2e-helpers.mjs --port 9444 --command "echo hello", or import OrcaTerminal for CDP-driven checks.
 
 import { execFileSync } from 'node:child_process'
 import { tmpdir } from 'node:os'
@@ -38,7 +17,6 @@ function tempScreenshotPath(filename) {
   return join(tmpdir(), filename)
 }
 
-/** Thin wrapper around `agent-browser --cdp <port> <subcommand>`. */
 function ab(port, args) {
   const result = execFileSync(AGENT_BROWSER, ['--cdp', String(port), ...args], {
     encoding: 'utf-8',
@@ -47,7 +25,6 @@ function ab(port, args) {
   return result.trim()
 }
 
-/** Run JS in the renderer via `agent-browser eval`. */
 function evalInRenderer(port, js) {
   return ab(port, ['eval', js])
 }
@@ -58,7 +35,6 @@ export class OrcaTerminal {
     this.port = cdpPort
   }
 
-  /** Verify connection by taking a snapshot. */
   connect() {
     ab(this.port, ['snapshot', '-i'])
   }
@@ -76,7 +52,6 @@ export class OrcaTerminal {
   discoverActivePtyId(maxId = 10) {
     const marker = `__PTY_PROBE_${Date.now()}__`
 
-    // Send Ctrl+C + marker echo to each candidate PTY
     const js = `
       (function() {
         for (let i = 1; i <= ${maxId}; i++) {
@@ -87,10 +62,8 @@ export class OrcaTerminal {
     `
     evalInRenderer(this.port, js)
 
-    // Wait for output to render
     sleep(1_500)
 
-    // Read the visible xterm buffer to find which marker appeared
     const bufferJs = `
       (function() {
         const xterms = document.querySelectorAll('.xterm');
@@ -108,7 +81,6 @@ export class OrcaTerminal {
     `
     const bufferResult = evalInRenderer(this.port, bufferJs)
 
-    // Parse the marker from the buffer
     let parsed
     try {
       parsed = JSON.parse(bufferResult.replace(/^"|"$/g, '').replace(/\\"/g, '"'))
@@ -123,7 +95,6 @@ export class OrcaTerminal {
     const markerRe = new RegExp(`${marker}_(\\d+)`, 'g')
     const matches = [...parsed.text.matchAll(markerRe)]
     if (matches.length === 0) {
-      // Fallback: take screenshot and try OCR-free approach by probing write
       throw new Error(
         'discoverActivePtyId: no marker found in buffer. ' +
           'The accessibility tree may be disabled. ' +
@@ -156,7 +127,6 @@ export class OrcaTerminal {
    * @param {string} text — text to send (use \r for Enter, \x03 for Ctrl+C, etc.)
    */
   send(ptyId, text) {
-    // Escape for JS string literal inside eval
     const escaped = text.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\r/g, '\\r')
     evalInRenderer(this.port, `window.api.pty.write('${ptyId}', '${escaped}')`)
   }
@@ -171,12 +141,10 @@ export class OrcaTerminal {
     this.send(ptyId, `${command}\r`)
   }
 
-  /** Send Ctrl+C to a PTY. */
   interrupt(ptyId) {
     this.send(ptyId, '\x03')
   }
 
-  /** Clear the current line (Ctrl+U). */
   clearLine(ptyId) {
     this.send(ptyId, '\x15')
   }
@@ -197,7 +165,7 @@ export class OrcaTerminal {
    * @returns {void}
    */
   newTerminal() {
-    ab(this.port, ['click', '@e7']) // "New terminal (Cmd+T)" button
+    ab(this.port, ['click', '@e7'])
     sleep(2_000)
   }
 
@@ -210,14 +178,10 @@ export class OrcaTerminal {
   readLang(ptyId) {
     this.exec(ptyId, 'echo __LANG__=$LANG')
     sleep(1_000)
-    // Screenshot and return for inspection
     return this.screenshot(tempScreenshotPath('orca-lang-check.png'))
   }
 }
 
-// ---------------------------------------------------------------------------
-// CLI entrypoint
-// ---------------------------------------------------------------------------
 if (process.argv[1]?.endsWith('terminal-e2e-helpers.mjs')) {
   const args = process.argv.slice(2)
   const portIdx = args.indexOf('--port')

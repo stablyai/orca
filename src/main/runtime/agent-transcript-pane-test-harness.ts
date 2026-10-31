@@ -1,4 +1,4 @@
-// One pane builder for every suite that replays a captured agent transcript through the runtime.
+import type { RuntimeTerminalCreate } from '../../shared/runtime-terminal-create-contract'
 import { vi } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import type { TuiAgent } from '../../shared/tui-agent'
@@ -16,30 +16,23 @@ export type TranscriptPaneOptions = {
   paneTitle: string
   foregroundProcess: string | null
   data: string
+  isReattach?: true
   launchAgent?: TuiAgent
-  /** Set for a pane whose PTY lives on an SSH host or WSL distro rather than locally. */
   connectionId?: string
-  /** The remote host of a `connectionId` pane is Windows. */
   remoteWindowsHost?: boolean
-  /** Simulates a PTY controller whose foreground probe never settles. */
   foregroundProbeHangs?: boolean
   onForegroundProbe?: () => void
-  /** PTY grid the controller reports; the runtime's emulator otherwise defaults to 80x24. */
+  /** Controller grid size; the runtime emulator defaults to 80x24. */
   size?: { cols: number; rows: number }
-  /** What a fresh foreground scan finds, where it differs from the cached foreground read. */
   confirmedForegroundProcess?: string | null
   onForegroundScan?: () => void
-  /** What the host's process inspection answers; absent for a host without one. */
   processInspection?: PtyProcessInspection
   onProcessInspection?: () => void
-  /** What the host's shell-foreground check answers: the spawned shell holds the foreground. */
   shellForegroundProven?: boolean
-  /** The pane's root process the provider reports; absent for a provider without an inventory. */
   paneRootPid?: number
   onShellForegroundProof?: () => void
 }
 
-/** Layout-owner builds: an empty store whose session holds main's layout, which binds the pane. */
 function transcriptLayoutStore(): RuntimeStore {
   return {
     getRepos: () => [],
@@ -64,7 +57,7 @@ function transcriptLayoutStore(): RuntimeStore {
 export async function createTranscriptPane(
   options: TranscriptPaneOptions,
   runtimeDeps?: ConstructorParameters<typeof OrcaRuntimeService>[2]
-): Promise<{ runtime: OrcaRuntimeService; handle: string }> {
+): Promise<{ runtime: OrcaRuntimeService; handle: string; terminal: RuntimeTerminalCreate }> {
   const runtime = new OrcaRuntimeService(
     ORCA_LAYOUT_OWNER_IS_MAIN ? transcriptLayoutStore() : null,
     undefined,
@@ -90,7 +83,8 @@ export async function createTranscriptPane(
       runtime,
       vi.fn(async (_args: { worktreeId?: string; tabId?: string; leafId?: string }) => ({
         id: TRANSCRIPT_PANE_PTY_ID,
-        incarnationId: 'inc-1'
+        incarnationId: 'inc-1',
+        ...(options.isReattach ? { isReattach: true as const } : {})
       }))
     ),
     write: () => true,
@@ -149,7 +143,6 @@ export async function createTranscriptPane(
     1,
     ORCA_LAYOUT_OWNER_IS_MAIN
       ? {
-          // A layout-owner window reports only what it shows of main's panes.
           tabs: [],
           leaves: [],
           mountedLeaves: [
@@ -191,17 +184,15 @@ export async function createTranscriptPane(
       agentLaunchAuthority: { launchToken: 'transcript-launch', launchAgent: options.launchAgent }
     })
   }
-  // Why the guard: a restore seed is only applied to a never-written record, so the restore
-  // cases must not write an empty chunk first.
+  // Restore seeds apply only to never-written records; do not write an empty chunk first.
   if (options.data.length > 0) {
     runtime.onPtyData(TRANSCRIPT_PANE_PTY_ID, options.data, Date.now())
   }
-  return { runtime, handle: terminal.handle }
+  return { runtime, handle: terminal.handle, terminal }
 }
 
-/** Advance readiness deadlines after real pane creation and emulator drains. */
 export async function waitForTranscriptIdle(
-  pane: Awaited<ReturnType<typeof createTranscriptPane>>,
+  pane: Pick<Awaited<ReturnType<typeof createTranscriptPane>>, 'runtime' | 'handle'>,
   timeoutMs: number
 ) {
   vi.useFakeTimers({

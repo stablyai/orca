@@ -54,7 +54,6 @@ function tab(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-// Views of one file through the real record middleware, identity index and save queue.
 describe('editor save queue: shared records', () => {
   let disk: FakeEditorDisk
   let store: ReturnType<typeof createEditorStore>
@@ -92,13 +91,13 @@ describe('editor save queue: shared records', () => {
   })
 
   it("a save queued on a detached record keeps that record's discard epoch after a rejoin", async () => {
-    // Restored divergent drafts: w2 is kept off w1's record.
+    // Divergent restored drafts keep w2 detached from w1’s record.
     store.setState({
       openFiles: [tab('w1', { isDirty: true }), tab('w2', { worktreeId: 'wt-2', isDirty: true })],
       editorDrafts: { w1: 'mine', w2: 'theirs' }
     })
     expect(isDetachedEditorBufferId(recordOf('w2'))).toBe(true)
-    // An earlier Don't Save on w1's record; it never touched w2's.
+    // Only w1’s record has previously been discarded.
     bumpEditorDiscardEpoch(recordOf('w1'))
     let release = (): void => {}
     const gate = new Promise<void>((resolve) => {
@@ -114,7 +113,7 @@ describe('editor save queue: shared records', () => {
     const first = queue.queueSave(view('w2'), 'theirs')
     await vi.advanceTimersByTimeAsync(0)
     const second = queue.queueSave(view('w2'), 'theirs')
-    // w1 goes clean, so w2 rejoins it, then types more before its queued save runs.
+    // Rejoin before dispatch to verify the queued request retains its original record’s discard epoch.
     store.getState().markFileDirty('w1', false)
     store.getState().clearEditorDraft('w1')
     await vi.advanceTimersByTimeAsync(0)
@@ -236,7 +235,6 @@ describe('editor save queue: shared records', () => {
       expect(view('old').externalMutation).toBeUndefined()
       expect(store.getState().editorDrafts.old).toBe('edits')
 
-      // A view on the current connection takes the record over and writes it.
       store.setState((s) => ({ openFiles: [...s.openFiles, tab('new', { worktreeId: 'wt-2' })] }))
       queue.syncAutoSave()
       await vi.advanceTimersByTimeAsync(DELAY_MS)
@@ -277,7 +275,6 @@ describe('editor save queue: shared records', () => {
       await vi.advanceTimersByTimeAsync(DELAY_MS * 2)
       expect(writes()).toEqual([])
 
-      // Keeping the edits lifts the pause on the record: one timer, one write.
       store.getState().setExternalMutation('w2', null)
       queue.syncAutoSave()
       await vi.advanceTimersByTimeAsync(DELAY_MS)

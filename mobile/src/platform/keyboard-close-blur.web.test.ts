@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-// The page's module graph: react-native-web's `Keyboard`, which blurs the field it saw focused.
 vi.mock('react-native', async () => {
   const { default: Keyboard }: { default: unknown } =
     // @ts-expect-error TS7016: react-native-web ships no type declarations.

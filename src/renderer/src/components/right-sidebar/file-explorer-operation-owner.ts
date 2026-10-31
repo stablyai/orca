@@ -43,10 +43,7 @@ export type FileExplorerOwnerState = Pick<
 > &
   Partial<Pick<AppState, 'activeWorktreeId' | 'activeWorkspaceExecutionHostId'>>
 
-/**
- * The owner every File Explorer read and write routes to, from the strict owner: a twin refuses
- * and focus never decides. Only a folder this app owns reads its host from its repos.
- */
+/** Use strict read/write ownership; refuse ambiguous twins and ignore focus, resolving app-owned folders through repos. */
 export function getFileExplorerOperationOwnerFromState(
   state: FileExplorerOwnerState,
   worktreeId: string | null | undefined
@@ -63,16 +60,13 @@ export function getFileExplorerOperationOwnerFromState(
       ? operationOwnerFromAuthority(match.owner)
       : { kind: 'unresolved' }
   }
-  if (match.kind === 'resolved' && match.owner.endpoint.kind === 'environment') {
+  if (match.kind === 'resolved') {
     return operationOwnerFromAuthority(match.owner)
   }
   return thisAppFolderOwner(state, worktreeId)
 }
 
-/**
- * An unstamped folder takes its host from its repos (the rule main shares), which `resolveOwner`
- * does not read; a server it is restored on wins until that server's folder catalog loads.
- */
+/** Unstamped folders inherit repo ownership; the restoring server wins until its folder catalog arrives. */
 function thisAppFolderOwner(
   state: FileExplorerOwnerState,
   workspaceId: string
@@ -93,7 +87,7 @@ function thisAppFolderOwner(
   return connectionId ? { kind: 'ssh', connectionId } : { kind: 'local' }
 }
 
-/** Keeps both halves of the pair: a server's nested SSH target stays the write's host (review-5 #9). */
+/** Preserve endpoint and nested SSH target so writes reach the owning host. */
 function operationOwnerFromAuthority({ endpoint, at }: HostAuthority): FileExplorerOperationOwner {
   if (endpoint.kind === 'environment') {
     return {

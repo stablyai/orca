@@ -1,6 +1,5 @@
 // @vitest-environment happy-dom
-// A value the field sets on the editor comes from the draft store, so the editor never saves it
-// back: an echo would make another window's draft, or a late-loaded one, a change of this window.
+// Store-driven editor updates must not echo back as this window’s edit to another or late-loaded draft.
 import { createElement, createRef } from 'react'
 import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -31,7 +30,6 @@ async function open(options: { hydrate?: boolean } = {}): Promise<Renderer> {
   return renderer
 }
 
-/** The editor, plus the field's effect that sets the store's draft on it. */
 async function mountEditor(
   renderer: Renderer
 ): Promise<{ stopSync: () => void; input: () => NativeChatComposerInput; unmount: () => void }> {

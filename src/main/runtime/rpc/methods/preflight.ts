@@ -1,14 +1,17 @@
 import { defineMethod } from '../core'
+import { resolveQualifiedAgentDetectionHost } from './preflight-workspace-target'
 import {
   detectRemoteWindowsTerminalCapabilities,
   runPreflightCheck
 } from '../../../preflight/agent-detection'
 import {
+  assertAgentDetectionHostRunning,
   detectAgentsOnHost,
   refreshAgentsOnHost
 } from '../../../preflight/workspace-agent-detection'
 import {
   PreflightAgentDetection,
+  PreflightProjectAgentDetection,
   PreflightCheck,
   PreflightDetectRemoteAgents,
   PreflightDetectRemoteWindowsTerminalCapabilities
@@ -24,10 +27,18 @@ export const PREFLIGHT_METHODS = [
   defineMethod({
     name: 'preflight.detectAgents',
     permission: 'workspace',
-    params: PreflightAgentDetection,
-    // Why the host resolves: only it knows the workspace's project runtime, including WSL.
-    handler: async (params, { runtime }) =>
-      detectAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId))
+    params: PreflightProjectAgentDetection,
+    // Only the host knows the workspace's actual project runtime, including WSL.
+    handler: async (params, { runtime }) => {
+      if (params.project) {
+        // Ungated: it serves a workspace create in that project, which boots the distro anyway.
+        return runtime.detectProjectLaunchContext(params.project.repo)
+      }
+      const host = await resolveQualifiedAgentDetectionHost(runtime, params)
+      // A client's inventory read is background work: it must not start a stopped WSL distro (E9).
+      await assertAgentDetectionHostRunning(host)
+      return detectAgentsOnHost(host)
+    }
   }),
   defineMethod({
     name: 'preflight.detectRemoteAgents',
@@ -46,7 +57,10 @@ export const PREFLIGHT_METHODS = [
     name: 'preflight.refreshAgents',
     permission: 'workspace',
     params: PreflightAgentDetection,
-    handler: async (params, { runtime }) =>
-      refreshAgentsOnHost(await runtime.resolveAgentDetectionHost(params.worktreeId, params.repoId))
+    handler: async (params, { runtime }) => {
+      const host = await resolveQualifiedAgentDetectionHost(runtime, params)
+      await assertAgentDetectionHostRunning(host)
+      return refreshAgentsOnHost(host)
+    }
   })
 ]

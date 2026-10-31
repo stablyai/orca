@@ -22,22 +22,20 @@ export type AgentTransitionStore = Pick<
   'getStatusSnapshot' | 'getStatusSnapshotForPane' | 'subscribeStatusRowMutations'
 >
 
-/** The workspace a pane belongs to, qualified by the SSH host that runs it (null: this machine). */
 export type AgentPaneWorkspace = { worktreeId: string; sshHostId: ExecutionHostId | null }
 
 export type AgentPaneChange =
-  /** A status that predates this observer (restored, replayed, present at attach, a hookless
-   *  agent's first title): never news. */
+  /** Existing status seeds observation without reporting a new transition. */
   | {
       kind: 'seeded'
       paneKey: string
       workspace: AgentPaneWorkspace
       phase: AgentPhase
       at: number
-      /** A first title: an idle one may follow no turn at all. */
+      /** An initial idle title may follow no turn at all. */
       fromTitle?: true
     }
-  /** Every hook look not reported as seeded, changed or not; null: no row or no workspace. */
+  /** Emitted for every non-seeded hook observation, even without a phase change. */
   | {
       kind: 'observed'
       paneKey: string
@@ -45,7 +43,6 @@ export type AgentPaneChange =
       phase: AgentPhase
       at: number
     }
-  /** The pane changed phase at `at`; leaving a workspace rests the pane there. */
   | {
       kind: 'moved'
       paneKey: string
@@ -74,15 +71,10 @@ export function sameAgentPaneWorkspace(
   return !!a && !!b && a.worktreeId === b.worktreeId && a.sshHostId === b.sshHostId
 }
 
-/**
- * Per-pane agent transitions from the hook server's status store, and from hookless agents' titles
- * where no hook row reports the pane: prompt submitted, turn finished, errored, needs input. One
- * phase per pane, so a title-tracked turn a hook row finishes is a finish. Runs on every host; panes
- * at rest are not kept.
- */
+/** Track one phase per pane, preferring hook rows over hookless-agent titles. */
 export class AgentTransitionDetector {
   private readonly panes = new Map<string, TrackedPane>()
-  /** Hookless panes seen since their PTY started: the first title seeds, it is not a transition. */
+  // The first title for each PTY seeds state rather than reporting a transition.
   private readonly titlePanes = new Map<string, TitlePane>()
   private readonly listeners = new Set<(change: AgentPaneChange) => void>()
   private store: AgentTransitionStore | null = null
@@ -95,7 +87,7 @@ export class AgentTransitionDetector {
     }
   ) {}
 
-  /** Subscribe before {@link attach}, or the statuses present at attach are missed. */
+  /** Subscribe before attach to receive its initial statuses. */
   subscribe(listener: (change: AgentPaneChange) => void): () => void {
     this.listeners.add(listener)
     return () => {
@@ -121,7 +113,6 @@ export class AgentTransitionDetector {
     }
   }
 
-  /** Hydration fills the store without a row mutation; once it has, its rows seed here. */
   seedRestoredRows(): void {
     for (const row of this.store?.getStatusSnapshot() ?? []) {
       if (!this.panes.has(row.paneKey)) {
@@ -130,7 +121,6 @@ export class AgentTransitionDetector {
     }
   }
 
-  /** Hookless agents' titles. Hook authority is per pane, as in Smart's attention. */
   noteTerminalSideEffects(batch: TerminalSideEffectBatch): void {
     const { worktreeId, paneKey } = batch
     if (!worktreeId || !paneKey) {
@@ -138,7 +128,7 @@ export class AgentTransitionDetector {
     }
     for (const fact of batch.facts) {
       if (fact.kind === 'title' && !this.latestRow(paneKey)) {
-        // A cleared stale working title is a timer's guess, not a finish.
+        // Timer-cleared titles do not prove turn completion.
         const phase = fact.staleWorkingTitleClear ? 'rest' : titleAgentPhase(fact.rawTitle)
         this.observeTitle(
           batch.ptyId,
@@ -161,7 +151,7 @@ export class AgentTransitionDetector {
       this.advance(paneKey, workspace, phase, this.deps.now(), agentPhaseTransition)
       return
     }
-    // A new PTY in the pane is a new agent; the last one left with its terminal.
+    // A new PTY replaces the pane's previous agent.
     if (known) {
       this.endTitlePane(paneKey)
     }
@@ -175,7 +165,7 @@ export class AgentTransitionDetector {
     }
     this.titlePanes.set(paneKey, { ptyId, releaseExit })
     const now = this.deps.now()
-    // The pane leaves its old workspace first, so a reader never takes the leave for the new one.
+    // Publish departure before associating the pane with its new workspace.
     this.leaveIfMoved(paneKey, workspace, now)
     this.emit({ kind: 'seeded', paneKey, workspace, phase, at: now, fromTitle: true })
     this.track(paneKey, workspace, phase)
@@ -184,7 +174,7 @@ export class AgentTransitionDetector {
   private endTitlePane(paneKey: string): void {
     this.titlePanes.get(paneKey)?.releaseExit()
     this.titlePanes.delete(paneKey)
-    // A hook row that took the pane over still reports it.
+    // Preserve hook-owned state after title tracking ends.
     if (!this.latestRow(paneKey)) {
       this.advance(paneKey, null, 'rest', this.deps.now(), () => null)
     }
@@ -211,7 +201,6 @@ export class AgentTransitionDetector {
     )
   }
 
-  /** The pane observed in `observed`; a pane that left or changed workspace rests where it was. */
   private advance(
     paneKey: string,
     workspace: AgentPaneWorkspace | null,
@@ -265,8 +254,11 @@ export class AgentTransitionDetector {
     }
   }
 
-  /** The row the pane's phase reads. The window applies a pane's rows in arrival order, so the
-   *  newest is the one it holds. */
+  phaseOf(paneKey: string): AgentPhase {
+    return this.panes.get(paneKey)?.phase ?? 'rest'
+  }
+
+  /** Use the newest row to match the window's arrival-order projection. */
   latestRow(paneKey: string): AgentStatusIpcPayload | null {
     let latest: AgentStatusIpcPayload | null = null
     for (const row of this.store?.getStatusSnapshotForPane(paneKey) ?? []) {
@@ -279,7 +271,6 @@ export class AgentTransitionDetector {
 
   private emit(change: AgentPaneChange): void {
     for (const listener of this.listeners) {
-      // One reader's failure must not cost the others the change.
       try {
         listener(change)
       } catch (error) {

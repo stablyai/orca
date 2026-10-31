@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type * as LocalCommandResolver from './command-path-resolver'
+import type * as WslGuestEnvironment from '../wsl/wsl-guest-environment'
 import { resolveProfileLoadingShell } from '../startup/hydrate-shell-path'
 
 const {
@@ -12,6 +13,7 @@ const {
   getAzureDevOpsAuthStatusMock,
   getGiteaAuthStatusMock,
   resolveCliCommandsMock,
+  findCommandsOnLocalPathMock,
   isCommandOnLocalPathMock,
   listLocalCommandPathsMock,
   mergePersistedWindowsPathAsyncMock,
@@ -26,6 +28,7 @@ const {
   getAzureDevOpsAuthStatusMock: vi.fn(),
   getGiteaAuthStatusMock: vi.fn(),
   resolveCliCommandsMock: vi.fn(),
+  findCommandsOnLocalPathMock: vi.fn(),
   isCommandOnLocalPathMock: vi.fn(),
   listLocalCommandPathsMock: vi.fn(),
   mergePersistedWindowsPathAsyncMock: vi.fn(),
@@ -33,8 +36,18 @@ const {
 }))
 
 const runWslProcessMock = vi.hoisted(() => vi.fn())
-// Why the runner and not child_process: WSL agent detection goes through
-// runWslProcess now, so a child_process mock never sees it.
+const invalidateGuest = vi.hoisted(() => vi.fn())
+vi.mock('../wsl/wsl-guest-environment', async (original) => ({
+  ...(await original<typeof WslGuestEnvironment>()),
+  invalidateWslGuestEnvironment: invalidateGuest
+}))
+// These cases cover a running distro; the E9 stopped-distro gate has its own suite.
+vi.mock('../wsl/wsl-background-exec-gate', () => ({
+  assertWslDistroRunningForExec: async () => {},
+  runAsWslExecUserAct: async (_distro: unknown, act: () => Promise<unknown>) => act()
+}))
+
+// WSL detection uses runWslProcess, so child_process mocks cannot observe it.
 vi.mock('../wsl/wsl-runner', () => ({ runWslProcess: runWslProcessMock }))
 
 vi.mock('electron', () => ({
@@ -64,16 +77,16 @@ vi.mock('../../shared/node-cli-command-resolution', () => ({
   resolveCliCommands: resolveCliCommandsMock
 }))
 
-// Why (#9297): local PATH resolution is now fs-based (no where/which spawn).
-// These tests express "which commands are on PATH" via the where/which mock,
-// so route the resolver through that same mock to preserve their intent.
+// Route filesystem PATH resolution through the existing command-lookup mock.
 vi.mock('./command-path-resolver', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalCommandResolver>()),
+  findCommandsOnLocalPath: findCommandsOnLocalPathMock,
   isCommandOnLocalPath: isCommandOnLocalPathMock,
   listLocalCommandPaths: listLocalCommandPathsMock
 }))
 
 vi.mock('../pty/windows-environment-path', () => ({
+  cachedPersistedWindowsPathSegments: () => [],
   readPersistedWindowsPathSegmentsAsync: async () => [],
   mergePersistedWindowsPathAsync: mergePersistedWindowsPathAsyncMock,
   mergePersistedWindowsPath: mergePersistedWindowsPathMock
@@ -111,6 +124,7 @@ describe('preflight', () => {
         getAzureDevOpsAuthStatusMock,
         getGiteaAuthStatusMock,
         resolveCliCommandsMock,
+        findCommandsOnLocalPathMock,
         isCommandOnLocalPathMock,
         listLocalCommandPathsMock,
         mergePersistedWindowsPathAsyncMock,
@@ -177,12 +191,11 @@ describe('preflight', () => {
     expect(hydrateShellPathMock).not.toHaveBeenCalled()
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
     expect(resolveProfileLoadingShell).not.toHaveBeenCalled()
+    expect(invalidateGuest).toHaveBeenCalledWith('Ubuntu')
   })
 
   it('refreshes via preflight:refreshAgents by re-hydrating PATH before re-detecting', async () => {
-    // Why: the Agents settings Refresh button calls this path. It must (1) ask
-    // the shell hydrator for a fresh PATH, (2) merge any new segments, then
-    // (3) re-run `which` so newly-installed CLIs appear without a restart.
+    // Refresh must hydrate and merge PATH before detecting newly installed CLIs.
     hydrateShellPathMock.mockResolvedValueOnce({
       segments: ['/Users/test/.opencode/bin'],
       ok: true,
@@ -260,13 +273,9 @@ describe('preflight', () => {
     expect(result.shellHydrationOk).toBe(false)
     expect(result.addedPathSegments).toEqual([])
     expect(result.agents).toEqual(['claude'])
-    // Why: drives the agent_picks `on_path:false` triage in dashboard 1562016.
-    // Without these fields we cannot distinguish "hydration failed" from
-    // "user genuinely doesn't have the binary."
+    // Diagnostics must distinguish failed hydration from an absent binary.
     expect(result.pathSource).toBe('sync_seed_only')
     expect(result.pathFailureReason).toBe('timeout')
-    // Why: when hydration fails, we must not call merge — nothing to merge —
-    // otherwise we'd log a no-op "added 0 segments" event on every refresh.
     expect(mergePathSegmentsMock).not.toHaveBeenCalled()
   })
 

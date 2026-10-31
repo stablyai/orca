@@ -1,9 +1,17 @@
-import type { AgentJournalSubmission } from '../../../shared/agent-session-journal-types'
-import { isQueuedAgentJournalSubmission } from '../../../shared/agent-session-queued-submission'
+import type { AgentSessionJournal } from '../agent-session-journal/journal-store'
+import { selectedStructuredSubmission } from './structured-agent-session-input-selection'
+import type { StructuredAgentSessionProviderChild } from './structured-agent-session-host-types'
 
 export type StructuredAgentSessionDeliveryPlace = {
   before: Promise<void>
   release: () => void
+}
+
+type OptionsCycle = StructuredAgentSessionDeliveryPlace & {
+  child: StructuredAgentSessionProviderChild
+  signal: AbortSignal
+  ready: Promise<void>
+  demand: 'refresh' | 'idle' | 'sealed'
 }
 
 type Lane = {
@@ -11,15 +19,20 @@ type Lane = {
   places: Set<StructuredAgentSessionDeliveryPlace>
   sends: Map<string, StructuredAgentSessionDeliveryPlace>
   active: Set<string>
+  options?: OptionsCycle
 }
 
 /** One delivery order; active handovers retain their place through settlement. */
 export class StructuredAgentSessionDeliveryOrder {
   private readonly lanes = new Map<string, Lane>()
 
-  reconcile(sessionId: string, submissions: readonly AgentJournalSubmission[]): void {
-    const queued = submissions.filter(isQueuedAgentJournalSubmission)
+  reconcile(sessionId: string, journal: AgentSessionJournal | undefined): void {
+    const selected = journal && selectedStructuredSubmission(journal)
+    const queued = selected ? [selected] : []
     const lane = this.lanes.get(sessionId)
+    if (lane?.options && (queued.length > 0 || lane.active.size > 0)) {
+      lane.options.demand = 'sealed'
+    }
     const ids = new Set(queued.map((submission) => submission.clientMessageId))
     for (const [id, place] of lane?.sends ?? []) {
       if (!ids.has(id) && !lane?.active.has(id)) {
@@ -27,9 +40,7 @@ export class StructuredAgentSessionDeliveryOrder {
         place.release()
       }
     }
-    for (const submission of queued.sort(
-      (a, b) => (a.acceptedSequence ?? 0) - (b.acceptedSequence ?? 0)
-    )) {
+    for (const submission of queued) {
       const current = this.lanes.get(sessionId)
       if (!current?.sends.has(submission.clientMessageId)) {
         const place = this.reserve(sessionId)
@@ -60,6 +71,46 @@ export class StructuredAgentSessionDeliveryOrder {
     lane.places.add(place)
     lane.tail = Promise.all([place.before, done.promise]).then(() => undefined)
     return place
+  }
+
+  joinOptions(sessionId: string, child: StructuredAgentSessionProviderChild): boolean {
+    const cycle = this.lanes.get(sessionId)?.options
+    if (!cycle || cycle.child !== child || cycle.signal.aborted) {
+      return false
+    }
+    if (cycle.demand !== 'sealed') {
+      cycle.demand = 'refresh'
+    }
+    return true
+  }
+
+  /** One optional producer shares the send order and the prepared readers' completion. */
+  reserveOptions(
+    sessionId: string,
+    child: StructuredAgentSessionProviderChild,
+    signal: AbortSignal
+  ): OptionsCycle {
+    const place = this.reserve(sessionId)
+    const lane = this.lanes.get(sessionId)!
+    const cycle: OptionsCycle = {
+      child,
+      signal,
+      before: place.before,
+      ready: lane.tail,
+      demand: 'refresh',
+      release: () => {
+        if (lane.options === cycle) {
+          lane.options = undefined
+        }
+        place.release()
+      }
+    }
+    lane.options = cycle
+    return cycle
+  }
+
+  optionsReady(sessionId: string): Promise<void> | undefined {
+    return this.lanes.get(sessionId)?.options?.ready
   }
 
   beforeSend(sessionId: string, messageId: string): Promise<void> {

@@ -66,22 +66,27 @@ test('a real hidden window performs no Resource Manager diagnostics and vetoes f
   await expect(orcaPage.getByText(/Unverifiable: local terminals/)).toHaveCount(0)
 })
 
-for (const theme of ['dark', 'light'] as const) {
-  test(`local PTY review and checked confirmation with 1,000 sessions (${theme})`, async ({
+for (const { theme, sessionCount, viewportHeight } of [
+  { theme: 'dark', sessionCount: 1_000, viewportHeight: 900 },
+  { theme: 'light', sessionCount: 1_000, viewportHeight: 900 },
+  { theme: 'dark', sessionCount: 20, viewportHeight: 500 },
+  { theme: 'light', sessionCount: 10_000, viewportHeight: 500 }
+] as const) {
+  test(`local PTY review and checked confirmation with ${sessionCount} sessions (${theme}, ${viewportHeight}px)`, async ({
     electronApp,
     orcaPage
   }, testInfo) => {
     await waitForSessionReady(orcaPage)
-    await orcaPage.setViewportSize({ width: 1200, height: 900 })
-    await electronApp.evaluate(({ ipcMain }) => {
-      const rows = Array.from({ length: 1_000 }, (_, index) => ({
+    await orcaPage.setViewportSize({ width: 1200, height: viewportHeight })
+    await electronApp.evaluate(({ ipcMain }, sessionCount) => {
+      const rows = Array.from({ length: sessionCount }, (_, index) => ({
         id: `local-pty-${String(index).padStart(4, '0')}`,
         incarnationId: `incarnation-${index}`,
         title: `Terminal ${index}`,
-        ...(index === 999 ? { foregroundProcess: 'node' } : {}),
+        ...(index === sessionCount - 1 ? { foregroundProcess: 'node' } : {}),
         cwd: `/workspace/folder-${index}`,
         agentOwnership: index === 0 ? 'unknown' : 'absent',
-        fencedTermination: index !== 998
+        fencedTermination: index !== sessionCount - 2
       }))
       const counts: Required<PtyViewCounts> = {
         listing: 0,
@@ -113,18 +118,23 @@ for (const theme of ['dark', 'light'] as const) {
         counts.kills.push(request)
         return { outcome: 'refused', reason: 'attached' }
       })
-    })
+    }, sessionCount)
     await makeResourceManagerFixtureVisible(electronApp, orcaPage)
     await orcaPage.evaluate(async (theme) => {
       await window.__store!.getState().updateSettingsOrThrow({ theme })
     }, theme)
     await orcaPage.getByRole('button', { name: /^Resource Manager,/ }).click()
+    const popover = orcaPage.locator('[data-slot="popover-content"]').filter({
+      has: orcaPage.getByRole('tab', { name: 'Resources', exact: true })
+    })
+    const resourcesHeight = await popover.evaluate((element) => element.clientHeight)
     const listStarted = performance.now()
     await orcaPage.getByRole('tab', { name: 'PTYs', exact: true }).click()
     await expect(
-      orcaPage.getByText('1000 Orca PTYs on this computer · 1000 without a tab', {
-        exact: true
-      })
+      orcaPage.getByText(
+        `${sessionCount} Orca PTYs on this computer · ${sessionCount} without a tab`,
+        { exact: true }
+      )
     ).toBeVisible()
     const listMs = performance.now() - listStarted
     const before = await electronApp.evaluate(() => {
@@ -137,11 +147,17 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(panel.getByRole('searchbox')).toHaveCount(0)
     await expect(panel.getByRole('combobox')).toHaveCount(0)
     const body = orcaPage.locator('[data-resource-pty-body]')
+    await expect
+      .poll(() => popover.evaluate((element) => element.clientHeight))
+      .toBe(resourcesHeight)
+    await expect
+      .poll(() => body.evaluate((element) => element.scrollHeight > element.clientHeight))
+      .toBe(true)
     await body.evaluate((element) => {
       element.scrollTop = element.scrollHeight
     })
     const unsupportedEnd = panel.getByRole('button', {
-      name: 'End Terminal 998',
+      name: `End Terminal ${sessionCount - 2}`,
       exact: true
     })
     await expect(unsupportedEnd).toBeDisabled()
@@ -149,17 +165,21 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(orcaPage.getByRole('tooltip', { name: /^End is unavailable/ })).toContainText(
       'End is unavailable for this terminal. Its host does not support the required safety checks.'
     )
-    const details = panel.getByRole('button', { name: 'Details for Terminal 999', exact: true })
+    const details = panel.getByRole('button', {
+      name: `Details for Terminal ${sessionCount - 1}`,
+      exact: true
+    })
     await details.focus()
     await orcaPage.keyboard.press('Enter')
     await expect(details).toHaveAttribute('aria-expanded', 'true')
-    await expect(panel.locator('dl').getByText('local-pty-0999', { exact: true })).toBeVisible()
-    await expect(panel.locator('dl').getByText('incarnation-999', { exact: true })).toBeVisible()
+    const lastSessionId = `local-pty-${String(sessionCount - 1).padStart(4, '0')}`
+    await expect(panel.locator('dl').getByText(lastSessionId, { exact: true })).toBeVisible()
+    await expect(
+      panel.locator('dl').getByText(`incarnation-${sessionCount - 1}`, { exact: true })
+    ).toBeVisible()
     await expect(panel.locator('dl').getByText('Unavailable', { exact: true })).toHaveCount(2)
     await panel.getByRole('button', { name: 'Copy Orca session ID', exact: true }).click()
-    expect(await electronApp.evaluate(({ clipboard }) => clipboard.readText())).toBe(
-      'local-pty-0999'
-    )
+    expect(await electronApp.evaluate(({ clipboard }) => clipboard.readText())).toBe(lastSessionId)
     await orcaPage.screenshot({
       path: testInfo.outputPath(`local-pty-details-${theme}.png`),
       animations: 'disabled'
@@ -172,7 +192,7 @@ for (const theme of ['dark', 'light'] as const) {
     await expect(firstTerminal).toBeVisible()
     expect(await orcaPage.getByRole('button', { name: /^End Terminal/ }).count()).toBeLessThan(50)
     await firstTerminal.focus()
-    for (let index = 1; index <= 30; index++) {
+    for (let index = 1; index <= Math.min(30, sessionCount - 3); index++) {
       await orcaPage.keyboard.press('Tab')
       await orcaPage.keyboard.press('Tab')
       const terminal = orcaPage.getByRole('button', { name: `End Terminal ${index}`, exact: true })
@@ -182,11 +202,17 @@ for (const theme of ['dark', 'light'] as const) {
     await body.evaluate((element) => {
       element.scrollTop = element.scrollHeight
     })
-    const lastTerminal = body.getByRole('button', { name: 'End Terminal 999', exact: true })
-    await expect(lastTerminal).toBeVisible()
-    console.info(JSON.stringify({ theme, rows: 1_000, listMs }))
-    await expect(body.getByText('Last seen process: node', { exact: false })).toBeVisible()
-    await expect(body.getByText('/workspace/folder-999', { exact: false })).toBeVisible()
+    const lastTerminal = body.getByRole('button', {
+      name: `End Terminal ${sessionCount - 1}`,
+      exact: true
+    })
+    await expect(lastTerminal).toBeInViewport()
+    console.info(JSON.stringify({ theme, rows: sessionCount, listMs }))
+    await expect(
+      body.getByText(`Last seen process: node · /workspace/folder-${sessionCount - 1}`, {
+        exact: true
+      })
+    ).toBeVisible()
     const after = await electronApp.evaluate(() => {
       if (!globalThis.__ptyViewCounts) {
         throw new Error('PTY view counters missing')
@@ -196,11 +222,13 @@ for (const theme of ['dark', 'light'] as const) {
     expect(after.listing).toBe(before.listing)
     expect(after.metrics).toBe(before.metrics)
     await lastTerminal.click()
-    await expect(orcaPage.getByRole('heading', { name: 'End Terminal 999?' })).toBeVisible()
+    await expect(
+      orcaPage.getByRole('heading', { name: `End Terminal ${sessionCount - 1}?` })
+    ).toBeVisible()
     await expect(
       orcaPage
-        .getByRole('dialog', { name: 'End Terminal 999?' })
-        .getByText('/workspace/folder-999', { exact: true })
+        .getByRole('dialog', { name: `End Terminal ${sessionCount - 1}?` })
+        .getByText(`/workspace/folder-${sessionCount - 1}`, { exact: true })
     ).toBeVisible()
     expect(
       (
@@ -230,8 +258,8 @@ for (const theme of ['dark', 'light'] as const) {
       ).kills
     ).toEqual([
       {
-        id: 'local-pty-0999',
-        expectedIncarnationId: 'incarnation-999',
+        id: lastSessionId,
+        expectedIncarnationId: `incarnation-${sessionCount - 1}`,
         requireNoAgentOwner: true,
         requireUnattached: true
       }
@@ -246,7 +274,7 @@ for (const theme of ['dark', 'light'] as const) {
     })
     await testInfo.attach('interaction-measurement', {
       body: JSON.stringify({
-        rows: 1_000,
+        rows: sessionCount,
         listingCalls: before.listing,
         metricCalls: before.metrics
       }),

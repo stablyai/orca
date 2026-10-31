@@ -1,6 +1,4 @@
-// The per-view store (design §1.4): each view's own selection, kept beside the layout and never
-// published to another view. A close moves each view's shown tab when it is applied; anything else
-// a record names that a later change removed falls back at read time and is pruned at save.
+// Keep each view’s selection private beside the layout. Apply close-neighbour selection during edits; other missing references fall back on read and prune on save.
 
 import { collectLayoutLeafIdsInOrder } from './terminal-pane-tree'
 import type { DesktopLayoutView } from './workspace-layout-beside'
@@ -17,10 +15,7 @@ export function deviceViewId(pairedDeviceId: string): LayoutViewId {
   return `device:${pairedDeviceId}`
 }
 
-/**
- * One shape for every view. The desktop's is also written into today's on-disk selection fields
- * (the Serializer), so a downgraded build restores the same selection.
- */
+/** Shared view shape; persist desktop selection in legacy fields so downgraded builds restore it. */
 export type LayoutViewRecord = DesktopLayoutView
 
 export type LayoutViewStore = Readonly<Partial<Record<LayoutViewId, LayoutViewRecord>>>
@@ -54,7 +49,6 @@ export function setViewRecord(
   }
 }
 
-/** A paired device was removed: its record goes with it. */
 export function forgetView(store: LayoutViewStore, viewId: LayoutViewId): LayoutViewStore {
   if (!Object.hasOwn(store, viewId)) {
     return store
@@ -76,11 +70,7 @@ export type ResolvedWorkspaceSelection = {
   activeBrowserTabId: string | null
 }
 
-/**
- * The group's shown tab: the recorded one, else the most recent still there, else the first. A
- * close moves the record to the neighbour when applied (workspace-layout-view-tab-closes.ts); this
- * covers a record that names a tab it never saw leave, such as one loaded from disk.
- */
+/** Use the recorded tab, most recent survivor, then first tab. This covers removals the view never observed; observed closes update the record during apply. */
 function resolveGroupTab(
   tabOrder: readonly string[],
   selection: { activeTabId: string | null; recentTabIds?: string[] } | undefined

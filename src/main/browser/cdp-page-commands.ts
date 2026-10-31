@@ -70,7 +70,7 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
       const sender = this.makeCdpSender(guest)
       await this.ensureDebuggerAttached(guest)
 
-      // Why: JS scrollBy needs no focus and is deterministic, unlike mouseWheel which is unreliable in Electron webviews.
+      // JS scrolling avoids focus changes and unreliable wheel delivery in Electron webviews.
       const expr = amount
         ? `window.scrollBy(0, ${direction === 'down' ? amount : -amount})`
         : `window.scrollBy(0, ${direction === 'down' ? 'window.innerHeight' : '-window.innerHeight'})`
@@ -113,7 +113,7 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
         cssContentSize?: { width: number; height: number }
         contentSize?: { width: number; height: number }
       }
-      // Why: screenshot clip uses CSS pixels; on HiDPI, device-pixel contentSize tiles duplicates, so prefer cssContentSize.
+      // Clips use CSS pixels; HiDPI contentSize can cause duplicated tiles.
       const contentSize = metrics.cssContentSize ?? metrics.contentSize
       if (!contentSize) {
         throw new BrowserError('browser_error', 'Unable to determine full-page screenshot bounds')
@@ -202,7 +202,7 @@ export class CdpPageCommands extends CdpBridgeCommandModule {
 
       const valueStr =
         result.value !== undefined ? String(result.value) : (result.description ?? '')
-      // Why: include origin to match agent-browser's BrowserEvalResult shape across both bridges.
+      // Keep the eval result shape compatible with the agent-browser bridge.
       const { result: urlResult } = (await sender('Runtime.evaluate', {
         expression: 'location.origin',
         returnByValue: true

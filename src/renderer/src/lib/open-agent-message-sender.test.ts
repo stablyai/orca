@@ -50,7 +50,7 @@ vi.mock('@/store', () => ({
 
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import { RUNTIME_COMPAT_BLOCK_CODE } from '@/runtime/runtime-protocol-compat'
-import type { AgentMessageSource } from '../../../shared/agent-session-message-source'
+import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
 import { AGENT_SESSION_WRITE_NOTICE_COPY } from '../../../shared/agent-session-write-notice-copy'
 import { testOrcaSessionId } from '../../../shared/orca-session-address-test-fixture'
 import { openAgentMessageSender } from './open-agent-message-sender'

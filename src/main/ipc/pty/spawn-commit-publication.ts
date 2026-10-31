@@ -18,8 +18,7 @@ import {
 import { seedTerminalRestoreRecordsFromSpawnResult } from './pane/agent-session-owners'
 import { seedResumeLaunchIdentityFromSpawn } from './pane/resume-launch-identity'
 import { recordPtySpawnTelemetry } from './pane/spawn-telemetry'
-import { noteRuntimePaneCreateResult, resolvePaneSpawnReservation } from './pane/spawn-reservation'
-import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import type { PtySpawnOutcome } from './spawn-outcome'
 import type { PtySpawnCommitInput, PtySpawnCommitState } from './spawn-commit-assembly'
 
 /** Window migration inputs: legacy and reminted spawn keys alias the pane's proven key. */
@@ -30,14 +29,14 @@ export type PtySpawnPaneKeyAliases = {
 }
 
 /** Everything a registered spawn publishes, in one order for both lanes; nothing here awaits. */
-export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
-  input: PtySpawnCommitInput<Reply>
-): Reply {
+export function publishCommittedPtySpawn(input: PtySpawnCommitInput): PtySpawnOutcome {
   const { state } = input
   const { deps, args, result } = state
   const runtime = deps.runtime
-  // Why here: every spawn that survives its binding save and registration publishes once here.
-  runtime?.noteTerminalSpawnCommit?.(result, input.expectedSourceBinding)
+  runtime?.noteTerminalSpawnCommit?.(
+    { ...result, spawnRequestedAt: state.spawnRequestedAt },
+    input.expectedSourceBinding
+  )
   input.spawnTiming?.log(result.id, {
     daemon: state.isDaemonHostSpawn,
     reattach: result.isReattach ?? false
@@ -65,24 +64,24 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
   commitAttachedPtySize({
     result,
     requested: { cols: args.cols, rows: args.rows },
-    cachedBeforeAttach: state.sessionSizeBeforeAttach,
+    cachedBeforeAttach: state.provisionalPtySize?.cachedBeforeAttach,
     reflowHeadlessTerminalToPtyGrid: runtime?.reflowHeadlessTerminalToPtyGrid?.bind(runtime)
   })
   if (state.effectiveSessionAppId !== undefined && state.effectiveSessionAppId !== result.id) {
     ptySizes.delete(state.effectiveSessionAppId)
   }
   beginSerializerIncarnation(result, input.paneKey)
-  // Why after registration: list/read records live main-side even when the renderer owns the model.
+  // Runtime list/read records remain main-owned even when renderer owns the emulator.
   seedTerminalRestoreRecordsFromSpawnResult(runtime, result)
-  // Why: arms main's per-PTY Command Code output detector from the launch command (renderer startupCommand parity).
+  // Arm output detection from the launch command, matching renderer startup behavior.
   if (!state.stablePaneOwner) {
     runtime?.noteTerminalSpawnCommand?.(result.id, state.launchCommand ?? null)
   }
-  // Why: telemetry-plan.md§Agent launch semantics — fire agent_started only after spawn resolved; safeParse each field so a spoofed IPC payload can't poison the event.
+  // Emit agent_started only after confirmed spawn, with field validation at the telemetry boundary.
   if (args.telemetry && !state.stablePaneOwner) {
     recordPtySpawnTelemetry(args.telemetry)
   }
-  // Why: record the paneKey mapping so hook titles and clearProviderPtyState can find this PTY's per-paneKey caches.
+  // Publish reverse pane lookup for hook titles and provider cleanup.
   const rememberedPaneKey = rememberPaneKeyForPty(result.id, input.paneKey)
   if (input.paneKeyAliases) {
     registerSpawnPaneKeyAliases(result, input.paneKey, input.paneKeyAliases)
@@ -90,14 +89,14 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
   registerPty({
     ptyId: result.id,
     worktreeId: input.registration.worktreeId ?? null,
-    sessionId: input.memorySessionId,
+    sessionId: result.id,
     paneKey: rememberedPaneKey,
     pid:
       typeof result.pid === 'number' && Number.isFinite(result.pid) && result.pid > 0
         ? result.pid
         : null
   })
-  // Why after commit: a spawn rejected above must not leave a published identity behind.
+  // Rejected spawns must not leave a published resume identity.
   seedResumeLaunchIdentityFromSpawn({
     paneKey: input.paneKey,
     launchAgent: args.launchAgent,
@@ -108,7 +107,7 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
     resumeArgvDropped: input.resumeArgvDropped,
     result
   })
-  // Why: inventory consumers cannot infer background and reattached PTYs from mounted-pane state.
+  // Inventory cannot infer background/reattached PTYs from mounted views.
   deps.sendPtySpawnedToRenderer(result.id)
   deps.options?.onCodexHomePtySpawned?.({
     id: result.id,
@@ -126,16 +125,7 @@ export function publishCommittedPtySpawn<Reply extends PtySpawnResult>(
         ? { launchEnv: input.codexLaunchEnv }
         : {})
   })
-  resolvePaneSpawnReservation(
-    state.paneSpawnReservationKey,
-    state.paneSpawnReservation,
-    input.joinPayload.reservation
-  )
-  // A view waiting on this create attaches to the accepted result before its waiter resumes.
-  if (ORCA_LAYOUT_OWNER_IS_MAIN) {
-    noteRuntimePaneCreateResult(state.paneSpawnReservationKey, input.joinPayload.reservation)
-  }
-  return input.joinPayload.reply
+  return { kind: 'committed', result: input.response }
 }
 
 function markRendererScopedHiddenAtCommit(state: PtySpawnCommitState): void {
@@ -147,7 +137,7 @@ function markRendererScopedHiddenAtCommit(state: PtySpawnCommitState): void {
     // Defense: never strand a mark on an id the provider renamed.
     transition?.(state.preSpawnHiddenMarkId, false)
   }
-  // Why after ownership (recorded at commit start): provider lookup routes by it, and a hidden-spawned agent should be paceable from its first flood.
+  // Record ownership before routing background pacing for a hidden agent's first flood.
   state.deps.syncPtyBackgroundedDelivery?.(id, 'spawn')
   closeStartupQueryAuthorityForPty(id)
 }
@@ -157,7 +147,7 @@ function beginSerializerIncarnation(result: PtySpawnResult, paneKey: string | nu
   const inheritRendererReadiness =
     result.isReattach === true && !pendingSerializer && rendererSerializerReadiness.has(result.id)
   rendererSerializerReadiness.beginIncarnation(result.id, inheritRendererReadiness)
-  // Why: capture the pending gen at spawn time so this PTY's teardown only settles its own generation, not a remount that replaced the entry.
+  // Teardown must settle only this spawn's serializer generation, never a later remount.
   if (pendingSerializer) {
     pendingPtyIdBySerializerGeneration.set(pendingSerializer.gen, result.id)
   }

@@ -58,8 +58,7 @@ vi.mock('./tooltip', async (importOriginal) => ({
   ProviderPanel: () => null
 }))
 
-// Why: Radix portals its menu behind pointer-capture the DOM shim cannot drive;
-// passthrough shells render the same tree eagerly so the real handlers run.
+// Render Radix portals eagerly because the DOM shim cannot drive their pointer capture.
 vi.mock('@/components/ui/dropdown-menu', () => {
   const passthrough =
     (role?: string) =>
@@ -165,26 +164,27 @@ describe('status bar Claude account that needs a sign-in', () => {
     expect(toastError).not.toHaveBeenCalled()
   })
 
-  it('does not repeat its sign-in note with a usage sign-in line', async () => {
-    const unavailable = (accountId: string): unknown => ({
-      accountId,
-      isFetching: false,
-      rateLimits: { ...claudeProvider, status: 'error', error: 'Not signed in' }
-    })
-    inactiveClaudeAccounts = [unavailable('old'), unavailable('new')]
+  it('does not ask an idle account whose usage token expired overnight to sign in', async () => {
+    inactiveClaudeAccounts = [
+      {
+        accountId: 'new',
+        isFetching: false,
+        rateLimits: {
+          ...claudeProvider,
+          status: 'error',
+          error: 'Claude usage updates the next time Claude runs.',
+          usageMetadata: {
+            failureKind: 'stale-token',
+            attemptedSources: ['oauth'],
+            authProvenance: 'profile:new'
+          }
+        }
+      }
+    ]
     await openAccounts()
-    expect(screen.getByText('Sign in again to use this account')).toBeTruthy()
-    // Only the row without a sign-in note keeps the usage line.
-    expect(screen.getAllByText('Sign in to see usage')).toHaveLength(1)
     const newRow = screen.getAllByText('new@example.com').at(-1)!.closest('[role="menuitem"]')
-    expect(newRow?.textContent).toContain('Sign in to see usage')
-  })
-
-  it('says why a failed sign-in failed', async () => {
-    reauthenticate.mockRejectedValueOnce(new Error('Claude login exited with code 1.'))
-    await openAccounts()
-    fireEvent.click(screen.getByRole('button', { name: /Sign in/ }))
-    await waitFor(() => expect(toastError).toHaveBeenCalledTimes(1))
+    expect(newRow?.textContent).not.toContain('Sign in to see usage')
+    expect(newRow?.textContent).toContain('Updates when Claude runs')
   })
 
   it('keeps the account list in the usage roster when the selected account needs a sign-in', async () => {

@@ -1,8 +1,7 @@
 import type { ComponentProps, ReactNode } from 'react'
 import { Pressable, View } from 'react-native'
 
-/** A message body that opens the actions sheet on long press (Android, which has no inline
- *  selection); elsewhere a plain view, so a held press selects text natively. */
+// Android uses a message-actions long press; other platforms keep native inline selection.
 export function MobileNativeChatLongPressContent({
   onLongPress,
   style,

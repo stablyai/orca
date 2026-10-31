@@ -1,10 +1,6 @@
 import type { DescendantSnapshot } from '../pty-descendant-termination'
 
-/**
- * Process-table reads are not atomic: a refresh can omit a still-live row, but
- * it can also observe a new process after the old row exited. Retain rows absent
- * from the refresh, but reject a PID whose identity changed between reads.
- */
+// Non-atomic scans may omit live rows; retain them, but reject any PID whose identity changed.
 function mergeRowsByPid<Row extends { pid: number }>(
   previous: readonly Row[],
   next: readonly Row[],
@@ -49,8 +45,7 @@ export function mergeClaudeDescendantSnapshots(
   if (previous.rootPgid !== next.rootPgid) {
     return null
   }
-  // A refresh cannot repair an earlier capture that lacked root identity;
-  // retaining those rows would permit a later numeric-pid kill without proof.
+  // New root identity cannot validate rows retained without identity evidence.
   if (!previous.root || !next.root) {
     return null
   }
@@ -70,8 +65,7 @@ export function mergeClaudeDescendantSnapshots(
   }
   return {
     ...next,
-    // Retained rows keep their earlier boundary; new rows use the refresh
-    // boundary. The scalar remains the latest scan for legacy consumers.
+    // Retained rows keep their first capture boundary; the scalar stays current for legacy consumers.
     descendants: descendants.rows,
     ...(descendants.capturedAtMsByPid ? { capturedAtMsByPid: descendants.capturedAtMsByPid } : {})
   }

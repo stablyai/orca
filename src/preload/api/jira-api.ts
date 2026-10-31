@@ -22,7 +22,7 @@ import type {
   JiraTransition,
   JiraUser,
   JiraViewer
-} from '../../shared/jira-types'
+} from '../../shared/jira/jira-types'
 
 export type JiraApi = {
   connect: (args: {

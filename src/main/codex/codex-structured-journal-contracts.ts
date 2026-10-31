@@ -1,6 +1,9 @@
 import type { AgentJournalItemIdentity } from '../../shared/agent-session-journal-types'
 import type { AgentSessionAccountKind } from '../../shared/agent-session-availability'
-import type { CodexDispatchRequestOrigin } from './codex-structured-dispatch-echo'
+import type {
+  CodexDispatchEchoes,
+  CodexDispatchRequestOrigin
+} from './codex-structured-dispatch-echo'
 import type { AgentSessionDeltaCoalescerDeps } from '../native-chat/agent-session-wire/agent-session-delta-coalescer'
 import type { StructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import type { CodexStructuredSessionEvent } from './codex-structured-session-adapter'
@@ -14,16 +17,16 @@ export type CodexActiveJournalItem = {
   turnId: string | null
   identity: AgentJournalItemIdentity
   item: CodexThreadItem
-  /** Names the helpers a collab call acted on, so a settled revision keeps naming them. */
+  /** Preserve helper names in settled collab-call revisions. */
   helperName?: CodexHelperName
-  /** Host clock at item/started, for a row whose first write comes later. */
+  /** Host start time retained for delayed first writes. */
   startedAt?: number
 }
 
 export type CodexJournalTranslatorDeps = {
   account?: () => AgentSessionAccountKind | undefined
   sink: StructuredAgentSessionEventSink
-  /** Names this connection in frame-row identities, so a later connection never revises its rows. */
+  /** Prevent later connections from revising this connection's frame rows. */
   acquisitionId?: string
   /** Keys restored lifecycle rows to the live identity; without it history restore skips them. */
   sessionId?: string
@@ -37,12 +40,13 @@ export type CodexJournalTranslatorDeps = {
     turnId?: string | null
   ) => void
   clearPromptTurn?: (threadId: string, turnId: string) => void
-  /** Settles a send's identity off the echoed user message, using the very
-   *  identity the journal row carries so a replay computes the same key. */
+  /** Use the journal row identity so replay computes the same settlement key. */
   onUserMessageEcho?: (clientMessageId: string, identity: AgentJournalItemIdentity) => void
   primaryThreadId?: () => string | null
-  /** Submission origin for one exact client message still awaiting its echo. */
+  /** Submission origin for a dispatch still armed. */
   dispatchRequestOrigin?: (clientMessageId: string) => CodexDispatchRequestOrigin | null
+  /** Armed send whose turn/start reply named this turn. */
+  dispatchTurnOpener?: CodexDispatchEchoes['turnOpener']
   subagentExecutions?: CodexSubagentExecutions
   coalesceMs?: number
   maxRetainedBytes?: number
@@ -51,8 +55,7 @@ export type CodexJournalTranslatorDeps = {
 
 export type CodexJournalTranslator = {
   handle: (event: CodexStructuredSessionEvent) => CodexJournalTranslationAdmission
-  /** Before Orca sends a conversation command: the next primary turn carries it out, and that
-   *  turn's end is the command's. */
+  /** The next primary turn carries this command and determines its end. */
   beginCommand: (command: StructuredAgentSessionCommandRun) => void
   /** The command was never taken. */
   forgetCommand: (turnId: string) => void

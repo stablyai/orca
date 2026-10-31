@@ -105,7 +105,7 @@ describe('selectProbeableLocalWorktreeMetadataCandidates', () => {
 
     const scan = captureNativeLocalWorktreeMetadataScanExpectation(state, state.repos[0]!)
     const selected = selectProbeableLocalWorktreeMetadataCandidates(state, scan, 'linux')
-    // Feeding the unfiltered capture to the authoritative prune must reach the same verdict.
+    // Prefiltering must preserve the authoritative deletion verdict.
     const removed = pruneSessionlessMissingLocalWorktreeMetadataForRepo(
       state,
       scan,

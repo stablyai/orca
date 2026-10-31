@@ -86,8 +86,7 @@ describe('BackgroundTransientFactRelay', () => {
     try {
       const { relay, emitted } = createRelay()
       relay.setSessionBackground('s1', true)
-      // A working-spinner title followed by title-less output would arm the
-      // 3s stale timer if titles were being tracked.
+      // Title-less output after a working title would arm the stale timer if title scanning ran.
       relay.onSessionData('s1', '\x1b]0;⠋ Claude\x07')
       relay.onSessionData('s1', 'output without titles')
       expect(vi.getTimerCount()).toBe(0)

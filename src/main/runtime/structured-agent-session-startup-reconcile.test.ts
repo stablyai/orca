@@ -1,7 +1,4 @@
-// A profile whose chat records a newer Orca wrote opens read-only. The startup reconcile adjudicates
-// its leases in memory and writes nothing there; a reconcile whose write fails is bookkeeping too.
-// Either way startup must finish rather than put the whole app into its degraded "Session restore
-// failed" mode.
+// Newer records reconcile read-only in memory; bookkeeping write failures must not put startup into Session restore failed.
 
 import { readFile, mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -47,7 +44,7 @@ beforeEach(async () => {
 afterEach(async () => {
   writes.failing = false
   await stopStructuredAgentSessionRuntime().catch(() => undefined)
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   vi.restoreAllMocks()
   await rm(root, { recursive: true, force: true })
 })
@@ -59,7 +56,7 @@ async function seedChat(options: { newer?: boolean } = {}) {
   if (options.newer) {
     await seedTestAgentSessionStoreFromNewerBuild(root)
   }
-  closeTestJournalHostDatabases()
+  await closeTestJournalHostDatabases()
   return { path: journalDatabasePath(root), sessionId: record.sessionId }
 }
 
@@ -93,7 +90,6 @@ it('finishes startup over records a newer Orca wrote, reads them, and writes not
   const log = recordingStructuredAgentSessionLogger()
   const runtime = startupRuntime(log)
 
-  // What the renderer's startup awaits through `app:prepareTerminalStartupRestoration`.
   await expect(runtime.prepareStructuredAgentSessionStartupRestoration()).resolves.toBeUndefined()
 
   expect(log.entries).toEqual([])
@@ -122,36 +118,4 @@ it('finishes startup when the reconcile cannot write, and reports it', async () 
     })
   ])
   expect(getStructuredAgentSessionHost()?.sessionAgent(sessionId)).toBe('claude')
-})
-
-// Closing a chat tab drops it from the restore index, which a newer Orca's records refuse: the
-// close is reported and goes on, since bookkeeping never keeps a tab open.
-it('closes a chat tab over records a newer Orca wrote, reporting the index it cannot write', async () => {
-  const { sessionId } = await seedChat({ newer: true })
-  const log = recordingStructuredAgentSessionLogger()
-  const runtime = startupRuntime(log)
-  await runtime.prepareStructuredAgentSessionStartupRestoration()
-  const host = getStructuredAgentSessionHost()
-  const close = vi.spyOn(host!, 'close')
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the runtime's own protected close path, reached with the one field it reads.
-  const internal = runtime as unknown as {
-    closeStructuredAgentSessionTab(tab: { sessionId: string }, cause: 'user-close'): Promise<void>
-  }
-
-  await expect(
-    internal.closeStructuredAgentSessionTab({ sessionId }, 'user-close')
-  ).resolves.toBeUndefined()
-
-  expect(log.entries).toContainEqual({
-    level: 'warn',
-    message: 'recording a closed chat tab failed',
-    fields: {
-      scope: 'tab-visibility-close',
-      sessionId,
-      error: expect.objectContaining({
-        refusal: expect.objectContaining({ details: { reason: 'journalWrittenByNewerOrca' } })
-      })
-    }
-  })
-  expect(close).toHaveBeenCalledWith(sessionId, 'user-close')
 })

@@ -1,23 +1,5 @@
 // @vitest-environment happy-dom
-/**
- * Pins the two properties that keep #11504 from firing, because neither is a decision anyone
- * made and both are one refactor away from being undone.
- *
- * macOS rewrites a double space into ". " and hands the period to the pty. Orca is not immune to
- * that - a plain Chromium textarea in the Electron version this repo pins does substitute, and
- * `spellcheck="false"` does not prevent it. What prevents it is that the forwarder claims a plain
- * space keydown and then empties the helper textarea, so the text system never sees the preceding
- * word the rule keys on.
- *
- * Both halves are needed. Before 01bcc8dca24 the claim predicate excluded space, letters and
- * digits, the field accumulated, and the substitution fired on real hardware. That commit widened
- * the predicate for unrelated reasons - IME commit survival and kitty encoding - and suppressed
- * this as a side effect it never mentions.
- *
- * So this file does not test the substitution, which cannot be produced in a unit environment. It
- * tests the two conditions measured to suppress it, so narrowing either one fails here rather
- * than in a Korean user's shell.
- */
+/** Claiming plain Space and clearing the textarea prevent macOS double-space period substitution (#11504); spellcheck=false alone does not. Unit tests verify those conditions, since native substitution needs real hardware. */
 import { Terminal } from '@xterm/xterm'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { installTerminalImeNativeTextForwarder } from './terminal-ime-native-text-forwarder'
@@ -91,8 +73,7 @@ describe('#11504 suppression rests on claiming space and emptying the field', ()
     return created
   }
 
-  // Why space specifically: it is the character the substitution rule triggers on, and it is the
-  // one the pre-01bcc8dca24 predicate explicitly excluded.
+  // Space triggers the native substitution rule and must remain claimable.
   it('claims a plain space keydown', () => {
     const p = pane()
     expect(p.forwarder.claimKeyEvent(makeKeydown({ key: ' ', code: 'Space', keyCode: 32 }))).toBe(
@@ -107,8 +88,7 @@ describe('#11504 suppression rests on claiming space and emptying the field', ()
     )
   })
 
-  // The second half: a claimed key must leave the field empty, or the text system reads a word
-  // before the space and substitutes.
+  // Empty the field so the text system cannot read a preceding word and substitute.
   it('leaves the helper textarea empty after a claimed commit, so no word precedes the space', () => {
     const p = pane()
     keydown(p.textarea, { key: 'a', code: 'KeyA', keyCode: 65 })
@@ -122,8 +102,7 @@ describe('#11504 suppression rests on claiming space and emptying the field', ()
     expect(p.textarea.value).toBe('')
   })
 
-  // A control chord is deliberately not claimed - that path belongs to xterm's encoder - so this
-  // asserts the exclusions that exist on purpose still hold.
+  // Control chords remain with xterm’s encoder.
   it('does not claim a control chord', () => {
     const p = pane()
     expect(

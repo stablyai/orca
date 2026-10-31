@@ -1,10 +1,5 @@
-// Argument parsing and the guards every script in this directory runs before it opens a socket.
-// Why: these benches dial real relay infrastructure with real credentials, so nothing here carries
-// a production default. The operator names the target and opts in explicitly, which makes an
-// accidental or automated run inert rather than live traffic against production. The destination
-// guards below exist because a director the operator names also *supplies* URLs (probe origins,
-// resolved cell URLs); without them a compromised or spoofed director could aim this harness at
-// the operator's own loopback and private networks.
+// Require explicit target/opt-in before sockets: benchmarks use live infrastructure and credentials, with no production defaults.
+// Vet director-supplied probe/cell destinations too, preventing private/loopback requests.
 import { lookup as dnsLookup } from 'node:dns/promises'
 
 export const LIVE_ENV_VAR = 'ORCA_RELAY_BENCH_LIVE'
@@ -41,9 +36,7 @@ export function requireLiveRun(usage) {
   }
 }
 
-// ---------- numeric arguments ----------
-// Why: a bare Number() cast accepts 'Infinity' (loops forever, unbounded relay traffic), '' and
-// 'abc' (NaN, a silent no-op run that still reports success), and negatives.
+// Reject Number() traps: Infinity creates unbounded traffic, empty/NaN can silently no-op, and negatives are invalid.
 export function parseBoundedInteger(value, { min, max }) {
   if (typeof value !== 'string') {
     return null
@@ -83,7 +76,6 @@ export function requirePort(value, label, usage) {
   return parsed
 }
 
-// ---------- destinations ----------
 const BLOCKED_IPV4_RANGES = [
   ['0.0.0.0', 8],
   ['10.0.0.0', 8],
@@ -213,10 +205,7 @@ function normalizeHostname(hostname) {
     .replace(/\.$/, '')
 }
 
-/**
- * Literal-address vetting for a URL this harness is about to fetch. Returns the normalized origin
- * or the reason it is refused. A DNS name still needs resolvesToPublicAddress().
- */
+// Vet literal addresses and return normalized origin/refusal; DNS names also need resolvesToPublicAddress.
 export function classifyPublicHttpsOrigin(value) {
   if (typeof value !== 'string' || !value) {
     return { ok: false, reason: 'missing origin' }
@@ -246,11 +235,7 @@ export function classifyPublicHttpsOrigin(value) {
   return { ok: true, origin: parsed.origin }
 }
 
-/**
- * Second layer for DNS names: a director could hand back a public-looking name that resolves into
- * the operator's network. fetch() resolves again, so this narrows the window rather than closing
- * it; the literal check above is what makes the obvious cases impossible.
- */
+// Reject DNS names resolving privately; fetch resolves again, so this narrows but does not eliminate the rebinding window.
 export async function resolvesToPublicAddress(origin, { lookup = dnsLookup } = {}) {
   const host = normalizeHostname(new URL(origin).hostname)
   if (isPublicIpAddress(host) !== null) {
@@ -276,8 +261,7 @@ export function requireOrigin(value, label, usage) {
   if (!value) {
     refuse(`missing ${label}. usage: ${usage}`)
   }
-  // https only: these origins carry bench credentials, and http would let an on-path observer
-  // read or rewrite them.
+  // Require HTTPS because origins carry credentials that plaintext exposes to on-path readers/writers.
   const verdict = classifyPublicHttpsOrigin(value)
   if (!verdict.ok) {
     refuse(`${label} ${verdict.reason}. usage: ${usage}`)

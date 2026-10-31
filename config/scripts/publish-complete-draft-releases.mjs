@@ -114,8 +114,7 @@ export async function publishCompleteDraftReleases({
       continue
     }
 
-    // Why: only release-cut-authored RC drafts with a complete asset set are
-    // resumed here; incomplete drafts stay private for the normal rebuild path.
+    // Resume only release-cut RC drafts with complete assets; incomplete drafts stay private for normal rebuild.
     await githubJson(
       fetchImpl,
       `https://api.github.com/repos/${repo}/releases/${release.id}`,

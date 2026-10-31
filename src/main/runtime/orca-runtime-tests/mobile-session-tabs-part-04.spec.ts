@@ -82,7 +82,6 @@ describe('OrcaRuntimeService', () => {
     const spawn = vi.fn().mockResolvedValue({ id: 'ssh:ssh-1@@remote-pty' })
     const runtime = new OrcaRuntimeService(remoteStore as never)
     runtime.setPtyController({
-      // The real Store keeps an SSH repo's session in its host's partition.
       spawn: committingSpawn(runtime, spawn, 'ssh:ssh-1'),
       write: () => true,
       kill: () => true,

@@ -1,10 +1,9 @@
-// A refused queued card comes back as a returned card that holds the cards behind it, read from the
-// chat's own rows with no card write of its own: through a rewind that retires its refused hand-off,
-// a new epoch, a restart and a Resume. Only its own Send and Delete act on it.
-
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
-import { openTestJournalHostDatabase } from '../agent-session-journal/journal-host-database-test-support'
+import {
+  openTestJournalHostDatabase,
+  readTestQueueChanges
+} from '../agent-session-journal/journal-host-database-test-support'
 import type { StructuredAgentSessionAdapter } from './structured-agent-session-adapter'
 import {
   HOST_TEST_SESSION as SESSION,
@@ -37,31 +36,12 @@ async function queuedDraft(text: string): Promise<string> {
   return queued.value.queued.messageId
 }
 
-/** The chat's queue rows on disk, in order. */
 function queueRows(): { messageId: string; op: string }[] {
-  return openTestJournalHostDatabase(rig.root)
-    .db.prepare('SELECT row_json FROM journal_rows WHERE session_id = ? ORDER BY seq')
-    .all(SESSION)
-    .flatMap((row) => {
-      const parsed: unknown =
-        typeof row === 'object' && row !== null && 'row_json' in row
-          ? JSON.parse(String(row.row_json))
-          : null
-      return typeof parsed === 'object' &&
-        parsed !== null &&
-        'kind' in parsed &&
-        parsed.kind === 'queue' &&
-        'messageId' in parsed &&
-        'change' in parsed &&
-        typeof parsed.change === 'object' &&
-        parsed.change !== null &&
-        'op' in parsed.change
-        ? [{ messageId: String(parsed.messageId), op: String(parsed.change.op) }]
-        : []
-    })
+  return readTestQueueChanges(openTestJournalHostDatabase(rig.root).db, SESSION).map(
+    ({ messageId, op }) => ({ messageId, op })
+  )
 }
 
-/** Lets the drain run its steps; none may hand these cards off. */
 async function expectNothingSent(...draftIds: string[]): Promise<void> {
   await new Promise((resolve) => setTimeout(resolve, 100))
   for (const draftId of draftIds) {
@@ -98,10 +78,13 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
     { messageId: c, state: 'waiting' }
   ]
   await eventually(async () => expect(await rig.drafts()).toEqual(held))
-  // The refusal is the dispatch row alone: no card row records it.
-  expect(queueRows()).toEqual([a, b, c].map((messageId) => ({ messageId, op: 'queued' })))
+  // Refusal returns the same card in place: its own state changes, and no card is added.
+  expect(queueRows()).toEqual([
+    ...[a, b, c].map((messageId) => ({ messageId, op: 'queued' })),
+    { messageId: a, op: 'dispatched' },
+    { messageId: a, op: 'returned' }
+  ])
 
-  // A rewind past the refused hand-off retires its submission; the card stays returned.
   const rewound = { itemId: target, expectedEpoch: journal().cursor().epoch }
   expect(
     await rig.host.rewind(CALLER, {
@@ -113,7 +96,7 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
   expect(await rig.drafts()).toEqual(held)
   await expectNothingSent(b, c)
 
-  // A new epoch deletes the refusal's rows: it is restated with the card, and replay reads it.
+  // Replacement epochs restate refusal with the card after retiring old rows.
   await journal().rollEpoch('handle_forked', rig.store.getRecord(SESSION)!.lease.runtimeFence)
   await rig.restartHostProcess()
   expect(await rig.drafts()).toEqual(held)
@@ -124,7 +107,6 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
     kind: 'providerRejected'
   })
 
-  // Its own Send hands it off under a fresh id; refused again, it holds the queue again.
   const resent = await rig.sendNow(a)
   if (!resent.ok || !('submission' in resent.value)) {
     throw new Error('expected the submission arm')
@@ -134,7 +116,6 @@ it('holds the cards behind it through a rewind, a new epoch, a restart and a Res
   await eventually(async () => expect(await rig.drafts()).toEqual(held))
   await expectNothingSent(b, c)
 
-  // Its own Delete releases the next card, in order.
   expect(await rig.deleteQueued(a)).toMatchObject({ ok: true, value: { deleted: true } })
   await eventually(async () => expect(await rig.handoff(b)).toBeDefined())
   expect(await rig.handoff(c)).toBeUndefined()

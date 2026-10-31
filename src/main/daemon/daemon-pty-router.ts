@@ -35,6 +35,12 @@ export class DaemonPtyRouter implements IPtyProvider {
   constructor(opts: { current: DaemonPtyAdapter; legacy: DaemonPtyAdapter[] }) {
     this.current = opts.current
     this.legacy = opts.legacy
+    for (const adapter of this.allAdapters()) {
+      // A close that finds no session asks every daemon this router knows before ending history.
+      if (typeof adapter.shareSessionListingWith === 'function') {
+        adapter.shareSessionListingWith(() => this.allAdapters())
+      }
+    }
     this.ownerResolver = new DaemonSessionOwnerResolver(
       this.allAdapters(),
       this.sessionAdapters,
@@ -42,7 +48,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     )
     this.subscriptions = new DaemonPtyAdapterSubscriptionFanout(
       this.allAdapters(),
-      // Why owner-only: another generation's exit for a reused id must not unroute a live legacy session.
+      // Another generation's exit for a reused ID must not unroute its live owner.
       (id, adapter) => {
         this.ownerResolver.forgetRoute(id, adapter)
       },
@@ -60,7 +66,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     if (this.retirement.admissionClosed) {
       throw new Error('Terminal daemon is decommissioning')
     }
-    // Why counted: an idle-retirement census must not race a spawn it cannot yet see.
+    // Retirement census must account for spawns that have not published their sessions yet.
     this.retirement.spawnInFlight++
     try {
       if (opts.attachOnly && opts.sessionId) {
@@ -71,7 +77,6 @@ export class DaemonPtyRouter implements IPtyProvider {
         (await findLegacySessionOwner(opts, this.current, this.legacy, this.legacyExitProof))
       const target = await routeSpawnOrHold(opts, adapter, this.current, this.ownerResolver)
       const result = await target.spawn(opts)
-      // Why: the adapter filters intentional recovery exits and canonical-ID races before publishing proof.
       if (!result.exitedBeforeSpawnReply) {
         this.ownerResolver.recordRoute(result.id, target, result.incarnationId)
       }
@@ -95,13 +100,12 @@ export class DaemonPtyRouter implements IPtyProvider {
   }
 
   supportsAgentSessionClaims(): boolean {
-    // Why: a legacy daemon may still own a resumable PTY, so authority requires every route.
+    // Resumable PTYs can belong to legacy generations, so every route must support claims.
     return this.allAdapters().every((adapter) => adapter.supportsAgentSessionClaims())
   }
 
   providesAgentSessionOwnerListings(ptyId: string): boolean {
-    // Why: an unmapped id may belong to any preserved daemon generation;
-    // only an established route can make an omitted owner authoritative.
+    // Unknown routes cannot make omitted owners authoritative; a preserved daemon may still own the ID.
     return (
       this.ownerResolver.getVerifiedRoute(ptyId)?.providesAgentSessionOwnerListings?.(ptyId) ===
       true
@@ -118,7 +122,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     )
 
   supportsAgentSessionCreateOperations(): boolean {
-    // Fresh sessions always route to the current daemon; legacy adapters only retain old IDs.
+    // New sessions route to current; legacy adapters retain existing IDs.
     return this.current.supportsAgentSessionCreateOperations()
   }
 
@@ -132,6 +136,10 @@ export class DaemonPtyRouter implements IPtyProvider {
       return routed.hasPty(id)
     }
     return this.current.hasPty(id) || this.legacy.some((adapter) => adapter.hasPty(id))
+  }
+
+  getPtyAvailability(id: string): boolean | null {
+    return this.adapterFor(id).getPtyAvailability(id)
   }
 
   async probePtyLiveness(id: string): Promise<boolean | null> {
@@ -312,7 +320,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     }
   }
 
-  // Why: restart reuses the legacy adapters in a new router, so detach only our subscriptions (dispose() would tear them down; skipping this leaked a router per restart).
+  // Restart reuses legacy adapters; detach subscriptions without disposing those adapters.
   disposeRouterOnly(): void {
     this.subscriptions.dispose()
   }
@@ -326,7 +334,7 @@ export class DaemonPtyRouter implements IPtyProvider {
     return this.current
   }
 
-  // Why by reference: callers read these by identity. A gone legacy socket is spliced out in place; snapshot holders (the restart swap) re-check on their next list.
+  // Preserve array identity while removing exited legacy adapters in place.
   getLegacyAdapters(): readonly DaemonPtyAdapter[] {
     return this.legacy
   }

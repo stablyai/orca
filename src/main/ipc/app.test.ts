@@ -43,8 +43,7 @@ vi.mock('node:child_process', () => ({
   spawn: spawnMock
 }))
 
-// Fakes the detached `spawn` child: a stdout EventEmitter plus close/error
-// events, so tests drive the async command lifecycle readCommandStdout expects.
+// Fake detached child lets tests drive readCommandStdout's stdout and close/error lifecycle.
 function createFakeSpawnChild(options: {
   stdout?: string
   code?: number
@@ -158,8 +157,7 @@ import { registerAppHandlers } from './app'
 
 describe('registerAppHandlers', () => {
   const originalPlatform = process.platform
-  // Why: readCommandStdout process-group-kills on timeout; stub the real signal
-  // so a fake child pid can never target a live process group during tests.
+  // Fake child PIDs must never target a live process group on timeout.
   let processKillSpy: ReturnType<typeof vi.spyOn>
 
   beforeEach(() => {
@@ -455,11 +453,7 @@ describe('registerAppHandlers', () => {
         'com.apple.inputmethod.SCIM.ITABC'
       )
       expect(spawnMock).toHaveBeenCalledTimes(1)
-      // Why: macOS 15's `plutil -extract <key> json` aborts on the input-source
-      // array, so the probe reads live cfprefsd via `defaults export` and dodges
-      // the bug with an xml1 extract before converting the clean subtree to JSON.
-      // Pin the exact pipeline (absolute paths, stdin markers) so dropping any
-      // stage silently regressing CJK detection to the fallback fails the test.
+      // macOS 15 plutil crashes extracting the array as JSON; pin defaults export, xml1 extraction and final JSON conversion.
       expect(spawnMock).toHaveBeenCalledWith(
         '/bin/sh',
         [
@@ -571,8 +565,7 @@ describe('registerAppHandlers', () => {
     expect(trustFloatingWorkspaceDirectoryMock).toHaveBeenCalledWith(store, '/Users/kaylee/notes')
   })
 
-  // Why: the renderer reads these on every Windows capability refresh; the sync probes
-  // execFileSync wsl.exe/pwsh.exe and would stall the main event loop for up to 5s each.
+  // Renderer capability refreshes must not block the main loop on synchronous wsl.exe/pwsh.exe probes.
   it('answers the Windows shell capability channels without a blocking spawn', async () => {
     registerAppHandlers({} as never)
 

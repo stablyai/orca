@@ -1,5 +1,13 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react'
-import { View, Pressable, useWindowDimensions, ScrollView, Keyboard, Modal } from 'react-native'
+import {
+  View,
+  Pressable,
+  useWindowDimensions,
+  ScrollView,
+  Keyboard,
+  Modal,
+  Platform
+} from 'react-native'
 import { Gesture, GestureDetector, GestureHandlerRootView } from 'react-native-gesture-handler'
 import Animated, {
   useSharedValue,
@@ -11,13 +19,17 @@ import Animated, {
   interpolate,
   Extrapolation
 } from 'react-native-reanimated'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { spacing } from '../theme/mobile-theme'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { resolveBottomDrawerFillHeight } from './bottom-drawer-fill-height'
 import { resolveBottomDrawerKeyboardInset } from './bottom-drawer-keyboard-inset'
 import {
+  BOTTOM_DRAWER_EASING,
   BOTTOM_DRAWER_HIDE_DURATION_MS,
   BOTTOM_DRAWER_SHOW_DURATION_MS
 } from './bottom-drawer-constants'
+import { AutoHeight } from './AutoHeight'
 import { bottomDrawerStyles as styles } from './bottom-drawer-styles'
 import {
   useBottomDrawerModalHost,
@@ -31,11 +43,15 @@ import { hostOs } from '../platform/host-os'
 
 const DISMISS_THRESHOLD = 80
 const SPRING_CONFIG = { damping: 28, stiffness: 400 }
-// Why: negative translateY (pulling up) is damped with a rubber-band factor
-// so the drawer resists upward dragging — a subtle polish touch that signals
-// the drawer cannot expand further.
+// Damp upward pull with rubber-band factor to signal drawer cannot expand further.
 const RUBBER_BAND_FACTOR = 0.25
 const TOP_SCROLL_EPSILON = 1
+const SHOW_TIMING = { duration: BOTTOM_DRAWER_SHOW_DURATION_MS, easing: BOTTOM_DRAWER_EASING }
+const HIDE_TIMING = { duration: BOTTOM_DRAWER_HIDE_DURATION_MS, easing: BOTTOM_DRAWER_EASING }
+// The sheet travels its own height plus this, not the whole screen, so short sheets don't rush.
+const OFFSCREEN_MARGIN = 48
+// The grabber row above the content: its padding plus the 5 pt bar.
+const HANDLE_AREA_HEIGHT = spacing.sm + 5 + spacing.md
 
 export type MountedBottomDrawerProps = {
   visible: boolean
@@ -45,8 +61,7 @@ export type MountedBottomDrawerProps = {
   dragContentToDismiss?: boolean
   contentScrollable?: boolean
   fillAvailable?: boolean
-  // Why: outer sheets pinned under an inner fill picker stay laid out (size
-  // preserved) but must not take touches, stack backdrops, or keyboard-lift.
+  // Pinned-under sheet preserves size but must not receive touches, backdrop or keyboard lift.
   interactive?: boolean
   zIndex?: number
   /** When this changes to a non-null value the content scrolls back to its top, e.g. a new page. */
@@ -65,6 +80,8 @@ export function MountedBottomDrawer({
   zIndex = 1000,
   scrollResetKey = null
 }: MountedBottomDrawerProps) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   const translateY = useSharedValue(0)
   const progress = useSharedValue(0)
   const keyboardOffset = useSharedValue(0)
@@ -78,15 +95,12 @@ export function MountedBottomDrawer({
   }, [scrollOffsetY, scrollResetKey])
   const contentDragStartY = useSharedValue(0)
   const contentDragCanDismiss = useSharedValue(false)
-  // Why: fill mode needs the keyboard inset in React layout (not only the
-  // reanimated translate) so height shrinks as the sheet lifts and the top
-  // edge stays under the status bar.
+  // Use React layout inset for fill height shrink plus lift; translation alone can cross status-bar gap.
   const [keyboardInset, setKeyboardInset] = useState(0)
   const { height: screenHeight } = useWindowDimensions()
+  const sheetHeight = useSharedValue(screenHeight)
   const insets = useWindowSafeAreaInsets()
-  // Why: on wide/tablet canvases a full-width sheet looks stretched; cap it and
-  // center it horizontally. Vertical bottom-anchoring (and all the drag/keyboard
-  // transforms below) is unchanged, so phone behavior stays identical.
+  // Cap/center tablet width while retaining phone’s bottom anchor and drag/keyboard transforms.
   const { isWideLayout, modalMaxWidth } = useResponsiveLayout()
   const insideModalHost = useBottomDrawerModalHost() !== null
   const fillHeight = fillAvailable
@@ -98,15 +112,8 @@ export function MountedBottomDrawer({
       })
     : undefined
 
-  // Why: a sheet pinned under a fill picker holds progress at its target while the
-  // picker owns the window, so nothing re-applies its transform when the picker
-  // leaves. If the native view was rebuilt underneath, it keeps a stale transform
-  // and never paints — a dimmed, dead screen the user can only escape by dismissing
-  // the whole modal. A shared-value write alone cannot heal that (verified on
-  // device: an unchanged or nudged style lands on the stale native binding), so the
-  // remount is what repaints; the writes below keep the shared values authoritative
-  // for the fresh view, which matters because the drawer swap (166ms) hands back
-  // before the 180ms enter animation has finished.
+  // Remount on picker handback to heal stale native view binding; unchanged/nudged shared-value writes cannot repaint (device-verified).
+  // Pinned sheet holds target progress while covered; seed fresh view from authoritative shared values because swap 166ms precedes enter animation 180ms.
   const [windowEpoch, setWindowEpoch] = useState(0)
   const wasInteractiveRef = useRef(interactive)
   useEffect(() => {
@@ -116,7 +123,7 @@ export function MountedBottomDrawer({
       return
     }
     translateY.value = 0
-    progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+    progress.value = withTiming(1, SHOW_TIMING)
     setWindowEpoch((epoch) => epoch + 1)
   }, [interactive, visible])
 
@@ -124,11 +131,11 @@ export function MountedBottomDrawer({
     if (visible) {
       translateY.value = 0
       scrollOffsetY.value = 0
-      progress.value = withTiming(1, { duration: BOTTOM_DRAWER_SHOW_DURATION_MS })
+      progress.value = withTiming(1, SHOW_TIMING)
     } else {
       Keyboard.dismiss()
       setKeyboardInset(0)
-      progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+      progress.value = withTiming(0, HIDE_TIMING, (finished) => {
         if (finished) {
           runOnJS(onHidden)()
         }
@@ -136,13 +143,9 @@ export function MountedBottomDrawer({
     }
   }, [onHidden, visible])
 
-  // Why: KeyboardAvoidingView and useAnimatedKeyboard are both unreliable
-  // inside Modal (iOS ignores KAV; Android needs adjustNothing for
-  // useAnimatedKeyboard). The keyboard seam's events work on both platforms
-  // and give the exact height; inside the shell's page they are the shell's.
+  // Use keyboard seam events: iOS Modal ignores KAV and Android useAnimatedKeyboard needs adjustNothing; page seam uses shell measurements.
   useEffect(() => {
-    // Pinned-under sheets stay visible for size but must not ride the keyboard —
-    // only the top interactive sheet owns inset/lift.
+    // Only top interactive sheet owns keyboard inset/lift; pinned-under sheet stays laid out without moving.
     if (!visible || !interactive) {
       keyboardOffset.value = 0
       setKeyboardInset(0)
@@ -164,10 +167,8 @@ export function MountedBottomDrawer({
       }
     }
 
-    // Why: fill sheets dock to the true keyboard top; autoFocus can raise the
-    // keyboard before listeners attach. Seed only in fill mode so content-sized
-    // outer sheets do not inherit a stale metrics height after an inner dismiss.
-    if (fillAvailable) {
+    // Seed fill sheets (autoFocus may precede listeners) and page sheets (focus moving under an open IME sends no event); native content sheets own a Modal window, where stale metrics would stick.
+    if (fillAvailable || Platform.OS === 'web') {
       const existing = currentSoftKeyboardHeight()
       if (existing > 0) {
         applyKeyboardHeight(existing)
@@ -192,23 +193,19 @@ export function MountedBottomDrawer({
   }, [visible, interactive, insets.bottom, fillAvailable])
 
   const dismiss = useCallback(() => {
-    // Why: restarting the hide animation cancels it, so onHidden never fires and the
-    // invisible Modal stays up swallowing taps (Android Back lands here mid-close).
+    // Never restart hide mid-close: cancellation prevents onHidden and leaves invisible Modal swallowing taps (Android Back).
     if (!visible) {
       return
     }
     Keyboard.dismiss()
-    progress.value = withTiming(0, { duration: BOTTOM_DRAWER_HIDE_DURATION_MS }, (finished) => {
+    progress.value = withTiming(0, HIDE_TIMING, (finished) => {
       if (finished) {
         runOnJS(onClose)()
       }
     })
   }, [onClose, progress, visible])
 
-  // One seam, both platforms: natively this is the hardware key, and inside the shell's page it is
-  // a claim the shell hands one press over on. Every session sheet renders through this component,
-  // so this one claim is what makes Android Back close the sheet rather than leave the screen.
-  // Only the top interactive drawer claims; a sheet pinned under a fill picker does not own the key.
+  // Top interactive sheet claims native/shell Back so Android closes drawer rather than screen; pinned-under sheet never owns key.
   useBackClaim(
     visible && interactive
       ? () => {
@@ -255,8 +252,7 @@ export function MountedBottomDrawer({
       contentDragCanDismiss.value = scrollOffsetY.value <= TOP_SCROLL_EPSILON
     })
     .onUpdate((e) => {
-      // Why: action-sheet content can be taller than the drawer; downward drags
-      // should scroll back to the top before they start dismissing the sheet.
+      // Scroll tall content back to top before downward drag dismisses sheet.
       if (scrollOffsetY.value > TOP_SCROLL_EPSILON) {
         contentDragCanDismiss.value = false
         contentDragStartY.value = 0
@@ -298,83 +294,82 @@ export function MountedBottomDrawer({
     })
 
   const drawerStyle = useAnimatedStyle(() => {
-    // Why: fill mode already shrinks height by the keyboard inset and lifts via
-    // marginBottom (layout). Also subtracting keyboardOffset here would double-
-    // count and park the dock under the keys (input hidden).
+    // Fill layout already shrinks/lifts via inset and marginBottom; subtracting keyboardOffset again hides dock under keys.
     const keyboardShift = fillAvailable ? 0 : keyboardOffset.value
     return {
       transform: [
         {
           translateY:
-            interpolate(progress.value, [0, 1], [screenHeight, 0], Extrapolation.CLAMP) +
+            interpolate(
+              progress.value,
+              [0, 1],
+              [Math.min(sheetHeight.value + OFFSCREEN_MARGIN, screenHeight), 0],
+              Extrapolation.CLAMP
+            ) +
             translateY.value -
             keyboardShift
         }
       ]
     }
-  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable])
+  }, [progress, translateY, keyboardOffset, screenHeight, fillAvailable, sheetHeight])
 
   const backdropStyle = useAnimatedStyle(() => {
     const dragFade = interpolate(translateY.value, [0, 300], [1, 0], Extrapolation.CLAMP)
     return { opacity: progress.value * dragFade }
   }, [progress, translateY])
 
-  // Why: the sheet renders through a full-screen native window (its own Modal
-  // below, or the shared BottomDrawerModalHost) so it always covers the viewport
-  // — even when mounted deep inside a ScrollView, where a plain absolute overlay
-  // anchors to the scrolled content and clips the sheet. Show/hide is driven by
-  // `progress` (animationType "none") so the reanimated exit animation runs before
-  // the parent unmounts us.
+  // Use full-screen native Modal (own/shared) to escape nested ScrollView clipping; progress drives animationType:none so exit finishes before unmount.
   const handle = (
     <GestureDetector gesture={handlePanGesture}>
       <Animated.View
         style={styles.handleHitArea}
         accessibilityRole="button"
-        accessibilityLabel="Dismiss drawer"
+        accessibilityLabel={t('components.mountedBottomDrawer.dismissDrawer', 'Dismiss drawer')}
       >
         <View style={styles.handle} />
       </Animated.View>
     </GestureDetector>
   )
 
-  const body = !contentScrollable ? (
-    <>
-      {handle}
-      <View style={[styles.staticContent, fillAvailable && styles.staticContentFill]}>
-        {children}
-      </View>
-    </>
+  const content = !contentScrollable ? (
+    <View style={[styles.staticContent, fillAvailable && styles.staticContentFill]}>
+      {children}
+    </View>
   ) : dragContentToDismiss ? (
-    <>
-      {handle}
-      <GestureDetector gesture={contentPanGesture}>
-        <Animated.View collapsable={false} style={styles.scrollFrame}>
-          <GestureDetector gesture={scrollGesture}>
-            <Animated.ScrollView
-              ref={scrollRef}
-              bounces={false}
-              keyboardShouldPersistTaps="handled"
-              onScroll={scrollHandler}
-              scrollEventThrottle={16}
-              showsVerticalScrollIndicator={false}
-            >
-              {children}
-            </Animated.ScrollView>
-          </GestureDetector>
-        </Animated.View>
-      </GestureDetector>
-    </>
+    <GestureDetector gesture={contentPanGesture}>
+      <Animated.View collapsable={false} style={styles.scrollFrame}>
+        <GestureDetector gesture={scrollGesture}>
+          <Animated.ScrollView
+            ref={scrollRef}
+            bounces={false}
+            keyboardShouldPersistTaps="handled"
+            onScroll={scrollHandler}
+            scrollEventThrottle={16}
+            showsVerticalScrollIndicator={false}
+          >
+            {children}
+          </Animated.ScrollView>
+        </GestureDetector>
+      </Animated.View>
+    </GestureDetector>
   ) : (
+    <ScrollView
+      ref={scrollRef}
+      bounces={false}
+      keyboardShouldPersistTaps="handled"
+      showsVerticalScrollIndicator={false}
+    >
+      {children}
+    </ScrollView>
+  )
+
+  // Content-sized sheets ease to a new height when what they show changes; fill sheets have a fixed one.
+  const contentCap =
+    screenHeight - insets.top - spacing.lg - (insets.bottom + spacing.lg) - HANDLE_AREA_HEIGHT
+  const body = (
     <>
       {handle}
-      <ScrollView
-        ref={scrollRef}
-        bounces={false}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {children}
-      </ScrollView>
+      {fillAvailable ? content : <AutoHeight maxHeight={contentCap}>{content}</AutoHeight>}
     </>
   )
 
@@ -387,8 +382,7 @@ export function MountedBottomDrawer({
     >
       <GestureHandlerRootView style={styles.root}>
         <Animated.View
-          // Why: pinned-under outer sheets keep progress=1 so size stays; hide
-          // their backdrop so only the top interactive drawer dims the canvas.
+          // Hide pinned-under backdrop while keeping progress 1 for size; only top sheet dims canvas.
           style={[styles.backdrop, interactive ? backdropStyle : { opacity: 0 }]}
         >
           {interactive ? <Pressable style={styles.backdropPressable} onPress={dismiss} /> : null}
@@ -414,10 +408,7 @@ export function MountedBottomDrawer({
                 width: '100%',
                 maxWidth: isWideLayout ? modalMaxWidth : undefined,
                 maxHeight: screenHeight - insets.top - spacing.lg,
-                // Why: fill sheets shrink height AND lift with marginBottom so the
-                // bottom edge sits on the keyboard top (height alone still leaves
-                // the dock in the keyboard’s footprint). Non-fill sheets keep
-                // the legacy translateY keyboard shift instead.
+                // Fill shrinks height and adds marginBottom to align bottom above keys; content-sized mode retains translateY shift.
                 height: fillHeight,
                 marginBottom: fillAvailable ? keyboardInset : 0,
                 paddingBottom:
@@ -425,6 +416,9 @@ export function MountedBottomDrawer({
               },
               drawerStyle
             ]}
+            onLayout={(event) => {
+              sheetHeight.value = event.nativeEvent.layout.height
+            }}
           >
             {body}
             <View style={styles.bottomExtension} />
@@ -434,9 +428,7 @@ export function MountedBottomDrawer({
     </Animated.View>
   )
 
-  // Why: inside a BottomDrawerModalHost the host owns the single native Modal;
-  // rendering our own would stack modals and reintroduce the iOS present/dismiss
-  // race the host exists to avoid. The host handles the Android back button.
+  // Shared host owns sole Modal/Android Back; nested Modal would restore iOS presentation race.
   if (insideModalHost) {
     return overlay
   }

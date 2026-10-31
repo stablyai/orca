@@ -1,3 +1,4 @@
+import { keepsTerminalPaneVisible } from './mobile-terminal-pane-layout'
 import { useCallback } from 'react'
 import { STARTUP_CWD_FALLBACK_SENTENCE } from '../../../src/shared/startup-cwd-fallback'
 import { triggerSelection } from '../platform/haptics'
@@ -15,6 +16,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     sessionTabs,
     defaultTerminalHandlesToLiveInput,
     setActiveHandle,
+    setSplitTerminalHandles,
     setActiveSessionTabId,
     activeSessionTabId,
     markdownDocs,
@@ -22,6 +24,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
     terminalUnsubsRef,
     terminalDiagnosticsRef,
     activeHandleRef,
+    visibleTerminalHandlesRef,
     activeSessionTabTypeRef,
     pendingSelectionRef,
     switchSessionTabRef,
@@ -52,14 +55,25 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       activeSessionTabTypeRef.current = 'terminal'
       defaultTerminalHandlesToLiveInput([handle])
       setActiveSessionTabId(matchingTab?.id ?? null)
+      const visible = visibleTerminalHandlesRef?.current
+      if (visible?.length === 2 && !visible.includes(handle)) {
+        const pair = [handle, visible[0]]
+        visibleTerminalHandlesRef.current = pair
+        setSplitTerminalHandles(pair)
+      }
       const prev = activeHandleRef.current
       activeHandleRef.current = handle
       setActiveHandle(handle)
       if (prev && prev !== handle) {
-        unsubscribeTerminal(prev)
+        if (!keepsTerminalPaneVisible(prev, visibleTerminalHandlesRef?.current)) {
+          unsubscribeTerminal(prev)
+        }
       }
       // Force a fresh subscribe even if eagerly subscribed without viewport
-      if (terminalUnsubsRef.current.has(handle)) {
+      if (
+        terminalUnsubsRef.current.has(handle) &&
+        (visibleTerminalHandlesRef?.current.length ?? 0) < 2
+      ) {
         unsubscribeTerminal(handle)
       }
       subscribeToTerminal(handle)
@@ -82,6 +96,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       defaultTerminalHandlesToLiveInput,
       reportActivation,
       sessionTabs,
+      setSplitTerminalHandles,
       subscribeToTerminal,
       unsubscribeTerminal,
       worktreeId
@@ -105,7 +120,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
         setActiveSessionTabId(tab.id)
         const prev = activeHandleRef.current
         if (prev) {
-          unsubscribeTerminal(prev)
+          if (!keepsTerminalPaneVisible(prev, visibleTerminalHandlesRef?.current)) {
+            unsubscribeTerminal(prev)
+          }
         }
         activeHandleRef.current = null
         setActiveHandle(null)
@@ -130,7 +147,9 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       setActiveSessionTabId(tab.id)
       const prev = activeHandleRef.current
       if (prev) {
-        unsubscribeTerminal(prev)
+        if (!keepsTerminalPaneVisible(prev, visibleTerminalHandlesRef?.current)) {
+          unsubscribeTerminal(prev)
+        }
       }
       activeHandleRef.current = null
       setActiveHandle(null)
@@ -159,7 +178,7 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       if (cached?.status === 'ready' && cached.isDirty) {
         return
       }
-      // Why: tab list lacks a reliable version for desktop clean saves; re-read on revisit unless the phone has a draft.
+      // Revisit rereads clean desktop saves because tab snapshots lack a reliable document version; preserve phone drafts.
       void readMarkdownTab(tab)
     },
     [
@@ -175,7 +194,6 @@ export function useMobileSessionTabSwitching(scope: MobileSessionKeyboardStateMo
       worktreeId
     ]
   )
-  // Ref to latest switchSessionTab so fetchSessionTabs can activate a synced browser tab without a dependency cycle.
   switchSessionTabRef.current = switchSessionTab
   return {
     switchTab,

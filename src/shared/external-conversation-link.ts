@@ -5,6 +5,15 @@ import type { ExecutionHostId } from './execution-host'
 export const CONNECTOR_SOURCES = ['slack', 'github', 'linear', 'discord', 'dev'] as const
 export type ConnectorSource = (typeof CONNECTOR_SOURCES)[number]
 
+/** How agent-facing text names where a conversation comes from. */
+export const CONNECTOR_SOURCE_NAMES: Record<ConnectorSource, string> = {
+  slack: 'Slack',
+  github: 'GitHub',
+  linear: 'Linear',
+  discord: 'Discord',
+  dev: 'Orca'
+}
+
 /** Terminal agents a connector may start; see `CONNECTOR_AGENTS` for why only these. */
 export type ConnectorAgent = 'claude' | 'codex'
 

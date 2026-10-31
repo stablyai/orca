@@ -1,4 +1,4 @@
-import { createElement, useEffect } from 'react'
+import { createElement, useEffect, type ComponentProps } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
@@ -43,6 +43,7 @@ vi.mock('react-native-gesture-handler', () => {
     GestureHandlerRootView: 'GestureHandlerRootView'
   }
 })
+vi.mock('./AutoHeight', () => ({ AutoHeight: ({ children }: { children: unknown }) => children }))
 vi.mock('react-native-reanimated', () => {
   function makeShared(key: string, initial: number) {
     let value = initial
@@ -58,6 +59,7 @@ vi.mock('react-native-reanimated', () => {
   }
   let sharedIndex = 0
   return {
+    Easing: { bezier: () => (t: number) => t },
     default: { View: 'AnimatedView', ScrollView: 'AnimatedScrollView' },
     useSharedValue: (initial: number) => makeShared(`shared-${sharedIndex++}`, initial),
     useAnimatedStyle: () => ({}),
@@ -77,8 +79,7 @@ import { MountedBottomDrawer } from './mounted-bottom-drawer'
 
 const noop = () => {}
 
-// Counts mounts of the sheet's CONTENT, so a test can tell an ordinary re-render
-// apart from the subtree rebuild the fix relies on to repaint a stale native view.
+// Count content mounts to distinguish required stale-native-view rebuild from ordinary rerender.
 const sheetBodyMounts = { count: 0 }
 function SheetBody() {
   useEffect(() => {
@@ -88,11 +89,14 @@ function SheetBody() {
 }
 
 function drawer(interactive: boolean) {
-  return createElement(
-    MountedBottomDrawer,
-    { visible: true, interactive, onClose: noop, onHidden: noop },
-    createElement(SheetBody)
-  )
+  const props: ComponentProps<typeof MountedBottomDrawer> = {
+    visible: true,
+    interactive,
+    onClose: noop,
+    onHidden: noop,
+    children: createElement(SheetBody)
+  }
+  return createElement(MountedBottomDrawer, props)
 }
 
 function render(interactive: boolean): ReactTestRenderer {
@@ -109,10 +113,7 @@ function update(renderer: ReactTestRenderer, interactive: boolean): void {
   })
 }
 
-// A sheet pinned under a fill picker keeps progress at 1 the whole time, so
-// nothing re-applies its enter transform when the picker gives the window back.
-// On device that left the create form laid out but unpainted — a dimmed screen
-// with no sheet and no way back except dismissing the whole modal.
+// Pinned form keeps progress 1 under picker; after handback, stale native transform can leave dim dead screen without repaint.
 describe('bottom drawer window hand-back', () => {
   afterEach(() => {
     withTimingCalls.length = 0
@@ -131,9 +132,7 @@ describe('bottom drawer window hand-back', () => {
     act(() => renderer.unmount())
   })
 
-  // Shared-value writes cannot heal a sheet whose native view was rebuilt under
-  // Reanimated (verified on device); only a fresh view repaints. Counting content
-  // mounts asserts the subtree actually rebuilt, not merely that a prop changed.
+  // Shared-value writes cannot heal rebuilt native binding (device-verified); require content remount, not just changed prop.
   it('rebuilds the sheet subtree when it takes the window back', () => {
     const renderer = render(true)
     update(renderer, false)

@@ -1,12 +1,10 @@
 import { translate } from '@/i18n/i18n'
 import type { SshConnectionStatus } from '../../../../shared/ssh-types'
-import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime-shared-control-types'
+import type { RemoteRuntimeSharedConnectionDiagnostics } from '../../../../shared/remote-runtime/control/remote-runtime-shared-control-types'
 import type { RuntimeHostBlockedReason } from '../../../../shared/runtime-host-status'
 import type { RuntimePairingRepairRoute } from '../../../../shared/runtime-environments'
-import {
-  describeRuntimeCompatBlock,
-  type RuntimeCompatVerdict
-} from '../../../../shared/protocol-compat'
+import type { RuntimeCompatVerdict } from '../../../../shared/protocol-compat'
+import { describeRuntimeCompatBlock } from '@/lib/runtime-host-copy'
 import {
   runtimeStatusForOverall,
   type HostStatus,
@@ -120,9 +118,6 @@ export function runtimeHostConnectionDetail(
       { value0: remoteControl.lastClose.reason }
     )
   }
-  // Why: pending-request / subscription counts are internal RPC plumbing (e.g. a
-  // live browser screencast shows as "N streams"). They're noise in a user-facing
-  // status row and make the line truncate — only surface actionable detail
-  // (errors, close reasons, reconnect attempts) above.
+  // Hide internal RPC counts; only errors, close reasons and reconnect attempts help users act.
   return undefined
 }

@@ -6,6 +6,7 @@ import {
   worktreeMatchesHost
 } from '@/store/slices/worktrees/listing/worktree-host-ownership'
 import { getResolvedExecutionHostIdForWorktree } from '@/lib/resolved-worktree-execution-host'
+import { getActiveWorkspaceExecutionHostId } from '@/lib/active-workspace-host'
 import {
   findIndexedFolderWorkspaceOwner,
   findIndexedProjectGroupOwner,
@@ -63,9 +64,7 @@ export function hasLivePtyForNotification(
   worktreeId: string,
   paneKey: string | undefined
 ): boolean {
-  // Why: inactive-worktree hook completions can arrive while the worktree tab
-  // list is between renderer hydration states; the pane-key PTY binding is the
-  // live terminal source in that path.
+  // Between tab-list hydration states, pane-key PTY bindings still prove inactive-worktree hook liveness.
   return hasLivePtyForWorktree(state, worktreeId) || hasLivePtyForPaneKey(state, paneKey)
 }
 
@@ -117,8 +116,7 @@ export function isCurrentLivePaneKey(
   }
 
   const leafPtyId = layout.ptyIdsByLeafId?.[parsed.leafId]
-  // Why: layout hydration can briefly know the leaf before restoring its PTY
-  // binding; the tab-level live PTY list remains the liveness source then.
+  // Layout can restore a leaf before its binding; tab-level PTYs still prove liveness.
   return leafPtyId === undefined || livePtyIds.includes(leafPtyId)
 }
 
@@ -153,22 +151,12 @@ export function isCurrentKnownPaneKey(
   }
 
   const leafPtyId = layout?.ptyIdsByLeafId?.[parsed.leafId]
-  // Why: when there is no live PTY map yet, a tab/leaf PTY hint proves this is
-  // an inactive-but-current pane. If hydration has no hint yet, keep accepting
-  // known-tab hook snapshots; only explicit suppressed hints mean teardown.
+  // Before PTY-map hydration, accept known-tab snapshots unless explicitly suppressed; tab/leaf hints prove current inactive panes.
   const ptyHints = [targetTabPtyId, leafPtyId].filter((ptyId): ptyId is string => Boolean(ptyId))
   return ptyHints.length === 0 || ptyHints.some((ptyId) => !isSuppressedPtyHint(state, ptyId))
 }
 
-/**
- * The row for this workspace on the host that owns it, plus that host when the
- * id needed one to be named.
- *
- * STA-4343: a worktree id is `repoId::path` with no host component, so two hosts
- * publish one id for two different workspaces. An id-keyed lookup answers with
- * whichever row came first, which on a collision is a coin flip — so resolve the
- * owning host instead, and name nothing when hydrated ownership cannot prove one.
- */
+/** Resolve the workspace’s owning host: repoId::path omits host and can collide. Hydrated ownership must prove one before naming the workspace (STA-4343). */
 function findWorktreeRowOnItsOwnHost(
   state: StoreSnapshot,
   worktreeId: string
@@ -177,7 +165,9 @@ function findWorktreeRowOnItsOwnHost(
   if (rows.length <= 1) {
     return { worktree: rows[0], hostId: null }
   }
-  const hostId = getResolvedExecutionHostIdForWorktree(state, worktreeId)
+  const hostId =
+    getActiveWorkspaceExecutionHostId(state, worktreeId) ??
+    getResolvedExecutionHostIdForWorktree(state, worktreeId)
   if (!hostId) {
     return { worktree: undefined, hostId: null }
   }
@@ -186,14 +176,7 @@ function findWorktreeRowOnItsOwnHost(
   return { worktree: rows.find((row) => worktreeMatchesHost(row, hostId, matchOptions)), hostId }
 }
 
-/**
- * The project for this worktree, named only when one host owns the repo id.
- *
- * A repo id is registered per host, so the same id can name two projects (see
- * `src/main/persistence-duplicate-repo-id-host-scope.test.ts`). That collision is
- * independent of the worktree-id collision above: two hosts can hold repo `dup` at
- * different paths, giving unique worktree ids whose repo lookup is still ambiguous.
- */
+/** Name the project only with a unique repo owner; repo IDs can collide across hosts even when workspace paths differ. */
 function findNotificationRepo(
   state: StoreSnapshot,
   worktreeId: string,

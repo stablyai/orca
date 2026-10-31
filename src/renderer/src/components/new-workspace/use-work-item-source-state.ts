@@ -2,8 +2,7 @@ import { useRef, useState } from 'react'
 import type { RepoSlug } from '@/lib/github-links'
 import type { GitHubWorkItem } from '../../../../shared/github/work-item-types'
 import type { GitLabWorkItem } from '../../../../shared/gitlab-types'
-import type { JiraIssue } from '../../../../shared/jira-types'
-import type { LinearIssue } from '../../../../shared/linear/issue-types'
+import type { JiraIssue } from '../../../../shared/jira/jira-types'
 import type { BaseRefSearchResult } from '../../../../shared/repo-types'
 import type { SmartNameMode } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import type { MrStateFilter } from './smart-workspace-localized-options'
@@ -20,17 +19,13 @@ export function useWorkItemSourceState(textOnly: boolean, value: string) {
     repoId: string
     query: string
   } | null>(null)
-  const [linearIssues, setLinearIssues] = useState<LinearIssue[]>([])
   const [jiraIssues, setJiraIssues] = useState<JiraIssue[]>([])
   const [githubLoading, setGithubLoading] = useState(false)
   const [gitlabLoading, setGitlabLoading] = useState(false)
   const [branchesLoading, setBranchesLoading] = useState(false)
-  const [linearLoading, setLinearLoading] = useState(false)
   const [linearUrlLoadingFeedbackQuery, setLinearUrlLoadingFeedbackQuery] = useState<string | null>(
     null
   )
-  const [settledLinearUrlQuery, setSettledLinearUrlQuery] = useState<string | null>(null)
-  const [linearReadError, setLinearReadError] = useState<string | null>(null)
   const [jiraLoading, setJiraLoading] = useState(false)
   const [commandValue, setCommandValue] = useState('')
   const repoSlugCacheRef = useRef<Map<string, RepoSlug>>(new Map())
@@ -52,8 +47,6 @@ export function useWorkItemSourceState(textOnly: boolean, value: string) {
     setBranches,
     branchResultsSource,
     setBranchResultsSource,
-    linearIssues,
-    setLinearIssues,
     jiraIssues,
     setJiraIssues,
     githubLoading,
@@ -62,14 +55,8 @@ export function useWorkItemSourceState(textOnly: boolean, value: string) {
     setGitlabLoading,
     branchesLoading,
     setBranchesLoading,
-    linearLoading,
-    setLinearLoading,
     linearUrlLoadingFeedbackQuery,
     setLinearUrlLoadingFeedbackQuery,
-    settledLinearUrlQuery,
-    setSettledLinearUrlQuery,
-    linearReadError,
-    setLinearReadError,
     jiraLoading,
     setJiraLoading,
     commandValue,

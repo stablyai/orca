@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -83,6 +83,10 @@ function fakeMachineNameRuntime(detectedName: string): { updates: unknown[] } {
 }
 
 describe('runtime-selector flags on locally pinned CLI commands', () => {
+  const priorExitCode = process.exitCode
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -180,15 +184,14 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     queueFixtures(callMock, okFixture('req_project_setups', { setups: [] }))
     const log = vi.spyOn(console, 'log').mockImplementation(() => {})
-    const err = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
+    vi.spyOn(console, 'error').mockImplementation(() => {})
     await main(['project', 'setups', '--host', 'runtime:gpu', '--json'], '/tmp/repo')
-    expect([...log.mock.calls, ...err.mock.calls].flat().join('\n')).not.toContain(
-      'name different Orca servers'
-    )
+    expect(JSON.parse(String(log.mock.calls[0]?.[0]))).toMatchObject({
+      ok: true,
+      result: { setups: [] }
+    })
     expect(callMock).toHaveBeenCalledWith('projectHostSetup.list')
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'gpu')
-    process.exitCode = priorExitCode
   })
 
   it('routes `host name` through an ambient ORCA_ENVIRONMENT, unlike the pinned `host list`', async () => {
@@ -230,7 +233,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(printed.error.message).toMatch(/does not support machine names/)
     expect(callMock).not.toHaveBeenCalledWith('settings.update', expect.anything())
     expect(process.exitCode).toBe(1)
-    process.exitCode = 0
   })
 
   it('reports an unreachable runtime as an error instead of inventing a name', async () => {
@@ -244,7 +246,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(printed.ok).toBe(false)
     expect(printed.error.code).toBe('runtime_unavailable')
     expect(process.exitCode).toBe(1)
-    process.exitCode = 0
   })
 
   it('rejects `host list --environment` instead of answering with a half-routed listing', async () => {
@@ -261,7 +262,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(process.exitCode).toBe(1)
     expect(callMock).not.toHaveBeenCalled()
     expect(runtimeClientConstructorMock).not.toHaveBeenCalledWith(null, 'm4air')
-    process.exitCode = 0
   })
 
   it('rejects `environment list --environment` rather than repeating the local answer', async () => {
@@ -276,7 +276,6 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     expect(printed.error.message).toContain(
       '`--environment` does not retarget `orca environment list`'
     )
-    process.exitCode = 0
   })
 
   it('rejects `--pairing-code` on both listings for the same reason', async () => {
@@ -289,13 +288,14 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
       '/tmp/repo'
     )
 
+    expect(logSpy).toHaveBeenCalledTimes(2)
     for (const call of logSpy.mock.calls) {
       const printed = JSON.parse(String(call[0]))
       expect(printed.ok).toBe(false)
+      expect(printed.error.code).toBe('invalid_argument')
       expect(printed.error.message).toContain('`--pairing-code` does not retarget')
     }
     expect(callMock).not.toHaveBeenCalled()
-    process.exitCode = 0
   })
 
   it('keeps `host list` local when ORCA_ENVIRONMENT is set ambiently', async () => {
@@ -333,8 +333,13 @@ describe('runtime-selector flags on locally pinned CLI commands', () => {
     await main(['environment', 'show', '--environment', 'm4air', '--json'], '/tmp/repo')
     await main(['environment', 'rm', '--environment', 'm4air', '--json'], '/tmp/repo')
 
-    for (const call of logSpy.mock.calls) {
-      expect(JSON.parse(String(call[0])).ok).toBe(true)
-    }
+    expect(resolveEnvironmentMock).toHaveBeenCalledExactlyOnceWith('/tmp/orca-user-data', 'm4air')
+    expect(removeEnvironmentMock).toHaveBeenCalledExactlyOnceWith('/tmp/orca-user-data', 'm4air')
+    expect(logSpy).toHaveBeenCalledTimes(2)
+    expect(logSpy.mock.calls.map(([output]) => JSON.parse(String(output)).result)).toEqual([
+      { environment },
+      { removed: environment }
+    ])
+    expect(callMock).not.toHaveBeenCalled()
   })
 })

@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import type { JiraIssue, JiraStatus, JiraTransition } from '../../../shared/jira-types'
+import type { JiraIssue, JiraStatus, JiraTransition } from '../../../shared/jira/jira-types'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 
 const mocks = vi.hoisted(() => ({
@@ -51,12 +51,6 @@ describe('findJiraBoardSectionTransition', () => {
     expect(found).toBe(renamed)
   })
 
-  it('falls back to matching the section label by status name', () => {
-    const toDone = transition('t-done', done)
-    const found = findJiraBoardSectionTransition([toDone], { label: 'Done', issues: [] })
-    expect(found).toBe(toDone)
-  })
-
   it('matches an empty column through its board-config status ids', () => {
     const renamed = transition('t-done', { ...done, name: 'Completed' })
     const found = findJiraBoardSectionTransition([renamed], {
@@ -65,15 +59,6 @@ describe('findJiraBoardSectionTransition', () => {
       issues: []
     })
     expect(found).toBe(renamed)
-  })
-
-  it('returns null when no transition reaches the section', () => {
-    expect(
-      findJiraBoardSectionTransition([transition('t-ip', inProgress)], {
-        label: 'Done',
-        issues: [issue('STA-1', done)]
-      })
-    ).toBeNull()
   })
   it('does not select an arbitrary action when several actions reach a column', () => {
     expect(

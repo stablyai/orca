@@ -13,6 +13,10 @@ import {
 import { resolveOrchestrationParty } from '../../../../orchestration/orchestration-party'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
 import { assertWorkerCanReport } from '../../../../orchestration/worker-report-admission'
+import {
+  askedQuestionReceipt,
+  waitForQuestionAnswer
+} from '../../../../orchestration/question-answer-delivery'
 
 export const ORCHESTRATION_ASK_METHODS = [
   defineMethod({
@@ -29,7 +33,7 @@ export const ORCHESTRATION_ASK_METHODS = [
         orchestrationCompatibilityEvidence
       }
     ) => {
-      // Why: group addresses have no unambiguous first-answer authority.
+      // Group addresses cannot select an unambiguous first answerer.
       if (params.to && isGroupAddress(params.to)) {
         throw new OrchestrationError(
           'invalid_argument',
@@ -39,7 +43,7 @@ export const ORCHESTRATION_ASK_METHODS = [
 
       const db = runtime.getOrchestrationDb()
       const from = params.from ?? 'unknown'
-      // Why: echoed on every return so a clamped caller reports the budget actually waited, not the one it asked for.
+      // Echo the clamped budget on every return so callers report time actually waited.
       const timeoutMs = clampOrchestrationAskTimeoutMs(params.timeoutMs)
       const paneKey = runtime.getTerminalPaneKey(from) ?? undefined
       if (!orchestrationCaller) {
@@ -51,7 +55,7 @@ export const ORCHESTRATION_ASK_METHODS = [
       }
       const remoteAttachment = paneKey ? db.findActiveRemoteAttachmentForPane(paneKey) : undefined
       if (remoteAttachment && paneKey) {
-        rejectFederatedExplicitTarget(params)
+        rejectFederatedExplicitTarget(params, remoteAttachment.home_run_id)
         return askRemoteRunHome({
           params: { ...params, timeoutMs },
           runtime,
@@ -138,65 +142,18 @@ export const ORCHESTRATION_ASK_METHODS = [
       }
 
       const questionId = question.message_id
-      recordMutationReceipt?.({
-        accepted: true,
-        answer: null,
-        messageId: questionId,
-        threadId: questionId,
-        timedOut: false,
-        cancelled: false,
-        connectionLost: false,
-        timeoutMs
-      })
-      const deadline = Date.now() + timeoutMs
-      while (true) {
-        const current = db.getQuestion(questionId)
-        if (!current || current.status === 'closed') {
-          throw new OrchestrationError(
-            'dispatch_inactive',
-            `Question ${questionId} closed because its Dispatch is inactive.`
-          )
-        }
-        if (current.status === 'answered') {
-          return {
-            answer: current.answer_body,
-            messageId: questionId,
-            answerMessageId: current.answer_message_id,
-            threadId: questionId,
-            timedOut: false,
-            cancelled: false,
-            connectionLost: false,
-            timeoutMs
-          }
-        }
-        if (signal?.aborted) {
-          return {
-            answer: null,
-            messageId: questionId,
-            threadId: questionId,
-            timedOut: false,
-            cancelled: true,
-            connectionLost: true,
-            timeoutMs
-          }
-        }
-        const remainingMs = deadline - Date.now()
-        if (remainingMs <= 0) {
-          return {
-            answer: null,
-            messageId: questionId,
-            threadId: questionId,
-            timedOut: true,
-            cancelled: false,
-            connectionLost: false,
-            timeoutMs
-          }
-        }
-        await runtime.waitForMessage(`dispatch:${activeDispatch.id}`, {
-          timeoutMs: remainingMs,
-          signal
-        })
+      if (!params.resume && params.wait === false) {
+        return askedQuestionReceipt(questionId, recordMutationReceipt)
       }
+      return waitForQuestionAnswer({
+        runtime,
+        questionId,
+        readQuestion: () => db.getQuestion(questionId),
+        closedMessage: `Question ${questionId} closed because its Dispatch is inactive.`,
+        timeoutMs,
+        signal,
+        recordMutationReceipt
+      })
     }
   })
 ]

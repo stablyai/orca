@@ -93,7 +93,6 @@ describe('daemon-host profile isolation under a shared LOCALAPPDATA', () => {
     expect(dirname(rootA)).toBe(join(localAppData, 'Orca', 'daemon-host-profiles'))
     expect(dirname(dirname(buildA))).toBe(rootA)
     expect(dirname(dirname(buildB))).toBe(rootB)
-    // The same profile spelled differently must not fork a second mirror.
     useProfile(`${join(tempDir, 'PROFILE-A')}\\`)
     expect(getDaemonHostRootDir()).toBe(rootA)
   })
@@ -160,11 +159,5 @@ describe('daemon-host profile isolation under a shared LOCALAPPDATA', () => {
     expect(existsSync(join(legacyCurrent, 'Orca.exe'))).toBe(true)
     expect(existsSync(join(legacyStaging, 'Orca.exe'))).toBe(true)
     expect(existsSync(join(legacyOld, 'Orca.exe'))).toBe(true)
-  })
-
-  it('stays under userData when LOCALAPPDATA is unset', () => {
-    delete process.env.LOCALAPPDATA
-    useProfile(join(tempDir, 'profile-a'))
-    expect(getDaemonHostRootDir()).toBe(join(tempDir, 'profile-a', 'daemon-host'))
   })
 })

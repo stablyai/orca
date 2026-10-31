@@ -9,13 +9,7 @@ import type { CodexHookAnswer, CodexHookHashes } from './codex-hook-trust-deriva
 import { CODEX_MANAGED_EVENT_LABELS } from './codex-hook-definition'
 import type { CodexEventLabel } from './config-toml-trust'
 
-/**
- * Orca's file of what Codex answered about its hook: the `codex --version`
- * behind each binary fingerprint, and per version and hook command, Codex's
- * hashes or why it gives none. Under userData, so a launch that finds nothing
- * new spawns nothing and the CLI's status can read what the app learned. Any
- * read failure reads as empty, so it is only ever re-derived.
- */
+// Persist app-derived answers under userData so CLI status can read them without spawning Codex.
 type BinaryRecord = { fingerprint: string; codexVersion: string }
 
 type VersionRecord = { command: string } & ({ hashes: CodexHookHashes } | { failure: string })
@@ -25,10 +19,10 @@ type MemoFile = {
   versions: Record<string, VersionRecord>
 }
 
-/** An answer Codex itself gave, which holds for every binary of its version. */
+// Only definitive answers may be reused for a Codex version.
 type MemoizedCodexHookAnswer = Exclude<CodexHookAnswer, { kind: 'pending' }>
 
-// Why a cap: one record per Codex version or path ever seen would otherwise accumulate.
+// Bound records as versions and binary paths accumulate.
 const MAX_RECORDS = 8
 
 export function getCodexHookTrustMemoPath(): string {
@@ -46,7 +40,7 @@ function readMemo(): MemoFile {
       return { binaries: readBinaries(parsed.binaries), versions: readVersions(parsed.versions) }
     }
   } catch {
-    // Why: absent or unreadable reads as empty; the next lookup re-derives.
+    // Treat read failures as cache misses; the next lookup can re-derive.
   }
   return { binaries: {}, versions: {} }
 }
@@ -91,7 +85,7 @@ function readHashes(value: unknown): CodexHookHashes | null {
   const hashes: Partial<Record<CodexEventLabel, string | null>> = {}
   for (const label of CODEX_MANAGED_EVENT_LABELS) {
     const hash = value[label]
-    // Why any non-empty string: the derivation takes whatever hash Codex lists.
+    // Codex owns the hash format; accept any nonempty string it reports.
     if (hash === null || (typeof hash === 'string' && hash !== '')) {
       hashes[label] = hash
     }
@@ -99,11 +93,7 @@ function readHashes(value: unknown): CodexHookHashes | null {
   return Object.keys(hashes).length > 0 ? hashes : null
 }
 
-/**
- * The saved answer for this binary as it is on disk now. In the app it is only
- * a hint: a shim keeps its bytes when the codex behind it changes, so the app
- * re-probes the version and reads readMemoizedVersionAnswer instead.
- */
+// App main must re-probe versions: unchanged shim bytes can point to an updated Codex.
 export function readMemoizedCodexHookAnswer(
   codexPath: string,
   command: string,
@@ -130,14 +120,13 @@ export function readMemoizedVersionAnswer(
     : { kind: 'refused', codexVersion, failure: record.failure }
 }
 
-/** Every saved version's hashes: what Orca may have approved its entry with. */
+/** Retain old versions' hashes to recognize earlier Orca approvals. */
 export function readEveryMemoizedCodexHookHashes(): CodexHookHashes[] {
   return Object.values(readMemo().versions).flatMap((record) =>
     'hashes' in record ? [record.hashes] : []
   )
 }
 
-/** Records the version behind a binary, and Codex's answer for that version. Never throws. */
 export function memoizeCodexHookAnswer(
   codexPath: string,
   fingerprint: string,
@@ -177,7 +166,7 @@ function withoutKey<T>(record: Record<string, T>, key: string): Record<string, T
   return next
 }
 
-// Why insertion order: a record is re-inserted on every write, so the oldest go first.
+// Writes reinsert records, making insertion order suitable for eviction.
 function newest<T>(record: Record<string, T>): Record<string, T> {
   return Object.fromEntries(Object.entries(record).slice(-MAX_RECORDS))
 }

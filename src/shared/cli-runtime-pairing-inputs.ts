@@ -8,7 +8,7 @@ const NATIVE_EXECUTABLE_MAGIC = [
   [0x4d, 0x5a] // Windows PE
 ]
 
-/** A compiled binary runs on no `node`, so pairing would only reorder PATH (Homebrew, /usr/bin). */
+/** Compiled binaries need no Node PATH pairing, which would only reorder Homebrew/system entries. */
 export function isNativeExecutable(commandPath: string): boolean {
   let fd: number | null = null
   try {
@@ -27,12 +27,7 @@ export function isNativeExecutable(commandPath: string): boolean {
   }
 }
 
-// Why: Win32 resolves env names case-insensitively and object order preserves
-// the block order, so the entry the child will actually read is the FIRST
-// case-insensitive match — not necessarily `Path` or `PATH`. Reading a narrower
-// set than withCliRuntimeOnPath's twin dedupe deletes would destroy a third spelling unread.
-// Mirrors resolvePathEnvKey in src/main/pty/windows-path-segment-merge.ts, which
-// src/shared must not import.
+// Windows reads the first case-insensitive PATH match; mirror windows-path-segment-merge without importing main so dedupe cannot discard an unread alias.
 export function firstWindowsPathEnvKey(env: NodeJS.ProcessEnv): string {
   for (const key of Object.keys(env)) {
     if (key.toLowerCase() === 'path' && env[key] !== undefined) {

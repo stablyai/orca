@@ -5,7 +5,7 @@
       "id": "b1",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["a-b-a", "stale-inflight-cleanup"],
       "steps": [
         {
@@ -680,182 +680,6 @@
         }
       ],
       "namedDeltas": ["new-workspace-runtime-context-null-results-degrade-to-absent"]
-    },
-    {
-      "id": "settings-home-providers-fulfilled",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "settings-home-providers-refused",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "settings refused"
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
-      "id": "settings-home-providers-transport-error",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["settings-first"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reject": {
-            "message": "settings disconnected",
-            "deliveryUnknown": true
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
     },
     {
       "id": "settings-resume-metadata-fulfilled",
@@ -2264,127 +2088,6 @@
       ]
     },
     {
-      "id": "settings-home-coalesced",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["stale-inflight-cleanup", "follow-up-cache-observation"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "action": "load",
-          "id": "overlapping-load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        },
-        {
-          "complete": "settings.get#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "follow-up-settled"
-        },
-        {
-          "action": "load",
-          "id": "third-load"
-        },
-        {
-          "checkpoint": "third-query"
-        }
-      ]
-    },
-    {
       "id": "settings-repo-cache-expiry",
       "operation": "settings.repo-metadata",
       "family": "settings.repo-metadata",
@@ -2508,7 +2211,7 @@
       "id": "inventory-lifecycle",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["reset", "unmount-remount", "blur-retained-route"],
       "steps": [
         {
@@ -2572,7 +2275,7 @@
       "id": "inventory-repeat-query",
       "operation": "workspace.file-inventory",
       "family": "legacy-inventory",
-      "sites": ["mobile/src/session/use-mobile-native-chat-file-search.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/use-mobile-native-chat-file-search.ts"],
       "schedules": ["normalized-repeat", "cache-cancels-debounce", "cache-stales-inflight"],
       "steps": [
         {
@@ -2962,121 +2665,6 @@
         },
         {
           "complete": "jira.status#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "refused-after-data"
-        }
-      ]
-    },
-    {
-      "id": "settings-home-providers-refuse-after-data",
-      "operation": "settings.home-providers",
-      "family": "settings.home-providers",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": ["success-then-refused"],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "settings-pending"
-        },
-        {
-          "complete": "settings.get#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "settings": {
-                "disabledTuiAgents": ["claude"],
-                "defaultTuiAgent": "codex",
-                "prBotAuthorOverrides": ["bot-user"],
-                "visibleTaskProviders": ["github", "linear"],
-                "hostSettingOverrides": {}
-              }
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "connected": false
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        },
-        {
-          "checkpoint": "data-present"
-        },
-        {
-          "action": "load",
-          "id": "reload"
-        },
-        {
-          "checkpoint": "refresh-pending"
-        },
-        {
-          "complete": "settings.get#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "settings refused"
-            }
-          }
-        },
-        {
-          "complete": "preflight.check#2",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "glab": {
-                "installed": false
-              }
-            }
-          }
-        },
-        {
-          "complete": "linear.status#2",
           "params": {
             "$undefined": true
           },
@@ -4281,7 +3869,8 @@
           "complete": "worktree.set#2",
           "params": {
             "worktree": "id:repo42::/p",
-            "linkedPR": null
+            "linkedPR": null,
+            "suppressedGitHubPR": 12
           },
           "reply": {
             "ok": true,
@@ -4695,7 +4284,12 @@
           "action": "apply",
           "id": "apply",
           "args": {
-            "blockedReason": "needs_push"
+            "blockedReason": "needs_push",
+            "upstreamStatus": {
+              "hasUpstream": true,
+              "ahead": 1,
+              "behind": 0
+            }
           }
         },
         {
@@ -4729,7 +4323,57 @@
           "action": "apply",
           "id": "apply",
           "args": {
-            "blockedReason": "no_upstream"
+            "blockedReason": "no_upstream",
+            "upstreamStatus": {
+              "hasUpstream": false,
+              "ahead": 0,
+              "behind": 0
+            }
+          }
+        },
+        {
+          "complete": "worktree.show#1",
+          "params": {
+            "worktree": "id:repo42::/p"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "worktree": {
+                "baseRef": "origin/main"
+              }
+            }
+          }
+        },
+        {
+          "complete": "repo.list#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "repos": []
+            }
+          }
+        },
+        {
+          "complete": "git.branchCompare#1",
+          "params": {
+            "worktree": "id:repo42::/p",
+            "baseRef": "origin/main"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "summary": {
+                "baseRef": "origin/main",
+                "changedFiles": 1,
+                "status": "ready",
+                "commitsAhead": 2
+              },
+              "entries": []
+            }
           }
         },
         {
@@ -4762,7 +4406,12 @@
           "id": "apply",
           "args": {
             "blockedReason": "needs_sync",
-            "patchEquivalent": true
+            "upstreamStatus": {
+              "hasUpstream": true,
+              "ahead": 1,
+              "behind": 1,
+              "behindCommitsArePatchEquivalent": true
+            }
           }
         },
         {
@@ -5343,7 +4992,7 @@
               "defaultBaseRef": "main",
               "title": "Host title",
               "body": "Host body",
-              "canCreate": true,
+              "canCreate": false,
               "blockedReason": "needs_push",
               "nextAction": null,
               "reviewLookupOutcome": "not_found"
@@ -5619,7 +5268,7 @@
               "defaultBaseRef": "main",
               "title": "Host title",
               "body": "Host body",
-              "canCreate": true,
+              "canCreate": false,
               "blockedReason": "needs_push",
               "nextAction": null,
               "reviewLookupOutcome": "not_found"
@@ -7998,38 +7647,6 @@
       ]
     },
     {
-      "id": "home-host-stats",
-      "operation": "home.host-stats",
-      "family": "home.host-stats",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "stats-pending"
-        },
-        {
-          "complete": "stats.summary#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "totalWorktrees": 3,
-              "activeWorktrees": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "settled"
-        }
-      ]
-    },
-    {
       "id": "worktree-home-catalog",
       "operation": "worktree.home-catalog",
       "family": "worktree.home-catalog",
@@ -8359,7 +7976,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8608,7 +8227,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8631,7 +8252,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8656,7 +8279,9 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": null
+            "linkedPRNumber": null,
+            "fallbackPRNumber": null,
+            "currentHeadOid": null
           },
           "reply": {
             "ok": true,
@@ -8709,7 +8334,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8722,8 +8347,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -8808,7 +8436,7 @@
             "ok": true,
             "result": {
               "worktree": {
-                "linkedPR": 12
+                "linkedPR": null
               }
             }
           }
@@ -8821,8 +8449,11 @@
           "params": {
             "repo": "id:repo-9",
             "branch": "feature",
-            "linkedPRNumber": 12
+            "linkedPRNumber": null,
+            "fallbackPRNumber": 12,
+            "currentHeadOid": null
           },
+          "paramsFollowDivergence": true,
           "reply": {
             "ok": true,
             "result": {
@@ -11646,7 +11277,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -11689,7 +11323,10 @@
           "complete": "gitlab.workItemDetails#1",
           "params": {
             "iid": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "type": "issue"
           },
@@ -12522,7 +12159,10 @@
           "params": {
             "body": "a comment",
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12563,7 +12203,10 @@
           "params": {
             "body": "a comment",
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12859,7 +12502,10 @@
           "params": {
             "iid": 7,
             "method": "squash",
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1"
           },
           "reply": {
@@ -12893,7 +12539,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "state": "closed"
@@ -12955,7 +12604,10 @@
           "complete": "gitlab.updateMRState#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "state": "closed"
           },
@@ -13027,7 +12679,10 @@
           "complete": "gitlab.updateIssue#1",
           "params": {
             "number": 4,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -13065,7 +12720,10 @@
           "complete": "gitlab.updateMR#1",
           "params": {
             "iid": 7,
-            "projectRef": { "host": "gitlab.com", "path": "group/project" },
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
             "repo": "id:repo-1",
             "updates": {
               "addLabels": ["triage"],
@@ -14447,7 +14105,8 @@
           "params": {
             "audioBase64": "ACVKb5S53gM=",
             "dictationId": "dictation-1",
-            "sampleRate": 16000
+            "sampleRate": 16000,
+            "seq": 0
           },
           "reply": {
             "ok": true,
@@ -14765,10 +14424,7 @@
       "id": "terminal-raw-input-reported",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": [
-        "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14796,18 +14452,6 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
           "checkpoint": "reported"
         }
       ]
@@ -14816,10 +14460,7 @@
       "id": "terminal-raw-input-refused",
       "operation": "terminal.accessory-raw-send",
       "family": "terminal.raw-input",
-      "sites": [
-        "mobile/src/terminal/terminal-live-accessory-raw-send.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/terminal/terminal-live-accessory-raw-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -14848,78 +14489,6 @@
         },
         {
           "checkpoint": "not-reported"
-        }
-      ]
-    },
-    {
-      "id": "terminal-takeover-report-retried",
-      "operation": "terminal.takeover-report",
-      "family": "terminal.takeover-report",
-      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "report",
-          "id": "report"
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": false,
-            "error": {
-              "code": "refused",
-              "message": "busy"
-            }
-          }
-        },
-        {
-          "advance": 250
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#2",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "reported-on-retry"
-        }
-      ]
-    },
-    {
-      "id": "terminal-takeover-report-accepted",
-      "operation": "terminal.takeover-report",
-      "family": "terminal.takeover-report",
-      "sites": ["mobile/src/terminal/worker-terminal-takeover-report.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "report",
-          "id": "report"
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
-          "checkpoint": "reported"
         }
       ]
     },
@@ -16143,7 +15712,7 @@
       "id": "native-chat-image-paste-single",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16199,7 +15768,7 @@
       "id": "native-chat-image-paste-two-images",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16275,7 +15844,7 @@
       "id": "native-chat-image-paste-stops-on-rejection",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16331,7 +15900,7 @@
       "id": "native-chat-image-paste-trailing-image",
       "operation": "nativeChat.image-paste",
       "family": "nativeChat.image-paste",
-      "sites": ["mobile/src/session/mobile-native-chat-image-send.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16387,7 +15956,7 @@
       "id": "native-chat-write-accepted",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16415,18 +15984,6 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
-        },
-        {
           "checkpoint": "accepted"
         }
       ]
@@ -16435,7 +15992,7 @@
       "id": "native-chat-write-rejected",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16471,7 +16028,7 @@
       "id": "native-chat-write-delivery-unknown",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16503,7 +16060,7 @@
       "id": "native-chat-write-clear-line",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16539,7 +16096,7 @@
       "id": "native-chat-write-typed-command",
       "operation": "nativeChat.terminal-write",
       "family": "nativeChat.terminal-write",
-      "sites": ["mobile/src/session/mobile-native-chat-send.ts"],
+      "sites": ["mobile/src/session/native-chat/mobile-native-chat-send.ts"],
       "schedules": [],
       "steps": [
         {
@@ -16563,18 +16120,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
             }
           }
         },
@@ -16656,7 +16201,9 @@
       "id": "native-chat-session-option-pick-written",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16692,7 +16239,9 @@
       "id": "native-chat-session-option-pick-refused",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -16729,7 +16278,9 @@
       "id": "native-chat-session-option-pick-empty",
       "operation": "nativeChat.session-option-pick",
       "family": "nativeChat.session-option-pick",
-      "sites": ["mobile/src/session/mobile-native-chat-session-option-persistence.ts"],
+      "sites": [
+        "mobile/src/session/native-chat/input/mobile-native-chat-session-option-persistence.ts"
+      ],
       "schedules": [],
       "steps": [
         {
@@ -17720,7 +17271,7 @@
       "id": "native-chat-readability-local-repo",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17753,7 +17304,7 @@
       "id": "native-chat-readability-remote-repo",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17786,7 +17337,7 @@
       "id": "native-chat-readability-refused",
       "operation": "session.native-chat-readability",
       "family": "session.native-chat-readability",
-      "sites": ["mobile/src/session/use-mobile-native-chat-readability.ts"],
+      "sites": ["mobile/src/session/native-chat/transcript/use-mobile-native-chat-readability.ts"],
       "schedules": [],
       "steps": [
         {
@@ -17842,22 +17393,10 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
-        },
-        {
           "checkpoint": "first-accepted"
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -17915,7 +17454,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -17969,7 +17508,7 @@
           }
         },
         {
-          "advance": 120
+          "advance": 1000
         },
         {
           "complete": "terminal.send#2",
@@ -18346,7 +17885,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18358,6 +17897,17 @@
           "complete": "worktree.set#1",
           "params": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -18412,7 +17962,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18424,6 +17974,17 @@
           "complete": "worktree.set#1",
           "params": {
             "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
               {
                 "body": "needs a test",
                 "createdAt": 0,
@@ -18479,7 +18040,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18514,7 +18075,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18550,7 +18111,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18586,7 +18147,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18628,7 +18189,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -18688,7 +18249,7 @@
             },
             "prompt": {
               "delivery": "submit",
-              "text": "You are reviewing the current worktree. Address the following mobile review notes.\n\nFile: src/app.ts\nLine: 4\nUser comment: \"needs a test\"\n\nAfter applying fixes:\n1. Summarize changed files.\n2. Run relevant tests.\n3. Tell me if anything remains risky."
+              "text": "File: src/app.ts\nLine: 4\nUser comment: \"needs a test\""
             },
             "launchSource": "notes_send"
           },
@@ -18983,7 +18544,7 @@
       "id": "native-chat-image-upload-start-refused",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19013,7 +18574,7 @@
       "id": "native-chat-image-upload-single",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19066,7 +18627,7 @@
       "id": "native-chat-image-upload-two",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19156,7 +18717,7 @@
       "id": "native-chat-image-upload-second-fails",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19223,7 +18784,7 @@
       "id": "native-chat-image-upload-cancelled",
       "operation": "nativeChat.image-upload",
       "family": "nativeChat.image-upload",
-      "sites": ["mobile/src/session/mobile-native-chat-image-attachment.ts"],
+      "sites": ["mobile/src/session/native-chat/composer/mobile-native-chat-image-attachment.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19534,8 +19095,7 @@
       "family": "session.terminal-paste",
       "sites": [
         "mobile/src/session/use-mobile-terminal-paste.ts",
-        "mobile/src/session/use-mobile-session-accessory-selection.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
+        "mobile/src/session/use-mobile-session-accessory-selection.ts"
       ],
       "schedules": [],
       "steps": [
@@ -19588,18 +19148,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
             }
           }
         },
@@ -19730,10 +19278,7 @@
       "id": "terminal-input-send-accepted",
       "operation": "session.terminal-input-send",
       "family": "session.terminal-input-send",
-      "sites": [
-        "mobile/src/session/use-mobile-session-terminal-send-actions.ts",
-        "mobile/src/terminal/worker-terminal-takeover-report.ts"
-      ],
+      "sites": ["mobile/src/session/use-mobile-session-terminal-send-actions.ts"],
       "schedules": [],
       "steps": [
         {
@@ -19771,18 +19316,6 @@
               "send": {
                 "accepted": true
               }
-            }
-          }
-        },
-        {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
             }
           }
         },
@@ -19877,69 +19410,7 @@
           }
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "changed": 1
-            }
-          }
-        },
-        {
           "checkpoint": "live-sent"
-        }
-      ]
-    },
-    {
-      "id": "home-host-accounts",
-      "operation": "home.host-accounts",
-      "family": "home.host-accounts",
-      "sites": ["mobile/src/home/mobile-home-host-requests.ts"],
-      "schedules": [],
-      "steps": [
-        {
-          "action": "load",
-          "id": "load"
-        },
-        {
-          "checkpoint": "accounts-pending"
-        },
-        {
-          "complete": "accounts.list#1",
-          "params": {
-            "$undefined": true
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "claude": {
-                "accounts": [
-                  {
-                    "id": "claude-1",
-                    "email": "claude@example.test",
-                    "updatedAt": 1700000000000
-                  }
-                ],
-                "activeAccountId": "claude-1"
-              },
-              "codex": {
-                "accounts": [],
-                "activeAccountId": null
-              },
-              "rateLimits": {
-                "claude": null,
-                "codex": null,
-                "inactiveClaudeAccounts": [],
-                "inactiveCodexAccounts": []
-              }
-            }
-          }
-        },
-        {
-          "checkpoint": "accounts-published"
         }
       ]
     },
@@ -19950,7 +19421,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -19989,7 +19465,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20029,7 +19510,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20069,7 +19555,12 @@
       "sites": ["mobile/src/settings/notification-display-test.tsx"],
       "schedules": [],
       "deviceStore": {
+        "orca:pushServiceNotificationsEnabled": "true",
         "orca:hosts": "[{\"id\":\"host-1\",\"name\":\"Desk\",\"endpoint\":\"ws://desk.local:7777\",\"publicKeyB64\":\"AAAA\",\"lastConnected\":1700000000000}]"
+      },
+      "deviceState": {
+        "notificationPermissions": { "status": "granted", "canAskAgain": true },
+        "pushToken": { "type": "ios", "data": "fixture-apns-token" }
       },
       "steps": [
         {
@@ -20609,7 +20100,8 @@
         {
           "complete": "git.status#1",
           "params": {
-            "worktree": "id:repo42::/p"
+            "worktree": "id:repo42::/p",
+            "includeLineStats": false
           },
           "reply": {
             "ok": true,
@@ -21122,7 +20614,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21178,6 +20671,9 @@
             "agent": "claude",
             "sessionId": "session-1",
             "limit": 60,
+            "capabilities": {
+              "transcriptSourceOrder": 1
+            },
             "beforeOffset": 1200,
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21233,7 +20729,8 @@
             "limit": 40,
             "subscriptionId": "claude:session-1:00000000-0000-4000-8000-000000000001",
             "capabilities": {
-              "transcriptPending": 1
+              "transcriptPending": 1,
+              "transcriptSourceOrder": 1
             },
             "transcriptPath": "/work/feature/.claude/session-1.jsonl"
           },
@@ -21345,18 +20842,6 @@
           "checkpoint": "sent"
         },
         {
-          "complete": "orchestration.workerTerminalUserInput#1",
-          "params": {
-            "terminal": "terminal-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": {
-              "reported": true
-            }
-          }
-        },
-        {
           "checkpoint": "reported"
         },
         {
@@ -21374,7 +20859,7 @@
           "reply": {
             "ok": true,
             "result": {
-              "cleared": true
+              "clear": { "handle": "terminal-1", "cleared": true }
             }
           }
         },
@@ -22880,7 +22365,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [
@@ -22955,7 +22440,7 @@
         "mobile/src/session/use-mobile-diff-review-comment-actions.ts",
         "mobile/src/session/use-mobile-diff-review-git-actions.ts",
         "mobile/src/session/use-mobile-diff-review-send-actions.ts",
-        "mobile/src/session/mobile-native-chat-stale-input.ts"
+        "mobile/src/session/native-chat/mobile-native-chat-stale-input.ts"
       ],
       "schedules": [],
       "steps": [

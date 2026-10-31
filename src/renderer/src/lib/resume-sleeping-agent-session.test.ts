@@ -203,11 +203,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
-  // Why: keep-alive mounts every tab of the active worktree and pane connect is
-  // not visibility-gated, so a hidden restorable pane cold-restores in place.
-  // Appending a resume tab here (the pre-keep-alive contract from #6800) forked
-  // a second surface onto the same provider session and stranded the hidden
-  // pane as a bare shell.
+  // Keep-alive mounts hidden active-worktree tabs for in-place cold restore; appending resume tabs forks the session and strands originals as bare shells (#6800).
   it('leaves a hidden restorable stable-pane record for in-place cold restore during activation', () => {
     const paneKey = makePaneKey('tab-1', LEAF_ID)
     const record = makeRecord({ paneKey, origin: 'worktree-sleep' })
@@ -502,16 +498,16 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     expect(state.sleepingAgentSessionsByPaneKey[second.paneKey]).toBeUndefined()
   })
 
-  it("leaves a workspace sleep's records to main: no fresh tab, record kept", () => {
+  it("leaves a workspace sleep's records to main while their tab remains", () => {
     const record = makeRecord({ origin: 'worktree-sleep' })
     useAppStore.setState({
-      tabsByWorktree: { 'wt-1': [] },
+      tabsByWorktree: { 'wt-1': [makeTerminalTab('tab-1', 'wt-1')] },
       sleepingAgentSessionsByPaneKey: { [record.paneKey]: record }
     } as never)
 
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(0)
     const state = useAppStore.getState()
-    expect(state.tabsByWorktree['wt-1']).toEqual([])
+    expect(state.tabsByWorktree['wt-1']).toHaveLength(1)
     expect(state.sleepingAgentSessionsByPaneKey[record.paneKey]).toBe(record)
   })
 
@@ -542,7 +538,7 @@ describe('resumeSleepingAgentSessionsForWorktree', () => {
     const resumedTab = state.tabsByWorktree['wt-1']?.[0]
     const startup = state.pendingStartupByTabId[resumedTab!.id]
     expect(startup?.command).toBe(
-      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' 'resume' 'sess-1'"
+      "codex --profile captured '--model' 'gpt-5' '--reasoning-effort' 'high' '-c' 'disable_paste_burst=true' 'resume' 'sess-1'"
     )
     expect(startup?.env).toEqual({ CODEX_PROFILE: 'captured' })
     expect(startup?.command).not.toContain('changed')

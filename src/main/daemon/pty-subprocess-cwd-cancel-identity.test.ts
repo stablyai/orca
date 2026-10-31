@@ -1,6 +1,4 @@
-// A canceled cwd probe must leave the daemon as the one cancellation identity
-// the wire carries. Clients key recovery off it, and an unrecognized message
-// takes the rollback branch that closes a terminal the user still has (#7718).
+// Recovery keys off the daemon’s cancellation identity; a different error takes terminal-closing rollback.
 import { describe, expect, it, vi } from 'vitest'
 import type * as LocalPtyUtils from '../providers/local-pty-utils'
 
@@ -62,8 +60,9 @@ describe('createPtySubprocess cwd cancellation identity', () => {
   })
 
   it('reports a canceled cwd probe as an attach cancellation, not a spawn failure', async () => {
+    const cwd = process.platform === 'win32' ? 'C:\\Volumes\\dead\\repo' : '/Volumes/dead/repo'
     validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new WorkingDirectoryValidationAbortedError('/Volumes/dead/repo')
+      new WorkingDirectoryValidationAbortedError(cwd)
     )
     const abort = new AbortController()
     abort.abort()
@@ -73,7 +72,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
         sessionId: 'canceled-cwd-session',
         cols: 80,
         rows: 24,
-        cwd: '/Volumes/dead/repo',
+        cwd,
         cancelSignal: abort.signal
       })
     ).rejects.toThrow(TerminalAttachCanceledError)
@@ -81,8 +80,9 @@ describe('createPtySubprocess cwd cancellation identity', () => {
   })
 
   it('leaves a genuine missing-directory failure alone', async () => {
+    const cwd = process.platform === 'win32' ? 'C:\\gone' : '/gone'
     validateWorkingDirectoryAsyncMock.mockRejectedValue(
-      new Error('Working directory "/gone" does not exist. It may have been deleted.')
+      new Error(`Working directory "${cwd}" does not exist. It may have been deleted.`)
     )
 
     await expect(
@@ -90,7 +90,7 @@ describe('createPtySubprocess cwd cancellation identity', () => {
         sessionId: 'missing-cwd-session',
         cols: 80,
         rows: 24,
-        cwd: '/gone'
+        cwd
       })
     ).rejects.toThrow(/does not exist/)
   })

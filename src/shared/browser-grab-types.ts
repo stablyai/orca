@@ -1,10 +1,4 @@
-// ---------------------------------------------------------------------------
-// Browser Context Grab — shared types
-//
-// These types define the contract between main, preload, and renderer for the
-// browser grab feature. The payload shape follows the design doc's extracted
-// content model, including redaction and budget constraints.
-// ---------------------------------------------------------------------------
+// Share grab extraction contracts across main/preload/renderer, including redaction and budgets.
 
 /** Page-level metadata captured at selection time. */
 export type BrowserGrabPageContext = {
@@ -97,10 +91,6 @@ export type BrowserAnnotationPayload = Omit<BrowserGrabPayload, 'screenshot'> & 
   screenshot: null
 }
 
-// ---------------------------------------------------------------------------
-// Grab operation lifecycle
-// ---------------------------------------------------------------------------
-
 export type GrabIntent = 'copy' | 'annotate'
 
 /** Why a grab operation was cancelled before the user selected an element. */
@@ -112,10 +102,6 @@ export type BrowserGrabResult =
   | { opId: string; kind: 'context-selected'; payload: BrowserGrabPayload }
   | { opId: string; kind: 'cancelled'; reason: BrowserGrabCancelReason }
   | { opId: string; kind: 'error'; reason: string }
-
-// ---------------------------------------------------------------------------
-// IPC argument and result types
-// ---------------------------------------------------------------------------
 
 export type BrowserSetGrabModeArgs = {
   browserPageId: string
@@ -169,11 +155,11 @@ export type BrowserPageAnnotation = {
   priority: BrowserAnnotationPriority
   createdAt: string
   payload: BrowserAnnotationPayload
+  /** Pasted images, saved on the worktree's host like a terminal image paste. */
+  imagePaths?: string[]
 }
 
-// ---------------------------------------------------------------------------
-// Payload budgets — enforced in both guest and main
-// ---------------------------------------------------------------------------
+// Payload budgets are enforced in guest and main.
 
 export const GRAB_BUDGET = {
   textSnippetMaxLength: 200,
@@ -195,9 +181,9 @@ export const GRAB_BUDGET = {
   screenshotMaxBytes: 2 * 1024 * 1024
 } as const
 
-// ---------------------------------------------------------------------------
-// Attribute allowlist for safe preview
-// ---------------------------------------------------------------------------
+export function isBrowserAnnotationPageFull(annotationCount: number): boolean {
+  return annotationCount >= GRAB_BUDGET.annotationsMaxPerPage
+}
 
 /** Only these attribute names are included in the payload by default. */
 export const GRAB_SAFE_ATTRIBUTE_NAMES = new Set([
@@ -221,13 +207,7 @@ export function isAriaAttribute(name: string): boolean {
   return name.startsWith('aria-')
 }
 
-/**
- * Patterns in attribute values that indicate secrets — these values get
- * redacted. Why tighter patterns than broad words like 'code' or 'state':
- * those match normal CSS class names (e.g. 'source-code', 'stateful') and
- * would visibly degrade extraction quality on most real-world sites. The
- * intent is to catch OAuth callback params and credential-like values.
- */
+/** Redact OAuth/credential-shaped values, not broad words like code/state that match ordinary CSS classes and degrade extraction. */
 export const GRAB_SECRET_PATTERNS = [
   'access_token',
   'auth_token',

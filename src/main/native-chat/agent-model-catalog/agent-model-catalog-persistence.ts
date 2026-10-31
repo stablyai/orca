@@ -6,26 +6,27 @@ import type {
 } from '../../../shared/agent-session-wire'
 import {
   agentModelCatalogEntry,
+  serializedAgentModelCatalogListing,
   type AgentModelCatalogEntry,
   type AgentModelCatalogListing
 } from './agent-model-catalog-entry'
 import { isStructuredAgentId } from '../../../shared/agent-session-provider-handle-encoding'
+import { isRecord } from '../../../shared/agent-status-child-work-value-guards'
 
-// 3: Codex models carry `serviceTiers`; an older file would offer Fast with no tier to send.
+// Older catalogs lack serviceTiers and cannot safely construct Fast requests.
 const SCHEMA_VERSION = 3
 const SAVE_COALESCE_MS = 500
 
 export type AgentModelCatalogPersistence = {
   load: () => Promise<AgentModelCatalogEntry[]>
-  /** Fire-and-forget, coalesced; a failed write never surfaces to a caller. */
-  save: (entries: readonly AgentModelCatalogEntry[]) => void
-  /** Writes a coalesced save now; the delay timer is unref'd, so quit must not rely on it. */
+  /** Coalesce saves; failures leave the in-memory store authoritative. */
+  save: (snapshot: () => readonly AgentModelCatalogEntry[]) => void
+  /** Flush at quit because the delayed-save timer is unref'd. */
   flush: () => Promise<void>
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a non-null `typeof === 'object'` value is indexable by string key.
-  return typeof value === 'object' && value !== null ? (value as Record<string, unknown>) : null
+  return isRecord(value) ? value : null
 }
 
 function text(value: unknown): string | null {
@@ -115,8 +116,7 @@ function parseListing(value: unknown): AgentModelCatalogListing | null {
   }
 }
 
-/** Checked reconstruction rather than trust: a field a future schema drops or
- *  reshapes loads as "no entry", never as a corrupt catalog. */
+/** Reject incompatible rows rather than trusting persisted schema shapes. */
 function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   const row = asRecord(value)
   if (!row || !isStructuredAgentId(row.agent) || typeof row.fingerprint !== 'string') {
@@ -148,24 +148,22 @@ function parseEntry(value: unknown): AgentModelCatalogEntry | null {
   )
 }
 
-/** Only the two listings and the configured default are written; the merged view is derived again on load. */
+// Persist source listings/default facts; derive the merged view on load.
 function persistedEntry(entry: AgentModelCatalogEntry): unknown {
   return {
     agent: entry.agent,
     fingerprint: entry.fingerprint,
-    discovered: entry.discovered,
-    live: entry.live,
+    discovered: serializedAgentModelCatalogListing(entry.discovered),
+    live: serializedAgentModelCatalogListing(entry.live),
     ...(entry.configured ? { configured: entry.configured } : {})
   }
 }
 
-/** One JSON file of last-good entries. Success-only by construction: failures
- *  are never handed to `save`, and a malformed file loads as empty. */
 export function createAgentModelCatalogFilePersistence(
   directory: string
 ): AgentModelCatalogPersistence {
   const filePath = join(directory, 'agent-model-catalog.json')
-  let pending: readonly AgentModelCatalogEntry[] | null = null
+  let pending: (() => readonly AgentModelCatalogEntry[]) | null = null
   let timer: ReturnType<typeof setTimeout> | null = null
   let writing = Promise.resolve()
 
@@ -174,11 +172,12 @@ export function createAgentModelCatalogFilePersistence(
       clearTimeout(timer)
       timer = null
     }
-    const entries = pending
+    const snapshot = pending
     pending = null
-    if (!entries) {
+    if (!snapshot) {
       return writing
     }
+    const entries = snapshot()
     writing = writing.then(async () => {
       try {
         await mkdir(dirname(filePath), { recursive: true })
@@ -193,7 +192,7 @@ export function createAgentModelCatalogFilePersistence(
         )
         await rename(tmpPath, filePath)
       } catch {
-        // Bookkeeping only; the in-memory store stays authoritative this run.
+        // Persistence is optional bookkeeping; preserve the current in-memory catalog.
       }
     })
     return writing
@@ -214,8 +213,8 @@ export function createAgentModelCatalogFilePersistence(
         return []
       }
     },
-    save(entries) {
-      pending = [...entries]
+    save(snapshot) {
+      pending = snapshot
       if (timer === null) {
         timer = setTimeout(flush, SAVE_COALESCE_MS)
         timer.unref?.()

@@ -3,24 +3,25 @@ import {
   BottomDrawer,
   View,
   Text,
-  Pressable,
-  ChevronDown,
-  colors,
-  workspaceSshStatusLabel,
   MobileWorkspaceNameInput,
   MobileAgentIcon,
   workspaceAgentLabel,
-  ChevronUp,
-  GitBranch,
-  ActivityIndicator,
   PickerModal
 } from './mobile-tasks-dependencies'
+import { AutoHeight } from '../components/AutoHeight'
+import { LIST_LEADING_INSET, ListGroup } from '../components/list/ListGroup'
+import { ListRow } from '../components/list/ListRow'
+import { SectionHeader } from '../components/list/SectionHeader'
+import { SheetHeader } from '../components/nav-bar/SheetHeader'
+import { SheetPrimaryButton } from '../components/SheetPrimaryButton'
 import {
   TASK_SECONDARY_DRAWER_Z_INDEX,
   getRepoBadgeColor,
   workspaceAgentIconId
 } from './mobile-tasks-legacy-foundation'
-import { styles } from './mobile-tasks-legacy-styles'
+import { newWorktreeFormStyles as styles } from '../components/new-worktree-form-styles'
+import { NewWorkspaceSshConnectionField } from '../components/NewWorkspaceSshConnectionField'
+import { translate } from '../i18n/mobile-i18n'
 
 export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresentationModel) {
   const {
@@ -44,211 +45,155 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
     workspaceCreateCanPickRepo,
     workspaceCreateDraft,
     workspaceCreateRequiresSshConnection,
-    workspaceCreateSshConnectInProgress,
-    workspaceCreateSshError,
-    workspaceCreateSshStatus,
+    workspaceCreateSshGate,
     workspaceCreateTargetConnectionId,
     workspaceCreateTargetRepo,
     workspaceNameDraft
   } = model
+  const closeDrawer = () => setWorkspaceCreateDraft(null)
+  const repositoryTitle = translate('tasks.workspaceCreateDrawer.repository', 'Repository')
+  const agentTitle = translate('tasks.workspaceCreateDrawer.agent', 'Agent')
+  const repositoryValue =
+    workspaceCreateTargetRepo?.displayName ??
+    translate('tasks.workspaceCreateDrawer.selectRepository', 'Select a repository')
+  const agentValue = workspaceCreateRequiresSshConnection
+    ? translate('tasks.workspaceCreateDrawer.connectFirst', 'Connect repository first')
+    : workspaceAgentDetectionPending
+      ? translate('tasks.workspaceCreateDrawer.detectingAgents', 'Detecting agents...')
+      : workspaceAgentLabel(resolvedWorkspaceAgent)
+  const creating = workspaceCreateDraft != null && creatingKey === workspaceCreateDraft.item.key
   return (
     <BottomDrawer
       visible={taskUiReady && workspaceCreateDraft != null}
-      onClose={() => setWorkspaceCreateDraft(null)}
+      onClose={closeDrawer}
       zIndex={TASK_SECONDARY_DRAWER_Z_INDEX}
     >
       {workspaceCreateDraft ? (
         <View>
-          <View style={styles.sheetHeader}>
-            <Text style={styles.sheetTitle}>Create Workspace</Text>
-            <Text style={styles.sheetSubtitle} numberOfLines={2}>
-              {workspaceCreateDraft.item.title}
-            </Text>
+          <View style={styles.header}>
+            <SheetHeader
+              title={translate('tasks.workspaceCreateDrawer.title', 'Create Workspace')}
+              subtitle={workspaceCreateDraft.item.title}
+              leading={{ label: translate('common.cancel', 'Cancel'), onPress: closeDrawer }}
+            />
           </View>
 
-          <View style={styles.workspaceCreateForm}>
-            <View style={styles.workspaceCreateField}>
-              <Text style={styles.workspaceCreateLabel}>Repository</Text>
-              <Pressable
-                style={styles.fieldButton}
-                disabled={!workspaceCreateCanPickRepo}
-                onPress={() => setShowWorkspaceCreateRepoPicker(true)}
-              >
-                {workspaceCreateTargetRepo ? (
+          <ListGroup separatorInset={LIST_LEADING_INSET}>
+            <ListRow
+              key="repository"
+              title={repositoryTitle}
+              value={repositoryValue}
+              leading={
+                workspaceCreateTargetRepo ? (
                   <View
                     style={[
-                      styles.pickerRepoDot,
-                      {
-                        backgroundColor: getRepoBadgeColor(
-                          workspaceCreateTargetRepo,
-                          workspaceCreateTargetRepo.displayName
-                        )
-                      }
+                      styles.repoDot,
+                      { backgroundColor: getRepoBadgeColor(workspaceCreateTargetRepo) }
                     ]}
                   />
-                ) : null}
-                <Text
-                  style={[
-                    styles.fieldButtonText,
-                    !workspaceCreateTargetRepo ? styles.fieldButtonPlaceholder : undefined
-                  ]}
-                  numberOfLines={1}
-                >
-                  {workspaceCreateTargetRepo?.displayName ?? 'Select a repository'}
-                </Text>
-                {workspaceCreateCanPickRepo ? (
-                  <ChevronDown size={14} color={colors.textMuted} />
-                ) : null}
-              </Pressable>
-            </View>
+                ) : null
+              }
+              navigates={workspaceCreateCanPickRepo}
+              onPress={
+                workspaceCreateCanPickRepo
+                  ? () => setShowWorkspaceCreateRepoPicker(true)
+                  : undefined
+              }
+              accessibilityLabel={`${repositoryTitle}, ${repositoryValue}`}
+            />
+            <ListRow
+              key="agent"
+              title={agentTitle}
+              value={agentValue}
+              leading={
+                <MobileAgentIcon agentId={workspaceAgentIconId(resolvedWorkspaceAgent)} size={20} />
+              }
+              navigates
+              disabled={workspaceCreateRequiresSshConnection}
+              onPress={() => setShowWorkspaceAgentPicker(true)}
+              accessibilityLabel={`${agentTitle}, ${agentValue}`}
+            />
+          </ListGroup>
 
-            {workspaceCreateTargetConnectionId ? (
-              <View style={styles.workspaceCreateField}>
-                <Text style={styles.workspaceCreateLabel}>SSH Connection</Text>
-                <View style={styles.sshConnectCard}>
-                  <View style={styles.sshStatusRow}>
-                    <View
-                      style={[
-                        styles.sshStatusDot,
-                        workspaceCreateSshStatus === 'connected'
-                          ? styles.sshStatusDotConnected
-                          : workspaceCreateSshConnectInProgress
-                            ? styles.sshStatusDotProgress
-                            : styles.sshStatusDotDisconnected
-                      ]}
-                    />
-                    <View style={styles.sshStatusCopy}>
-                      <Text style={styles.sshStatusTitle} numberOfLines={1}>
-                        {workspaceCreateTargetRepo?.displayName ?? 'Remote repository'}
-                      </Text>
-                      <Text style={styles.detailMuted}>
-                        {workspaceSshStatusLabel(workspaceCreateSshStatus)}
-                      </Text>
-                    </View>
-                    {workspaceCreateSshStatus === 'connected' ? null : (
-                      <Pressable
-                        style={[
-                          styles.inlineSaveButtonCompact,
-                          workspaceCreateSshConnectInProgress
-                            ? styles.fieldButtonDisabled
-                            : undefined
-                        ]}
-                        disabled={workspaceCreateSshConnectInProgress}
-                        onPress={() => void connectWorkspaceSshRepo()}
-                      >
-                        <Text style={styles.inlineSaveText}>
-                          {workspaceCreateSshConnectInProgress ? 'Connecting...' : 'Connect'}
-                        </Text>
-                      </Pressable>
-                    )}
-                  </View>
-                  {workspaceCreateSshError ? (
-                    <Text style={styles.detailError}>{workspaceCreateSshError}</Text>
-                  ) : null}
-                </View>
-              </View>
-            ) : null}
+          {workspaceCreateTargetConnectionId ? (
+            <NewWorkspaceSshConnectionField
+              repoName={
+                workspaceCreateTargetRepo?.displayName ??
+                translate('tasks.workspaceCreateDrawer.remoteRepository', 'Remote repository')
+              }
+              sshGate={workspaceCreateSshGate}
+              onConnect={() => void connectWorkspaceSshRepo()}
+            />
+          ) : null}
 
-            <View style={styles.workspaceCreateField}>
-              <Text style={styles.workspaceCreateLabel}>
-                Workspace Name <Text style={styles.workspaceCreateLabelHint}>[Optional]</Text>
-              </Text>
-              <MobileWorkspaceNameInput
-                style={styles.input}
-                value={workspaceNameDraft}
-                onChangeText={handleWorkspaceNameDraftChange}
-                placeholderTextColor={colors.textMuted}
-                shouldAutoFocus={taskUiReady && workspaceCreateDraft !== null}
-              />
-            </View>
+          <SectionHeader
+            title={translate('tasks.workspaceCreateDrawer.workspaceName', 'Workspace Name')}
+            trailing={translate('tasks.workspaceCreateDrawer.optionalLabel', 'Optional')}
+          />
+          <MobileWorkspaceNameInput
+            value={workspaceNameDraft}
+            onChangeText={handleWorkspaceNameDraftChange}
+            shouldAutoFocus={taskUiReady && workspaceCreateDraft !== null}
+          />
 
-            <View style={styles.workspaceCreateField}>
-              <Text style={styles.workspaceCreateLabel}>Agent</Text>
-              <Pressable
-                style={[
-                  styles.fieldButton,
-                  workspaceCreateRequiresSshConnection ? styles.fieldButtonDisabled : undefined
-                ]}
-                disabled={workspaceCreateRequiresSshConnection}
-                onPress={() => setShowWorkspaceAgentPicker(true)}
-              >
-                <MobileAgentIcon agentId={workspaceAgentIconId(resolvedWorkspaceAgent)} size={16} />
-                <Text style={styles.fieldButtonText} numberOfLines={1}>
-                  {workspaceCreateRequiresSshConnection
-                    ? 'Connect repository first'
-                    : workspaceAgentDetectionPending
-                      ? 'Detecting agents...'
-                      : workspaceAgentLabel(resolvedWorkspaceAgent)}
-                </Text>
-                <ChevronDown size={14} color={colors.textMuted} />
-              </Pressable>
-            </View>
-
-            <Pressable
-              style={styles.workspaceAdvancedToggle}
-              onPress={() => setShowWorkspaceAdvanced((current) => !current)}
-            >
-              <Text style={styles.workspaceAdvancedText}>Advanced</Text>
-              {showWorkspaceAdvanced ? (
-                <ChevronUp size={14} color={colors.textSecondary} />
-              ) : (
-                <ChevronDown size={14} color={colors.textSecondary} />
-              )}
-            </Pressable>
-
+          <SectionHeader
+            title={translate('tasks.workspaceCreateDrawer.advanced', 'Advanced')}
+            expanded={showWorkspaceAdvanced}
+            onToggle={() => setShowWorkspaceAdvanced((current) => !current)}
+          />
+          <AutoHeight>
             {showWorkspaceAdvanced ? (
-              <View style={styles.workspaceCreateField}>
-                <Text style={styles.workspaceCreateLabel}>Start from</Text>
-                <Pressable
-                  style={styles.fieldButton}
+              <ListGroup>
+                <ListRow
+                  key="startFrom"
+                  title={translate('tasks.workspaceCreateDrawer.startFrom', 'Start from')}
+                  value={
+                    workspaceBaseBranch?.refName ??
+                    translate('tasks.workspaceCreateDrawer.defaultBranch', 'Default branch')
+                  }
+                  navigates
                   onPress={() => {
                     setWorkspaceBaseBranchQuery(workspaceBaseBranch?.refName ?? '')
                     setShowWorkspaceBaseBranchPicker(true)
                   }}
-                >
-                  <GitBranch size={14} color={colors.textMuted} />
-                  <Text style={styles.fieldButtonText} numberOfLines={1}>
-                    {workspaceBaseBranch?.refName ?? 'Default branch'}
-                  </Text>
-                  <ChevronDown size={14} color={colors.textMuted} />
-                </Pressable>
-                {workspaceBaseBranch ? (
-                  <Text style={styles.detailMuted} numberOfLines={1}>
-                    Create from {workspaceBaseBranch.refName}
-                  </Text>
-                ) : null}
-              </View>
+                />
+              </ListGroup>
             ) : null}
-          </View>
+          </AutoHeight>
 
           {workspaceCreateTargetRepo ? null : (
-            <Text style={styles.detailError}>
+            <Text style={styles.error}>
               {workspaceCreateDraft.item.provider === 'linear'
-                ? 'Add a Git repository before creating a Linear workspace.'
-                : 'Repository not found.'}
+                ? translate(
+                    'tasks.workspaceCreateDrawer.addRepository',
+                    'Add a Git repository before creating a Linear workspace.'
+                  )
+                : translate(
+                    'tasks.workspaceCreateDrawer.repositoryNotFound',
+                    'Repository not found.'
+                  )}
             </Text>
           )}
 
-          <View style={styles.workspaceCreateActions}>
-            <Pressable
-              style={[
-                styles.createButton,
-                styles.workspaceCreateButton,
-                (!workspaceCreateTargetRepo ||
-                  workspaceCreateRequiresSshConnection ||
-                  workspaceAgentDetectionPending ||
-                  creatingKey === workspaceCreateDraft.item.key) &&
-                  styles.createButtonDisabled
-              ]}
+          <View style={styles.footer}>
+            <SheetPrimaryButton
+              label={
+                workspaceAgentDetectionPending
+                  ? translate('tasks.workspaceCreateDrawer.detectingAgents', 'Detecting agents...')
+                  : workspaceCreateRequiresSshConnection
+                    ? translate(
+                        'tasks.workspaceCreateDrawer.connectRepository',
+                        'Connect Repository'
+                      )
+                    : translate('tasks.workspaceCreateDrawer.title', 'Create Workspace')
+              }
+              busy={creating}
               disabled={
                 !workspaceCreateTargetRepo ||
                 workspaceCreateRequiresSshConnection ||
-                workspaceAgentDetectionPending ||
-                creatingKey === workspaceCreateDraft.item.key
+                workspaceAgentDetectionPending
               }
               onPress={() => {
-                // Why: this compact issue-to-workspace flow should match the
-                // basic create workspace path; sparse checkout can return later.
                 void createWorkspace(
                   workspaceCreateDraft.item,
                   workspaceCreateDraft.repoIdOverride,
@@ -264,19 +209,7 @@ export function renderMobileTasksWorkspaceCreateDrawer(model: ConnectionPresenta
                   undefined
                 )
               }}
-            >
-              {creatingKey === workspaceCreateDraft.item.key ? (
-                <ActivityIndicator size="small" color={colors.bgBase} />
-              ) : (
-                <Text style={styles.createButtonText}>
-                  {workspaceAgentDetectionPending
-                    ? 'Detecting agents...'
-                    : workspaceCreateRequiresSshConnection
-                      ? 'Connect Repository'
-                      : 'Create Workspace'}
-                </Text>
-              )}
-            </Pressable>
+            />
           </View>
         </View>
       ) : null}
@@ -297,7 +230,7 @@ export function renderMobileTasksWorkspaceCreateRepoPicker(model: ConnectionPres
   return (
     <PickerModal
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceCreateRepoPicker}
-      title="Repository"
+      title={translate('tasks.workspaceCreateDrawer.repository', 'Repository')}
       options={workspaceRepoOptions}
       selected={workspaceCreateTargetRepo?.id ?? ''}
       onSelect={(repoId) => {
@@ -326,7 +259,7 @@ export function renderMobileTasksWorkspaceAgentPicker(model: ConnectionPresentat
   return (
     <PickerModal
       visible={taskUiReady && workspaceCreateDraft != null && showWorkspaceAgentPicker}
-      title="Agent"
+      title={translate('tasks.workspaceCreateDrawer.agent', 'Agent')}
       options={workspaceAgentOptions}
       selected={resolvedWorkspaceAgent}
       onSelect={(agent) => {

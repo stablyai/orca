@@ -14,9 +14,7 @@ function named(label: string): string {
   )
 }
 
-/** What an offered chat was doing when Orca went away, read from the offer's own stop-time
- *  snapshot. Null when the host sent none — an older host, or an offer recorded by a build that
- *  captured no snapshot — which the dialog's own wording already covers. */
+/** Read the host’s stop-time snapshot; older hosts/offers may omit it, so return null for caller fallback copy. */
 export function resumeActivityLabel(
   activity: AgentSessionRestartActivity | undefined
 ): ResumeActivityLabel | null {
@@ -25,8 +23,7 @@ export function resumeActivityLabel(
   }
   const parts: string[] = []
   const [prompt] = activity.prompts
-  // The headline is the main agent's own recorded state: blocked names the prompt it was waiting
-  // on, working was a reply in progress, done says nothing — its children speak below.
+  // Describe the lead’s recorded state; completed leads leave the activity description to their children.
   if (activity.state === 'blocked' && prompt) {
     parts.push(
       prompt.kind === 'approval'
@@ -63,13 +60,12 @@ export function resumeActivityLabel(
   } else if (agents.length > 1) {
     parts.push(
       translate(
-        'auto.components.NativeChatResumeOnRestartModal.activitySubagentMany',
-        '{{value0}} subagents running',
-        { value0: agents.length }
+        'auto.components.NativeChatResumeOnRestartModal.activitySubagentCount',
+        '{{count}} subagents running',
+        { count: agents.length, defaultValue_one: '{{count}} subagent running' }
       )
     )
   }
-  // Shells, monitors and workflows alone are what the sidebar labels monitoring.
   if (watches.length === 1 && onlyWatch) {
     parts.push(
       translate(
@@ -81,9 +77,9 @@ export function resumeActivityLabel(
   } else if (watches.length > 1) {
     parts.push(
       translate(
-        'auto.components.NativeChatResumeOnRestartModal.activityMonitorMany',
-        'Monitoring {{value0}} background tasks',
-        { value0: watches.length }
+        'auto.components.NativeChatResumeOnRestartModal.activityMonitorCount',
+        'Monitoring {{count}} background tasks',
+        { count: watches.length, defaultValue_one: 'Monitoring {{count}} background task' }
       )
     )
   }

@@ -4,13 +4,22 @@ import type { OpenFile } from '@/store/slices/editor'
 import type { EditorFileOperationProvenance } from '@/lib/editor-file-operation-owner'
 import { editorSaveWriterView } from './editor-save-writer-view'
 
-// oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: an opaque marker; the mocked owner check only compares it by identity.
-const STALE = { stale: true } as unknown as EditorFileOperationProvenance
+const STALE: EditorFileOperationProvenance = {
+  ownershipProjection: 'explicit',
+  generation: {
+    route: { executionHostId: 'local', runtimeEnvironmentId: null },
+    runtimeConnectionGeneration: null,
+    runtimePairingRevision: undefined,
+    runtimeSshGeneration: null,
+    nestedSshGeneration: null,
+    directSshGeneration: null
+  }
+}
 
 vi.mock('@/lib/editor-file-operation-owner', () => ({
-  assertEditorFileOperationCurrent: (
+  captureEditorFileOperationForOwner: (
     _state: unknown,
-    _worktreeId: string,
+    _file: OpenFile,
     provenance: EditorFileOperationProvenance
   ) => {
     if (provenance === STALE) {
@@ -32,7 +41,7 @@ function view(id: string, patch: Partial<OpenFile> = {}): OpenFile {
   }
 }
 
-/** Two views of one record, as the sharing switch will produce: `old` predates a reconnect. */
+/** Use the real shared-record shape with old representing a pre-reconnect view. */
 function sharedState(views: OpenFile[]): AppState {
   const ids = views.map((file) => file.id)
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a partial state; the writer view reads only open files and the view index.

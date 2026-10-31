@@ -1,6 +1,4 @@
-// A workspace a paired server owns (its row names the server, as the app's catalog sets it): its
-// browser and chat tabs open and close as today in both builds, and never reach main's layout.
-// An SSH worktree is laid out by this machine's main but has no host to run a chat on.
+// Paired-owned browser/chat layouts bypass local main in both builds. SSH worktree layout remains local-main-owned but lacks a structured-chat host.
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import type * as RpcClientModule from '@/runtime/runtime-rpc-client'
@@ -46,8 +44,7 @@ vi.mock('sonner', () => ({
 
 createStoreCascadesMockApi()
 
-import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-provisional-tab'
-import { resolveStructuredAgentSessionOwner } from '@/runtime/structured-agent-session-owner'
+import { openStructuredAgentSessionProvisionalTab } from '@/lib/structured-agent-session-launch-surface'
 
 const SERVER = 'server-1'
 const SERVER_WT = 'repo-s::/srv/app'
@@ -173,11 +170,4 @@ describe("a paired server's workspace", () => {
       ])
     }
   )
-})
-
-describe('an SSH worktree', () => {
-  it("has no host to run a chat on, where this machine's worktree has its own", () => {
-    expect(resolveStructuredAgentSessionOwner(store.getState(), SSH_WT)).toBeNull()
-    expect(resolveStructuredAgentSessionOwner(store.getState(), LOCAL_WT)).toBe('local')
-  })
 })

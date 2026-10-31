@@ -1,8 +1,6 @@
 // @vitest-environment happy-dom
 
-// Stop is there from the moment a message is sent until the work settles — against a host that takes
-// a Stop naming no turn. Against any other host, one that accepts sends first included, it stays
-// exactly what it was: a running turn only, named.
+// Hosts supporting untargeted Stop offer it from send through settlement; older hosts can stop only named running turns.
 
 import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -25,6 +23,7 @@ let fence = 3
 let latestTurn: AgentSessionLatestTurn | null | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call,
   supportsStructuredAgentSessionQuietRepeatedStop: vi.fn(async () => false),
   supportsStructuredAgentSessionPromptCancel: vi.fn(async () => false)
@@ -100,7 +99,6 @@ const RUNNING_TURN: AgentJournalRenderItem = {
   body: { kind: 'turn', turnId: 'provider-turn', state: 'running' }
 }
 
-// Every way work can be in flight after a send, in the order a message passes through them.
 const IN_FLIGHT = {
   'the send is on its way to the host': () => {
     outbox = [entry('sending')]
@@ -211,8 +209,7 @@ describe('Stop against a host that stops the conversation', () => {
       })
     }
 
-    // One key serves every Stop in this chat, so a kept id would replay into a later Stop, which the
-    // host answers as already handled and stops nothing for up to a day.
+    // Every Stop needs a new ID; reusing one could replay handled state and stop nothing for a day.
     const ids = cancelOperationIds()
     expect(new Set(ids).size).toBe(3)
   })
@@ -235,7 +232,6 @@ describe('Stop against a host that stops the conversation', () => {
       await Promise.all(presses)
     })
 
-    // The host runs them in order; the second acts on whatever is still running, if anything.
     const ids = cancelOperationIds()
     expect(ids).toHaveLength(2)
     expect(ids[1]).not.toBe(ids[0])
@@ -284,7 +280,7 @@ describe('Stop against a host that stops the conversation', () => {
       if (method !== 'agentSession.cancel') {
         return Promise.resolve(null)
       }
-      // As the host's ledger does: an id it already ran replays as handled and stops nothing.
+      // Model the host ledger: repeated IDs replay without stopping again.
       const operationId: string = params.envelope.clientOperationId
       const value = { cancelled: !ran.has(operationId) }
       ran.add(operationId)
@@ -297,7 +293,6 @@ describe('Stop against a host that stops the conversation', () => {
     act(() => {
       first = result.current.stop()
     })
-    // The next message goes out, and reaches the host ahead of the second Stop.
     outbox = [entry('sending')]
     rerender()
     act(() => {
@@ -344,7 +339,7 @@ describe('Stop against a host that stops the conversation', () => {
       if (method !== 'agentSession.cancel') {
         return null
       }
-      // As the host's ledger does: an id it already ran replays as handled and stops nothing.
+      // Model the host ledger: repeated IDs replay without stopping again.
       const operationId: string = params.envelope.clientOperationId
       const value = { cancelled: !ran.has(operationId) }
       ran.add(operationId)
@@ -432,8 +427,7 @@ const EARLIER_TURN: AgentJournalRenderItem[] = [
   }
 ]
 
-/** The main agent's state as the sidebar row reads it: the host's projection of this journal,
- *  through the same fold the row applies, or null when the session lists no agent at all. */
+/** Read the sidebar’s main-agent state from the real journal projection/fold; null without an agent. */
 function sidebarMainAgentState(): string | null {
   const summary = projectStructuredAgentSessionStatusSummary(items, submissions, 3)
   return summary.status
@@ -441,9 +435,7 @@ function sidebarMainAgentState(): string | null {
     : null
 }
 
-// Claude retrying a rate-limited request (HTTP 429) writes only `api_retry` frames: it echoes the
-// message and opens a turn only once a request gets through or is interrupted, so the journal holds
-// a handed-over send, a row per retry, and no turn for as long as the retries last.
+// Claude 429 retries emit api_retry without opening a turn until success/interruption; Stop must still act on the handed-over send.
 const RATE_LIMIT_RETRY: AgentJournalRenderItem = {
   itemId: 'provider-frame:claude:acquisition:1',
   revision: 3,
@@ -507,8 +499,7 @@ describe('Stop against a host that stops the conversation, beside the sidebar', 
   })
 })
 
-// A host that accepts sends first but predates the no-turn cancel refuses that cancel as invalid,
-// so it is treated exactly as an older host; so is one whose capabilities are not known yet.
+// Accepted sends alone do not imply untargeted cancel support; older/unknown hosts keep named-turn Stop.
 describe.each([
   ['one that only accepts sends first', [AGENT_SESSION_ACCEPTED_SEND_RUNTIME_CAPABILITY]],
   ['an older one', []],
@@ -542,12 +533,10 @@ describe.each([
       await result.current.stop()
     })
     expect(cancels()).toEqual([expect.objectContaining({ turnId: 'provider-turn' })])
-    // Every Stop takes back what has not gone out and keeps what has from being sent again.
     expect(mocks.stopSends).toHaveBeenCalledOnce()
   })
 })
 
-// A long turn's record sits above the loaded page; the host's record is what says it runs.
 describe('a running turn whose record is not loaded', () => {
   beforeEach(() => {
     items = []

@@ -9,18 +9,12 @@ import {
   type AgentSessionAccountHome
 } from '../../../shared/agent-session-account-home'
 
-/**
- * Everything that changes which models a listing can answer with: the agent,
- * the account home the CLI reads credentials/config from, the execution host
- * that runs the binary, and for an agent whose project config adds or removes
- * models, the folder it listed in. Login-state or CLI-version drift under the
- * same key is corrected by later listings, never by the fingerprint.
- */
+/** Key by agent, account, host and optional project scope; later probes repair login/version drift. */
 export type AgentModelCatalogIdentity = {
   agent: string
-  /** Null on the native host; WSL distros each carry their own CLI. */
+  /** Native host uses null; each WSL distro has its own CLI. */
   wslDistro: string | null
-  /** Only for an agent whose models differ by folder; absent keys the account's catalog. */
+  /** Include only for catalogs whose membership varies by folder. */
   folder?: string
 } & (
   | { accountHomeVariable: string; accountHomePath: string; accountHome?: never }
@@ -46,8 +40,8 @@ export function agentModelCatalogFingerprint(identity: AgentModelCatalogIdentity
     .digest('hex')
 }
 
-/** The durable record pins the account home at launch, so this names the
- *  catalog THAT session lists from — not whichever account is selected now. */
+/** The catalog of the account in `record.accountHome`; a session's reads and saves pass the account
+ *  it runs on there, which differs from the one it was created under once the selection moved. */
 export function agentModelCatalogIdentityForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>
 ): AgentModelCatalogIdentity {
@@ -58,7 +52,6 @@ export function agentModelCatalogIdentityForRecord(
   }
 }
 
-/** `folder` only for an agent whose catalog is kept per folder. */
 export function agentModelCatalogFingerprintForRecord(
   record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>,
   folder?: string
@@ -66,8 +59,21 @@ export function agentModelCatalogFingerprintForRecord(
   return agentModelCatalogFingerprint({ ...agentModelCatalogIdentityForRecord(record), folder })
 }
 
-/** A live session's store handle, pinned to the account home it spawned under.
- *  Native only: both structured adapters refuse non-native locations at launch. */
+/** A chat keys by the account pinned at launch; native probes cannot list a WSL-pinned one. */
+export function recordCatalogKey(
+  record: Pick<AgentSessionRecord, 'provider' | 'accountHome' | 'location'>,
+  folder?: string
+): { fingerprint: string; accountHome: AgentSessionRecord['accountHome'] | null } {
+  return {
+    fingerprint: agentModelCatalogFingerprintForRecord(record, folder),
+    accountHome:
+      record.location.executionHostId === 'local' && record.location.wslDistro === null
+        ? record.accountHome
+        : null
+  }
+}
+
+/** Per-spawn store access; supported structured adapters require native execution. */
 export function agentModelCatalogSessionAccess(
   store: AgentModelCatalogStore | undefined,
   agent: { agent: string; accountHomeVariable: string },

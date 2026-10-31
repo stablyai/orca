@@ -49,6 +49,7 @@ export const ptyStreamAndSerializationApi = {
       transformed?: boolean
       background?: boolean
       droppedOutput?: boolean
+      gapEscapeState?: string
     }) => void
   ): (() => void) => {
     const listener = (
@@ -61,6 +62,7 @@ export const ptyStreamAndSerializationApi = {
         transformed?: boolean
         background?: boolean
         droppedOutput?: boolean
+        gapEscapeState?: string
       }
     ) => callback(data)
     ipcRenderer.on('pty:data', listener)

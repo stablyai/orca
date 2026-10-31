@@ -24,7 +24,6 @@ export interface ExpoTwoWayAudioEventMap {
   onAudioInterruption: AudioInterruptionEvent
 }
 
-// These are useful for defining `useCallback` types inline
 export type MicrophoneDataCallback = (event: MicrophoneDataEvent) => void
 export type VolumeLevelCallback = (event: VolumeLevelEvent) => void
 export type RecordingChangeCallback = (event: RecordingChangeEvent) => void

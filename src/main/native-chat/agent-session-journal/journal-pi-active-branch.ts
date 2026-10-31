@@ -13,7 +13,7 @@ function closePiImportDatabase(db: Database.Database | null): void {
   }
 }
 
-/** Keep the complete Pi tree on disk until its saved leaf identifies the active branch. */
+// Spool the full tree until the saved leaf identifies the active branch.
 export function createPiTranscriptCollector<T>(
   toItem: (message: NativeChatMessage, identity: AgentJournalItemIdentity) => T,
   identify: (line: string, lineIndex: number) => AgentJournalItemIdentity
@@ -76,7 +76,7 @@ export function createPiTranscriptCollector<T>(
       if (typeof id !== 'string' || !(parentId === null || typeof parentId === 'string')) {
         throw new Error('Pi session entry has no valid branch identity')
       }
-      // Pi v1 indexes include headers and parsed metadata, but not malformed lines.
+      // Pi v1 counts parsed headers/metadata but excludes malformed records from indexes.
       const keptByIndex =
         version < 2 && typeof record.firstKeptEntryIndex === 'number'
           ? byFileIndex.get(record.firstKeptEntryIndex)
@@ -203,8 +203,7 @@ export function createPiTranscriptCollector<T>(
   }
 }
 
-/** One saved Pi entry as a chat shows it: summaries for compaction and abandoned branches, nothing
- *  for a system prompt, else the decoder Pi shares with omp. */
+/** Preserve branch/compaction summaries; skip system prompts and reuse the OMP decoder otherwise. */
 export function decodePiSessionEntryLine(
   line: string,
   fallbackId: string

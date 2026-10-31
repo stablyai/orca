@@ -1,12 +1,7 @@
 import { statSync, watch, type BigIntStats, type FSWatcher } from 'node:fs'
 import { stat } from 'node:fs/promises'
 
-// Why: watching one file instead of its directory keeps macOS off fseventsd — a
-// file watch is a kqueue registration there, while a directory watch is a
-// recursive FSEvents stream that delivers every write beneath it. A file watch
-// binds an inode, though: rename-replace (git lock files, atomic JSON writes)
-// leaves it deaf and a missing file cannot be watched at all, so events and
-// owner sweeps re-stat the path and rebind when it names a new file.
+// macOS file watches avoid recursive FSEvents churn, but bind an inode; refresh after events/sweeps to follow atomic replacement or creation.
 
 export type RebindingFileWatch = {
   /** Re-stats the path, rebinding and reporting a change if it differs from the last look. */
@@ -15,23 +10,15 @@ export type RebindingFileWatch = {
   close: () => Promise<void>
 }
 
-// Why: macOS raises a vnode attribute event for every mmap read (git maps the
-// index and packed-refs; ~120/s measured on a busy repo), so events are
-// coalesced and only a stat that differs counts as a change. An access-time
-// update leaves mtime, ctime and size alone. Each event that proves to be
-// noise doubles the window, so a file that every git process maps costs about
-// one rebind a second; a real change restores the short window.
+// macOS mmap reads emit vnode noise; coalesce until stat proves change, backing off noisy events and resetting on real writes.
 const EVENT_COALESCE_MS = 200
 const MAX_EVENT_COALESCE_MS = 1_600
-// Why: the native registration only lands on a later loop turn, and a stat
-// already queued can predate a replacement in that gap, which would leave the
-// binding on a dead inode. A timer cannot fire before that turn.
+// Verify on a later loop turn: registration is asynchronous and an earlier stat may miss replacement before binding.
 const BIND_VERIFY_DELAY_MS = 50
 
 type FileSnapshot = { identity: string; stamp: string }
 
-// Why: Node closes an errored watcher's handle without emitting 'close', and a
-// later close() is then a silent no-op, so waiting on 'close' alone can hang.
+// Node error closes handles without close events; later close() may do nothing, so bound the wait.
 const WATCHER_CLOSE_TIMEOUT_MS = 1_000
 
 export function closeFileSystemWatcher(watcher: FSWatcher): Promise<void> {
@@ -103,8 +90,7 @@ export function watchFileAcrossReplacement(
     try {
       const next = watch(path, { persistent: false }, () => {
         if (!closed && watcher === next) {
-          // One-shot: a hot file costs one rebind per window instead of a wakeup
-          // per read. The refresh stat covers writes made while disarmed.
+          // Disarm until refresh so hot reads coalesce; the stat still covers writes made meanwhile.
           unbind()
           scheduleCoalescedRefresh()
         }
@@ -147,8 +133,7 @@ export function watchFileAcrossReplacement(
     if (current?.identity !== boundIdentity) {
       unbind()
       if (current) {
-        // A replacement between the stat and this bind leaves the identity stale,
-        // which the bind's verify pass treats as a change: the harmless direction.
+        // Read identity before binding so a racing replacement produces a safe verification mismatch.
         bind(current.identity)
       }
     }
@@ -177,9 +162,7 @@ export function watchFileAcrossReplacement(
   try {
     lastSeen = fileSnapshot(statSync(path, { bigint: true }))
     bind(lastSeen.identity)
-  } catch {
-    // Missing until a refresh finds it.
-  }
+  } catch {}
 
   return {
     refresh,

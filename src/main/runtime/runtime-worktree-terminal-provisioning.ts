@@ -17,6 +17,8 @@ export type WorktreeProvisionTerminalOptions = {
   activate?: boolean
   surfaceOwner?: false
   keepPaneOnStartFailure?: true
+  /** The worktree's create was the user's act (E9). */
+  wslUserAct?: true
 }
 
 export type WorktreeTerminalProvisioningHost = {
@@ -25,12 +27,11 @@ export type WorktreeTerminalProvisioningHost = {
     selector: string,
     options: WorktreeProvisionTerminalOptions
   ) => Promise<TerminalResult>
-  // Why: keyed by the terminal; the host resolves its tab, so no create path can forget to pass it.
-  // The title is the tab's own, as the window's setTabCustomTitle sets it, never the pane's title.
+  // Resolve tab from the terminal handle so callers cannot omit ownership; title belongs to the tab, not its pane.
   setTabTitle: (handle: string, title: string) => Promise<void>
   setTabColor: (handle: string, color: string) => Promise<void>
-  /** Layout-owner build: main writes the tabs, titles, colours and mark in one command. False
-   *  when it refused them. */
+  // Desktop hosts inject localized copy; Node hosts retain the English fallback.
+  getSetupTerminalTitle?: () => string
   /** The tabs main made; none when the workspace already had them; null when main refused. */
   applyDefaultTabs?: (
     worktreeId: string,
@@ -40,7 +41,12 @@ export type WorktreeTerminalProvisioningHost = {
   recordSetupCompletionToken: (ptyId: string, token: string) => void
 }
 
+// What every terminal of this create shares: who surfaces it, and whether the create was the user's act (E9).
+type TerminalSurfacing = { surfaceOwner?: false; wslUserAct?: true }
+
 export type WorktreeTerminalProvisioningArgs = {
+  /** The create was the user's act: its terminals may start a stopped WSL distro. */
+  wslUserAct?: true
   worktreeSelector: string
   worktreeId: string
   worktreePath: string
@@ -63,19 +69,17 @@ export async function createWorktreeDefaultTabTerminals(
   selector: string,
   worktreeId: string,
   defaultTabs: CreateWorktreeResult['defaultTabs'] | undefined,
-  surfacing: { surfaceOwner?: false } = {},
+  surfacing: TerminalSurfacing = {},
   startupHandle?: string
 ): Promise<string[]> {
   if (!defaultTabs || defaultTabs.tabs.length === 0 || !host.canSpawn()) {
     return []
   }
   const [first, ...rest] = defaultTabs.tabs
-  // The agent the create started is the workspace's first tab, as the window lays it out: it takes
-  // the first template's title and color, and that template's command does not run beside it.
+  // Startup occupies the first default tab: inherit its title/color without also running its template command.
   if (startupHandle && first) {
     await dressAsDefaultTab(host, worktreeId, startupHandle, first)
   }
-  // Switch point: main writes the tabs first, then starts each terminal in its pane.
   if (ORCA_LAYOUT_OWNER_IS_MAIN && host.applyDefaultTabs) {
     return startDefaultTabsInLayout(
       host,
@@ -114,7 +118,7 @@ async function startDefaultTabsInLayout(
     selector: string
     worktreeId: string
     defaultTabs: NonNullable<CreateWorktreeResult['defaultTabs']>
-    surfacing: { surfaceOwner?: false }
+    surfacing: TerminalSurfacing
   },
   templates: NonNullable<CreateWorktreeResult['defaultTabs']>['tabs']
 ): Promise<string[]> {
@@ -135,7 +139,7 @@ async function startDefaultTabsInLayout(
     console.warn(`[worktree-create] Main refused the default tabs for ${worktreeId}`)
     return []
   }
-  // A workspace already given its default tabs gets none again, so only the ones made start.
+  // Start only newly created defaults; existing workspaces receive none again.
   const created = new Set(createdTabs.map(({ tabId }) => tabId))
   const handles: string[] = []
   for (const { template, tab } of panes.filter(({ tab }) => created.has(tab.tabId))) {
@@ -156,8 +160,7 @@ async function startDefaultTabsInLayout(
   return handles
 }
 
-// Why: a tab's look is bookkeeping; a failure is logged and never costs the tab, the other field,
-// or the create.
+// Appearance failures must not cost the tab, the other field or workspace creation.
 async function dressAsDefaultTab(
   host: WorktreeTerminalProvisioningHost,
   worktreeId: string,
@@ -187,7 +190,10 @@ export async function provisionWorktreeTerminals(
   if (!host.canSpawn()) {
     return { setupSpawned: false, setupTerminalHandle: null }
   }
-  const surfacing = args.surfaceOwner === false ? { surfaceOwner: false as const } : {}
+  const surfacing: TerminalSurfacing = {
+    ...(args.surfaceOwner === false ? { surfaceOwner: false as const } : {}),
+    ...(args.wslUserAct ? { wslUserAct: true as const } : {})
+  }
   let setupSpawned = false
   let setupTerminalHandle: string | null = null
   let shellSkippedForSetup = false
@@ -236,10 +242,10 @@ export async function provisionWorktreeTerminals(
         )
       const env = { ...args.setup.envVars, ...observed?.env }
       const setupTerminal = await host.createTerminal(args.worktreeSelector, {
-        title: 'Setup',
+        title: host.getSetupTerminalTitle?.() ?? 'Setup',
         command,
         env,
-        // Switch point: a setup main could not start stays in its pane, showing why.
+        // Keep failed setup in its pane to show the failure.
         ...(ORCA_LAYOUT_OWNER_IS_MAIN ? { keepPaneOnStartFailure: true as const } : {}),
         ...surfacing
       })

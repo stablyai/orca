@@ -3,7 +3,7 @@ import type {
   AgentJournalQuestionItem
 } from './agent-session-journal-types'
 import { isAskUserQuestionTool } from './agent-question-answered-intent'
-import { parseAskFromToolInput } from './native-chat-ask'
+import { parseAskFromToolInput } from './native-chat/input/native-chat-ask'
 import { agentJournalItemRowOrigin } from './agent-session-journal-position'
 import { agentJournalLinkageFields } from './agent-session-journal-producer'
 import type { NativeChatMessage } from './native-chat-types'
@@ -12,7 +12,7 @@ import { readAgentJournalTurn } from './agent-session-turn-record'
 import type { NativeChatResolvedPrompt } from './native-chat-resolution-receipt'
 
 type Projection = { message: NativeChatMessage | null; questionKey: string | null }
-const projections = new WeakMap<AgentJournalRenderItem, Projection>()
+type ItemProjector = (item: AgentJournalRenderItem) => NativeChatMessage | null
 const pendingGroups = new WeakMap<
   AgentJournalQuestionItem,
   {
@@ -57,13 +57,17 @@ function questionKey(questions: readonly { question: string }[]): string | null 
   return texts.length > 0 && texts.every(Boolean) ? JSON.stringify(texts.sort()) : null
 }
 
-function projectItem(item: AgentJournalRenderItem): Projection {
+function projectItem(
+  item: AgentJournalRenderItem,
+  projections: WeakMap<AgentJournalRenderItem, Projection>,
+  projectMessage: ItemProjector
+): Projection {
   const cached = projections.get(item)
   if (cached) {
     return cached
   }
   const { body } = item
-  let message = projectStructuredItemToNativeChat(item)
+  let message = projectMessage(item)
   let key: string | null = null
   if (body.kind === 'question') {
     const questions = body.questions?.length ? body.questions : [{ question: body.question }]
@@ -91,13 +95,14 @@ function projectItem(item: AgentJournalRenderItem): Projection {
 }
 
 /** Question presentation is client-local; archives and older RPC consumers keep their projection. */
-function projectQuestions(items: readonly AgentJournalRenderItem[]): {
+function projectQuestions(
+  items: readonly AgentJournalRenderItem[],
+  project: (item: AgentJournalRenderItem) => Projection
+): {
   messages: NativeChatMessage[]
   receipts: ReadonlyMap<string, NativeChatResolvedPrompt>
 } {
-  // Consume one question item for each matching tool call. A Set would hide every
-  // same-text call in a turn after the first question item, which can lose a real
-  // duplicate call when only one prompt was journalled.
+  // Count matching question items; a Set would hide extra same-text tool calls that were never journalled as prompts.
   const questionsByTurn = new Map<string, Map<string, number>>()
   const rows: { item: AgentJournalRenderItem; projection: Projection; turn: string }[] = []
   let turn = ''
@@ -109,7 +114,7 @@ function projectQuestions(items: readonly AgentJournalRenderItem[]): {
     if (lifecycle) {
       turn = lifecycle.turnId
     }
-    const projection = projectItem(item)
+    const projection = project(item)
     rows.push({ item, projection, turn })
     if (turn && item.body.kind === 'question' && projection.questionKey) {
       let questions = questionsByTurn.get(turn)
@@ -167,22 +172,31 @@ function projectQuestions(items: readonly AgentJournalRenderItem[]): {
   return { messages, receipts }
 }
 
-const histories = new WeakMap<
-  readonly AgentJournalRenderItem[],
-  ReturnType<typeof projectQuestions>
->()
-
-export function structuredQuestionTranscript(items: readonly AgentJournalRenderItem[]) {
-  let projection = histories.get(items)
-  if (!projection) {
-    projection = projectQuestions(items)
-    histories.set(items, projection)
+/** Each surface owns caches for the item interpretation it renders. */
+export function createStructuredQuestionProjection(
+  projectMessage: ItemProjector = projectStructuredItemToNativeChat
+) {
+  const projections = new WeakMap<AgentJournalRenderItem, Projection>()
+  const histories = new WeakMap<
+    readonly AgentJournalRenderItem[],
+    ReturnType<typeof projectQuestions>
+  >()
+  const project = (item: AgentJournalRenderItem) => projectItem(item, projections, projectMessage)
+  const transcript = (items: readonly AgentJournalRenderItem[]) => {
+    let projection = histories.get(items)
+    if (!projection) {
+      projection = projectQuestions(items, project)
+      histories.set(items, projection)
+    }
+    return projection
   }
-  return projection
+  return {
+    transcript,
+    messages: (items: readonly AgentJournalRenderItem[]) => transcript(items).messages
+  }
 }
 
-export function projectStructuredQuestionMessages(
-  items: readonly AgentJournalRenderItem[]
-): NativeChatMessage[] {
-  return structuredQuestionTranscript(items).messages
-}
+export const {
+  transcript: structuredQuestionTranscript,
+  messages: projectStructuredQuestionMessages
+} = createStructuredQuestionProjection()

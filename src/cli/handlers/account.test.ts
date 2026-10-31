@@ -1,7 +1,9 @@
 import type * as NodeCliCommandResolutionModule from '../../shared/node-cli-command-resolution'
+import type * as ProcessHostModule from '@orca/process-host'
 import { EventEmitter } from 'node:events'
 import { existsSync } from 'node:fs'
 import { delimiter } from 'node:path'
+import { PassThrough } from 'node:stream'
 import type * as NodeFs from 'node:fs'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
@@ -10,6 +12,7 @@ const {
   getVersionManagerBinPathsMock,
   readKeychainMock,
   resolveCliCommandMock,
+  spawnProcessMock,
   rmSyncMock,
   spawnMock,
   stdioForWindowsInteractiveChildMock,
@@ -19,6 +22,7 @@ const {
   getVersionManagerBinPathsMock: vi.fn(),
   readKeychainMock: vi.fn(),
   resolveCliCommandMock: vi.fn(),
+  spawnProcessMock: vi.fn(),
   rmSyncMock: vi.fn(),
   spawnMock: vi.fn(),
   stdioForWindowsInteractiveChildMock: vi.fn(),
@@ -37,6 +41,10 @@ vi.mock('node:child_process', () => ({
   execFileSync: vi.fn(),
   spawn: spawnMock
 }))
+vi.mock('@orca/process-host', async (importOriginal) => ({
+  ...(await importOriginal<typeof ProcessHostModule>()),
+  spawnProcess: spawnProcessMock
+}))
 vi.mock('../../main/claude-accounts/keychain', () => ({
   deleteActiveClaudeKeychainCredentialsStrict: deleteKeychainMock,
   readActiveClaudeKeychainCredentialsStrict: readKeychainMock,
@@ -54,7 +62,8 @@ vi.mock('../../shared/windows-console-input', () => ({
 
 import { ACCOUNT_HANDLERS } from './account'
 import type { HandlerContext } from '../dispatch'
-import type { RuntimeClient } from '../runtime-client'
+import { RuntimeClientError, type RuntimeClient } from '../runtime-client'
+import { reportCliError } from '../cli-error'
 import {
   getCmdExePath,
   WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR,
@@ -62,8 +71,19 @@ import {
 } from '../../shared/windows-batch-spawn'
 import {
   ACCOUNT_IMPORT_RUNTIME_CAPABILITY,
-  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY
+  CLAUDE_SIGN_IN_RUNTIME_CAPABILITY,
+  DATA_ACCOUNT_RUNTIME_CAPABILITY
 } from '../../shared/account-runtime-capabilities'
+
+function helpChild(stdout: string): EventEmitter {
+  const child = Object.assign(new EventEmitter(), { stdout: new PassThrough() })
+  queueMicrotask(() => {
+    child.stdout.write(stdout)
+    child.emit('exit', 0)
+    child.emit('close', 0)
+  })
+  return child
+}
 
 function successfulChild(): EventEmitter {
   const child = new EventEmitter()
@@ -119,6 +139,7 @@ describe('account CLI handlers', () => {
       dispose: vi.fn()
     }))
     resolveCliCommandMock.mockReset().mockImplementation((command: string) => command)
+    spawnProcessMock.mockReset()
     getVersionManagerBinPathsMock.mockReset().mockReturnValue([])
     readKeychainMock.mockReset().mockResolvedValue(null)
     deleteKeychainMock.mockReset().mockResolvedValue(undefined)
@@ -149,7 +170,7 @@ describe('account CLI handlers', () => {
 
   afterEach(() => {
     Object.defineProperty(process, 'platform', originalPlatform)
-    logSpy.mockRestore()
+    vi.restoreAllMocks()
     if (originalElectronRunAsNode === undefined) {
       delete process.env.ELECTRON_RUN_AS_NODE
     } else {
@@ -171,6 +192,184 @@ describe('account CLI handlers', () => {
       process.env.WSL_DISTRO_NAME = originalWslDistroName
     }
   })
+
+  it('falls back to OpenCode when opencode2 cannot be spawned', async () => {
+    const supportedCommand = 'opencode'
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+    resolveCliCommandMock.mockImplementation((command: string) => `/tools/${command}`)
+    spawnProcessMock.mockImplementation(({ program }) => {
+      if (program !== `/tools/${supportedCommand}`) {
+        throw new Error('ENOENT')
+      }
+      return helpChild('--standalone  Run with a private server instead of the background service')
+    })
+    await ACCOUNT_HANDLERS['account add'](context('opencode', true))
+    expect(spawnProcessMock.mock.calls.map(([spec]) => spec.program)).toEqual([
+      '/tools/opencode2',
+      '/tools/opencode'
+    ])
+    const [command, args, options] = spawnMock.mock.calls[0]
+    expect(command).toBe(`/tools/${supportedCommand}`)
+    expect(args).toEqual(['auth', 'login', '--standalone'])
+    expect(spawnProcessMock).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        args: ['auth', 'login', '--help'],
+        env: options.env
+      })
+    )
+    expect(options.env.OPENCODE_DB).toBe('opencode.db')
+    expect(existsSync(options.env.XDG_DATA_HOME)).toBe(false)
+    expect(callMock).toHaveBeenLastCalledWith('accounts.addDataFromHome', {
+      provider: 'opencode',
+      sourceDataHome: options.env.XDG_DATA_HOME,
+      label: 'opencode'
+    })
+  })
+
+  it('skips a Windows candidate that the interactive login preparation cannot launch', async () => {
+    Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+    callMock.mockResolvedValue({ result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] } })
+    resolveCliCommandMock.mockImplementation((command: string) =>
+      command === 'opencode2' ? 'C:\\Users\\A&B\\npm\\opencode2.cmd' : 'C:\\tools\\opencode.cmd'
+    )
+    spawnProcessMock.mockImplementation(() => helpChild('--standalone'))
+
+    const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+    const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+    await ACCOUNT_HANDLERS['account add'](context('opencode', true))
+    expect(warn).not.toHaveBeenCalled()
+    expect(errorLog).not.toHaveBeenCalled()
+
+    expect(spawnProcessMock).toHaveBeenCalledTimes(1)
+    const [probe] = spawnProcessMock.mock.calls[0]
+    expect(probe.program).toBe(getCmdExePath())
+    expect(probe.args).toEqual([
+      '/d',
+      '/c',
+      '@',
+      'C:\\tools\\opencode.cmd',
+      'auth',
+      'login',
+      '--help'
+    ])
+    expect(spawnMock).toHaveBeenCalledWith(
+      probe.program,
+      ['/d', '/c', '@', 'C:\\tools\\opencode.cmd', 'auth', 'login', '--standalone'],
+      expect.objectContaining({ env: probe.env })
+    )
+  })
+
+  it.each(['v1', 'missing', 'unsafe'])(
+    'retains Windows preparation diagnosis with %s fallback and recovers through a safe first suffix',
+    async (fallback) => {
+      Object.defineProperty(process, 'platform', { configurable: true, value: 'win32' })
+      callMock.mockResolvedValue({ result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] } })
+      const preferred = String.raw`C:\Users\A&B\AppData\Roaming\npm\opencode2.cmd`
+      const generic =
+        fallback === 'unsafe'
+          ? String.raw`C:\Users\A&B\AppData\Roaming\npm\opencode.cmd`
+          : String.raw`C:\tools\opencode.cmd`
+      const resolved = new Map([
+        ['opencode2', preferred],
+        ['opencode', generic]
+      ])
+      resolveCliCommandMock.mockImplementation(
+        (command: string) => resolved.get(command) ?? command
+      )
+      spawnProcessMock.mockImplementation(() => {
+        if (fallback === 'missing') {
+          throw new Error('ENOENT')
+        }
+        return helpChild('Usage: opencode auth login [url]\n--help Show help\n')
+      })
+      const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
+      const errorLog = vi.spyOn(console, 'error').mockImplementation(() => {})
+      const failure = await ACCOUNT_HANDLERS['account add'](context('opencode', true)).catch(
+        (error: unknown) => error
+      )
+      expect(failure).toBeInstanceOf(RuntimeClientError)
+      if (!(failure instanceof Error)) {
+        throw new Error('Expected account-add failure')
+      }
+      expect(resolveCliCommandMock.mock.calls.map(([name]) => name)).toEqual([
+        'opencode2',
+        'opencode'
+      ])
+      expect(spawnProcessMock).toHaveBeenCalledTimes(fallback === 'unsafe' ? 0 : 1)
+      if (fallback !== 'unsafe') {
+        expect(spawnProcessMock).toHaveBeenCalledWith(
+          expect.objectContaining({
+            program: getCmdExePath(),
+            args: ['/d', '/c', '@', generic, 'auth', 'login', '--help']
+          })
+        )
+        expect(existsSync(spawnProcessMock.mock.calls[0][0].env.XDG_DATA_HOME)).toBe(false)
+      }
+      expect(spawnMock).not.toHaveBeenCalled()
+      expect(callMock.mock.calls.map(([method]) => method)).toEqual(['status.get'])
+      expect(warn).not.toHaveBeenCalled()
+      expect(errorLog).not.toHaveBeenCalled()
+      expect(logSpy).not.toHaveBeenCalled()
+      reportCliError(failure, false)
+      expect(errorLog).toHaveBeenCalledExactlyOnceWith(failure.message)
+      reportCliError(failure, true)
+      expect(logSpy).toHaveBeenCalledTimes(1)
+      expect(JSON.parse(logSpy.mock.calls[0][0]).error.message).toBe(failure.message)
+      expect(failure.message).toContain(preferred)
+      if (fallback === 'unsafe') {
+        expect(failure.message).toContain(generic)
+      }
+      expect(failure.message).toContain('Windows could not start')
+      expect(failure.message).toContain(WINDOWS_BATCH_UNSAFE_CHARACTERS_LABEL)
+      expect(failure.message).toContain('full absolute path')
+      expect(failure.message).toContain(
+        String.raw`npm install --prefix C:\tools\orca-opencode2 @opencode/cli`
+      )
+      expect(failure.message).toContain('first match')
+      expect(failure.message).toContain('move/rename only its suffixed opencode2 launchers')
+      expect(failure.message).toContain('shared npm PATH directories unchanged')
+      expect(failure.message).not.toContain(WINDOWS_BATCH_UNSAFE_ARGUMENTS_ERROR)
+      expect(failure.message).not.toContain('Usage:')
+      if (fallback === 'v1') {
+        // External discovery now exposes the safe first suffix; the old generic v1 is unchanged.
+        const safe = String.raw`C:\tools\orca-opencode2\node_modules\.bin\opencode2.cmd`
+        resolved.set('opencode2', safe)
+        expect(resolved.get('opencode')).toBe(generic)
+        spawnProcessMock
+          .mockClear()
+          .mockImplementation(() =>
+            helpChild('--standalone  Run with a private server instead of the background service')
+          )
+        logSpy.mockClear()
+        errorLog.mockClear()
+        await ACCOUNT_HANDLERS['account add'](context('opencode', true))
+        expect(spawnProcessMock).toHaveBeenCalledExactlyOnceWith(
+          expect.objectContaining({
+            args: ['/d', '/c', '@', safe, 'auth', 'login', '--help']
+          })
+        )
+        expect(spawnMock).toHaveBeenCalledExactlyOnceWith(
+          getCmdExePath(),
+          ['/d', '/c', '@', safe, 'auth', 'login', '--standalone'],
+          expect.anything()
+        )
+        const loginEnv = spawnMock.mock.calls[0][2].env
+        expect(callMock).toHaveBeenLastCalledWith('accounts.addDataFromHome', {
+          provider: 'opencode',
+          sourceDataHome: loginEnv.XDG_DATA_HOME,
+          label: 'opencode'
+        })
+        expect(existsSync(loginEnv.XDG_DATA_HOME)).toBe(false)
+        expect(errorLog).not.toHaveBeenCalled()
+        expect(warn).not.toHaveBeenCalled()
+      }
+    }
+  )
 
   it('uses Codex device auth and keeps JSON stdout clean', async () => {
     await ACCOUNT_HANDLERS['account add'](context('codex', true))
@@ -249,7 +448,7 @@ describe('account CLI handlers', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       getCmdExePath(),
-      ['/d', '/c', 'C:\\tools\\codex.cmd', 'login', '--device-auth'],
+      ['/d', '/c', '@', 'C:\\tools\\codex.cmd', 'login', '--device-auth'],
       expect.objectContaining({ stdio: ['inherit', 'inherit', 'inherit'] })
     )
   })
@@ -263,7 +462,7 @@ describe('account CLI handlers', () => {
 
     expect(spawnMock).toHaveBeenCalledWith(
       getCmdExePath(),
-      ['/d', '/c', shim, 'login', '--device-auth'],
+      ['/d', '/c', '@', shim, 'login', '--device-auth'],
       expect.anything()
     )
   })

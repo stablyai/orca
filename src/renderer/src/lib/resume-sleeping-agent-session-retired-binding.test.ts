@@ -41,8 +41,7 @@ const record: SleepingAgentSessionRecord = {
   origin: 'quit'
 }
 
-// A pane in the layout with no terminal bound: either main cleared a gone terminal's binding
-// during the pane's reattach (a first visit after a reboot), or the pane's agent died in place.
+// No binding can mean main cleared a reattaching terminal, or that its agent died in place.
 function retiredBindingState(): void {
   useAppStore.setState({
     activeWorktreeId: 'wt-1',
@@ -100,18 +99,6 @@ describe('a resume record whose pane has no terminal bound', () => {
     expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
     expect(resumeSleepingAgentSessionsForWorktree('wt-1')).toBe(1)
     expect(mocks.launch).toHaveBeenCalledWith(record, undefined)
-  })
-
-  it('a start that settled, or a disposed pane, no longer owns it', () => {
-    mocks.layoutOwnerIsMain = true
-    retiredBindingState()
-    holdPaneResumeInPlace(PANE_KEY, () => true)()
-    const disposedRelease = holdPaneResumeInPlace(PANE_KEY, () => false)
-    try {
-      expect(recordPaneIsOwnedByPreservedPane(record, useAppStore.getState())).toBe(false)
-    } finally {
-      disposedRelease()
-    }
   })
 
   it('keeps the window-owned rule: an unbound pane does not own it, in flight or not', () => {

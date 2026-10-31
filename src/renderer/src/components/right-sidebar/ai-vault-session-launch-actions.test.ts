@@ -1,7 +1,10 @@
+import { createElement } from 'react'
+import AiVaultSessionDropLayer from '../tab-group/AiVaultSessionDropLayer'
+import { writeAiVaultSessionDragData } from '@/lib/ai-vault-session-drag'
 import type * as ForkStartup from '@/lib/ai-vault-session-fork-startup'
 // @vitest-environment happy-dom
-import { renderHook, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { cleanup, render, fireEvent, renderHook, waitFor } from '@testing-library/react'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AiVaultSession } from '../../../../shared/ai-vault-types'
 import type { WebRuntimeTerminalCreateOutcome } from '@/runtime/web-runtime-session-types'
 
@@ -14,6 +17,7 @@ const mocks = vi.hoisted(() => ({
   prepareAiVaultSessionForTerminalResume: vi.fn(),
   launchAiVaultSessionInNewTab: vi.fn(),
   activateAiVaultResumeWorkspace: vi.fn(),
+  rpc: vi.fn(),
   toastError: vi.fn(),
   toastSuccess: vi.fn()
 }))
@@ -35,7 +39,7 @@ vi.mock('@/lib/ai-vault-session-resume-preparation', () => ({
   prepareAiVaultSessionForFork: mocks.prepareAiVaultSessionForFork,
   prepareAiVaultSessionForResume: mocks.prepareAiVaultSessionForResume,
   prepareAiVaultSessionForTerminalResume: mocks.prepareAiVaultSessionForTerminalResume,
-  dropDeletedSshResumeCwd: async (session: unknown) => session,
+  dropDeletedRemoteResumeCwd: async (session: unknown) => session,
   aiVaultCliForkHostTooOldMessage: () =>
     'Update Orca on the host that runs this chat to resume it in a new CLI.'
 }))
@@ -55,6 +59,10 @@ vi.mock('./ai-vault-session-resume-in-chat-launch', () => ({
   resumeAiVaultSessionInNewChat: vi.fn()
 }))
 vi.mock('sonner', () => ({ toast: { error: mocks.toastError, success: mocks.toastSuccess } }))
+vi.mock('@/runtime/runtime-rpc-client', () => ({
+  callRuntimeRpc: mocks.rpc,
+  runtimeEnvironmentSupportsCapability: async () => true
+}))
 vi.mock('@/store', () => ({
   useAppStore: { getState: mocks.getState }
 }))
@@ -99,18 +107,21 @@ function renderActions(agentCmdOverrides?: { opencode?: string }) {
   ).result.current
 }
 
-describe('Switch to Terminal launch', () => {
-  beforeEach(() => {
-    vi.clearAllMocks()
-    mocks.getState.mockReturnValue({ activeWorktreeId: 'worktree-1', settings: {} })
-    mocks.prepareAiVaultSessionForFork.mockImplementation(async (session) => ({
-      session,
-      copied: false
-    }))
-    mocks.buildAiVaultForkStartupForWorktree.mockReturnValue(FORK_STARTUP)
-    mocks.launchAiVaultSessionInNewTab.mockReturnValue({ tabId: 'tab-1' })
-  })
+beforeEach(() => {
+  vi.resetAllMocks()
+  mocks.getState.mockReturnValue({ activeWorktreeId: 'worktree-1', settings: {} })
+  mocks.prepareAiVaultSessionForFork.mockImplementation(async (session) => ({
+    session,
+    copied: false
+  }))
+  mocks.buildAiVaultForkStartupForWorktree.mockReturnValue(FORK_STARTUP)
+  mocks.launchAiVaultSessionInNewTab.mockReturnValue({ tabId: 'tab-1' })
+  mocks.rpc.mockResolvedValue(undefined)
+})
 
+afterEach(() => cleanup())
+
+describe('Switch to Terminal launch', () => {
   // Either OpenCode chat may own a 2.x conversation, so the copy may open in either CLI.
   it.each([
     ['command', 'opencode'],
@@ -198,7 +209,6 @@ describe('Switch to Terminal launch', () => {
     expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
   })
 
-  // A host whose guard predates the fork refuses it as a second writer.
   it('asks for a host update, once, when an older paired host refuses the fork', async () => {
     mocks.launchAiVaultSessionInNewTab.mockReturnValue({
       tabId: null,
@@ -231,7 +241,6 @@ describe('Switch to Terminal launch', () => {
 })
 
 it('refuses the stale OMP row before creating a second terminal writer', async () => {
-  vi.clearAllMocks()
   mocks.prepareAiVaultSessionForTerminalResume.mockRejectedValue(
     new Error(
       "Error invoking remote method 'aiVault:prepareSessionResume': Error: agent_session_conflict"
@@ -246,4 +255,70 @@ it('refuses the stale OMP row before creating a second terminal writer', async (
     'This OMP conversation is open in a chat. Refresh Session History to open it.'
   )
   expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
+})
+
+it('intercepts an ordinary structured Resume and actual pane drop on handled refusal without terminal execution', async () => {
+  mocks.getState.mockReturnValue({
+    activeWorktreeId: 'worktree-1',
+    settings: {},
+    repos: [],
+    worktreesByRepo: {},
+    folderWorkspaces: [],
+    projectGroups: [],
+    unifiedTabsByWorktree: {}
+  })
+  mocks.rpc.mockImplementation(async (_target, method) => {
+    if (method === 'session.tabs.list') {
+      throw new Error('advisory inventory unavailable')
+    }
+    return { ok: false, refusal: { code: 'agent_session_identity_required' } }
+  })
+  const actions = renderActions()
+  actions.handleResume(owned)
+  await waitFor(() =>
+    expect(mocks.toastError).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('no longer on this host')
+    )
+  )
+  const rect = vi
+    .spyOn(HTMLElement.prototype, 'getBoundingClientRect')
+    .mockReturnValue(new DOMRect(0, 0, 100, 100))
+  try {
+    const view = render(
+      createElement(
+        'div',
+        { 'data-tab-group-body-id': 'group', 'data-worktree-id': 'worktree-1' },
+        createElement(AiVaultSessionDropLayer, { worktreeId: 'worktree-1', enabled: true })
+      )
+    )
+    try {
+      const transfer = new DataTransfer()
+      writeAiVaultSessionDragData(transfer, {
+        agent: 'claude',
+        sessionId: owned.sessionId,
+        structuredSession: owned.structuredSession,
+        title: owned.title,
+        command: ''
+      })
+      const layer = view.container.querySelector('[data-ai-vault-session-drop-layer]')
+      if (!layer) {
+        throw new Error('drop layer must mount')
+      }
+      const drop = new MouseEvent('drop', {
+        clientX: 50,
+        clientY: 50,
+        bubbles: true,
+        cancelable: true
+      })
+      Object.defineProperty(drop, 'dataTransfer', { value: transfer })
+      fireEvent(layer, drop)
+      await waitFor(() => expect(mocks.toastError).toHaveBeenCalledTimes(2))
+      expect(mocks.launchAiVaultSessionInNewTab).not.toHaveBeenCalled()
+      expect(mocks.prepareAiVaultSessionForTerminalResume).not.toHaveBeenCalled()
+    } finally {
+      view.unmount()
+    }
+  } finally {
+    rect.mockRestore()
+  }
 })

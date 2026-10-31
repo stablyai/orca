@@ -5,18 +5,18 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../../../shared/execution-host'
 import {
   isManagedBrowserProfileOf,
   managedBrowserProfileOwnerKey,
+  unadmittedBrowserPartition,
   type ManagedBrowserProfileOwner
 } from '../../../../../shared/browser-profile-scope'
 import { withoutKey } from '../../../../../shared/workspace-layout/stored-record-fields'
 import type { AppState } from '../../types'
 
-// Why a partition main never admits: a placeholder that outlives this run (quit, or a failed
-// creation) must load nowhere rather than fall back to the shared Default jar.
+// Use an inadmissible placeholder partition: failed/quit creations must never fall back to shared Default jar.
 const placeholderProfile = (
   sessionProfileId: string
 ): { sessionProfileId: string; sessionPartition: string } => ({
   sessionProfileId,
-  sessionPartition: `persist:orca-browser-unminted-${sessionProfileId}`
+  sessionPartition: unadmittedBrowserPartition(sessionProfileId)
 })
 
 const localProfiles = (state: AppState): BrowserSessionProfile[] =>

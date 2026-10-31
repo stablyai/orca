@@ -1,7 +1,19 @@
 import { createClaudeStructuredLaunchResolver } from '../runtime/structured-agent-launch-composition.test-support'
-import { describe, expect, it, vi } from 'vitest'
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, describe, expect, it, vi } from 'vitest'
+import { ClaudeProfileRouter } from '../claude-accounts/claude-profile-router'
+import { installClaudeProfileRouter } from '../claude-accounts/claude-profile-installed-router'
+import { claudeProfileMarkerPath } from '../claude-accounts/claude-profile-paths'
 import type { AgentSessionRecord } from '../../shared/agent-session-record'
 import { LOCAL_EXECUTION_HOST_ID } from '../../shared/execution-host'
+
+const roots: string[] = []
+afterEach(() => {
+  installClaudeProfileRouter(undefined)
+  roots.splice(0).forEach((root) => rmSync(root, { recursive: true, force: true }))
+})
 
 const SESSION_ID = 'orca-session-auth'
 const IDENTITY = { sessionId: SESSION_ID } as Parameters<
@@ -27,11 +39,32 @@ function resolverFor(options: {
   account: 'managed' | 'system'
   overlay?: Record<string, string>
 }): ReturnType<typeof createClaudeStructuredLaunchResolver> {
+  const root = mkdtempSync(join(tmpdir(), 'claude-auth-parity-'))
+  roots.push(root)
+  installClaudeProfileRouter(
+    new ClaudeProfileRouter({
+      dataRoot: root,
+      userHome: join(root, 'personal'),
+      env: {},
+      getSettings: () => ({
+        claudeManagedAccounts: [],
+        activeClaudeManagedAccountId: options.account === 'managed' ? 'auth-parity' : null,
+        activeClaudeManagedAccountIdsByRuntime: undefined,
+        agentStatusHooksEnabled: false,
+        disabledTuiAgents: []
+      }),
+      runSetup: async ({ profile }) => {
+        mkdirSync(profile.home, { recursive: true })
+        writeFileSync(claudeProfileMarkerPath(profile), '{}')
+        return { outcome: 'prepared', warnings: [], surfaces: {} }
+      }
+    })
+  )
   return createClaudeStructuredLaunchResolver({
     resolveLaunchArgs: () => [],
     store: { getRecord: () => record(), pinLaunchDirectory: vi.fn() },
     resolveWorkspacePath: async (id) => `/repos/${id}`,
-    resolveCommand: () => '/usr/local/bin/claude',
+    resolveCommand: () => ({ command: '/usr/local/bin/claude', prefixArgs: [] }),
     resolveAuthPolicy: () => ({ account: options.account }),
     ...(options.overlay ? { resolveEnv: () => options.overlay as Record<string, string> } : {})
   })
@@ -50,8 +83,7 @@ function withAmbientAuth<T>(value: string, run: () => Promise<T>): Promise<T> {
 }
 
 describe('claude structured auth parity with the terminal preflight', () => {
-  // Like terminals, a chat keeps the shell's Anthropic auth on every account: a proxy's key must
-  // travel with its ANTHROPIC_BASE_URL.
+  // Proxy credentials must travel with ANTHROPIC_BASE_URL on either account type.
   for (const account of ['managed', 'system'] as const) {
     it(`passes an ambient Anthropic key through on a ${account} account`, async () => {
       await withAmbientAuth('sk-ant-SHELL', async () => {

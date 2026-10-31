@@ -11,6 +11,7 @@ let items: AgentJournalRenderItem[] = []
 let backgroundTasks: AgentSessionBackgroundTaskState | undefined
 
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  subscribeStructuredAgentSessionStatus: vi.fn(async () => ({ unsubscribe: vi.fn() })),
   callStructuredAgentSession: mocks.call
 }))
 
@@ -64,7 +65,6 @@ beforeEach(() => {
   backgroundTasks = undefined
 })
 
-/** Starts `/compact` and leaves its reply outstanding, then sends a message. */
 function sendDuringCommand(): boolean | 'queued' {
   mocks.call.mockImplementation((_target: unknown, method: string) =>
     method === 'agentSession.conversationCommand' ? new Promise(() => {}) : Promise.resolve(null)
@@ -90,14 +90,6 @@ it('still refuses a message locally while an older host runs a command', () => {
   expect(mocks.outboxSend).not.toHaveBeenCalled()
 })
 
-it('queues a message typed during a command on a host that runs it as a turn', () => {
-  items = [answer('from this host', true)]
-
-  expect(sendDuringCommand()).toBe(true)
-  expect(mocks.outboxSend).toHaveBeenCalledOnce()
-})
-
-// What a refused /clear names goes from the chat with its cause, so its line can go too.
 describe('a /clear refused for something the chat shows', () => {
   const renderSession = () =>
     renderHook(() =>

@@ -1,5 +1,4 @@
-// Desktop words for a chat write that did not happen: each sentence translated whole, with the
-// shared English as its fallback so desktop and mobile never say it differently.
+// Translate whole shared sentences with their English fallbacks so desktop and mobile wording agree.
 
 import { translate } from '@/i18n/i18n'
 import {
@@ -38,7 +37,11 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.notDoneOption', COPY.notDoneOption),
   notDoneCommand: () =>
     translate('components.native-chat.writeNotice.notDoneCommand', COPY.notDoneCommand),
-  notDoneGoal: () => translate('components.native-chat.writeNotice.notDoneGoal', COPY.notDoneGoal),
+  notDoneGoalChangeIncomplete: () =>
+    translate(
+      'components.native-chat.writeNotice.notDoneGoalChangeIncomplete',
+      COPY.notDoneGoalChangeIncomplete
+    ),
   notDoneQueuedEdit: () =>
     translate('components.native-chat.writeNotice.notDoneQueuedEdit', COPY.notDoneQueuedEdit),
   restartFailed: () =>
@@ -140,6 +143,7 @@ const SENTENCES: Record<AgentSessionWriteNoticeSentence, () => string> = {
     translate('components.native-chat.writeNotice.clearAfterSending', COPY.clearAfterSending),
   compactAfterSending: () =>
     translate('components.native-chat.writeNotice.compactAfterSending', COPY.compactAfterSending),
+  pendingWork: () => translate('components.native-chat.writeNotice.pendingWork', COPY.pendingWork),
   queueTooLarge: () =>
     translate('components.native-chat.writeNotice.queueTooLarge', COPY.queueTooLarge),
   shrinkQueue: () => translate('components.native-chat.writeNotice.shrinkQueue', COPY.shrinkQueue),

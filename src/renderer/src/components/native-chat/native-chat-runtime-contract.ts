@@ -3,8 +3,14 @@ import type {
   NativeChatReadSessionResult
 } from '../../../../preload/api-types'
 import type { NativeChatTurnLifecycle } from '../../../../shared/native-chat-types'
+import { translate } from '@/i18n/i18n'
 
-export const RUNTIME_NATIVE_CHAT_READ_ERROR = "Couldn't read agent chat from the remote runtime."
+export function runtimeNativeChatReadError(): string {
+  return translate(
+    'components.native-chat.runtime.readError',
+    "Couldn't read agent chat from the remote runtime."
+  )
+}
 
 export function parseRuntimeNativeChatTurnLifecycle(
   value: unknown
@@ -30,8 +36,7 @@ export function parseRuntimeNativeChatTurnLifecycle(
   return {
     state: record.state,
     turnId: record.turnId.trim(),
-    // Why: an omitted timestamp is a valid payload; normalize it to null rather
-    // than dropping the whole lifecycle record.
+    // Missing timestamps are valid; normalize them without dropping the lifecycle record.
     timestamp: record.timestamp ?? null
   }
 }
@@ -40,7 +45,7 @@ export function parseRuntimeNativeChatReadSessionResult(
   value: unknown
 ): NativeChatReadSessionResult {
   if (typeof value !== 'object' || value === null) {
-    return { error: RUNTIME_NATIVE_CHAT_READ_ERROR }
+    return { error: runtimeNativeChatReadError() }
   }
   const record = value as Record<string, unknown>
   if (Array.isArray(record.messages)) {
@@ -56,5 +61,5 @@ export function parseRuntimeNativeChatReadSessionResult(
       ...(record.notFound === true ? { notFound: true } : {})
     }
   }
-  return { error: RUNTIME_NATIVE_CHAT_READ_ERROR }
+  return { error: runtimeNativeChatReadError() }
 }

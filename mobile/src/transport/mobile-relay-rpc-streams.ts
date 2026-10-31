@@ -3,6 +3,7 @@ import {
   handleTerminalBinaryFrame,
   type TerminalSnapshotState
 } from './rpc-client-terminal-binary-frame'
+import { TerminalUnreadableFrameResets } from './terminal-unreadable-frame-resets'
 import {
   buildStreamUnsubscribe,
   buildTerminalUnsubscribeParams,
@@ -18,7 +19,7 @@ type StreamRecord = {
   method: string
   params: unknown
   envelope?: RpcEnvelopeFields
-  listener: (result: unknown) => void
+  listener?: (result: unknown) => void
   onBinaryFrame?: Parameters<RpcClient['subscribe']>[3] extends
     | { onBinaryFrame?: infer Listener }
     | undefined
@@ -34,8 +35,7 @@ type StreamRecord = {
 
 type StreamUnsubscribe = { method: string; params: Record<string, unknown> }
 
-/** The host cleanup slot an unsubscribe names. Every envelope field counts as routing, so the whole
- *  envelope is part of the slot, read in sorted key order so equal envelopes name one slot. */
+// Include the whole envelope in cleanup-slot identity; sort keys so equivalent routing names the same slot.
 function unsubscribeSlot(
   { method, params }: StreamUnsubscribe,
   envelope: RpcEnvelopeFields | undefined
@@ -52,7 +52,6 @@ function unsubscribeSlot(
   return JSON.stringify([method, params.subscriptionId, clientId, routing])
 }
 
-/** Unsubscribe derived from the subscribe params alone (no server-assigned id). */
 function buildParamsUnsubscribe(
   method: string,
   params: unknown,
@@ -80,6 +79,7 @@ export class MobileRelayRpcStreams {
   >()
   private readonly terminalListeners = new Map<number, (result: unknown) => void>()
   private readonly terminalSnapshots = new Map<number, TerminalSnapshotState>()
+  private readonly unreadableTerminalFrames = new TerminalUnreadableFrameResets()
   private activeBrowserStream: StreamRecord | null = null
   private sendCount = 0
 
@@ -175,7 +175,7 @@ export class MobileRelayRpcStreams {
       if (typeof metadata.subscriptionId === 'string') {
         stream.subscriptionId = metadata.subscriptionId
       }
-      if (typeof metadata.streamId === 'number') {
+      if (typeof metadata.streamId === 'number' && stream.listener) {
         stream.streamIds.add(metadata.streamId)
         this.terminalListeners.set(metadata.streamId, stream.listener)
       }
@@ -188,7 +188,7 @@ export class MobileRelayRpcStreams {
       }
     }
     if (!stream.cancelled) {
-      stream.listener(result)
+      stream.listener?.(result)
     }
     return true
   }
@@ -201,19 +201,18 @@ export class MobileRelayRpcStreams {
     }
     handleTerminalBinaryFrame(bytes, {
       terminalSnapshots: this.terminalSnapshots,
+      unreadableFrames: this.unreadableTerminalFrames,
       getListener: (streamId) => this.terminalListeners.get(streamId)
     })
   }
 
   clear(): void {
-    for (const stream of this.streams.values()) {
+    for (const [id, stream] of this.streams) {
       stream.cancelled = true
+      this.remove(id)
     }
-    this.streams.clear()
     this.cancelledSubscriptions.clear()
-    this.terminalListeners.clear()
-    this.terminalSnapshots.clear()
-    this.activeBrowserStream = null
+    this.unreadableTerminalFrames.clear()
   }
 
   private cancel(id: string): void {
@@ -260,7 +259,7 @@ export class MobileRelayRpcStreams {
     if (this.hasNewerSlotOwner(unsubscribe, sendOrder, envelope)) {
       return
     }
-    // Why: added after the sibling check; an old host strips it and would evict the live sibling.
+    // Check siblings first: older hosts strip requestId and would otherwise evict the live same-slot stream.
     const params = terminalRequestId
       ? { ...unsubscribe.params, requestId: terminalRequestId }
       : unsubscribe.params
@@ -301,11 +300,14 @@ export class MobileRelayRpcStreams {
     for (const streamId of stream.streamIds) {
       this.terminalListeners.delete(streamId)
       this.terminalSnapshots.delete(streamId)
+      this.unreadableTerminalFrames.forget(streamId)
     }
     if (this.activeBrowserStream === stream) {
       this.activeBrowserStream = null
     }
     this.streams.delete(id)
+    stream.listener = undefined
+    stream.onBinaryFrame = undefined
   }
 
   private fail(id: string, stream: StreamRecord, message: string, error?: unknown): void {
@@ -317,7 +319,8 @@ export class MobileRelayRpcStreams {
 
   /** Removed first, so the listener's dispose cannot name a host-ended stream. */
   private finish(id: string, stream: StreamRecord, result: unknown): void {
+    const listener = stream.listener
     this.remove(id)
-    stream.listener(result)
+    listener?.(result)
   }
 }

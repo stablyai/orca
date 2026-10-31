@@ -4,9 +4,7 @@ import { collectProcessHostSources } from './check-process-host-imports.mjs'
 import { collectModuleSpecifiers } from './static-module-specifiers.mjs'
 import { isTestOnlySourcePath } from './test-only-source-path.mjs'
 
-// Code kept only for old clients, servers or profiles. Each folder is reached only through its
-// listed entry modules and only from the listed importers, so deleting the folder plus those
-// import lines removes the path.
+// Legacy folders are reachable only through listed entrypoints/importers, keeping removal confined to those boundaries.
 export const COMPAT_FOLDERS = [
   {
     folder: 'src/shared/workspace-layout/old-client',

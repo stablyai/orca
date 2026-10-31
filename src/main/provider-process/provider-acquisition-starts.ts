@@ -1,27 +1,25 @@
-// The adapter's starts: each acquire under way, stopped when the host aborts its signal (a close,
-// a Stop that must not wait behind it, or quit), and each failed start's connection until its
-// process's exit is proven, so the next start or quit retries that same connection's close instead
-// of answering for a process it no longer knows (and never spawns a second one meanwhile).
+// Retain failed connections until exit is proven so retries and quit can close the same process.
 
 import type { ProviderProcessCloseResult } from './provider-process-close'
 
 export type ProviderAcquisitionConnection = {
+  readonly lastCloseResult?: ProviderProcessCloseResult | null
   close(): Promise<boolean | ProviderProcessCloseResult>
   onExit(listener: () => void): void
 }
 
 export type ProviderStartAttempt<Connection extends ProviderAcquisitionConnection> = {
-  /** The host's: the start's one canceller. */
+  /** Host-owned cancellation for this acquisition. */
   readonly signal: AbortSignal
   connection: Connection | null
-  /** What the signal's abort does while the start runs; detached once it ends. */
+  /** Detached when acquisition hands the connection to its session. */
   readonly stopConnection: () => void
 }
 
 export class ProviderAcquisitionStarts<Connection extends ProviderAcquisitionConnection> {
   private readonly failed = new Map<string, Connection>()
 
-  /** Registered before anything awaits, so an abort from here on stops this start. */
+  /** Install cancellation before acquisition can yield. */
   begin(signal: AbortSignal | undefined): ProviderStartAttempt<Connection> {
     const attempt: ProviderStartAttempt<Connection> = {
       signal: signal ?? new AbortController().signal,
@@ -32,7 +30,7 @@ export class ProviderAcquisitionStarts<Connection extends ProviderAcquisitionCon
     return attempt
   }
 
-  /** The start has its connection; one already aborted goes as soon as it exists. */
+  /** Honor cancellation that arrived before the connection existed. */
   track(attempt: ProviderStartAttempt<Connection>, connection: Connection): void {
     attempt.connection = connection
     if (attempt.signal.aborted) {
@@ -40,13 +38,11 @@ export class ProviderAcquisitionStarts<Connection extends ProviderAcquisitionCon
     }
   }
 
-  /** A connection the start handed over is the session's: an abort after this goes through its
-   *  stop, which knows the close was asked for, not this listener, which would read as a crash. */
+  /** Session Stop owns cancellation after handoff; this listener would make it look like a crash. */
   end(attempt: ProviderStartAttempt<Connection>): void {
     attempt.signal.removeEventListener('abort', attempt.stopConnection)
   }
 
-  /** A failed start whose process is not proven gone keeps its connection until its exit is. */
   retainFailed(sessionId: string, connection: Connection): void {
     this.failed.set(sessionId, connection)
     connection.onExit(() => {
@@ -56,18 +52,25 @@ export class ProviderAcquisitionStarts<Connection extends ProviderAcquisitionCon
     })
   }
 
-  /** Asks a failed start's connection to close again: true once none is left unproven. */
+  /** Retry the retained connection; true means no unproven process remains. */
   async stopFailed(sessionId: string): Promise<boolean> {
     const connection = this.failed.get(sessionId)
     if (!connection) {
       return true
     }
     const result = await connection.close().catch(() => false)
-    const proven = typeof result === 'boolean' ? result : result.root === 'exited'
+    const proven =
+      typeof result === 'boolean'
+        ? result
+        : result.root === 'exited' || result.killDelivered === true
     if (proven && this.failed.get(sessionId) === connection) {
       this.failed.delete(sessionId)
     }
     return proven
+  }
+
+  failedConnection(sessionId: string): Connection | undefined {
+    return this.failed.get(sessionId)
   }
 
   failedSessionIds(): string[] {

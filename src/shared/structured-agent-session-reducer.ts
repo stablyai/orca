@@ -52,8 +52,7 @@ import {
   type StructuredAgentSubagentRoster
 } from './structured-agent-session-subagent-roster'
 
-/** The last host clock sample: `hostNow - receivedAt` is the client's skew from the host,
- *  which is what lets a client attaching mid-turn anchor its live counter on the real start. */
+/** Sample hostNow/receivedAt to convert host turn starts into client-clock anchors when attaching mid-turn. */
 export type StructuredAgentHostClock = {
   hostNow: number
   receivedAt: number
@@ -65,10 +64,9 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   fence: number | null
   items: AgentJournalRenderItem[]
   submissions: AgentJournalSubmission[]
-  /** Head-trim floor, in the session's own rows; paging back raises it so a live batch cannot
-   *  undo the page. */
+  /** Own-row trim floor grows with paging so live batches cannot undo loaded history. */
   retainedOwnItemLimit: number
-  /** Head-trim ceiling on every agent's rows, the memory backstop; paging back raises it too. */
+  /** All-agent memory ceiling grows with paging too. */
   retainedItemCap: number
   hasOlder: boolean
   status: 'idle' | 'loading' | 'ready' | 'error'
@@ -87,20 +85,15 @@ export type StructuredAgentSessionState = AgentSessionCurrentRequestsState & {
   activity?: AgentSessionTurnActivity | null
   /** Absent until a frame from a host that stamps `hostNow` has been applied. */
   hostClock?: StructuredAgentHostClock
-  /** Every subagent a roster row this client received named, by agent id; not trimmed with
-   *  `items`. Absent until a page has been applied. */
+  /** Retain received roster entries by agent ID beyond the item window; absent until a page arrives. */
   subagentRoster?: StructuredAgentSubagentRoster
-  /** The host's newest turn record over the whole journal, which says whether a turn runs; absent
-   *  from an older host, whose answer is read off `items` instead. */
+  /** Whole-journal turn state; older hosts omit it and require loaded-item fallback. */
   latestTurn?: AgentSessionLatestTurn | null
-  /** The prompts the host says still wait on the person (`AgentSessionHistoryPage`); absent from
-   *  an older host, whose every pending prompt in `items` is read as waiting. */
+  /** Host-actionable prompts; older hosts treat every pending item as waiting. */
   actionablePromptIds?: string[]
-  /** Whether the host says the session's own agent is working (`AgentSessionHistoryPage.working`);
-   *  absent from an older host, whose answer is derived from `items` and `submissions`. */
+  /** Host main-agent work state; older hosts derive from items/submissions. */
   working?: boolean
-  /** Bumped per live batch that leaves a turn row's newest revision outside the window
-   *  (dropped or trimmed), so a whole-journal answer derived from turn rows is asked for again. */
+  /** Bump when a live turn revision falls outside the window so whole-journal turn readers refresh. */
   unloadedTurnRevisions?: number
 }
 
@@ -113,8 +106,7 @@ export type StructuredAgentSessionAction =
       items: AgentJournalRenderItem[]
     }
   | { type: 'error'; message: string; refusal?: AgentSessionRefusalReference }
-  /** `opensSubscription`: the first frame of a new subscription, which states the roster even
-   *  when it resumes from a cursor; a host that omits it there has none to report. */
+  /** First subscription frame restates the roster even on cursor resume; an old host omitting it has no running children. */
   | {
       type: 'event'
       event: AgentSessionSubscribeEvent
@@ -186,9 +178,7 @@ export function reduceStructuredAgentSession(
       return state
     }
     const head = state.items[0]
-    // A live batch head-trimmed past the anchor while this read was in flight, so the
-    // page no longer abuts the retained window; merging it would leave a silent hole.
-    // The caller re-anchors on the new head and asks again.
+    // Head trim overtook the requested anchor; merging would leave a hole. Caller must retry from the new head.
     if (head && head.sequence > requested.sequence) {
       return state
     }
@@ -240,7 +230,7 @@ export function reduceStructuredAgentSession(
         : state.backgroundTasks
   const activity = event.activity !== undefined ? event.activity : state.activity
   const liveItems = liveItemsWithinWindow(state, event.batch.items)
-  // Every roster revision, the window's or not: a trimmed roster row keeps its sequence.
+  // Fold every roster revision even outside the window; trimmed rows retain their sequence.
   const subagentRoster = foldStructuredAgentSubagentRoster(
     state.subagentRoster ?? NO_STRUCTURED_AGENT_SUBAGENT_ROSTER,
     event.batch.items,

@@ -5,9 +5,10 @@ import { startOrcadConvertHost } from './helpers/orcad-convert-host'
 import { reconnect, serverCall } from './helpers/orcad-convert-flow'
 import { runtimeAdvertisesBrowserClientHosting } from '../../src/shared/browser-client-hosting-eligibility'
 import { ORCAD_TEMPLATE, skipUnlessManagedDockerHost } from './helpers/orcad-managed-workspace'
+import { getOrcadSshDeployment } from '../../src/shared/runtime-environments'
 
 skipUnlessManagedDockerHost()
-test.use({ orcaAppExtraEnv: { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE } })
+test.use({ orcaAppExtraEnv: { ORCA_ORCAD_TEMPLATE_PATH: ORCAD_TEMPLATE ?? '' } })
 
 test('a backendless managed host offers desktop-hosted pages and refuses its own engine', async ({
   orcaPage: page
@@ -24,7 +25,7 @@ test('a backendless managed host offers desktop-hosted pages and refuses its own
       return target.id
     }, target.input)
     const environment = (await page.evaluate(() => window.api.runtimeEnvironments.list())).find(
-      (entry) => entry.orcadDeployment?.sshTargetId === targetId
+      (entry) => getOrcadSshDeployment(entry)?.sshTargetId === targetId
     )
     if (!environment) {
       throw new Error('Missing managed environment')
@@ -54,8 +55,7 @@ test('a backendless managed host offers desktop-hosted pages and refuses its own
     const refused = await call('browser.tabList', {})
     console.log('[managed-browser-command]', JSON.stringify(refused))
     expect(refused).toMatchObject({ ok: false, error: { code: 'browser_unavailable' } })
-    // A paired caller's open-url asks for a desktop hosting this host's pages, which a managed SSH
-    // desktop never is; the host's own CLI reaches it through the browser bridge instead.
+    // Managed SSH desktops do not host via paired open-url; the host CLI uses its browser bridge instead.
     const openUrl = await call('browser.openUrl', {
       url: 'https://example.org/',
       worktree: 'active'

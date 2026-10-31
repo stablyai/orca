@@ -1,6 +1,6 @@
-import { EventEmitter } from 'node:events'
 import type { ChildProcess } from 'node:child_process'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { createFakeSpawnedChild } from '../../../shared/__fixtures__/fake-spawned-child'
 import type * as GitFetchHeadLockModule from '../../../shared/git-fetch-head-lock'
 
 const {
@@ -29,10 +29,7 @@ vi.mock('@orca/process-host/process-tree-termination', () => ({
   signalProcessTree: signalProcessTreeMock,
   forceTerminateProcessTree: forceTerminateProcessTreeMock
 }))
-// Why: the real FETCH_HEAD key derivation walks the filesystem (realpath/stat/readFile), so
-// concurrent same-repo callers join the lock lane in libuv threadpool completion order rather
-// than call order. Keep the real FIFO lock and drop only the key walk, which owns its coverage
-// in `src/shared/git-fetch-head-lock.test.ts`.
+// Mock only filesystem key derivation so libuv completion order cannot reorder the real FIFO lock.
 vi.mock('../../../shared/git-fetch-head-lock', async (importOriginal) => {
   const actual = await importOriginal<typeof GitFetchHeadLockModule>()
   const { runWithGitOperationLock } = await import('../../../shared/git-operation-lock')
@@ -60,13 +57,7 @@ import {
 type ExecCallback = (error: Error | null, stdout: string | Buffer, stderr: string | Buffer) => void
 
 function mockChild(pid: number | undefined = 1234): ChildProcess {
-  const child = new EventEmitter() as EventEmitter & Record<string, unknown>
-  child.pid = pid
-  child.kill = vi.fn(() => true)
-  child.stdin = Object.assign(new EventEmitter(), { end: vi.fn() })
-  child.stdout = new EventEmitter()
-  child.stderr = new EventEmitter()
-  return child as unknown as ChildProcess
+  return createFakeSpawnedChild(pid)
 }
 
 function mockMissingSshConfig(callback: ExecCallback): ChildProcess {

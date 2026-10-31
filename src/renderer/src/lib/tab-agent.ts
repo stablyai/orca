@@ -2,7 +2,7 @@ import type { AgentStatusEntry } from '../../../shared/agent-status-types'
 import type { TerminalLayoutSnapshot } from '../../../shared/terminal-tab-types'
 import type { TerminalAgent } from '../../../shared/terminal-agent'
 import { isTerminalLeafId, makePaneKey } from '../../../shared/stable-pane-id'
-import type { RetainedAgentEntry } from '@/store/slices/agent-status'
+import type { RetainedAgentEntry } from '@/store/slices/agent-status/agent-status-contract'
 import { agentTypeToIconAgent } from './agent-status'
 import {
   firstTabAgentExcludingLeaf,
@@ -11,14 +11,7 @@ import {
   selectRetainedTabAgentPanes
 } from './tab-agent-status-index'
 
-/**
- * Resolve a terminal tab's agent from hook-reported status — the PRIMARY
- * identity signal for the tab-bar icon (composed by useTabAgent): the same
- * already-computed state that drives the sidebar agent rows, kept live by the
- * OSC 133 command-finished machinery that drops entries when a process exits.
- * Focused-pane resolvers track the pane in view; sibling resolvers cover the
- * rest of a split tab.
- */
+/** Hook status is primary tab-icon identity, matching sidebar rows and OSC 133 exit cleanup. Resolve focused leaf first, then sibling split panes. */
 export function resolveFocusedTabAgent(
   agentStatusByPaneKey: Record<string, AgentStatusEntry>,
   layout: TerminalLayoutSnapshot | undefined,
@@ -28,8 +21,7 @@ export function resolveFocusedTabAgent(
   if (activeLeafId && isTerminalLeafId(activeLeafId)) {
     return agentFromStatusEntry(agentStatusByPaneKey[makePaneKey(tabId, activeLeafId)])
   }
-  // Why: hook events can arrive while the terminal layout is temporarily
-  // unmounted; with no focused leaf to compare, same-tab hook status is primary.
+  // Hook events can arrive while layout unmounts; without a focused leaf, same-tab hook status remains primary.
   return resolveAnyTabAgent(agentStatusByPaneKey, tabId)
 }
 

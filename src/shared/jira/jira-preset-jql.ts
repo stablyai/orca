@@ -1,5 +1,5 @@
-import type { JiraIssueFilter, JiraIssueListFilters } from '../jira-types'
-import { normalizeJiraStatusSelection } from '../jira-quick-filters'
+import type { JiraIssueFilter, JiraIssueListFilters } from './jira-types'
+import { normalizeJiraStatusSelection } from './jira-quick-filters'
 
 export function buildJiraPresetJql(
   filter: JiraIssueFilter,

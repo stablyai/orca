@@ -22,9 +22,7 @@ export type BrowserAddressBarEditSession = {
   preview: BrowserAddressBarPreview | null
 }
 
-// Why this exists outside React: adopting a client-hosted page swaps the streamed pane for the
-// client-hosted one under a different key, so the whole address bar unmounts mid-typing. The page
-// id is the one identity that survives that swap, so it keys what the remounting bar picks back up.
+// Page identity survives streamed/client-hosted pane swaps; park live edits outside React for the replacement bar.
 const editSessionsByPageId = new Map<string, BrowserAddressBarEditSession>()
 
 export function saveBrowserAddressBarEditSession(
@@ -32,10 +30,7 @@ export function saveBrowserAddressBarEditSession(
   session: BrowserAddressBarEditSession
 ): void {
   editSessionsByPageId.set(pageId, session)
-  // Why a microtask rather than a timeout: React deletes the old pane and inserts the new one in
-  // one synchronous commit, and the resuming layout effect runs before the stack unwinds — so a
-  // swap always beats this. Anything arriving later is a different mount, such as a tab revisited
-  // or a worktree switched back to, where seizing focus would be the bug rather than the fix.
+  // Expire after this synchronous commit: layout effects may resume a swap, but later revisits must never seize focus.
   queueMicrotask(() => {
     if (editSessionsByPageId.get(pageId) === session) {
       editSessionsByPageId.delete(pageId)
@@ -51,11 +46,7 @@ export function consumeBrowserAddressBarEditSession(
   return session
 }
 
-/**
- * Drop a page's parked edit. The microtask above already bounds every write to the commit that
- * made it, so this is hygiene rather than correctness: it keeps a closing page from leaving an
- * entry behind for the rest of the tick.
- */
+/** Clear a closing page’s parked edit before the microtask expires it. */
 export function clearBrowserAddressBarEditSession(pageId: string): void {
   editSessionsByPageId.delete(pageId)
 }

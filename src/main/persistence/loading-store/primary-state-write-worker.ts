@@ -3,7 +3,7 @@ import type { PrimaryStateWriteOperationsContext } from './primary-state-write-c
 import { markPrimaryStateWriteDurable } from './primary-state-write-runtime'
 import { prepareSelectiveProfileStateWrite } from './profile-state-selective-write'
 
-/** The queued operation owns its captured intent; later edits belong to the next write. */
+// Capture intent now; edits made while this operation waits belong to the next write.
 export async function writeProfileStateInWorker(
   { runtime, serialization }: PrimaryStateWriteOperationsContext,
   authority: AsyncProfileStateAuthority
@@ -63,7 +63,7 @@ export async function writeProfileStateInWorker(
   return true
 }
 
-/** Release copied payloads before the acknowledgement; retain only commit bookkeeping. */
+/** Drop copied payloads before acknowledgement; retain commit bookkeeping only. */
 function beginWrite(
   authority: AsyncProfileStateAuthority,
   serialization: PrimaryStateWriteOperationsContext['serialization'],

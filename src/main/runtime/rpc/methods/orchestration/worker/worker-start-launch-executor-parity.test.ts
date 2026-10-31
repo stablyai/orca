@@ -1,10 +1,11 @@
-/**
- * A fresh worker starts through the shared launch executor, and its durable dispatch records must
- * read exactly as they did when the placement sequenced the launch itself: the same effects, the
- * same stage rows in the same order, one host question, and a refused chat that fails the start.
- */
+import {
+  agentSessionLeaseFixture,
+  agentSessionRecordFixture
+} from '../../../../../../shared/agent-session-record.test-fixture'
+/** Shared-executor starts must preserve durable effects/stage order, ask host support once and fail refused chats. */
 
 import { beforeEach, describe, expect, it, vi } from 'vitest'
+import type { RuntimeTerminalCreate } from '../../../../../../shared/runtime-terminal-create-contract'
 import {
   downgradeAgentLaunchModeForHost,
   type AgentLaunchModeReceipt
@@ -41,16 +42,35 @@ const TERMINAL: AgentLaunchModeReceipt = {
   reason: 'user_default',
   detail: 'Started a terminal agent worker, the default for new agent tabs in your settings.'
 }
-const COORDINATOR = { id: 'wt_coord', repoId: 'repo_1' }
+const CREATION_TARGET = { repoSelector: 'repo_1', parentWorktreeId: 'wt_coord' }
 const EXISTING = { id: 'wt_existing', repoId: 'repo_1' }
 
 function fakes() {
   const stages: string[] = []
+  const creation: RuntimeTerminalCreate = {
+    handle: 'term_startup',
+    worktreeId: 'wt_new',
+    title: null,
+    ptyId: 'pty-startup',
+    incarnationId: 'inc-startup',
+    isReattach: true,
+    agentSessionDisposition: 'adopted'
+  }
   const runtime = {
-    createManagedWorktree: vi.fn(async (args: { startupAgent?: string }) => ({
-      worktree: { id: 'wt_new', repoId: 'repo_1' },
-      ...(args.startupAgent ? { startupTerminal: { handle: 'term_startup' } } : {})
-    })),
+    createManagedWorktree: vi.fn(
+      async (args: {
+        startupAgent?: string
+        onStartupTerminalCreated?: (terminal: RuntimeTerminalCreate) => void
+      }) => {
+        if (args.startupAgent) {
+          args.onStartupTerminalCreated?.(creation)
+        }
+        return {
+          worktree: { id: 'wt_new', repoId: 'repo_1' },
+          ...(args.startupAgent ? { startupTerminal: { handle: creation.handle } } : {})
+        }
+      }
+    ),
     listTerminals: vi.fn(async (_selector: string) => ({
       terminals: [{ handle: 'term_startup', title: 'claude', tabId: 'tab_1', leafId: 'leaf_1' }]
     })),
@@ -70,7 +90,7 @@ function fakes() {
   }
   const failedStages: string[] = []
   const effects: WorkerEffect[] = []
-  return { runtime, db, stages, failedStages, effects }
+  return { runtime, db, stages, failedStages, effects, creation }
 }
 
 function place(
@@ -91,7 +111,7 @@ function place(
       ...(args.terminal ? { terminal: args.terminal } : {})
     }),
     requestedWorktree: args.existing ? 'id:wt_existing' : 'new-child',
-    creationWorktree: args.existing ? undefined : COORDINATOR,
+    creationTarget: args.existing ? undefined : CREATION_TARGET,
     resolvedWorktree: args.existing ? EXISTING : undefined,
     mode: args.mode,
     agent: args.terminal ? undefined : 'claude',
@@ -102,11 +122,14 @@ function place(
 }
 
 function installHost() {
-  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a worker create reads only `subscribe` and the record's location.
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the host supplies subscribe and a complete writable record for the newly minted id.
   setStructuredAgentSessionHost({
     subscribe: () => () => {},
     deps: {
-      store: { getRecord: () => ({ location: { executionHostId: 'local', wslDistro: null } }) }
+      store: {
+        requireWritableRecord: (sessionId: string) =>
+          agentSessionRecordFixture(agentSessionLeaseFixture({ sessionId }))
+      }
     }
   } as never)
 }
@@ -172,7 +195,8 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledTimes(1)
     expect(f.runtime.getStructuredAgentSessionCreateSupport).toHaveBeenCalledWith(
       'id:wt_new',
-      'claude'
+      'claude',
+      { requireInstalledChatProgram: true }
     )
     expect(f.stages).toEqual(['worktree_creating', 'worktree_created', 'terminal_creating'])
     expect(f.failedStages).toEqual(['worktree_create', 'terminal_create', 'terminal_create'])
@@ -196,6 +220,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_new', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })
@@ -247,6 +272,7 @@ describe('a fresh worker through the launch executor', () => {
       }
     })
     expect(placed).not.toHaveProperty('warning')
+    expect(placed.terminalCreation).toBe(f.creation)
   })
 
   it('opens an existing worktree’s terminal worker as worker-<task>, leaving the sidebar alone', async () => {
@@ -258,6 +284,7 @@ describe('a fresh worker through the launch executor', () => {
     expect(f.runtime.createTerminal).toHaveBeenCalledWith('id:wt_existing', {
       startupAgent: 'claude',
       launchSource: 'orchestration',
+      suppressStartupUpdatePrompt: true,
       title: 'worker-task_1',
       surfaceOwner: false
     })

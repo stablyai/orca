@@ -1,8 +1,11 @@
+import { codexLegacyMirrorRecords } from './agent-session-journal/codex-history-test-fixture'
+import { prepareLegacyTranscriptImport } from './agent-session-journal/journal-legacy-import'
+import { createNativeChatMerger, replaceList } from '../../shared/native-chat/native-chat-merge'
 import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { afterEach, describe, expect, it } from 'vitest'
-import { extractPendingAsk } from '../../shared/native-chat-ask'
+import { extractPendingAsk } from '../../shared/native-chat/input/native-chat-ask'
 import { decodeCodexTranscriptLine } from './transcript-line-decoders-codex'
 import { readNativeChatTranscript } from './transcript-reader'
 import { readNativeChatTranscriptTail } from './transcript-tail-reader'
@@ -134,6 +137,19 @@ describe('Codex transcript history modes', () => {
         },
         '2026-08-09T10:00:01.000Z'
       ),
+      completedItem({ type: 'ContextCompaction', id: 'compaction-1' }, '2026-08-09T10:00:01.500Z'),
+      {
+        type: 'response_item',
+        payload: {
+          type: 'reasoning',
+          id: 'reason',
+          summary: [{ type: 'summary_text', text: 'why' }]
+        }
+      },
+      completedItem(
+        { type: 'Reasoning', id: 'reason', summary_text: ['why'], raw_content: [] },
+        '2026-08-09T10:00:01.750Z'
+      ),
       {
         type: 'response_item',
         payload: {
@@ -173,43 +189,48 @@ describe('Codex transcript history modes', () => {
           ]
         },
         {
+          id: 'compaction-1',
+          role: 'system',
+          timestamp: Date.parse('2026-08-09T10:00:01.500Z'),
+          blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }]
+        },
+        { id: 'reason', role: 'reasoning', blocks: [{ type: 'text', text: 'why' }] },
+        {
           id: 'assistant-1',
           role: 'assistant',
           blocks: [{ type: 'text', text: 'Visible response' }]
         }
       ]
     })
-    expect('messages' in result && result.messages).toHaveLength(2)
     expect(tail).toMatchObject({ messages: 'messages' in result ? result.messages : [] })
+    const snapshot = createNativeChatMerger()
+    replaceList(snapshot, 'messages' in result ? result.messages : [])
+    expect(snapshot.list.filter(({ role }) => role === 'reasoning')).toHaveLength(1)
+    const imported = await prepareLegacyTranscriptImport({
+      agent: 'codex',
+      sessionId: 'session-1',
+      options: { filePath }
+    })
+    expect(
+      imported.ok &&
+        imported.items
+          .filter(({ body }) => body.kind === 'message' && body.role === 'reasoning')
+          .map(({ body }) => body)
+    ).toEqual([{ kind: 'message', role: 'reasoning', blocks: [{ type: 'text', text: 'why' }] }])
   })
 
   it('keeps legacy event messages without duplicating response copies', async () => {
-    const filePath = await writeCodexFixture([
-      {
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'user',
-          content: [{ type: 'input_text', text: 'Prompt' }]
-        }
-      },
-      { type: 'event_msg', payload: { type: 'user_message', message: 'Prompt' } },
-      { type: 'event_msg', payload: { type: 'agent_message', message: 'Response' } },
-      {
-        type: 'response_item',
-        payload: {
-          type: 'message',
-          role: 'assistant',
-          content: [{ type: 'output_text', text: 'Response' }]
-        }
-      }
-    ])
+    const filePath = await writeCodexFixture(codexLegacyMirrorRecords())
 
     const result = await readNativeChatTranscript('codex', 'session-1', { filePath })
 
     expect(result).toMatchObject({
       messages: [
         { role: 'user', blocks: [{ type: 'text', text: 'Prompt' }] },
+        {
+          role: 'system',
+          blocks: [{ type: 'text', text: 'Context compacted', presentation: 'compaction' }]
+        },
         { role: 'assistant', blocks: [{ type: 'text', text: 'Response' }] }
       ]
     })

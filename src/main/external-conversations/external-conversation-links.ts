@@ -23,7 +23,6 @@ import type { ConversationKey } from './external-conversation-types'
 
 type LinkRecord = { externalConversations?: unknown }
 
-/** The workspace records links live on; the runtime's store satisfies it. */
 export type ExternalConversationLinkStore = WorkspaceRecordStore<
   LinkRecord,
   { externalConversations: ExternalConversationLink[] }
@@ -42,7 +41,7 @@ const ExternalConversationLinkSchema = z.object({
   externalId: z.string(),
   paneKey: z.string(),
   agent: z.enum(CONNECTOR_AGENTS),
-  // A malformed session drops alone: the link still delivers, it just cannot reopen.
+  // A malformed provider session prevents reopening, but must not discard a usable link.
   providerSession: z
     .unknown()
     .transform((raw) => normalizeAgentProviderSession(raw) ?? undefined)
@@ -56,7 +55,7 @@ const ExternalConversationLinkSchema = z.object({
   createdAt: z.number()
 })
 
-/** The workspace record's links; malformed entries (hand edits, a newer host's shape) are skipped. */
+/** Skip malformed links so hand edits or newer host shapes do not break reads. */
 export function readLinks(
   store: ExternalConversationLinkStore,
   workspace: AgentPaneWorkspace
@@ -77,7 +76,6 @@ function sameConversation(link: ExternalConversationLink, key: ConversationKey):
   return link.source === key.source && link.externalId === key.externalId
 }
 
-/** Replaces this conversation's link on the workspace record, host-qualified like any meta write. */
 export function writeLink(
   store: ExternalConversationLinkStore,
   workspace: AgentPaneWorkspace,
@@ -85,17 +83,13 @@ export function writeLink(
 ): void {
   const others = readLinks(store, workspace).filter((existing) => !sameConversation(existing, link))
   writeWorkspaceRecord(store, workspace, { externalConversations: [...others, link] })
-  // The record writer skips a workspace whose host it cannot name rather than guess.
+  // The record writer refuses ambiguous hosts; verify that the link actually persisted.
   if (!readLinks(store, workspace).some((current) => current.paneKey === link.paneKey)) {
     throw new Error('external_conversation_link_unwritten')
   }
 }
 
-/**
- * Every persisted link, read from every host's canonical rows each time: the locator-keyed map
- * keeps only one host's row per id, and a removed, renamed or re-adopted workspace is never
- * answered from a cache.
- */
+/** Read canonical rows on every host; the locator map can hide same-path workspaces on other hosts. */
 export function* allLinks(store: ExternalConversationLinkStore): Generator<LinkedConversation> {
   const hosts = new Set<ExecutionHostId>([
     LOCAL_EXECUTION_HOST_ID,
@@ -126,4 +120,15 @@ export function findLink(
     }
   }
   return null
+}
+
+export function requireLink(
+  store: ExternalConversationLinkStore,
+  key: ConversationKey
+): LinkedConversation {
+  const linked = findLink(store, key)
+  if (!linked) {
+    throw new Error('external_conversation_not_found')
+  }
+  return linked
 }

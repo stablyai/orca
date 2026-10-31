@@ -1,8 +1,8 @@
 import type { NdjsonRejectedRecord } from '../../shared/main-process-ndjson-framer'
-import type { CodexAppServerConnectionHandlers } from './codex-app-server-connection-types'
-import { CodexAppServerFrameSizeError } from './codex-app-server-frame-size-error'
+import type { CodexAppServerConnectionHandlers } from './app-server/codex-app-server-connection-types'
+import { CodexAppServerFrameSizeError } from './app-server/codex-app-server-frame-size-error'
 import { isProviderRecord } from '../provider-process/provider-json-record'
-import { CodexAppServerRequestError } from './codex-app-server-request-error'
+import { CodexAppServerRequestError } from './app-server/codex-app-server-request-error'
 import {
   CodexAppServerUnsupportedError,
   isCodexMethodNotFoundError
@@ -17,9 +17,8 @@ export type CodexPendingRequest = {
   resolve: (result: unknown) => void
   reject: (error: Error) => void
   timer: ReturnType<typeof setTimeout> | undefined
-  /** Called as the reply is read, or as the request times out, before anything awaits it: in
-   *  stdout order with every notification read around it. */
-  onReply?: () => void
+  /** Runs on reply/timeout before promise continuations; replies retain stdout notification order. */
+  onReply?: (result?: unknown) => void
 }
 
 export function createCodexAppServerRecordDispatcher(input: {
@@ -92,8 +91,7 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     const waiter = pending.get(message.id)
     if (!waiter) {
-      // Transport diagnostics, not conversation: only the request that gave up could have
-      // interpreted this reply, and it already reported its own outcome.
+      // Late/unmatched replies belong in diagnostics; no waiting call can interpret them.
       const timedOutMethod = timedOutMethods.get(message.id)
       timedOutMethods.delete(message.id)
       const error = isProviderRecord(message.error) ? message.error.message : undefined
@@ -107,8 +105,8 @@ export function createCodexAppServerRecordDispatcher(input: {
     }
     pending.delete(message.id)
     clearTimeout(waiter.timer)
-    waiter.onReply?.()
     const error = message.error
+    waiter.onReply?.(isProviderRecord(error) ? undefined : message.result)
     if (isProviderRecord(error)) {
       const detail = typeof error.message === 'string' ? error.message : 'unknown error'
       waiter.reject(

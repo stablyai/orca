@@ -1,13 +1,4 @@
-/**
- * Owner-qualified automation requests for one authority.
- *
- * Every call carries the incarnation the caller captured: a runtime request is
- * pinned to its `pairingRevision` through the existing environment revision
- * guard, and an SSH-scoped request carries the registration generation the row
- * was fetched under. Responses are validated, never cast — an older host that
- * silently drops the selector answers with its whole authority, and committing
- * that would attribute other hosts' automations to the selected one.
- */
+/** Pin runtime pairing revisions and SSH registration generations to captured owners. Validate responses: an old host may ignore selectors and return other hosts’ rows. */
 
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
@@ -39,7 +30,7 @@ import {
 } from './automation-host-client'
 import {
   assertAuthorityCapability,
-  assertExtraAgentArgsSupported,
+  prepareAutomationLaunchSetup,
   assertOwnerFencingSupported,
   assertAutomationCreateIdempotencySupported,
   AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
@@ -131,8 +122,7 @@ export async function listScopedAutomations(
   authority: AutomationAuthorityRef,
   selector: AutomationListScopeSelector
 ): Promise<ScopedAutomationList> {
-  // Why: the desktop authority is the in-process runtime, so the probe no-ops
-  // there — its scoped contract ships with the client and can never lag it.
+  // Desktop is in-process and ships this client’s scoped contract, so capability probing no-ops.
   await assertAuthorityCapability(
     authority,
     AUTOMATION_LIST_HOST_SCOPE_RUNTIME_CAPABILITY,
@@ -141,11 +131,7 @@ export async function listScopedAutomations(
   return validated(await callAuthority(authority, 'automation.list', { selector }), selector)
 }
 
-/**
- * The one unscoped request an old runtime gets per refresh cycle. Its result is
- * partitioned client-side into every requested entry; it carries no owners and
- * no usage projection, so those rows stay view-only.
- */
+/** Share one old-runtime call per refresh; client partitioning supplies view-only rows without invented owners or usage. */
 export async function listLegacyAutomations(
   authority: AutomationAuthorityRef
 ): Promise<Automation[]> {
@@ -168,11 +154,7 @@ export async function listAutomationsForOwner(
   return await listScopedAutomations(owner.authority, scopeSelector(owner))
 }
 
-/**
- * Deliberately unprobed, matching the mutation arms' *absence* of a probe here:
- * history is read-only, and an older host that ignores the precondition answers
- * with the rows it has rather than acting on a fence it never honoured.
- */
+/** Owned and orphan history reads do not probe. Old hosts may ignore preconditions and return their stored rows; read-only calls cannot mutate behind an unhonored fence. */
 async function listRunsFenced(
   authority: AutomationAuthorityRef,
   automationId: string,
@@ -207,11 +189,7 @@ export async function listAutomationRunsPageForOwner(
   return { runs: result.runs, nextCursor: 'nextCursor' in result ? result.nextCursor : null }
 }
 
-/**
- * The one fenced-mutation path every authority shares. Owned and orphan rows
- * differ in the precondition they fence with and in nothing else, so they
- * share the transport, the capability probe, and any check either later gains.
- */
+/** Share owned/orphan mutation transport and capability probing; only the fence precondition differs. */
 async function updateFenced(
   authority: AutomationAuthorityRef,
   id: string,
@@ -220,10 +198,10 @@ async function updateFenced(
   destination?: AutomationDestination
 ): Promise<Automation> {
   await assertOwnerFencingSupported(authority)
-  await assertExtraAgentArgsSupported(authority, updates.extraAgentArgs)
+  const prepared = await prepareAutomationLaunchSetup(authority, updates)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.update', {
     id,
-    updates: toRuntimeAutomationUpdateInput(updates),
+    updates: toRuntimeAutomationUpdateInput(prepared),
     expectedOwner,
     destination
   })
@@ -255,19 +233,14 @@ export async function deleteAutomationForOwner(
   await deleteFenced(owner.authority, id, ownerPrecondition(owner))
 }
 
-/**
- * Orphan rows have no owner to key by, so the orphan precondition is the fence.
- * The authority is still known and still probed: an orphan on an out-of-date
- * host is refused for the same reason an owned row there is.
- *
- * No destination is accepted — moving a row needs a host it can move to.
- */
+/** Fence orphan mutations with their known authority/orphan precondition and the same capability probe as owned rows. No destination is accepted. */
 export async function updateOrphanAutomation(
   authority: AutomationAuthorityRef,
   id: string,
-  updates: AutomationUpdateInput
+  updates: AutomationUpdateInput,
+  destination?: AutomationDestination
 ): Promise<Automation> {
-  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION)
+  return await updateFenced(authority, id, updates, ORPHAN_OWNER_PRECONDITION, destination)
 }
 
 export async function deleteOrphanAutomation(
@@ -277,10 +250,7 @@ export async function deleteOrphanAutomation(
   await deleteFenced(authority, id, ORPHAN_OWNER_PRECONDITION)
 }
 
-/**
- * An orphan keeps its history: reading past runs needs no host to run on, which
- * is why `ORPHAN_ACTIONS` allows it where execution is blocked.
- */
+/** Orphans retain read-only history even though they cannot execute. */
 export async function listOrphanAutomationRuns(
   authority: AutomationAuthorityRef,
   automationId: string
@@ -324,9 +294,9 @@ export async function createAutomationForDestination(
   }
   await assertOwnerFencingSupported(authority)
   // Why before create: a move is create-then-delete and must refuse before mutating anything.
-  await assertExtraAgentArgsSupported(authority, input.extraAgentArgs)
+  const prepared = await prepareAutomationLaunchSetup(authority, input)
   const result = await callAuthority<{ automation: Automation }>(authority, 'automation.create', {
-    ...toRuntimeAutomationCreateInput(input),
+    ...toRuntimeAutomationCreateInput(prepared),
     destination
   })
   return result.automation

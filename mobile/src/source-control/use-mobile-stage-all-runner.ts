@@ -9,19 +9,17 @@ type Params = {
   sendGitRequest: <T>(method: string, params?: Record<string, unknown>) => Promise<T>
 }
 
-/** Stage All for the Changes screen, including rows a capped `git.status` did not list. */
 export function useMobileStageAllRunner({
   status,
   stageablePaths,
   runGitWorkflow,
   sendGitRequest
 }: Params): () => Promise<void> {
-  // Why: undeclared in the reply schema, so it passes through loose and an older host omits it.
+  // The loose schema carries this only when the host publishes it; older hosts omit it.
   const isStatusCapped = status?.didHitLimit === true
   return useCallback(async () => {
     if (isStatusCapped) {
-      // Why no paths: an older host strips `scope` and stages `filePaths`, so it stages nothing
-      // and the missing receipt reports that instead of a silently partial stage.
+      // Send no paths: older hosts strip scope and must fail the receipt check rather than silently stage a partial list.
       await runGitWorkflow('stage-all', async () => {
         const reply = await sendGitRequest<unknown>('git.bulkStage', {
           filePaths: [],

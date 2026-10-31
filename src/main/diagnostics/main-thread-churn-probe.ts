@@ -2,10 +2,7 @@ import { writeStartupDiagnosticLine } from '../startup/startup-diagnostics'
 
 export const MAIN_THREAD_DIAGNOSTICS_ENV = 'ORCA_MAIN_THREAD_DIAGNOSTICS'
 
-// Why: 25ms mirrors event-loop-stall-probe — a timer that fires late by N ms
-// proves the main thread was blocked for N ms, which is the direct in-process
-// measurement of the macOS "Performance Diagnostics" main-thread warnings
-// reported in issue #7576.
+// Match the startup probe's 25ms sampling interval for comparable stall windows.
 const TICK_MS = 25
 const REPORT_EVERY_MS = 5_000
 
@@ -13,22 +10,13 @@ export function isMainThreadDiagnosticsEnabled(env: NodeJS.ProcessEnv = process.
   return env[MAIN_THREAD_DIAGNOSTICS_ENV] === '1'
 }
 
-// Git global options that precede the subcommand. Value-taking flags must be
-// skipped together with their value to find the real subcommand.
+// Skip Git global options together with their separate values.
 const GIT_VALUE_FLAGS = new Set(['-C', '-c', '--git-dir', '--work-tree', '--exec-path'])
 
-// Why: only subcommand-style CLIs get a "<binary> <subcommand>" bucket; for
-// anything else (rg, node, …) the first positional is an operand, not a
-// subcommand, and would fragment the aggregation.
+// Operand-based CLIs would fragment aggregation if bucketed by their first positional.
 const SUBCOMMAND_BINARIES = new Set(['git', 'gh', 'glab'])
 
-/**
- * Reduce a resolved spawn to a stable aggregation key like "git status" or
- * "gh api". Handles WSL wrapping (`wsl.exe -d <distro> -- git …`), absolute
- * binary paths, `.exe` suffixes, and git global flags before the subcommand.
- */
-// Split on both separators so Windows-style paths classify correctly even
-// when the classifier itself runs in a posix test environment.
+// Accept both path separators even when classifying foreign-platform commands.
 function binaryName(command: string): string {
   const leaf = command.split(/[\\/]/).pop() ?? command
   return leaf.replace(/\.exe$/i, '').toLowerCase()
@@ -38,8 +26,7 @@ export function classifySubprocessCommand(command: string, args: readonly string
   let binary = binaryName(command)
   const rest = [...args]
   if (binary === 'wsl') {
-    // Orca spawns guest commands with `--exec`; `--`/`-e` still appear on
-    // wsl.exe processes started outside Orca, so unwrap either separator.
+    // Accept external WSL invocations using -- or -e as well as Orca's --exec.
     while (rest.length > 0) {
       const arg = rest.shift()
       if (arg === '--' || arg === '--exec' || arg === '-e') {
@@ -62,8 +49,6 @@ export function classifySubprocessCommand(command: string, args: readonly string
       subcommand = arg
       break
     }
-    // Why: only git's global flags take a separate value; e.g. rg's -C takes
-    // a number that must not be consumed as if it were a flag value.
     if (binary === 'git' && GIT_VALUE_FLAGS.has(arg)) {
       i++
     }
@@ -76,19 +61,13 @@ export function classifySubprocessCommand(command: string, args: readonly string
 
 export type SubprocessSpawnStats = {
   count: number
-  // Cumulative and worst main-thread block: the spawn initiation (uv_spawn →
-  // posix_spawn) for async launches, the whole run for runProcessSync.
+  // Async launches measure spawn initiation; synchronous launches measure the entire run.
   blockMsTotal: number
   blockMsMax: number
 }
 
 const spawnStatsByCommand = new Map<string, SubprocessSpawnStats>()
 
-/**
- * Record one subprocess spawn from the main process. `blockMs` is how long
- * the spawn call held the main thread (until exit for synchronous launches).
- * No-op unless ORCA_MAIN_THREAD_DIAGNOSTICS=1.
- */
 export function recordSubprocessSpawn(
   command: string,
   args: readonly string[],
@@ -121,12 +100,7 @@ export function drainSubprocessSpawnStats(): Record<string, SubprocessSpawnStats
   return drained
 }
 
-/**
- * Timestamped marker line for correlating a specific main-process activity
- * (e.g. an updater check) with the probe's stall windows and with macOS
- * Performance Diagnostics log entries in field captures. No-op unless
- * ORCA_MAIN_THREAD_DIAGNOSTICS=1.
- */
+/** Correlate process activity with stall windows and captured macOS diagnostics. */
 export function writeMainThreadDiagnosticMarker(marker: string): void {
   if (!isMainThreadDiagnosticsEnabled()) {
     return
@@ -141,14 +115,7 @@ export type MainThreadChurnProbeOptions = {
   extraStats?: () => Record<string, unknown>
 }
 
-/**
- * Long-running main-process jank probe for benchmarks and field diagnosis of
- * issue #7576. Every 5s emits one `[main-thread] {json}` stderr line with the
- * window's worst event-loop stall, stall counts over 50/250ms, drained subprocess
- * spawn stats, and any counters the caller contributes. Unlike the startup stall
- * probe this never stops: the churn it measures (git status polling, updater
- * retries) is steady-state.
- */
+/** Unlike the startup probe, report steady-state stalls and subprocess costs throughout the session. */
 export function startMainThreadChurnProbe(options: MainThreadChurnProbeOptions = {}): void {
   if (!isMainThreadDiagnosticsEnabled()) {
     return

@@ -5,12 +5,9 @@ import { attachRestoredTabConflictScan } from './editor-restored-tab-conflict-sc
 
 export default function EditorAutosaveController(): null {
   useEffect(() => {
-    // Why: autosave and quit coordination need to survive editor tab switches,
-    // but keeping the full EditorPanel mounted while hidden widened the restart
-    // surface too far. Keep only this narrow controller alive between mounts.
+    // Keep autosave and quit coordination alive across tab switches without retaining the full panel.
     const detachAutosave = attachEditorAutosaveController(useAppStore)
-    // Why: restored dirty tabs must be conflict-checked app-level, before any
-    // panel mounts — autosave can otherwise write over an offline agent edit.
+    // Check restored dirty tabs before any panel mounts, or autosave could overwrite offline agent edits.
     const detachConflictScan = attachRestoredTabConflictScan(useAppStore)
     return () => {
       detachAutosave()

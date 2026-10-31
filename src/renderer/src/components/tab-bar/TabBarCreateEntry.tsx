@@ -6,7 +6,11 @@ import {
   getTabEntryOptions,
   isTabEntryAbsolutePathLike
 } from './tab-create-entry-action'
-import { findMatchingTabAgentLaunchOptions } from './tab-agent-launch-options'
+import {
+  configuredAgentPickerLaunchOption,
+  findMatchingTabAgentLaunchOptions,
+  matchingAgentPickerLaunchOptions
+} from './tab-agent-launch-options'
 import { findMatchingTabCreateMenuOptions } from './tab-create-menu-options'
 import { getActiveOptionId, type ActiveOption } from './tab-create-entry-active-option'
 import {
@@ -42,6 +46,7 @@ export default function TabBarCreateEntry(props: TabBarCreateEntryProps): React.
 
 function TabBarCreateEntrySession({
   agentOptions = EMPTY_AGENT_OPTIONS,
+  agentPickerEntries,
   groupId,
   menuOpen,
   menuOptions = EMPTY_MENU_OPTIONS,
@@ -90,8 +95,7 @@ function TabBarCreateEntrySession({
     [shouldResolveAbsolutePaths, worktreeId]
   )
   const allowAbsolutePaths = useAppStore(allowAbsolutePathsSelector)
-  // Why the worktree path: editor↔file dedupe folds case by the worktree's
-  // filesystem, which a Windows client's own platform does not describe.
+  // Deduplicate using the workspace filesystem; the client platform cannot establish path case sensitivity.
   const worktreePath = useAppStore((state) =>
     menuOpen ? (state.getKnownWorktreeById(worktreeId)?.path ?? null) : null
   )
@@ -149,8 +153,11 @@ function TabBarCreateEntrySession({
     () =>
       terminalQueryMode
         ? EMPTY_AGENT_OPTIONS
-        : findMatchingTabAgentLaunchOptions(query, agentOptions),
-    [agentOptions, query, terminalQueryMode]
+        : [
+            ...matchingAgentPickerLaunchOptions(agentPickerEntries ?? [], query),
+            ...findMatchingTabAgentLaunchOptions(query, agentOptions)
+          ],
+    [agentOptions, agentPickerEntries, query, terminalQueryMode]
   )
 
   const disabled = !onOpenEntry
@@ -203,8 +210,7 @@ function TabBarCreateEntrySession({
         setSelectionGuidance(getTabEntryChooseActionMessage())
         return
       }
-      // Why: an 'empty' status is the placeholder prompt, not a failure — showing
-      // it as an error turns a bare "?" into a red row that reads like a bug.
+      // Empty status is guidance rather than failure; do not turn a bare query marker into an error.
       if (statusOption?.classification.kind !== 'empty') {
         setError(statusMessage)
       }
@@ -242,8 +248,7 @@ function TabBarCreateEntrySession({
       onDidOpenEntry?.()
       return
     }
-    // A history row is a navigation, so it rides the entry-open path the typed-URL
-    // row already uses — routing, worktree targeting and SSH resolution included.
+    // Route history through typed-URL navigation to preserve workspace targeting and SSH resolution.
     const classification: TabEntryActionClassification =
       selectedOption.kind === 'history'
         ? { kind: 'explicit-url', url: selectedOption.option.entry.url }
@@ -292,9 +297,7 @@ function TabBarCreateEntrySession({
             setSelectionGuidance(null)
             return
           }
-          // Why: with no result rows the static create/agent items render below;
-          // move focus into that Radix menu list so it stays keyboard-navigable
-          // from the search box instead of trapping focus in the input.
+          // With no search results, transfer arrow navigation to static Radix items so the input cannot trap focus.
           if (
             focusTabEntryMenuItemAtEdge(
               event.currentTarget,
@@ -318,8 +321,7 @@ function TabBarCreateEntrySession({
           value={query}
           onChange={(event) => {
             const nextQuery = event.target.value
-            // Why: the parent query only changes in response to typing, so publish
-            // it in this event rather than a later effect after the render commits.
+            // Publish query changes in the typing event instead of waiting for a post-commit effect.
             setQuery(nextQuery)
             onQueryChange?.(nextQuery)
             setPinnedOptionId(null)
@@ -327,8 +329,7 @@ function TabBarCreateEntrySession({
             setSwitchError(null)
             setSelectionGuidance(null)
           }}
-          // Why: disabling the focused input would hand focus to the body and
-          // break arrow/Escape navigation until the submission settles.
+          // Keep pending input focus with readOnly; disabling it breaks arrow/Escape navigation.
           disabled={disabled}
           readOnly={pending}
           aria-busy={pending || undefined}
@@ -348,9 +349,7 @@ function TabBarCreateEntrySession({
           className="h-9 rounded-none border-0 bg-transparent px-0 text-xs font-normal text-foreground shadow-none placeholder:font-normal placeholder:text-muted-foreground focus-visible:border-0 focus-visible:ring-0 aria-invalid:border-0 aria-invalid:ring-0 md:text-xs dark:bg-transparent"
         />
       </div>
-      {/* Above the list, not instead of it: a stale switch target must not wipe
-          the rows the user can still act on. The live region stays mounted so a
-          screen reader announces the failure instead of missing the insertion. */}
+      {/* Keep a mounted live region above usable rows so stale-target failures announce without removing other choices. */}
       <div role="status">
         {error ? (
           <div className="mt-1 px-1" id="tab-create-entry-error">
@@ -386,6 +385,15 @@ function TabBarCreateEntrySession({
                 id={resultOptionDomId(index)}
                 option={option}
                 selected={index === activeSelectedIndex}
+                onUseAgent={
+                  option.kind === 'agent' && option.option.pickerEntry
+                    ? (draft) =>
+                        submitOption({
+                          kind: 'agent',
+                          option: configuredAgentPickerLaunchOption(option.option, draft)
+                        })
+                    : undefined
+                }
                 disabled={
                   disabled ||
                   pending ||

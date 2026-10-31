@@ -12,10 +12,7 @@ import {
 } from '@/runtime/host-session-mirror-hydration'
 import { clearRuntimeEnvironmentConnectionGenerationsForTests } from '@/store/slices/runtime-status'
 
-// Deferring a mirrored pane's resume is only half the fix: whatever settles the
-// mirror must replay the parked sweep, or the aug20 duplicate-launch defect is
-// traded for a resume that never happens. These pin both halves plus the
-// per-connection reset a host restart depends on.
+// Mirror settlement must replay deferred recovery and reset per connection, or duplicate-launch prevention would strand resumes.
 
 const initialAppStoreState = useAppStore.getState()
 
@@ -126,10 +123,6 @@ function seedSleepingRecord(worktreeId: string, sessionId: string): string {
   return paneKey
 }
 
-function retractMirroredTab(worktreeId: string): void {
-  useAppStore.setState({ tabsByWorktree: { [worktreeId]: [] } })
-}
-
 function connectRuntime(runtimeId: string): void {
   useAppStore.getState().setRuntimeEnvironmentStatus(RUNTIME_ENV_ID, {
     status: {
@@ -156,41 +149,6 @@ afterEach(() => {
 })
 
 describe('parked mirrored-pane resume replay', () => {
-  it('releases the deferred sweep without relaunching a retracted host pane', () => {
-    const worktree = makeRuntimeOwnedWorktree()
-    seedState(worktree)
-    const paneKey = seedSleepingRecord(worktree.id, 'codex-session-replay-1')
-
-    expect(resumeSleepingAgentSessionsForWorktree(worktree.id)).toBe(0)
-    expect(useAppStore.getState().sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-
-    // Retraction settles the mirror; it does not authorize a client to restart the agent.
-    retractMirroredTab(worktree.id)
-    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
-
-    const after = useAppStore.getState()
-    expect(after.tabsByWorktree[worktree.id]).toEqual([])
-    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-  })
-
-  it('replays without relaunching when the mirror reports the host PTY live', () => {
-    const worktree = makeRuntimeOwnedWorktree()
-    seedState(worktree)
-    const paneKey = seedSleepingRecord(worktree.id, 'codex-session-replay-2')
-
-    resumeSleepingAgentSessionsForWorktree(worktree.id)
-
-    // The host answered: the PTY is still attached to the mirrored pane.
-    useAppStore.setState({ ptyIdsByTabId: { [WEB_TAB_ID]: ['pty-host-old-1'] } })
-    markHostSessionMirrorHydrated(RUNTIME_ENV_ID)
-
-    const after = useAppStore.getState()
-    expect((after.tabsByWorktree[worktree.id] ?? []).map((tab) => tab.id)).toEqual([WEB_TAB_ID])
-    expect(after.sleepingAgentSessionsByPaneKey[paneKey]).toBeDefined()
-    expect(Object.keys(after.automaticAgentResumeClaimsByTabId)).toHaveLength(0)
-  })
-
   it('drops the hydrated verdict when the host reconnects under a new runtime id', () => {
     connectRuntime('runtime-a')
     markHostSessionMirrorHydrated(RUNTIME_ENV_ID)

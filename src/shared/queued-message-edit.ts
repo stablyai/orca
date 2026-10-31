@@ -1,10 +1,24 @@
-import type { AgentJournalMessageItem } from './agent-session-journal-types'
+import type {
+  AgentJournalMessageItem,
+  AgentJournalSkillRef,
+  AgentJournalSubmission
+} from './agent-session-journal-types'
+import type { AgentSessionQueuedMessage } from './agent-session-queued-message-wire'
+import {
+  pickedSkillsInText,
+  agentSessionSendBodyFingerprint
+} from './structured-agent-session-send-mutation'
+import { MAX_SKILL_REFS } from './rpc-contract/structured-agent-session-message-params'
 import { MAX_BLOCKS, MAX_PROMPT_BYTES } from './rpc-contract/structured-agent-session-params'
-import { imageReferenceInsertion, imageReferenceToken } from './native-chat-image-reference'
+import {
+  imageReferenceInsertion,
+  withoutImageReference
+} from './native-chat/native-chat-image-reference'
 import {
   imageReferencesToPromptMarkers,
-  promptMarkersToImageReferences
-} from './native-chat-image-transcript-markers'
+  promptMarkersToImageReferences,
+  stripSentImagePromptMarkers
+} from './native-chat/transcript/native-chat-image-transcript-markers'
 
 export type QueuedMessageImageBlock = Extract<
   AgentJournalMessageItem['blocks'][number],
@@ -12,7 +26,12 @@ export type QueuedMessageImageBlock = Extract<
 >
 
 /** What Save writes: the text, and when `images` is given, the complete ordered image set. */
-export type QueuedMessageEdit = { text: string; images?: readonly QueuedMessageImageBlock[] }
+export type QueuedMessageEdit = {
+  text: string
+  images?: readonly QueuedMessageImageBlock[]
+  /** Present means complete replacement, including an empty set; omitted preserves legacy editing. */
+  skills?: readonly AgentJournalSkillRef[]
+}
 
 export type QueuedMessageEditResult =
   | { ok: true; body: AgentJournalMessageItem }
@@ -71,8 +90,7 @@ export function queuedEditTextForKeptImages(
   let chips = promptMarkersToImageReferences(text, from)
   const staying = new Set(to)
   for (const id of from.filter((entry) => !staying.has(entry))) {
-    const token = imageReferenceToken(id)
-    chips = chips.replaceAll(`${token} `, '').replaceAll(token, '')
+    chips = withoutImageReference(chips, id)
   }
   return imageReferencesToPromptMarkers(chips, to)
 }
@@ -101,6 +119,17 @@ export function queuedEditBaseText(
         queuedEditKeptImages(body).map(({ id }) => id),
         kept.map(({ id }) => id)
       )
+}
+
+/** The typing an edit hands to the chat box: none when only images changed, and without the
+ *  markers of the card's own images, which the chat box does not carry. */
+export function queuedEditHandOffTyping(
+  body: AgentJournalMessageItem,
+  draft: Pick<QueuedMessageEditDraft, 'text' | 'kept'>
+): string {
+  return draft.text === queuedEditBaseText(body, draft.kept)
+    ? ''
+    : stripSentImagePromptMarkers(draft.text, draft.kept.length)
 }
 
 function queuedEditImagesChanged(
@@ -160,22 +189,29 @@ export function queuedMessageWithEdit(
   edit: QueuedMessageEdit
 ): QueuedMessageEditResult {
   const { text, images } = edit
+  const skills =
+    edit.skills === undefined ? undefined : pickedSkillsInText(text, edit.skills, ['$', '/'])
   const editable = queuedMessageEditableText(body)
   if (editable === null) {
     return { ok: false, reason: 'not-editable' }
   }
-  if (byteLength(text) > MAX_PROMPT_BYTES) {
+  if (byteLength(text) > MAX_PROMPT_BYTES || (skills?.length ?? 0) > MAX_SKILL_REFS) {
     return { ok: false, reason: 'too-large' }
   }
   if (!text.trim() && (images ? images.length === 0 : imageBlocks(body).length === 0)) {
     return { ok: false, reason: 'empty' }
   }
   // Unchanged text and images keep their blocks, so a Save that changes nothing is a no-op.
-  if (text === editable && (!images || sameImages(images, imageBlocks(body)))) {
+  if (
+    text === editable &&
+    (!images || sameImages(images, imageBlocks(body))) &&
+    (skills === undefined || JSON.stringify(skills) === JSON.stringify(body.skills ?? []))
+  ) {
     return { ok: true, body }
   }
   // Plain-text edits cannot retain which occurrence owned a picked file.
-  const { skills: _pickedSkills, ...plainBody } = body
+  const { skills: _pickedSkills, ...withoutSkills } = body
+  const plainBody = { ...withoutSkills, ...(skills?.length ? { skills } : {}) }
   if (images) {
     const blocks: AgentJournalMessageItem['blocks'] = [
       ...(text.trim() ? [{ type: 'text' as const, text: text.trimEnd() }] : []),
@@ -203,4 +239,59 @@ export function queuedMessageWithEdit(
     blocks.unshift({ type: 'text', text })
   }
   return { ok: true, body: { ...plainBody, blocks } }
+}
+
+/** A question or approval holds the chat box's place, so the text there is out of sight until then. */
+export const QUEUED_EDIT_NOTICE_COPY = {
+  editChanged: 'This message changed while you were editing. Your edit is in the chat box.',
+  editChangedPrompt:
+    'This message changed while you were editing. Your edit will be in the chat box after you answer the agent.',
+  editChangedNotSaved: "This message changed while you were editing. Your edit wasn't saved.",
+  editGone: 'This message was already sent or removed. Your edit is in the chat box.',
+  editGonePrompt:
+    'This message was already sent or removed. Your edit will be in the chat box after you answer the agent.',
+  editFailed: "This message can't be edited."
+} as const
+
+export type QueuedEditNotice = keyof typeof QUEUED_EDIT_NOTICE_COPY
+
+export function queuedEditChangedNotice(handedOff: boolean, promptOpen: boolean): QueuedEditNotice {
+  if (!handedOff) {
+    return 'editChangedNotSaved'
+  }
+  return promptOpen ? 'editChangedPrompt' : 'editChanged'
+}
+
+/** Sent means handed off with this body; holds/differs describe the current card, gone its removal; null queue proves nothing. */
+type QueuedEditStanding = 'sent' | 'gone' | 'holds' | 'differs'
+
+export function queuedEditStanding(
+  view: {
+    messages: readonly AgentSessionQueuedMessage[] | null
+    cards: readonly { messageId: string }[]
+    submissions: readonly AgentJournalSubmission[]
+  },
+  sessionId: string,
+  messageId: string,
+  /** The fingerprint of the body the edit would save; null when it saves none. */
+  desired: string | null
+): QueuedEditStanding | null {
+  if (view.messages === null) {
+    return null
+  }
+  const listed = view.messages.find((entry) => entry.messageId === messageId)
+  if (!listed || !queuedCardOnScreen(view.cards, messageId)) {
+    const sent = view.submissions.some(
+      (entry) => entry.queuedMessageId === messageId && entry.payloadFingerprint === desired
+    )
+    return desired !== null && sent ? 'sent' : 'gone'
+  }
+  return agentSessionSendBodyFingerprint(sessionId, listed.body) === desired ? 'holds' : 'differs'
+}
+
+export function queuedCardOnScreen(
+  cards: readonly { messageId: string }[],
+  messageId: string
+): boolean {
+  return cards.some((card) => card.messageId === messageId)
 }

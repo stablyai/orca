@@ -2,7 +2,7 @@ import { expect, vi } from 'vitest'
 import type {
   AgentStatusBatchTransaction,
   AgentStatusBatchUpdate
-} from '../store/slices/agent-status'
+} from '../store/slices/agent-status/agent-status-contract'
 import type { AppState } from '../store/types'
 import { makePaneKey } from '../../../shared/stable-pane-id'
 
@@ -145,9 +145,7 @@ export function installMockAgentStatusTransaction(state: StoreLike): void {
 }
 
 export function buildStoreState(overrides: StoreLike): StoreLike {
-  // Why: copy the defensive set of getState() fields the hook touches during
-  // mount so individual tests only need to override workspaceSessionReady,
-  // tabsByWorktree, and setAgentStatus.
+  // Seed the hook’s full mount surface so suites override only readiness, tabs and agent status.
   const state: StoreLike = {
     setUpdateStatus: vi.fn(),
     fetchRepos: vi.fn(),
@@ -172,6 +170,7 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     setSshConnectionState: vi.fn(),
     setSshTargetLabels: vi.fn(),
     setPortForwards: vi.fn(),
+    setUnrestoredPortForwards: vi.fn(),
     clearPortForwards: vi.fn(),
     setDetectedPorts: vi.fn(),
     enqueueSshCredentialRequest: vi.fn(),
@@ -185,6 +184,7 @@ export function buildStoreState(overrides: StoreLike): StoreLike {
     suppressedPtyExitIds: {},
     markAgentAttentionUnread: vi.fn(),
     agentStatusByPaneKey: {},
+    agentLaunchConfigByPaneKey: {},
     setAgentStatuses: vi.fn(() => []),
     recordAgentProviderSession: vi.fn(),
     setAgentProgramStatus: vi.fn(() => true),

@@ -1,9 +1,4 @@
-// Rows appended since a cursor, projected into what a subscriber must apply.
-//
-// The batch carries each touched item at its CURRENT reduced state rather than
-// the raw rows: a client that applies the same batch twice converges, and a
-// provider echo that was adopted into a submission slot arrives under the slot
-// key instead of appearing as a second copy of the user's own message.
+// Project touched items at current reduced state for idempotent delivery; adopted echoes retain submission keys.
 
 import { agentJournalSubmissionKey } from '../../../shared/agent-session-journal-item-key'
 import { compareAgentJournalItems } from '../../../shared/agent-session-journal-position'
@@ -15,35 +10,43 @@ import type {
 import type { AgentSessionJournalBatch } from '../../../shared/agent-session-wire'
 import { isStructuredAgentSessionStopNote } from './structured-agent-session-command-turn'
 import { findSequenceGap } from '../agent-session-journal/journal-cursor'
-import {
-  isJournalStopOrResumeRow,
-  type JournalRow
-} from '../agent-session-journal/journal-row-schema'
+import type { JournalReadRow } from '../agent-session-journal/journal-read-row'
+import { isJournalStopOrResumeRow } from '../agent-session-journal/journal-row-schema'
 
 export type JournalBatchProjection =
   | { ok: true; batch: AgentSessionJournalBatch }
-  /** A missing sequence means the tail lost a row; the subscriber reloads
-   *  rather than rendering a timeline with a hole in it. */
+  /** Reload on gaps instead of rendering partial history. */
   | { ok: false; reset: 'journal_gap' }
 
 export function projectJournalBatch(input: {
-  rows: readonly JournalRow[]
+  rows: readonly JournalReadRow[]
   snapshot: AgentJournalSnapshot
-  /** Sequence the subscriber has already applied. */
   afterSequence: number
   canonicalItemId?: (itemId: string) => string
 }): JournalBatchProjection {
-  const gap = findSequenceGap(
-    input.rows.map((row) => row.seq),
-    input.afterSequence + 1
-  )
-  if (gap) {
+  if (
+    input.rows.every((row) => row.kind !== 'outcome') &&
+    findSequenceGap(
+      input.rows.map((row) => row.seq),
+      input.afterSequence + 1
+    )
+  ) {
     return { ok: false, reset: 'journal_gap' }
   }
   const aliases = submissionAliases(input.snapshot.submissions)
   const touchedItemIds = new Set<string>()
   const touchedClientMessageIds = new Set<string>()
   for (const row of input.rows) {
+    if (row.kind === 'outcome') {
+      for (const itemId of row.itemIds) {
+        touchedItemIds.add(input.canonicalItemId?.(itemId) ?? aliases.get(itemId) ?? itemId)
+      }
+      for (const clientMessageId of row.submissionIds) {
+        touchedClientMessageIds.add(clientMessageId)
+        touchedItemIds.add(agentJournalSubmissionKey(clientMessageId))
+      }
+      continue
+    }
     if (row.kind === 'lifecycle-batch') {
       for (const mutation of row.mutations) {
         touchedItemIds.add(
@@ -55,7 +58,7 @@ export function projectJournalBatch(input: {
       continue
     }
     if (isJournalStopOrResumeRow(row)) {
-      // Host-only: no item; the queue pause it feeds is published beside the list.
+      // Stop/Resume markers are host-only; publish derived queue pauses separately.
       continue
     }
     if (row.kind === 'item' || row.kind === 'tombstone') {
@@ -64,7 +67,7 @@ export function projectJournalBatch(input: {
       )
       continue
     }
-    // A card's row naming its hand-off can change how that send reads (`foldQueuedHandOffInDoubt`).
+    // Queue attempt annotations can change the linked send’s display.
     const attempt =
       row.kind === 'queue' && row.change.op === 'queued' ? row.change.attempt : undefined
     const clientMessageId =
@@ -104,9 +107,7 @@ export function projectJournalBatch(input: {
   }
 }
 
-// The indexes are keyed on the snapshot arrays themselves, which the reducer
-// rebuilds on every change, so a paged catch-up over one snapshot pays for them
-// once instead of once per page — including the byte-shrink loop's re-projections.
+// Snapshot arrays invalidate these indexes; catch-up pages and byte-shrink retries reuse them.
 const liveItemsByTimeline = new WeakMap<
   readonly AgentJournalRenderItem[],
   ReadonlyMap<string, AgentJournalRenderItem>
@@ -129,8 +130,7 @@ function stopNotesByTurn(
   }
   const notes = new Map<string, string[]>()
   for (const item of items) {
-    // Every Stop note is a status row. Not filtered on its failure: a note already projected
-    // without one must still re-emit when its turn row is removed.
+    // Re-emit projected Stop notes on turn removal even if their failure field is already absent.
     if (
       item.body.kind === 'status' &&
       item.turnScope?.kind === 'turn' &&
@@ -158,12 +158,7 @@ function liveItemsById(
   return live
 }
 
-/**
- * Provider item id → the submission slot that adopted it, rebuilt from the
- * snapshot's own accepted submissions. This mirrors the alias the reducer
- * writes on an accepted dispatch; deriving it here keeps the projection a pure
- * function of published state instead of reaching into reducer internals.
- */
+/** Derive aliases from published acceptance so projection stays independent of reducer internals. */
 function submissionAliases(
   submissions: readonly AgentJournalSubmission[]
 ): ReadonlyMap<string, string> {

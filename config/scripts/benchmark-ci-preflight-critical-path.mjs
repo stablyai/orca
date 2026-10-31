@@ -60,7 +60,22 @@ const baselineName =
 const baselineFile = path.join(root, 'config/scripts', `.benchmark-baseline-${baselineName}`)
 const runnerFile = path.join(output, 'baseline-smoke-runner.mjs')
 const mobileBundle = path.join(output, 'smoke-mobile-web')
-writeFileSync(baselineFile, baselineSource(`config/scripts/${baselineName}`))
+// The sync-spawn ratchet's analysis lives in a shared module; compare the parent's copy of it too.
+const collectorName = 'gated-call-use-collector.mjs'
+const baselineCollectorFile = path.join(
+  root,
+  'config/scripts',
+  `.benchmark-baseline-${collectorName}`
+)
+let baselineScript = baselineSource(`config/scripts/${baselineName}`)
+if (baselineScript.includes(`./${collectorName}`)) {
+  writeFileSync(baselineCollectorFile, baselineSource(`config/scripts/${collectorName}`))
+  baselineScript = baselineScript.replaceAll(
+    `./${collectorName}`,
+    `./.benchmark-baseline-${collectorName}`
+  )
+}
+writeFileSync(baselineFile, baselineScript)
 
 try {
   if (comparison !== 'smoke') {
@@ -186,5 +201,6 @@ for (const [program, args] of ${JSON.stringify(steps)}) {
   console.log(JSON.stringify(report.summary))
 } finally {
   rmSync(baselineFile, { force: true })
+  rmSync(baselineCollectorFile, { force: true })
   rmSync(runnerFile, { force: true })
 }

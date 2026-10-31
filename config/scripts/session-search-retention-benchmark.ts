@@ -11,10 +11,7 @@ import {
 import { SessionSearchStore } from '../../src/main/ai-vault-search/session-search-store'
 import SyncDatabase from '../../src/main/sqlite/sync-database'
 
-// Bundle with esbuild --bundle --platform=node, then run on the host under test.
-// Every mode seeds through SessionSearchStore so the three arms are comparable;
-// only `whole-file` leaves the shipped path, because it is the baseline the
-// batched purge exists to replace.
+// Bundle with esbuild --bundle --platform=node and run on target host. All arms seed through store; only whole-file baseline bypasses shipped purge.
 
 const ROWS = 60_000
 
@@ -92,9 +89,7 @@ try {
       } else {
         let purging = true
         const purge = store.purgeOlderThan(Date.now() + 60_000)
-        // Hiding is immediate: cutting the session loose from its file is the
-        // first transaction, so a read one turn in already sees nothing, long
-        // before the rows are gone.
+        // First transaction cuts session from file, hiding search results immediately before chunked deletion finishes.
         const hiddenEarly = yieldToEventLoop().then(() => visibleRows(probe))
         const sampler = sampleLoopStalls(() => purging, intervals)
         await purge

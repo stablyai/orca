@@ -1,7 +1,5 @@
-# Ephemeral CI only. Preview ZIP or inbox capability binaries, always under a private service and accounts.
-# -HiddenTools: the private accounts are denied every machine PATH directory holding one of these
-# executables, and their own PATH carries logging shims for them, so SSH sessions have no host toolchain.
-# -HostCellProbe receives a context hashtable (accounts, port, keys, shim log) once provisioning passes.
+# Ephemeral CI only: preview/inbox sshd under private service/accounts. -HiddenTools denies machine tool PATHs and adds logging shims.
+# -HostCellProbe receives accounts, port, keys and shim log after provisioning.
 param([Parameter(Mandatory=$true)][string]$Receipt,[string]$Archive,[Parameter(Mandatory=$true)][ValidateSet('arm64','x64')][string]$Arch,[ValidateSet('preview','inbox')][string]$Server='preview',[scriptblock]$ProductionRouteProbe,[ValidateRange(1,6)][int]$Accounts=1,[ValidateRange(0,6)][int]$ForwardingAccounts=0,[string[]]$HiddenTools=@(),[scriptblock]$HostCellProbe,[string]$InboxPreparationReceipt)
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot 'windows-ssh-capability.ps1')
@@ -123,8 +121,7 @@ function Record-PrivateServiceDiagnostics([switch]$AfterStop) {
   Write-Stage 'private-service-diagnostics-complete'
 }
 
-# Drops every PATH entry holding one of the tools; entries are expanded, as a session sees them.
-# Why .NET and not Join-Path: Join-Path throws on an entry naming a drive this runner lacks.
+# Expand PATH entries as the session does; .NET tolerates missing drives where Join-Path throws.
 function Split-HostToolchainPath([string]$PathValue,[string[]]$Tools) {
   $kept=[Collections.Generic.List[string]]::new();$hidden=[Collections.Generic.List[string]]::new()
   foreach($entry in @($PathValue -split ';' | Where-Object {$_})){
@@ -274,8 +271,7 @@ $(@($accountNames | Select-Object -Last $ForwardingAccounts | ForEach-Object {"M
     $machinePath=(Get-Item -LiteralPath 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Environment').GetValue('Path','',[Microsoft.Win32.RegistryValueOptions]::DoNotExpandEnvironmentNames)
     $split=Split-HostToolchainPath $machinePath ($HiddenTools+@('node'))
     $kept=$split.kept;$hidden=$split.hidden
-    # Why ACLs, not PATH: Win32-OpenSSH builds the session PATH from the machine and user registry
-    # values, ignoring the service environment and SetEnv. Deny ACEs name only the private accounts.
+    # OpenSSH rebuilds PATH from registry, ignoring service env/SetEnv; deny ACEs affect only private accounts.
     foreach($directory in $hidden){
       Invoke-Bounded icacls.exe (@($directory.TrimEnd('\'),'/deny')+@($ownedAccounts | ForEach-Object {"*$($_.sid):(OI)(CI)RX"})) 120 | Out-Null
       $deniedToolDirs.Add($directory)

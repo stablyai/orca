@@ -1,4 +1,6 @@
-/* oxlint-disable react-doctor/no-adjust-state-on-prop-change -- Why: Linear drawer state hydrates full issue details and comments from provider IPC for the selected issue. */
+import { getLinearSourceScope } from '@/store/slices/linear/linear-slice-scope'
+import { observeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
+import { useLinearIssuePublication } from '@/hooks/useLinearIssuePublication'
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { findLinearIssueWorkspaceAttachment } from '@/lib/linear-issue-workspace-attachment'
@@ -6,12 +8,12 @@ import { openLinearIssueWorkspaceOrStart } from '@/lib/linear-issue-workspace-op
 import { getWorktreeAttachmentLabel } from '@/lib/worktree-attachment-label'
 import { folderWorkspaceToWorktree } from '../../../shared/folder-workspace-worktree'
 import { useAppStore } from '@/store'
+import { translate } from '@/i18n/i18n'
 import { useAllWorktrees } from '@/store/selectors'
-import type { LinearComment, LinearIssue } from '../../../shared/linear/issue-types'
-import { linearGetIssue, linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
+import type { LinearComment } from '../../../shared/linear/issue-types'
+import { linearIssueComments } from '@/runtime/runtime-linear-issue-mutations'
 import {
   initLinearIssueEditState,
-  type LinearEditState,
   type LinearItemDrawerProps,
   type LinearLocalComment
 } from '@/components/linear-item-drawer-types'
@@ -31,15 +33,17 @@ export default function LinearItemDrawer({
   onClose,
   sourceContext
 }: LinearItemDrawerProps): React.JSX.Element {
-  const [fullIssue, setFullIssue] = useState<LinearIssue | null>(null)
-  const [comments, setComments] = useState<LinearComment[]>([])
-  const [commentsLoading, setCommentsLoading] = useState(false)
-  const [editState, setEditState] = useState<LinearEditState | null>(null)
-  const requestIdRef = useRef(0)
-  const hasEditedRef = useRef(false)
-  const optimisticCommentsRef = useRef<LinearComment[]>([])
   const settings = useAppStore((s) => s.settings)
   const providerSettings = sourceContext ?? defaultScopeSource(settings)
+  const scope = getLinearSourceScope(providerSettings)
+  const publication = useLinearIssuePublication(issue, providerSettings)
+  const { isCurrent } = publication
+  const fullIssue = publication.issue
+  const [comments, setComments] = useState<LinearComment[]>([])
+  const [commentsLoading, setCommentsLoading] = useState(false)
+  const editState = fullIssue ? initLinearIssueEditState(fullIssue) : null
+  const requestIdRef = useRef(0)
+  const optimisticCommentsRef = useRef<LinearComment[]>([])
   const allWorktrees = useAllWorktrees()
   const folderWorkspaces = useAppStore((s) => selectFolderWorkspaces(s))
   const attachmentWorkspaces = useMemo(
@@ -47,65 +51,42 @@ export default function LinearItemDrawer({
     [allWorktrees, folderWorkspaces]
   )
 
-  const handleEditStateChange = useCallback((patch: Partial<LinearEditState>) => {
-    hasEditedRef.current = true
-    setFullIssue((prev) => (prev ? { ...prev, ...patch } : prev))
-    setEditState((prev) => (prev ? { ...prev, ...patch } : prev))
-  }, [])
-
-  const handleIssueTextChange = useCallback(
-    (patch: Partial<Pick<LinearIssue, 'title' | 'description'>>) => {
-      hasEditedRef.current = true
-      setFullIssue((prev) => (prev ? { ...prev, ...patch } : prev))
-    },
-    []
-  )
-
-  // Why: the list view may not include the full description. Re-fetch
-  // the issue by ID and its comments to populate the drawer.
+  // List rows may omit descriptions; fetch full issue and comments for the drawer.
+  // oxlint-disable-next-line react-doctor/no-derived-state-effect -- Why: resets drafts as it starts the fenced IPC fetch for a new issue id.
   useEffect(() => {
     if (!issue) {
-      setFullIssue(null)
       setComments([])
-      setEditState(null)
-      hasEditedRef.current = false
       return
     }
-    hasEditedRef.current = false
     optimisticCommentsRef.current = []
     setComments([])
     setCommentsLoading(true)
-    setEditState(initLinearIssueEditState(issue))
+
     requestIdRef.current += 1
     const requestId = requestIdRef.current
-    setFullIssue(issue)
 
-    // Why: fetch issue and comments independently so a transient comments
-    // failure doesn't discard the successfully-fetched issue data.
-    linearGetIssue(providerSettings, issue.id, issue.workspaceId)
-      .then((issueResult) => {
-        if (requestId !== requestIdRef.current) {
-          return
-        }
-        if (issueResult) {
-          const fetched = issueResult as LinearIssue
-          setFullIssue(fetched)
-          // Why: skip if the user already made optimistic edits — the fetch
-          // carries pre-edit data that would clobber in-flight changes.
-          if (!hasEditedRef.current) {
-            setEditState(initLinearIssueEditState(fetched))
-          }
-        }
-      })
-      .catch(() => {})
+    // Fetch independently so comments failure cannot discard the issue.
+    let initial = true
+    const release = observeLinearIssueRead(
+      useAppStore.getState().fetchLinearIssue(issue.id, issue.workspaceId, {
+        scope,
+        force: true,
+        seed: issue
+      }),
+      () => requestId === requestIdRef.current && isCurrent(),
+      (lease, view) => {
+        const seed = initial && view.kind === 'loading'
+        initial = false
+        publication.read(lease, view, seed)
+      }
+    )
 
     linearIssueComments(providerSettings, issue.id, issue.workspaceId)
       .then((commentsResult) => {
         if (requestId !== requestIdRef.current) {
           return
         }
-        // Why: merge any comments the user posted optimistically while the
-        // fetch was in-flight, using id to avoid duplicates.
+        // Merge optimistic comments posted during fetch, deduplicating by id.
         let fetched = commentsResult as LinearComment[]
         const opt = optimisticCommentsRef.current
         if (opt.length > 0) {
@@ -115,20 +96,28 @@ export default function LinearItemDrawer({
             fetched = [...fetched, ...missing]
           }
         }
-        setComments(fetched)
+        setComments((previous) =>
+          // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Read-only lifetime predicate must run at consumption; it mutates no state or token.
+          requestId === requestIdRef.current && isCurrent() ? fetched : previous
+        )
       })
       .catch(() => {})
       .finally(() => {
         if (requestId === requestIdRef.current) {
-          setCommentsLoading(false)
+          setCommentsLoading((previous) =>
+            // react-doctor-disable-next-line react-doctor/no-impure-state-updater -- Read-only lifetime predicate must run at consumption; it mutates no state or token.
+            requestId === requestIdRef.current && isCurrent() ? false : previous
+          )
         }
       })
+    return () => {
+      requestIdRef.current += 1
+      release()
+    }
     // oxlint-disable-next-line react-hooks/exhaustive-deps
-  }, [issue?.id, issue?.workspaceId, providerSettings])
+  }, [issue?.id, issue?.workspaceId, scope.contextKey, publication.read])
 
-  // Why: same pointer-events fix as GitHubItemDialog — Radix may leave
-  // pointer-events: none on body when overlays transition.
-  // oxlint-disable-next-line react-hooks/exhaustive-deps
+  // Clear Radix’s stale body pointer-events after overlay transitions, as GitHubItemDialog does.
   useEffect(() => {
     if (!issue?.id) {
       return
@@ -162,7 +151,7 @@ export default function LinearItemDrawer({
       id: comment.id,
       body: comment.body,
       createdAt: comment.createdAt,
-      user: { displayName: 'You' }
+      user: { displayName: translate('auto.components.issueComments.you', 'You') }
     }
     optimisticCommentsRef.current.push(newComment)
     setComments((prev) => [...prev, newComment])
@@ -188,10 +177,8 @@ export default function LinearItemDrawer({
     issue,
     onClose,
     displayed,
-    handleIssueTextChange,
     sourceContext,
     editState,
-    handleEditStateChange,
     commentsLoading,
     comments,
     handleCommentAdded,

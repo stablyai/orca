@@ -98,8 +98,7 @@ describe('linear links', () => {
     expect(parseLinearIssueInput('not an issue')).toBeNull()
   })
 
-  // A hostname-only check accepts these, and the parsed link is later handed to
-  // shell.openUrl — so the protocol gate is load-bearing, not cosmetic.
+  // These later reach shell.openUrl; host-only validation would accept unsafe protocols.
   it('rejects linear.app URLs on non-web protocols', () => {
     for (const input of [
       'file://linear.app/acme/issue/ENG-123',
@@ -148,8 +147,7 @@ describe('buildLinearIssueLinkUpdates', () => {
     }
   })
 
-  // Inheriting the previous issue's org key would let resolveLegacyLinearLinkWorkspace
-  // match it and persist a workspace id the new issue does not belong to.
+  // Stale org keys can resolve/persist a new issue into the previous issue’s workspace.
   it('clears the organization key for bare identifiers', () => {
     const result = buildLinearIssueLinkUpdates('STA-335')
 

@@ -1,14 +1,12 @@
 // @vitest-environment happy-dom
 
-// End to end for A1: a frame off the host's turn-completion stream lights the unread indicators
-// and sends one OS notification for a structured chat whose transcript is not on screen.
-// Everything between the wire and the store is real here — the renderer feed, the neutral
-// attention policy, the structured surface adapter, the store reducers and the delivery tail — so
-// only the transport and the preload bridge are mocks.
+// Exercise the real attention path from completion stream to indicators/OS delivery; mock only transport and preload.
 
 import { act, cleanup, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi, type Mock } from 'vitest'
 import type { AgentJournalTurnOutcome } from '../../../../shared/agent-session-journal-types'
+import { modelRefusalReadStates } from './structured-model-refusal.test-fixture'
+import { structuredAttentionReadObservation } from './structured-attention-read-observation'
 import type {
   AgentSessionStatusEvent,
   AgentSessionTurnCompletion,
@@ -17,7 +15,6 @@ import type {
 import type { NotificationDispatchRequest } from '../../../../shared/notification-settings-types'
 import { structuredAgentSessionPaneKey } from '../../../../shared/structured-agent-session-projection'
 import type { Tab } from '../../../../shared/tab-types'
-import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
@@ -66,6 +63,12 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
 }))
 
 import { StructuredAgentSessionAttentionBridge } from './StructuredAgentSessionAttentionBridge'
+import {
+  emitAgentSubjectReads,
+  subscribeAgentSubjectReads,
+  type AgentSubjectRead,
+  type StructuredSubjectRead
+} from '@/attention/agent-subject-read-actions'
 import { applyWebSessionTabsSnapshot } from '@/runtime/web-session-tabs-sync/snapshot-api'
 import { resolveNotificationTabOwner } from '@/attention/notification-subject-owner'
 import { resetStructuredAgentSessionTurnCompletionFeedsForTests } from '@/runtime/structured-agent-session-turn-completion-feed'
@@ -75,6 +78,7 @@ import {
 } from '@/runtime/structured-agent-session-status-feed'
 import { makeTabGroup, makeUnifiedTab } from '../../store/slices/store-session-test-harness'
 import { makeWorktree, TEST_REPO } from '../../store/slices/worktrees-slice-test-fixtures'
+import { getDefaultSettings } from '../../../../shared/constants'
 
 // Worktree ids encode their repo (`repoId::path`); the unread reducer buckets by that prefix.
 const WORKSPACE = 'repo1::/tmp/wt'
@@ -120,7 +124,9 @@ function completionFrame(
   return { type: 'completion', completion: turnCompletion(sessionId, outcome) }
 }
 
-function promptFrame(sessionId = SESSION): AgentSessionTurnCompletionEvent {
+function promptFrame(
+  sessionId = SESSION
+): Extract<AgentSessionTurnCompletionEvent, { type: 'prompt' }> {
   return {
     type: 'prompt',
     prompt: { scope: turnCompletion().scope, sessionId, promptId: 'approval-1', raisedAt: 1 }
@@ -135,12 +141,9 @@ function completionFrameWithoutOutcome(): AgentSessionTurnCompletionEvent {
   return { type: 'completion', completion }
 }
 
-/** Every request the renderer handed the preload notification bridge, in order. */
 const dispatched: NotificationDispatchRequest[] = []
-/** Every retirement an acknowledgement asked main for, in order. */
 const dismissed: { ids: string[]; paneKeys?: string[] }[] = []
 
-/** The single dispatch a settled turn is allowed to make. */
 function onlyDispatch(): NotificationDispatchRequest {
   expect(dispatched).toHaveLength(1)
   const request = dispatched[0]
@@ -220,70 +223,188 @@ describe('StructuredAgentSessionAttentionBridge', () => {
         ]
       },
       activeGroupIdByWorktree: { [WORKSPACE]: GROUP },
-      // The user is working elsewhere — the case the dot exists for.
       activeWorktreeId: 'other-workspace',
       activeWorkspaceExecutionHostId: null,
       runtimeEnvironments: [],
       unreadTerminalTabs: {},
       unreadTerminalPanes: {},
       unreadAgentCompletionPanes: {},
-      // The attention dispatch reads exactly one field; GlobalSettings has no test factory.
-      // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only field read.
-      settings: { experimentalTerminalAttention: true } as GlobalSettings
+      settings: { ...getDefaultSettings('/tmp'), experimentalTerminalAttention: true }
     })
   })
 
   afterEach(() => {
     cleanup()
+    vi.useRealTimers()
     vi.unstubAllGlobals()
     resetStructuredAgentSessionTurnCompletionFeedsForTests()
     resetStructuredAgentSessionStatusFeedsForTests()
   })
 
-  it('lights the unread indicators when the host reports a successful turn', async () => {
+  it.each([10, 100])(
+    'routes a Mark All Read batch across %i tabs without per-tab subject scans',
+    async (count) => {
+      const store = mocks.store
+      if (!store) {
+        throw new Error('test store was not initialized')
+      }
+      const rows = Array.from({ length: count }, (_, index) => {
+        const id = `read-tab-${index}`
+        const sessionId = `read-session-${index}`
+        return {
+          sessionId,
+          tab: chatTab({ id, entityId: sessionId }),
+          paneKey: structuredAgentSessionPaneKey(id, sessionId)
+        }
+      })
+      store.setState({ unifiedTabsByWorktree: { [WORKSPACE]: rows.map((row) => row.tab) } })
+      let comparisons = 0
+      const stopCounting = subscribeAgentSubjectReads((reads) => {
+        for (const read of reads) {
+          const subjectKey = read.subjectKey
+          Object.defineProperty(read, 'subjectKey', {
+            get: () => {
+              comparisons += 1
+              return subjectKey
+            }
+          })
+        }
+      })
+      try {
+        const view = render(<StructuredAgentSessionAttentionBridge />)
+        await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+        act(() => {
+          for (const row of rows) {
+            hostStream()({
+              type: 'completion',
+              completion: {
+                ...turnCompletion(row.sessionId),
+                journalCursor: { epoch: 'read-epoch', sequence: 1 }
+              }
+            })
+          }
+          store.getState().acknowledgeAgents(
+            rows.map((row) => row.paneKey),
+            undefined,
+            'explicit'
+          )
+        })
+        expect(mocks.acknowledgeAttention.mock.calls).toEqual(
+          rows.map((row) => [
+            { kind: 'local' },
+            row.sessionId,
+            { epoch: 'read-epoch', sequence: 1 }
+          ])
+        )
+        expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toEqual(
+          expect.arrayContaining(rows.map((row) => row.paneKey))
+        )
+        expect(comparisons).toBeLessThanOrEqual(count)
+        view.unmount()
+        mocks.acknowledgeAttention.mockClear()
+        comparisons = 0
+        act(() =>
+          store.getState().acknowledgeAgents(
+            rows.map((row) => row.paneKey),
+            undefined,
+            'explicit'
+          )
+        )
+        expect(mocks.acknowledgeAttention).not.toHaveBeenCalled()
+        expect(comparisons).toBe(0)
+      } finally {
+        stopCounting()
+      }
+    }
+  )
+
+  it('keeps first-read semantics and retires a viewed model refusal on its owning target', async () => {
     render(<StructuredAgentSessionAttentionBridge />)
     await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
-    expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
-
-    act(() => hostStream()(completionFrame()))
-
-    expect(indicators()).toEqual({
-      workspaceBold: true,
-      paneDot: 'agent-completion',
-      tabDot: 'agent-completion'
+    const { before, after } = modelRefusalReadStates()
+    const read: StructuredSubjectRead = {
+      sessionId: SESSION,
+      target: { kind: 'local' },
+      observedCursor: before.cursor,
+      observationKey: structuredAttentionReadObservation(before)
+    }
+    const valid: AgentSubjectRead = { subjectKey: CHAT_SUBJECT, structured: read }
+    const emit = (first: AgentSubjectRead): void => {
+      act(() => emitAgentSubjectReads([CHAT_SUBJECT], [first, valid], 'explicit'))
+    }
+    emit({ subjectKey: CHAT_SUBJECT })
+    emit({ subjectKey: CHAT_SUBJECT, structured: { ...read, sessionId: 'other-session' } })
+    emit({
+      subjectKey: CHAT_SUBJECT,
+      structured: { ...read, target: { kind: 'environment', environmentId: 'other-host' } }
     })
-    expect(onlyDispatch()).toMatchObject({
-      source: 'agent-task-complete',
-      surface: 'agent-session',
-      worktreeId: WORKSPACE,
-      paneKey: CHAT_SUBJECT,
-      agentState: 'done',
-      agentTurnOutcome: 'success'
-    })
+    expect(mocks.acknowledgeAttention).not.toHaveBeenCalled()
+    expect(dismissed).toEqual([])
+    const later: AgentSubjectRead = {
+      ...valid,
+      structured: {
+        ...read,
+        observedCursor: after.cursor,
+        observationKey: structuredAttentionReadObservation(after)
+      }
+    }
+    act(() => emitAgentSubjectReads([CHAT_SUBJECT], [valid, later], 'explicit'))
+    expect(mocks.acknowledgeAttention).toHaveBeenCalledExactlyOnceWith(
+      { kind: 'local' },
+      SESSION,
+      before.cursor
+    )
+    dismissed.length = 0
+    act(() => hostStream()(completionFrame(SESSION, 'failure')))
+    expect(onlyDispatch()).toMatchObject({ agentTurnOutcome: 'failure' })
+    expect(later.structured?.observationKey).not.toBe(read.observationKey)
+    act(() => emitAgentSubjectReads([CHAT_SUBJECT], [later]))
+    await waitFor(() => expect(mocks.acknowledgeAttention).toHaveBeenCalledTimes(2))
+    expect(mocks.acknowledgeAttention).toHaveBeenLastCalledWith(
+      { kind: 'local' },
+      SESSION,
+      after.cursor
+    )
+    expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toContain(CHAT_SUBJECT)
   })
 
-  it('lights the indicators and says "needs input" when the host raises a prompt mid-turn', async () => {
-    render(<StructuredAgentSessionAttentionBridge />)
-    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+  // Every settled outcome is news; main chooses its wording from the host verdict.
+  it.each([
+    { kind: 'completion', outcome: 'success' },
+    { kind: 'completion', outcome: 'failure' },
+    { kind: 'completion', outcome: 'cancellation' },
+    { kind: 'prompt', outcome: undefined }
+  ] as const)(
+    'lights unread indicators and dispatches host $kind/$outcome',
+    async ({ kind, outcome }) => {
+      render(<StructuredAgentSessionAttentionBridge />)
+      await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
+      expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
 
-    act(() => hostStream()(promptFrame()))
+      act(() =>
+        hostStream()(kind === 'completion' ? completionFrame(SESSION, outcome) : promptFrame())
+      )
 
-    expect(indicators()).toEqual({
-      workspaceBold: true,
-      paneDot: 'agent-completion',
-      tabDot: 'agent-completion'
-    })
-    const request = onlyDispatch()
-    expect(request).toMatchObject({
-      source: 'agent-task-complete',
-      surface: 'agent-session',
-      worktreeId: WORKSPACE,
-      paneKey: CHAT_SUBJECT,
-      agentState: 'blocked'
-    })
-    // A prompt is not a verdict on any turn.
-    expect(request).not.toHaveProperty('agentTurnOutcome')
-  })
+      expect(indicators()).toEqual({
+        workspaceBold: true,
+        paneDot: 'agent-completion',
+        tabDot: 'agent-completion'
+      })
+      const request = onlyDispatch()
+      expect(request).toMatchObject({
+        source: 'agent-task-complete',
+        surface: 'agent-session',
+        worktreeId: WORKSPACE,
+        paneKey: CHAT_SUBJECT,
+        agentState: kind === 'completion' ? 'done' : 'blocked'
+      })
+      if (kind === 'completion') {
+        expect(request).toMatchObject({ agentTurnOutcome: outcome })
+      } else {
+        expect(request).not.toHaveProperty('agentTurnOutcome')
+      }
+    }
+  )
 
   it('does not invent a read boundary before the chat has accepted history', async () => {
     render(<StructuredAgentSessionAttentionBridge />)
@@ -295,38 +416,26 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     expect(mocks.acknowledgeAttention).not.toHaveBeenCalled()
   })
 
-  it("ignores a prompt for a session the tab doesn't hold", async () => {
-    render(<StructuredAgentSessionAttentionBridge />)
-    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
-
-    act(() => hostStream()(promptFrame('another-session')))
-
-    expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
-    expect(dispatched).toEqual([])
-  })
-
-  // A settled turn is news whichever way it settled, exactly as the CLI lane treats one. The
-  // difference is wording, which main picks from the verdict.
-  it.each(['failure', 'cancellation'] as const)(
-    'lights the indicators and hands main the %s the host reports',
-    async (outcome) => {
+  it.each(['completion', 'prompt'] as const)(
+    'ignores a %s for a session the tab does not hold',
+    async (kind) => {
       render(<StructuredAgentSessionAttentionBridge />)
       await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
 
-      act(() => hostStream()(completionFrame(SESSION, outcome)))
+      act(() =>
+        hostStream()(
+          kind === 'completion'
+            ? completionFrame('another-session')
+            : promptFrame('another-session')
+        )
+      )
 
-      expect(indicators()).toEqual({
-        workspaceBold: true,
-        paneDot: 'agent-completion',
-        tabDot: 'agent-completion'
-      })
-      expect(onlyDispatch()).toMatchObject({ agentState: 'done', agentTurnOutcome: outcome })
+      expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
+      expect(dispatched).toEqual([])
     }
   )
 
-  // The row's start moves after the banner is minted: a completion can outrun the settled
-  // re-projection (working -> done), and a settled row is re-stamped with no history entry by any
-  // later journal row, such as the status note a cancel appends (done -> done).
+  // Completion may outrun status projection, and later journal rows can restamp the settled row without history.
   it.each(['working', 'done'] as const)(
     'retires the banner it raised after a %s row moves its start',
     async (rowStateAtDispatch) => {
@@ -358,15 +467,13 @@ describe('StructuredAgentSessionAttentionBridge', () => {
 
       mocks.store?.getState().acknowledgeAgents([CHAT_SUBJECT])
 
-      // The id rebuilt from the moved row can no longer name the banner; main retires it by the
-      // subject it was announced under, which is what this request must carry.
+      // The restamped row cannot rebuild the banner id; retire it by its original subject.
       expect(dismissed.flatMap(({ ids }) => ids)).not.toContain(raised.notificationId)
       expect(dismissed.flatMap(({ paneKeys }) => paneKeys ?? [])).toContain(CHAT_SUBJECT)
     }
   )
 
-  // Remote clients receive the status and completion streams over separate sockets, unordered, so
-  // the wording must come from the completion alone. The mirror is set to disagree in each case.
+  // Separate status/completion sockets are unordered; derive wording from completion despite conflicting mirrors.
   function mirrorStatus(status: 'idle' | 'attention'): void {
     mocks.statusEmitters[0]?.({
       type: 'status',
@@ -415,15 +522,6 @@ describe('StructuredAgentSessionAttentionBridge', () => {
 
     expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
     expect(dispatched).toEqual([])
-  })
-
-  it('ignores a completion for another session on the same host', async () => {
-    render(<StructuredAgentSessionAttentionBridge />)
-    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
-
-    act(() => hostStream()(completionFrame('session-elsewhere')))
-
-    expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
   })
 
   it('shares one host stream across tabs and routes each completion to its own tab', async () => {
@@ -674,8 +772,7 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     expect(mocks.subscribeCompletions).toHaveBeenCalledOnce()
   })
 
-  // An unrecorded tab follows the chat pane's rule: an id two hosts share names no owner until
-  // the tab's first snapshot records its host.
+  // Ambiguous workspace ids cannot locate an unstamped tab until its snapshot records the host.
   it('pauses an unrecorded chat while its workspace id names two hosts, until its host is recorded', async () => {
     render(<StructuredAgentSessionAttentionBridge />)
     await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
@@ -721,33 +818,19 @@ describe('StructuredAgentSessionAttentionBridge', () => {
     expect(mocks.subscribeCompletions).not.toHaveBeenCalled()
   })
 
-  it('drops the host stream when the last structured tab closes', async () => {
-    render(<StructuredAgentSessionAttentionBridge />)
-    await waitFor(() => expect(mocks.subscribeCompletions).toHaveBeenCalledOnce())
-
-    act(() => mocks.store?.setState({ unifiedTabsByWorktree: { [WORKSPACE]: [] } }))
-
-    await waitFor(() => expect(mocks.unsubscribe).toHaveBeenCalledOnce())
-  })
-
   it('replays nothing after a reconnect, so a completion missed while down stays missed', async () => {
     vi.useFakeTimers()
-    try {
-      render(<StructuredAgentSessionAttentionBridge />)
-      await act(() => Promise.resolve())
-      expect(mocks.subscribeCompletions).toHaveBeenCalledOnce()
+    render(<StructuredAgentSessionAttentionBridge />)
+    await act(() => Promise.resolve())
+    expect(mocks.subscribeCompletions).toHaveBeenCalledOnce()
 
-      act(() => hostStream()({ type: 'end' }))
-      await act(() => vi.advanceTimersByTimeAsync(5_000))
-      expect(mocks.subscribeCompletions).toHaveBeenCalledTimes(2)
+    act(() => hostStream()({ type: 'end' }))
+    await act(() => vi.advanceTimersByTimeAsync(5_000))
+    expect(mocks.subscribeCompletions).toHaveBeenCalledTimes(2)
 
-      // The reopened stream starts empty. Nothing lights until the host sends something NEW,
-      // which is the whole recovery contract: live-only, no catch-up, no replayed dot.
-      expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
-      act(() => hostStream(1)(completionFrame()))
-      expect(indicators().paneDot).toBe('agent-completion')
-    } finally {
-      vi.useRealTimers()
-    }
+    // Reopened streams are live-only; never replay old completion dots during recovery.
+    expect(indicators()).toEqual({ workspaceBold: false, paneDot: undefined, tabDot: undefined })
+    act(() => hostStream(1)(completionFrame()))
+    expect(indicators().paneDot).toBe('agent-completion')
   })
 })

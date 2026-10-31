@@ -5,7 +5,10 @@ import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { flushSync } from 'react-dom'
 import type { useImeEnterGestureOwnership } from '@/lib/ime-composition-keyboard-event'
 import { cn } from '@/lib/utils'
-import type { ComposerAutocomplete, NativeChatPickerItem } from './native-chat-composer-state'
+import type {
+  ComposerAutocomplete,
+  NativeChatPickerItem
+} from '../../../../shared/native-chat-composer-autocomplete'
 import { NativeChatMentionMenu, NativeChatPickerMenu } from './NativeChatAutocompleteMenus'
 import type { NativeChatMentionFiles } from './use-native-chat-mention-files'
 import { NativeChatComposerActions } from './NativeChatComposerActions'
@@ -19,18 +22,22 @@ import {
 import type {
   SessionOptionDescriptor,
   SessionOptionsSurface
-} from '../../../../shared/native-chat-session-options'
+} from '../../../../shared/native-chat/input/native-chat-session-options'
 import type { NativeChatOptionPickerRequest } from './native-chat-composer-types'
 import { NativeChatImageAttachmentPreview } from './NativeChatImageAttachmentPreview'
 import type { NativeChatComposerGoalMode } from './use-native-chat-composer-submit'
 import { translate } from '@/i18n/i18n'
 import { useNativeChatComposerDraftUnsaved } from './use-native-chat-draft-unsaved'
+import { useLatestHandler } from '@/lib/use-latest-handler'
+import type { NativeChatFollowUpBehavior } from '../../../../shared/native-chat-follow-up-behavior'
+
+function noop(): void {}
 
 export type NativeChatComposerFieldProps = {
-  /** Pane identity published to the drop pipeline so a native file drop lands
-   *  only in the composer it was dropped on. */
-  /** Owner of the draft the editor's document is saved with. */
+  editSession?: { cancel: () => void }
+  /** Own draft persistence and native-drop routing by this pane so drops cannot land in another composer. */
   draftScopeKey: string
+  positionTarget?: string
   textareaRef: RefObject<NativeChatComposerInput | null>
   draft: string
   disabled: boolean
@@ -50,10 +57,13 @@ export type NativeChatComposerFieldProps = {
   /** Why the send button is disabled, when the user can do something about it. */
   sendBlockedReason?: string | null
   isWorking: boolean
+  /** The draft holds text or images, so Send takes Stop's place while the agent works. */
+  hasDraft?: boolean
+  /** While the agent works: what Cmd/Ctrl+Enter would do instead of a plain send, when it differs. */
+  alternateSend?: NativeChatFollowUpBehavior
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
-  /** The chat reads Stopping: the placeholder says a message runs after the stop, queued as a
-   *  card where the host holds sends as cards (`queue`), else sent and held by the host (`send`). */
+  /** After Stop, describe whether the host queues the next message as a card or holds the send. */
   afterStop?: NativeChatAfterStopSend
   attachDisabled: boolean
   dictationDisabled: boolean
@@ -89,8 +99,7 @@ export type NativeChatComposerImageAttachment = {
   /** Empty while `pending`: the clipboard image has no agent-readable path yet. */
   path: string
   connectionId?: string
-  /** Clipboard thumbnail (blob/data URL) rendered before — and after — the file
-   *  lands, so the chip never waits on a disk round-trip to show something. */
+  /** Show clipboard thumbnails immediately, without waiting for disk/upload completion. */
   previewUrl?: string
   /** True while the pasted image is still being written to disk or uploaded. */
   pending?: boolean
@@ -100,11 +109,7 @@ export type NativeChatComposerImageAttachment = {
   unavailableName?: string
 }
 
-/**
- * Applies a draft clear that was dropped mid-composition: everything the field held when the
- * IME started is what the clear was meant to erase, so only the composed segment survives.
- * Diffed from both ends because an IME edits at the caret, which need not be the end.
- */
+/** After a clear suppressed by IME, preserve only the composed segment; compare both ends because the caret need not be at the end. */
 function imeComposedSegment(base: string, settled: string): string {
   const limit = Math.min(base.length, settled.length)
   let prefix = 0
@@ -122,7 +127,9 @@ function imeComposedSegment(base: string, settled: string): string {
 }
 
 export function NativeChatComposerField({
+  editSession,
   draftScopeKey,
+  positionTarget,
   textareaRef,
   draft,
   disabled,
@@ -139,6 +146,8 @@ export function NativeChatComposerField({
   sendButtonDisabled,
   sendBlockedReason,
   isWorking,
+  hasDraft = false,
+  alternateSend,
   isStopping = false,
   afterStop,
   attachDisabled,
@@ -180,9 +189,61 @@ export function NativeChatComposerField({
   const compositionBaseRef = useRef('')
   const imageRow = useMemo(() => imageAttachments.map(({ id }) => id), [imageAttachments])
   const droppedDraftClearRef = useRef(false)
-  // The draft the editor last reported or was given. Why: a chip's node view renders the composer
-  // (flushSync) inside the editor's change, before onChange, with a draft the editor already passed.
+  // Remember the editor’s last draft because chip node views can flushSync a render before its onChange publishes.
   const editorDraftRef = useRef<string | null>(null)
+
+  const settleImeValue = (element: NativeChatComposerInput): void => {
+    if (droppedDraftClearRef.current) {
+      droppedDraftClearRef.current = false
+      element.value = imeComposedSegment(compositionBaseRef.current, element.value)
+    }
+    onImeSettled(element)
+  }
+
+  // Why: stable identities let the memoized editor and actions skip the per-keystroke render (#35836).
+  const editorChange = useLatestHandler((input: NativeChatComposerInput) => {
+    const value = input.value
+    editorDraftRef.current = value
+    onDraftChange(value, input)
+  })
+  const editorSelect = useLatestHandler(onTextareaSelect)
+  const editorKeyDownCapture = useLatestHandler((event: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!imeEnterGesture.ownsKeyDown(event)) {
+      onKeyDown(event)
+    }
+  })
+  const editorKeyUp = useLatestHandler(imeEnterGesture.onKeyUp)
+  const editorBlur = useLatestHandler(() => {
+    const compositionWasActive = imeEnterGesture.isComposing()
+    imeEnterGesture.reset()
+    if (compositionWasActive) {
+      settleImeValue(textareaRef.current!)
+    }
+  })
+  const editorCompositionStart = useLatestHandler(() => {
+    if (imeEnterGesture.isComposing()) {
+      imeEnterGesture.setComposing(false)
+      // Settle the interrupted composition before the new one takes browser ownership.
+      flushSync(() => settleImeValue(textareaRef.current!))
+    }
+    compositionBaseRef.current = textareaRef.current!.value
+    imeEnterGesture.setComposing(true)
+  })
+  const editorCompositionEnd = useLatestHandler((event: React.CompositionEvent<HTMLDivElement>) => {
+    const compositionWasActive = imeEnterGesture.isComposing()
+    imeEnterGesture.setComposing(false, event.data)
+    if (compositionWasActive) {
+      settleImeValue(textareaRef.current!)
+    }
+  })
+  const editorPaste = useLatestHandler(onPaste)
+  const attach = useLatestHandler(onAttach)
+  const dictationToggle = useLatestHandler(onDictationToggle)
+  const dictationHoldStart = useLatestHandler(onDictationHoldStart)
+  const dictationHoldEnd = useLatestHandler(onDictationHoldEnd)
+  const send = useLatestHandler(onSend)
+  const stop = useLatestHandler(onStop ?? noop)
+  const exitGoalMode = useLatestHandler(goalMode?.exit ?? noop)
 
   // Browser owns the provisional value; React synchronizes drafts only between IME sessions.
   useLayoutEffect(() => {
@@ -191,9 +252,7 @@ export function NativeChatComposerField({
       return
     }
     if (imeEnterGesture.isComposing()) {
-      // Why: a clear (an async structured send confirming) would otherwise be lost outright and
-      // the sent text would ride along into the next message. Only clears are carved out of
-      // browser ownership; every other programmatic draft still loses to the live composition.
+      // Remember async send clears during composition so sent text cannot leak into the next message; other drafts still yield to IME.
       droppedDraftClearRef.current ||= draft === '' && textarea.value !== ''
       return
     }
@@ -204,20 +263,11 @@ export function NativeChatComposerField({
     editorDraftRef.current = draft
   }, [draft, imeEnterGesture, textareaRef])
 
-  const settleImeValue = (element: NativeChatComposerInput): void => {
-    if (droppedDraftClearRef.current) {
-      droppedDraftClearRef.current = false
-      element.value = imeComposedSegment(compositionBaseRef.current, element.value)
-    }
-    onImeSettled(element)
-  }
-
   // Stable so the memoized option pickers keep their identity.
   const focusComposer = useCallback(() => textareaRef.current?.focus(), [textareaRef])
 
   return (
     <div className="shrink-0 bg-chat-canvas">
-      {/* Extra bottom padding keeps the input box off the window rim. */}
       <div className="px-3 pt-2 pb-4 sm:px-4">
         <div className="relative mx-auto w-full max-w-(--chat-content-max-width)">
           {autocomplete.mode === 'slash' ? (
@@ -254,18 +304,10 @@ export function NativeChatComposerField({
           />
           <div
             className={cn(
-              // Why: always-on hairline (token-level border, not focus ring) —
-              // no focus/click border flash. The box is a container, not a
-              // focus target.
+              // Use a constant container border so focus changes cannot flash it.
               'rounded-xl border border-chat-composer-border p-1.5 shadow-xs',
               'bg-chat-composer-surface',
-              // Why (#10481): the native caret blink invalidates paint up to the
-              // nearest containment boundary; without this the whole transcript
-              // re-rasterizes twice a second. Pickers are siblings and every menu
-              // and tooltip in here is a Radix portal, so nothing floating clips.
-              // Tightest descendant is the attachment remove button, which
-              // overhangs its thumbnail by 6px and clears this box's padding by
-              // 4px — keep that slack if the padding below ever shrinks.
+              // Contain caret-blink repaint to the composer; keep 4px slack around overhanging attachment buttons, while menus use portals.
               '[contain:paint]'
             )}
           >
@@ -285,46 +327,19 @@ export function NativeChatComposerField({
             <NativeChatPromptEditor
               key={draftScopeKey}
               scopeKey={draftScopeKey}
+              positionTarget={positionTarget}
               imageRow={imageRow}
               inputRef={textareaRef}
               initialValue={draft}
               disabled={disabled}
-              onChange={(input) => {
-                const value = input.value
-                editorDraftRef.current = value
-                onDraftChange(value, input)
-              }}
-              onKeyDownCapture={(event) => {
-                if (!imeEnterGesture.ownsKeyDown(event)) {
-                  onKeyDown(event)
-                }
-              }}
-              onKeyUp={imeEnterGesture.onKeyUp}
-              onBlur={() => {
-                const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.reset()
-                if (compositionWasActive) {
-                  settleImeValue(textareaRef.current!)
-                }
-              }}
-              onCompositionStart={() => {
-                if (imeEnterGesture.isComposing()) {
-                  imeEnterGesture.setComposing(false)
-                  // Settle the interrupted composition before the new one takes browser ownership.
-                  flushSync(() => settleImeValue(textareaRef.current!))
-                }
-                compositionBaseRef.current = textareaRef.current!.value
-                imeEnterGesture.setComposing(true)
-              }}
-              onCompositionEnd={() => {
-                const compositionWasActive = imeEnterGesture.isComposing()
-                imeEnterGesture.setComposing(false)
-                if (compositionWasActive) {
-                  settleImeValue(textareaRef.current!)
-                }
-              }}
-              onPasteCapture={onPaste}
-              onSelect={onTextareaSelect}
+              onChange={editorChange}
+              onKeyDownCapture={editorKeyDownCapture}
+              onKeyUp={editorKeyUp}
+              onBlur={editorBlur}
+              onCompositionStart={editorCompositionStart}
+              onCompositionEnd={editorCompositionEnd}
+              onPasteCapture={editorPaste}
+              onSelect={editorSelect}
               aria-expanded={autocomplete.mode !== 'none'}
               aria-controls={autocomplete.mode !== 'none' ? pickerListboxId : undefined}
               aria-activedescendant={
@@ -333,18 +348,16 @@ export function NativeChatComposerField({
                   : undefined
               }
               placeholder={
-                goalMode?.active
-                  ? translate(
-                      'components.native-chat.goal.placeholder',
-                      'Describe your goal, define measurable outcomes for best results'
-                    )
-                  : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
+                editSession
+                  ? translate('components.native-chat.queuedMessages.editMessage', 'Edit message')
+                  : goalMode?.active
+                    ? translate(
+                        'components.native-chat.goal.placeholder',
+                        'Describe your goal, define measurable outcomes for best results'
+                      )
+                    : (unavailableHint ?? nativeChatComposerPlaceholder(hasPty, canSend, afterStop))
               }
-              // Why: coarse-pointer min-height follows the app's touch target convention.
-              // Editable content grows naturally; the 8lh cap (plus
-              // py-1) turns further growth into internal scrolling, and scrollbar-sleek
-              // keeps that gutter off the heavy native scrollbar. Both are layout-driven,
-              // so re-wrap on window/pane resize is handled without a measure pass.
+              // Let layout handle wrapping and touch targets; scroll after eight lines without JavaScript measurement.
               className={cn(
                 'min-h-12 w-full bg-transparent px-2 py-1 text-sm text-chat-foreground-strong outline-none pointer-coarse:min-h-14',
                 'max-h-[calc(8lh+0.5rem)] overflow-y-auto scrollbar-sleek',
@@ -354,27 +367,30 @@ export function NativeChatComposerField({
             />
             <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <NativeChatComposerActions
+                editSession={editSession}
                 attachDisabled={attachDisabled}
                 dictationDisabled={dictationDisabled}
                 sendDisabled={sendButtonDisabled}
                 sendBlockedReason={sendBlockedReason}
                 draftNotSaved={draftNotSaved}
                 isWorking={isWorking}
+                hasDraft={hasDraft}
+                alternateSend={alternateSend}
                 isStopping={isStopping}
                 isDictating={isDictating}
                 isDictationHoldMode={isDictationHoldMode}
-                onAttach={onAttach}
-                onDictationToggle={onDictationToggle}
-                onDictationHoldStart={onDictationHoldStart}
-                onDictationHoldEnd={onDictationHoldEnd}
-                onSend={onSend}
-                onStop={onStop}
+                onAttach={attach}
+                onDictationToggle={dictationToggle}
+                onDictationHoldStart={dictationHoldStart}
+                onDictationHoldEnd={dictationHoldEnd}
+                onSend={send}
+                onStop={onStop ? stop : undefined}
                 sessionOptionsSurface={sessionOptionsSurface}
                 sessionOptionsSnapshot={sessionOptionsSnapshot}
                 contextUsage={contextUsage}
                 sessionOptionsPickerRequest={sessionOptionsPickerRequest}
                 focusComposer={focusComposer}
-                onExitGoalMode={goalMode?.active ? goalMode.exit : undefined}
+                onExitGoalMode={goalMode?.active ? exitGoalMode : undefined}
                 {...(agent ? { agent } : {})}
               />
             </div>

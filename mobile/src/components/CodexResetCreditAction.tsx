@@ -1,6 +1,9 @@
 import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native'
 import { RotateCcw } from 'lucide-react-native'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import type { CodexResetCreditSummary } from './codex-reset-credit'
 
 export function CodexResetCreditAction({
@@ -16,6 +19,8 @@ export function CodexResetCreditAction({
   disabled: boolean
   onPress: () => void
 }) {
+  const t = useMobileTranslation()
+  useMobileColorScheme()
   return (
     <>
       <View style={styles.separator} />
@@ -24,7 +29,7 @@ export function CodexResetCreditAction({
           <Text style={styles.title}>{summary.availabilityLabel}</Text>
           <Text style={styles.subtitle}>
             {[summary.expiryLabel, scopeLabel].filter(Boolean).join(' · ') ||
-              'Earned Codex rate-limit reset'}
+              t('components.codexResetCreditAction.earnedReset', 'Earned Codex rate-limit reset')}
           </Text>
         </View>
         <Pressable
@@ -36,11 +41,22 @@ export function CodexResetCreditAction({
           onPress={onPress}
           disabled={disabled}
           accessibilityRole="button"
-          accessibilityLabel={busy ? 'Resetting Codex rate limits' : 'Use Codex rate-limit reset'}
+          accessibilityLabel={
+            busy
+              ? t('components.codexResetCreditAction.resettingLabel', 'Resetting Codex rate limits')
+              : t('components.codexResetCreditAction.useResetLabel', 'Use Codex rate-limit reset')
+          }
           accessibilityHint={
             scopeLabel
-              ? `Uses one earned reset for ${scopeLabel}`
-              : 'Uses one earned reset for the active Codex account'
+              ? t(
+                  'components.codexResetCreditAction.scopedHint',
+                  'Uses one earned reset for {{scopeLabel}}',
+                  { scopeLabel }
+                )
+              : t(
+                  'components.codexResetCreditAction.activeAccountHint',
+                  'Uses one earned reset for the active Codex account'
+                )
           }
           accessibilityState={{ busy, disabled }}
           hitSlop={8}
@@ -50,14 +66,18 @@ export function CodexResetCreditAction({
           ) : (
             <RotateCcw size={14} color={colors.textPrimary} />
           )}
-          <Text style={styles.buttonText}>{busy ? 'Resetting…' : 'Use reset'}</Text>
+          <Text style={styles.buttonText}>
+            {busy
+              ? t('components.codexResetCreditAction.resetting', 'Resetting…')
+              : t('components.codexResetCreditAction.useReset', 'Use reset')}
+          </Text>
         </Pressable>
       </View>
     </>
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   separator: {
     height: StyleSheet.hairlineWidth,
     backgroundColor: colors.borderSubtle,
@@ -93,7 +113,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: spacing.md,
     borderWidth: StyleSheet.hairlineWidth,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.button,
+    borderRadius: radii.control,
     backgroundColor: colors.bgRaised
   },
   buttonPressed: {
@@ -107,4 +127,4 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: colors.textPrimary
   }
-})
+}))

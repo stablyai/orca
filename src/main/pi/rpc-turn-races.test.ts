@@ -94,6 +94,41 @@ describe('Pi turn settlement races', () => {
       expect(errors[0]?.text).toContain('`/login`')
     }
   })
+  it('keeps a reply whose finished thinking and text blocks outnumber the open-stream bound', async () => {
+    const h = await setup()
+    await h.start()
+    const content = Array.from({ length: 300 }, (_, index) =>
+      index % 2
+        ? { type: 'text', text: `text ${index}` }
+        : { type: 'thinking', thinking: `thought ${index}` }
+    )
+    const message = { role: 'assistant', content: [] }
+    h.turns.receive({ type: 'message_start', message })
+    content.forEach((block, contentIndex) => {
+      const kind = block.type === 'text' ? 'text' : 'thinking'
+      const text = block.text ?? block.thinking ?? ''
+      h.turns.receive({
+        type: 'message_update',
+        message,
+        assistantMessageEvent: { type: `${kind}_delta`, contentIndex, delta: text }
+      })
+      h.turns.receive({
+        type: 'message_update',
+        message,
+        assistantMessageEvent: { type: `${kind}_end`, contentIndex, content: text }
+      })
+    })
+    h.turns.receive({ type: 'message_end', message: { role: 'assistant', content } })
+    h.turns.receive({ type: 'agent_end' })
+    h.turns.receive({ type: 'agent_settled' })
+    await h.flush()
+    expect(h.failed).not.toHaveBeenCalled()
+    const texts = (await h.rig.rows()).flatMap(({ body }) =>
+      body.kind === 'message' && body.blocks[0]?.type === 'text' ? [body.blocks[0].text] : []
+    )
+    expect(texts).toEqual(content.map((block) => block.text ?? block.thinking))
+    expect((await h.rig.turns())[0]?.outcome).toBe('success')
+  })
   it.each(['user', 'custom'])(
     'accepts a steer only at its own echo after a %s message starts an idle run',
     async (role) => {
@@ -168,33 +203,46 @@ describe('Pi turn settlement races', () => {
     expect((await h.rig.turns())[0]?.outcome).toBe('success')
   })
 
-  it('keeps a busy generation open and rejects a probe made stale by new activity', async () => {
-    let release: ((value: unknown) => void) | undefined
-    const request = vi.fn(
-      (_command: string) =>
-        new Promise<unknown>((resolve) => {
-          release = resolve
-        })
-    )
-    const h = await setup(request)
-    await h.start()
-    h.turns.receive({ type: 'agent_settled' })
-    await Promise.resolve()
-    release?.(state({ isStreaming: true }))
-    await h.flush()
-    expect(h.idle).not.toHaveBeenCalled()
-    h.turns.receive({ type: 'agent_settled' })
-    await Promise.resolve()
-    h.turns.receive({ type: 'message_update', message: { role: 'assistant', content: [] } })
-    release?.(state())
-    await h.flush()
-    expect(h.idle).not.toHaveBeenCalled()
-    h.turns.receive({ type: 'agent_settled' })
-    await Promise.resolve()
-    release?.(state())
-    await h.flush()
-    expect((await h.rig.turns())[0]?.outcome).toBe('success')
-  })
+  it.each([
+    [
+      'received',
+      (turns: PiRpcTurns) =>
+        turns.receive({ type: 'message_update', message: { role: 'assistant', content: [] } })
+    ],
+    [
+      'oversized',
+      (turns: PiRpcTurns) => turns.skipped('message_update', '{"type":"message_update",')
+    ]
+  ])(
+    'keeps a busy generation open and rejects a probe made stale by %s activity',
+    async (_kind, activity) => {
+      let release: ((value: unknown) => void) | undefined
+      const request = vi.fn(
+        (_command: string) =>
+          new Promise<unknown>((resolve) => {
+            release = resolve
+          })
+      )
+      const h = await setup(request)
+      await h.start()
+      h.turns.receive({ type: 'agent_settled' })
+      await Promise.resolve()
+      release?.(state({ isStreaming: true }))
+      await h.flush()
+      expect(h.idle).not.toHaveBeenCalled()
+      h.turns.receive({ type: 'agent_settled' })
+      await Promise.resolve()
+      activity(h.turns)
+      release?.(state())
+      await h.flush()
+      expect(h.idle).not.toHaveBeenCalled()
+      h.turns.receive({ type: 'agent_settled' })
+      await Promise.resolve()
+      release?.(state())
+      await h.flush()
+      expect((await h.rig.turns())[0]?.outcome).toBe('success')
+    }
+  )
 
   it('settles a provider-handled local command without agent events', async () => {
     const h = await setup()
@@ -236,6 +284,22 @@ describe('Pi turn settlement races', () => {
       await h.flush()
       expect((await h.rig.turns())[0]?.outcome).toBe(succeeded ? 'success' : 'failure')
     }
+  })
+
+  it('keeps an exhausted retry a failure when its records exceed the line limit', async () => {
+    const h = await setup()
+    await h.start()
+    h.turns.skipped(
+      'message_end',
+      '{"type":"message_end","message":{"role":"assistant","content":['
+    )
+    h.turns.skipped(
+      'auto_retry_end',
+      '{"type":"auto_retry_end","success":false,"attempt":3,"finalError":"'
+    )
+    h.turns.receive({ type: 'agent_settled' })
+    await h.flush()
+    expect((await h.rig.turns())[0]?.outcome).toBe('failure')
   })
 })
 

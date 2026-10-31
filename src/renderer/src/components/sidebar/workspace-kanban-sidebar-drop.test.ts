@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WorkspaceStatusDefinition, Worktree } from '../../../../shared/worktree/types'
+import {
+  composeWorktreeHostIdentity,
+  getWorktreeHostIdentity
+} from '../../../../shared/worktree/host-qualified-identity'
 import { serializeWorkspaceLaneFullIds } from './workspace-kanban-filtered-drop-index'
 import {
   buildWorkspaceKanbanSidebarDropUpdates,
@@ -215,8 +219,7 @@ const VIRTUAL_CARD_HEIGHT = 36
 // Scrolled past the head of the lane, so the mounted window starts mid-list.
 const VIRTUAL_SPACER_TOP = -350
 
-// A virtualized lane: only `windowRange` of the view is mounted, and the layout
-// registration carries the whole view — exactly what the virtualizer publishes.
+// Mount only the virtual window while publishing the complete view layout, as the virtualizer does.
 function appendVirtualBoard(args: {
   fullLaneIds: readonly string[]
   viewIds: readonly string[]
@@ -436,8 +439,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 
     // Rendered index 1 means "before doing-b", which is index 3 in the full lane.
     expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 1)).toBe(3)
-    // Why: a tracked target can be committed after the pointer left the lane,
-    // so the translation must not depend on the current pointer position.
+    // Commit may happen after the pointer leaves the lane; translation cannot depend on pointer position.
     expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', 2)).toBe(4)
   })
 
@@ -451,8 +453,7 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
     })
 
     const target = getWorkspaceKanbanSidebarDropTarget(24, 210)
-    // The indicator sits between the mounted cards for view items 12 and 13,
-    // whose full-lane neighbours are doing-24 and doing-26.
+    // View items 12 and 13 map to full-lane neighbors doing-24 and doing-26.
     expect(target).toMatchObject({ status: 'doing', dropIndex: 13, dropIndicatorY: 218 })
     expect(resolveWorkspaceKanbanSidebarFullLaneDropIndex('doing', target.dropIndex)).toBe(26)
 
@@ -551,12 +552,20 @@ describe('workspace kanban sidebar drop DOM bridge', () => {
 })
 
 function rowsFrom(byId: ReadonlyMap<string, Worktree>) {
-  const rowsFor = (worktreeId: string): Worktree[] => {
-    const row = byId.get(worktreeId)
-    return row ? [row] : []
+  const byKey = new Map<string, Worktree[]>(
+    [...byId.values()].map((row) => [getWorktreeHostIdentity(row), [row]])
+  )
+  return {
+    status: (worktreeId: string): Worktree[] => {
+      const row = byId.get(worktreeId)
+      return row ? [row] : []
+    },
+    orderByKey: (key: string): Worktree[] => byKey.get(key) ?? []
   }
-  return { status: rowsFor, order: rowsFor }
 }
+
+// Board lanes and manual ranks key cards by host identity; these rows carry no host.
+const k = (id: string): string => composeWorktreeHostIdentity(undefined, id)
 
 describe('workspace kanban sidebar drop updates', () => {
   it('writes a status-only update for cross-lane drops outside Manual sort', () => {
@@ -570,12 +579,12 @@ describe('workspace kanban sidebar drop updates', () => {
       status: 'doing',
       dropIndex: 1,
       groups: [
-        { key: 'todo', worktreeIds: ['todo-a'] },
-        { key: 'doing', worktreeIds: ['doing-a'] }
+        { key: 'todo', worktreeIds: [k('todo-a')] },
+        { key: 'doing', worktreeIds: [k('doing-a')] }
       ],
       rowsFor: rowsFrom(worktreeById),
-      allWorktreeIds: [...worktreeById.keys()],
-      rankByWorktreeId: new Map(),
+      allWorktreeKeys: [...worktreeById.keys()].map(k),
+      rankByKey: new Map(),
       workspaceStatuses,
       sortBy: 'recent',
       now: 10_000
@@ -599,12 +608,12 @@ describe('workspace kanban sidebar drop updates', () => {
       status: 'doing',
       dropIndex: 1,
       groups: [
-        { key: 'todo', worktreeIds: ['todo-a'] },
-        { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
+        { key: 'todo', worktreeIds: [k('todo-a')] },
+        { key: 'doing', worktreeIds: [k('doing-a'), k('doing-b')] }
       ],
       rowsFor: rowsFrom(worktreeById),
-      allWorktreeIds: [...worktreeById.keys()],
-      rankByWorktreeId: new Map(),
+      allWorktreeKeys: [...worktreeById.keys()].map(k),
+      rankByKey: new Map(),
       workspaceStatuses,
       sortBy: 'manual',
       now: 10_000
@@ -653,11 +662,11 @@ describe('workspace kanban sidebar drop updates', () => {
         })
       ]
     ])
-    const rankByWorktreeId = new Map([
-      ['todo-a', 4000],
-      ['filtered', 3000],
-      ['doing-a', 2000],
-      ['doing-b', 1000]
+    const rankByKey = new Map([
+      [k('todo-a'), 4000],
+      [k('filtered'), 3000],
+      [k('doing-a'), 2000],
+      [k('doing-b'), 1000]
     ])
 
     const result = buildWorkspaceKanbanSidebarDropUpdates({
@@ -665,12 +674,12 @@ describe('workspace kanban sidebar drop updates', () => {
       status: 'doing',
       dropIndex: 1,
       groups: [
-        { key: 'todo', worktreeIds: ['todo-a'] },
-        { key: 'doing', worktreeIds: ['doing-a', 'doing-b'] }
+        { key: 'todo', worktreeIds: [k('todo-a')] },
+        { key: 'doing', worktreeIds: [k('doing-a'), k('doing-b')] }
       ],
       rowsFor: rowsFrom(worktreeById),
-      allWorktreeIds: ['todo-a', 'filtered', 'doing-a', 'doing-b'],
-      rankByWorktreeId,
+      allWorktreeKeys: ['todo-a', 'filtered', 'doing-a', 'doing-b'].map(k),
+      rankByKey,
       workspaceStatuses,
       sortBy: 'manual',
       now: 10_000

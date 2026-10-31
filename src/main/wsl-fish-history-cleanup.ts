@@ -2,23 +2,13 @@ import { runWslProcess } from './wsl/wsl-runner'
 import { isSafeFishHistorySession } from './fish-history-session'
 import { isWslDistroRunning } from './wsl-background-distro-gate'
 
-/** 'distro-stopped': nothing ran, because GC must not boot a stopped distro; retry once it runs. */
+/** Stopped distros must wait for a later cleanup; GC cannot boot them. */
 export type WslFishHistoryCleanupOutcome = 'deleted' | 'skipped' | 'distro-stopped'
 
-/** Deduped by distro+session, so a rescan that re-queues the same tombstone
- *  joins the running call instead of spawning a second `wsl.exe`.
- *
- *  Not otherwise rate-limited: the caller admits at most
- *  MAX_PENDING_HISTORY_TREE_REMOVALS tombstones at a time, so fanout is bounded
- *  but can still be dozens of `wsl.exe` launches during a startup GC drain on a
- *  machine with many dead WSL fish worktrees. Narrowing that belongs with the
- *  tombstone scheduler that owns the admission, not here. */
+/** Join identical cleanups; the tombstone scheduler bounds concurrency across different sessions. */
 const cleanupsInFlight = new Map<string, Promise<WslFishHistoryCleanupOutcome>>()
 
-/** Why run this INSIDE the distro: the history file lives on the distro's own
- *  filesystem under its `$XDG_DATA_HOME`/`$HOME`, which only a shell in there
- *  can resolve. `string match -qr '^/'` rejects a relative XDG_DATA_HOME the
- *  same way fish itself does before falling back. */
+/** Resolve data home inside the distro, rejecting relative XDG_DATA_HOME as fish does. */
 function fishCleanupScript(session: string): string {
   return [
     'set -l data_home $XDG_DATA_HOME',
@@ -59,11 +49,7 @@ async function runCleanup(
   }
   const result = await run({
     distro,
-    // 'preferred', not 'none': `fish` is a bare name, so it is a PATH lookup.
-    // A fish from linuxbrew or nix lives only on the login PATH, and without it
-    // this throws on a distro where the cleanup would have worked. The probe
-    // failing is still fine -- the old `--exec fish` spawn sourced no login
-    // shell either, so running on the default PATH is no worse than before.
+    // Prefer login PATH for fish installed by linuxbrew/nix, but permit the default PATH if probing fails.
     loginPath: 'preferred',
     program: 'fish',
     args: ['--command', fishCleanupScript(session)],
@@ -77,16 +63,11 @@ async function runCleanup(
   return 'deleted'
 }
 
-/** Test-only: drop in-flight state so one test's pending work cannot reach the next. */
 export function __resetWslFishHistoryCleanups(): void {
   cleanupsInFlight.clear()
 }
 
-/** Await every in-flight cleanup; for deterministic shutdown and tests.
- *  Why snapshot-and-drain rather than re-reading the map in the loop condition:
- *  an entry that has settled but whose `.finally` has not yet removed it would
- *  make `while (size > 0)` re-await a resolved promise forever, starving the
- *  event loop instead of returning. */
+/** Await each cleanup once so settled entries awaiting finally removal cannot starve the event loop. */
 export async function flushWslFishHistoryCleanups(): Promise<void> {
   const awaited = new Set<Promise<WslFishHistoryCleanupOutcome>>()
   let pending = [...cleanupsInFlight.values()]

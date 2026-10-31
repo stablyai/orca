@@ -1,5 +1,5 @@
 import path from 'node:path'
-import { describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const {
   callMock,
@@ -57,6 +57,14 @@ const ORCA_PROJECT = {
 const PROJECT_LIST_FIXTURE = okFixture('req_project_list', { projects: [ORCA_PROJECT] })
 
 describe('orca cli worktree awareness', () => {
+  const priorExitCode = process.exitCode
+  beforeEach(() => {
+    process.exitCode = undefined
+  })
+  afterEach(() => {
+    process.exitCode = priorExitCode
+  })
+
   useWorktreeAwarenessEnvironment({
     callMock,
     serveOrcaAppMock,
@@ -103,15 +111,27 @@ describe('orca cli worktree awareness', () => {
             sourceRepoIds: ['repo-1'],
             createdAt: 1,
             updatedAt: 1
+          },
+          {
+            id: 'folder:notes',
+            displayName: 'Notes',
+            kind: 'folder',
+            badgeColor: '#7c3aed',
+            sourceRepoIds: [],
+            createdAt: 1,
+            updatedAt: 1
           }
         ]
       })
     )
-    vi.spyOn(console, 'log').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
-    await main(['project', 'list', '--json'], '/tmp/repo')
+    await main(['project', 'list'], '/tmp/repo')
 
-    expect(callMock).toHaveBeenCalledWith('project.list')
+    expect(callMock).toHaveBeenCalledExactlyOnceWith('project.list')
+    expect(logSpy).toHaveBeenCalledExactlyOnceWith(
+      'github:stablyai/orca  Orca  github:stablyai/orca\nfolder:notes  Notes  no-provider'
+    )
   })
 
   it('routes a runtime host filter to that paired server and keeps its own local rows', async () => {
@@ -210,50 +230,45 @@ describe('orca cli worktree awareness', () => {
     )
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(['project', 'setups', '--host', 'runtime:old-server', '--json'], '/tmp/repo')
 
     const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({
+      ok: false,
+      error: { code: 'incompatible_runtime' }
+    })
     expect(printed).toContain('does not support project host setup yet')
     expect(printed).not.toContain('Unknown method')
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('rejects a runtime host id that no paired server owns instead of answering empty', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(['project', 'setups', '--host', 'runtime:not-a-real-env', '--json'], '/tmp/repo')
 
     expect(callMock).not.toHaveBeenCalledWith('projectHostSetup.list')
     const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
     expect(printed).toContain('no paired Orca server is named or has id not-a-real-env')
-    expect(JSON.parse(printed).error.code).toBe('invalid_argument')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
     expect(JSON.parse(printed).error.data.knownEnvironments).toEqual([])
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('rejects an unknown ssh host instead of answering empty', async () => {
     queueFixtures(callMock, okFixture('req_ssh_targets', { targets: [] }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(['project', 'setups', '--host', 'ssh:openclaw', '--json'], '/tmp/repo')
 
     expect(callMock).not.toHaveBeenCalledWith('projectHostSetup.list')
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'no SSH target named or with id openclaw'
-    )
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain('no SSH target named or with id openclaw')
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('tells a caller reaching for a paired server by ssh that it is an environment', async () => {
@@ -261,16 +276,13 @@ describe('orca cli worktree awareness', () => {
     queueFixtures(callMock, okFixture('req_ssh_targets', { targets: [] }))
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(['project', 'setups', '--host', 'ssh:awin', '--json'], '/tmp/repo')
 
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      '--environment awin'
-    )
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain('--environment awin')
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('resolves an ssh label to its target id before filtering', async () => {
@@ -290,6 +302,18 @@ describe('orca cli worktree awareness', () => {
             setupMethod: 'legacy-repo',
             createdAt: 1,
             updatedAt: 1
+          },
+          {
+            id: 'setup-other-host',
+            projectId: 'github:stablyai/orca',
+            hostId: 'ssh:other-target',
+            repoId: 'repo-other',
+            path: '/home/me/other',
+            displayName: 'Other',
+            setupState: 'ready',
+            setupMethod: 'legacy-repo',
+            createdAt: 1,
+            updatedAt: 1
           }
         ]
       })
@@ -298,7 +322,9 @@ describe('orca cli worktree awareness', () => {
 
     await main(['project', 'setups', '--host', 'ssh:openclaw'], '/tmp/repo')
 
-    expect(logSpy.mock.calls[0]?.[0]).toContain('setup-openclaw')
+    expect(logSpy).toHaveBeenCalledExactlyOnceWith(
+      'setup-openclaw  project:github:stablyai/orca  host:ssh:ssh-123-abc  ready  /home/me/orca'
+    )
   })
 
   it('never lets an environment name reach a persisted host id', async () => {
@@ -356,24 +382,20 @@ describe('orca cli worktree awareness', () => {
   it('rejects a malformed --host value before contacting any runtime', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(['project', 'setups', '--host', 'runtime:', '--json'], '/tmp/repo')
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'Invalid --host value: runtime:'
-    )
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain('Invalid --host value: runtime:')
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('refuses a runtime host id alongside an unrelated --pairing-code connection', async () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       ['project', 'setups', '--host', 'runtime:gpu', '--pairing-code', 'remote-runtime', '--json'],
@@ -381,12 +403,10 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
-      'use either --host runtime:<id> or --pairing-code, not both'
-    )
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain('use either --host runtime:<id> or --pairing-code, not both')
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('sets up an existing project folder with a path resolved against the local cli cwd', async () => {
@@ -459,7 +479,6 @@ describe('orca cli worktree awareness', () => {
     pairRuntimeEnvironment(listEnvironmentsMock, 'gpu')
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       [
@@ -477,18 +496,17 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain(
       'Remote project setup requires --path to be an absolute path on the remote server.'
     )
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('rejects SSH project setup relative paths, which name the client filesystem', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       [
@@ -506,18 +524,17 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain(
       'Remote project setup requires --path to be an absolute path on the remote server.'
     )
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('rejects remote repo.add relative paths instead of resolving against client cwd', async () => {
     const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     const errSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
-    const priorExitCode = process.exitCode
 
     await main(
       ['repo', 'add', '--path', './apps/web', '--pairing-code', 'remote-runtime', '--json'],
@@ -525,12 +542,12 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(callMock).not.toHaveBeenCalled()
-    expect([...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')).toContain(
+    const printed = [...logSpy.mock.calls, ...errSpy.mock.calls].flat().join('\n')
+    expect(JSON.parse(printed)).toMatchObject({ ok: false, error: { code: 'invalid_argument' } })
+    expect(printed).toContain(
       'Remote repo add requires --path to be an absolute path on the remote server.'
     )
     expect(process.exitCode).toBe(1)
-
-    process.exitCode = priorExitCode
   })
 
   it('sends remote repo.add absolute paths unchanged', async () => {
@@ -639,10 +656,13 @@ describe('orca cli worktree awareness', () => {
     )
 
     expect(runtimeClientConstructorMock).toHaveBeenCalledWith(null, 'awin')
-    expect(callMock).toHaveBeenCalledWith(
-      'projectHostSetup.clone',
-      expect.objectContaining({ destination: 'C:\\orca-probe' })
-    )
+    expect(callMock).toHaveBeenCalledWith('projectHostSetup.clone', {
+      projectId: 'github:stablyai/orca',
+      hostId: 'runtime:awin',
+      url: 'https://github.com/stablyai/orca.git',
+      destination: 'C:\\orca-probe',
+      displayName: undefined
+    })
   })
 
   it('updates project host setup metadata through the project-first runtime API', async () => {
@@ -823,14 +843,23 @@ describe('orca cli worktree awareness', () => {
 
   it('refuses --host on a server that would ignore it and act on the first same-id twin', async () => {
     queueFixtures(callMock, hostTargetStatusFixture(false))
-    vi.spyOn(console, 'error').mockImplementation(() => {})
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
 
     await main(
       ['project', 'setup-delete', '--setup', 'dup', '--host', 'local', '--force', '--json'],
       '/tmp/repo'
     )
 
-    expect(callMock).not.toHaveBeenCalledWith('projectHostSetup.delete', expect.anything())
+    expect(callMock.mock.calls).toEqual([['status.get']])
+    expect(logSpy).toHaveBeenCalledTimes(1)
+    expect(JSON.parse(String(logSpy.mock.calls[0]?.[0]))).toMatchObject({
+      ok: false,
+      error: {
+        code: 'incompatible_runtime',
+        message: expect.stringContaining('cannot pick a project setup by host yet')
+      }
+    })
+    expect(process.exitCode).toBe(1)
   })
 })
 

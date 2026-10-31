@@ -168,8 +168,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       workspaceSpaceScanError: null,
       workspaceSpaceMeasurements: []
     })
-    // Why: the compact Resource Manager card and the full Space page share
-    // one manual scan result; duplicate button presses should join the same IO.
+    // Resource Manager and Space share manual-scan IO; duplicate clicks join it.
     inFlightScan = window.api.workspaceSpace
       .analyze()
       .then((result) => {
@@ -226,8 +225,7 @@ export const createWorkspaceSpaceSlice: StateCreator<AppState, [], [], Workspace
       const nextAnalysis = state.workspaceSpaceAnalysis
         ? removeDeletedWorktreesFromAnalysis(state.workspaceSpaceAnalysis, worktreeTargets)
         : null
-      // Why: this runs on every worktree removal and list refresh; a no-op
-      // must not mint new identities and wake every space subscriber.
+      // Removal/list refresh runs often; no-op must preserve identities to avoid waking all Space subscribers.
       if (
         nextMeasurements.length === state.workspaceSpaceMeasurements.length &&
         nextAnalysis === state.workspaceSpaceAnalysis

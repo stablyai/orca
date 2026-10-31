@@ -1,6 +1,9 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { Check } from 'lucide-react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
+import { themedStyleSheet } from '../theme/themed-styles'
+import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
+import { useMobileTranslation } from '../i18n/use-mobile-translation'
 import { BottomDrawer } from './BottomDrawer'
 
 export type SetupTrustPrompt = {
@@ -15,24 +18,26 @@ type Props = {
   visible: boolean
   prompt: SetupTrustPrompt | null
   busy: boolean
+  allowAlwaysTrust?: boolean
   onRunOnce: () => void
   onAlwaysTrust: () => void
   onDontRun: () => void
   onClose: () => void
 }
 
-// The repo-owned orca.yaml setup-hook trust prompt, shown before a workspace
-// create that would run an untrusted setup script. Extracted from NewWorktreeModal
-// to keep that file focused; the async persist/create logic stays with the caller.
+// Prompt before create runs untrusted repo-owned orca.yaml setup; caller retains async persistence/create.
 export function SetupHookTrustDrawer({
   visible,
   prompt,
   busy,
+  allowAlwaysTrust = true,
   onRunOnce,
   onAlwaysTrust,
   onDontRun,
   onClose
 }: Props) {
+  useMobileColorScheme()
+  const t = useMobileTranslation()
   return (
     <BottomDrawer visible={visible && prompt != null} onClose={onClose}>
       {prompt ? (
@@ -40,18 +45,32 @@ export function SetupHookTrustDrawer({
           <View style={styles.trustHeader}>
             <Text style={styles.title}>
               {prompt.previouslyApproved
-                ? `${prompt.repoName}'s setup script changed`
-                : `Run setup from ${prompt.repoName}?`}
+                ? t(
+                    'components.setupHookTrustDrawer.scriptChangedTitle',
+                    "{{repoName}}'s setup script changed",
+                    { repoName: prompt.repoName }
+                  )
+                : t(
+                    'components.setupHookTrustDrawer.runSetupTitle',
+                    'Run setup from {{repoName}}?',
+                    {
+                      repoName: prompt.repoName
+                    }
+                  )}
             </Text>
             <Text style={styles.subtitle}>
-              This repository's orca.yaml runs before the workspace starts. Only run it if you trust
-              this repository.
+              {t(
+                'components.setupHookTrustDrawer.description',
+                "This repository's orca.yaml runs before the workspace starts. Only run it if you trust this repository."
+              )}
             </Text>
           </View>
 
           <View style={styles.trustScriptBox}>
             <Text style={styles.trustScriptLabel}>
-              {prompt.previouslyApproved ? 'New setup script' : 'Setup script'}
+              {prompt.previouslyApproved
+                ? t('components.setupHookTrustDrawer.newScriptLabel', 'New setup script')
+                : t('components.setupHookTrustDrawer.scriptLabel', 'Setup script')}
             </Text>
             <Text style={styles.trustScriptText}>{prompt.scriptContent}</Text>
           </View>
@@ -59,16 +78,26 @@ export function SetupHookTrustDrawer({
           <View style={styles.trustActionGroup}>
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onRunOnce}>
               <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Run hooks</Text>
+              <Text style={styles.trustActionText}>
+                {t('components.setupHookTrustDrawer.runHooks', 'Run hooks')}
+              </Text>
             </Pressable>
             <View style={styles.trustActionSeparator} />
-            <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
-              <Check size={16} color={colors.textPrimary} />
-              <Text style={styles.trustActionText}>Always trust and run</Text>
-            </Pressable>
-            <View style={styles.trustActionSeparator} />
+            {allowAlwaysTrust ? (
+              <>
+                <Pressable style={styles.trustActionRow} disabled={busy} onPress={onAlwaysTrust}>
+                  <Check size={16} color={colors.textPrimary} />
+                  <Text style={styles.trustActionText}>
+                    {t('components.setupHookTrustDrawer.alwaysTrustAndRun', 'Always trust and run')}
+                  </Text>
+                </Pressable>
+                <View style={styles.trustActionSeparator} />
+              </>
+            ) : null}
             <Pressable style={styles.trustActionRow} disabled={busy} onPress={onDontRun}>
-              <Text style={styles.trustActionText}>Don't run</Text>
+              <Text style={styles.trustActionText}>
+                {t('components.setupHookTrustDrawer.dontRun', "Don't run")}
+              </Text>
             </Pressable>
           </View>
         </View>
@@ -77,7 +106,7 @@ export function SetupHookTrustDrawer({
   )
 }
 
-const styles = StyleSheet.create({
+const styles = themedStyleSheet(() => ({
   title: {
     fontSize: 15,
     fontWeight: '600',
@@ -93,8 +122,8 @@ const styles = StyleSheet.create({
     marginBottom: spacing.md
   },
   trustScriptBox: {
-    backgroundColor: colors.bgRaised,
-    borderRadius: radii.input,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     padding: spacing.md,
@@ -112,8 +141,8 @@ const styles = StyleSheet.create({
     color: colors.textPrimary
   },
   trustActionGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.input,
+    backgroundColor: colors.sheetGroup,
+    borderRadius: radii.surface,
     overflow: 'hidden'
   },
   trustActionRow: {
@@ -134,4 +163,4 @@ const styles = StyleSheet.create({
     backgroundColor: colors.borderSubtle,
     marginHorizontal: spacing.md
   }
-})
+}))

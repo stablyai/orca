@@ -1,0 +1,513 @@
+// @vitest-environment happy-dom
+
+import { act } from 'react'
+import { createRoot, type Root } from 'react-dom/client'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import type {
+  PluginHostListEntry,
+  PluginMarketplaceHostInstallPreview,
+  PluginMarketplaceHostListing
+} from '../../../../../preload/api-types'
+import { usePluginSyntaxFailureStore } from '@/store/plugin-syntax-failures'
+import { usePluginSyntaxStore } from '@/store/plugin-syntax-packs'
+import { usePluginThemeStore } from '@/store/plugin-themes'
+import { pluginManifestSchema } from '../../../../../shared/plugins/manifest/plugin-manifest'
+import {
+  pluginListEntryFromInstalled,
+  pluginListEntryFromListing,
+  type PluginListEntry
+} from '../list/plugin-list-entries'
+import { PluginDetailPage } from './PluginDetailPage'
+import type { PluginPagePreview } from '../state/use-plugin-catalog'
+
+vi.mock('../../ui/tooltip', () => ({
+  Tooltip: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipTrigger: ({ children }: { children: React.ReactNode }) => <>{children}</>,
+  TooltipContent: () => null
+}))
+
+const listing: PluginMarketplaceHostListing = {
+  marketplaceSourceId: 'official',
+  marketplaceName: 'Orca Official Plugins',
+  marketplaceOwner: 'stablyai',
+  marketplaceCommit: 'c',
+  pluginKey: 'stablyai.orca-minimal-icons',
+  source: { kind: 'git', url: 'https://example.invalid/icons.git', ref: 'main' },
+  description: 'Monochrome icons.',
+  categories: ['icons'],
+  official: true,
+  bundled: false,
+  release: {
+    version: '1.0.0',
+    commit: 'd'.repeat(40),
+    contentHash: 'e'.repeat(64),
+    execution: 'data',
+    minimumOrca: '1.0.0',
+    types: ['icon-theme']
+  }
+}
+
+const manifest = pluginManifestSchema.parse({
+  manifestVersion: 1,
+  id: 'orca-minimal-icons',
+  publisher: 'stablyai',
+  name: 'Orca Minimal Icons',
+  version: '1.0.0',
+  engines: { orca: '>=1.0.0' },
+  pluginApi: 1,
+  contributes: {
+    iconThemes: [{ id: 'minimal', title: 'Minimal Icons', path: 'icons/theme.json' }]
+  }
+})
+
+const preview: PluginMarketplaceHostInstallPreview = {
+  marketplaceSourceId: 'official',
+  marketplaceName: 'Orca Official Plugins',
+  marketplaceOwner: 'stablyai',
+  marketplaceCommit: 'c',
+  pluginKey: listing.pluginKey,
+  source: listing.source,
+  resolvedCommit: 'd'.repeat(40),
+  contentHash: 'e'.repeat(64),
+  consentFingerprint: 'f',
+  manifest,
+  official: true,
+  bundled: false
+}
+
+const installed: PluginHostListEntry = {
+  pluginKey: 'stablyai.gleam',
+  consentFingerprint: 'sha256-gleam',
+  name: 'Gleam',
+  version: '1.0.0',
+  publisher: 'stablyai',
+  status: 'idle',
+  needsReconsent: false,
+  isDev: false,
+  official: false,
+  bundled: false,
+  capabilities: [],
+  panels: [],
+  commands: [],
+  hasWorker: false,
+  execution: 'data',
+  restarts: 0,
+  source: { kind: 'local-path', reference: '/tmp/gleam', resolvedCommit: null, contentHash: 'h' }
+}
+
+let root: Root | null = null
+const install = {
+  phaseOf: () => null,
+  install: vi.fn().mockResolvedValue(undefined),
+  dismiss: vi.fn()
+}
+
+async function render(
+  entry: PluginListEntry,
+  fetchPreview: (target: PluginMarketplaceHostListing) => Promise<PluginPagePreview>,
+  { refreshing = false }: { refreshing?: boolean } = {}
+): Promise<HTMLDivElement> {
+  const container = document.createElement('div')
+  document.body.appendChild(container)
+  root = createRoot(container)
+  await act(async () => {
+    root?.render(
+      <PluginDetailPage
+        entry={entry}
+        busy={false}
+        orcaVersion="1.4.214"
+        logsState={undefined}
+        handlers={{
+          onOpen: vi.fn(),
+          onReview: vi.fn(),
+          onToggleEnabled: vi.fn(),
+          onRestart: vi.fn(),
+          onViewLogs: vi.fn(),
+          onCheckUpdate: vi.fn(),
+          onRollbackRequest: vi.fn(),
+          onRemoveRequest: vi.fn()
+        }}
+        fetchPreview={fetchPreview}
+        install={install}
+        refreshing={refreshing}
+        onConsent={vi.fn().mockResolvedValue(undefined)}
+        onBack={vi.fn()}
+        onOpenShortcuts={vi.fn()}
+      />
+    )
+  })
+  return container
+}
+
+beforeEach(() => {
+  Object.defineProperty(window, 'api', {
+    configurable: true,
+    value: {
+      plugins: {
+        getRollbackVersion: vi.fn().mockResolvedValue(null),
+        getInstalledManifest: vi.fn().mockResolvedValue(null)
+      },
+      shell: { openUrl: vi.fn() }
+    }
+  })
+})
+
+afterEach(() => {
+  act(() => root?.unmount())
+  root = null
+  document.body.innerHTML = ''
+  usePluginSyntaxStore.setState({ entries: [], loaded: false })
+  usePluginThemeStore.setState({ entries: [], loaded: false })
+  usePluginSyntaxFailureStore.setState({ failures: {} })
+})
+
+describe('PluginDetailPage', () => {
+  it('installs a content-only plugin in one click from its page', async () => {
+    const container = await render(pluginListEntryFromListing(listing), () =>
+      Promise.resolve({ ok: true, preview })
+    )
+    const button = Array.from(container.querySelectorAll('button')).find(
+      (candidate) => candidate.textContent === 'Install'
+    )
+    await act(async () => button?.click())
+    expect(install.install).toHaveBeenCalledWith(listing, { preview })
+  })
+
+  it('shows author links and hotlinked images as nothing, and links only the install source', async () => {
+    const container = await render(
+      pluginListEntryFromListing({
+        ...listing,
+        source: { kind: 'git', url: 'https://github.com/Acme/icons.git', ref: 'main' },
+        description: 'Docs at https://evil.example and [click](javascript:alert(1))',
+        homepage: 'https://evil.example/home',
+        repository: 'https://evil.example/repo',
+        changelog: 'See <a href="https://evil.example">notes</a>',
+        images: { cover: { url: 'https://tracker.example/pixel.png', alt: 'Cover' } }
+      }),
+      () => Promise.resolve({ ok: true, preview })
+    )
+    expect(container.querySelectorAll('a, img')).toHaveLength(0)
+    expect(container.textContent).toContain('See <a href="https://evil.example">notes</a>')
+    expect(container.textContent).not.toContain('Homepage')
+    const repository = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Repository'
+    )
+    await act(async () => repository?.click())
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/acme/icons')
+    const readme = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Read the README on GitHub'
+    )
+    await act(async () => readme?.click())
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      `https://github.com/acme/icons/tree/${'d'.repeat(40)}#readme`
+    )
+  })
+
+  it("links a mirrored community plugin to its author's repository at the pinned commit", async () => {
+    const container = await render(
+      pluginListEntryFromListing({
+        ...listing,
+        pluginKey: 'acme.icons',
+        official: false,
+        source: {
+          kind: 'git',
+          url: 'https://github.com/stablyai/orca-community-mirror.git',
+          ref: 'refs/tags/acme/icons/1.0.0'
+        },
+        release: { ...listing.release!, repository: 'https://github.com/Acme/Icons' }
+      }),
+      () => Promise.resolve({ ok: true, preview })
+    )
+    const click = async (label: string) => {
+      const button = Array.from(container.querySelectorAll('button')).find(
+        (candidate) => candidate.textContent === label
+      )
+      await act(async () => button?.click())
+    }
+    await click('Repository')
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith('https://github.com/acme/icons')
+    await click('Read the README on GitHub')
+    expect(window.api.shell.openUrl).toHaveBeenCalledWith(
+      `https://github.com/acme/icons/tree/${'d'.repeat(40)}#readme`
+    )
+    expect(window.api.shell.openUrl).not.toHaveBeenCalledWith(
+      expect.stringContaining('orca-community-mirror')
+    )
+  })
+
+  it('never claims no access when the plugin could not be read, and retries', async () => {
+    const fetchPreview = vi
+      .fn<(target: PluginMarketplaceHostListing) => Promise<PluginPagePreview>>()
+      .mockResolvedValueOnce({ ok: false })
+      .mockResolvedValueOnce({ ok: true, preview })
+    // Why no release: an older catalog vouches for no profile, so only the files can say.
+    const container = await render(
+      pluginListEntryFromListing({ ...listing, release: undefined }),
+      fetchPreview
+    )
+    expect(container.textContent).toContain('Couldn’t read its access')
+    expect(container.textContent).not.toContain('outside its own files')
+    const installButton = Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Install & enable')
+    )
+    expect(installButton?.disabled).toBe(true)
+
+    const retry = Array.from(container.querySelectorAll('button')).find(
+      (button) => button.textContent === 'Retry'
+    )
+    await act(async () => retry?.click())
+    expect(fetchPreview).toHaveBeenCalledTimes(2)
+    expect(container.textContent).toContain('Content only')
+  })
+
+  it('never calls a commands plugin content only, before or after its manifest is read', async () => {
+    const commandsListing: PluginMarketplaceHostListing = {
+      ...listing,
+      pluginKey: 'stablyai.shortcuts',
+      release: { ...listing.release!, execution: 'declarative', types: ['instructions'] }
+    }
+    let resolvePreview: (result: PluginPagePreview) => void = () => {}
+    const container = await render(
+      pluginListEntryFromListing(commandsListing),
+      () => new Promise((resolve) => (resolvePreview = resolve))
+    )
+    expect(container.textContent).not.toContain('Content only')
+    // Why no capabilities: the old page read "no worker" as "no code that runs".
+    await act(async () =>
+      resolvePreview({
+        ok: true,
+        preview: {
+          ...preview,
+          pluginKey: 'stablyai.shortcuts',
+          manifest: { ...preview.manifest, capabilities: [] }
+        }
+      })
+    )
+    expect(container.textContent).not.toContain('Content only')
+    expect(container.textContent).toContain('Its commands can act for you or your agents')
+  })
+
+  it('warns that an installed worker plugin has full access even without capabilities', async () => {
+    const container = await render(
+      pluginListEntryFromInstalled({ ...installed, hasWorker: true, execution: 'trusted-worker' }),
+      vi.fn()
+    )
+    expect(container.textContent).not.toContain('sandbox')
+    expect(container.textContent).toContain(
+      'Full access: runs as a normal program and can read your files, use the network and run other programs.'
+    )
+  })
+
+  it('warns about the commands a panel plugin carries and discloses replaced shortcuts first', async () => {
+    vi.spyOn(navigator, 'userAgent', 'get').mockReturnValue('Macintosh')
+    const panelManifest = pluginManifestSchema.parse({
+      ...manifest,
+      contributes: {
+        panels: [{ id: 'board', title: 'Board', entry: 'board.html' }],
+        commands: [{ id: 'tasks', title: 'Open Tasks', action: 'sidebar.left.toggle' }],
+        keybindings: [{ command: 'tasks', key: 'Mod+Alt+T' }]
+      }
+    })
+    const panelListing: PluginMarketplaceHostListing = {
+      ...listing,
+      pluginKey: 'stablyai.board',
+      release: { ...listing.release!, execution: 'sandboxed-ui', types: ['panel', 'instructions'] }
+    }
+    const container = await render(pluginListEntryFromListing(panelListing), () =>
+      Promise.resolve({
+        ok: true,
+        preview: { ...preview, pluginKey: 'stablyai.board', manifest: panelManifest }
+      })
+    )
+    expect(container.textContent).toContain('Its commands can act for you or your agents')
+    expect(container.textContent).not.toContain('These permissions limit what it can do')
+    expect(container.textContent).not.toContain('outside its own files')
+    expect(container.textContent).toMatch(/replaces your shortcut for/)
+  })
+
+  const codeRelease = {
+    ...listing,
+    pluginKey: 'stablyai.shortcuts',
+    release: {
+      ...listing.release!,
+      commit: 'd'.repeat(40),
+      contentHash: 'e'.repeat(64),
+      execution: 'declarative' as const,
+      types: ['instructions' as const]
+    }
+  }
+  const codeManifest = pluginManifestSchema.parse({
+    ...manifest,
+    contributes: { commands: [{ id: 'go', title: 'Go', action: 'sidebar.left.toggle' }] }
+  })
+  const codePreview = {
+    ...preview,
+    pluginKey: 'stablyai.shortcuts',
+    resolvedCommit: 'd'.repeat(40),
+    contentHash: 'e'.repeat(64),
+    manifest: codeManifest
+  }
+  const installButton = (container: HTMLElement) =>
+    Array.from(container.querySelectorAll('button')).find((button) =>
+      button.textContent?.includes('Install & enable')
+    )
+
+  it('arms Install & enable only for the exact release it shows', async () => {
+    const container = await render(pluginListEntryFromListing(codeRelease), () =>
+      Promise.resolve({ ok: true, preview: codePreview })
+    )
+    expect(installButton(container)?.disabled).toBe(false)
+    expect(container.textContent).not.toContain('Newer version available')
+  })
+
+  it.each([
+    ['catalog commit', { marketplaceCommit: 'f'.repeat(40) }],
+    ['release commit', { resolvedCommit: 'f'.repeat(40) }],
+    ['content hash', { contentHash: 'f'.repeat(64) }],
+    ['execution profile', { manifest: { ...codeManifest, main: 'dist/main.mjs' } }]
+  ])('disarms when the preview differs by %s', async (_field, change) => {
+    const container = await render(pluginListEntryFromListing(codeRelease), () =>
+      Promise.resolve({ ok: true, preview: { ...codePreview, ...change } })
+    )
+    expect(container.textContent).toContain('Newer version available')
+    expect(installButton(container)?.disabled).toBe(true)
+  })
+
+  it('gives no access verdict while the plugin is still being read', async () => {
+    const summarized = {
+      ...codeRelease,
+      release: { ...codeRelease.release, capabilities: [] }
+    }
+    let resolvePreview: (result: PluginPagePreview) => void = () => {}
+    const container = await render(
+      pluginListEntryFromListing(summarized),
+      () => new Promise((resolve) => (resolvePreview = resolve))
+    )
+    expect(container.textContent).toContain('Reading the plugin…')
+    expect(container.textContent).not.toContain('No other access')
+    await act(async () => resolvePreview({ ok: true, preview: codePreview }))
+    expect(container.textContent).toContain('No other access')
+  })
+
+  it('disarms while a catalog refresh is in flight', async () => {
+    const container = await render(
+      pluginListEntryFromListing(codeRelease),
+      () => Promise.resolve({ ok: true, preview: codePreview }),
+      { refreshing: true }
+    )
+    expect(installButton(container)?.disabled).toBe(true)
+  })
+
+  it('trusts the full preview over a capped catalog summary', async () => {
+    const capped = Array.from({ length: 64 }, (_, index) => ({
+      kind: 'panels' as const,
+      name: `Panel ${index}`
+    }))
+    const panelListing = {
+      ...codeRelease,
+      release: { ...codeRelease.release, execution: 'sandboxed-ui' as const, contributes: capped }
+    }
+    const panelManifest = pluginManifestSchema.parse({
+      ...manifest,
+      contributes: {
+        panels: [{ id: 'p', title: 'P', entry: 'p.html' }],
+        commands: [{ id: 'go', title: 'Go', action: 'sidebar.left.toggle' }]
+      }
+    })
+    // Why both: before the preview the capped summary is unknown, after it the manifest decides.
+    let resolvePreview: (result: PluginPagePreview) => void = () => {}
+    const container = await render(
+      pluginListEntryFromListing(panelListing),
+      () => new Promise((resolve) => (resolvePreview = resolve))
+    )
+    expect(container.textContent).toContain('Its commands can act for you or your agents')
+    await act(async () =>
+      resolvePreview({ ok: true, preview: { ...codePreview, manifest: panelManifest } })
+    )
+    expect(container.textContent).toContain('Its commands can act for you or your agents')
+    expect(container.textContent).not.toContain('These permissions limit what it can do')
+  })
+
+  it('names what a plugin under review adds from its installed manifest', async () => {
+    vi.mocked(window.api.plugins.getInstalledManifest).mockResolvedValue(preview.manifest)
+    const container = await render(
+      pluginListEntryFromInstalled({
+        ...installed,
+        pluginKey: 'stablyai.icons',
+        status: 'pending'
+      }),
+      vi.fn()
+    )
+    expect(window.api.plugins.getInstalledManifest).toHaveBeenCalledWith({
+      pluginKey: 'stablyai.icons'
+    })
+    expect(container.textContent).toContain('Minimal Icons')
+    expect(container.textContent).toContain('File icon theme')
+  })
+
+  describe('not-official warning', () => {
+    const banner = (container: HTMLElement) => container.querySelector('[data-plugin-not-official]')
+
+    it.each([
+      ['official', true, 'data', false],
+      ['official', true, 'trusted-worker', false],
+      ['community theme', false, 'data', false],
+      ['community', false, 'declarative', true],
+      ['community', false, 'trusted-worker', true]
+    ] as const)(
+      'on a %s catalog page with profile %s: shown %s',
+      async (_kind, official, execution, shown) => {
+        const page = { ...listing, official, release: { ...listing.release!, execution } }
+        // Why never resolved: the catalog's verified profile alone decides before the manifest is read.
+        const container = await render(
+          pluginListEntryFromListing(page),
+          () => new Promise(() => {})
+        )
+        expect(banner(container) !== null).toBe(shown)
+        if (shown) {
+          expect(banner(container)?.textContent).toBe(
+            'Not an official plugin: Make sure you trust stablyai before installing. This plugin runs the publisher’s code inside Orca.'
+          )
+          expect(banner(container)?.querySelector('button')).toBeNull()
+        }
+      }
+    )
+
+    it('keeps a one-line translations note on a community language pack page', async () => {
+      const page = {
+        ...listing,
+        official: false,
+        release: { ...listing.release!, types: ['interface-language' as const] }
+      }
+      const container = await render(pluginListEntryFromListing(page), () => new Promise(() => {}))
+      expect(banner(container)?.getAttribute('data-plugin-not-official')).toBe('translations')
+      expect(banner(container)?.textContent).toBe(
+        'Not an official plugin: Translations can change any text in Orca. Make sure you trust stablyai.'
+      )
+    })
+
+    it.each([
+      ['an official', { official: true, execution: 'trusted-worker' as const }, false],
+      ['a community theme', { execution: 'data' as const, types: ['app-theme' as const] }, false],
+      ['a community code', { execution: 'declarative' as const }, true],
+      ['a dev folder code', { isDev: true, execution: 'sandboxed-ui' as const }, true]
+    ])('on %s installed plugin: shown %s', async (_kind, change, shown) => {
+      const container = await render(
+        pluginListEntryFromInstalled({ ...installed, ...change }),
+        vi.fn()
+      )
+      expect(banner(container) !== null).toBe(shown)
+    })
+
+    it('shows for a data claim whose installed manifest carries commands', async () => {
+      vi.mocked(window.api.plugins.getInstalledManifest).mockResolvedValue(
+        pluginManifestSchema.parse({
+          ...manifest,
+          contributes: { commands: [{ id: 'go', title: 'Go', action: 'sidebar.left.toggle' }] }
+        })
+      )
+      const container = await render(pluginListEntryFromInstalled(installed), vi.fn())
+      expect(banner(container)).not.toBeNull()
+    })
+  })
+})

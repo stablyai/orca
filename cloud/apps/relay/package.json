@@ -19,7 +19,7 @@
     "@orca-cloud/postgres-schema": "workspace:*",
     "@orca-cloud/relay-contract": "workspace:*",
     "hono": "^4.13.13",
-    "jose": "^6.2.12",
+    "jose": "^6.2.13",
     "pg": "^8.23.1",
     "tweetnacl": "^1.0.3",
     "ws": "^8.22.0",

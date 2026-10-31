@@ -44,8 +44,7 @@ export function IntegrationCardShell(props: {
           <p className="text-sm font-medium">{props.name}</p>
           <p className="text-xs text-muted-foreground">{props.description}</p>
         </div>
-        {/* Why: settings can be narrow with the sidebar open; controls need their
-        own row before they squeeze provider copy into unreadable columns. */}
+        {/* Wrap actions before narrow Settings layouts squeeze provider copy into unreadable columns. */}
         <div className="flex basis-full shrink-0 flex-wrap items-center justify-start gap-1.5 min-[1100px]:ml-auto min-[1100px]:basis-auto min-[1100px]:justify-end">
           {props.actions}
           {status}

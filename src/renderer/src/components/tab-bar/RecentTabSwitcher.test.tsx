@@ -3,13 +3,16 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { FLOATING_TERMINAL_WORKTREE_ID } from '../../../../shared/constants'
 import type { Tab } from '../../../../shared/tab-types'
-import type { AppState } from '../../store/types'
+import type * as FloatingWorkspaceActions from '@/lib/floating-workspace-terminal-actions'
 
-const { activateCyclableTabMock, getStateMock } = vi.hoisted(() => ({
-  activateCyclableTabMock: vi.fn(),
-  getStateMock: vi.fn()
-}))
+const { activateCyclableTabMock, activateFloatingWorkspaceCyclableTabMock, getStateMock } =
+  vi.hoisted(() => ({
+    activateCyclableTabMock: vi.fn(),
+    activateFloatingWorkspaceCyclableTabMock: vi.fn(),
+    getStateMock: vi.fn()
+  }))
 
 vi.mock('../../store', () => ({
   useAppStore: {
@@ -20,6 +23,14 @@ vi.mock('../../store', () => ({
 vi.mock('../../hooks/ipc-tab-switch', () => ({
   activateCyclableTab: activateCyclableTabMock
 }))
+
+vi.mock('@/lib/floating-workspace-terminal-actions', async (importOriginal) => {
+  const actual = await importOriginal<typeof FloatingWorkspaceActions>()
+  return {
+    ...actual,
+    activateFloatingWorkspaceCyclableTab: activateFloatingWorkspaceCyclableTabMock
+  }
+})
 
 vi.mock('@/i18n/i18n', () => ({
   translate: (_key: string, fallback: string) => fallback
@@ -35,12 +46,12 @@ type CtrlTabKeyUpCallback = () => void
 
 let ctrlTabKeyDownCallback: CtrlTabKeyDownCallback | null = null
 
-function makeTab(id: string, entityId: string, label: string): Tab {
+function makeTab(id: string, entityId: string, label: string, worktreeId = WORKTREE_ID): Tab {
   return {
     id,
     entityId,
     groupId: GROUP_ID,
-    worktreeId: WORKTREE_ID,
+    worktreeId,
     contentType: 'editor',
     label,
     customLabel: null,
@@ -50,26 +61,26 @@ function makeTab(id: string, entityId: string, label: string): Tab {
   }
 }
 
-function makeStore(): AppState {
+function makeStore(worktreeId = WORKTREE_ID) {
   const tabs = [
-    makeTab('tab-a', 'file-a', 'A'),
-    makeTab('tab-b', 'file-b', 'B'),
-    makeTab('tab-c', 'file-c', 'C')
+    makeTab('tab-a', 'file-a', 'A', worktreeId),
+    makeTab('tab-b', 'file-b', 'B', worktreeId),
+    makeTab('tab-c', 'file-c', 'C', worktreeId)
   ]
   return {
     activeView: 'terminal',
-    activeWorktreeId: WORKTREE_ID,
+    activeWorktreeId: worktreeId,
     activeBrowserTabId: null,
     activeFileId: 'file-a',
-    activeGroupIdByWorktree: { [WORKTREE_ID]: GROUP_ID },
+    activeGroupIdByWorktree: { [worktreeId]: GROUP_ID },
     activeTabId: null,
     activeTabType: 'editor',
     browserTabsByWorktree: {},
     groupsByWorktree: {
-      [WORKTREE_ID]: [
+      [worktreeId]: [
         {
           id: GROUP_ID,
-          worktreeId: WORKTREE_ID,
+          worktreeId,
           activeTabId: 'tab-a',
           tabOrder: ['tab-a', 'tab-b', 'tab-c'],
           recentTabIds: ['tab-c', 'tab-b', 'tab-a']
@@ -78,14 +89,14 @@ function makeStore(): AppState {
     },
     openFiles: tabs.map((tab) => ({
       id: tab.entityId,
-      worktreeId: WORKTREE_ID,
+      worktreeId,
       isDirty: false
     })),
     settings: { ctrlTabOrderMode: 'mru' },
     tabBarOrderByWorktree: {},
     tabsByWorktree: {},
-    unifiedTabsByWorktree: { [WORKTREE_ID]: tabs }
-  } as unknown as AppState
+    unifiedTabsByWorktree: { [worktreeId]: tabs }
+  }
 }
 
 function installWindowApi(): void {
@@ -154,6 +165,7 @@ describe('RecentTabSwitcher', () => {
   beforeEach(() => {
     ctrlTabKeyDownCallback = null
     activateCyclableTabMock.mockReset()
+    activateFloatingWorkspaceCyclableTabMock.mockReset()
     getStateMock.mockReturnValue(makeStore())
     installWindowApi()
   })
@@ -209,6 +221,46 @@ describe('RecentTabSwitcher', () => {
     expect(keyUp.defaultPrevented).toBe(true)
     expect(terminal.keyUp).not.toHaveBeenCalled()
     expectCommittedToTabB()
+
+    await act(async () => {
+      root.unmount()
+    })
+  })
+
+  it('opens and switches within floating workspace when floating panel is focused', async () => {
+    getStateMock.mockReturnValue({
+      ...makeStore(FLOATING_TERMINAL_WORKTREE_ID),
+      activeWorktreeId: WORKTREE_ID
+    })
+
+    const floatingPanel = document.createElement('div')
+    floatingPanel.setAttribute('data-floating-terminal-panel', '')
+    const floatingInput = document.createElement('textarea')
+    floatingPanel.appendChild(floatingInput)
+    document.body.appendChild(floatingPanel)
+    floatingInput.focus()
+
+    const { root } = await renderSwitcher()
+
+    await dispatchKeyboard(floatingInput, 'keydown', {
+      key: 'Tab',
+      code: 'Tab',
+      ctrlKey: true
+    })
+
+    expect(document.body.querySelector('[role="listbox"]')).not.toBeNull()
+
+    await dispatchKeyboard(floatingInput, 'keyup', {
+      key: 'Control',
+      code: 'ControlLeft',
+      ctrlKey: false
+    })
+
+    expect(activateFloatingWorkspaceCyclableTabMock).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ key: 'tab-b', id: 'file-b' })
+    )
+    expect(activateCyclableTabMock).not.toHaveBeenCalled()
 
     await act(async () => {
       root.unmount()

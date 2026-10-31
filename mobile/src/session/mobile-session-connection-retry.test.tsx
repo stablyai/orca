@@ -4,12 +4,15 @@ import { describe, expect, it, vi } from 'vitest'
 import type { ForceReconnect } from '../transport/rpc-client-context-contract'
 
 vi.mock('react-native', () => ({ Platform: { OS: 'web' } }))
+vi.mock('../layout/use-shell-side-rail', () => ({
+  useShellSideRail: () => false,
+  useDirectionPadAvailable: () => false
+}))
 
 import { useMobileSessionPresentation } from './use-mobile-session-presentation'
 
 type Presentation = ReturnType<typeof useMobileSessionPresentation>
 
-/** A session whose host the shell's client has failed to reach twenty times. */
 function present(forceReconnectHost: ForceReconnect): Presentation {
   const scope = {
     created: undefined,
@@ -54,17 +57,21 @@ function present(forceReconnectHost: ForceReconnect): Presentation {
 
 describe("the session header's tap to retry", () => {
   it('is not offered on the page, and the status says what is wrong without promising a tap', () => {
-    const { showConnectionRetry, terminalSummary } = present(null)
-    expect({ showConnectionRetry, terminalSummary }).toEqual({
+    const { showConnectionRetry, connectionEscalated, terminalSummary } = present(null)
+    expect({ showConnectionRetry, connectionEscalated, terminalSummary }).toEqual({
       showConnectionRetry: false,
+      connectionEscalated: true,
       terminalSummary: "Can't reach desktop"
     })
   })
 
   it('is still offered natively', () => {
-    const { showConnectionRetry, terminalSummary } = present(() => Promise.resolve())
-    expect({ showConnectionRetry, terminalSummary }).toEqual({
+    const { showConnectionRetry, connectionEscalated, terminalSummary } = present(() =>
+      Promise.resolve()
+    )
+    expect({ showConnectionRetry, connectionEscalated, terminalSummary }).toEqual({
       showConnectionRetry: true,
+      connectionEscalated: true,
       terminalSummary: "Can't reach desktop — tap to retry"
     })
   })

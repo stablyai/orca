@@ -1,13 +1,14 @@
-// The host's one projection of current work (`structuredAgentSessionCurrentWork`), end to end
-// against the real host, store and SQLite journal: what an ended generation left holds nothing and
-// reads as nothing to every reader (the projection, the session list, a chat client, Stop, a prompt
-// answer, the queue), whether or not its cleanup or its release landed, while a live owner's work
-// holds exactly as before.
+// Ended generations must hold no work across projection, status, chat, Stop, prompts and queue,
+// even when settlement/release writes fail; live generations retain their work.
 
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { agentJournalItemKey } from '../../../shared/agent-session-journal-item-key'
 import type { AgentSessionExecutionLocation } from '../../../shared/agent-session-record'
-import type { AgentSessionStatusSummary } from '../../../shared/agent-session-wire'
+import type {
+  AgentSessionStatusEvent,
+  AgentSessionStatusSummary
+} from '../../../shared/agent-session-wire'
+import type { AgentSessionStatusSnapshot } from '../../../shared/agent-session-status-snapshot-fold'
 import {
   isActionableStructuredAgentSessionPrompt,
   runningStructuredAgentSessionTurnId
@@ -18,7 +19,7 @@ import {
   type StructuredAgentSessionState
 } from '../../../shared/structured-agent-session-reducer'
 import {
-  liveTestJournalRows,
+  readTestJournalOutcomes,
   openTestJournalHostDatabase
 } from '../agent-session-journal/journal-host-database-test-support'
 import { HOST_TEST_SESSION as SESSION } from './structured-agent-session-host-test-data'
@@ -37,6 +38,12 @@ import {
   turnState
 } from './structured-agent-session-leftover-settlement.test-fixture'
 
+// Mobile has its own typecheck project; run its real consumer across the shared wire boundary.
+const phoneFeedPath = '../../../../mobile/src/session/mobile-structured-session-status-feed'
+const phoneClientPath = '../../../../mobile/src/transport/rpc-client-test-stub'
+const { mobileStructuredSessionStatusFeed } = await import(phoneFeedPath)
+const { stubRpcClient } = await import(phoneClientPath)
+
 let rig: QueuedMessageTestRig | undefined
 
 afterEach(async () => {
@@ -53,10 +60,26 @@ const FOLDER: AgentSessionExecutionLocation = {
   workspaceKind: 'folder'
 }
 
-/** A chat client and the session list, each fed by the host as a real one is. */
 function watch(current: QueuedMessageTestRig) {
   let chat: StructuredAgentSessionState = EMPTY_STRUCTURED_AGENT_SESSION
   let listed: AgentSessionStatusSummary | undefined
+  const phone: {
+    subscribe: (listener: () => void) => () => void
+    getSnapshot: () => AgentSessionStatusSnapshot
+  } = mobileStructuredSessionStatusFeed(
+    stubRpcClient({
+      subscribe: (
+        _method: string,
+        _params: unknown,
+        emit: (event: AgentSessionStatusEvent) => void
+      ) =>
+        current.host.subscribeStatus({
+          id: 'phone-1',
+          emit: (event) => emit(structuredClone(event))
+        })
+    })
+  )
+  phone.subscribe(() => {})
   current.host.subscribe({
     id: 'chat-1',
     sessionId: SESSION,
@@ -77,7 +100,7 @@ function watch(current: QueuedMessageTestRig) {
   return {
     chat: () => chat,
     listed: () => listed,
-    /** Whether the chat would let the person answer the prompt. */
+    phone: () => phone.getSnapshot().get(SESSION),
     answerable: () =>
       chat.items.some(
         (item) =>
@@ -89,7 +112,6 @@ function watch(current: QueuedMessageTestRig) {
   }
 }
 
-/** The tail page a client hydrates from. */
 async function hydration(current: QueuedMessageTestRig) {
   const page = await current.host.history({ sessionId: SESSION, direction: 'tail' })
   if (!page.ok) {
@@ -117,7 +139,7 @@ describe("a dead generation's leftovers, its settlement refused and its lease re
     ['a folder workspace', FOLDER]
   ])('in %s, read as nothing by every reader, and hold nothing', async (_name, location) => {
     const { current, view } = await deadGenerationWithFailedSettlement(location)
-    // Still saved as running and pending: only a settlement would end them.
+    // Persisted rows still claim running/pending; projection must apply exit evidence.
     expect(turnState(current)).toBe('running')
     const work = currentWork(current)
 
@@ -125,10 +147,9 @@ describe("a dead generation's leftovers, its settlement refused and its lease re
     expect(work.working()).toBe(false)
     expect(work.actionablePromptIds()).toEqual([])
     expect(view.listed()?.status).not.toBe('working')
+    expect(view.phone()?.status).toBe(view.listed()?.status)
     expect(current.host.readStatusSummary(SESSION)?.status).not.toBe('working')
-    // A client hydrating now, and the one already watching, read the same.
     const page = await hydration(current)
-    // Read interrupted, as its settlement will write it: never running, never finished.
     expect(page.latestTurn?.turn.state).toBe('interrupted')
     expect(page.actionablePromptIds).toEqual([])
     expect(page.working).toBe(false)
@@ -170,17 +191,20 @@ describe('a close Orca asked for, its settlement refused', () => {
       sessionId: SESSION,
       cause: 'requested-close',
       reason: 'closed by Orca',
+      deathEvidenceKind: 'kill-delivered',
       fence: child.fence,
       acquisitionGeneration: child.generation
     })
     await current.host.collaboratorsForTests().serialize(SESSION, async () => {})
 
+    expect(current.store.getRecord(SESSION)?.lease.deathEvidence?.kind).toBe('kill-delivered')
     expect(currentJournal(current).cursor().sequence).toBe(before)
     expect(turnState(current)).toBe('running')
     await vi.waitFor(() => expect(view.answerable()).toBe(false))
     expect(view.chat().working).toBe(false)
     expect(runningStructuredAgentSessionTurnId(view.chat())).toBeNull()
     expect(view.listed()?.status).not.toBe('working')
+    expect(view.phone()?.status).toBe(view.listed()?.status)
   })
 })
 
@@ -219,10 +243,11 @@ describe('a waiting card when the generation ahead of it ends', () => {
     await vi.waitFor(() =>
       expect(journal.queuedMessages.get(card?.messageId ?? '')?.state).toBe('dispatched')
     )
-    // The first row after the end is the drain's own hand-off: nothing was written to wake it.
-    const first = liveTestJournalRows(database.db, SESSION).find((row) => row.seq > before)
-    expect(JSON.parse(first?.rowJson ?? '{}')).toMatchObject({
-      kind: 'submission',
+    // Generation-end publication alone must wake delivery without an intervening journal write.
+    const first = readTestJournalOutcomes(database.db, SESSION).find(
+      (row) => row.seq > before && row.field === 'submissions'
+    )
+    expect(JSON.parse(first?.json ?? '[null, {}]')[1]).toMatchObject({
       queuedMessageId: card?.messageId
     })
   })
@@ -238,6 +263,7 @@ describe('a live owner', () => {
 
     const work = currentWork(current)
     expect(work.liveFence).toBe(current.store.getRecord(SESSION)?.lease.runtimeFence)
+    expect(view.phone()?.status).toBe('attention')
     expect(work.activeTurnId()).toBe('unfinished')
     expect(work.actionablePromptIds()).toEqual([APPROVAL_ID])
     const page = await hydration(current)
@@ -250,4 +276,30 @@ describe('a live owner', () => {
     expect(view.answerable()).toBe(true)
     expect(view.listed()?.status).not.toBe('idle')
   })
+})
+
+it('reuses token deltas but refreshes pending prompt dependencies', async () => {
+  rig = await createQueuedMessageTestRig()
+  await rig.workingSend()
+  await leaveUnfinishedWork(rig, { prompt: true })
+  const journal = currentJournal(rig)
+  const before = currentWork(rig).actionablePrompts()
+  expect(before.map((item) => item.itemId)).toContain(APPROVAL_ID)
+  const visits = vi.spyOn(journal, 'visitItems')
+  const token = { provider: 'codex' as const, threadId: 'tokens', turnId: 'tokens', ordinal: 1 }
+  const body = { kind: 'message' as const, role: 'assistant' as const, blocks: [] }
+  await journal.appendItem(token, body, { fence: 1, turnScope: { kind: 'thread' } })
+  expect(currentWork(rig).actionablePrompts()).toBe(before)
+  expect(visits).not.toHaveBeenCalled()
+  await journal.appendTombstone(APPROVAL, { fence: 1 })
+  expect(currentWork(rig).actionablePromptIds()).toEqual([])
+  expect(visits).toHaveBeenCalledOnce()
+  await leaveUnfinishedWork(rig, { prompt: true })
+  expect(currentWork(rig).actionablePromptIds()).toContain(APPROVAL_ID)
+  visits.mockClear()
+  for (let n = 0; n < 201; n++) {
+    await journal.appendItem(token, body, { fence: 1, turnScope: { kind: 'thread' } })
+  }
+  expect(currentWork(rig).actionablePromptIds()).toContain(APPROVAL_ID)
+  expect(visits).toHaveBeenCalledOnce()
 })

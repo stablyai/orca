@@ -1,10 +1,6 @@
-/**
- * The tab of an `agent.launch` appears before the launch is admitted, at the requested place, and
- * the spawn lands in that tab's pane. Driven through the method's handler with the shared runtime
- * stub and the real durable ledger, so "before admission" is read off the order the host asked for
- * the tab and opened the launch record.
- */
+/** Drive the RPC handler and durable ledger to prove early tab publication precedes admission and spawn uses that pane. */
 
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
@@ -121,6 +117,7 @@ beforeEach(async () => {
 afterEach(async () => {
   setAgentLaunchRecordStore(null)
   resetAgentLaunchPanesForTests()
+  await closeTestJournalHostDatabases()
   await rm(directory, { recursive: true, force: true })
 })
 
@@ -162,8 +159,7 @@ function hostWithWindow(
     events,
     published,
     selectCreatedMobileSessionTabForClient: vi.fn(() => true),
-    // Layout-owner build: main writes the tab and answers as the window did; these stand for its
-    // write (main-layout-agent-launch-tabs.test.ts covers it), so each case's fakes still apply.
+    // Stand in for main's layout write so both builds share fakes; main-layout-agent-launch-tabs.test.ts covers the real write.
     publishAgentLaunchTabInMainLayout: vi.fn(
       (request: Omit<AgentLaunchTabPublishRequest, 'requestId'>) =>
         runtime.publishAgentLaunchTab(request)
@@ -216,7 +212,6 @@ async function paneVerdict(
 
 /** The record not open yet when the request arrives, as on the first launch after a restart. */
 function coldRecord(runtime: Host): Host {
-  // Only at the publish: admission opens it.
   runtime.openedAgentSessionRecordStore.mockReturnValueOnce(null)
   return runtime
 }
@@ -381,7 +376,6 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       await vi.waitFor(() => expect(deliverTerminalAgentLaunchPrompt).toHaveBeenCalled())
       await expect(paneVerdict(runtime)).resolves.toEqual({ kind: 'proceed' })
 
-      // Main's commit of the user's tab close, as the window sends it.
       markAgentLaunchesClosedByUser('wt-7', { kind: 'tab', tabId: TAB_ID })
       deliver(true)
 
@@ -472,7 +466,6 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       const publish = refused.publishAgentLaunchTab.getMockImplementation()!
       refused.publishAgentLaunchTab.mockImplementation((request) => {
         const published = publish(request)
-        // The pane mounts as soon as the tab exists.
         verdicts.push(paneVerdict(refused, `${request.tabId}:${request.leafId}`))
         return published
       })
@@ -500,7 +493,6 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       const publish = runtime.publishAgentLaunchTab.getMockImplementation()!
       runtime.publishAgentLaunchTab.mockImplementation((request) => {
         const published = publish(request)
-        // The pane mounts as soon as the tab exists.
         verdicts.push(paneVerdict(runtime, `${request.tabId}:${request.leafId}`))
         return published
       })
@@ -604,7 +596,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
       )
 
       const survived = coldRecord(hostWithWindow())
-      // The agent's pane comes back while the replay runs (the daemon kept it across a crash).
+      // The daemon preserved this pane across a crash; it reappears during replay.
       survived.publishAgentLaunchTab.mockImplementationOnce(async (request) => {
         survived.hasLiveTerminalForPaneKey.mockReturnValue(true)
         return { tabId: request.tabId, created: true, placement: { groupId: 'group-1' } }
@@ -834,7 +826,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
   })
 
   describe('the view the tab opens in', () => {
-    const TERMINAL_VIEW = { experimentalNativeChat: false }
+    const TERMINAL_VIEW = {}
 
     it('keeps a terminal launch in the same view for the shown tab and spawn', async () => {
       const runtime = hostWithWindow({ settings: TERMINAL_VIEW })
@@ -855,7 +847,7 @@ describe.each(['window', 'main'] as const)('the %s owning the layout', (owner) =
     })
 
     it('publishes a terminal fallback in terminal view while Chat UI is on', async () => {
-      const runtime = hostWithWindow({ settings: { experimentalNativeChat: true } })
+      const runtime = hostWithWindow({ settings: STRUCTURED_PREFERENCE })
 
       await replayLaunch(runtime, { agent: 'gemini' }, CLI)
 

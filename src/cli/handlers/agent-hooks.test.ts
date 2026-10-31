@@ -57,7 +57,14 @@ const {
 vi.mock('../runtime-client', () => {
   class RuntimeClient {
     call = callMock
-    getCliStatus = getCliStatusMock
+    async getOfflineRuntimeAdmission() {
+      const status = await getCliStatusMock()
+      return {
+        reachable: status.result.runtime.reachable,
+        legacyPidRunning: status.result.app.running,
+        pid: status.result.app.pid ?? null
+      }
+    }
   }
 
   class RuntimeClientError extends Error {

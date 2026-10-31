@@ -69,7 +69,9 @@ describe('markdown document templates', () => {
     const nonBreakingSpace = String.fromCharCode(160)
     const fileName = `  launch___plan\t${nonBreakingSpace}${' pasted '.repeat(300)}.md`
 
-    expect(getMarkdownTemplateTitleForFileName(fileName)).toContain('Launch plan pasted pasted')
+    expect(getMarkdownTemplateTitleForFileName(fileName)).toBe(
+      `Launch plan ${'pasted '.repeat(299)}pasted`
+    )
     expect(
       replace.mock.calls.filter(
         ([pattern]) => pattern instanceof RegExp && pattern.source === '\\s+'

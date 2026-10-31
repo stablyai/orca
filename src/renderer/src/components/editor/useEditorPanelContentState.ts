@@ -28,7 +28,7 @@ type UseEditorPanelContentStateParams = {
 type UseEditorPanelContentStateResult = {
   fileContents: Record<string, FileContent>
   diffContents: Record<string, DiffContent>
-  reloadContent: (file: OpenFile) => void
+  reloadContent: (file: OpenFile, options?: { wakeWslDistro?: boolean }) => void
 }
 
 export function useEditorPanelContentState({
@@ -43,8 +43,7 @@ export function useEditorPanelContentState({
   const [diffContents, setDiffContents] = useState<Record<string, DiffContent>>({})
   const diffContentsRef = useRef(diffContents)
   const fileLoadRetryAttemptsRef = useRef<Record<string, number>>({})
-  // Why: per-tab read generations let a forced/external reload supersede an
-  // older in-flight read so a slower stale promise cannot overwrite fresh state.
+  // Generation fences keep slow superseded reads from overwriting newer content.
   const fileReadGenerationRef = useRef<Record<string, number>>({})
   const diffReadGenerationRef = useRef<Record<string, number>>({})
   const fileReadGenerationCounterRef = useRef(0)
@@ -81,8 +80,7 @@ export function useEditorPanelContentState({
       let changed = false
       for (const fileId of uniqueIds) {
         const existing = next[fileId]
-        // Why: keep the last-known bytes rendered and swap them when the lazy
-        // reload lands — dropping them flashes "Loading…" on every reveal.
+        // Keep last-known text until lazy reload lands to avoid Loading flashes on reveal.
         if (existing && existing.isStale !== true) {
           next[fileId] = { ...existing, isStale: true }
           changed = true
@@ -102,8 +100,7 @@ export function useEditorPanelContentState({
       let changed = false
       for (const fileId of uniqueIds) {
         const existing = next[fileId]
-        // Why: keep the last-known diff rendered and swap it when the lazy
-        // reload lands — dropping it flashes "Loading diff…" on every reveal.
+        // Keep the last-known diff until lazy reload lands to avoid Loading diff flashes on reveal.
         if (existing && existing.isStale !== true) {
           next[fileId] = { ...existing, isStale: true }
           changed = true
@@ -137,11 +134,9 @@ export function useEditorPanelContentState({
     setDiffContents
   })
 
-  // Why: the changed-on-disk banner's explicit reload on an unstaged diff tab
-  // must refetch the diff body, not the plain file content — one entry point
-  // branches on the tab mode so every consumer reloads the right store.
+  // Route explicit reloads by mode so diff banners refresh diff bodies instead of plain-file caches.
   const reloadContent = useCallback(
-    (file: OpenFile): void => {
+    (file: OpenFile, options?: { wakeWslDistro?: boolean }): void => {
       if (file.mode === 'diff') {
         setDiffContents((prev) => {
           if (!prev[file.id]) {
@@ -151,7 +146,10 @@ export function useEditorPanelContentState({
           delete next[file.id]
           return next
         })
-        void loadDiffContent(file, { force: true })
+        void loadDiffContent(file, {
+          force: true,
+          ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
+        })
         return
       }
       delete fileLoadRetryAttemptsRef.current[file.id]
@@ -164,7 +162,8 @@ export function useEditorPanelContentState({
         return next
       })
       void loadFileContent(file.filePath, file.id, file.worktreeId, file.relativePath, {
-        force: true
+        force: true,
+        ...(options?.wakeWslDistro ? { wakeWslDistro: true } : {})
       })
     },
     [loadDiffContent, loadFileContent]

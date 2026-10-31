@@ -8,6 +8,7 @@ import {
   LogicalClientCutoverError,
   type MobileConnectionPath
 } from './stable-logical-rpc-client'
+import { LogicalClientSuspendedError } from './logical-client-suspended-error'
 
 class FakeSession implements RpcClient {
   readonly sendRequest =
@@ -111,6 +112,9 @@ describe('stable logical RPC client', () => {
       undefined
     )
     expect(oldSession.close).toHaveBeenCalledOnce()
+    expect(nextSession.subscribe.mock.invocationCallOrder[0]).toBeLessThan(
+      oldSession.close.mock.invocationCallOrder[0]!
+    )
     expect(client.getActivePath()).toBe('relay')
     expect(client.getGeneration()).toBe(2)
     oldSession.emitStream('stale')
@@ -166,6 +170,23 @@ describe('stable logical RPC client', () => {
     await expect(client.sendRequest('status.get')).resolves.toEqual(success('next'))
   })
 
+  it('reports requests the suspended session never sent as suspended, and written ones as ambiguous', async () => {
+    const session = new FakeSession('connected')
+    const unsent = deferred<RpcResponse>()
+    const written = deferred<RpcResponse>()
+    session.sendRequest.mockReturnValueOnce(unsent.promise).mockReturnValueOnce(written.promise)
+    const client = createStableLogicalRpcClient(session, 'relay')
+    const waiting = client.sendRequest('speech.dictation.chunk').catch((error: unknown) => error)
+    const inFlight = client.sendRequest('speech.dictation.chunk').catch((error: unknown) => error)
+
+    client.suspendActiveSession()
+    unsent.reject(new Error('relay session closed'))
+    written.reject(markRpcDeliveryUnknown(new Error('Client closed')))
+
+    expect(await waiting).toBeInstanceOf(LogicalClientSuspendedError)
+    expect(isRpcDeliveryUnknown(await inFlight)).toBe(true)
+  })
+
   it('preserves delivery ambiguity without replaying a mutation after relay replacement', async () => {
     const session = new FakeSession('connected')
     const replacement = new FakeSession('connected')
@@ -192,8 +213,7 @@ describe('stable logical RPC client', () => {
     const session = new FakeSession('connected')
     const inFlight = deferred<RpcResponse>()
     session.sendRequest.mockReturnValue(inFlight.promise)
-    // A request still waiting for connect never wrote its frame — the physical
-    // layer rejects it unmarked and that must survive the logical close.
+    // A request still waiting for connect wrote no frame and must remain unmarked on logical close.
     const preWriteError = new Error('Connection closed')
     session.close.mockImplementation(() => inFlight.reject(preWriteError))
     const client = createStableLogicalRpcClient(session, 'lan')
@@ -244,9 +264,7 @@ describe('stable logical RPC client', () => {
     expect(client.getActivePath()).toBe('relay')
   })
 
-  // A replacement relay session that retries internally publishes 'reconnecting' as one of
-  // its own dial phases. Forwarding it is the point: amber "Reconnecting…" beats the grey
-  // the suspended client would otherwise hold for the whole dial.
+  // Forward replacement reconnecting phases so the suspended client shows progress during the dial.
   it('forwards a reconnecting phase published by the dialing session itself', async () => {
     const oldSession = new FakeSession('connected')
     const replacement = new FakeSession('connecting')
@@ -266,9 +284,7 @@ describe('stable logical RPC client', () => {
     expect(states).toEqual(['connecting', 'reconnecting', 'handshaking', 'connected'])
   })
 
-  // The dominant relay case: the direct dial failed, so the client sits in 'reconnecting'
-  // (never 'disconnected') while its retry loop lives. The dot is already amber there, so
-  // nothing is forwarded — but the pending path must still name what is being dialed.
+  // A direct session already reconnecting needs no phase forwarding, but must still name the pending relay path.
   it('names a relay dial started from reconnecting without disturbing the state', async () => {
     const direct = new FakeSession('connected')
     const replacement = new FakeSession('connecting')
@@ -285,7 +301,6 @@ describe('stable logical RPC client', () => {
     replacement.setState('connecting')
     replacement.setState('handshaking')
 
-    // The still-bound direct session keeps cycling; the forwarder must not fight it.
     expect(client.getState()).toBe('reconnecting')
     expect(states).toEqual([])
 
@@ -414,7 +429,6 @@ describe('stable logical RPC client', () => {
     expect(client.getPendingPath()).toBeNull()
   })
 
-  // Pins the shipping wiring: migrateTo's bound honors the replacement's dial stages.
   it('outlives the flat bound when the relay cell holds the dial', async () => {
     vi.useFakeTimers()
     try {
@@ -458,7 +472,7 @@ describe('stable logical RPC client', () => {
 })
 
 describe('stable logical RPC client subscription fencing', () => {
-  /** A physical session with an inert disposer, so only the logical guard can fence a late event. */
+  // An inert physical disposer leaves only the logical generation guard to reject late events.
   function leakySession() {
     const session = new FakeSession('connected')
     const listeners = new Set<(result: unknown) => void>()

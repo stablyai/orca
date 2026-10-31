@@ -22,8 +22,7 @@ export function handleMultiplexInputFrame(
   const inputClaimTail = stream.isMobile ? Promise.resolve(true) : stream.desktopClaimTail
   const inputSessionId = frame.seq > 0 ? stream.inputSessionId : null
   const sequenced = inputSessionId !== null
-  // Why 'applied' for locked or unclaimed input: it is dropped by policy, and a replay must not run it later.
-  // Empty sequenced input is how a client fills the slot of input it gave up, so later input can follow.
+  // Mark policy-dropped locked/unclaimed input applied so replay cannot run it later; empty sequences fill abandoned slots.
   const deliver = async (): Promise<TerminalInputWriteOutcome> => {
     if (!text || isTerminalInputLockedForClient(runtime, stream.ptyId, stream.client)) {
       return 'applied'
@@ -37,13 +36,13 @@ export function handleMultiplexInputFrame(
       text,
       client: stream.client,
       isMobile: stream.isMobile,
-      // Why: an ack drops the client's replay copy, so it must wait for the provider's handoff.
+      // Ack only after provider handoff because clients delete their replay copy.
       requireWriteSettlement: sequenced
     })
-    if (!sequenced) {
+    if (!sequenced && outcome !== 'paused') {
       state.notifyStreamWriteUnavailable(stream, outcome)
     }
-    return outcome === 'delivered'
+    return outcome === 'delivered' || outcome === 'paused'
       ? 'applied'
       : outcome === 'rejected'
         ? 'refused'
@@ -53,8 +52,7 @@ export function handleMultiplexInputFrame(
     void deliver()
     return
   }
-  // Why every frame is answered, duplicates too: the client resends until acked, and an earlier
-  // ack may have died with its connection. A refusal asks this live stream to resend, never remounts.
+  // Ack duplicates too because prior ack may be lost; refusals request in-stream resend, never remount.
   void inputSequenceLedger
     .admit(stream.ptyId, inputSessionId, frame.seq, deliver)
     .then((admission) => state.sendInputAck(stream, admission.appliedSeq, admission.kind))

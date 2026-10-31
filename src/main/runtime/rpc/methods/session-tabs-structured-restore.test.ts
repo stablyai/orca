@@ -11,13 +11,12 @@ function makeRequest(method: string, params?: unknown): RpcRequest {
   return { id: 'req-1', authToken: 'tok', method, params }
 }
 
-// The host's own structured-chat setting is off throughout: it is a launch preference, so it must
-// not decide whether chats a paired client opened come back after a restart.
+// Host Chat | CLI choices pick new-launch defaults, never whether paired clients' existing chats restore.
 function makeRuntime(): OrcaRuntimeService {
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only the runtime members these RPCs read are staged.
   return {
     getRuntimeId: () => 'test-runtime',
-    getClientSettings: vi.fn(() => ({ experimentalNativeChat: false })),
+    getClientSettings: vi.fn(() => ({})),
     restoreStructuredAgentSessionTabs: vi.fn(),
     listMobileSessionTabs: vi.fn().mockResolvedValue(visibleSnapshot())
   } as unknown as OrcaRuntimeService
@@ -55,8 +54,7 @@ describe('structured session tab restoration', () => {
     expect(runtime.restoreStructuredAgentSessionTabs).toHaveBeenCalledTimes(1)
   })
 
-  // Why: an old build has no capability to advertise, and skipping the restore left it with
-  // nothing to project after a desktop restart — neither the chat nor its fallback row.
+  // Older clients still need restore after host restart so their chat or fallback row exists.
   it('restores for a mobile client that advertises no capability', async () => {
     const runtime = await listTabs({ clientKind: 'mobile', clientCapabilities: [] })
 

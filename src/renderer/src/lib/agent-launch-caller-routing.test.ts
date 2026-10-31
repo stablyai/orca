@@ -1,7 +1,4 @@
-// Which surface each production call site resolves to, and what aborts the open.
-// Split from the command/prompt/placement files by responsibility; the profile table they share
-// lives in agent-launch-caller-profiles-test-harness.ts.
-
+import { EVERY_AGENT_CHAT } from '../../../shared/native-chat/every-agent-chat.test-fixture'
 import { beforeEach, describe, expect, it, vi } from 'vitest'
 import {
   STRUCTURED_AGENT_SESSION_CLIENT_LAUNCH_MODE_CAPABILITY,
@@ -13,7 +10,8 @@ import {
 } from './agent-launch-caller-profiles-test-harness'
 import {
   createLaunchFunnelStore,
-  queuedStartupCommand,
+  createdTabOptions,
+  hostLaunchRequest,
   resetLaunchFunnelStore
 } from './agent-launch-funnel-test-harness'
 
@@ -29,7 +27,7 @@ const mockExecutionHostId = vi.fn(() => 'local')
 vi.mock('@/store', () => ({ useAppStore: { getState: () => store } }))
 vi.mock('@/lib/new-workspace', () => ({ CLIENT_PLATFORM: 'darwin' }))
 vi.mock('@/lib/connection-context', () => ({ getConnectionIdFromState: () => null }))
-vi.mock('@/lib/native-chat-transcript-readability', () => ({
+vi.mock('../../../shared/native-chat/transcript/native-chat-transcript-readability', () => ({
   isNativeChatTranscriptLocalReadable: () => true
 }))
 vi.mock('@/runtime/web-runtime-session-environment', () => ({
@@ -56,9 +54,7 @@ vi.mock('@/lib/agent-paste-draft', () => ({ pasteDraftWhenAgentReady: vi.fn(asyn
 vi.mock('@/lib/agent-ready-wait', () => ({
   waitForAgentReady: vi.fn(async () => ({ ready: true, reason: 'foreground-match' }))
 }))
-// Why: the structured executor is mocked, the structured ROUTE is not. The real resolver still
-// decides which profiles reach this seam, which is the fact worth pinning; the seam itself is an
-// internal boundary a migration is free to move.
+// Mock structured execution while retaining real route selection; callers must still reach the correct surface.
 vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: (_target: unknown, method: string) =>
     method === 'agentSession.createSupport' ? mockCreateSupport() : new Promise(() => undefined)
@@ -72,7 +68,6 @@ vi.mock('@/lib/structured-agent-session-launch-admission', async (importOriginal
 vi.mock('@/runtime/local-runtime-capabilities', () => ({
   readLocalRuntimeCapabilitiesOrUnknown: () => mockHostCapabilities()
 }))
-/** What the paired server that owns 'wt-1' last reported about itself. */
 function serverReports(capabilities: readonly string[] | null): void {
   Object.assign(store, {
     runtimeStatusByEnvironmentId: new Map(
@@ -82,7 +77,7 @@ function serverReports(capabilities: readonly string[] | null): void {
 }
 
 const CHAT_DEFAULT_SETTINGS = {
-  experimentalNativeChat: true
+  nativeChatProviders: EVERY_AGENT_CHAT
 }
 
 const cases = callerProfileCases()
@@ -115,7 +110,11 @@ describe('agent launch caller routing', () => {
       settlement: new Promise(() => undefined),
       cancel: vi.fn()
     })
-    mockLaunchAgentInWebHostTab.mockResolvedValue({ delivered: true, failureNotified: false })
+    mockLaunchAgentInWebHostTab.mockResolvedValue({
+      delivered: true,
+      failureNotified: false,
+      outcome: { status: 'created' }
+    })
   })
 
   it.each(cases)('routes %s to a local terminal under default settings', async (_id, profile) => {
@@ -153,8 +152,7 @@ describe('agent launch caller routing', () => {
 
       const result = await launch(profile)
 
-      // Why: a caller-named cwd is a process shape only a PTY produces, so that profile is
-      // structurally barred rather than merely unconfigured and stays terminal with the default on.
+      // A caller-named custom cwd requires a PTY, so enabling default chat cannot admit that profile.
       const structurallyBarred = profile.id === 'session-continuation'
       expect(result?.surface.kind).toBe(structurallyBarred ? 'local-terminal' : 'host-published')
     }
@@ -187,7 +185,6 @@ describe('agent launch caller routing', () => {
     store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
     mockExecutionHostId.mockReturnValue('runtime:web-runtime')
-    // This machine could not host one; the server that owns the workspace can.
     mockHostCapabilities.mockReturnValue([])
     serverReports([
       STRUCTURED_AGENT_SESSION_RUNTIME_CAPABILITY,
@@ -201,7 +198,6 @@ describe('agent launch caller routing', () => {
       worktreeId: 'wt-1'
     })
 
-    // The server admits the chat before any of it exists here, so the surface is the host's.
     expect(result?.surface.kind).toBe('host-published')
     expect(mockBeginHostAdmittedStructuredLaunch).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({ target: { kind: 'environment', environmentId: 'web-runtime' } })
@@ -209,8 +205,7 @@ describe('agent launch caller routing', () => {
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })
 
-  // Before, the chat opened first and a decline replaced it: the workspace could lose its only tab,
-  // the caller heard "failed" while a terminal ran its prompt, and the caller's arguments were lost.
+  // Decline must preserve the workspace tab, caller arguments and honest outcome when falling back to a terminal.
   it("runs the caller's own launch as the server's terminal when the server declines the chat", async () => {
     store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
     mockIsWebRuntimeSessionActive.mockReturnValue(true)
@@ -234,7 +229,7 @@ describe('agent launch caller routing', () => {
 
     expect(result?.surface).toEqual({ kind: 'host-published' })
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
-    await expect(result?.promptDeliveryResult).resolves.toEqual({
+    await expect(result?.promptDeliveryResult).resolves.toMatchObject({
       delivered: true,
       failureNotified: false
     })
@@ -251,8 +246,7 @@ describe('agent launch caller routing', () => {
     expect(store.createTab).not.toHaveBeenCalled()
   })
 
-  // Before, a local chat opened first and this machine's "no" left it failed, with a Retry that
-  // failed the same way and no terminal.
+  // Local refusal must fall back to a terminal rather than strand a failed chat with a futile Retry.
   it("runs the caller's own launch as a local terminal when this machine declines the chat", async () => {
     store.settings = { ...store.settings, ...CHAT_DEFAULT_SETTINGS }
     await useActualAdmission()
@@ -274,8 +268,21 @@ describe('agent launch caller routing', () => {
     await expect(result?.structuredSettlement).resolves.toEqual({ kind: 'terminal' })
     expect(store.createTab).toHaveBeenCalledOnce()
     expect(store.createTab.mock.calls[0]?.slice(0, 2)).toEqual(['wt-1', 'group-1'])
-    expect(queuedStartupCommand(store)).toBe("claude '--model' 'sonnet'")
-    // The typed prompt goes to that terminal once, and the caller hears it arrived.
+    expect(hostLaunchRequest(store)).toMatchObject({
+      agent: 'claude',
+      target: { kind: 'existing', worktree: 'id:wt-1' },
+      agentArgs: '--model sonnet'
+    })
+    const options = createdTabOptions(store)
+    const tabId = options?.id
+    if (typeof tabId !== 'string') {
+      throw new Error('Expected an allocated terminal tab id')
+    }
+    expect(options).toMatchObject({
+      id: store.createTab.mock.results[0]?.value.id,
+      initialLeafId: expect.any(String),
+      agentLaunchPane: { leafId: options?.initialLeafId }
+    })
     await expect(result?.promptDeliveryResult).resolves.toEqual({
       delivered: true,
       failureNotified: false
@@ -283,9 +290,11 @@ describe('agent launch caller routing', () => {
     const { pasteDraftWhenAgentReady } = await import('@/lib/agent-paste-draft')
     expect(pasteDraftWhenAgentReady).toHaveBeenCalledOnce()
     expect(pasteDraftWhenAgentReady).toHaveBeenCalledWith(
-      expect.objectContaining({ content: 'fix the flaky test' })
+      expect.objectContaining({ tabId, content: 'fix the flaky test' })
     )
-    // On this machine the terminal opening is the answer; no notice names a server.
+    await expect(vi.mocked(pasteDraftWhenAgentReady).mock.calls[0]?.[0].launchPty).resolves.toBe(
+      `${tabId}-pty`
+    )
     expect(mockToastInfo).not.toHaveBeenCalled()
     expect(mockLaunchAgentInWebHostTab).not.toHaveBeenCalled()
   })
@@ -395,8 +404,7 @@ describe('agent launch caller routing', () => {
   it('returns null without opening any surface when no startup plan can be built', async () => {
     const { launchAgentInNewTab } = await import('./launch-agent-in-new-tab')
 
-    // Why: unbalanced quoting is the real shape behind every caller's "could not build the launch
-    // command" toast — the arguments cannot be tokenized, so no surface should be opened at all.
+    // Unbalanced argument quoting must abort before any surface opens.
     const result = launchAgentInNewTab({
       requestId: 'request-9',
       agent: 'codex',

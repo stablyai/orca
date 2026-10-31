@@ -1,8 +1,6 @@
 import React from 'react'
 
-// Why: the Warp brand mark labels the "Import themes from Warp" action. Keeping
-// it as a currentColor glyph (like the other brand icons here) lets it inherit
-// button text color and stay theme-aware. Path from simple-icons.
+// Warp path from simple-icons; currentColor lets the mark follow the button theme.
 export function WarpIcon({ className }: { className?: string }): React.JSX.Element {
   return (
     <svg viewBox="0 0 24 24" aria-hidden className={className} fill="currentColor">

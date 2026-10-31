@@ -1,7 +1,3 @@
-// The running child work a structured session publishes reaches the phone's strip: desktop's view
-// of the same roster, rows that stop claiming live work once the stream is lost, and a Stop that
-// reaches the host's background-task cancel.
-
 import { createElement } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -65,7 +61,9 @@ describe('mobile structured session background tasks', () => {
   const client: RpcClient = {
     sendRequest,
     subscribe: (_method, _params, onData) => {
-      listener = onData
+      if (_method === 'agentSession.subscribe') {
+        listener = onData
+      }
       return vi.fn()
     },
     updateTerminalSubscriptionViewport: () => {},
@@ -142,7 +140,7 @@ describe('mobile structured session background tasks', () => {
   function stripElapsed(): string {
     const tasks = hook!.backgroundTasks
     const [group] = buildBackgroundTaskGroupsFromViews(tasks.view.children ?? [], tasks.rowContext)
-    // The strip reads host-stamped clocks on the host's clock: the phone's now less the offset.
+    // Convert phone now with host clock offset so elapsed time uses the roster’s timestamp domain.
     return backgroundTaskRowMeta(
       group!.tasks[0]!.row,
       Date.now() - tasks.rowContext.hostClockOffsetMs
@@ -154,15 +152,12 @@ describe('mobile structured session background tasks', () => {
     await mount(withChildren(40_000))
     const first = hook?.backgroundTasks
     expect(first?.rowContext.hostClockOffsetMs).toBe(60_000)
-    // Child first seen at host time 1_000; host now is 40_000.
     expect(stripElapsed()).toBe('39s')
 
-    // A later sample whose delivery took 300 ms longer: the same offset once rounded.
     const jitter = batchEvent()
     act(() => listener?.(jitter.type === 'batch' ? { ...jitter, hostNow: 39_700 } : jitter))
     expect(hook?.backgroundTasks).toBe(first)
 
-    // The host's clock jumped forward 20 s (a restart or correction): every elapsed moves with it.
     act(() => listener?.(withChildren(60_000)))
     expect(hook?.backgroundTasks.rowContext.hostClockOffsetMs).toBe(40_000)
     expect(stripElapsed()).toBe('59s')

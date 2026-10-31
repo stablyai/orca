@@ -9,13 +9,7 @@ import type {
   RpcClientContextValue
 } from '../transport/rpc-client-context-contract'
 
-/**
- * The panel's Retry while the host is unreachable, mounted under the page's own provider.
- *
- * `client-context` and `route-handoff` resolve to their `.web` siblings, as the page bundle does.
- * `useForceReconnect` forwards to the provider this suite mounts rather than re-exporting the real
- * hook: the sibling imports the hooks back, and an awaited mock of it deadlocks.
- */
+// Mount Retry under page web provider with .web handoff/client context; forward useForceReconnect to provider, since awaiting real hooks cyclic import deadlocks.
 
 const doubles = vi.hoisted(
   (): {
@@ -35,22 +29,46 @@ vi.mock('expo-router', () => ({
 }))
 vi.mock('react-native', () => ({
   ActivityIndicator: 'ActivityIndicator',
+  Animated: { View: 'View' },
   Pressable: 'Pressable',
   RefreshControl: 'RefreshControl',
   SectionList: 'SectionList',
   Text: 'Text',
   TextInput: 'TextInput',
   View: 'View',
+  Dimensions: { get: () => ({ width: 390, height: 844 }) },
+  Keyboard: { addListener: () => ({ remove() {} }), dismiss: () => {} },
   Platform: { OS: 'web', select: (choices: Record<string, unknown>) => choices.web },
   AppState: { currentState: 'active', addEventListener: () => ({ remove() {} }) },
-  StyleSheet: { create: (value: unknown) => value, hairlineWidth: 1 }
+  StyleSheet: { absoluteFill: {}, create: (value: unknown) => value, hairlineWidth: 1 }
 }))
 vi.mock('react-native-safe-area-context', () => ({
   SafeAreaView: 'SafeAreaView',
   useSafeAreaInsets: () => ({ top: 0, bottom: 0, left: 0, right: 0 })
 }))
-vi.mock('react-native-svg', () => ({ default: 'Svg', Path: 'Path' }))
-vi.mock('lucide-react-native', () => ({ ChevronLeft: 'Icon', Play: 'Icon', RefreshCw: 'Icon' }))
+vi.mock('react-native-svg', () => ({
+  default: 'Svg',
+  Defs: 'Defs',
+  LinearGradient: 'LinearGradient',
+  Path: 'Path',
+  Rect: 'Rect',
+  Stop: 'Stop'
+}))
+vi.mock('lucide-react-native', () => ({
+  ChevronDown: 'Icon',
+  ChevronLeft: 'Icon',
+  CircleAlert: 'Icon',
+  History: 'Icon',
+  RefreshCw: 'Icon',
+  Search: 'Icon',
+  SearchX: 'Icon',
+  TriangleAlert: 'Icon',
+  X: 'Icon'
+}))
+// Reanimated needs native modules; the eased height is not under test.
+vi.mock('../components/AutoHeight', () => ({
+  AutoHeight: ({ children }: { children: unknown }) => children
+}))
 vi.mock('../platform/haptics', () => ({ triggerError: () => {}, triggerSuccess: () => {} }))
 vi.mock('../components/MobileAgentIcon', () => ({ MobileAgentIcon: () => null }))
 vi.mock('../navigation/route-handoff', async () => await import('../navigation/route-handoff.web'))
@@ -132,8 +150,7 @@ describe("the agent-history panel's Retry while the host is unreachable", () => 
   })
 
   it('loads again when the shell reconnects, which is what the missing Retry relies on', async () => {
-    // The premise of hiding it: nothing on the page re-dials, so the load has to re-run on the
-    // client and state the shell's own reconnect delivers.
+    // Page never redials itself; rerun load against client/state delivered by shell reconnect.
     const pair = createFakeBridgePortPair()
     const rendered = await mountPanel(pair)
     expect(retryControls(rendered)).toHaveLength(0)

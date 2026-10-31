@@ -9,8 +9,9 @@ export type StructuredAgentSessionProviderOpenInput = {
   signal: AbortSignal
 }
 
-/** Protocol facts returned to the host that awaits this child's open. */
 export type StructuredAgentSessionProviderOpenResult = {
+  /** Actual provider creation, independent of a head already committed by rewind. */
+  newConversation?: boolean
   link?: AgentSessionProviderHandleLink
   reportedOptions: AgentSessionOptionsResult['current']
   catalogListing?: AgentModelCatalogLiveListing

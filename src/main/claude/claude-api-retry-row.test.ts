@@ -11,7 +11,10 @@ import { openAgentSessionJournal } from '../native-chat/agent-session-journal/jo
 import { createDeferredStructuredAgentSessionEventSink } from '../native-chat/agent-session-wire/structured-agent-session-event-sink'
 import { unhandledProviderFrameJournalItem } from '../native-chat/agent-session-wire/unhandled-provider-frame'
 import { createClaudeJournalTranslator } from './claude-structured-journal-translation'
-import { openTestJournalHostDatabase } from '../native-chat/agent-session-journal/journal-host-database-test-support'
+import {
+  closeTestJournalHostDatabases,
+  openTestJournalHostDatabase
+} from '../native-chat/agent-session-journal/journal-host-database-test-support'
 import { testEventSinkLogging } from '../native-chat/agent-session-wire/structured-agent-session-logger-test-support'
 import { claudeProviderHandle } from '../../shared/agent-session-provider-handle-encoding'
 
@@ -23,7 +26,6 @@ const IDENTITY: AgentSessionJournalIdentity = {
   providerHandle: claudeProviderHandle('provider-1', 'leaf-1')
 }
 
-/** A frame as Claude Code sends it while it retries a refused request. */
 function apiRetry(attempt: number, fields: Record<string, unknown> = {}): Record<string, unknown> {
   return {
     type: 'system',
@@ -46,6 +48,7 @@ beforeEach(async () => {
 })
 
 afterEach(async () => {
+  await closeTestJournalHostDatabases()
   await rm(root, { recursive: true, force: true })
 })
 
@@ -86,18 +89,7 @@ describe('a Claude api_retry frame', () => {
       }
     })
     expect(row).not.toHaveProperty('providerFrame')
-    // The latest attempt's frame, as the log detail.
     expect(row.failure?.detail?.text).toContain('"attempt":3')
-  })
-
-  it('says how far a gateway failure has got, and the code it failed with', async () => {
-    const [row] = await statusRowsFor([
-      apiRetry(1, { error: 'server_error', error_status: 502 }),
-      apiRetry(2, { error: 'server_error', error_status: 502 })
-    ])
-    expect(row?.text).toBe(
-      'Claude hit a temporary problem and is retrying. Retry 2 of 10.\nLast error: HTTP 502 server error.'
-    )
   })
 
   it('starts a new row when a later run starts over', async () => {
@@ -141,7 +133,6 @@ describe('a Claude api_retry frame', () => {
     expect(rows).toEqual([
       unhandledProviderFrameJournalItem('claude', 'message:system:future_notice', unknown)?.body
     ])
-    // An uncatalogued kind keeps its sentence but is no failure: only a kind decides that.
     expect(rows[0]).toMatchObject({ text: 'rate_limit' })
     expect(rows[0]).not.toHaveProperty('tone')
   })

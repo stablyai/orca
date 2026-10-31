@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react'
-import { BOTTOM_DRAWER_HIDE_DURATION_MS } from './bottom-drawer-constants'
 import { resolveNewWorktreeFormSheetVisible } from './new-worktree-form-sheet-visibility'
 
 export type NewWorktreeDrawerView =
@@ -11,9 +10,8 @@ export type NewWorktreeDrawerView =
   | 'agent'
   | 'trust'
 
-// Why: iOS cannot reliably present a second native modal until the first drawer's
-// exit commits; one extra frame keeps transitions sequential on slower devices.
-const NEW_WORKTREE_DRAWER_TRANSITION_MS = BOTTOM_DRAWER_HIDE_DURATION_MS + 16
+// One frame: every sheet shares BottomDrawerModalHost's one native Modal, so there is no second iOS presentation to wait out.
+const NEW_WORKTREE_DRAWER_TRANSITION_MS = 16
 
 export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
   drawerView: NewWorktreeDrawerView
@@ -25,8 +23,7 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
   const [drawerView, setDrawerView] = useState<NewWorktreeDrawerView>('form')
   const drawerTransitionTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  // Why: cancel any queued transition and reset when the modal closes, so a
-  // timer can't land after close and leave a stale drawer for the next open.
+  // Cancel queued transitions on close so the next open cannot inherit a stale drawer.
   useEffect(() => {
     if (modalVisible) {
       return
@@ -58,8 +55,7 @@ export function useNewWorktreeDrawerNavigation(modalVisible: boolean): {
   }
 
   function openSourceDrawer(): void {
-    // Why: same-beat open; the form stays mounted underneath so the outer
-    // content height is preserved when the fill picker dismisses.
+    // Keep the form mounted under the picker to preserve the outer content height.
     if (drawerTransitionTimerRef.current) {
       clearTimeout(drawerTransitionTimerRef.current)
     }

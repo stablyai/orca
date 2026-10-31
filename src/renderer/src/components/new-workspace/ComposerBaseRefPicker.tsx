@@ -14,12 +14,7 @@ type ComposerBaseRefPickerProps = {
   readOnly?: boolean
 }
 
-/**
- * Base ref control for the New Workspace composer.
- *
- * Owns its own store reads so the name section stays presentational and the
- * worktree subscription only exists while the picker is actually on screen.
- */
+/** Own store subscriptions only while the picker is shown, leaving the name section presentational. */
 export function ComposerBaseRefPicker({
   repoId,
   baseBranch,

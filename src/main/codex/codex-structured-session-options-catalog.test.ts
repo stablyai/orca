@@ -7,7 +7,10 @@ import {
 import { AgentModelCatalogStore } from '../native-chat/agent-model-catalog/agent-model-catalog-store'
 import { optionSession } from './codex-structured-option-session.test-fixture'
 import { describe, expect, it, vi } from 'vitest'
-import { fetchCodexModelCatalogListing } from './codex-structured-model-catalog'
+import {
+  composeCodexSessionOptionCatalog,
+  fetchCodexModelCatalogListing
+} from './codex-structured-model-catalog'
 
 function modelRow(id: string): Record<string, unknown> {
   return {
@@ -57,6 +60,7 @@ it('uses installed choices after an update and keeps saved values for the next t
     ['model', 'A'],
     ['effort', 'low']
   ])
+  session.appliedTurnOptions = { model: 'A', effort: 'low' }
   const store = new AgentModelCatalogStore()
   const install = (models: AgentSessionOptionsResult['models']) =>
     store.recordSuccess('scope', 'codex', { origin: 'probe', complete: true, models }, 'discovery')
@@ -70,9 +74,9 @@ it('uses installed choices after an update and keeps saved values for the next t
   const before = await readLiveCodexSessionOptions(session, 100)
   expect(before.models[0]?.efforts).toEqual([{ value: 'high', label: 'High' }])
   expect(before.current).toMatchObject({ model: 'A', effort: 'low' })
-  await expect(applyCodexStructuredSessionOption(session, 'effort', 'low')).rejects.toThrow(
-    'does not support low'
-  )
+  await expect(applyCodexStructuredSessionOption(session, 'effort', 'low')).resolves.toMatchObject({
+    effort: 'low'
+  })
   install([{ id: 'B', label: 'B', isDefault: true, efforts: [] }])
   const after = await readLiveCodexSessionOptions(session, 100)
   expect(after.models.map((row) => row.id)).toEqual(['B', 'A'])
@@ -82,4 +86,42 @@ it('uses installed choices after an update and keeps saved values for the next t
     { model: 'A', effort: 'low' }
   )
   expect(request).not.toHaveBeenCalled()
+})
+
+it('keeps declared context independent from configured policy and actual Codex effort', async () => {
+  for (const [configuredEffort, policy, declared] of [
+    [undefined, 'high', 'high'],
+    ['low', 'low', 'low'],
+    ['unlisted', 'high', null]
+  ] as const) {
+    const listing = await fetchCodexModelCatalogListing({
+      connection: {
+        request: async (method) =>
+          method === 'model/list'
+            ? {
+                data: [
+                  {
+                    model: 'native',
+                    displayName: 'Native',
+                    isDefault: true,
+                    defaultReasoningEffort: 'high',
+                    supportedReasoningEfforts: ['low', 'high'].map((reasoningEffort) => ({
+                      reasoningEffort
+                    }))
+                  }
+                ],
+                nextCursor: null
+              }
+            : { config: { model: 'native', model_reasoning_effort: configuredEffort } }
+      }
+    })
+    expect(listing.models[0]).toMatchObject({
+      defaultEffort: policy,
+      declaredDefaultEffort: declared
+    })
+    expect(
+      composeCodexSessionOptionCatalog(listing, { current: { model: 'native', effort: 'max' } })
+        .current
+    ).toMatchObject({ model: 'native', effort: 'max' })
+  }
 })

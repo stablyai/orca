@@ -51,7 +51,10 @@ export async function updateProjectItemFieldValue(
   args: UpdateProjectItemFieldArgs
 ): Promise<GitHubProjectMutationResult> {
   if (!args.projectId || !args.itemId || !args.fieldId) {
-    return { ok: false, error: { type: 'validation_error', message: 'Missing ids.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Missing ids.', reason: 'missing_ids' }
+    }
   }
   let valueFragment: string
   let valueVariable: { type: string; val: string | number }
@@ -88,7 +91,10 @@ export async function clearProjectItemFieldValue(
   args: ClearProjectItemFieldArgs
 ): Promise<GitHubProjectMutationResult> {
   if (!args.projectId || !args.itemId || !args.fieldId) {
-    return { ok: false, error: { type: 'validation_error', message: 'Missing ids.' } }
+    return {
+      ok: false,
+      error: { type: 'validation_error', message: 'Missing ids.', reason: 'missing_ids' }
+    }
   }
   const result = await runGraphql<unknown>(
     `mutation($projectId:ID!, $itemId:ID!, $fieldId:ID!) {

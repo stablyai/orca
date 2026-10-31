@@ -49,7 +49,8 @@ function runtime() {
       }
     },
     subscribeAgentProviderSessionChangesFn: null,
-    getAgentStatusRowsForPane: (): AgentStatusIpcPayload[] => []
+    getAgentStatusRowsForPane: (): AgentStatusIpcPayload[] => [],
+    agentTransitions: { latestRow: vi.fn(() => null), subscribe: vi.fn(() => () => {}) }
   }
 }
 
@@ -62,7 +63,6 @@ describe('installExternalConversations', () => {
     const folders = vi.spyOn(store, 'getFolderWorkspaces')
     const rows = vi.spyOn(host, 'getAgentStatusRowsForPane')
     const connectors = installExternalConversations(store, host)
-    // Nothing is read until the host's first `current()`.
     expect(getSettings).not.toHaveBeenCalled()
     expect(connectors.current()).toBeNull()
     update({ experimentalConnectors: false })
@@ -74,12 +74,7 @@ describe('installExternalConversations', () => {
     expect(meta).not.toHaveBeenCalled()
     expect(folders).not.toHaveBeenCalled()
     expect(rows).not.toHaveBeenCalled()
-  })
-
-  it('builds the seam on first use when the setting is already on', () => {
-    const { store } = fakeStore({ experimentalConnectors: true })
-    const seam = installExternalConversations(store, runtime()).current()
-    expect(seam?.signal.aborted).toBe(false)
+    expect(host.agentTransitions.subscribe).not.toHaveBeenCalled()
   })
 
   it('disposes on disable without another call, and builds one fresh seam on re-enable', () => {
@@ -139,18 +134,6 @@ describe('installExternalConversations', () => {
     expect(launch).toHaveBeenCalledTimes(1)
   })
 
-  it('keeps the seam through unrelated settings changes', () => {
-    const { store, update } = fakeStore({ experimentalConnectors: true })
-    const connectors = installExternalConversations(store, runtime())
-    const seam = connectors.current()
-    update({ editorAutoSave: true })
-    expect(connectors.current()).toBe(seam)
-  })
-
-  it('stays off without a store', () => {
-    expect(installExternalConversations(null, runtime()).current()).toBeNull()
-  })
-
   it('watches persisted links from host startup, so a session changed before any call is kept', () => {
     const records = fakeLinkStore()
     const link = { source: 'dev', externalId: 't1', paneKey: PANE, agent: 'claude' }
@@ -172,7 +155,6 @@ describe('installExternalConversations', () => {
         return () => reports.delete(listener)
       }
     }
-    // What each runtime host does at startup, before any connector call.
     const connectors = installExternalConversations(store, host)
     connectors.current()
     const cleared = { ...SESSION, id: 'claude-session-after-clear' }

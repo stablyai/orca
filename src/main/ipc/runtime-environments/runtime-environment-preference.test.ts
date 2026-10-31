@@ -43,7 +43,7 @@ function saveEnvironment(name = 'server') {
       v: 2,
       endpoint: 'ws://127.0.0.1:59999',
       deviceToken: 'test-token',
-      // Why a key per name: one key is one server, which the store refuses to save twice.
+      // Each saved server needs a distinct key; duplicate keys are rejected.
       publicKeyB64: Buffer.alloc(32, name).toString('base64')
     })
   })
@@ -110,6 +110,22 @@ describe('Active Server after a saved host is removed', () => {
         timeout: 5_000
       })
       expect(listEnvironments(userDataPath).map(({ id }) => id)).toContain(kept.id)
+    } finally {
+      stopWatching()
+    }
+  })
+
+  it('tells renderers when the CLI saves a new server (#25251)', async () => {
+    saveEnvironment('existing')
+    const onRegistryChanged = vi.fn()
+    const stopWatching = watchRuntimeEnvironmentPreference(
+      preferenceStore(null),
+      userDataPath,
+      onRegistryChanged
+    )
+    try {
+      saveEnvironment('cli-added')
+      await vi.waitFor(() => expect(onRegistryChanged).toHaveBeenCalled(), { timeout: 5_000 })
     } finally {
       stopWatching()
     }

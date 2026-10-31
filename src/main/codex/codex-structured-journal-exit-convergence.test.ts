@@ -45,8 +45,6 @@ afterEach(async () => {
   }
 })
 
-/** What the chat shows with the live generation at `liveFence`: 7 while the child runs, none once
- *  its exit released it (`structuredAgentSessionCurrentWork`). */
 function userVisible(journal: AgentSessionJournal, liveFence: number | null) {
   const items = journal.snapshot().items
   const work = new StructuredAgentSessionCurrentWork(journal, liveFence)
@@ -183,7 +181,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   }
   const gate = Promise.withResolvers<void>()
   const blocked = journal.readInOrder(() => gate.promise)
-  // A count-refused exit still delegates settlement to the host, as on main.
+  // Saturate the queue to force host settlement after the provider's exit rows are refused.
   for (let index = 0; index < 1_024; index++) {
     deferred.sink.publish({ lifecycle: true, coalescingKey: `limit-${index}` })
   }
@@ -268,7 +266,7 @@ it('settles a refused Codex exit through the host in one commit, then permits a 
   const settled = journal.snapshot()
   const submissions = journal.submissions()
   await journal.close()
-  closeTestJournalHostDatabase(root)
+  await closeTestJournalHostDatabase(root)
   const reopened = await journals.open(options)
   expect(reopened.snapshot()).toEqual(settled)
   expect(reopened.submissions()).toEqual(submissions)

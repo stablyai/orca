@@ -19,6 +19,7 @@ export const OptionalPRRefreshReason = z
 export const PrForBranch = RepoSelector.extend({
   branch: requiredString('Missing branch'),
   reason: OptionalPRRefreshReason,
+  userRefresh: z.boolean().optional(),
   linkedPRNumber: z.number().int().positive().nullable().optional(),
   fallbackPRNumber: z.number().int().positive().nullable().optional(),
   acceptMergedFallbackPR: z.boolean().optional(),
@@ -39,7 +40,8 @@ export const PRCommentReaction = RepoSelector.extend({
 })
 
 export const PullRequestChecks = PullRequest.extend({
-  headSha: OptionalString
+  headSha: OptionalString,
+  userRefresh: z.boolean().optional()
 })
 
 export const PullRequestCheckDetails = RepoSelector.extend({

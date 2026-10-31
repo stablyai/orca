@@ -1,5 +1,8 @@
 import type { RuntimeServiceCommandSurface } from '../../runtime-service-command-surface'
-import { resolveRemoteCliBrowserScopeSelector } from '../../desktop-browser-bridge/remote-cli-browser-scope'
+import {
+  remoteCliBrowserScopeWorkspaceId,
+  resolveRemoteCliBrowserScopeSelector
+} from '../../desktop-browser-bridge/remote-cli-browser-scope'
 import type { ResolvedWorktree } from '../../runtime-worktree-path-identity'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import type { WorkspaceSessionState } from '../../../../shared/workspace-session-state-types'
@@ -37,6 +40,9 @@ import { RuntimeRemoteFetchController } from '../../runtime-remote-fetch-control
 import { RuntimeWorktreeBaseReconciliation } from '../../runtime-worktree-base-reconciliation'
 import { RuntimeWorktreeRemovalInFlight } from '../../runtime-worktree-removal-in-flight'
 import { ServeBrowserTabs } from '../../serve-browser-tabs'
+import { readBrowserTabBar } from '../../browser/browser-tab-listing'
+import { parseWorkspaceKey } from '../../../../shared/workspace-scope'
+import { getRepoIdFromWorktreeId } from '../../../../shared/worktree/id'
 import type { ServeBrowserPageState } from '../../serve-browser-tab-layout'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import type { LayoutCommand } from '../../../../shared/workspace-layout/workspace-layout-command-types'
@@ -51,7 +57,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     repoId?: string
     hostId?: ExecutionHostId
   }): BrowserNetworkExecutionHost | Promise<BrowserNetworkExecutionHost>
-  abstract getAuthoritativeWindow(): BrowserWindow
+  abstract getAuthoritativeWindow(missingWindowMessage?: string): BrowserWindow
   protected abstract getAvailableAuthoritativeWindow(): BrowserWindow | null
   protected abstract markHeadlessBrowserSessionTabActive(
     worktreeId: string | undefined,
@@ -114,14 +120,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
   protected abstract resolveDesktopRestoreTarget(ptyId: string): { cols: number; rows: number }
   abstract getTerminalSize(ptyId: string): { cols: number; rows: number } | null
 
-  // Why: per-PTY driver state. The "driver" is whoever currently owns the
-  // input/resize floor. While `kind === 'mobile'` the desktop renderer drops
-  // xterm.onData/onResize and shows the lock banner; `terminal.send` /
-  // `pty:write` and `pty:resize` IPC handlers also drop desktop-side calls
-  // server-side as defense-in-depth. The `clientId` carried on the mobile
-  // variant is the most recent mobile actor — used by
-  // `applyMobileDisplayMode` to pick the active phone-fit viewport. See
-  // docs/mobile-presence-lock.md.
+  // Mobile ownership locks desktop input/resize in both renderer and main; clientId selects the active phone viewport (docs/mobile-presence-lock.md).
   protected readonly terminalDrivers = new RuntimeTerminalDriverController({
     notifyChanged: (ptyId, next) => this.notifier?.terminalDriverChanged(ptyId, next),
     canClaimMobileFloor: (ptyId, clientId) => {
@@ -169,9 +168,10 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       getAgentEnvironment: () => this.accounts.getCommitMessageAgentEnvironment()
     },
     browserHost: {
+      getRuntimeId: () => this.getRuntimeId(),
       getAgentBrowserBridge: () => this.agentBrowserBridge,
-      resolveWorktreeSelector: (selector) =>
-        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveWorktreeSelector(selector),
+      resolveWorkspaceSelector: (selector) =>
+        resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveWorkspaceSelector(selector),
       resolveBrowserWorkspace: (selector) =>
         resolveRemoteCliBrowserScopeSelector(selector) ?? this.resolveBrowserWorkspace(selector),
       getBrowserHostLeaseRegistry: () => getBrowserHostLeaseRegistry(this),
@@ -184,6 +184,19 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
       markHeadlessBrowserSessionTabActive: this.markHeadlessBrowserSessionTabActive.bind(this),
       notifyHeadlessBrowserSessionTabsChanged: (worktreeId) =>
         this.notifyMobileSessionTabsChanged(worktreeId),
+      readBrowserTabBar: (worktreeId) =>
+        readBrowserTabBar(this.mobileSessionTabsByWorktree, worktreeId, (id) => {
+          // Why: an SSH host's bridged workspace may have no row here, yet its pages render in this window.
+          if (id === remoteCliBrowserScopeWorkspaceId()) {
+            return true
+          }
+          const scope = parseWorkspaceKey(id)
+          return scope?.type === 'folder'
+            ? (this.store?.getFolderWorkspaces?.() ?? []).some(
+                (workspace) => workspace.id === scope.folderWorkspaceId
+              )
+            : (this.store?.getRepos() ?? []).some((repo) => repo.id === getRepoIdFromWorktreeId(id))
+        }),
       retireRuntimeOwnedBrowserSessionTab: (worktreeId, browserPageId) =>
         this.retireRuntimeOwnedBrowserSessionTab(worktreeId, browserPageId),
       serveBrowserTabs: this.serveBrowserTabs
@@ -208,7 +221,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     }
   })
 
-  // Why: tests and diagnostic seams replace only screencast startup; ordinary edge methods stay pre-bound.
+  // Tests and diagnostics replace screencast startup; other edge methods stay pre-bound.
   protected browserCommands = this.edgeCommands.getBrowserCommands()
 
   protected readonly browserDrivers = new RuntimeBrowserDriverController({
@@ -232,18 +245,7 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     }
   })
 
-  // Why: resubscribe-grace window. When the last mobile subscriber for a
-  // PTY unsubscribes, we hold the driver=mobile{clientId} state and the
-  // inner-map record open for ~250ms. If the same (ptyId, clientId)
-  // re-subscribes inside the window — typically because the mobile app
-  // tore down the stream to reconfigure (rare with the new
-  // updateMobileViewport path, but still possible on reconnects, network
-  // hiccups, or older client builds) — we cancel the deferred idle and
-  // restore-timer so the desktop banner doesn't flash and the new
-  // subscriber doesn't capture an already-phone-fitted PTY size as its
-  // restore baseline. Keyed by ptyId; carries the timer plus the snapshot
-  // of the leaving subscriber so we can re-insert it on cancel. See
-  // docs/mobile-presence-lock.md.
+  // Keep the leaving client snapshot by PTY for ~250ms so reconnects/older clients avoid banner flashes and capturing phone-fit restore baselines (docs/mobile-presence-lock.md).
   protected pendingSoftLeavers = new Map<
     string,
     {
@@ -261,40 +263,19 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     }
   >()
 
-  // Why: tracks the last PTY size set by the desktop renderer (via pty:resize
-  // IPC). Unlike ptySizes (which is overwritten by server-side phone-fit
-  // resizes), this map preserves the actual pane geometry. Used as the
-  // preferred source for previousCols so desktop restore uses the correct
-  // split-pane width instead of a stale full-width value.
+  // Preserve actual renderer pane geometry; phone-fit resizes overwrite ptySizes and must not become desktop restore baselines.
   protected lastRendererSizes = new Map<string, { cols: number; rows: number }>()
 
-  // Why: when a desktop-fit override change fires, the desktop renderer's
-  // re-render cascade (triggered by setOverrideTick) runs safeFit on ALL
-  // panes — not just the affected one. Background tab panes get measured at
-  // full-width (214) instead of their correct split width (105). The stale
-  // pty:resize IPCs overwrite both the actual PTY size and lastRendererSizes.
-  // This global window suppresses ALL pty:resize for 200ms after any
-  // desktop-fit notification. The server has already set the correct PTY
-  // size via ptyController.resize(), so desktop renderer resizes during
-  // this window are redundant (for the restored pane) or wrong (collateral).
+  // Desktop-fit notifications remeasure all panes, sometimes at wrong full width; suppress renderer resizes for 200ms after the server sets correct sizes.
   protected resizeSuppressedUntil = 0
 
-  // Why: delays PTY restore by 300ms after mobile unsubscribe so rapid tab
-  // switches don't cause unnecessary resize thrashing. Keyed by clientId
-  // Why: keyed by ptyId so each PTY gets its own independent restore timer.
-  // The old clientId-keyed design lost timers when two PTYs were unsubscribed
-  // back-to-back (only the last timer survived).
+  // Delay restore 300ms to avoid tab-switch thrashing; key by PTY so one client leaving two terminals retains both timers.
   protected pendingRestoreTimers = new Map<
     string,
     { timer: ReturnType<typeof setTimeout>; clientId: string }
   >()
 
-  // Why: inline resize events replace the unsubscribe→resubscribe pattern.
-  // Listeners are notified when mode changes or desktop restores, allowing
-  // the subscribe stream to emit a 'resized' event with fresh scrollback.
-  // `seq` is the layout state-machine sequence number bumped on every
-  // applyLayout success; mobile clients use it to drop stale events that
-  // arrive after a newer transition. See docs/mobile-terminal-layout-state-machine.md.
+  // Inline resized events carry fresh scrollback and monotonic layout seq so mobile drops stale transitions (docs/mobile-terminal-layout-state-machine.md).
   protected resizeListeners = new Map<
     string,
     Set<
@@ -308,28 +289,13 @@ export abstract class OrcaRuntimeWithTerminalDrivers extends OrcaRuntimeWithFitO
     >
   >()
 
-  // Why: per-PTY layout state machine. `applyLayout` is the sole writer of
-  // `layouts`, `terminalFitOverrides`, and `ptyController.resize`; every
-  // trigger method routes through `enqueueLayout`. The monotonic `seq` is
-  // emitted on the mobile subscribe stream so clients can drop stale events.
-  // See docs/mobile-terminal-layout-state-machine.md.
+  // applyLayout alone writes layout, fit overrides and PTY resize; triggers enter enqueueLayout (docs/mobile-terminal-layout-state-machine.md).
   protected layouts = new Map<string, PtyLayoutState>()
 
-  // Why: per-PTY async serialization queue for applyLayout. Without
-  // serialization, two concurrent triggers can interleave around the
-  // ptyController.resize await and bump seq in the wrong order, defeating
-  // seq-as-truth. Coalesces same-kind same-owner viewport ticks so the
-  // keyboard-show/hide animation doesn't queue 10+ resizes; mode flips,
-  // take-floor, and different-owner targets always append (preserves
-  // multi-mobile fairness). See docs/mobile-terminal-layout-state-machine.md
-  // "enqueueLayout coalescing".
+  // Serialize resize awaits to preserve seq order; coalesce only same-kind/same-owner viewport ticks, retaining mode/floor changes and other owners for fairness.
   protected layoutQueues = new Map<string, LayoutQueueEntry>()
 
-  // Why: gate so enqueueLayout's "no layouts entry" short-circuit doesn't
-  // fire on the very first transition for a PTY (where the entry doesn't
-  // exist yet *because* we're about to create it). `handleMobileSubscribe`
-  // adds the ptyId before calling enqueueLayout and removes it after the
-  // call resolves.
+  // The first subscribe creates the layout entry; bypass the missing-entry short circuit until that enqueue resolves.
   protected freshSubscribeGuard = new Set<string>()
 
   protected stats: StatsCollector | null = null

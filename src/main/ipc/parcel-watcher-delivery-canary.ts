@@ -1,21 +1,10 @@
-// Canary self-check for the watcher child. Why: @parcel/watcher can wedge
-// silently — a lock-order inversion between Debounce::notify (debounce mutex →
-// watcher mutex) and Watcher teardown (watcher mutex → debounce mutex in
-// ~Watcher) deadlocks the single process-wide debounce thread, after which
-// every subscription still acks but no events are ever delivered. The canary
-// watches a private temp dir and touches a file in it; consecutive missed
-// deliveries mean event delivery is dead, so exit and let the host respawn.
-//
-// A missed canary can also mean the OS event source itself is stalled (an
-// overloaded macOS fseventsd delays every client). A restart cannot fix that
-// and recreating every stream adds load, so before exiting the canary checks
-// whether an independent fs.watch on the same dir also stays silent, and
-// reports the stall to the host so callers can rescan instead of going stale.
+// Parcel debounce/teardown lock inversion can silently deadlock delivery across subscriptions.
+// Probe a private directory; independent fs.watch distinguishes a child fault from an OS event stall.
 import { type FSWatcher, mkdtempSync, rmSync, watch, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import type * as ParcelWatcher from '@parcel/watcher'
-import { loadParcelWatcher } from './parcel-watcher-module-loader'
+import { loadParcelWatcher } from './filesystem/watcher-process/parcel-watcher-module-loader'
 import { hasShallowWatchDelivered, noteShallowWatchDelivered } from './shallow-watch-delivery-probe'
 import { errorMessage } from '../../shared/error-message'
 
@@ -27,8 +16,7 @@ const INDEPENDENT_PROBE_WINDOW_MS = 5_000
 const INDEPENDENT_PROBE_WRITE_INTERVAL_MS = 1_000
 export const CANARY_STALL_BACKOFF_INITIAL_MS = 30_000
 export const CANARY_STALL_BACKOFF_MAX_MS = 5 * 60_000
-// Why: a deadlock can look like a stall (e.g. fs.watch muted by the same
-// fault); bound it with a restart that the host's crash fuse still rate-limits.
+// Even an apparent OS stall may hide a deadlock; bound it with a crash-fuse-limited restart.
 export const CANARY_STALL_RESTART_AFTER_MS = 15 * 60_000
 
 export type WatcherCanaryActivity = {
@@ -49,10 +37,7 @@ export function armedCanaryRevision(
   platform: NodeJS.Platform
 ): number | null {
   if (activity.pendingCrawlStartedAt !== null) {
-    // Why: FSEvents subscribe does not crawl, so a pending subscribe there is
-    // most likely stuck behind the deadlock the canary exists to catch. Crawls
-    // elsewhere (huge or network trees) hold Parcel's backend mutex for as long
-    // as they take, and a restart would only re-crawl from scratch.
+    // macOS subscribe does not crawl; elsewhere a legitimate crawl holds the backend mutex, so restarting would repeat it.
     return platform === 'darwin' ? activity.revision : null
   }
   return activity.liveSubscriptions > 0 ? activity.revision : null
@@ -77,8 +62,7 @@ export async function startWatcherDeliveryCanary(
   try {
     canaryDir = configuredCanaryDir ?? mkdtempSync(join(tmpdir(), 'orca-watcher-canary-'))
     const watcher = await loadParcelWatcher()
-    // Why: pin the Windows backend like the main subscriptions do, so the
-    // canary never probes for Watchman.
+    // Match the Windows subscriptions so the canary never probes for Watchman.
     const opts: ParcelWatcher.Options = process.platform === 'win32' ? { backend: 'windows' } : {}
     await watcher.subscribe(
       canaryDir,
@@ -104,9 +88,7 @@ export async function startWatcherDeliveryCanary(
     }
   })
 
-  // One long-lived fs.watch on the canary dir: canary writes keep proving it
-  // works, and a stall probe only checks whether it delivered since time T.
-  // Why: opening one per probe makes macOS rebuild the shared FSEventStream.
+  // Keep one fs.watch: opening one per probe makes macOS rebuild the shared FSEventStream.
   let independentLastEventAt = 0
   let independentWatch: FSWatcher | null = null
   const ensureIndependentWatch = (): boolean => {
@@ -156,8 +138,7 @@ export async function startWatcherDeliveryCanary(
         return 'inconclusive'
       }
       await sleep(INDEPENDENT_PROBE_WRITE_INTERVAL_MS)
-      // Why: any native callback (not just the canary's) proves the shared
-      // debounce thread is alive, so the child is not deadlocked.
+      // Any native callback proves the shared debounce thread is alive.
       if (nativeDeliveredSince(startedAt)) {
         return 'native-delivered'
       }
@@ -203,8 +184,7 @@ export async function startWatcherDeliveryCanary(
     const activityRevision = stableRevision()
     if (activityRevision === null) {
       misses = 0
-      // Why: a disarmed canary cannot confirm a stall; end it so the host stops
-      // rescanning, and re-detect it once re-armed.
+      // Disarming invalidates stall evidence; stop host rescans until the canary can probe again.
       if (health === 'stalled') {
         stallBackoffMs = null
         stallStartedAt = null
@@ -221,8 +201,7 @@ export async function startWatcherDeliveryCanary(
       return
     }
     await sleep(CANARY_EVENT_TIMEOUT_MS)
-    // A root may start crawling after this probe was written. Invalidate the
-    // probe instead of misclassifying lifecycle work as a delivery deadlock.
+    // A crawl starting after the write invalidates this probe; lifecycle work is not a delivery deadlock.
     if (stableRevision() !== activityRevision) {
       misses = 0
       schedule(nextProbeDelay())
@@ -258,8 +237,7 @@ export async function startWatcherDeliveryCanary(
       return
     }
     if (verdict === 'silent') {
-      // Why: a host where fs.watch never delivered cannot tell a stall from a
-      // deadlock; any earlier delivery in this process proves it can.
+      // fs.watch must have delivered before it can distinguish OS stalls from child deadlock.
       if (!hasShallowWatchDelivered()) {
         restart('canary starved; fs.watch never delivered in this process')
         return

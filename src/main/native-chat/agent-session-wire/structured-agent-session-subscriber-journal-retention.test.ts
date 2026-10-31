@@ -220,7 +220,7 @@ describe('subscriber journal lifetime', () => {
     rig.clock.now += IDLE_MS + 1
     await sweepOnce(rig.host)
     expect(rig.host.hasSession(SESSION)).toBe(false)
-    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION)
+    expect(rig.adapter.closeSession).toHaveBeenCalledWith(SESSION, undefined)
     expect(subscriberCount()).toBe(1)
     expect(reader.state.types).not.toContain('end')
     vi.clearAllMocks()

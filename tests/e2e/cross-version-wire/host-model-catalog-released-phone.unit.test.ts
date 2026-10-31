@@ -68,7 +68,7 @@ it.each(['success', 'budget'] as const)(
       .map((row) => JSON.stringify(row))
       .join('\n')
     const probe = createClaudeModelCatalogProbe({
-      resolveCommand: () => process.execPath,
+      resolveCommand: () => ({ command: process.execPath, prefixArgs: [] }),
       resolveEnv: () => ({}),
       resolveInheritedEnv: async () => ({}),
       resolveAuthPolicy: () => ({ account: 'system' }),
@@ -85,7 +85,7 @@ it.each(['success', 'budget'] as const)(
             }
           }),
           async () => {
-            await wait(strict ? 14_000 : mode === 'success' ? 14_000 : 60_000)
+            await wait(strict ? 14_000 : mode === 'success' ? 8_000 : 60_000)
             if (strict) {
               throw new AgentModelCatalogProbeError('enterprise policy', 'exit', false, {
                 exitCode: 1,
@@ -116,15 +116,22 @@ it.each(['success', 'budget'] as const)(
     const service = createAgentModelCatalogService({
       store: new AgentModelCatalogStore(),
       getRecord: () => undefined,
+      getConversation: () => undefined,
       drivesRecord: () => true,
       resolveAccountHome: async () => home,
       probes: { claude: scoped }
     })
     setStructuredAgentSessionHost(
       Object.assign(hostStub(), {
+        readModelCatalog: async (params: Parameters<typeof service.read>[0]) => {
+          if (!params.savedOnly) {
+            void service.demand(params)
+          }
+          return service.read(params)
+        },
         deps: {
           modelCatalog: service,
-          store: { getRecord: () => undefined },
+          store: { getRecord: () => undefined, getConversation: () => undefined },
           adapter: {}
         }
       })
@@ -187,10 +194,12 @@ it.each(['success', 'budget'] as const)(
     )
     try {
       await Promise.all(
-        ['/1', '/2', '/3', '/4', '/5'].map((workspacePath) =>
-          service.read({ agent: 'claude', workspacePath })
-        )
+        ['/1', '/2', '/3', '/4', '/5'].map((workspacePath) => {
+          void service.demand({ agent: 'claude', workspacePath })
+          return service.read({ agent: 'claude', workspacePath })
+        })
       )
+      await vi.advanceTimersByTimeAsync(0)
       expect(modern).toHaveBeenCalledTimes(2)
       useMobileHostModelCatalogUpgrade({
         agent: 'claude',

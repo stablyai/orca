@@ -4,10 +4,7 @@ import {
 } from '../../shared/linear/issue-attribute-filter'
 import type { LinearListFilter } from './linear-issue-listing'
 
-// Why: attribute facets must merge into Linear's IssueFilter before the first-N
-// cursor walk so hasMore reflects the filtered set, not the unfiltered window.
-// @linear/sdk does not export IssueFilter as a public type, so we keep a
-// structural subset that matches the operators this list path actually sends.
+// Structural SDK filter subset; merge facets before pagination so hasMore describes the filtered set.
 
 export type LinearGraphQLIssueFilter = {
   state?: {
@@ -61,8 +58,7 @@ function attributeFacetFilter(
   }
 
   if (attributeFilter.labelIds.length > 0) {
-    // Why: collection `some` is any-of; a direct labels.id comparator would
-    // not express multi-label membership the same way.
+    // Collection some expresses any-of label membership.
     next.labels = { some: { id: { in: attributeFilter.labelIds } } }
   }
 
@@ -83,8 +79,7 @@ function mergeIssueFilters(
   const merged: LinearGraphQLIssueFilter = {}
   for (const part of defined) {
     if (part.state) {
-      // Why: preset state.type and attribute state.id must coexist; a top-level
-      // spread would overwrite one nested constraint.
+      // Preserve both preset state.type and attribute state.id constraints.
       merged.state = { ...merged.state, ...part.state }
     }
     if (part.team) {

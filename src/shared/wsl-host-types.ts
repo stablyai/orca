@@ -1,4 +1,5 @@
-/** What the desktop UI reads about WSL hosts (WSL-via-orcad C7); desktop-only IPC, never on the wire. */
+/** Desktop-only WSL host IPC; never part of the wire protocol (C7). */
+import type { WslHostCopyParams } from './wsl-host-failure-copy'
 
 export const WSL_HOST_STATUS_CHANNEL = 'wslHosts:statusChanged'
 
@@ -7,7 +8,6 @@ export type WslHostDistro = {
   state: 'running' | 'stopped'
   /** WSL 1 runs no Linux kernel, so it cannot host orcad; null when the registry did not say. */
   version: 1 | 2 | null
-  /** The WSL host already added for this distro. */
   environmentId: string | null
 }
 
@@ -27,8 +27,13 @@ export type WslHostStatus = {
   state: WslHostConnectionState
   /** Why it failed or is unverifiable, in the main process's words. */
   detail: string | null
+  /** `detail`'s WSL_HOST_STATUS_DETAIL_COPY code; absent when `detail` is verbatim diagnostic text. */
+  detailCode?: string
+  detailParams?: WslHostCopyParams
   /** An app update the running server waits to take (e.g. live terminals); Update/Force retry it. */
   deferredUpdate?: WslHostDeferredUpdate | null
+  /** A Remove that could not prove the server stopped; `detail` says why. Remove retries it. */
+  removalPending?: boolean
 }
 
 /** An explicit Update retries a skipped build behind the terminal census; Force also passes it. */
@@ -36,6 +41,9 @@ export type WslHostConnectIntent = 'update' | 'force'
 
 /** A host a newer Orca runs refused this build: only Force (or updating Orca) changes that. */
 export const ORCAD_HOST_NEWER_DEFERRAL_CODE = 'orcad_host_newer'
+
+/** A project move to the host runs on this desktop; the update waits for it to finish. */
+export const ORCAD_UPDATE_WSL_MOVE_RUNNING_CODE = 'orcad_update_wsl_move_running'
 
 export type WslHostDeferredUpdate = {
   candidateVersion: string
@@ -46,17 +54,35 @@ export type WslHostDeferredUpdate = {
   forceable: boolean
 }
 
-/** What this build can do for WSL hosts; the UI reads it once at startup. */
 export type WslHostCapability = {
   /** False when the packaged orcad template is missing, so no WSL host can deploy or connect. */
   serverFiles: boolean
+  /** False in serve-only: saved hosts work, but no host is added and no project moved. Absent from older mains. */
+  acceptsNewWork?: boolean
 }
 
-/** What removing a host left behind in its distro. */
-export type WslHostServerStop = { stopped: true } | { stopped: false; reason: string }
+/**
+ * What removing a host left behind in its distro, in the census vocabulary: `live` when something
+ * is proven still running, `unverifiable` when Orca could not tell. `kept` (E11): the host stays
+ * listed with its stop pending, so Remove can retry; older mains removed it anyway.
+ */
+export type WslHostServerStop =
+  /** `keptForOtherDesktops`: another Orca shares the server, so only this desktop let go of it. */
+  | { stopped: true; keptForOtherDesktops?: string[] }
+  | {
+      stopped: false
+      reason: string
+      /** `reason`'s WSL_HOST_STATUS_DETAIL_COPY code, when it is one coded sentence. */
+      reasonCode?: string
+      reasonParams?: WslHostCopyParams
+      verdict?: 'live' | 'unverifiable'
+      kept?: boolean
+    }
 
 export type WslHostAddFailureKind =
   | 'unsupported-wsl1'
+  /** Its platform, libc or loader can't run Orca's server (e.g. NixOS, musl without libstdc++). */
+  | 'unsupported-distro'
   | 'distro-stopped'
   | 'already-added'
   | 'ssh-managed'
@@ -67,9 +93,15 @@ export type WslHostAddFailureKind =
 
 export type WslHostAddResult =
   | { ok: true; environmentId: string }
-  | { ok: false; kind: WslHostAddFailureKind; message: string }
+  | {
+      ok: false
+      kind: WslHostAddFailureKind
+      message: string
+      /** `message`'s WSL_HOST_ADD_REFUSAL_COPY code; absent when `message` is verbatim error text. */
+      errorCode?: string
+      errorParams?: WslHostCopyParams
+    }
 
-/** The host's name in Orca: the distro, marked as WSL so it reads apart from an SSH host. */
 export function wslHostEnvironmentLabel(distro: string): string {
   return `${distro} (WSL)`
 }

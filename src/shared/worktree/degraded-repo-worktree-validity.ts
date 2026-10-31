@@ -45,10 +45,7 @@ export function buildValidWorktreeIdsForSessionHydration(
   const detectedWorktreesByRepo = catalog.detectedWorktreesByRepo ?? {}
   const repoIdsWithLoadedWorktrees = new Set(
     Object.entries(worktreesByRepo)
-      // Why (#1158): a metadata fallback can be non-empty yet partial (host-less metas are skipped on
-      // multi-owner repos, agent-scratch stays hidden), so it cannot prove deletion the way a real listing can.
-      // Only an explicitly non-authoritative result is disqualified; a repo with no detection entry at all
-      // still counts as loaded, as before.
+      // Metadata fallbacks can omit host-less/scratch rows and cannot prove deletion (#1158). Explicitly non-authoritative listings disqualify a repo; no detection entry preserves legacy loaded status.
       .filter(
         ([repoId, worktrees]) =>
           worktrees.length > 0 && detectedWorktreesByRepo[repoId]?.authoritative !== false
@@ -66,7 +63,7 @@ export function buildValidWorktreeIdsForSessionHydration(
       continue
     }
     const repoId = getRepoIdFromWorktreeId(worktreeId)
-    // Why (#1158): a failed scan cannot prove deletion, while loaded worktrees or an authoritative scan can.
+    // A failed scan cannot prove deletion; loaded rows or authoritative scans can (#1158).
     if (
       knownRepoIds.has(repoId) &&
       !repoIdsWithLoadedWorktrees.has(repoId) &&

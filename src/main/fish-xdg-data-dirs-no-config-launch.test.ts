@@ -5,7 +5,7 @@ import { finalizeLocalPtySpawnEnvironment } from './providers/local-pty-finalize
 import { createLocalPtyLaunchPlan } from './providers/local-pty-launch-plan'
 import type * as LocalPtyUtils from './providers/local-pty-utils'
 
-// Why: the fish path need not exist on the test host; only the spawn env is asserted.
+// Only spawn env is tested; do not require a real fish binary on this host.
 vi.mock('./providers/local-pty-utils', async (importOriginal) => ({
   ...(await importOriginal<typeof LocalPtyUtils>()),
   resolveUnixShellPath: (shellPath: string) => shellPath,
@@ -62,7 +62,7 @@ describe.skipIf(process.platform === 'win32').each([
   ['daemon', daemonEnv],
   ['local', localEnv]
 ])('%s fish spawn', (_name, launchEnv) => {
-  // Why: fish skips vendor_conf.d under -N, so nothing would ever undo the prefix.
+  // -N skips vendor_conf.d, so no snippet would restore the prefix.
   it('leaves XDG_DATA_DIRS alone for -N', () => {
     const env = launchEnv(['-l', '-N'])
     expect(env.XDG_DATA_DIRS).toBe(INHERITED)

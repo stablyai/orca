@@ -1,10 +1,4 @@
-/**
- * A validated AppImage desktop unpacks its extracted copy in the background, so the next terminal daemon
- * runs from the copy instead of a FUSE mount that can vanish under it (appimage-extraction-cache.md):
- * at a launch that finds no copy for this file, and when an update finishes downloading. Lowest
- * priority, under the registration lock, never publishes the CLI launcher, and never blocks the
- * window: a refusal or failure is logged and the daemon keeps today's mount fallback.
- */
+// Prepare daemon copies in the background so a disappearing FUSE mount cannot sever them.
 import { existsSync } from 'node:fs'
 import { lstat, stat } from 'node:fs/promises'
 import { basename, dirname, isAbsolute, join } from 'node:path'
@@ -61,7 +55,7 @@ export function startAppImageCopyPreExtraction(
     return null
   }
   currentCopy = preExtract({ ...options, appImagePath }, 'this AppImage')
-  // Why after, not inside: a daemon may be waiting on the copy, and must not wait on the prune too.
+  // A daemon waiting on the copy must not also wait for pruning.
   void currentCopy.then(async (ready) => {
     if (ready) {
       await pruneIdleGenerations(root.rootPath, { ...options, appImagePath })
@@ -102,7 +96,7 @@ export async function preExtractDownloadedAppImageUpdate(
   }
   const log = options.log ?? ((line: string) => console.log(line))
   try {
-    // Why: this runs the downloaded file; accept only electron-updater's own verified download.
+    // Extraction executes the file; accept only electron-updater's verified download.
     const download = await lstat(downloadedFile)
     if (!download.isFile() || !(await isUpdateDownload(downloadedFile))) {
       return false
@@ -161,8 +155,7 @@ async function preExtract(
       return false
     }
     if (options.installedAppImagePath) {
-      // Why: until the update installs, nothing runs from this copy, so this window's lease is
-      // what keeps the running release's pruners off it.
+      // This window's lease protects the unused update copy from pruning until installation.
       await leaseAppImageGenerationForCurrentProcess({
         execPath: join(root.rootPath, GENERATION_EXECUTABLE_NAME)
       })

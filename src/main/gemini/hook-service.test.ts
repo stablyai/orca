@@ -111,7 +111,7 @@ describe('GeminiHookService', () => {
     expect(config.hooks.BeforeTool[0].hooks[0].command).toMatch(managedCommandPattern)
   })
 
-  // Why: runs on every OS; windows-hook-payload-delivery.test.ts runs each form under Gemini's shell.
+  // Shell execution is covered separately by windows-hook-payload-delivery.test.ts.
   it('registers the Windows batch hook command for every event', () => {
     const platform = vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     try {

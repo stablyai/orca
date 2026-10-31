@@ -1,5 +1,3 @@
-// What a Claude child's listing says about its account, apart from this session's own state.
-
 import type {
   AgentSessionFastModeSupport,
   AgentSessionOptionsResult
@@ -38,6 +36,9 @@ function wireClaudeModel(entry: ListedModel): WireClaudeModel {
     ...(entry.description ? { description: entry.description } : {}),
     isDefault: entry.isDefault,
     efforts: entry.efforts,
+    ...(entry.declaredDefaultEffort !== undefined
+      ? { declaredDefaultEffort: entry.declaredDefaultEffort }
+      : {}),
     ...(entry.supportsFastMode !== undefined ? { supportsFastMode: entry.supportsFastMode } : {}),
     ...(entry.supportsAutoMode !== undefined ? { supportsAutoMode: entry.supportsAutoMode } : {})
   }

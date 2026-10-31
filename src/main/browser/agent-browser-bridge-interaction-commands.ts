@@ -7,27 +7,42 @@ import type {
   BrowserFocusResult,
   BrowserClearResult,
   BrowserSelectAllResult,
-  BrowserKeypressResult,
   BrowserPdfResult
 } from '../../shared/runtime-types'
 import { BrowserError } from './cdp-bridge'
-import { WAIT_PROCESS_TIMEOUT_GRACE_MS } from './agent-browser-bridge-types'
-import { acquireElectronDebugger } from './electron-debugger-lease'
-import { parseCdpKeyEvent, imeFallbackKeyEvent } from './cdp-keyboard-us-layout'
-import { dispatchPageKeyEvent, type GuestCdpSender } from './guest-direct-key-input'
-import { sendGuestCdpCommand } from './guest-cdp-command'
+import {
+  FILE_INPUT_FRAME_URL_FUNCTION,
+  FILE_UPLOAD_TARGET_FUNCTION,
+  FILL_ELEMENT_FUNCTION,
+  SELECT_ALL_ELEMENT_FUNCTION
+} from './browser-element-functions'
+import { assertUploadFilesExist } from './browser-upload-files'
+import type { WebContents } from 'electron'
+import type { CapturedElement } from './cdp-element-capture'
+import { interceptFileChooser, type OpenedFileChooser } from './guest-file-chooser'
+import { readRecord, readString } from './guest-frame-input-sessions'
+import {
+  agentBrowserWaitArguments,
+  type AgentBrowserWaitOptions
+} from './agent-browser-wait-arguments'
+import { parseCdpKeyEvent } from './cdp-keyboard-us-layout'
 import { readRemoteCliAdmittedPage } from './remote-cli-page-admission'
-import { AgentBrowserBridgeCaptureCommands } from './agent-browser-bridge-capture-commands'
+import { AgentBrowserBridgeKeyCommands } from './agent-browser-bridge-key-commands'
 
-export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeCaptureCommands {
+export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowserBridgeKeyCommands {
   async hover(
     element: string,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserHoverResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['hover', element])) as BrowserHoverResult
-    })
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, ['hover', element])) as BrowserHoverResult
+      },
+      { elements: [element] }
+    )
   }
 
   async drag(
@@ -36,9 +51,14 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserDragResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['drag', from, to])) as BrowserDragResult
-    })
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, ['drag', from, to])) as BrowserDragResult
+      },
+      { elements: [from, to] }
+    )
   }
 
   async upload(
@@ -47,68 +67,110 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserUploadResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, [
-        'upload',
-        element,
-        ...filePaths
-      ])) as BrowserUploadResult
-    })
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        await assertUploadFilesExist(filePaths)
+        const target = await this.captureElement(sessionName, element)
+        const { wc, captured } = target
+        const chooser = await interceptFileChooser(wc, captured.sessionId)
+        try {
+          const isFileInput = await this.callElementFunction(
+            sessionName,
+            target,
+            element,
+            'upload to',
+            FILE_UPLOAD_TARGET_FUNCTION,
+            { userGesture: true }
+          )
+          const input =
+            isFileInput === true
+              ? captured
+              : await this.openedFileInput(sessionName, wc, element, await chooser.next())
+          const frame = await this.sendElementCdpCommand(
+            sessionName,
+            wc,
+            'Runtime.callFunctionOn',
+            {
+              objectId: input.objectId,
+              functionDeclaration: FILE_INPUT_FRAME_URL_FUNCTION,
+              returnByValue: true
+            },
+            input.sessionId
+          )
+          const frameUrl = readRecord(frame, 'result')?.value
+          await this.sendElementCdpCommand(
+            sessionName,
+            wc,
+            'DOM.setFileInputFiles',
+            { files: filePaths, objectId: input.objectId },
+            input.sessionId
+          )
+          return {
+            uploaded: filePaths.length,
+            ...(typeof frameUrl === 'string' ? { frameUrl } : {})
+          }
+        } finally {
+          await chooser.release()
+        }
+      },
+      { elements: [element] }
+    )
+  }
+
+  private async openedFileInput(
+    sessionName: string,
+    wc: WebContents,
+    element: string,
+    opened: OpenedFileChooser | null
+  ): Promise<CapturedElement> {
+    if (!opened?.backendNodeId) {
+      throw new BrowserError(
+        'browser_element_not_interactable',
+        `Cannot upload to ${element}: ${opened ? 'its file picker has no file input' : 'clicking it opened no file picker'}`
+      )
+    }
+    const resolved = await this.sendElementCdpCommand(
+      sessionName,
+      wc,
+      'DOM.resolveNode',
+      { backendNodeId: opened.backendNodeId },
+      opened.sessionId
+    )
+    const objectId = readString(readRecord(resolved, 'object'), 'objectId')
+    if (!objectId) {
+      throw new BrowserError('browser_error', `Could not resolve the file input ${element} opened`)
+    }
+    return { objectId, sessionId: opened.sessionId }
   }
 
   async wait(
-    options?: {
-      selector?: string
-      timeout?: number
-      text?: string
-      url?: string
-      load?: string
-      fn?: string
-      state?: string
-    },
+    options?: AgentBrowserWaitOptions,
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserWaitResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = ['wait']
-      const hasCondition =
-        !!options?.selector || !!options?.text || !!options?.url || !!options?.load || !!options?.fn
-      if (options?.selector) {
-        args.push(options.selector)
-      } else if (options?.timeout != null && !hasCondition) {
-        args.push(String(options.timeout))
-      }
-      if (options?.text) {
-        args.push('--text', options.text)
-      }
-      if (options?.url) {
-        args.push('--url', options.url)
-      }
-      if (options?.load) {
-        args.push('--load', options.load)
-      }
-      if (options?.fn) {
-        args.push('--fn', options.fn)
-      }
-      const normalizedState = options?.state === 'visible' ? undefined : options?.state
-      if (normalizedState) {
-        args.push('--state', normalizedState)
-      }
-      // Why: agent-browser's selector wait lacks a per-command timeout — enforce it here so a missing selector fails as browser_timeout, not a hang.
-      return (await this.execAgentBrowser(sessionName, args, {
-        timeoutMs:
-          options?.timeout != null && hasCondition
-            ? options.timeout + WAIT_PROCESS_TIMEOUT_GRACE_MS
-            : undefined,
-        timeoutError:
-          options?.timeout != null && hasCondition
-            ? new BrowserError(
-                'browser_timeout',
-                `Timed out waiting for browser condition after ${options.timeout}ms.`
-              )
-            : undefined
-      })) as BrowserWaitResult
-    })
+    return this.enqueueTargetedCommand(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        const { args, conditionTimeoutMs, processTimeoutMs } = agentBrowserWaitArguments(
+          options ?? {}
+        )
+        // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: agent-browser's wait --json answers the BrowserWaitResult shape.
+        return (await this.execAgentBrowser(sessionName, args, {
+          timeoutMs: processTimeoutMs,
+          timeoutError:
+            conditionTimeoutMs === undefined
+              ? undefined
+              : new BrowserError(
+                  'browser_timeout',
+                  `Timed out waiting for browser condition after ${conditionTimeoutMs}ms.`
+                )
+        })) as BrowserWaitResult
+      },
+      { elements: [options?.selector] }
+    )
   }
 
   async check(
@@ -117,10 +179,15 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserCheckResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      const args = checked ? ['check', element] : ['uncheck', element]
-      return (await this.execAgentBrowser(sessionName, args)) as BrowserCheckResult
-    })
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        const args = checked ? ['check', element] : ['uncheck', element]
+        return (await this.execAgentBrowser(sessionName, args)) as BrowserCheckResult
+      },
+      { elements: [element] }
+    )
   }
 
   async focus(
@@ -128,9 +195,14 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserFocusResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      return (await this.execAgentBrowser(sessionName, ['focus', element])) as BrowserFocusResult
-    })
+    return this.enqueuePageAction(
+      worktreeId,
+      browserPageId,
+      async (sessionName) => {
+        return (await this.execAgentBrowser(sessionName, ['focus', element])) as BrowserFocusResult
+      },
+      { elements: [element] }
+    )
   }
 
   async clear(
@@ -138,20 +210,14 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserClearResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName) => {
-        if (!(await this.isExplicitContentEditableTarget(sessionName, element))) {
-          // Why: agent-browser resolves the ref directly, preserving iframe/shadow-root/unfocusable semantics for ordinary fields.
-          await this.execAgentBrowser(sessionName, ['fill', element, ''])
-          return { cleared: element }
-        }
-
-        await this.fillExplicitContentEditable(sessionName, element, '')
+        await this.actOnElement(sessionName, element, 'clear', FILL_ELEMENT_FUNCTION, [''])
         return { cleared: element }
       },
-      { requireScopedTarget: true }
+      { requireScopedTarget: true, elements: [element] }
     )
   }
 
@@ -160,104 +226,30 @@ export abstract class AgentBrowserBridgeInteractionCommands extends AgentBrowser
     worktreeId?: string,
     browserPageId?: string
   ): Promise<BrowserSelectAllResult> {
-    return this.enqueueTargetedCommand(worktreeId, browserPageId, async (sessionName) => {
-      // Why: agent-browser has no select-all command — implement as focus + Ctrl+A
-      await this.execAgentBrowser(sessionName, ['focus', element])
-      return (await this.execAgentBrowser(sessionName, [
-        'press',
-        'Control+a'
-      ])) as BrowserSelectAllResult
-    })
-  }
-
-  async keypress(
-    key: string,
-    worktreeId?: string,
-    browserPageId?: string
-  ): Promise<BrowserKeypressResult> {
-    return this.enqueueTargetedCommand(
+    return this.enqueuePageAction(
       worktreeId,
       browserPageId,
       async (sessionName, target) => {
-        const parsed = parseCdpKeyEvent(key) ?? imeFallbackKeyEvent(key)
-        if (!parsed) {
-          // Why: a key name the table cannot express must not dispatch keyCode 0 and
-          // report success — route it to the helper, creating its session only now so
-          // the direct path never pays for it.
-          await this.ensureSession(sessionName, target.browserPageId, target.webContentsId)
-          return (await this.execAgentBrowser(sessionName, ['press', key])) as BrowserKeypressResult
+        const focused = await this.actOnElement(
+          sessionName,
+          element,
+          'select all in',
+          SELECT_ALL_ELEMENT_FUNCTION
+        )
+        // Code editors select their whole document from the shortcut, beyond the DOM they render;
+        // an element that can't take focus keeps the DOM selection instead.
+        const shortcut = parseCdpKeyEvent(process.platform === 'darwin' ? 'Meta+a' : 'Control+a')
+        if (focused === true && shortcut) {
+          await this.pressKeysInPage(sessionName, target, [shortcut])
         }
-        const wc = this.getWebContents(target.webContentsId)
-        if (!wc || wc.isDestroyed()) {
-          throw new BrowserError(
-            'browser_tab_not_found',
-            `Browser page ${target.browserPageId} is no longer available`
-          )
-        }
-        const event = {
-          windowsVirtualKeyCode: parsed.keyCode,
-          nativeVirtualKeyCode: parsed.keyCode,
-          key: parsed.key,
-          code: parsed.code,
-          modifiers: parsed.modifiers,
-          location: parsed.location
-        }
-        let releaseDebugger = (): void => {}
-        try {
-          releaseDebugger = acquireElectronDebugger(wc).release
-          const send: GuestCdpSender = (method, params, sessionId) =>
-            sendGuestCdpCommand(wc, method, params, sessionId)
-          const guardFocus = (): Promise<() => void> =>
-            this.browserManager.guardUserFocusForAgentInput(target.webContentsId)
-          await dispatchPageKeyEvent(
-            wc,
-            {
-              // Why: rawKeyDown is the no-character form; sending keyDown without text
-              // makes Blink synthesize an empty input for editing keys.
-              type: parsed.text === null ? 'rawKeyDown' : 'keyDown',
-              ...event,
-              ...(parsed.text === null ? {} : { text: parsed.text, unmodifiedText: parsed.text })
-            },
-            send,
-            guardFocus
-          )
-          await dispatchPageKeyEvent(
-            wc,
-            {
-              type: 'keyUp',
-              ...event,
-              // Why: the self bit is keydown-only -- Blink reports shiftKey false on the Shift keyup.
-              modifiers: parsed.modifiers & ~parsed.selfModifier
-            },
-            send,
-            guardFocus
-          )
-          return { pressed: key }
-        } catch (error) {
-          // Why: attach/dispatch reject with plain Errors, which the RPC layer would report as
-          // runtime_error — the helper path this replaced always produced a browser_* code, and
-          // the pane only reclaims a dead page when it sees one.
-          if (error instanceof BrowserError) {
-            throw error
-          }
-          if (!this.getWebContents(target.webContentsId)) {
-            throw this.createPageUnavailableError(sessionName)
-          }
-          throw new BrowserError(
-            'browser_error',
-            `Failed to press ${key} in browser page ${target.browserPageId}: ${error instanceof Error ? error.message : String(error)}`
-          )
-        } finally {
-          releaseDebugger()
-        }
+        return { selected: element }
       },
-      { ensureSession: false, requireScopedTarget: true }
+      { elements: [element] }
     )
   }
 
   async pdf(worktreeId?: string, browserPageId?: string): Promise<BrowserPdfResult> {
-    // Why: agent-browser's CDP printToPDF hangs in Electron webviews — use the native webContents.printToPDF().
-    // Printing lays the page out afresh, so it works on an undrawn page and needs no paint hold.
+    // Native printing avoids helper CDP hangs and lays out undrawn pages without a paint hold.
     return this.enqueueTargetedCommand(worktreeId, browserPageId, async (_sessionName, target) => {
       const wc = this.getWebContents(target.webContentsId)
       if (!wc) {

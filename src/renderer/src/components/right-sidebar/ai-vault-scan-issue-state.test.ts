@@ -78,9 +78,7 @@ describe('aiVaultScanNoticeIssues', () => {
     expect(skippedAiVaultTranscriptCount(partial)).toBe(1)
   })
 
-  // #15036: a locked opencode.db holds every OpenCode session, so reporting it
-  // as "1 transcript skipped" both understates the loss and buries the cause in
-  // a bare driver string.
+  // An unreadable OpenCode database hides every session; report the source failure, not one skipped transcript (#15036).
   it('gives an unreadable OpenCode database its own row instead of a skipped count', () => {
     const sourceIssue = {
       agent: 'opencode' as const,

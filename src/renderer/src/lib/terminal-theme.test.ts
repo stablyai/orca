@@ -337,3 +337,49 @@ describe('resolveOpaqueTerminalBackground', () => {
     expect(resolveOpaqueTerminalBackground('var(--background)')).toBe(null)
   })
 })
+
+describe('plugin terminal themes', () => {
+  const pluginTheme = {
+    id: 'plugin:samples.midnight/midnight' as const,
+    pluginKey: 'samples.midnight',
+    pluginName: 'Midnight',
+    label: 'Midnight',
+    mode: 'dark' as const,
+    terminal: { background: '#010203', foreground: '#fefefe', red: '#ff0000' }
+  }
+  const settings = {
+    theme: 'dark' as const,
+    terminalThemeDark: pluginTheme.id,
+    terminalDividerColorDark: '',
+    terminalUseSeparateLightTheme: false,
+    terminalThemeLight: '',
+    terminalCustomThemes: [],
+    terminalDividerColorLight: '',
+    terminalPluginPalettes: [{ id: pluginTheme.id, colors: pluginTheme.terminal }]
+  }
+
+  it('paints a selected plugin theme from its saved palette and lists it by plugin name', () => {
+    expect(resolveEffectiveTerminalAppearance(settings, true).theme?.background).toBe('#010203')
+    expect(getAvailableTerminalThemeOptions(settings, [pluginTheme]).at(-1)).toMatchObject({
+      value: pluginTheme.id,
+      group: 'plugin',
+      sourceLabel: 'Midnight'
+    })
+  })
+
+  it('falls back to the default theme when no palette was saved', () => {
+    expect(
+      resolveEffectiveTerminalAppearance({ ...settings, terminalPluginPalettes: [] }, true).theme
+    ).toEqual(getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK))
+  })
+
+  it('repaints the default theme while the plugin is off, keeping the choice for re-enable', () => {
+    const off = { ...settings, disabledPlugins: [pluginTheme.pluginKey] }
+    expect(resolveEffectiveTerminalAppearance(off, true).theme).toEqual(
+      getBuiltinTheme(DEFAULT_TERMINAL_THEME_DARK)
+    )
+    expect(
+      resolveEffectiveTerminalAppearance({ ...off, disabledPlugins: [] }, true).theme?.background
+    ).toBe('#010203')
+  })
+})

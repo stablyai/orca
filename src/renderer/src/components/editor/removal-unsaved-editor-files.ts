@@ -11,10 +11,7 @@ import { flushClosingEditorBuffers } from './editor-pending-flush'
 import { editorTabModelUri, isCodeViewTab } from './editor-save-disk-precondition'
 import { editorModelRegistry } from '@/lib/editor-model-registry'
 
-/**
- * Savable tabs among `closedIds` holding unsaved text whose every view of the record also closes,
- * one per record.
- */
+/** Prompt once per writable dirty record only when every view of it is closing. */
 export function lastViewUnsavedFiles(state: AppState, closedIds: ReadonlySet<string>): OpenFile[] {
   const seenRecords = new Set<string>()
   const result: OpenFile[] = []
@@ -33,7 +30,6 @@ export function lastViewUnsavedFiles(state: AppState, closedIds: ReadonlySet<str
   return result
 }
 
-/** Every view that shows `file`'s text: the views of its record. */
 export function unsavedTextViewIds(state: AppState, file: OpenFile): string[] {
   return [...new Set([file.id, ...editorBufferSiblingViewIds(state, file.id)])]
 }

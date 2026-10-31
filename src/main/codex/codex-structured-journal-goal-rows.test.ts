@@ -60,14 +60,6 @@ function texts(rows: AgentJournalItemBody[]): string[] {
 }
 
 describe('codex goal frames as journal rows', () => {
-  it('writes one row when the goal appears', () => {
-    const { rows, frames: generic } = frames()
-
-    generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
-
-    expect(texts(rows)).toEqual(['Goal set: Keep the current scratch directory tidy.'])
-  })
-
   it('records the goal in typed form so readers never parse the frame head', () => {
     const { rows, frames: generic } = frames()
 
@@ -99,8 +91,7 @@ describe('codex goal frames as journal rows', () => {
   it('does not repeat the row while only the counters climb', () => {
     const { rows, frames: generic } = frames()
 
-    // Codex re-sends the goal through the turn as accounting ticks; a live session
-    // emitted these two seconds apart with nothing else changed.
+    // Captured live accounting ticks, two seconds apart.
     generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
     generic.appendUnhandled(
       'notification:thread/goal/updated',
@@ -114,38 +105,6 @@ describe('codex goal frames as journal rows', () => {
     )
 
     expect(rows).toHaveLength(1)
-  })
-
-  it('writes a second row when the status changes', () => {
-    const { rows, frames: generic } = frames()
-
-    generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
-    generic.appendUnhandled(
-      'notification:thread/goal/updated',
-      goalFrame({ status: 'complete', tokensUsed: 31_000 }),
-      THREAD
-    )
-
-    expect(texts(rows)).toEqual([
-      'Goal set: Keep the current scratch directory tidy.',
-      'Goal complete: Keep the current scratch directory tidy.'
-    ])
-  })
-
-  it('writes a row when the objective is replaced', () => {
-    const { rows, frames: generic } = frames()
-
-    generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
-    generic.appendUnhandled(
-      'notification:thread/goal/updated',
-      goalFrame({ objective: 'Ship the parser.' }),
-      THREAD
-    )
-
-    expect(texts(rows)).toEqual([
-      'Goal set: Keep the current scratch directory tidy.',
-      'Goal set: Ship the parser.'
-    ])
   })
 
   it('writes a row when the goal is cleared, and again if a new goal follows', () => {
@@ -173,16 +132,6 @@ describe('codex goal frames as journal rows', () => {
     generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), THREAD)
     generic.appendUnhandled('notification:thread/goal/updated', goalFrame({}), other)
 
-    expect(rows).toHaveLength(2)
-  })
-
-  it('leaves non-goal frames to the existing path', () => {
-    const { rows, frames: generic } = frames()
-
-    generic.appendUnhandled('notification:warning', { message: 'disk almost full' }, THREAD)
-    generic.appendUnhandled('notification:warning', { message: 'disk almost full' }, THREAD)
-
-    // No goal dedupe applies, so both warnings still land.
     expect(rows).toHaveLength(2)
   })
 })

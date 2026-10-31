@@ -1,5 +1,4 @@
-// Layout-owner build: what main itself restores at startup and window load, with or without a
-// window: the live terminals no pane shows, and what the next startup reconnects.
+// Main restores unshown live terminals and reconnect facts at startup/window load, including headless hosts.
 
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 import { parsePaneKey } from '../../../../shared/stable-pane-id'
@@ -30,31 +29,23 @@ import {
 } from '../../terminal/recovery/foreign-pane-bindings'
 import { LOCAL_EXECUTION_HOST_ID } from '../../../../shared/execution-host'
 import { getExplicitWorktreeIdSelector } from '../../runtime-worktree-selection'
+import { followExportedPaneKeys } from '../../terminal/identity/exported-pane-key-follow'
 
-/** The longest a workspace's first surface waits for main's placement pass. */
 export const FIRST_SURFACE_PLACEMENT_WAIT_MS = 500
 
 export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRuntimeWithAutomationOperations {
   abstract applyLayoutCommand(command: WindowLayoutCommand): Promise<LayoutApplyReply>
-  /** Shows a restored pane whose terminal is gone as sleeping, unless it already has a status. */
   protected abstract notePaneSleeping(paneKey: string): void
 
   private placementRun: Promise<LiveTerminalPlacement> | null = null
-  /** What the next pass covers: every workspace, or the ones a window's sweep asked for. */
   private placementQueued: 'all' | Set<string> | null = null
-  /** The one pass running now, without the passes queued behind it, and what it covers. */
   private placementPass: {
     run: Promise<LiveTerminalPlacement>
     scope: 'all' | ReadonlySet<string>
   } | null = null
   private stopFollowingProviderRebinds: (() => void) | null = null
 
-  /**
-   * Layout-owner build: shows every live local terminal no pane shows, or only `worktreeId`'s.
-   * Runs at startup, window load and client attach, after the terminal service is replaced, and
-   * for one workspace on each window sweep. One pass at a time: a call during a pass runs one
-   * more pass after it, so a terminal seen late is still placed.
-   */
+  /** Serialize startup, window, attach and provider-rebind placement; a call during a pass queues another so late terminals are included. Optional workspace scope supports sweeps. */
   placeUnshownLiveTerminals(worktreeId?: string): Promise<LiveTerminalPlacement> {
     this.stopFollowingProviderRebinds ??= onLocalPtyProviderRebound(
       () => void placeUnshownLiveTerminalsBestEffort(this)
@@ -84,10 +75,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
     return this.placementRun
   }
 
-  /**
-   * Layout-owner build: a window's sweep (first visit, an empty or sleeping activation, a phone
-   * wake) shows that workspace's unshown live terminals before it reads which ones are shown.
-   */
+  /** Place this workspace's unshown terminals before the window sweep reads its listing. */
   async placeUnshownLiveTerminalsOf(worktreeSelector: string): Promise<void> {
     const worktreeId = getExplicitWorktreeIdSelector(worktreeSelector)
     if (!ORCA_LAYOUT_OWNER_IS_MAIN || !worktreeId) {
@@ -100,13 +88,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
     }
   }
 
-  /**
-   * A workspace's first surface waits out the placement pass running when it arrives, not the
-   * passes queued behind it: a live terminal that pass is placing is the workspace's tab, not room
-   * for a fresh shell. At most FIRST_SURFACE_PLACEMENT_WAIT_MS, so opening a workspace stays quick;
-   * a pass slower than that may leave an extra tab beside the restored terminal. Null when there
-   * is nothing to wait for.
-   */
+  /** First-surface creation waits for the current applicable pass, excluding queued passes. Cap at FIRST_SURFACE_PLACEMENT_WAIT_MS; slower placement may leave an extra tab. */
   protected livePlacementSettledFor(command: WindowLayoutCommand): Promise<unknown> | null {
     const pass = this.placementPass
     if (!ORCA_LAYOUT_OWNER_IS_MAIN || !('initial' in command) || !command.initial || !pass) {
@@ -168,8 +150,7 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
               [...scope].some((worktreeId) => worktreeIdsEqual(worktreeId, pty.worktreeId))
             ),
       paneOf: (pty) => this.paneOfPty(pty),
-      // A window spawn holds its workspace's lock until its pane is recorded (spawn-run.ts), and a
-      // registration in flight is binding one, as a census reads it (pty-terminal-summary.ts).
+      // Window spawns hold the workspace lock through pane recording; pending registration also reserves its binding.
       isStillBinding: (pty) =>
         this.pendingPtyRegistrationIncarnations.has(pty.ptyId) ||
         this.terminalMutationLock.hasActiveSpawns(worktreeIdentityKey(pty.worktreeId)),
@@ -180,8 +161,9 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
         const pty = this.ptysById.get(ptyId)
         const pane = parsePaneKey(paneKey)
         if (pty && pane) {
-          // No graph standing: a window's graph that later shows otherwise still wins.
+          // This claim has no graph standing; a later window graph wins.
           recordPtySurface(pty, pane.tabId, paneKey, SURFACE_CLAIM_WITHOUT_STANDING)
+          followExportedPaneKeys(this.ptysById.values(), (record) => this.paneOfPty(record).paneKey)
         }
       }
     })
@@ -192,7 +174,6 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
     return placement
   }
 
-  /** Each local pane bound to a terminal the host no longer runs restores from it when started. */
   private markDeadBoundPanesSleeping(): void {
     const session = this.store?.getWorkspaceSession?.(LOCAL_EXECUTION_HOST_ID)
     for (const paneKey of session
@@ -229,7 +210,6 @@ export abstract class OrcaRuntimeWithRestoredTerminalPlacement extends OrcaRunti
     }
   }
 
-  /** Layout-owner build: what the next startup reconnects for `session`, from main's own state. */
   shutdownReconnectFactsFor(
     session: WorkspaceSessionState,
     partition: ExecutionHostId

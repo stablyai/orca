@@ -35,8 +35,7 @@ const runtimeDetectedWorktreeRefreshesInFlight = new Map<
 >()
 
 const STALE_RUNTIME_GENERATION_ERROR = 'runtime_environment_generation_changed'
-// Why exactly one: a second stale answer means the connection is still churning, and
-// retrying into that would stall the caller instead of letting it fail visibly.
+// Retry one stale generation; a second signals ongoing churn and must fail visibly instead of stalling.
 const STALE_RUNTIME_GENERATION_RETRIES = 1
 
 export function isStaleRuntimeGenerationError(error: unknown): boolean {
@@ -145,8 +144,7 @@ async function listDetectedWorktreesForRuntimeRepoOnce(
   options: DetectedWorktreeRefreshOptions,
   environmentId: string
 ): Promise<DetectedWorktreeRefreshOutcome> {
-  // Why recomputed per attempt: the key embeds both generations, so a retry after a
-  // reconnect must not join the superseded connection's in-flight scan.
+  // Recompute generation-keyed coalescing key on retry so reconnect cannot join superseded scans.
   const key = detectedWorktreeRefreshKey(repoId, options)
   const connectionGeneration = getEnvironmentSshStateGeneration(environmentId)
   const runtimeConnectionGeneration = getRuntimeEnvironmentConnectionGeneration(environmentId)
@@ -165,11 +163,7 @@ async function listDetectedWorktreesForRuntimeRepoOnce(
     ) {
       throw new Error(STALE_RUNTIME_GENERATION_ERROR)
     }
-    // Why (#10562): the scan coalesces, but teardown must not — each caller carries
-    // its own known-id snapshot and purges its own state, so a caller that joined
-    // an in-flight scan would otherwise purge without ever stopping those terminals.
-    // Why gated: a listing older than an applied create or remove is not applied, so it must
-    // not stop terminals either.
+    // Each joined caller needs teardown for its own known IDs (#10562); stale catalog publications may neither merge nor stop terminals.
     if (!options.isStaleCatalogPublication?.(result)) {
       await teardownMissingWorktreeTerminalsBestEffort(
         { kind: 'environment', environmentId },
@@ -206,10 +200,7 @@ export async function listDetectedWorktreesForRepoCoalesced(
       try {
         return await listDetectedWorktreesForRuntimeRepoOnce(repoId, options, target.environmentId)
       } catch (err) {
-        // Why re-read instead of surfacing: the fence proves this answer predates the
-        // current connection, not that the repo has no worktrees. Callers drop the repo
-        // on any throw, so a discarded scan left those rows absent until an unrelated
-        // refresh happened to run (#19241).
+        // Retry fenced replies: they prove old connection, not empty repo; throwing immediately strands missing sidebar rows (#19241).
         if (attempt >= STALE_RUNTIME_GENERATION_RETRIES || !isStaleRuntimeGenerationError(err)) {
           throw err
         }

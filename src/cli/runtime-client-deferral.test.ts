@@ -6,14 +6,16 @@ import { tmpdir } from 'node:os'
 const {
   applyAgentStatusHooksEnabledMock,
   constructorArgsMock,
+  moduleEvaluationMock,
   callMock,
-  getCliStatusMock,
+  getOfflineRuntimeAdmissionMock,
   testUserDataPathRef
 } = vi.hoisted(() => ({
   applyAgentStatusHooksEnabledMock: vi.fn(async () => []),
   constructorArgsMock: vi.fn(),
+  moduleEvaluationMock: vi.fn(),
   callMock: vi.fn(),
-  getCliStatusMock: vi.fn(),
+  getOfflineRuntimeAdmissionMock: vi.fn(),
   testUserDataPathRef: { current: '' }
 }))
 
@@ -33,9 +35,10 @@ vi.mock('../main/agent-hooks/managed-agent-hook-controls', () => ({
 }))
 
 vi.mock('./runtime-client', () => {
+  moduleEvaluationMock()
   class RuntimeClient {
     call = callMock
-    getCliStatus = getCliStatusMock
+    getOfflineRuntimeAdmission = getOfflineRuntimeAdmissionMock
     openOrca = vi.fn()
 
     constructor(...args: unknown[]) {
@@ -48,6 +51,8 @@ vi.mock('./runtime-client', () => {
 import { main } from './index'
 import * as dispatchModule from './dispatch'
 
+const evaluationsBeforeMain = moduleEvaluationMock.mock.calls.length
+
 describe('RuntimeClient module-graph deferral', () => {
   let logSpy: ReturnType<typeof vi.spyOn>
   let errorSpy: ReturnType<typeof vi.spyOn>
@@ -57,7 +62,7 @@ describe('RuntimeClient module-graph deferral', () => {
     applyAgentStatusHooksEnabledMock.mockClear()
     constructorArgsMock.mockClear()
     callMock.mockReset()
-    getCliStatusMock.mockReset()
+    getOfflineRuntimeAdmissionMock.mockReset()
     logSpy = vi.spyOn(console, 'log').mockImplementation(() => {})
     errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {})
   })
@@ -68,6 +73,10 @@ describe('RuntimeClient module-graph deferral', () => {
     vi.unstubAllEnvs()
     rmSync(testUserDataPathRef.current, { recursive: true, force: true })
     process.exitCode = 0
+  })
+
+  it('does not evaluate the runtime-client module before main', () => {
+    expect(evaluationsBeforeMain).toBe(0)
   })
 
   it('constructs no client for --help', async () => {
@@ -91,12 +100,14 @@ describe('RuntimeClient module-graph deferral', () => {
   ]
 
   it.each(SUPPRESSED_GROUPS)(
-    'constructs exactly %s expected clients, with null remote selection',
+    'suppresses ambient remote selection for %s with the expected client count',
     async (_name, argv, constructs) => {
       vi.stubEnv('ORCA_PAIRING_CODE', 'pairing-code')
       vi.stubEnv('ORCA_ENVIRONMENT', 'some-environment')
-      getCliStatusMock.mockResolvedValue({
-        result: { runtime: { reachable: false }, app: { running: false } }
+      getOfflineRuntimeAdmissionMock.mockResolvedValue({
+        reachable: false,
+        legacyPidRunning: false,
+        pid: null
       })
 
       await main(argv, '/tmp/repo')
@@ -188,10 +199,17 @@ describe('RuntimeClient module-graph deferral', () => {
   })
 
   it('reuses one client instance across repeated ctx.client reads', async () => {
-    callMock.mockResolvedValue({ result: { worktrees: [] } })
+    const dispatchSpy = vi.spyOn(dispatchModule, 'dispatch').mockResolvedValue(undefined)
+    try {
+      await main(['worktree', 'list', '--json'], '/tmp/repo')
 
-    await main(['worktree', 'list', '--json'], '/tmp/repo')
-
-    expect(constructorArgsMock).toHaveBeenCalledTimes(1)
+      expect(dispatchSpy).toHaveBeenCalledTimes(1)
+      const ctx = dispatchSpy.mock.calls[0]?.[1]
+      const first = ctx?.client
+      expect(ctx?.client).toBe(first)
+      expect(constructorArgsMock).toHaveBeenCalledTimes(1)
+    } finally {
+      dispatchSpy.mockRestore()
+    }
   })
 })

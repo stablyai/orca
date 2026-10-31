@@ -1,12 +1,6 @@
+import { closeTestJournalHostDatabases } from '../../../native-chat/agent-session-journal/journal-host-database-test-support'
 import '../unused-default-rpc-methods.test-fixture'
-/**
- * The pane a caller reserves for the terminal `agent.launch` creates.
- *
- * A client that places its own tabs mints the pane id first and records where the tab should go
- * under it; the host still reveals the tab, and the renderer finds the placement by that id. So the
- * only thing that crosses the wire is identity — and the outcome's `paneKey` says which pane really
- * exists, so a caller whose reservation lost (older host, replay, structured route) can tell.
- */
+/** Caller-reserved pane identity crosses the wire; placement stays client-owned, and the returned paneKey identifies the actual pane after replay or fallback. */
 
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -77,8 +71,7 @@ describe('a launch into an existing workspace', () => {
     })
   })
 
-  // An AI button's click names no operation: the host writes no record for it, so a record store
-  // that cannot open never stops it.
+  // Unnamed launches write no ledger record, so an unavailable record store must not stop them.
   it('starts a reserved pane with no operation id even when the launch record cannot open', async () => {
     setAgentLaunchRecordStore(null)
     const runtime = runtimeStub({ settings: TERMINAL_ONLY })
@@ -137,8 +130,7 @@ describe('a launch into an existing workspace', () => {
 })
 
 describe('a reserved pane that is already live', () => {
-  // The runtime attaches to a live pane rather than spawning, which is right for `terminal.create`
-  // but here would report an agent that never started and paste into whatever runs there.
+  // A live reserved pane would attach rather than start the agent, then paste into an unrelated process.
   it('refuses the launch and delivers no prompt', async () => {
     // An agent that takes its prompt as a paste after start, so a missing refusal would reach it.
     const runtime = runtimeStub({ settings: TERMINAL_ONLY, terminalPaneAlreadyLive: true })
@@ -192,8 +184,7 @@ describe('a launch that creates its workspace', () => {
   })
 
   it('keeps the reservation out of the worktree.create payload', async () => {
-    // A sibling of the payload, like the other startup inputs: it names this launch's pane, not
-    // something a `worktree.create` caller can ask for.
+    // paneKey belongs to this launch, outside the worktree-create payload.
     const runtime = runtimeStub({ settings: TERMINAL_ONLY })
 
     await launch({ ...CREATE_LAUNCH, paneKey: PANE_KEY }, runtime)
@@ -241,6 +232,7 @@ describe('a live-pane refusal under a named operation', () => {
 
   afterEach(async () => {
     setAgentLaunchRecordStore(null)
+    await closeTestJournalHostDatabases()
     await rm(directory, { recursive: true, force: true })
   })
 

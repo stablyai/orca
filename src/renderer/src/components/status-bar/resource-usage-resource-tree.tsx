@@ -13,10 +13,8 @@ import { WorktreeRow } from './resource-usage-session-rows'
 
 export type SortOption = 'memory' | 'cpu' | 'name'
 
-// ─── Sorting ────────────────────────────────────────────────────────
-
 function compareMetricDesc(a: Metric, b: Metric): number {
-  // Why: null metrics (remote rows) sort last regardless of direction so they don't pollute the "biggest consumers" view.
+  // Keep unsampled rows after measured consumers in descending metric sorts.
   if (a === null && b === null) {
     return 0
   }
@@ -52,8 +50,6 @@ function sortProjectGroups(groups: UnifiedProjectGroup[], sort: SortOption): Uni
   }
   return copy
 }
-
-// ─── Repo + worktree tree ───────────────────────────────────────────
 
 export function ResourceTree({
   repos,

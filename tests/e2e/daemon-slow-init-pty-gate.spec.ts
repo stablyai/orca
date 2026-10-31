@@ -16,10 +16,7 @@ import { attachRepoAndOpenTerminal, createRestartSession } from './helpers/orca-
 import { PROTOCOL_VERSION } from '../../src/main/daemon/types'
 import { PTY_SESSION_ID_SEPARATOR } from '../../src/shared/pty-session-id-format'
 
-// Why: longer than FIRST_WINDOW_STARTUP_SERVICE_TIMEOUT_MS (12s) so the first
-// window fails open before the daemon provider exists — the exact race that
-// used to flip restored panes onto non-restorable LocalPtyProvider terminals
-// (#5232 Bug 1) — but well under the 60s local-PTY fail-open cap.
+// Outlast the 12s first-window timeout but stay below the 60s local-PTY fail-open cap (#5232).
 const DAEMON_INIT_DELAY_MS = 15_000
 
 function readDaemonPid(userDataDir: string): number {
@@ -70,9 +67,7 @@ test('reattaches daemon PTYs when daemon init outlasts the first-window timeout'
     await session.close(firstApp)
     firstApp = null
 
-    // Why: session.launch() inherits this process's env, so this reaches the
-    // relaunched app's main process and delays initDaemonPtyProvider past the
-    // first-window timeout.
+    // Inherited env delays daemon-provider init in the relaunched app beyond the first-window timeout.
     process.env.ORCA_E2E_DAEMON_INIT_DELAY_MS = String(DAEMON_INIT_DELAY_MS)
     try {
       const secondLaunch = await session.launch()
@@ -88,9 +83,7 @@ test('reattaches daemon PTYs when daemon init outlasts the first-window timeout'
       await ensureTerminalVisible(secondLaunch.page)
       await waitForActiveTerminalManager(secondLaunch.page, 45_000)
       await waitForPaneCount(secondLaunch.page, 1, 45_000)
-      // Why: pre-fix, the pane spawned a fresh LocalPtyProvider terminal here
-      // (numeric pty id, no marker); post-fix it waits out the daemon init and
-      // warm-reattaches the original daemon session.
+      // Require the original daemon session’s marker; a fresh LocalPtyProvider terminal would lack it.
       await waitForTerminalOutput(secondLaunch.page, marker, 45_000)
 
       const reattachedPtyId = await discoverActivePtyId(secondLaunch.page)

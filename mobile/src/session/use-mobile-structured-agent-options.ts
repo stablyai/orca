@@ -1,34 +1,27 @@
-import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session-conversation-command'
+import type { AgentSessionConversationCommand } from '../../../src/shared/agent-session/agent-session-conversation-command'
 import { useMobileStructuredOptionState } from './use-mobile-structured-option-state'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { isAgentSessionHandleProvider } from '../../../src/shared/agent-session-provider-handle'
 import { structuredAgentSessionSeedCatalog } from '../../../src/shared/structured-agent-session-seed-catalog'
 import type { AgentSessionOptionResult } from '../../../src/shared/agent-session-wire'
-import type { SessionOptionValue } from '../../../src/shared/native-chat-session-options'
-import {
-  canSetStructuredAgentSessionOption,
-  commitStructuredAgentSessionOption,
-  commitStructuredAgentSessionOptionValues,
-  lockedStructuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionPicks
-} from '../../../src/shared/structured-agent-session-options'
+import { lockedStructuredAgentSessionOptionSnapshot } from '../../../src/shared/structured-agent-session-options'
 import {
   structuredAgentSessionOptionView,
   structuredAgentSessionSendSelection,
+  structuredAgentSessionMessageSelection,
   structuredAgentSessionShownSnapshot
 } from '../../../src/shared/structured-agent-session-option-view'
-import {
-  AGENT_CHAT_PERMISSION_MODE_OPTION_ID,
-  agentChatPermissionModes
-} from '../../../src/shared/agent-chat-permission-mode'
+import { agentChatPermissionModes } from '../../../src/shared/agent-chat-permission-mode'
 import { legacyHostPermissionDescriptor } from '../../../src/shared/structured-agent-session-permission-option'
 import type { RpcClient } from '../transport/rpc-client'
 import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
 import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
-import { persistMobileStructuredOptionPicks } from './mobile-native-chat-session-option-persistence'
 import { useMobileHostModelCatalogUpgrade } from './use-mobile-host-model-catalog-upgrade'
 import { mobileCreatedStructuredSession } from './mobile-created-structured-sessions'
-import { encodeStructuredAgentSessionOptionValue } from '../../../src/shared/structured-agent-session-option-codec'
+import {
+  acceptedStructuredSessionSelectionOutcome,
+  createStructuredAgentSessionOptionsWriteOwner
+} from '../../../src/shared/structured-agent-session-options-write-owner'
 import { useMobileStructuredOptionSurface } from './use-mobile-structured-option-surface'
 
 const NO_COMMANDS: readonly AgentSessionConversationCommand[] = []
@@ -39,48 +32,55 @@ export function useMobileStructuredAgentOptions(args: {
   sessionId: string | null
   enabled: boolean
   fence: number | null
+  turnId: string | null
   mutate: StructuredAgentSessionMutate
-  /** Moves when the host's status says a session option changed; each move re-reads them. */
   optionStamp?: string
-  /** What the host advertised; null until its status probe answers. */
   hostSupport: Pick<
     StructuredAgentSessionHostSupport,
-    'permissionModes' | 'coherentModelCatalog'
+    | 'permissionModes'
+    | 'permissionOwn'
+    | 'coherentModelCatalog'
+    | 'statusFeed'
+    | 'sendSelection'
+    | 'sendOptions'
   > | null
 }) {
-  const { agent, client, enabled, fence, mutate, optionStamp, sessionId, hostSupport } = args
-  // Every agent's seed, as on the desktop: a built-in list or the provider-default pill.
+  const { agent, client, enabled, fence, mutate, optionStamp, sessionId, turnId, hostSupport } =
+    args
   const optionCatalog = useMemo(
     () => (agent ? structuredAgentSessionSeedCatalog(agent) : null),
     [agent]
   )
-  // A chat this phone created runs the listed default, as a desktop chat its own view launched does.
   const createdHere = useMemo(
     () => (sessionId ? mobileCreatedStructuredSession(sessionId) : undefined),
     [sessionId]
   )
+  // An options answer made before the account's listing landed listed none of it.
   const {
+    projectPermission,
     optionState,
     optionStateRef,
     activeOptionRecordRef,
-    pendingOptionRef,
-    optionMutationGeneration,
+    providerStarting,
     updateOptionState,
     conversationSupport,
     imageSupport,
     awaitingOptions,
-    writes,
-    readRef,
     receiveCatalog,
-    isCurrentContext
+    isCurrentContext,
+    controller,
+    reread
   } = useMobileStructuredOptionState({
     agent,
     enabled,
+    statusFeed: hostSupport?.statusFeed === true,
     fence,
     optionCatalog,
     sessionId,
+    turnId,
     client,
     optionStamp,
+    sendSelection: hostSupport?.sendSelection === true,
     newLaunch: createdHere !== undefined,
     worktree: createdHere?.worktree,
     coherentCatalog: hostSupport?.coherentModelCatalog === true
@@ -99,7 +99,7 @@ export function useMobileStructuredAgentOptions(args: {
     receiveCatalog
   })
 
-  // A host predating per-chat modes (1.4.224 and older) states none: say what its chats run instead.
+  // Pre-1.4.225 hosts lack per-chat modes; show their actual global agent mode.
   const legacyHostPermissions =
     agent !== null &&
     agentChatPermissionModes(agent) !== null &&
@@ -107,156 +107,113 @@ export function useMobileStructuredAgentOptions(args: {
     imageSupport?.sessionId === sessionId &&
     !imageSupport.statesPermissionMode &&
     optionState.permissionMode === null
+  const interactionReadyRef = useRef(!awaitingOptions)
   const lockSnapshotRef = useRef(
     (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) => snapshot
   )
   const lockSnapshot = (snapshot: ReturnType<typeof structuredAgentSessionShownSnapshot>) =>
     awaitingOptions ? lockedStructuredAgentSessionOptionSnapshot(snapshot) : snapshot
   useLayoutEffect(() => {
+    interactionReadyRef.current = !awaitingOptions
     lockSnapshotRef.current = lockSnapshot
   })
-  const shown = lockSnapshot(structuredAgentSessionShownSnapshot(optionState))
+  const readOptionState = useCallback(
+    () =>
+      projectPermission({
+        ...structuredAgentSessionOptionView(
+          optionStateRef.current,
+          undefined,
+          controller.overlay()
+        ),
+        permissionOwnSupported: hostSupport ? hostSupport.permissionOwn === true : null
+      }),
+    [controller, projectPermission, hostSupport?.permissionOwn]
+  )
+  const shown = lockSnapshot(structuredAgentSessionShownSnapshot(readOptionState()))
   const optionSnapshot = legacyHostPermissions
     ? [...shown, legacyHostPermissionDescriptor()]
     : shown
 
-  const setStructuredOption = useCallback(
-    async (id: string, value: SessionOptionValue): Promise<boolean> => {
-      const currentState = optionStateRef.current
-      const encoded = encodeStructuredAgentSessionOptionValue(id, value)
-      if (
-        !isCurrentContext() ||
-        pendingOptionRef.current !== null ||
-        !client ||
-        !sessionId ||
-        !optionCatalog ||
-        encoded === null ||
-        !canSetStructuredAgentSessionOption(
-          structuredAgentSessionOptionView(currentState, undefined, {}),
-          id,
-          value,
-          lockSnapshotRef.current(structuredAgentSessionShownSnapshot(currentState))
-        )
-      ) {
-        return false
-      }
-      const targetRecord = currentState.record
-      writes.current.count += 1
-      const mutationGeneration = ++optionMutationGeneration.current
-      const isCurrent = (): boolean =>
-        isCurrentContext() &&
-        activeOptionRecordRef.current === targetRecord &&
-        optionMutationGeneration.current === mutationGeneration
-      // Record-only: shown at once, so the picker stays usable while the write waits behind a start.
-      const shownAtOnce = id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID
-      if (shownAtOnce) {
-        updateOptionState((current) =>
-          current.record === targetRecord
-            ? commitStructuredAgentSessionOption(current, id, encoded)
-            : current
-        )
-      } else {
-        pendingOptionRef.current = id
-        updateOptionState((current) => ({ ...current, pendingId: id }))
-      }
-      // A same-fence accepted write, or a shown one that failed, reads back what the host now holds.
-      let readsBack = shownAtOnce
-      try {
-        const result = await mutate<AgentSessionOptionResult>(
-          'agentSession.setOption',
-          'agentSession.setOption',
-          { key: id, value: encoded }
-        )
-        if (!isCurrent()) {
-          return result.status !== 'rejected'
-        }
-        if (result.status === 'accepted') {
-          const committed = result.value.options ?? { [id]: encoded }
-          updateOptionState((current) =>
-            current.record === targetRecord && result.sameFence
-              ? commitStructuredAgentSessionOptionValues(current, committed)
-              : current
-          )
-          // Only an accepted pick: an `unknown` outcome commits optimistically to the
-          // visible record, and remembering one the provider refused would seed a
-          // launch the user never chose.
-          if (agent) {
-            void persistMobileStructuredOptionPicks({
-              client,
-              agent,
-              picks: structuredAgentSessionOptionPicks(currentState, committed)
-            })
-          }
-          readsBack = result.sameFence
-          return true
-        }
-        if (result.status === 'unknown') {
-          readsBack = false
-          updateOptionState((current) =>
-            current.record === targetRecord
-              ? commitStructuredAgentSessionOption(current, id, encoded)
-              : current
-          )
-          return true
-        }
-        return false
-      } finally {
-        if (isCurrent()) {
-          pendingOptionRef.current = null
-          updateOptionState((current) =>
-            current.record === targetRecord && current.pendingId === id
-              ? { ...current, pendingId: null }
-              : current
-          )
-        }
-        if (isCurrentContext() && activeOptionRecordRef.current === targetRecord) {
-          writes.current.count -= 1
-          writes.current.readback ||= readsBack && isCurrent()
-          if (!writes.current.count && writes.current.readback) {
-            readRef.current?.()
-          }
-        }
-      }
-    },
-    [
-      agent,
-      awaitingOptions,
-      client,
-      createdHere,
-      mutate,
-      optionCatalog,
-      writes,
+  const readWriteContext = () => {
+    const currentState = projectPermission({
+      ...optionStateRef.current,
+      permissionOwnSupported: hostSupport ? hostSupport.permissionOwn === true : null
+    })
+    const view = structuredAgentSessionOptionView(currentState, undefined, controller.overlay())
+    return {
+      controller,
+      record: optionStateRef.current.record,
+      view,
+      snapshot: lockSnapshotRef.current(structuredAgentSessionShownSnapshot(view)),
+      ready: !awaitingOptions && !!client && !!sessionId && interactionReadyRef.current,
+      providerStarting,
       isCurrentContext,
-      sessionId,
-      updateOptionState
-    ]
-  )
-
-  // Read, not rendered: what the chat holds when the send goes out.
-  const sendSelection = useCallback(
-    () => structuredAgentSessionSendSelection(optionStateRef.current),
+      flush: (isCurrent: () => boolean) => {
+        controller.flush(async (pick) => {
+          // A queued pick never retargets a replacement runtime.
+          if (!isCurrent()) {
+            return { kind: 'superseded' }
+          }
+          const result = await mutate<AgentSessionOptionResult>(
+            'agentSession.setOption',
+            'agentSession.setOption',
+            { key: pick.key, value: pick.value }
+          )
+          return result.status === 'accepted'
+            ? acceptedStructuredSessionSelectionOutcome(pick, result.value.options)
+            : result.status === 'unknown'
+              ? { kind: 'unknown' }
+              : { kind: 'refused' }
+        })
+      },
+      revalidate: reread,
+      revalidateOn: 'refused-current' as const
+    }
+  }
+  const writeContextRef = useRef(readWriteContext)
+  useLayoutEffect(() => {
+    writeContextRef.current = readWriteContext
+  })
+  const writer = useMemo(
+    () => createStructuredAgentSessionOptionsWriteOwner(() => writeContextRef.current()),
     []
   )
+  useLayoutEffect(() => () => writer.detach(), [writer])
+  const setStructuredOption = writer.setOption
+
+  // Controls and capture derive from the same queried base and transient operations.
+  const sendSelection = useCallback(() => {
+    const view = structuredAgentSessionOptionView(
+      optionStateRef.current,
+      undefined,
+      controller.overlay()
+    )
+    return hostSupport?.sendSelection
+      ? { selection: structuredAgentSessionMessageSelection(view) }
+      : hostSupport?.sendOptions
+        ? { options: structuredAgentSessionSendSelection(view) }
+        : {}
+  }, [controller, hostSupport?.sendSelection, hostSupport?.sendOptions])
+
   const { optionPickerRequest, invokeStructuredOption, optionSurface } =
     useMobileStructuredOptionSurface({
       optionSnapshot,
       demandModelCatalog,
+      lockSnapshot: (snapshot) => lockSnapshotRef.current(snapshot),
       setStructuredOption,
-      optionStateRef,
-      lockSnapshot: (snapshot) => lockSnapshotRef.current(snapshot)
+      readOptionState
     })
 
   return {
     optionPickerRequest,
     conversationCommands:
       conversationSupport?.sessionId === sessionId ? conversationSupport.commands : NO_COMMANDS,
-    /** The chat takes images, as its options report says; else only Claude and Codex, as before. */
     acceptsImages:
       (imageSupport?.sessionId === sessionId ? imageSupport.acceptsImages : undefined) ??
       (agent !== null && isAgentSessionHandleProvider(agent)),
     optionSnapshot,
     optionSurface,
-    pendingOptionId: optionState.pendingId,
+    pendingOptionId: writer.pendingOptionId(controller, optionState.record),
     setStructuredOption,
     invokeStructuredOption,
     sendSelection

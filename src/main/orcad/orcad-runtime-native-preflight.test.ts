@@ -3,7 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type {
   WatcherProcessCallback,
   WatcherProcessHooks
-} from '../ipc/parcel-watcher-process-subscription'
+} from '../ipc/filesystem/watcher-process/parcel-watcher-process-subscription'
 import { PtySpawnHealthTimeoutError } from '../daemon/pty-subprocess/spawn-preflight'
 import { preflightOrcadNativeRuntime } from './orcad-runtime-native-preflight'
 import { WindowsProcessTableTimeoutError } from '../windows/windows-process-table-timeout-error'
@@ -41,7 +41,7 @@ vi.mock('node:fs/promises', () => ({
   writeFile: fixture.write,
   rm: fixture.remove
 }))
-vi.mock('../ipc/parcel-watcher-process-supervisor', () => ({
+vi.mock('../ipc/filesystem/watcher-process/parcel-watcher-process-supervisor', () => ({
   WatcherProcessSupervisor: class {
     subscribe = fixture.subscribe
     dispose = fixture.dispose
@@ -89,7 +89,6 @@ describe('bundled native readiness', () => {
     )
   })
 
-  // A loaded Windows runner timed the whole-table snapshot out, and startup failed readiness.
   it('identifies itself by one PID when the process-table snapshot times out', async () => {
     vi.spyOn(process, 'platform', 'get').mockReturnValue('win32')
     fixture.rows.mockRejectedValue(

@@ -1,8 +1,8 @@
+import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { RuntimeTerminalInteractiveWait } from '../../../../../../shared/runtime-types'
 import type { WorkerTerminalReleaseRuntime } from '../../../../orchestration/worker-terminal-release-runtime'
 import type { OrchestrationDb } from '../../../../orchestration/db'
 import { OrchestrationError } from '../../../../orchestration/orchestration-error'
-import { parseWorkerTerminalHostScope } from '../../../../../../shared/worker-terminal-host-scope'
 import type { OrchestrationFleetWorker } from '../../../../../../shared/orchestration-fleet-projection'
 import { projectWorkerFleet } from './worker-list-projection'
 import { observeChatAssignee } from '../../../../orchestration/chat-assignee'
@@ -13,8 +13,9 @@ import type {
   WorkerDispatchRow
 } from '../../../../orchestration/types'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../../shared/layout-owner-switch'
+import { exposeDispatchContext } from './dispatch-context-exposure'
 
-/** Observe a worker terminal, re-minting a live handle from the recorded process incarnation when the durable handle went stale, so a still-running worker is never reported missing and leaked. */
+/** Recover live handles by recorded process incarnation so stale durable handles cannot hide and leak running workers. */
 export async function inspectWorkerTerminal(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
@@ -27,11 +28,9 @@ export async function inspectWorkerTerminal(
   reason?: string
   /** Set only on a proven-exact worker parked on a prompt that needs a human. */
   agentWait?: RuntimeTerminalInteractiveWait | null
-  /** Structured workers only: whether mail still reaches it — at rest included, since the mail
-   *  starts it. Absent when ownership cannot be read. `status` stays the process verdict. */
+  /** Structured workers: mail reachability includes at-rest sessions that mail restarts; absent means ownership unreadable. status remains the process verdict. */
   addressable?: boolean
-  /** The handle that actually resolved: the durable one, or a live handle re-minted from the
-   *  recorded process incarnation after the durable handle went stale. Null when none resolved. */
+  /** The durable or incarnation-reminted live handle; null means none resolved. */
   terminalHandle: string | null
 }> {
   const worker = db.getWorkerDispatch(dispatchId)
@@ -47,11 +46,7 @@ export async function inspectWorkerTerminal(
   let effectiveHandle = terminalHandle
   let terminal = await runtime.showTerminal(effectiveHandle).catch(() => null)
   if (!terminal) {
-    // Why: the durable handle resolves nowhere after a renderer graph epoch bump or handle
-    // invalidation, yet the recorded process incarnation may still name a live PTY. Re-mint a
-    // live handle (incarnation-fenced) so worker-show and release act on the still-running
-    // process instead of reporting it missing — which would leak the agent process tree.
-    // (workerList is a pure DB projection and never calls inspectWorkerTerminal.)
+    // Remint by exact incarnation after durable-handle loss so show/release reach the live process; workerList never performs this inspection.
     const resource = db.getWorkerTerminalResourceByOwner(dispatchId)
     const reminted = resource?.process_incarnation
       ? runtime.resolveTerminalHandleByProcessIncarnation(
@@ -79,13 +74,8 @@ export async function inspectWorkerTerminal(
   if (!exact) {
     return { terminal, exact, status: 'identity_changed', terminalHandle: effectiveHandle }
   }
-  // Why: the aggregate inventory only iterates registered providers, so a dropped
-  // relay clears `connected` for every remote PTY at once. Lost contact is not a
-  // death certificate, and the verdict is the only field that can tell them apart.
-  // Why reused rather than re-derived: showTerminal already scanned this pane's retained
-  // tail for the same verdict, and a second scan could also disagree with the one it published.
-  // Exact-gated by the early return above: a replaced process's prompt would attribute another
-  // lane's blocker to this worker.
+  // Dropped relays clear connected without proving death; reuse showTerminal's host verdict and prompt scan.
+  // Exact identity is required so another process's prompt cannot become this worker's blocker.
   const agentWait = terminal.agentWait
   const verdict = runtime.getTerminalLivenessVerdict?.(effectiveHandle) ?? null
   if (verdict?.status === 'unverifiable') {
@@ -148,9 +138,7 @@ export async function inspectWorkerTerminal(
   }
 }
 
-/** Why conditional: a present `agentWait: null` must mean "looked, nothing waiting"; an
- *  unattached, missing or identity-changed worker was never looked at, and a bare
- *  `unverifiable` is not actionable without naming what contact was lost. */
+/** Emit agentWait:null only after checking the exact worker; absence means unknown. Name lost contact when liveness is unverifiable. */
 export function exposeObservation(observation: Awaited<ReturnType<typeof inspectWorkerTerminal>>) {
   return {
     status: observation.status,
@@ -166,7 +154,7 @@ function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
     dispatchId: dispatch.id,
     runtimeEpoch: null,
     state: 'unsupervised' as const,
-    // Why: with no worker row Orca supervises only the context; it keeps no record of an --inject paste.
+    // Without a worker row only context is supervised; inject paste has no durable record.
     stage: 'context_only',
     worktreeId: null,
     agentTerminalHandle: dispatch.assignee_handle,
@@ -177,37 +165,6 @@ function exposeContextOnlyWorker(dispatch: DispatchContextRow) {
     lastError: dispatch.last_failure,
     createdAt: dispatch.created_at,
     updatedAt: dispatch.completed_at ?? dispatch.created_at
-  }
-}
-
-// Why: `launch_token_hash` and `capability_hash` are authority material with no receipt
-// consumer, and `host_scope` shipped as a JSON string inside JSON. One camelCase shape,
-// the same one `exposeWorker` publishes beside it.
-export function exposeDispatchContext(dispatch: DispatchContextRow) {
-  return {
-    id: dispatch.id,
-    runId: dispatch.run_id,
-    taskId: dispatch.task_id,
-    // Every shipped CLI prints `dispatch.task_id`, and mixed client/host versions are the
-    // normal state, so the rename ships beside the spelling old clients still read.
-    task_id: dispatch.task_id,
-    contractVersion: dispatch.contract_version,
-    assigneeHandle: dispatch.assignee_handle,
-    assigneePaneKey: dispatch.assignee_pane_key,
-    processIncarnation: dispatch.process_incarnation,
-    capabilityRevokedAt: dispatch.capability_revoked_at,
-    retryOfDispatchId: dispatch.retry_of_dispatch_id,
-    creatorDispatchId: dispatch.creator_dispatch_id,
-    hostScope: parseWorkerTerminalHostScope(dispatch.host_scope),
-    status: dispatch.status,
-    failureCount: dispatch.failure_count,
-    lastFailure: dispatch.last_failure,
-    terminationReason: dispatch.termination_reason,
-    depth: dispatch.depth,
-    dispatchedAt: dispatch.dispatched_at,
-    completedAt: dispatch.completed_at,
-    createdAt: dispatch.created_at,
-    lastHeartbeatAt: dispatch.last_heartbeat_at
   }
 }
 
@@ -227,9 +184,7 @@ export async function showContextOnlyWorker(
   }
 }
 
-// Why: the row was spread verbatim beside its parsed copies, so a reader got
-// `residual_resources` (a JSON string) next to `residualResources` (an array) and had to
-// guess which was authoritative. Parse once, emit camelCase once.
+// Decode residual_resources once and emit only residualResources; competing raw/parsed forms obscure authority.
 export function exposeWorker(worker: WorkerDispatchRow) {
   return {
     dispatchId: worker.dispatch_id,
@@ -248,13 +203,7 @@ export function exposeWorker(worker: WorkerDispatchRow) {
   }
 }
 
-/**
- * The same fleet verdict `worker-list` publishes, for one Dispatch.
- *
- * Why worker-show needs it: `observation.status` is PTY liveness, so an agent that died
- * at a trust prompt inside a live pane read `live` here and `unverifiable` from
- * `worker-list` — and `worker-list`'s own `nextAction` pointed back at this command.
- */
+/** Use the same agent verdict as worker-list: a live PTY does not prove its agent is live, especially when list recovery points to show. */
 export function projectFleetWorkerPage(
   runtime: WorkerTerminalReleaseRuntime,
   db: OrchestrationDb,
@@ -330,6 +279,10 @@ export async function callFederatedWorkerShow(
     effects: unknown[]
     residualResources: unknown[]
   }
+  /** Absent from hosts that predate automatic release. */
+  autoReleaseAt?: string | null
+  /** Absent from hosts that predate Keep open. */
+  keptOpen?: boolean
   terminal: unknown
   observation: {
     status: string

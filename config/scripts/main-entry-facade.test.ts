@@ -28,6 +28,9 @@ it('keeps main code and asset paths working after a CLI build replaces its publi
       'import { writeFileSync } from "node:fs"; import { join } from "node:path"; import { getStatus } from "./controls"; import { createTracker } from "./tracker"; import { getBootLabel } from "./boot-label"; import("./late").then(({ readLabel }) => writeFileSync(join(__dirname, "result.json"), JSON.stringify({ status: getStatus(), tracker: createTracker(), directory: __dirname, label: getBootLabel(), lateLabel: readLabel() })))'
     )
     const options = electronViteConfig.main?.build?.rollupOptions
+    if (Array.isArray(options?.output)) {
+      throw new Error('Expected one main-process output')
+    }
     await build({
       configFile: false,
       root,
@@ -37,6 +40,8 @@ it('keeps main code and asset paths working after a CLI build replaces its publi
         minify: electronViteConfig.main?.build?.minify,
         rolldownOptions: {
           ...options,
+          // Plugins and the bootstrap banner guard the real main entry, not this fixture.
+          output: { ...options?.output, postBanner: undefined },
           plugins: [],
           input: { index: join(root, 'main.ts'), controls: join(root, 'controls.ts') }
         }

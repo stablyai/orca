@@ -34,8 +34,7 @@ export function createOpenFileState(
     activeTabTypeByWorktree: {},
     activeTabType: 'terminal',
     recentlyClosedEditorTabsByWorktree: {},
-    // Why the worktree is required: an implicit "active worktree" default let callers retype the
-    // main window while acting on a tab that lives elsewhere (e.g. the floating workspace).
+    // Require explicit worktree so background/floating actions cannot retype main-window selection.
     setActiveTabType: (type, worktreeId) =>
       set((s) => ({
         ...(ownsGlobalSelection(s, worktreeId) ? { activeTabType: type } : {}),

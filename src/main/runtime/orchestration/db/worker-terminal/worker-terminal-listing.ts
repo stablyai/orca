@@ -16,13 +16,19 @@ import {
   countWorkerTerminalInventory,
   scanWorkerTerminalStates
 } from './worker-terminal-inventory-counts'
-import { markWorkerTerminalUserOwned } from './worker-terminal-user-takeover'
+import {
+  allowWorkerTerminalAutoClose,
+  getWorkerAutoCloseState,
+  keepWorkerTerminalOpen
+} from './worker-terminal-user-keep'
 
 export {
   countWorkerTerminalInventory,
   getWorkerAttentionFacts,
   getWorkerAttentionFactsForDispatches,
-  markWorkerTerminalUserOwned
+  allowWorkerTerminalAutoClose,
+  getWorkerAutoCloseState,
+  keepWorkerTerminalOpen
 }
 
 /** `databaseId` is the real order key; the timestamp fields only satisfy pre-v3 cursors. */
@@ -131,10 +137,7 @@ export function listWorkerTerminalResources(
     }
   }
   if (params.after) {
-    // Order and fence must share one key, or a row created between pages moves across the cut.
-    // Pages walk down from the newest row, so the continuation takes what sits below the anchor.
-    // A pre-v3 cursor is resolved from its anchor row; when a reset deleted that row
-    // `rowid < NULL` matched nothing and the page read as a finished, empty inventory.
+    // Fence and order by rowid; resolve old cursors from their anchor and reject missing anchors after reset.
     where.push('d.rowid < ?')
     values.push(resolveAnchorRowId.call(this, params.after, params.runId))
   }
@@ -142,7 +145,7 @@ export function listWorkerTerminalResources(
   let detailValues = values
   let detailLimit = params.limit
   if (params.terminalState) {
-    // Terminal state is derived by one TS function; page it before reading detail columns.
+    // Derive states and page before fetching detail columns.
     const matching = scanWorkerTerminalStates
       .call(this, where, values)
       .filter((row) => row.terminalState === params.terminalState)
@@ -275,7 +278,9 @@ export function getWorkerTerminalOrderingKey(
 }
 
 export type WorkerTerminalListingMethods = {
-  markWorkerTerminalUserOwned: typeof markWorkerTerminalUserOwned
+  allowWorkerTerminalAutoClose: typeof allowWorkerTerminalAutoClose
+  getWorkerAutoCloseState: typeof getWorkerAutoCloseState
+  keepWorkerTerminalOpen: typeof keepWorkerTerminalOpen
   listWorkerTerminalReleaseBacklog: typeof listWorkerTerminalReleaseBacklog
   listWorkerTerminalResources: typeof listWorkerTerminalResources
   getWorkerTerminalListingSnapshot: typeof getWorkerTerminalListingSnapshot
@@ -287,7 +292,9 @@ export type WorkerTerminalListingMethods = {
 
 export function attachWorkerTerminalListing(ctor: { prototype: object }): void {
   Object.assign(ctor.prototype, {
-    markWorkerTerminalUserOwned,
+    allowWorkerTerminalAutoClose,
+    getWorkerAutoCloseState,
+    keepWorkerTerminalOpen,
     listWorkerTerminalReleaseBacklog,
     listWorkerTerminalResources,
     getWorkerTerminalListingSnapshot,

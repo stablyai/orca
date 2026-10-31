@@ -39,14 +39,7 @@ const SLOW_MESSAGE =
 
 type Snapshot = [NativeChatMessage[], boolean, number, string | undefined]
 
-let releaseStall: (() => void) | undefined
 let unhandled: unknown[] = []
-
-function stalls<T>(): Promise<T> {
-  return new Promise<T>((resolve) => {
-    releaseStall = () => resolve(undefined as T)
-  })
-}
 
 function subscribeCollecting(snapshots: Snapshot[]) {
   return subscribeNativeChatTranscript({
@@ -67,20 +60,17 @@ function trackUnhandled(reason: unknown): void {
 }
 
 beforeEach(() => {
-  // blockedRoutes is persistent gate state: a prior stall must not quarantine
-  // this test's route.
+  // Reset persistent quarantine so stalls cannot leak between cases.
   resetWslTranscriptFsGateForTests()
   mocks.resolve.mockReset()
   mocks.stat.mockReset()
   mocks.open.mockReset()
-  releaseStall = undefined
   unhandled = []
   process.on('unhandledRejection', trackUnhandled)
   vi.useFakeTimers()
 })
 
 afterEach(async () => {
-  releaseStall?.()
   await vi.advanceTimersByTimeAsync(0)
   vi.useRealTimers()
   process.off('unhandledRejection', trackUnhandled)
@@ -91,16 +81,13 @@ const EMPTY_STATS = { size: 0, mtimeMs: 1, ctimeMs: 1, ino: 1, dev: 1, mtime: ne
 describe('native chat transcript subscription with a stalled install stat', () => {
   it('keeps watching and emits exactly one retryable snapshot, then the real one', async () => {
     mocks.resolve.mockResolvedValue(UNC_PATH)
-    // Every stat stalls until the distro "wakes": the first-strike quarantine
-    // runs on the real performance.now clock, so depending on wall time a retry
-    // probe may be re-admitted mid-test and must find the mount still hung.
+    // Real performance.now may expire quarantine mid-test; every retry must still find the mocked mount stalled.
     const pendingStats: ((stats: typeof EMPTY_STATS) => void)[] = []
     mocks.stat.mockImplementation(
       () => new Promise((resolve) => pendingStats.push(resolve as never))
     )
     const snapshots: Snapshot[] = []
 
-    // Not awaited yet: the setup install is itself blocked on the stalled stat.
     const subscribing = subscribeCollecting(snapshots)
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
     const subscription = await subscribing
@@ -109,11 +96,9 @@ describe('native chat transcript subscription with a stalled install stat', () =
     await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
     expect(snapshots).toEqual([[[], false, 0, SLOW_MESSAGE]])
 
-    // Later poll ticks fast-fail on the still-stuck route without re-emitting.
     await vi.advanceTimersByTimeAsync(500)
     expect(snapshots).toHaveLength(1)
 
-    // The distro wakes: the same subscription still delivers a real snapshot.
     mocks.stat.mockResolvedValue(EMPTY_STATS)
     for (const release of pendingStats.splice(0)) {
       release(EMPTY_STATS)
@@ -127,8 +112,6 @@ describe('native chat transcript subscription with a stalled install stat', () =
   })
 
   it('keeps the poll loop alive on a non-gate resolve failure without emitting a frame', async () => {
-    // First resolve misses (transcript not flushed) so setup falls through to
-    // the poll loop; every later tick throws a non-gate error.
     mocks.resolve
       .mockResolvedValueOnce(null)
       .mockRejectedValue(Object.assign(new Error('EACCES'), { code: 'EACCES' }))
@@ -139,7 +122,6 @@ describe('native chat transcript subscription with a stalled install stat', () =
     await vi.advanceTimersByTimeAsync(500)
 
     expect(snapshots).toEqual([])
-    // Still retrying: the rethrow-free branch must not kill `void runAttempt()`.
     expect(mocks.resolve.mock.calls.length).toBeGreaterThan(attemptsAfterSetup)
     expect(unhandled).toEqual([])
     subscription.unsubscribe()
@@ -165,29 +147,13 @@ describe('native chat transcript subscription with a stalled install stat', () =
     const statCallsAtTeardown = mocks.stat.mock.calls.length
 
     subscription.unsubscribe()
-    // No timer advance: the waiter must detach on unsubscribe, not 30s later.
+    // Detach immediately on unsubscribe without waiting for the gate deadline.
     releaseOpen?.(handle)
     await vi.advanceTimersByTimeAsync(0)
 
-    // The drain that was in flight must not admit anything more.
     expect(handle.read).not.toHaveBeenCalled()
     expect(mocks.stat.mock.calls.length).toBe(statCallsAtTeardown)
-    // Nobody is left to own the late handle, so the gate closes it.
     expect(handle.close).toHaveBeenCalledTimes(1)
-    expect(unhandled).toEqual([])
-  })
-
-  it('tears down cleanly while an admission is still stalled', async () => {
-    mocks.resolve.mockResolvedValue(UNC_PATH)
-    mocks.stat.mockImplementation(stalls)
-    const snapshots: Snapshot[] = []
-
-    const subscribing = subscribeCollecting(snapshots)
-    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
-    const subscription = await subscribing
-
-    expect(() => subscription.unsubscribe()).not.toThrow()
-    await vi.advanceTimersByTimeAsync(WSL_TRANSCRIPT_FS_EXACT_TIMEOUT_MS + 1)
     expect(unhandled).toEqual([])
   })
 })

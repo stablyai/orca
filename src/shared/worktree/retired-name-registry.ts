@@ -1,13 +1,6 @@
 import { MARINE_CREATURES } from '../marine-creatures'
 
-/** Retirement is permanent — a spent name's directory may still hold agent conversation state
- *  keyed by that path — so the registry can never evict. It compacts instead.
- *
- *  Names come from a fixed pool and the suggester only reaches tier N+1 once every tier-N name is
- *  taken, so a completed tier is exactly a set of 552 entries that no longer need to be listed
- *  individually: `exhaustedTiers` covers every tier at or below it, `names` holds only what sits
- *  above it. That bounds a repo at roughly one pool's worth of entries forever, with no eviction
- *  and nothing un-retired. */
+/** Never evict retired names: their cwd may retain agent history. Compact complete consecutive pool tiers into exhaustedTiers; retain explicit names above the watermark. */
 export type RetiredNameRegistry = {
   exhaustedTiers: number
   names: readonly string[]
@@ -19,8 +12,7 @@ export const CREATURE_POOL_NAMES: ReadonlySet<string> = new Set(
   MARINE_CREATURES.map((name) => name.toLowerCase())
 )
 
-// Matches the widest tier `creatureNameTier` will parse: a watermark past it could never be
-// reached by a name, so it would only silence lookups.
+// Cap the watermark at the highest tier creatureNameTier can parse.
 const MAX_EXHAUSTED_TIERS = 999_999
 
 /** Tier 1 is the bare pool name; tier N is `name-N`. */
@@ -28,9 +20,7 @@ export function creatureNameAtTier(poolName: string, tier: number): string {
   return tier === 1 ? poolName : `${poolName}-${tier}`
 }
 
-/** Null for anything the suggester never emits — a non-pool base, or a repeat-suffixed collision
- *  variant like `nautilus-2-3` — so no watermark can ever cover those. Load-bearing for user-typed
- *  names: `fix-login-2` must not read as retired just because tier 2 is spent. */
+/** Only generated pool/tier spellings can be covered by a watermark; user labels and repeat-suffixed collisions remain explicit. */
 export function creatureNameTier(name: string): number | null {
   const normalized = name.trim().toLowerCase()
   if (CREATURE_POOL_NAMES.has(normalized)) {
@@ -51,8 +41,7 @@ export function clampExhaustedTiers(value: unknown): number {
     : 0
 }
 
-/** Membership without reconstructing a compacted tier: at or below the watermark answers with no
- *  lookup at all. Built once per create attempt because the create loop probes up to 100 names. */
+/** Build once per create attempt to avoid rebuilding the explicit set for up to 100 probes; compacted tiers need no reconstruction. */
 export function createRetiredNameLookup(registry: RetiredNameRegistry): (name: string) => boolean {
   const explicit = new Set(registry.names)
   const exhaustedTiers = clampExhaustedTiers(registry.exhaustedTiers)
@@ -75,11 +64,7 @@ function tierIsComplete(names: ReadonlySet<string>, tier: number): boolean {
   return true
 }
 
-/** Folds every completed tier into the watermark and drops the names it now covers.
- *
- *  Loops rather than checking one tier: tiers complete out of order, because a create-time
- *  collision can spend `nautilus-2` while tier 1 is still open. Those higher-tier names simply
- *  wait in the explicit set until their own tier completes. */
+/** Fold consecutive completed tiers into the watermark. Collisions can spend higher-tier names early; keep those explicit until intervening tiers complete. */
 export function compactRetiredNames(registry: RetiredNameRegistry): RetiredNameRegistry {
   let exhaustedTiers = clampExhaustedTiers(registry.exhaustedTiers)
   const names = new Set(registry.names)
@@ -95,8 +80,7 @@ export function compactRetiredNames(registry: RetiredNameRegistry): RetiredNameR
   return { exhaustedTiers, names: [...names] }
 }
 
-/** Returns null when nothing changed, so callers can skip the write. Names must already have
- *  passed the caller's retirement gate — this only does set math. */
+/** Return null for no change. Callers must enforce retirement eligibility before supplying names. */
 export function addRetiredNames(
   registry: RetiredNameRegistry,
   incoming: Iterable<string>
@@ -116,8 +100,7 @@ export function addRetiredNames(
       })
 }
 
-/** Union of two registries. The higher watermark wins and absorbs the other's names, so peers at
- *  different compaction points do not re-expand each other's spent tiers. */
+/** Take the higher watermark so peer merges never re-expand spent tiers. */
 export function mergeRetiredNameRegistries(
   base: RetiredNameRegistry,
   incoming: RetiredNameRegistry

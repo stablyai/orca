@@ -1,6 +1,7 @@
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { PtyReplayDataMeta } from './pty-transport-types'
+import type { ITerminalOptions } from '@xterm/xterm'
+import type { PtyReplayDataMeta, PtyTransport } from './pty-transport-types'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
@@ -27,7 +28,7 @@ export type ConnectCallbacks = {
 
 export type MockTransport = {
   retryRecovery?: () => boolean
-  attach: ReturnType<typeof vi.fn>
+  attach: Mock<PtyTransport['attach']>
   connect: ReturnType<typeof vi.fn> & {
     mockImplementation: (
       impl: (opts: { callbacks?: ConnectCallbacks } & Record<string, unknown>) => Promise<unknown>
@@ -42,7 +43,7 @@ export type MockTransport = {
   setOutputPaused?: ReturnType<typeof vi.fn>
   resize: ReturnType<typeof vi.fn>
   isConnected?: ReturnType<typeof vi.fn>
-  getPtyId: ReturnType<typeof vi.fn>
+  getPtyId: Mock<() => string | null>
   getConnectionId: ReturnType<typeof vi.fn>
   serializeBuffer?: ReturnType<typeof vi.fn>
   serializeBufferOutcome?: ReturnType<typeof vi.fn>
@@ -50,8 +51,9 @@ export type MockTransport = {
 
 export function createMockTransport(initialPtyId: string | null = null): MockTransport {
   let ptyId = initialPtyId
-  const transport = {
-    attach: vi.fn(({ existingPtyId }: { existingPtyId: string }) => {
+  const sendInput = vi.fn<(data: string) => boolean>(() => true)
+  const transport: MockTransport = {
+    attach: vi.fn<PtyTransport['attach']>(({ existingPtyId }) => {
       ptyId = existingPtyId
     }),
     connect: vi.fn().mockImplementation(async (opts: { sessionId?: string }) => {
@@ -64,18 +66,17 @@ export function createMockTransport(initialPtyId: string | null = null): MockTra
     disconnect: vi.fn(() => {
       ptyId = null
     }),
-    sendInput: vi.fn(() => true),
+    sendInput,
+    // Query replies use the same spy as ordinary input (#7329).
+    sendInputImmediate: vi.fn((data: string): boolean => sendInput(data)),
+    sendInputAccepted: vi.fn(async (data: string): Promise<boolean> => sendInput(data)),
     claimViewport: vi.fn(() => true),
     resize: vi.fn(() => true),
     getPtyId: vi.fn(() => ptyId),
     getConnectionId: vi.fn(() => null),
     serializeBuffer: undefined
-  } as MockTransport
+  }
   transport.isConnected = vi.fn(() => ptyId !== null)
-  const sendInput = transport.sendInput as unknown as (data: string) => boolean
-  // Why: query replies route through sendInputImmediate; delegate to the same spy so reply-delivery assertions still observe them (#7329).
-  transport.sendInputImmediate = vi.fn((data: string) => sendInput(data))
-  transport.sendInputAccepted = vi.fn(async (data: string) => sendInput(data))
   return transport
 }
 
@@ -105,12 +106,13 @@ export type MockPaneTerminal = {
   buffer: { active: MockPaneBuffer }
   modes: { bracketedPasteMode: boolean; sendFocusMode: boolean }
   options: {
+    windowsPty?: ITerminalOptions['windowsPty']
     scrollback: number
     ignoreBracketedPasteMode: boolean
     theme: { foreground: string; background: string }
     vtExtensions: { kittyKeyboard: boolean }
   }
-  write: Mock<(data: string, callback?: () => void) => void>
+  write: Mock<(data: string | Uint8Array, callback?: () => void) => void>
   resize: Mock<(cols: number, rows: number) => void>
   clear: Mock
   scrollToBottom: Mock<() => void>
@@ -140,11 +142,16 @@ export type MockPane = {
   }
 }
 
+const testPanes: MockPane[] = []
+
+export function takeTerminalTestPanes(): MockPane[] {
+  return testPanes.splice(0)
+}
+
 export function createPane(paneId: number): MockPane {
   const leafId = leafIdForPane(paneId)
   const activeBuffer = {
-    // Mutable so a test can put the pane on the alt screen: the replay prologue
-    // only switches buffers when this disagrees with the snapshot.
+    // Keep buffer type mutable to test replay switches when snapshot and live xterm disagree.
     type: 'normal' as 'normal' | 'alternate',
     viewportY: 0,
     baseY: 0,
@@ -171,9 +178,11 @@ export function createPane(paneId: number): MockPane {
       },
       vtExtensions: { kittyKeyboard: true }
     },
-    write: vi.fn<(data: string, callback?: () => void) => void>(function write(...args): void {
+    write: vi.fn<(data: string | Uint8Array, callback?: () => void) => void>(function write(
+      ...args
+    ): void {
       const [data, callback] = args
-      if (data === '' || callback?.name === 'runParsedSteps') {
+      if (data.length === 0 || callback?.name === 'runParsedSteps') {
         callback?.()
       }
     }),
@@ -202,7 +211,7 @@ export function createPane(paneId: number): MockPane {
       registerOscHandler: vi.fn(() => ({ dispose: vi.fn() }))
     }
   }
-  return {
+  const pane: MockPane = {
     id: paneId,
     leafId,
     stablePaneId: leafId,
@@ -213,6 +222,12 @@ export function createPane(paneId: number): MockPane {
       proposeDimensions: vi.fn(() => ({ cols: terminal.cols, rows: terminal.rows }))
     }
   }
+  testPanes.push(pane)
+  return pane
+}
+
+export function terminalWriteText(data: string | Uint8Array): string {
+  return typeof data === 'string' ? data : new TextDecoder().decode(data)
 }
 
 export function captureCallbackTerminalWrites(pane: MockPane): {
@@ -221,12 +236,13 @@ export function captureCallbackTerminalWrites(pane: MockPane): {
 } {
   const writes: string[] = []
   const parseCallbacks: (() => void)[] = []
-  pane.terminal.write = function write(data: string, callback?: () => void): void {
-    writes.push(data)
+  pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+    // Parse barriers are zero-length byte writes; record what xterm would parse.
+    writes.push(terminalWriteText(data))
     if (callback) {
       parseCallbacks.push(callback)
     }
-  } as typeof pane.terminal.write
+  })
   return { writes, parseCallbacks }
 }
 

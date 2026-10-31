@@ -4,9 +4,7 @@ import { DictationSetupPollController } from './dictation-setup-poll-controller'
 const POLL_INTERVAL_MS = 1500
 
 async function flushPromises(): Promise<void> {
-  // Why: the refresh mock wraps its result in `.finally()` and the resume path chains
-  // runRefresh → requestRefresh → runRefresh, so the follow-up refresh is several microtask
-  // hops deep — drain generously rather than a fixed two ticks.
+  // Refresh chains finally → requestRefresh → runRefresh; drain enough microtasks to reach the follow-up read.
   for (let i = 0; i < 8; i += 1) {
     await Promise.resolve()
   }
@@ -182,9 +180,7 @@ describe('DictationSetupPollController', () => {
     poller.setForeground(true)
     expect(refresh).toHaveBeenCalledOnce()
 
-    // Explicit stop lands while the read is still on the wire.
     poller.setPolling(false)
-    // The stale read then resolves "keep polling" — the fence must drop it, not restart the poll.
     request.resolve(true)
     await flushPromises()
 

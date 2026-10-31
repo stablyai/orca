@@ -1,16 +1,5 @@
 /** @vitest-environment happy-dom */
-/**
- * Crash cluster "React #185 in TerminalPaneOverlayLayer" (boundary terminal.workbench).
- *
- * The overlay's own park verdict does not oscillate (terminal-cold-park-verdict-loop
- * covers that). What used to put it in the stack: its cold-park effect re-runs on
- * every tab-model write — a runtime title publication, an unread bump re-mints
- * tabsByWorktree — and each run dispatched setColdParkedTerminalTabIds even when
- * the verdict was unchanged. React only bails on such a dispatch while the fiber
- * has no pending lanes, so inside a cascade some other component drives, this hook
- * is the one that trips the root-global nested-update counter and gets blamed (see
- * src/shared/react-update-depth-attribution.ts).
- */
+/** Unchanged park-state dispatches can inherit another component’s pending cascade and get blamed for React #185. Title writes must still recheck watcher coverage, but only changed verdicts should dispatch (react-update-depth-attribution.ts). */
 import { act, useEffect, useState, StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -62,8 +51,7 @@ vi.mock('./terminal-parked-tab-watchers', () => ({
   }
 }))
 
-// Counts cold-park effect executions: the effect clears and re-arms its recheck
-// timers on every run, so this is also the per-commit work the identity dep costs.
+// Count per-commit cold-park effect work through its timer reconciliation calls.
 vi.mock('./terminal-parking-e2e-overrides', () => ({
   getTerminalParkingPolicyOverrides: () => {
     harness.parkEffectRuns += 1
@@ -130,10 +118,7 @@ function publishRuntimeTitle(revision: number): void {
   }))
 }
 
-/**
- * The cascade driver: a component with its own runaway passive effect, in no way
- * related to terminal parking. It is the bug; the overlay is the bystander.
- */
+// An unrelated runaway passive effect drives the cascade; the overlay is a bystander.
 function UnrelatedCascadeDriver(): null {
   const [tick, setTick] = useState(0)
   useEffect(() => {
@@ -212,22 +197,18 @@ describe('cold-park effect vs. unrelated commit cascade', () => {
     root = createRoot(container)
     const error = renderTree(root)
 
-    // The park verdict itself never churns: one empty -> parked transition,
-    // matching the field bundle, which carries no terminal_park_verdict_churn crumb.
+    // The verdict must settle after one empty → parked transition, matching the field report.
     expect(harness.renderedParkedSets.at(-1)).toEqual(['tab-b'])
     expect(new Set(harness.renderedParkedSets.map((ids) => ids.join(',')))).toEqual(
       new Set(['', 'tab-b'])
     )
 
-    // React #185 still fires — the driver is the bug — but it must land on the
-    // driver's own dispatch, not on the overlay's park state. Asserting the throw
-    // happened keeps the "not blamed" check below from passing on an empty stack.
+    // Require the driver’s React #185 throw so an empty stack cannot pass the overlay-attribution check.
     expect(error instanceof Error ? error.message : '').toContain('Maximum update depth exceeded')
     const stack = error instanceof Error ? (error.stack ?? '') : String(error ?? '')
     expect(stack).not.toContain('use-terminal-tab-cold-parking')
     expect(stack).toContain('terminal-cold-park-tab-model-identity')
-    // The effect itself still re-runs — coverage is re-derived from store state
-    // the park key cannot encode — it just stops dispatching an unchanged verdict.
+    // Coverage still needs every tab-model write; only unchanged verdict dispatches stop.
     expect(harness.parkEffectRuns).toBeGreaterThan(REACT_NESTED_UPDATE_LIMIT)
   })
 })

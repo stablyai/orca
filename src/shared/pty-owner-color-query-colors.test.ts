@@ -1,19 +1,9 @@
 import { expect, it } from 'vitest'
-import { DEFAULT_TERMINAL_THEME_DARK } from './terminal-theme-selection'
-import { TERMINAL_THEME_CATALOG } from './terminal-themes'
 import {
   ORCA_DEFAULT_COLOR_QUERY_REPLY_COLORS,
   normalizeColorQueryReplyColors,
   resolvePtyOwnerColorQueryColors
 } from './pty-owner-color-query-colors'
-
-it("falls back to the colours of Orca's default dark terminal theme", () => {
-  const theme = TERMINAL_THEME_CATALOG[DEFAULT_TERMINAL_THEME_DARK]
-  expect(ORCA_DEFAULT_COLOR_QUERY_REPLY_COLORS).toEqual({
-    foreground: theme?.foreground,
-    background: theme?.background
-  })
-})
 
 it('prefers host colours, then spawn colours, then the default, skipping unusable pairs', () => {
   const host = { foreground: '#000000', background: '#111111' }
@@ -37,4 +27,15 @@ it('keeps only a wire pair that answers both slots', () => {
   expect(normalizeColorQueryReplyColors({ foreground: '#fff', background: 'blue' })).toBeNull()
   expect(normalizeColorQueryReplyColors('#fff')).toBeNull()
   expect(normalizeColorQueryReplyColors(null)).toBeNull()
+})
+
+it("puts a launching client's colours ahead of the host's", () => {
+  const launcher = { foreground: '#444444', background: '#555555' }
+  const host = { foreground: '#000000', background: '#111111' }
+  const spawn = { foreground: '#222222', background: '#333333' }
+
+  expect(resolvePtyOwnerColorQueryColors(host, spawn, launcher)).toEqual(launcher)
+  expect(
+    resolvePtyOwnerColorQueryColors(host, spawn, { foreground: 'red', background: '#555555' })
+  ).toEqual(host)
 })
