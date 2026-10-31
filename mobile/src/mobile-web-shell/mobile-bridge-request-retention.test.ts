@@ -1,7 +1,7 @@
 import { afterEach, expect, it, vi } from 'vitest'
-import { BridgeHostRequests } from '../../mobile/src/mobile-web-shell/bridge-host-requests'
-import { createFakeRpcClient } from '../../mobile/src/mobile-web-shell/bridge-host-test-fakes'
-import { getRemoteRuntimeRequestAdmissionEvidence } from './remote-runtime/requests/remote-runtime-prepared-request-admission'
+import { BridgeHostRequests } from './bridge-host-requests'
+import { createFakeRpcClient } from './bridge-host-test-fakes'
+import { getRemoteRuntimeRequestAdmissionEvidence } from '../../../src/shared/remote-runtime/requests/remote-runtime-prepared-request-admission'
 
 afterEach(() =>
   expect(getRemoteRuntimeRequestAdmissionEvidence()).toEqual({
