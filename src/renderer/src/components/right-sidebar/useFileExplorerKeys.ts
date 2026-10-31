@@ -31,6 +31,12 @@ export function shouldIgnoreFileExplorerKeyTarget(target: EventTarget | null): b
   )
 }
 
+// Why: Host mode covers the tree but can leave focus on shared chrome (toolbar); tree
+// shortcuts would otherwise act on the hidden tree's selection (Delete trashes it).
+export function isExplorerTreeCoveredByHostMode(shell: Element | null): boolean {
+  return shell?.querySelector('[data-file-explorer-host-overlay]') != null
+}
+
 /** Scope all explorer shortcuts to its focused container so editor/terminal input remains untouched. */
 export function useFileExplorerKeys(opts: {
   containerRef: React.RefObject<HTMLDivElement | null>
@@ -149,6 +155,9 @@ export function useFileExplorerKeys(opts: {
         return
       }
       if (shouldIgnoreFileExplorerKeyTarget(e.target)) {
+        return
+      }
+      if (isExplorerTreeCoveredByHostMode(opts.containerRef.current)) {
         return
       }
 

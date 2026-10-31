@@ -37,7 +37,8 @@ describe('buildPersistedUnifiedTabSessionData', () => {
           second: { type: 'leaf', groupId: 'kept' }
         }
       },
-      activeGroupIdByWorktree: { [WT]: 'emptied' }
+      activeGroupIdByWorktree: { [WT]: 'emptied' },
+      openFiles: []
     })
 
     expect(saved.tabGroups?.[WT]?.map((group) => group.id)).toEqual(['kept'])
@@ -50,7 +51,8 @@ describe('buildPersistedUnifiedTabSessionData', () => {
       unifiedTabsByWorktree: { [WT]: [] },
       groupsByWorktree: { [WT]: [{ id: 'root', worktreeId: WT, activeTabId: null, tabOrder: [] }] },
       layoutByWorktree: { [WT]: { type: 'leaf', groupId: 'root' } },
-      activeGroupIdByWorktree: { [WT]: 'root' }
+      activeGroupIdByWorktree: { [WT]: 'root' },
+      openFiles: []
     })
 
     expect(saved.tabGroups).toEqual({})

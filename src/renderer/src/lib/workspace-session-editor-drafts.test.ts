@@ -207,4 +207,39 @@ describe('workspace session editor drafts', () => {
     expect(persisted).toEqual(expect.objectContaining({ filePath: '/tmp/clean.md' }))
     expect(persisted).not.toHaveProperty('readOnly')
   })
+
+  it('never persists Explorer Host mode tabs so restore cannot replay their grant', () => {
+    const payload = buildWorkspaceSessionPayload(
+      createSnapshot({
+        openFiles: [
+          {
+            id: '/home/user/.bashrc',
+            filePath: '/home/user/.bashrc',
+            relativePath: '/home/user/.bashrc',
+            worktreeId: 'wt-1',
+            language: 'shell',
+            mode: 'edit',
+            isDirty: false,
+            readOnly: true,
+            hostBrowse: true
+          },
+          {
+            id: '/repo/src/a.ts',
+            filePath: '/repo/src/a.ts',
+            relativePath: 'src/a.ts',
+            worktreeId: 'wt-1',
+            language: 'typescript',
+            mode: 'edit',
+            isDirty: false
+          }
+        ],
+        activeFileIdByWorktree: { 'wt-1': '/home/user/.bashrc' }
+      })
+    )
+
+    expect(payload.openFilesByWorktree?.['wt-1']?.map((file) => file.filePath)).toEqual([
+      '/repo/src/a.ts'
+    ])
+    expect(payload.activeFileIdByWorktree?.['wt-1']).not.toBe('/home/user/.bashrc')
+  })
 })

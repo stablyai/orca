@@ -117,9 +117,20 @@ export function applyOpenFileToState(
     )
       ? (existing.fileContentReloadNonce ?? 0) + 1
       : existing.fileContentReloadNonce
-    // Normal open explicitly enables editing of a View Log; View Log must never downgrade an already writable tab.
+    // Normal open explicitly enables editing of a View Log or Explorer Host tab; read-only opens must never downgrade an already writable tab.
     const nextReadOnly = existing.readOnly === true && file.readOnly === true ? true : undefined
-    const nextLiveTail = file.liveTail === true && nextReadOnly === true ? true : undefined
+    // Why: a Host-mode open only focuses an existing View Log tab; it must not end its
+    // live tail or make it session-only.
+    const hostOpenOfReadOnlyTab = file.hostBrowse === true && nextReadOnly === true
+    const nextLiveTail = hostOpenOfReadOnlyTab
+      ? existing.liveTail
+      : file.liveTail === true && nextReadOnly === true
+        ? true
+        : undefined
+    const nextHostBrowse = hostOpenOfReadOnlyTab && existing.hostBrowse === true ? true : undefined
+    // Why: read-only opens skip provenance capture; keep the one taken when the tab turns writable.
+    // Restored tabs without provenance keep resolving the owner lazily, as before.
+    const becameWritable = existing.readOnly === true && nextReadOnly !== true
     const needsExistingUpdate =
       existing.mode !== file.mode ||
       existing.diffSource !== file.diffSource ||
@@ -139,7 +150,8 @@ export function applyOpenFileToState(
       refreshExternalSshProvenance ||
       existing.fileContentReloadNonce !== fileContentReloadNonce ||
       existing.readOnly !== nextReadOnly ||
-      existing.liveTail !== nextLiveTail
+      existing.liveTail !== nextLiveTail ||
+      existing.hostBrowse !== nextHostBrowse
     if (!needsExistingUpdate) {
       return activeResult
     }
@@ -154,9 +166,10 @@ export function applyOpenFileToState(
               runtimeEnvironmentId,
               externalSshTargetId: nextExternalSshTargetId,
               terminalArtifactGrantId: nextGrantId,
-              operationProvenance: refreshExternalSshProvenance
-                ? operationProvenance
-                : f.operationProvenance,
+              operationProvenance:
+                refreshExternalSshProvenance || (becameWritable && !f.operationProvenance)
+                  ? operationProvenance
+                  : f.operationProvenance,
               mode: file.mode,
               diffSource: file.diffSource,
               branchCompare: file.branchCompare,
@@ -171,7 +184,8 @@ export function applyOpenFileToState(
               isPreview: updatedPreview,
               fileContentReloadNonce,
               readOnly: nextReadOnly,
-              liveTail: nextLiveTail
+              liveTail: nextLiveTail,
+              hostBrowse: nextHostBrowse
             }
           : f
       ),

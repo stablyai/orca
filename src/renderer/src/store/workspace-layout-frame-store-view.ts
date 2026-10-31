@@ -91,7 +91,8 @@ export function layoutViewAndFactsOfStore(
     unifiedTabsByWorktree,
     groupsByWorktree,
     layoutByWorktree,
-    activeGroupIdByWorktree
+    activeGroupIdByWorktree,
+    openFiles: state.openFiles
   })
   // The builders read only these workspaces' entries of the selection maps.
   const view: DesktopLayoutView = {

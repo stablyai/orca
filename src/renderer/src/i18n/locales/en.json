@@ -21387,6 +21387,20 @@
       "folderLoadError": "Could not load this folder:",
       "emptyFolder": "No files in this folder"
     },
+    "host": {
+      "returnToProject": "Return to workspace root",
+      "refresh": "Refresh folder",
+      "browsing": "Host: {{host}}",
+      "parentDirectory": "Parent directory",
+      "contentsUnavailable": "Contents search covers the workspace. Return to the workspace root to use it.",
+      "thisFolder": "this folder",
+      "enter": "Browse host filesystem",
+      "folderOpenFailed": "Could not open this folder: {{error}}",
+      "unsupportedEntry": "This item cannot be opened.",
+      "entryMissing": "This item no longer exists.",
+      "entryUnverifiable": "Could not reach this item: {{error}}",
+      "unavailable": "Host browsing is not available for this workspace"
+    },
     "trashFailed": {
       "titleRecycleBin": "Couldn't move '{{name}}' to the Recycle Bin. Delete it permanently?",
       "titleTrash": "Couldn't move '{{name}}' to the Trash. Delete it permanently?",
