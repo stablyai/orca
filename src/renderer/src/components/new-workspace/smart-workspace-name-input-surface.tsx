@@ -3,6 +3,7 @@ import { ExternalLink, X } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import { WorkspaceEmojiPickerButton } from '@/components/workspace-emoji/WorkspaceEmojiPickerButton'
 import { isImeCompositionKeyDown } from '@/lib/ime-composition-keyboard-event'
 import { isBlockingJiraUrlIntent } from '../../../../shared/new-workspace/smart-workspace-source-results'
 import { isBlockingLinearUrlIntent } from '../../../../shared/new-workspace/smart-workspace-linear-intent'
@@ -55,6 +56,8 @@ export function renderSmartWorkspaceNameInput(
     unresolvedLinearUrlIntent,
     blockingTaskUrlResolution
   } = controller
+  // Emoji only make sense where the user types a name, not a search query.
+  const showEmojiPickerButton = mode === 'smart' || mode === 'text'
 
   if (selectedSource) {
     return (
@@ -300,8 +303,25 @@ export function renderSmartWorkspaceNameInput(
         aria-describedby={
           jiraSource.intent ? jiraStatusId : unresolvedLinearUrlIntent ? linearStatusId : undefined
         }
+        adornment={showEmojiPickerButton ? 'trailing' : 'none'}
         className="h-9 bg-background pl-8 text-sm"
       />
+      {showEmojiPickerButton ? (
+        <WorkspaceEmojiPickerButton
+          className="absolute top-1/2 right-1.5 -translate-y-1/2"
+          disabled={disabled}
+          inputRef={localInputRef}
+          onOpenChange={(pickerOpen) => {
+            if (pickerOpen) {
+              // Why: the source results list would otherwise sit under the picker.
+              setOpen(false)
+              setEmojiCursor(null)
+            }
+          }}
+          onValueChange={onValueChange}
+          value={value}
+        />
+      ) : null}
     </>
   )
 }

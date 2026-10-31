@@ -19,7 +19,9 @@ type WorkspaceEmojiPickerButtonProps = {
   className?: string
   disabled?: boolean
   inputRef: RefObject<HTMLInputElement | null>
+  onOpenChange?: (open: boolean) => void
   onValueChange: (value: string) => void
+  /** Defaults to the field's enclosing dialog so the picker's search box can take focus. */
   portalContainer?: HTMLElement | null
   value: string
 }
@@ -28,11 +30,13 @@ export function WorkspaceEmojiPickerButton({
   className,
   disabled = false,
   inputRef,
+  onOpenChange,
   onValueChange,
   portalContainer,
   value
 }: WorkspaceEmojiPickerButtonProps): React.JSX.Element {
   const [open, setOpen] = useState(false)
+  const [dialogContainer, setDialogContainer] = useState<HTMLElement | null>(null)
   // Why: the input loses focus while the picker is open, so remember where to insert.
   const selectionRef = useRef<{ start: number; end: number } | null>(null)
   const pendingCursorRef = useRef<number | null>(null)
@@ -47,8 +51,13 @@ export function WorkspaceEmojiPickerButton({
           }
         : null
       pendingCursorRef.current = null
+      if (portalContainer === undefined) {
+        // Why: a body-portaled picker sits outside a modal dialog's focus trap and can't be typed in.
+        setDialogContainer(input?.closest<HTMLElement>('[role="dialog"]') ?? null)
+      }
     }
     setOpen(nextOpen)
+    onOpenChange?.(nextOpen)
   }
 
   const handlePick = (emoji: string): void => {
@@ -62,6 +71,7 @@ export function WorkspaceEmojiPickerButton({
     onValueChange(replacement.value)
     pendingCursorRef.current = replacement.cursor
     setOpen(false)
+    onOpenChange?.(false)
   }
 
   const label = translate('workspace.links.addEmoji', 'Add emoji')
@@ -91,7 +101,7 @@ export function WorkspaceEmojiPickerButton({
       <PopoverContent
         align="end"
         side="bottom"
-        portalContainer={portalContainer}
+        portalContainer={portalContainer === undefined ? dialogContainer : portalContainer}
         onCloseAutoFocus={(event) => {
           const cursor = pendingCursorRef.current
           if (cursor === null) {
