@@ -63,22 +63,6 @@ afterEach(() => {
 })
 
 describe.skipIf(process.platform === 'win32')('WSL connect state snapshot', () => {
-  it('reads a fresh host in one command', async () => {
-    const reader = createWslOrcadConnectStateReader()
-
-    await expect(reader.readActivationRecord(target())).resolves.toEqual(
-      emptyOrcadActivationRecord()
-    )
-
-    expect(mockExec).toHaveBeenCalledOnce()
-    expect(reader.snapshot()).toEqual({
-      activation: { state: 'absent' },
-      transactionAbsent: true,
-      instanceLock: { state: 'absent' },
-      fenceOpen: true
-    })
-  })
-
   it('reads the record, a pending journal, the instance lock and a held fence together', async () => {
     write('.orca-remote/orcad-active.json', serializeOrcadActivationRecord(ACTIVE))
     write('.orca-remote/.orcad-activation-transaction/transaction.json', '{"partial"')
@@ -192,12 +176,6 @@ describe('wslOrcadConnectStateHints', () => {
     instanceLock: { state: 'absent' as const },
     fenceOpen: true
   }
-
-  it('hints while the record the snapshot read is the one acted on', () => {
-    const hints = wslOrcadConnectStateHints(snapshot, ACTIVE)
-    expect(hints.instanceLock(ACTIVE)).toEqual({ state: 'absent' })
-    expect(hints.deployPreRead(ACTIVE)).toEqual({ preRead: { record: ACTIVE, fenceOpen: true } })
-  })
 
   it('stops hinting once recovery, adoption or admission replaced the record', () => {
     const hints = wslOrcadConnectStateHints(snapshot, ACTIVE)

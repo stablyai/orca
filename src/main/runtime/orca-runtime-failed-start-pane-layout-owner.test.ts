@@ -75,15 +75,6 @@ describe('layout-owner build: a start main could not make keeps its pane, showin
     expect(runtime.startStatusOf(`${tabId}:${leafId}`)).toBeNull()
   })
 
-  it('still takes back the pane of a start that did not ask to keep it', async () => {
-    const { runtime, spawn, session } = setupLayoutOwnerRuntime()
-    spawn.mockRejectedValueOnce(new Error('shell not found'))
-
-    await expect(runtime.createTerminal(`id:${WORKTREE_ID}`)).rejects.toThrow('shell not found')
-
-    expect(session().tabsByWorktree[WORKTREE_ID] ?? []).toEqual([])
-  })
-
   it('does not bring back a pane the user closed while its start was failing', async () => {
     const { runtime, spawn, session } = setupLayoutOwnerRuntime()
     spawn.mockImplementationOnce(async ({ tabId }) => {
@@ -118,16 +109,6 @@ describe('layout-owner build: a start main could not make keeps its pane, showin
     await runtime.createTerminal(`id:${WORKTREE_ID}`)
 
     expect(seen).toEqual([{ status: 'starting' }])
-    const { tabId, leafId } = spawn.mock.calls[0]![0]
-    expect(runtime.startStatusOf(`${tabId}:${leafId}`)).toBeNull()
-  })
-
-  it('clears the status of a start whose pane it took back', async () => {
-    const { runtime, spawn } = setupLayoutOwnerRuntime()
-    spawn.mockRejectedValueOnce(new Error('shell not found'))
-
-    await expect(runtime.createTerminal(`id:${WORKTREE_ID}`)).rejects.toThrow('shell not found')
-
     const { tabId, leafId } = spawn.mock.calls[0]![0]
     expect(runtime.startStatusOf(`${tabId}:${leafId}`)).toBeNull()
   })

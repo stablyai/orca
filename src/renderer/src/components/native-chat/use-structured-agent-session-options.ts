@@ -4,14 +4,11 @@ import { toast } from 'sonner'
 import { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
 import { structuredAgentSessionSeedCatalog } from '../../../../shared/structured-agent-session-seed-catalog'
 import type { SessionOptionsSurface } from '../../../../shared/native-chat/input/native-chat-session-options'
-import { AGENT_CHAT_PERMISSION_MODE_OPTION_ID } from '../../../../shared/agent-chat-permission-mode'
 import {
-  canSetStructuredAgentSessionOption,
   lockedStructuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionSnapshot,
-  structuredAgentSessionOptionPicks
+  structuredAgentSessionOptionSnapshot
 } from '../../../../shared/structured-agent-session-options'
-import { encodeStructuredAgentSessionOptionValue } from '../../../../shared/structured-agent-session-option-codec'
+import { createStructuredAgentSessionOptionsWriteOwner } from '../../../../shared/structured-agent-session-options-write-owner'
 import { structuredAgentSessionShownSnapshot } from '../../../../shared/structured-agent-session-option-view'
 import { useHostModelCatalogUpgrade } from './use-host-model-catalog-upgrade'
 import { useStructuredAgentSessionOptionState } from './use-structured-agent-session-option-state'
@@ -103,89 +100,44 @@ export function useStructuredAgentSessionOptions(args: StructuredAgentSessionOpt
       optionView(optionState, launchSeedOptions, launch?.explicitOptions)
     )
   )
-  const setStructuredOption = useCallback(
-    async (id: string, value: string | boolean): Promise<boolean> => {
-      const view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
-      const pickState = {
-        ...view,
-        pendingId:
-          providerStarting ||
-          id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID ||
-          !controller.isPending(id)
-            ? null
-            : id
-      }
-      const encoded = encodeStructuredAgentSessionOptionValue(id, value)
-      if (
-        (id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID &&
-          value === 'own' &&
-          !view.permissionOwnSupported) ||
-        !isCurrentContext() ||
-        !acceptsPicks ||
-        !optionCatalog ||
-        encoded === null ||
-        !canSetStructuredAgentSessionOption(
-          pickState,
-          id,
-          value,
-          lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
-          interactionReadyRef.current
-        )
-      ) {
-        return false
-      }
-      if (!transportEnabled || fence === null) {
-        const applied = holdStructuredAgentSessionLaunchOption(sessionId, id, encoded, view)
-        void applied?.then((outcome) => {
-          if (outcome.kind === 'refused' && outcome.failure) {
-            toast.error(agentSessionWriteFailureText(outcome.failure, 'option'))
-          }
-          rereadOptions()
-        })
-        return applied !== null
-      }
-      const context = structuredAgentSessionOptionPicks(view, { [id]: encoded })[0]?.modelId ?? null
-      const presents = capturePresentation?.()
-      const operation = controller.issue(id, encoded, context)
-      updateOptionState((current) => ({
-        ...current,
-        pendingId: providerStarting || id === AGENT_CHAT_PERMISSION_MODE_OPTION_ID ? null : id
-      }))
-      void flushStructuredSessionSelectionOptions(target, sessionId, fence, controller)
-      const outcome = await operation.result
-      updateOptionState((current) => ({
-        ...current,
-        pendingId: controller.pendingId()
-      }))
-      if (
-        (outcome.kind === 'refused' || outcome.kind === 'unknown') &&
-        outcome.failure &&
-        (presents?.() ?? true)
-      ) {
-        toast.error(agentSessionWriteFailureText(outcome.failure, 'option'))
-      }
-      rereadOptions()
-      return outcome.kind !== 'refused'
-    },
-    [
+  const readWriteContext = () => {
+    const view = optionView(optionStateRef.current, launchSeedOptions, launch?.explicitOptions)
+    return {
       controller,
-      capturePresentation,
-      acceptsPicks,
-      fence,
-      launch?.explicitOptions,
-      launchSeedOptions,
-      target,
-      optionCatalog,
-      isCurrentContext,
-      optionStateRef,
-      optionView,
+      record: optionStateRef.current.record,
+      view,
+      snapshot: lockSnapshotRef.current(structuredAgentSessionOptionSnapshot(view)),
+      ready: acceptsPicks && interactionReadyRef.current,
       providerStarting,
-      rereadOptions,
-      sessionId,
-      transportEnabled,
-      updateOptionState
-    ]
+      isCurrentContext,
+      ...(!transportEnabled || fence === null
+        ? {
+            hold: (id: string, encoded: string, view: typeof optionState) =>
+              holdStructuredAgentSessionLaunchOption(sessionId, id, encoded, view)
+          }
+        : {}),
+      flush: () => {
+        if (fence !== null) {
+          void flushStructuredSessionSelectionOptions(target, sessionId, fence, controller)
+        }
+      },
+      capturePresentation,
+      presentFailure: (failure: Parameters<typeof agentSessionWriteFailureText>[0]) =>
+        toast.error(agentSessionWriteFailureText(failure, 'option')),
+      revalidate: rereadOptions,
+      revalidateOn: 'settled' as const
+    }
+  }
+  const writeContextRef = useRef(readWriteContext)
+  useLayoutEffect(() => {
+    writeContextRef.current = readWriteContext
+  })
+  const writer = useMemo(
+    () => createStructuredAgentSessionOptionsWriteOwner(() => writeContextRef.current()),
+    []
   )
+  useLayoutEffect(() => () => writer.detach(), [writer])
+  const setStructuredOption = writer.setOption
   const setOption = useCallback(
     async (id: string, value: string | boolean) => {
       await setStructuredOption(id, value)

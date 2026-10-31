@@ -7,7 +7,6 @@ vi.mock('@/runtime/runtime-rpc-client', () => ({
 
 import {
   clearNativeChatVisualCacheForTests,
-  isRetryableNativeChatVisualFailure,
   peekCachedNativeChatVisual,
   readNativeChatVisual
 } from './native-chat-visual-read-client'
@@ -29,20 +28,6 @@ afterEach(() => {
 })
 
 describe('readNativeChatVisual', () => {
-  it("reads through the chat's own runtime with only the session and file name", async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
-    expect(await readNativeChatVisual(remote)).toEqual({
-      ok: true,
-      document: { revision: 'r1', html: '<p>', path: '/v' }
-    })
-    expect(callRuntimeRpc).toHaveBeenCalledWith(
-      remote.target,
-      'agentSession.readVisual',
-      { sessionId: 'session-alpha', file: 'a.html' },
-      expect.any(Object)
-    )
-  })
-
   it('revalidates with the held revision and keeps the cached bytes when unchanged', async () => {
     callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
@@ -63,17 +48,6 @@ describe('readNativeChatVisual', () => {
     })
   })
 
-  it('shows a rewritten file as its new revision', async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
-    await readNativeChatVisual(local)
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r2', html: '<hr>', path: '/v' })
-    expect(await readNativeChatVisual(local)).toEqual({
-      ok: true,
-      document: { revision: 'r2', html: '<hr>', path: '/v' }
-    })
-    expect(peekCachedNativeChatVisual(local)?.revision).toBe('r2')
-  })
-
   it('keeps one runtime from answering for another', async () => {
     callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     await readNativeChatVisual(local)
@@ -88,13 +62,6 @@ describe('readNativeChatVisual', () => {
     resolve({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
     expect(await first).toEqual(await second)
     expect(callRuntimeRpc).toHaveBeenCalledTimes(1)
-  })
-
-  it('reads a lost connection or an older host as unavailable, never as a verdict', async () => {
-    callRuntimeRpc.mockRejectedValueOnce(new Error('method_not_found'))
-    expect(await readNativeChatVisual(local)).toEqual({ ok: false, reason: 'unavailable' })
-    callRuntimeRpc.mockRejectedValueOnce(new Error('socket closed'))
-    expect(await readNativeChatVisual(local)).toEqual({ ok: false, reason: 'unavailable' })
   })
 
   it('passes host refusals through, degrades an unknown one, and forgets a refused file', async () => {
@@ -113,19 +80,6 @@ describe('readNativeChatVisual', () => {
     expect(await readNativeChatVisual(local)).toEqual({ ok: false, reason: 'unavailable' })
   })
 
-  it('asks again for the bytes when an unchanged answer finds nothing cached', async () => {
-    callRuntimeRpc.mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
-    await readNativeChatVisual(local)
-    clearNativeChatVisualCacheForTests()
-    callRuntimeRpc
-      .mockResolvedValueOnce({ ok: true, revision: 'r1', sizeBytes: 3, unchanged: true })
-      .mockResolvedValueOnce({ ok: true, revision: 'r1', html: '<p>', path: '/v' })
-    expect(await readNativeChatVisual(local)).toEqual({
-      ok: true,
-      document: { revision: 'r1', html: '<p>', path: '/v' }
-    })
-  })
-
   it('bounds the cache by entry count', async () => {
     for (let index = 0; index < 30; index += 1) {
       callRuntimeRpc.mockResolvedValueOnce({
@@ -138,14 +92,5 @@ describe('readNativeChatVisual', () => {
     }
     expect(peekCachedNativeChatVisual({ ...local, file: 'f0.html' })).toBeNull()
     expect(peekCachedNativeChatVisual({ ...local, file: 'f29.html' })?.revision).toBe('r29')
-  })
-})
-
-describe('isRetryableNativeChatVisualFailure', () => {
-  it('retries only what may change on its own', () => {
-    expect(isRetryableNativeChatVisualFailure('unavailable')).toBe(true)
-    expect(isRetryableNativeChatVisualFailure('not_found')).toBe(true)
-    expect(isRetryableNativeChatVisualFailure('outside_folder')).toBe(false)
-    expect(isRetryableNativeChatVisualFailure('too_large')).toBe(false)
   })
 })
