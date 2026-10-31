@@ -13,6 +13,7 @@ export async function deleteExpiredSearchFiles(
   closed: () => boolean,
   yieldStep: () => Promise<void> = yieldToEventLoop
 ): Promise<void> {
+  let removedExpired = false
   if (cutoffMs !== null) {
     const expired = db
       .prepare('SELECT path FROM files WHERE mtime_ms < ? ORDER BY mtime_ms')
@@ -30,6 +31,7 @@ export async function deleteExpiredSearchFiles(
         if (file) {
           db.prepare('DELETE FROM sessions WHERE id = ?').run(file.session_row_id)
           db.prepare('DELETE FROM files WHERE path = ?').run(path)
+          removedExpired = true
         }
         db.exec('COMMIT')
       } catch (error) {
@@ -39,14 +41,21 @@ export async function deleteExpiredSearchFiles(
       await yieldStep()
     }
   }
-  await drainOrphanedMessages(db, closed, yieldStep)
+  await drainOrphanedMessages(db, closed, yieldStep, removedExpired)
 }
 
-/** Drain orphaned rows left by retention, replacement, or interruption; the rows record unfinished work. */
+/**
+ * Drain orphaned rows left by retention, replacement, or interruption; the rows record unfinished work.
+ * `reclaim` gates the trailing page move: recurring no-op drains (unlimited purges behind every
+ * freshness wait) must not shuffle free pages around the file, or sweeps themselves become a
+ * sustained write source (#36666). Callers that only schedule a drain after real deletions keep
+ * the default.
+ */
 export async function drainOrphanedMessages(
   db: SyncDatabase,
   closed: () => boolean,
-  yieldStep: () => Promise<void> = yieldToEventLoop
+  yieldStep: () => Promise<void> = yieldToEventLoop,
+  reclaim = true
 ): Promise<void> {
   // Finish one session before scanning for the next orphan to avoid repeating that scan per batch.
   const nextOrphan = db.prepare(
@@ -71,5 +80,7 @@ export async function drainOrphanedMessages(
     await yieldStep()
   }
   // removeFile may free pages even when this drain has no orphaned messages.
-  db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+  if (reclaim) {
+    db.pragma(`incremental_vacuum(${RECLAIM_PAGES_PER_STEP})`)
+  }
 }
