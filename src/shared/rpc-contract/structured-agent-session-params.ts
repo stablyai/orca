@@ -1,3 +1,4 @@
+import { ContextHandoff } from './structured-agent-session-context-handoff-params'
 import { AgentSessionSelectionSchema } from '../agent-session-execution-options'
 import {
   SendBody,
@@ -284,6 +285,7 @@ export const ConversationCommandParams = z
   .object({
     envelope: MutationEnvelope,
     command: z.enum(['clear', 'compact']),
+    handoff: ContextHandoff.optional(),
     /** Queue active /compact only with agent-session.queued-commands.v1; older strict hosts refuse it.
      * /clear never queues: delivery is outside its fingerprint, so including it conflicts. */
     delivery: z.literal('queue-if-active').optional()

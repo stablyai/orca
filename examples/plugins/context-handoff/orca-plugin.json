@@ -1,0 +1,16 @@
+{
+  "manifestVersion": 2,
+  "execution": "trusted-worker",
+  "id": "context-handoff",
+  "publisher": "your-github-user",
+  "name": "Context Handoff",
+  "version": "1.0.0",
+  "description": "Prepare a new context in the same local chat while preserving the latest user message.",
+  "engines": { "orca": ">=1.4.247" },
+  "pluginApi": 1,
+  "main": "main.mjs",
+  "contributes": {
+    "commands": [{ "id": "context-handoff", "title": "Context: Hand off this chat" }]
+  },
+  "capabilities": [{ "kind": "chat:read" }, { "kind": "chat:handoff" }, { "kind": "storage:own" }]
+}

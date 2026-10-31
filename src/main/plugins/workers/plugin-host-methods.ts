@@ -116,6 +116,8 @@ function summarizeParams(method: string, params: unknown): string {
       const text = typeof record.text === 'string' ? record.text : ''
       return `terminal=${String(record.terminalId)} bytes=${Buffer.byteLength(text, 'utf8')} enter=${record.enter === true}`
     }
+    case 'chat.handoff':
+      return `session=${String(record.sessionId)} operation=${String(record.operationId)}`
     case 'notifications.show': {
       const title = typeof record.title === 'string' ? record.title : ''
       return `titleChars=${title.length}`

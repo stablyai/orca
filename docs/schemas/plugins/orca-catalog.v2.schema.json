@@ -349,13 +349,15 @@
               "notifications:show"
             ]
           ],
-          "maxItems": 7,
+          "maxItems": 9,
           "type": "array",
           "items": {
             "type": "string",
             "enum": [
               "workspace:read",
               "agent:read",
+              "chat:read",
+              "chat:handoff",
               "terminal:send",
               "notifications:show",
               "storage:own",

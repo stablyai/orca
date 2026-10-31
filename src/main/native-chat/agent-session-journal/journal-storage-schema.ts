@@ -105,7 +105,12 @@ const messageSource = z.object({
 const block = z.discriminatedUnion('type', [
   textBlock.extend({
     contextClear: z
-      .object({ operationId: z.string(), afterFence: z.number(), clearedAt: z.number() })
+      .object({
+        operationId: z.string(),
+        afterFence: z.number(),
+        clearedAt: z.number(),
+        handoff: z.string().optional()
+      })
       .optional(),
     failure: storedFailureFact.optional(),
     orcaStop: z.object({ cause: z.string(), turnItemId: text }).optional(),

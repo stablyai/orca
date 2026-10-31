@@ -1,3 +1,4 @@
+import { refuse } from '../../../shared/agent-session-wire-refusals'
 import { conversationCommandInFlight } from './structured-conversation-command-admission'
 import { sendStructuredAgentSessionTurn } from './structured-agent-session-host-mutations'
 import {
@@ -26,6 +27,16 @@ export class StructuredConversationCommandController {
     })
 
   run = (caller: StructuredAgentSessionCaller, params: ConversationCommandParams) => {
+    if (params.command === 'compact' && params.handoff) {
+      return Promise.resolve({
+        ok: false as const,
+        refusal: refuse(
+          'agent_session_operation_invalid',
+          { reason: 'requestMalformed' },
+          'Handoff context requires a clear command.'
+        )
+      })
+    }
     if (params.command === 'compact') {
       return runStructuredCompaction(this.context(), this.host, caller, params, {
         clearInFlight: this.pending.has(params.envelope.sessionId)

@@ -36,7 +36,7 @@ export function appendJournalContextClear(input: {
             { provider: 'orca', clientMessageId: `context-clear:${boundary.operationId}` },
             {
               kind: 'status',
-              text: 'Context cleared',
+              text: boundary.handoff ? 'Context handed off' : 'Context cleared',
               presentation: 'context-cleared',
               contextClear: boundary
             },

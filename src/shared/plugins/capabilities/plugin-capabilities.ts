@@ -12,6 +12,8 @@ import {
 export const PLUGIN_CAPABILITY_KINDS = [
   'workspace:read',
   'agent:read',
+  'chat:read',
+  'chat:handoff',
   'terminal:send',
   'notifications:show',
   'storage:own',
@@ -25,6 +27,8 @@ export type PluginCapabilityKind = (typeof PLUGIN_CAPABILITY_KINDS)[number]
 export const PLUGIN_CAPABILITY_SINCE: Record<PluginCapabilityKind, string> = {
   'workspace:read': PLUGIN_SCHEMA_SINCE_V1,
   'agent:read': PLUGIN_MANIFEST_V2_SINCE,
+  'chat:read': '1.4.247',
+  'chat:handoff': '1.4.247',
   'terminal:send': PLUGIN_SCHEMA_SINCE_V1,
   'notifications:show': PLUGIN_SCHEMA_SINCE_V1,
   'storage:own': PLUGIN_MANIFEST_V2_SINCE,
@@ -59,6 +63,8 @@ export const PLUGIN_CAPABILITY_DESCRIPTIONS: Record<PluginCapabilityKind, string
   'workspace:read':
     'Read the name, branch, and terminal list of your focused workspace, and get notified when workspaces are created or removed',
   'agent:read': 'Get notified when agent status changes',
+  'chat:read': 'Read text from local chats in your focused workspace',
+  'chat:handoff': 'Reset local chat context while preserving a handoff for the next message',
   'terminal:send': 'Type and run commands in your terminals, local and SSH',
   'notifications:show': 'Show desktop notifications labeled with the plugin name',
   'storage:own': "Store data in the plugin's own storage folder",

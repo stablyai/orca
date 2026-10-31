@@ -1069,6 +1069,8 @@
           "enum": [
             "workspace:read",
             "agent:read",
+            "chat:read",
+            "chat:handoff",
             "terminal:send",
             "notifications:show",
             "storage:own",
@@ -1080,6 +1082,8 @@
           "x-orca-enum-since": {
             "workspace:read": "1.4.160",
             "agent:read": "1.4.245",
+            "chat:read": "1.4.247",
+            "chat:handoff": "1.4.247",
             "terminal:send": "1.4.160",
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",

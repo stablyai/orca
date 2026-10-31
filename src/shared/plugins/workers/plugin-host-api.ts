@@ -1,4 +1,11 @@
 import { z } from 'zod'
+import {
+  pluginChatTarget,
+  pluginChatList,
+  pluginChatContext,
+  pluginChatHandoff,
+  pluginChatHandoffResult
+} from './plugin-chat-api'
 import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
 import type { PluginSurface } from '../frames/plugin-protocol'
 
@@ -121,6 +128,38 @@ const spec = <P extends z.ZodType, R extends z.ZodType>(
 ): PluginHostMethodSpec<P, R> => entry
 
 export const PLUGIN_HOST_API = {
+  'chat.list': spec({
+    summary: 'List local chat ids in the focused workspace.',
+    since: 1,
+    scope: 'active-workspace',
+    capability: 'chat:read',
+    mutation: false,
+    surfaces: ALL_SURFACES,
+    params: z.strictObject({}).optional(),
+    result: pluginChatList
+  }),
+  'chat.readContext': spec({
+    summary:
+      'Read a bounded text transcript and exact latest user text for a local chat in the focused workspace.',
+    since: 1,
+    scope: 'active-workspace',
+    capability: 'chat:read',
+    mutation: false,
+    surfaces: ALL_SURFACES,
+    params: pluginChatTarget,
+    result: pluginChatContext
+  }),
+  'chat.handoff': spec({
+    summary:
+      'Clear an idle local chat only if its journal still matches the supplied cursor, saving context for its next message.',
+    since: 1,
+    scope: 'active-workspace',
+    capability: 'chat:handoff',
+    mutation: true,
+    surfaces: WORKER_ONLY,
+    params: pluginChatHandoff,
+    result: pluginChatHandoffResult
+  }),
   'workspace.readContext': spec({
     summary:
       'Branch, name and terminal ids of the focused workspace, or null when none is focused.',

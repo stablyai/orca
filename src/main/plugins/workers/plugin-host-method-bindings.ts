@@ -1,4 +1,5 @@
 import type { z } from 'zod'
+import type { PluginChatServices } from '../../../shared/plugins/workers/plugin-chat-api'
 import {
   isPluginHostMethodName,
   PLUGIN_HOST_API,
@@ -19,6 +20,7 @@ export type PluginWorktreeContext = {
 }
 
 export type PluginHostServices = {
+  chats?: PluginChatServices
   resolveActiveWorktreeContext(): Promise<PluginWorktreeContext | null>
   listWorktreeTerminals(worktreeId: string): Promise<{ id: string }[]>
   sendTerminalText(
@@ -102,7 +104,27 @@ function bind<P extends z.ZodType, R extends z.ZodType>(
 const api = PLUGIN_HOST_API
 const OK = { ok: true } as const
 
+async function activeChatServices(services: PluginHostServices) {
+  const context = await services.resolveActiveWorktreeContext()
+  if (!context || !services.chats) {
+    throw new Error('Local chats are unavailable in this workspace')
+  }
+  return { chats: services.chats, workspaceId: context.worktreeId }
+}
+
 const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
+  'chat.list': bind(api['chat.list'], async (_params, { services }) => {
+    const { chats, workspaceId } = await activeChatServices(services)
+    return chats.list(workspaceId)
+  }),
+  'chat.readContext': bind(api['chat.readContext'], async (params, { services }) => {
+    const { chats, workspaceId } = await activeChatServices(services)
+    return chats.read(workspaceId, params.sessionId)
+  }),
+  'chat.handoff': bind(api['chat.handoff'], async (params, { pluginId, services }) => {
+    const { chats, workspaceId } = await activeChatServices(services)
+    return chats.handoff(workspaceId, pluginId, params)
+  }),
   'workspace.readContext': bind(api['workspace.readContext'], async (_params, { services }) => {
     const context = await services.resolveActiveWorktreeContext()
     if (!context) {

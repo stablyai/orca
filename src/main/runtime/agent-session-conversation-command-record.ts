@@ -14,6 +14,7 @@ export type AgentSessionConversationClear = {
     state: 'completed'
   }
   now: number
+  handoff?: string
 }
 
 export function providerContextBoundaryForClear(clear: AgentSessionConversationClear) {
@@ -22,7 +23,8 @@ export function providerContextBoundaryForClear(clear: AgentSessionConversationC
       .update(agentSessionOperationKey(clear.command.callerKey, clear.command.operationId))
       .digest('hex'),
     afterFence: clear.fence,
-    clearedAt: clear.now
+    clearedAt: clear.now,
+    ...(clear.handoff ? { handoff: clear.handoff } : {})
   }
 }
 
@@ -39,7 +41,7 @@ export function commitConversationClearRecord(
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
   state.records.set(clear.sessionId, {
-    ...(source.conversationNameSource === 'user'
+    ...(clear.handoff || source.conversationNameSource === 'user'
       ? source
       : setAgentSessionRecordConversationName(source, null, clear.now)),
     providerHandleChain: [],

@@ -242,7 +242,8 @@ const KnownItemBody = z.discriminatedUnion('kind', [
       .object({
         operationId: z.string().min(1).max(512),
         afterFence: z.number().int().nonnegative(),
-        clearedAt: z.number().int().nonnegative()
+        clearedAt: z.number().int().nonnegative(),
+        handoff: z.string().min(1).max(65536).optional()
       })
       .optional(),
     tone: z.string().optional(),

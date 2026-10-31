@@ -87,6 +87,7 @@ const REASON_WORDS = {
     conversationCommandInFlight: causeWords('commandRunning', 'wait', 'waitForCommand'),
     // The chat's agent process is being replaced, which a start or restart does.
     handoffInFlight: AGENT_STARTING,
+    handoffContextStale: codeWords('retry'),
     continuationSuperseded: causeWords('continuationSuperseded', 'nothingLeft'),
     turnActive: causeWords('turnActive', 'wait', 'waitForTurn'),
     promptPending: causeWords('promptPending', 'actFirst', 'answerFirst'),

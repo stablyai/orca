@@ -1,3 +1,5 @@
+import type { AgentJournalCursor } from '../../../shared/agent-session-journal-types'
+import { refuse } from '../../../shared/agent-session-wire-refusals'
 import { neverThrowingStructuredAgentSessionLogger } from './structured-agent-session-logger'
 import type {
   AgentSessionConversationCommand,
@@ -43,8 +45,13 @@ export type ConversationCommandParams = {
   command: AgentSessionConversationCommand
   /** Only /compact queues: the drain delivers provider messages; /clear needs host-side execution. */
   delivery?: 'queue-if-active'
+  handoff?: { context: string; cursor: AgentJournalCursor }
   userSend?: true
 }
+function commandFields(params: ConversationCommandParams) {
+  return { command: params.command, ...(params.handoff ? { handoff: params.handoff } : {}) }
+}
+
 export function runStructuredConversationCommand(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
@@ -54,7 +61,7 @@ export function runStructuredConversationCommand(
     context,
     caller.callerKey,
     params.envelope,
-    { method: 'agentSession.conversationCommand', fields: { command: params.command } },
+    { method: 'agentSession.conversationCommand', fields: commandFields(params) },
     (selection) => clearUnderSerialize(context, caller, params, selection)
   )
 }
@@ -91,7 +98,7 @@ async function clearUnderSerialize(
     now: context.now,
     plan: {
       method: 'agentSession.conversationCommand',
-      fields: { command },
+      fields: commandFields(params),
       // This writes the conversation independently of provider ownership.
       conversationWrite: true,
       recoverUnknownFromDurableState: true,
@@ -116,6 +123,22 @@ async function clearUnderSerialize(
       // No committed clear means no effects, so replay can safely rerun it.
       rerunWhenReplayMissing: () => true,
       run: async (ctx) => {
+        if (params.handoff) {
+          const cursor = ctx.journal.cursor()
+          if (
+            cursor.epoch !== params.handoff.cursor.epoch ||
+            cursor.sequence !== params.handoff.cursor.sequence
+          ) {
+            return {
+              ok: false,
+              refusal: refuse(
+                'agent_session_operation_invalid',
+                { reason: 'handoffContextStale' },
+                'The conversation changed. Prepare a new handoff before clearing context.'
+              )
+            }
+          }
+        }
         const record = store.requireWritableRecord(sessionId)
         const blocked = conversationCommandBlocked(
           ctx,
@@ -146,7 +169,13 @@ async function clearUnderSerialize(
           phase: 'committed',
           state: 'completed'
         }
-        clear = { sessionId, fence, command: completed, now: context.now() }
+        clear = {
+          sessionId,
+          fence,
+          command: completed,
+          now: context.now(),
+          ...(params.handoff ? { handoff: params.handoff.context } : {})
+        }
         if (!ctx.operationReceipt) {
           throw new Error('agent_session_clear_receipt_missing')
         }

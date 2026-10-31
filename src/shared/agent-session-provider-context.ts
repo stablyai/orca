@@ -4,6 +4,8 @@ export type AgentSessionProviderContextBoundary = {
   operationId: string
   afterFence: number
   clearedAt: number
+  /** Durable background context for the first ordinary send after a handoff. */
+  handoff?: string
 }
 
 export function isAgentSessionProviderContextBoundary(
@@ -23,7 +25,11 @@ export function isAgentSessionProviderContextBoundary(
     'clearedAt' in value &&
     typeof value.clearedAt === 'number' &&
     Number.isSafeInteger(value.clearedAt) &&
-    value.clearedAt >= 0
+    value.clearedAt >= 0 &&
+    (!('handoff' in value) ||
+      (typeof value.handoff === 'string' &&
+        value.handoff.length > 0 &&
+        value.handoff.length <= 65536))
   )
 }
 

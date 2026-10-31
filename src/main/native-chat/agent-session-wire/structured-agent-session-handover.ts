@@ -25,6 +25,7 @@ import {
   structuredAgentSessionHandoverOrigin
 } from './structured-agent-session-command-turn'
 import { carriedStoppedHistory } from './structured-agent-session-stopped-history-selection'
+import { withHandoffContext } from './structured-agent-session-handoff-context'
 import { withStoppedHistory } from '../../../shared/agent-session-stopped-history'
 import {
   markStructuredAgentSessionInputUnadmitted,
@@ -68,6 +69,7 @@ export async function beginSubmissionHandover(
   // Join only current turns; persist stopped-history carry before writing to the provider.
   const turnScope = contextStructuredAgentSessionCurrentWork(ctx).turnScope()
   let carried = carriedStoppedHistory(ctx, turnScope, submission, body)
+  let handoffBody = withHandoffContext(ctx, clientMessageId, body)
   let ownsChild = stillCurrent
   let closing: UnsentSendHold['cause'] | undefined
   let unwritten = false
@@ -102,6 +104,7 @@ export async function beginSubmissionHandover(
   const prepareFresh = async (fence: number): Promise<AgentJournalMessageItem> => {
     ctx.fence = fence
     carried = carriedStoppedHistory(ctx, AGENT_JOURNAL_THREAD_SCOPE, submission, body)
+    handoffBody = withHandoffContext(ctx, clientMessageId, body)
     await ctx.journal.resolveDispatch({
       clientMessageId,
       state: 'pending',
@@ -109,7 +112,7 @@ export async function beginSubmissionHandover(
       turnScope: AGENT_JOURNAL_THREAD_SCOPE,
       carries: carried?.covers ?? []
     })
-    return carried ? withStoppedHistory(body, carried.messages) : body
+    return carried ? withStoppedHistory(handoffBody, carried.messages) : handoffBody
   }
   // Preserve handover time so turn-open cannot re-anchor elapsed work.
   const requestedAt = structuredAgentSessionHandoverOrigin(ctx.journal, submission)
@@ -133,7 +136,7 @@ export async function beginSubmissionHandover(
                   ? await dispatchSafely(
                       ctx,
                       clientMessageId,
-                      carried ? withStoppedHistory(body, carried.messages) : body,
+                      carried ? withStoppedHistory(handoffBody, carried.messages) : handoffBody,
                       requestedAt,
                       submission.options,
                       queued,

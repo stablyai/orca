@@ -44,6 +44,7 @@ export const AGENT_SESSION_REFUSAL_REASONS = {
     /** Older hosts only: a command blocked behind that /clear. */
     'conversationCommandUnconfirmed',
     'conversationCommandInFlight',
+    'handoffContextStale',
     'handoffInFlight',
     'turnActive',
     'continuationSuperseded',

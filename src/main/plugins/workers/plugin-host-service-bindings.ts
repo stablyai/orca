@@ -1,3 +1,4 @@
+import { pluginChatServices } from './plugin-chat-services'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api'
 import type { PluginHostServices } from './plugin-host-methods'
 import { PluginSecretsStore } from '../plugin-secrets-store'
@@ -34,6 +35,7 @@ export function bindPluginHostServices(input: {
 }): PluginHostServices {
   const { delegate, pluginsDataDir } = input
   return {
+    chats: pluginChatServices(),
     resolveActiveWorktreeContext: async () => {
       const context = await delegate.resolveActiveWorktreeContext()
       if (!context) {
