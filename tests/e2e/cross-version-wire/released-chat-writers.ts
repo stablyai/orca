@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs'
+import { existsSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { expect, vi } from 'vitest'
 import { z } from 'zod'
@@ -12,7 +12,6 @@ import {
   claudeProviderHandle,
   codexProviderHandle
 } from '../../../src/shared/agent-session-provider-handle-encoding'
-import { QUEUED_MESSAGE_PAUSED_SEND_FAILED } from '../../../src/shared/agent-session-queued-message-wire'
 import type { agentSessionFailureFact } from '../../../src/shared/agent-session-failure'
 import type { agentSessionFailureWords } from '../../../src/shared/agent-session-failure-words'
 import type { createClaudeJournalTranslator } from '../../../src/main/claude/claude-structured-journal-translation'
@@ -24,6 +23,7 @@ import {
   materializeReleaseCheckout,
   releaseModuleExport
 } from './release-checkout'
+import { queueReleasedCards } from './released-chat-queue'
 
 // A released build's own writers, for a chat as its host writes one: its translators fed its own
 // captured provider streams, sends with their dispatch results, queue edits, Stop and Resume, a
@@ -76,7 +76,9 @@ async function released(ref: string) {
       'src/main/native-chat/agent-session-wire/structured-agent-session-event-sink.ts',
       'createDeferredStructuredAgentSessionEventSink'
     ),
-    queueFull: () => words(fact('queueFull'), { surface: 'rejection' })
+    queueFull: () => words(fact('queueFull'), { surface: 'rejection' }),
+    /** Releases before Stop events record only the interrupted turn. */
+    stopEvents: existsSync(join(checkout.root, JOURNAL, 'journal-stop-marks.ts'))
   }
 }
 
@@ -122,23 +124,7 @@ async function sendsAndQueue(journal: Journal, release: Released): Promise<void>
     state: 'rejected',
     ...release.queueFull()
   })
-  const first = await journal.queuedMessages.insert({
-    messageId: 'card-1',
-    body: message('later'),
-    options: { model: 'model-1' }
-  })
-  await journal.queuedMessages.insert({ messageId: 'card-2', body: message('second') })
-  await journal.queuedMessages.update({
-    messageId: 'card-1',
-    expectedBodyFingerprint: first.fingerprint,
-    text: 'later, edited'
-  })
-  await journal.queuedMessages.move({ messageId: 'card-2', beforeMessageId: 'card-1' })
-  await journal.queuedMessages.hold({
-    messageIds: ['card-2'],
-    reason: QUEUED_MESSAGE_PAUSED_SEND_FAILED
-  })
-  await journal.queuedMessages.withdraw(['card-1'])
+  await queueReleasedCards(journal.queuedMessages)
 }
 
 const claudeCapture = z.object({ at: z.number(), frame: z.record(z.string(), z.unknown()) })
@@ -239,12 +225,18 @@ async function stream(
 }
 
 /** A Stop with its settlement, a Resume, and an item later removed. */
-async function stopAndRemove(journal: Journal, clock: { at: number }): Promise<void> {
+async function stopAndRemove(
+  journal: Journal,
+  release: Released,
+  clock: { at: number }
+): Promise<void> {
   const stopped = { provider: 'orca', clientMessageId: 'stopped-turn' } as const
   const scope = { fence: FENCE, turnScope: AGENT_JOURNAL_THREAD_SCOPE }
   await journal.appendItem(stopped, { kind: 'turn', turnId: 'stop-turn', state: 'running' }, scope)
-  await journal.appendStopEvent({ reason: 'user-stop', turnId: 'stop-turn' }, FENCE)
-  const settle = journal.stopMarks.beginSettle(true)
+  if (release.stopEvents) {
+    await journal.appendStopEvent({ reason: 'user-stop', turnId: 'stop-turn' }, FENCE)
+  }
+  const settle = release.stopEvents ? journal.stopMarks.beginSettle(true) : null
   await journal.appendLifecycleBatch({
     settlementId: 'stop-settlement',
     fence: FENCE,
@@ -262,8 +254,10 @@ async function stopAndRemove(journal: Journal, clock: { at: number }): Promise<v
       }
     ]
   })
-  journal.stopMarks.settled(settle)
-  await journal.appendQueueResume(FENCE)
+  if (settle) {
+    journal.stopMarks.settled(settle)
+    await journal.appendQueueResume(FENCE)
+  }
   const removed = { provider: 'orca', clientMessageId: 'removed-note' } as const
   await journal.appendItem(removed, { kind: 'status', text: 'removed' }, scope)
   await journal.appendTombstone(removed, { fence: FENCE })
@@ -290,7 +284,7 @@ export async function writeReleasedChat(
     }
     await sendsAndQueue(journal, release)
     await stream(release, agent, journal, clock)
-    await stopAndRemove(journal, clock)
+    await stopAndRemove(journal, release, clock)
     return {
       snapshot: journal.snapshot(),
       cards: [...journal.queuedMessages.list()],
@@ -299,4 +293,9 @@ export async function writeReleasedChat(
   } finally {
     await journals.closeAll()
   }
+}
+
+/** The release's own journal opener, to carry a chat on as that release would. */
+export async function releasedJournalOpener(ref: string): Promise<Opener> {
+  return (await released(ref)).opener()
 }
