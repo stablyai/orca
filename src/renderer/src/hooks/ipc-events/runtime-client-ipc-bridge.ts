@@ -1,6 +1,9 @@
 import { consumeLinearIssueRead } from '@/store/slices/linear/linear-issue-publication'
 import { applyHostWorktreeTerminalSleepState } from '@/components/terminal-pane/pty-shutdown-exit-deferral'
-import { dispatchTerminalSideEffectBatch } from '@/components/terminal-pane/terminal-side-effect-facts-handler'
+import {
+  dispatchTerminalSideEffectBatch,
+  installTerminalSideEffectSource
+} from '@/components/terminal-pane/terminal-side-effect-facts-handler'
 import { emitAutomationsChangedWindowEvent } from '@/lib/automations-changed-window-event'
 import { applyNativeChatLaunchDraftResolved } from '@/runtime/native-chat-launch-draft-runtime-resolution'
 import { getRuntimeEnvironmentRevision } from '@/runtime/runtime-environment-revision'
@@ -13,7 +16,10 @@ import {
   hydrateRuntimeEnvironmentSshState,
   refreshRuntimeEnvironmentSshTargetMetadata
 } from '@/runtime/runtime-environment-ssh-state'
-import { subscribeRuntimeClientEvents } from '@/runtime/runtime-client-events'
+import {
+  subscribeRuntimeClientEvents,
+  type RuntimeClientEventInstallation
+} from '@/runtime/runtime-client-events'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import { getEnvironmentSshStateGeneration } from '@/store/slices/runtime-environment-ssh'
 import { getRuntimeEnvironmentConnectionGeneration } from '@/store/slices/runtime-status'
@@ -84,9 +90,7 @@ export function registerRuntimeClientIpcBridge(
         )
       ])
     },
-    onError: (error) => {
-      console.error('Failed to refresh runtime projects:', error)
-    }
+    onError: (error) => console.error('Failed to refresh runtime projects:', error)
   })
   const requestProjectRefresh = (environmentId: string): void => {
     invalidateRemoteWorktreeLineage(useAppStore.getState, environmentId)
@@ -95,18 +99,28 @@ export function registerRuntimeClientIpcBridge(
 
   const handleRuntimeClientEvent = (
     environmentId: string,
-    event: RuntimeClientEvent,
+    event: RuntimeClientEvent | { type: 'terminalSideEffectsReady'; capable: boolean },
+    installation?: RuntimeClientEventInstallation,
     generation = getEnvironmentSshStateGeneration(environmentId)
   ): void => {
     if (event.type === 'worktreeTerminalSleepState') {
       applyHostWorktreeTerminalSleepState(environmentId, event)
       return
     }
+    if (event.type === 'terminalSideEffectsReady') {
+      if (installation) {
+        installTerminalSideEffectSource(environmentId, installation.source, event.capable)
+      }
+      return
+    }
     if (event.type === 'terminalSideEffects') {
-      dispatchTerminalSideEffectBatch({
-        ...event.batch,
-        ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
-      })
+      dispatchTerminalSideEffectBatch(
+        {
+          ...event.batch,
+          ptyId: toRemoteRuntimePtyId(event.batch.ptyId, environmentId)
+        },
+        installation
+      )
       return
     }
     if (event.type === 'nativeChatLaunchDraftResolved') {
@@ -231,13 +245,13 @@ export function registerRuntimeClientIpcBridge(
       void useAppStore.getState().fetchHostWorkspaceStatuses(environmentId)
       const subscription = subscribeRuntimeClientEvents(
         environmentId,
-        (event) => {
+        (event, installation) => {
           if (
             sshGeneration === getEnvironmentSshStateGeneration(environmentId) &&
             runtimeGeneration === getRuntimeEnvironmentConnectionGeneration(environmentId) &&
             runtimeRevision === getRuntimeEnvironmentRevision(environmentId)
           ) {
-            onEvent(event)
+            onEvent(event, installation)
           }
         },
         onError,

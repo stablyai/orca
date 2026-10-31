@@ -1,3 +1,4 @@
+import { dispatchRemoteInterruptListeners } from './server-remote-interrupt-dispatch'
 import type { RemoteAgentInterruptDispatch } from '../../../shared/agent-hook-interrupt-reconciliation'
 import {
   markClaudeLeadTurnDone,
@@ -97,6 +98,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (existing.restoredUnconfirmed) {
       return false
     }
+    const launchToken = this.projectLaunchAuthority(existing).launchToken
     const payload = existing.payload
     const agentType: AgentType | undefined = payload.agentType
     if (shouldIgnoreInterruptIntent(agentType, request.intent)) {
@@ -141,7 +143,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (payload.mainAgent ? payload.mainAgent.state !== 'working' : childWorkEvidenced) {
       return false
     }
-    const inferred = this.settleTurnWithoutStop(existing, 'cancellation')
+    const inferred = this.settleTurnWithoutStop(existing, launchToken, 'cancellation')
     if (!inferred) {
       return false
     }
@@ -157,18 +159,12 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         request: {
           paneKey: existing.paneKey,
           hostTurnRevision: existing.hostTurnRevision,
-          launchToken: existing.launchToken,
+          launchToken,
           providerSession: existing.providerSession,
           intent: 'ctrl-c'
         }
       }
-      for (const listener of this.remoteInterruptListeners) {
-        try {
-          listener(command)
-        } catch (error) {
-          console.warn('[agent-hooks] remote interrupt dispatch failed', error)
-        }
-      }
+      dispatchRemoteInterruptListeners(this.remoteInterruptListeners, command)
     }
     console.debug('[agent-hooks] inferred interrupted agent status', {
       paneKey: inferred.paneKey,
@@ -190,13 +186,14 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
       !row.restoredUnconfirmed &&
       !row.providerSessionOnly
     ) {
-      this.settleTurnWithoutStop(row)
+      this.settleTurnWithoutStop(row, this.projectLaunchAuthority(row).launchToken)
     }
   }
 
   /** End a working main-agent turn whose Stop hook never comes; cancellation marks an interrupt. */
   private settleTurnWithoutStop(
     existing: EnrichedAgentHookEventPayload,
+    launchToken: string | undefined,
     outcome?: 'cancellation'
   ): EnrichedAgentHookEventPayload | undefined {
     const { payload } = existing
@@ -212,13 +209,13 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
         : undefined
     const state = local?.state ?? relayed?.stateName ?? 'done'
     const workingMode = local?.workingMode ?? relayed?.workingMode
-    return this.applyNormalizedStatus({
+    return this.applyDerivedStatus(existing, {
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
-      launchToken: existing.launchToken,
+      launchToken,
       hostTurnRevision: existing.hostTurnRevision,
       source: existing.source,
       // Retain shell evidence so restart can seed the cancelled main agent and later settle drained children.
@@ -265,6 +262,7 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     if (existing.restoredUnconfirmed) {
       return false
     }
+    const launchToken = this.projectLaunchAuthority(existing).launchToken
     const payload = existing.payload
     // AskUserQuestion clears on input; actual permission waits remain sticky.
     if (
@@ -285,13 +283,13 @@ export abstract class AgentHookServerStatusInference extends AgentHookServerRowO
     }
     // Update the producer too so later child hooks cannot resurrect the answered question.
     const restored = clearClaudeAnsweredQuestionWait(this.state, existing.paneKey)
-    const inferred = this.applyNormalizedStatus({
+    const inferred = this.applyDerivedStatus(existing, {
       paneKey: existing.paneKey,
       tabId: existing.tabId,
       worktreeId: existing.worktreeId,
       connectionId: existing.connectionId,
       providerSession: existing.providerSession,
-      launchToken: existing.launchToken,
+      launchToken,
       hostTurnRevision: existing.hostTurnRevision,
       source: existing.source,
       payload: {

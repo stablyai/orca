@@ -106,7 +106,9 @@ describe('subscribeRuntimeClientEvents', () => {
 })
 
 it('existing desktop reader ignores additive phone preference fields and events', async () => {
-  const { subscribe, respond } = recordRuntimeSubscription({ subscriptionId: 'old-reader' })
+  const { subscribe, respond, callbacks } = recordRuntimeSubscription({
+    subscriptionId: 'old-reader'
+  })
   stubRuntimeEnvironmentBridge({ subscribe })
   const onEvent = vi.fn(),
     onError = vi.fn()
@@ -120,7 +122,12 @@ it('existing desktop reader ignores additive phone preference fields and events'
     }
   })
   respond({ ok: true, result: { type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false } })
-  expect(onEvent).not.toHaveBeenCalled()
+  expect(onEvent.mock.calls).toEqual([
+    [
+      { type: 'terminalSideEffectsReady', capable: false },
+      { baseline: true, source: callbacks() }
+    ]
+  ])
   expect(onError).not.toHaveBeenCalled()
   subscription.unsubscribe()
 })

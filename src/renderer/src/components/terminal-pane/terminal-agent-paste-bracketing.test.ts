@@ -204,3 +204,22 @@ describe('leading-newline paste into a remote agent pane', () => {
     expect(plan.mode).toBe('direct')
   })
 })
+
+it('keeps pane/menu paste passive-neutral with rowless, restored and independent Done inputs', () => {
+  const passive = {
+    [AGENT_PANE_KEY]: foregroundEntry({ agent: 'codex', agentEvidence: 'process-admitted' })
+  }
+  const rowCases: Record<string, AgentStatusEntry>[] = [
+    {},
+    { [AGENT_PANE_KEY]: agentEntry({ restoredUnconfirmed: true }) },
+    { [AGENT_PANE_KEY]: agentEntry({ state: 'done' }) }
+  ]
+  for (const rows of rowCases) {
+    expect(decide({ agentStatusByPaneKey: rows, paneForegroundAgentByPaneKey: passive })).toEqual(
+      decide({ agentStatusByPaneKey: rows, paneForegroundAgentByPaneKey: {} })
+    )
+  }
+  expect(
+    decide({ agentStatusByPaneKey: {}, paneForegroundAgentByPaneKey: passive })
+  ).toBeUndefined()
+})

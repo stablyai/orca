@@ -2,7 +2,6 @@
 
 import { dashboardCardDisplayState } from '../../../../shared/dashboard-snapshot'
 import { admitDashboardSnapshot } from '../../../../main/ipc/dashboard-payload-validation'
-import { buildDashboardBucketCounts } from './build-dashboard-bucket-counts'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 import { createElement, Fragment } from 'react'
 import { act, cleanup, render, screen, within } from '@testing-library/react'
@@ -20,6 +19,7 @@ import type { DashboardSnapshot } from '../../../../shared/dashboard-snapshot'
 import type { ExecutionHostId } from '../../../../shared/execution-host'
 
 vi.mock('@/store', async () => {
+  await vi.importActual('@/store')
   const { createTestStore } = await import('@/store/slices/store-test-helpers')
   return { useAppStore: createTestStore() }
 })
@@ -53,6 +53,16 @@ import {
   type DashboardSnapshotInput as DashboardSnapshotState
 } from './build-dashboard-snapshot'
 import { createWorktreeAgentRowsCache } from './worktree-agent-rows-cache'
+import {
+  buildDashboardBucketCounts,
+  createDashboardBucketCountsCache
+} from './build-dashboard-bucket-counts'
+import {
+  foregroundConsumerState,
+  FOREGROUND_TEST_NOW,
+  FOREGROUND_TEST_KEY,
+  FOREGROUND_TEST_WORKTREE
+} from './foreground-consumer-test-fixture'
 
 const NOW = 1_000_000_000
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
@@ -151,6 +161,40 @@ function baseState(overrides: Partial<DashboardSnapshotState> = {}): DashboardSn
 }
 
 describe('buildDashboardSnapshot rows cache', () => {
+  it('keeps passive/null activity and independent Done/title rows equal through both caches', () => {
+    const rowsCache = createWorktreeAgentRowsCache()
+    const bucketsCache = createDashboardBucketCountsCache()
+    const snapshot = (evidence: Parameters<typeof foregroundConsumerState>[0]) => {
+      const state = foregroundConsumerState(evidence)
+      return {
+        snapshot: buildDashboardSnapshot({ ...state, chatNames: new Map() }, FOREGROUND_TEST_NOW, {
+          rowsCache
+        }),
+        buckets: buildDashboardBucketCounts(state, FOREGROUND_TEST_NOW, bucketsCache)
+      }
+    }
+    const absent = snapshot(null)
+    const passive = snapshot('process-admitted')
+    expect(passive).toEqual(absent)
+    expect(
+      passive.snapshot.cards.find((card) => card.paneKey === FOREGROUND_TEST_KEY)
+    ).toBeUndefined()
+    expect(passive.snapshot.cards.map((card) => card.paneKey)).toHaveLength(2)
+    const current = snapshot('process-read')
+    expect(rowsCache.lastComputedWorktreeIds).toEqual([FOREGROUND_TEST_WORKTREE])
+    expect(
+      current.snapshot.cards.find((card) => card.paneKey === FOREGROUND_TEST_KEY)?.agentType
+    ).toBe('codex')
+    expect(current.snapshot.cards.filter((card) => card.paneKey !== FOREGROUND_TEST_KEY)).toEqual(
+      absent.snapshot.cards
+    )
+    expect(current.buckets).not.toEqual(absent.buckets)
+    expect(snapshot('process-admitted')).toEqual(absent)
+    expect(JSON.stringify(passive.snapshot)).not.toMatch(
+      /privateExecutionSentinel|incarnationId|process-admitted/
+    )
+  })
+
   it.each([
     ['cancellation', 'interrupted'],
     ['failure', 'failed'],

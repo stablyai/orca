@@ -11,7 +11,12 @@ export function evaluateDroppableEnqueue(
   queuedBefore: number,
   queuedAfter: number,
   isSessionDroppable: (sessionId: string) => boolean,
-  salvageDroppedData: (dropped: string) => string
+  salvageDroppedData: (
+    dropped: string,
+    maxChars: number,
+    end?: number,
+    accept?: (chars: number) => boolean
+  ) => string
 ): void {
   let sessionDroppable: boolean
   if (queuedBefore <= 0) {

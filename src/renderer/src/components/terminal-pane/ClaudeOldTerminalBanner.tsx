@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import { useEffect, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
@@ -70,7 +71,7 @@ export function ClaudeOldTerminalBanner({
   // Why either signal: a typed claude is seen by the process read, or by its hooks.
   const claudeInPane = useAppStore(
     (state) =>
-      state.paneForegroundAgentByPaneKey[paneKey]?.agent === 'claude' ||
+      foregroundAgentForActions(state.paneForegroundAgentByPaneKey[paneKey]) === 'claude' ||
       state.agentStatusByPaneKey[paneKey]?.agentType === 'claude'
   )
   const openedBefore = useOpenedBeforeClaudeAccounts(

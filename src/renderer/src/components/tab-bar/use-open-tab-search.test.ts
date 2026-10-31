@@ -224,6 +224,38 @@ describe('useOpenTabSearch', () => {
     seedStore()
   })
 
+  it('publishes the allowed passive occupant without adding activity or a provider session', () => {
+    const leaf = '11111111-1111-4111-8111-111111111111'
+    const paneKey = `term-a:${leaf}`
+    useAppStore.setState({
+      terminalLayoutsByTabId: {
+        'term-a': { root: { type: 'leaf', leafId: leaf }, activeLeafId: leaf, expandedLeafId: null }
+      }
+    })
+    const { result, rerender } = renderSearch()
+    for (const agentEvidence of ['process-admitted', null, 'process-read'] as const) {
+      act(() =>
+        useAppStore.setState({
+          paneForegroundAgentByPaneKey: agentEvidence
+            ? { [paneKey]: { agent: 'codex', agentEvidence, shellForeground: false } }
+            : {}
+        })
+      )
+      rerender({ enabled: false, query: 'zebra' })
+      rerender({ enabled: true, query: 'zebra' })
+      const entry = result.current.results.find(
+        (row) => row.source === 'workspace' && row.tabId === 'tab-a'
+      )
+      expect(entry?.source).toBe('workspace')
+      if (entry?.source !== 'workspace') {
+        throw new Error('missing workspace result')
+      }
+      expect(entry.occupantAgent).toBe(agentEvidence ? 'codex' : null)
+      expect(entry.matchedText).toBeNull()
+      expect(entry).not.toHaveProperty('providerSession')
+    }
+  })
+
   it('returns no results while disabled', () => {
     const { result } = renderSearch({ enabled: false })
 

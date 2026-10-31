@@ -1,3 +1,4 @@
+import type { PtyDataEvent } from '../providers/pty-provider-events'
 import './mock-descendant-sweep'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { join } from 'node:path'
@@ -296,17 +297,54 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
     it('reattaches to existing session and receives events', async () => {
       const { id } = await adapter.spawn({ cols: 80, rows: 24 })
 
+      const onEvent = DaemonClient.prototype.onEvent
+      let dataSource: Parameters<Parameters<DaemonClient['onEvent']>[0]>[1]
+      const eventSubscription = vi
+        .spyOn(DaemonClient.prototype, 'onEvent')
+        .mockImplementation(function (this: DaemonClient, listener) {
+          return onEvent.call(this, (event, source) => {
+            if (
+              typeof event === 'object' &&
+              event !== null &&
+              'type' in event &&
+              event.type === 'event' &&
+              'event' in event &&
+              event.event === 'data'
+            ) {
+              dataSource = source
+            }
+            listener(event, source)
+          })
+        })
       const adapter2 = new DaemonPtyAdapter({ socketPath, tokenPath })
-      const dataPayloads: { id: string; data: string }[] = []
+      const dataPayloads: PtyDataEvent[] = []
       adapter2.onData((payload) => dataPayloads.push(payload))
 
-      await adapter2.attach(id)
+      try {
+        await adapter2.attach(id)
 
-      lastSubprocess._simulateData('after-reattach')
-      await waitFor(() => dataPayloads.length > 0)
-      expect(dataPayloads[0]).toEqual({ id, data: 'after-reattach' })
-
-      adapter2.dispose()
+        lastSubprocess._simulateData('after-reattach')
+        await waitFor(() => dataPayloads.length > 0)
+        if (!dataSource) {
+          throw new Error('Expected actual daemon stream source')
+        }
+        expect(dataPayloads).toHaveLength(1)
+        expect(dataPayloads[0]).toEqual({
+          id,
+          data: 'after-reattach',
+          semanticSource: {
+            provider: adapter2,
+            stream: dataSource.owner,
+            terminalState: dataSource.terminalState
+          }
+        })
+        expect(dataPayloads[0].semanticSource?.provider).toBe(adapter2)
+        expect(dataPayloads[0].semanticSource?.stream).toBe(dataSource.owner)
+        expect(dataPayloads[0].semanticSource?.terminalState).toBe(dataSource.terminalState)
+      } finally {
+        adapter2.dispose()
+        eventSubscription.mockRestore()
+      }
     })
 
     it('preserves the live session dimensions instead of forcing 80×24', async () => {

@@ -1,3 +1,4 @@
+import '@/store'
 /** Bulk purge runs no terminal teardown; evict tab maps and PTY maps from live/durable bindings like single removal. External scans/project removal/hydration otherwise leak ephemeral terminal/agent keys for renderer lifetime. */
 import { describe, it, expect, vi, beforeEach } from 'vitest'
 import type * as AgentStatusModule from '@/lib/agent-status'
@@ -122,8 +123,22 @@ describe('bulk worktree purge evicts the per-tab/per-pty terminal maps it previo
     const store = createTestStore()
     seedMaps(store)
 
+    const foreground = {
+      agent: 'codex' as const,
+      agentEvidence: 'process-admitted' as const,
+      shellForeground: false
+    }
+    store.setState({
+      paneForegroundAgentByPaneKey: {
+        [`${TAB1}:leaf-1`]: foreground,
+        [`${TAB2}:leaf-1`]: foreground
+      }
+    })
+
     store.getState().purgeWorktreeTerminalState([WT1])
     const s = store.getState()
+    expect(s.paneForegroundAgentByPaneKey[`${TAB1}:leaf-1`]).toBeUndefined()
+    expect(s.paneForegroundAgentByPaneKey[`${TAB2}:leaf-1`]).toBe(foreground)
 
     // Removed worktree's tab/pty: every map evicted.
     expect(s.lastKnownRelayPtyIdByTabId[TAB1]).toBeUndefined()

@@ -247,8 +247,8 @@ export function bindHandleReattachResult(sessionBag: ConnectPanePtySession): voi
     session.syncPanePtyLayoutBinding(ptyId)
     useAppStore.getState().restoreAgentPaneAuthority?.(session.cacheKey)
     notifyCodexPaneBoundForStaleSweep(ptyId)
-    session.agentCompletionCoordinator.startProcessTracking()
-    session.sampleVisiblePaneForegroundAgent()
+    session.agentCompletionCoordinator?.startProcessTracking()
+    session.sampleVisiblePaneForegroundAgent?.()
 
     // Why: mobile streaming needs xterm's exact screen state; install the serializer + lastTitle source for main-process hydration parity.
     session.registerPaneSerializerFor(ptyId)

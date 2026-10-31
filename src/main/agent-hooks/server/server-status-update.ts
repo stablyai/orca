@@ -1,3 +1,4 @@
+import type { AgentHookEventPayload } from '../../../shared/agent-hook-listener/listener-event'
 import { retainHookRootContext } from '../../../shared/agent-hook-listener/pane-provider-session'
 import { deriveCliWriterTopology } from './cli-writer-observation'
 import { previewHookPresence } from '../../../shared/agent-hook-presence-transition'
@@ -11,7 +12,6 @@ import {
 } from '../../../shared/agent-status-identity'
 import type { EnrichedAgentHookEventPayload, IncomingAgentHookEvent } from './server-types'
 import type { AgentStatusObservationOrigin } from '../../../shared/agent-status-observation'
-import { ClaudeOwedNotificationExpiryTimers } from '../../../shared/claude-owed-notification-expiry-timers'
 import { setClaudeMainAgentTurnState } from '../../../shared/agent-hook-listener/providers/claude-roster-state'
 import {
   attachClaudePermissionToolUseId,
@@ -25,11 +25,7 @@ import { AgentHookServerStatusApplication } from './server-status-application'
 import { claimsPaneAfterExit } from './agent-exit-evidence'
 
 export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusApplication {
-  protected readonly claudeOwedNotificationExpiry = new ClaudeOwedNotificationExpiryTimers(
-    this.state
-  )
-
-  // Every row mutation passes here, including cancellation and pane moves.
+  // Why here: every stored row passes through, including a cancel inference and a pane move.
   protected override commitStatusRowMutation(
     before: EnrichedAgentHookEventPayload | null | undefined,
     after: EnrichedAgentHookEventPayload | null | undefined,
@@ -38,7 +34,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     if (after) {
       this.claudeOwedNotificationExpiry.arm(after.paneKey, (row) => {
         if (this.server) {
-          this.applyNormalizedStatus(row)
+          this.applyNormalizedStatus(row, undefined, 'hook', undefined, undefined, false, after)
         }
       })
     }
@@ -52,6 +48,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     observedAt?: number,
     mutationBefore?: EnrichedAgentHookEventPayload,
     newRun = false,
+    derivedFrom?: AgentHookEventPayload,
     retireBinding = false
   ): EnrichedAgentHookEventPayload | undefined {
     const rootContext = previewHookPresence(
@@ -162,7 +159,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       )
       this.clearAssistantMessageRetry(enriched.paneKey)
       this.runtimeObservedStatusPaneKeys.delete(enriched.paneKey)
-      if (!this.writeLegacyStatusRow(enriched)) {
+      if (!this.writeLegacyStatusRow(enriched, derivedFrom)) {
         return undefined
       }
       this.commitStatusRowMutation(rowBefore, enriched)
@@ -216,14 +213,17 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
       return previous
     }
     const effectivePayload = latch.event
-    if (previous && shouldKeepClaudePermissionVisible(previous, effectivePayload)) {
+    if (
+      previous &&
+      shouldKeepClaudePermissionVisible(previous, effectivePayload, this.generationClaim(previous))
+    ) {
       const held = withHeldChildWaitMainAgent(previous, effectivePayload)
       // Child prompts preserve main-agent progress and its paired shell evidence; the main agent's own waits do not.
       if (previous.toolAgentId) {
         onAccepted?.()
       }
       if (held !== previous) {
-        if (!this.writeLegacyStatusRow(held)) {
+        if (!this.writeLegacyStatusRow(held, previous)) {
           return undefined
         }
         this.scheduleStatusPersist()
@@ -281,7 +281,7 @@ export abstract class AgentHookServerStatusUpdate extends AgentHookServerStatusA
     } else {
       this.runtimeObservedStatusPaneKeys.add(enriched.paneKey)
     }
-    if (!this.writeLegacyStatusRow(enriched)) {
+    if (!this.writeLegacyStatusRow(enriched, derivedFrom)) {
       return undefined
     }
     this.commitStatusRowMutation(rowBefore, enriched)

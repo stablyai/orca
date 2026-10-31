@@ -1,3 +1,4 @@
+import type { PtySemanticSource } from '../../../providers/pty-provider-events'
 import { OrcaRuntimeWithOnPtyData } from '../output/pty-output-ingestion'
 import {
   WAIT_BLOCKED_CHECK_MIN_INTERVAL_MS,
@@ -179,21 +180,6 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
       entry.pendingFacts = []
       this.emitTerminalSideEffectBatch(ptyId, facts)
     }
-    const afterFacts = entry.afterFacts
-    entry.afterFacts = []
-    for (const run of afterFacts) {
-      run()
-    }
-  }
-
-  /** Runs `run` after the chunk being applied has emitted its facts, or now between chunks. */
-  protected runAfterPendingTerminalSideEffectFacts(ptyId: string, run: () => void): void {
-    const entry = this.ptyTitleTrackersByPtyId.get(ptyId)
-    if (entry?.applyingChunk) {
-      entry.afterFacts.push(run)
-      return
-    }
-    run()
   }
 
   /** Synthetic title/bell frames update the stateless title path only, never emulator/tail/stats or the real escape scanner, which may hold a split OSC. Legacy byte delivery still applies when side effects are off. */
@@ -212,14 +198,30 @@ export abstract class OrcaRuntimeWithScheduleWaitBlockedCheck extends OrcaRuntim
     }
   }
 
+  selectPtyLegacySemanticSource(ptyId: string, source?: PtySemanticSource): void {
+    if (!source || source.terminalState) {
+      return
+    }
+    const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
+    if (entry.transientSource?.stream !== source.stream) {
+      entry.transientSource = source
+      entry.tracker.setTransientFactScanningSuppressed(false)
+    }
+  }
+
   /** When daemon scan authority thins output, suppress main transient scans of gapped bytes to avoid duplicate/phantom facts; titles remain main-owned. */
   setPtyTransientFactDelegation(
     ptyId: string,
     delegated: boolean,
     scanSeedAnsi?: string,
-    mode2031PendingSubscribe?: true
+    mode2031PendingSubscribe?: true,
+    source?: PtySemanticSource
   ): void {
     const entry = this.getOrCreatePtyTitleTrackerEntry(ptyId)
+    this.selectPtyLegacySemanticSource(ptyId, source)
+    if (entry.transientSource?.terminalState ?? Boolean(entry.transientIncarnationId)) {
+      return
+    }
     entry.tracker.setTransientFactScanningSuppressed(delegated)
     if (!delegated && scanSeedAnsi) {
       // Seed scanner carry at authority handoff so a split escape cannot mint/swallow bells; suppress title scanning because titles were never delegated.

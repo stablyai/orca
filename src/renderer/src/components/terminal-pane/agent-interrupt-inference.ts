@@ -20,6 +20,7 @@ export type AgentInterruptInference = {
     baselineSequence?: number
   ): boolean | Promise<boolean> | undefined
   flushPending(): boolean | Promise<boolean>
+  hasPending(): boolean
   dispose(): void
 }
 
@@ -268,6 +269,7 @@ export function createAgentInterruptInference({
       return undefined
     },
     flushPending,
+    hasPending: () => pendingTimer !== null || doubleEscapeTimer !== null,
     dispose() {
       disposed = true
       clearPending()

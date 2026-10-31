@@ -17,10 +17,12 @@ import { useTabAgent } from './use-tab-agent'
 const initialAppState = useAppStore.getInitialState()
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = makePaneKey('tab-1', LEAF_ID)
+let probeRenders = 0
 let latestHookAgent: TerminalAgent | null | undefined
 const hookRoots: Root[] = []
 
 function HookProbe({ tab }: { tab: TerminalTab }): null {
+  probeRenders += 1
   latestHookAgent = useTabAgent(tab)
   return null
 }
@@ -183,6 +185,43 @@ describe('useTabAgent process signals', () => {
     })
     document.body.replaceChildren()
     useAppStore.setState(initialAppState, true)
+  })
+
+  it('displays passive process identity without exit history, preserves equal map identity and ignores unrelated panes', async () => {
+    const tab = { ...baseTab, launchAgent: 'codex' as const }
+    const context = {
+      execution: {},
+      ptyId: 'pty-1',
+      incarnationId: 'inc-1',
+      worktreeId: 'wt-1',
+      environmentId: null
+    }
+    const entry = {
+      agent: 'pi' as const,
+      agentEvidence: 'process-admitted' as const,
+      shellForeground: false,
+      context
+    }
+    await setPaneForeground(entry)
+    await renderHookProbe(tab)
+    expect(latestHookAgent).toBe('pi')
+    const map = useAppStore.getState().paneForegroundAgentByPaneKey
+    probeRenders = 0
+    await setPaneForeground({ ...entry, context: { ...context } })
+    expect(useAppStore.getState().paneForegroundAgentByPaneKey).toBe(map)
+    expect(probeRenders).toBe(0)
+    for (let revision = 0; revision < 10; revision += 1) {
+      await act(async () =>
+        useAppStore.getState().setPaneForegroundAgent(`other:${LEAF_ID}`, {
+          agent: revision % 2 ? 'codex' : 'pi',
+          shellForeground: false
+        })
+      )
+      expect(probeRenders).toBe(0)
+    }
+    await act(async () => useAppStore.getState().clearPaneForegroundAgent(PANE_KEY))
+    expect(latestHookAgent).toBe('codex')
+    expect(clearTabLaunchAgent).not.toHaveBeenCalled()
   })
 
   it('shows the recognized foreground agent for a manual launch with no hooks or titles', async () => {

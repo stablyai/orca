@@ -98,7 +98,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       }
       ;(onDataHandler as (data: string) => void)('a')
 
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('uses the current worktree tab for Codex stale fallback without enumerating all worktrees', async () => {
@@ -141,7 +144,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       }
       ;(onDataHandler as (data: string) => void)('a')
 
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('blocks stale Codex fallback input from the current worktree tab without enumerating all worktrees', async () => {
@@ -219,7 +225,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       }
       ;(onDataHandler as (data: string) => void)('a')
 
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('restores input through the tab fallback when the dismissed pane has no live PTY binding', async () => {
@@ -253,7 +262,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       }
       ;(onDataHandler as (data: string) => void)('a')
 
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('keeps a dismissed split pane typing while a sibling still holds the prompt', async () => {
@@ -293,7 +305,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       ;(onDataHandler as (data: string) => void)('a')
 
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('pty-dismissed')
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('keeps blocking a pane with its own unanswered notice next to a dismissed sibling', async () => {
@@ -373,7 +388,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       ;(onDataHandler as (data: string) => void)('a')
 
       expect((transport.getPtyId as unknown as () => string | null)()).toBe('pty-plain-shell')
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('keeps blocking input on a pane whose restart is requested but not yet run', async () => {
@@ -648,7 +666,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await vi.advanceTimersByTimeAsync(500)
       await flushAsyncTicks()
 
-      expect(transport.sendInput).toHaveBeenCalledWith('\x03')
+      expect(transport.sendInput).toHaveBeenCalledWith('\x03', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
 
@@ -691,7 +712,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       await vi.advanceTimersByTimeAsync(500)
       await flushAsyncTicks()
 
-      expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
+      expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply', {
+        call: { onEligible: expect.any(Function), onDispatch: expect.any(Function) }
+      })
       expect(transport.sendInput).not.toHaveBeenCalled()
       expect(window.api.agentStatus.inferInterrupt).not.toHaveBeenCalled()
     })
@@ -754,7 +777,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       sendTerminalInputThroughPane(pane, '\r')
       expect(transport.sendInput.mock.calls.map(([data]) => data)).not.toContain('\r')
       sendTerminalInputThroughPane(pane, 'ls\r')
-      expect(transport.sendInput).toHaveBeenCalledWith('ls\r', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('ls\r', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       _resetTerminalPaneRecoveryForTests()
     })
 
@@ -782,7 +808,10 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 2)
       await flushAsyncTicks()
 
-      expect(transport.sendInput).toHaveBeenCalledWith('x', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('x', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       expect(pane.terminal.write).toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       expect(remountTerminalTabForRecovery).toHaveBeenCalledWith('tab-1', AUTOMATIC_REQUEST)
       binding.dispose()
@@ -811,7 +840,9 @@ export function registerPtyConnectionTerminalInputGatingTests(): void {
       vi.advanceTimersByTime(WRITE_PIPELINE_STALL_CHECK_MS * 2)
       await flushAsyncTicks()
 
-      expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply')
+      expect(transport.sendInputAccepted).toHaveBeenCalledWith('\x03', 'query-reply', {
+        call: { onEligible: expect.any(Function), onDispatch: expect.any(Function) }
+      })
       expect(pane.terminal.write).not.toHaveBeenCalledWith(new Uint8Array(0), expect.any(Function))
       binding.dispose()
     })

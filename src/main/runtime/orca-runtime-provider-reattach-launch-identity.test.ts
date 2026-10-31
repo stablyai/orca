@@ -1,9 +1,16 @@
 import { describe, expect, it, vi } from 'vitest'
+import type * as ShellAloneModule from './run-terminal-shell-alone'
 import { makePaneKey } from '../../shared/stable-pane-id'
 import { OrcaRuntimeService } from './orca-runtime'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../shared/layout-owner-switch'
 import { registerBoundPty } from './bind-first-pane.test-fixture'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
+
+// The shell's process tree once the agent command finished: nothing but the shell.
+vi.mock('./run-terminal-shell-alone', async (importOriginal) => ({
+  ...(await importOriginal<typeof ShellAloneModule>()),
+  confirmRootShellHasNoChildrenFromProcessTable: async () => true
+}))
 
 vi.mock('electron', () => ({
   app: { getPath: vi.fn(() => '/tmp'), isPackaged: false },
@@ -87,8 +94,16 @@ describe('provider reattach launch identity', () => {
     })
   })
 
-  it('retires daemon launch identity when the agent command finishes', () => {
+  it('retires daemon launch identity when the agent command finishes', async () => {
     const runtime = createRuntime()
+    runtime.setPtyController({
+      write: () => true,
+      kill: () => true,
+      getForegroundProcess: async () => null,
+      listProcesses: async () => [
+        { id: 'pty-finished-reattach', rootProcessId: 4242, cwd: '/repo', title: 'zsh' }
+      ]
+    })
 
     registerBoundPty(runtime, 'pty-finished-reattach', WORKTREE_ID, null, {
       tabId: TAB_ID,
@@ -104,6 +119,9 @@ describe('provider reattach launch identity', () => {
       exitCode: 0
     })
 
+    await vi.waitFor(() =>
+      expect(getPty(runtime, 'pty-finished-reattach')).toMatchObject({ launchAgent: null })
+    )
     expect(getPty(runtime, 'pty-finished-reattach')).toMatchObject({
       launchAgent: null,
       launchToken: null,

@@ -50,10 +50,11 @@ import type {
   StatusFreshnessListener,
   StatusRowMutationListener
 } from './server-types'
-import { RevisionedMap } from './revisioned-map'
+import { AgentHookServerAuthorityState } from './server-authority-state'
 import { forgetAgentExit, type AgentExitEvidence } from './agent-exit-evidence'
 
-export abstract class AgentHookServerState {
+/** Shared mutable state for the layered hook-server implementation. */
+export abstract class AgentHookServerState extends AgentHookServerAuthorityState {
   protected canWriteLegacyStatusRow(entry: AgentHookEventPayload): boolean {
     return canAdmitLegacyAgentStatusEntry(
       this.state,
@@ -137,15 +138,6 @@ export abstract class AgentHookServerState {
   )
   // Hydrated work is UI continuity, not current-runtime liveness evidence.
   protected runtimeObservedStatusPaneKeys = new Set<string>()
-  protected hydratedAuthorityCommitments: readonly AgentHookAuthorityEvidence[] = Object.freeze([])
-  // Authority revisions bypass throttling to preserve replay fencing after a crash.
-  protected hydratedLaunchTokenHashByPaneKey = new RevisionedMap<string, string>()
-  protected persistedAuthorityCommitmentsByPaneKey = new RevisionedMap<
-    string,
-    AgentHookAuthorityEvidence
-  >()
-  protected revokedHydratedAuthorityCommitments = new WeakSet<AgentHookAuthorityEvidence>()
-  protected currentAuthorityObservations = new Map<string, AgentHookAuthorityEvidence>()
   protected legacyPaneKeyAliases = new Map<string, PaneKeyAliasEntry>()
   // Index every retired alias so reattachment finds the full fence; eviction falls back to single-key lifting.
   protected retiredPaneFencesByKey = new Map<string, RetiredPaneFence>()
@@ -229,12 +221,19 @@ export abstract class AgentHookServerState {
     origin: AgentStatusObservationOrigin,
     observedAt: number
   ): AgentStatusObservation
+  protected abstract applyDerivedStatus(
+    source: AgentHookEventPayload,
+    event: AgentHookEventPayload
+  ): EnrichedAgentHookEventPayload | undefined
   protected abstract applyNormalizedStatus(
     payload: AgentHookEventPayload,
     onAccepted?: () => void,
     origin?: AgentStatusObservationOrigin,
     observedAt?: number,
-    mutationBefore?: EnrichedAgentHookEventPayload
+    mutationBefore?: EnrichedAgentHookEventPayload,
+    newRun?: boolean,
+    derivedFrom?: AgentHookEventPayload,
+    retireBinding?: boolean
   ): EnrichedAgentHookEventPayload | undefined
   protected abstract emitEnrichedStatus(enriched: EnrichedAgentHookEventPayload): void
   protected abstract clearAssistantMessageRetry(paneKey: string): void
@@ -264,8 +263,10 @@ export abstract class AgentHookServerState {
   protected abstract boundPaneKeyAliases(): void
   protected abstract getPhysicalPaneKeyForAuthority(paneKey: string, ptyId?: string): string
   protected abstract restoreRetiredPaneFence(fence: RetiredPaneFence): void
-  protected abstract revokeHydratedAuthorityForPaneKeys(paneKeys: ReadonlySet<string>): boolean
-  protected abstract resolvePaneKeyAlias(paneKey: string): string
+  protected abstract revokeHydratedAuthorityForPaneKeys(
+    paneKeys: ReadonlySet<string>,
+    hash?: string
+  ): boolean
   protected abstract normalizeHookBodyPaneKeyAlias(body: unknown): unknown
   protected abstract normalizeLocalHookPayload(
     source: AgentHookSource,
@@ -306,14 +307,11 @@ export abstract class AgentHookServerState {
   ): EnrichedAgentHookEventPayload | null
   protected abstract maybeWriteEndpointFile(): void
   protected abstract hydrateLastStatusFromDisk(): void
-  protected abstract captureHydratedAuthorityCommitments(): void
-  protected abstract recordCurrentAuthorityObservation(payload: AgentHookEventPayload): void
   protected abstract toAuthorityEvidence(
     payload: AgentHookEventPayload | EnrichedAgentHookEventPayload,
     launchTokenHashOverride?: string
   ): AgentHookAuthorityEvidence | null
   protected abstract serializeStatusFile(): string
-  protected abstract scheduleStatusPersist(): void
   protected abstract runStatusPersist(): void
   protected abstract primeStatusPersistBaseline(onDiskJson: string): void
 

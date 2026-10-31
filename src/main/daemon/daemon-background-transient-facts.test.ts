@@ -35,8 +35,20 @@ describe('BackgroundTransientFactRelay', () => {
   it('emits command-finished with the OSC 133;D exit code', () => {
     const { relay, emitted } = createRelay()
     relay.setSessionBackground('s1', true)
-    relay.onSessionData('s1', '\x1b]133;D;0\x07')
+    relay.onSessionData('s1', '\x1b]133;D;0\x07\x1b]133;A\x07')
     expect(emitted).toEqual([{ sessionId: 's1', fact: { kind: 'command-finished', exitCode: 0 } }])
+  })
+
+  it('does not finish an app zone whose B C was scanned before the pane was hidden', () => {
+    const { relay, emitted } = createRelay()
+    relay.setSessionBackground('s1', true)
+    relay.onSessionData('s1', '\x1b]133;D;0\x07OMP reply')
+    relay.setSessionBackground('s1', false)
+    relay.setSessionBackground('s1', true)
+    relay.onSessionData('s1', '\x1b]133;C\x07\x1b]133;D;0\x07OMP reply')
+    relay.onSessionData('s1', '\x1b]133;B\x07\x1b]133;C\x07\x1b]9999;{"state":"working"}\x07')
+    relay.onSessionData('s1', '\x1b]133;D;0\x07OMP reply')
+    expect(emitted).toEqual([])
   })
 
   it('preserves a provisional 2031 subscribe when scan authority moves to the daemon', () => {

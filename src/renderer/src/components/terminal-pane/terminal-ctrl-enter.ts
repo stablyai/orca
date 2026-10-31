@@ -1,3 +1,4 @@
+import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
 import { isTuiAgent, TUI_AGENT_CONFIG } from '../../../../shared/tui-agent-config'
 import { resolveCommittedTitleAgentType } from '../../lib/pane-agent-evidence'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
@@ -20,11 +21,14 @@ export function hasCtrlEnterCsiUAuthorityForPane(
   if (foreground?.shellForeground === true || foreground?.routingRevoked === true) {
     return false
   }
-  if (foreground?.routingTrusted === true) {
+  if (foreground?.routingTrusted === true && foregroundAgentForActions(foreground) !== null) {
     return agentAcceptsCtrlEnterCsiU(foreground.agent)
   }
   const titleAgent = terminalTitle ? resolveCommittedTitleAgentType(terminalTitle) : null
-  if (foreground?.agent != null && foreground.agent !== titleAgent) {
+  if (
+    foregroundAgentForActions(foreground) != null &&
+    foregroundAgentForActions(foreground) !== titleAgent
+  ) {
     return false
   }
   return agentAcceptsCtrlEnterCsiU(titleAgent)

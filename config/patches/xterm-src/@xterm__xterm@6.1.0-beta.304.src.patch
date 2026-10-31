@@ -1,5 +1,5 @@
 diff --git a/src/browser/CoreBrowserTerminal.ts b/src/browser/CoreBrowserTerminal.ts
-index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca673c57f4e1 100644
+index 67893b7966eb095db4459b8837de9766921f36c5..2bf85d5bb17babc00531013afad5b745af565a3d 100644
 --- a/src/browser/CoreBrowserTerminal.ts
 +++ b/src/browser/CoreBrowserTerminal.ts
 @@ -325,6 +325,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
@@ -32,7 +32,21 @@ index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca67
      this._register(addDisposableListener(this.textarea!, 'input', (ev: InputEvent) => this._inputEvent(ev), true));
      this._register(this.onRender(() => this._compositionHelper!.updateCompositionElements()));
    }
-@@ -552,6 +566,11 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -523,13 +537,6 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+     // CSI ? 996 n - color scheme query (https://contour-terminal.org/vt-extensions/color-palette-update-notifications/)
+     this._register(this._inputHandler.onRequestColorSchemeQuery(() => this._reportColorScheme()));
+ 
+-    // Emit unsolicited color scheme notification on theme change when DECSET 2031 is enabled
+-    this._register(this._themeService.onChangeColors(() => {
+-      if (this.coreService.decPrivateModes.colorSchemeUpdates) {
+-        this._reportColorScheme();
+-      }
+-    }));
+-
+     this._characterJoinerService = this._instantiationService.createInstance(CharacterJoinerService);
+     this._instantiationService.setService(ICharacterJoinerService, this._characterJoinerService);
+ 
+@@ -552,6 +559,11 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
      this._compositionView = this._document.createElement('div');
      this._compositionView.classList.add('composition-view');
      this._compositionHelper = this._instantiationService.createInstance(CompositionHelper, this.textarea, this._compositionView);
@@ -44,7 +58,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca67
      this._helperContainer.appendChild(this._compositionView);
  
      this._mouseCoordsService = this._instantiationService.createInstance(MouseCoordsService);
-@@ -1009,7 +1028,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -1009,7 +1021,9 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
  
      this._onKey.fire({ key, domEvent: ev });
      this._showCursor();
@@ -55,7 +69,7 @@ index 67893b7966eb095db4459b8837de9766921f36c5..3c2ac1afaeda22da4482099702d3ca67
  
      this._keyPressHandled = true;
  
-@@ -1027,6 +1048,23 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
+@@ -1027,6 +1041,23 @@ export class CoreBrowserTerminal extends CoreTerminal implements ITerminal {
     * @param ev The input event to be handled.
     */
    protected _inputEvent(ev: InputEvent): boolean {

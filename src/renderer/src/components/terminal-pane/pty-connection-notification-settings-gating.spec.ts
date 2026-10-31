@@ -64,7 +64,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const { useNotificationDispatch } = await vi.importActual<
         typeof UseNotificationDispatchModule
       >('./use-notification-dispatch')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -114,7 +114,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('does not suppress terminal bell notifications when agent-complete notifications are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport()
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -159,7 +159,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('forwards agent completion to notification policy when desktop banners are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -213,6 +213,14 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
         createManager(1) as never,
         createDeps() as never
       )
+      const handler = await import('./terminal-side-effect-facts-handler')
+      const firstSource = createdTransportOptions[0]?.onSourceAdmitted
+      const secondSource = createdTransportOptions[1]?.onSourceAdmitted
+      if (typeof firstSource !== 'function' || typeof secondSource !== 'function') {
+        throw new Error('Missing actual source result seam')
+      }
+      firstSource('pty-1')
+      secondSource('pty-2')
       await flushAsyncTicks()
 
       expect(storeSubscribers).toHaveLength(1)
@@ -220,12 +228,15 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       firstBinding.dispose()
       expect(storeSubscribers).toHaveLength(1)
       secondBinding.dispose()
+      expect(storeSubscribers).toHaveLength(1)
+      handler.retireTerminalSemanticResident('pty-1')
+      handler.retireTerminalSemanticResident('pty-2')
       expect(storeSubscribers).toHaveLength(0)
     })
 
     it('offers generic title completions while desktop completion banners are disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -250,6 +261,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const deps = createDeps()
 
       connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks()
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -261,7 +273,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
       titleHandler('experimental-agent-observability', 'experimental-agent-observability')
       await flushAsyncTicks()
-      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
+      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('tab-pty')
       vi.advanceTimersByTime(AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS - 1)
       expect(deps.dispatchNotification).not.toHaveBeenCalled()
       vi.advanceTimersByTime(1)
@@ -278,7 +290,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('keeps an in-flight generic completion when desktop completion banners are enabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -304,6 +316,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const deps = createDeps()
 
       connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks()
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -315,7 +328,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       titleHandler('⠋ experimental-agent-observability', '⠋ experimental-agent-observability')
       titleHandler('experimental-agent-observability', 'experimental-agent-observability')
       await flushAsyncTicks()
-      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('pty-codex')
+      expect(window.api.pty.inspectProcess).toHaveBeenCalledWith('tab-pty')
       expect(deps.dispatchNotification).not.toHaveBeenCalled()
       mockStoreState.settings = {
         ...mockStoreState.settings,
@@ -343,7 +356,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('keeps raw title completion continuity across desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -362,6 +375,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
       const deps = createDeps()
 
       connectPanePty(pane as never, manager as never, deps as never)
+      await flushAsyncTicks()
 
       const titleHandler = createdTransportOptions[0]?.onTitleChange as
         | ((title: string, rawTitle: string) => void)
@@ -405,7 +419,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('keeps a scheduled agent completion across desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -467,7 +481,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('restores a suppressed terminal bell when disabling pending agent completion', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -519,7 +533,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('delivers completion after working and desktop banner changes', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()
@@ -583,7 +597,7 @@ export function registerPtyConnectionNotificationSettingsGatingTests(): void {
 
     it('delivers completion after working starts with desktop banners disabled', async () => {
       const { connectPanePty } = await import('./pty-connection')
-      const transport = createMockTransport('pty-codex')
+      const transport = createMockTransport('tab-pty')
       transportFactoryQueue.push(transport)
 
       vi.useFakeTimers()

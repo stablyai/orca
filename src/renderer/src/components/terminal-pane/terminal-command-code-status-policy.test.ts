@@ -1,9 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { AgentStatusEntry, AgentType } from '../../../../shared/agent-status-types'
+import { createInitialStoreState } from './pty-connection-test-store-fixtures'
 import type { PaneForegroundAgentEntry } from '@/store/slices/pane-foreground-agent'
 
 const PTY_ID_LOCAL = 'pty-1'
-const PTY_ID_SSH = 'ssh:target-1@@pty-9'
 const TAB_ID = 'tab-1'
 const WORKTREE_ID = 'repo-1::/tmp/wt-1'
 const PANE_KEY = `${TAB_ID}:11111111-1111-4111-8111-111111111111`
@@ -14,12 +14,14 @@ const DONE_SETTLE_MS = 1500
 const ROUTING = { connectionId: null }
 
 type MockStoreState = {
+  settings: { promptCacheTimerEnabled: boolean }
   tabsByWorktree: Record<string, { id: string; launchAgent?: AgentType }[]>
   agentStatusByPaneKey: Record<string, AgentStatusEntry | undefined>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType } | undefined>
   paneForegroundAgentByPaneKey: Record<string, PaneForegroundAgentEntry>
   agentLaunchConfigByPaneKey: Record<string, { identity: { agentType?: AgentType } } | undefined>
   runtimePaneTitlesByTabId: Record<string, Record<number, string | undefined>>
+  setCacheTimerStartedAt: ReturnType<typeof vi.fn>
   setAgentStatus: ReturnType<typeof vi.fn>
   dropAgentStatus: ReturnType<typeof vi.fn>
   clearAgentLaunchConfig: ReturnType<typeof vi.fn>
@@ -32,7 +34,7 @@ const resolveLiveAgentStatusConnectionRouting = vi.fn()
 const getConnectionIdFromState = vi.fn()
 
 vi.mock('@/store', () => ({
-  useAppStore: { getState: () => mockStoreState }
+  useAppStore: { getState: () => mockStoreState, subscribe: vi.fn(() => () => {}) }
 }))
 vi.mock('@/hooks/terminal-command-finished-event', () => ({
   dispatchTerminalCommandFinishedEvent
@@ -45,7 +47,12 @@ vi.mock('@/lib/connection-owner-resolution', () => ({
 }))
 
 function makeMockStoreState(): MockStoreState {
+  const initialStore: ReturnType<typeof createInitialStoreState> = createInitialStoreState(
+    () => initialStore
+  )
   return {
+    ...initialStore,
+    settings: { promptCacheTimerEnabled: true },
     tabsByWorktree: { [WORKTREE_ID]: [{ id: TAB_ID }] },
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
@@ -53,6 +60,7 @@ function makeMockStoreState(): MockStoreState {
     agentLaunchConfigByPaneKey: {},
     runtimePaneTitlesByTabId: { [TAB_ID]: { [PANE_ID]: '✳ Build feature' } },
     setAgentStatus: vi.fn(),
+    setCacheTimerStartedAt: vi.fn(),
     dropAgentStatus: vi.fn(),
     clearAgentLaunchConfig: vi.fn(),
     setPaneForegroundAgent: vi.fn()
@@ -71,18 +79,62 @@ function makeStatusEntry(overrides: Partial<AgentStatusEntry> = {}): AgentStatus
 }
 
 async function createPolicy(ptyId: string) {
-  const { createParkedTerminalCommandStatusPolicy } =
-    await import('./parked-terminal-command-status')
-  return createParkedTerminalCommandStatusPolicy({
-    ptyId,
-    worktreeId: WORKTREE_ID,
-    tabId: TAB_ID,
-    paneId: PANE_ID,
-    paneKey: PANE_KEY
-  })
+  const { createTerminalResidentPolicy } = await import('./terminal-resident-policy')
+  const policy = createTerminalResidentPolicy(
+    {
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      paneKey: PANE_KEY,
+      cwd: '',
+      initialTitle: mockStoreState.runtimePaneTitlesByTabId[TAB_ID]?.[PANE_ID]
+    },
+    { endpoint: 'local', executionHost: 'local', ptyId, runtimeId: null, incarnationId: null },
+    () => true
+  )
+  return { ...policy.commandCode, dispose: () => policy.dispose() }
 }
 
-describe('createParkedTerminalCommandStatusPolicy', () => {
+async function createPresentedExecution(incarnationId = 'command-code-execution') {
+  const {
+    admitLegacyTerminalSemanticResident,
+    getTerminalSemanticResident,
+    retireTerminalSemanticResident
+  } = await import('./terminal-side-effect-facts-handler')
+  const resident = admitLegacyTerminalSemanticResident({
+    ptyId: PTY_ID_LOCAL,
+    incarnationId,
+    byteSource: false,
+    binding: {
+      paneKey: PANE_KEY,
+      worktreeId: WORKTREE_ID,
+      tabId: TAB_ID,
+      cwd: '',
+      initialTitle: mockStoreState.runtimePaneTitlesByTabId[TAB_ID]?.[PANE_ID]
+    }
+  })
+  const policy = resident.policy
+  return {
+    resident,
+    policy,
+    current: () => getTerminalSemanticResident(PTY_ID_LOCAL),
+    attach: () =>
+      policy.attachPresentation({
+        paneId: PANE_ID,
+        isVisible: () => true,
+        showTitle: vi.fn(),
+        resetInputModes: vi.fn(),
+        setFocusReportSuppression: vi.fn(),
+        markBracketedPasteInterrupted: vi.fn(),
+        onAgentExited: vi.fn(),
+        setMode2031: vi.fn(),
+        clearFocusReportSuppression: vi.fn()
+      }),
+    retire: () =>
+      retireTerminalSemanticResident(PTY_ID_LOCAL, resident.identity.incarnationId ?? undefined)
+  }
+}
+
+describe('terminal Command Code status policy', () => {
   beforeEach(() => {
     vi.resetModules()
     vi.useFakeTimers()
@@ -90,97 +142,20 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     resolveLiveAgentStatusConnectionRouting.mockReset().mockReturnValue(ROUTING)
     getConnectionIdFromState.mockReset().mockReturnValue(null)
     mockStoreState = makeMockStoreState()
+    vi.stubGlobal('window', {
+      api: {
+        pty: {
+          inspectProcess: vi
+            .fn()
+            .mockResolvedValue({ foregroundProcess: null, hasChildProcesses: false })
+        }
+      }
+    })
   })
 
   afterEach(() => {
     vi.useRealTimers()
-  })
-
-  // Confirmed parked-agent exit must retire identity; a nested shell’s leaked 133;D must not (#23767).
-  describe('parked command boundary with a known foreground agent', () => {
-    const confirmForegroundProcess = vi.fn<(id: string) => Promise<string | null>>()
-    const flushMicrotasks = async (): Promise<void> => {
-      for (let i = 0; i < 5; i += 1) {
-        await Promise.resolve()
-      }
-    }
-
-    beforeEach(() => {
-      confirmForegroundProcess.mockReset()
-      vi.stubGlobal('window', { api: { pty: { confirmForegroundProcess } } })
-      mockStoreState.paneForegroundAgentByPaneKey[PANE_KEY] = {
-        agent: 'codex',
-        shellForeground: false,
-        routingTrusted: true
-      }
-    })
-
-    afterEach(() => {
-      vi.unstubAllGlobals()
-    })
-
-    it('keeps the agent when the confirmation still sees it (a leaked nested-shell marker)', async () => {
-      confirmForegroundProcess.mockResolvedValue('codex')
-      const policy = await createPolicy(PTY_ID_LOCAL)
-
-      policy.onCommandFinished(0)
-      await flushMicrotasks()
-
-      expect(confirmForegroundProcess).toHaveBeenCalledWith(PTY_ID_LOCAL)
-      expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalled()
-      policy.dispose()
-    })
-
-    it.each([
-      ['a shell', 'zsh'],
-      ['no answer', null]
-    ])('retires the agent when the confirmation finds %s', async (_label, processName) => {
-      confirmForegroundProcess.mockResolvedValue(processName)
-      const policy = await createPolicy(PTY_ID_LOCAL)
-
-      policy.onCommandFinished(0)
-      await flushMicrotasks()
-
-      expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(PANE_KEY, {
-        agent: null,
-        shellForeground: false
-      })
-      policy.dispose()
-    })
-
-    it('retires an SSH pane without a fenced read it cannot make while parked', async () => {
-      const policy = await createPolicy(PTY_ID_SSH)
-
-      policy.onCommandFinished(0)
-      await flushMicrotasks()
-
-      expect(confirmForegroundProcess).not.toHaveBeenCalled()
-      expect(mockStoreState.setPaneForegroundAgent).toHaveBeenCalledWith(PANE_KEY, {
-        agent: null,
-        shellForeground: false
-      })
-      policy.dispose()
-    })
-
-    it('writes nothing once the pane was revealed while the confirmation ran', async () => {
-      confirmForegroundProcess.mockResolvedValue('zsh')
-      const policy = await createPolicy(PTY_ID_LOCAL)
-
-      policy.onCommandFinished(0)
-      policy.dispose()
-      await flushMicrotasks()
-
-      expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalled()
-    })
-  })
-
-  it('leaves a pane with no process identity untouched at a parked command boundary', async () => {
-    const policy = await createPolicy(PTY_ID_SSH)
-
-    policy.onCommandFinished(0)
-
-    expect(mockStoreState.setPaneForegroundAgent).not.toHaveBeenCalled()
-    policy.dispose()
+    vi.unstubAllGlobals()
   })
 
   it('seeds a Command Code working row with the current pane title', async () => {
@@ -359,47 +334,159 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
     policy.dispose()
   })
 
-  // Reveal inherits the settle deadline; flushing early would make the same-prompt guard reject a genuine working repaint.
-  it('dispose hands the pending settle to the remounted pane instead of completing it early', async () => {
+  it('retains the admitted execution, policy and deadline across presentation detach and reveal', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',
       prompt: 'Fix the spinner',
       agentType: 'command-code'
     })
-    const policy = await createPolicy(PTY_ID_LOCAL)
-    const { setCommandCodeDoneSettleExecutor } = await import('./command-code-done-settle')
+    const execution = await createPresentedExecution()
+    const { resident, policy } = execution
+    const commandCode = policy.commandCode
+    let detach = execution.attach()
+    try {
+      commandCode.onCommandCodeDone('Fix the spinner')
+      const pendingTimers = vi.getTimerCount()
+      vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+      detach()
+      expect(resident.isLive).toBe(true)
+      expect(execution.current()).toBe(resident)
+      detach = execution.attach()
+      expect(resident.policy).toBe(policy)
+      expect(resident.policy.commandCode).toBe(commandCode)
+      expect(vi.getTimerCount()).toBe(pendingTimers)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
 
-    policy.onCommandCodeDone('Fix the spinner')
-    vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
-    const revealedPaneSettle = vi.fn()
-    setCommandCodeDoneSettleExecutor(PANE_KEY, revealedPaneSettle)
-    policy.dispose()
-
-    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
-    vi.advanceTimersByTime(1)
-    expect(revealedPaneSettle).toHaveBeenCalledExactlyOnceWith('Fix the spinner')
+      vi.advanceTimersByTime(1)
+      expect(mockStoreState.setAgentStatus).toHaveBeenCalledExactlyOnceWith(
+        PANE_KEY,
+        expect.objectContaining({
+          state: 'done',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        }),
+        expect.anything(),
+        undefined,
+        ROUTING
+      )
+      vi.advanceTimersByTime(DONE_SETTLE_MS)
+      expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
+    } finally {
+      detach()
+      execution.retire()
+    }
   })
 
-  // A revealed pane’s working repaint before the inherited deadline must still cancel completion.
-  it('lets a working repaint after the handoff cancel the transferred settle', async () => {
+  it('lets a working repaint after presentation reveal cancel the same execution settle', async () => {
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',
       prompt: 'Fix the spinner',
       agentType: 'command-code'
     })
-    const policy = await createPolicy(PTY_ID_LOCAL)
-    const { cancelCommandCodeDoneSettle, setCommandCodeDoneSettleExecutor } =
-      await import('./command-code-done-settle')
+    const execution = await createPresentedExecution()
+    const { policy, resident } = execution
+    let detach = execution.attach()
+    try {
+      policy.commandCode.onCommandCodeDone('Fix the spinner')
+      vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+      detach()
+      detach = execution.attach()
+      expect(execution.current()).toBe(resident)
+      policy.commandCode.onCommandCodeWorking('Fix the spinner')
+      vi.advanceTimersByTime(DONE_SETTLE_MS * 2)
+      expect(mockStoreState.setAgentStatus).toHaveBeenCalledExactlyOnceWith(
+        PANE_KEY,
+        expect.objectContaining({
+          state: 'working',
+          prompt: 'Fix the spinner',
+          agentType: 'command-code'
+        }),
+        expect.anything(),
+        undefined,
+        ROUTING
+      )
+    } finally {
+      detach()
+      execution.retire()
+    }
+  })
 
-    policy.onCommandCodeDone('Fix the spinner')
-    const revealedPaneSettle = vi.fn()
-    setCommandCodeDoneSettleExecutor(PANE_KEY, revealedPaneSettle)
-    policy.dispose()
-    cancelCommandCodeDoneSettle(PANE_KEY)
-    vi.advanceTimersByTime(DONE_SETTLE_MS * 2)
+  it('releases a pending Done timer and executor when its admitted execution ends', async () => {
+    const working = makeStatusEntry({
+      state: 'working',
+      prompt: 'Fix the spinner',
+      agentType: 'command-code'
+    })
+    mockStoreState.agentStatusByPaneKey[PANE_KEY] = working
+    const execution = await createPresentedExecution()
+    const detach = execution.attach()
+    const ended = vi.fn()
+    execution.resident.onEnd(ended)
+    try {
+      const timersBeforeSettle = vi.getTimerCount()
+      execution.policy.commandCode.onCommandCodeDone(working.prompt)
+      expect(vi.getTimerCount()).toBe(timersBeforeSettle + 1)
+      vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(execution.current()).toBe(execution.resident)
+      expect(execution.resident.isLive).toBe(true)
 
-    expect(revealedPaneSettle).not.toHaveBeenCalled()
-    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      execution.retire()
+      expect(execution.resident.isLive).toBe(false)
+      expect(execution.policy.isLive()).toBe(false)
+      expect(execution.current()).toBeUndefined()
+      expect(ended).toHaveBeenCalledExactlyOnceWith(execution.resident)
+      expect(vi.getTimerCount()).toBe(0)
+      vi.advanceTimersByTime(DONE_SETTLE_MS + 1)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(mockStoreState.agentStatusByPaneKey[PANE_KEY]).toBe(working)
+      expect(vi.getTimerCount()).toBe(0)
+
+      // A matching row and unqualified public deadline would expose a retained executor.
+      const { openCommandCodeDoneSettle } = await import('./command-code-done-settle')
+      openCommandCodeDoneSettle(PANE_KEY, working.prompt)
+      expect(vi.getTimerCount()).toBe(1)
+      vi.advanceTimersByTime(DONE_SETTLE_MS)
+      expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+      expect(vi.getTimerCount()).toBe(0)
+
+      const successor = await createPresentedExecution('command-code-successor')
+      const nextWorking = makeStatusEntry({
+        state: 'working',
+        prompt: 'Fix the next spinner',
+        agentType: 'command-code',
+        updatedAt: 1001
+      })
+      mockStoreState.agentStatusByPaneKey[PANE_KEY] = nextWorking
+      try {
+        expect(successor.resident).not.toBe(execution.resident)
+        execution.retire()
+        expect(successor.current()).toBe(successor.resident)
+        expect(successor.resident.isLive).toBe(true)
+        successor.policy.commandCode.onCommandCodeDone(nextWorking.prompt)
+        vi.advanceTimersByTime(DONE_SETTLE_MS - 1)
+        expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
+        vi.advanceTimersByTime(1)
+        expect(mockStoreState.setAgentStatus).toHaveBeenCalledExactlyOnceWith(
+          PANE_KEY,
+          expect.objectContaining({
+            state: 'done',
+            prompt: nextWorking.prompt,
+            agentType: 'command-code'
+          }),
+          expect.anything(),
+          undefined,
+          ROUTING
+        )
+        expect(ended).toHaveBeenCalledTimes(1)
+      } finally {
+        successor.retire()
+      }
+      expect(vi.getTimerCount()).toBe(0)
+    } finally {
+      detach()
+      execution.retire()
+    }
   })
 
   it('dispose does not flush a settle a working repaint already cancelled', async () => {
@@ -442,84 +529,25 @@ describe('createParkedTerminalCommandStatusPolicy', () => {
 
     expect(mockStoreState.setAgentStatus).toHaveBeenCalledTimes(1)
   })
-
-  it('nudges git UI on command finished for every PTY class', async () => {
-    const local = await createPolicy(PTY_ID_LOCAL)
-    local.onCommandFinished(0)
-    local.dispose()
-    const ssh = await createPolicy(PTY_ID_SSH)
-    ssh.onCommandFinished(0)
-    ssh.dispose()
-
-    expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledTimes(2)
-    expect(dispatchTerminalCommandFinishedEvent).toHaveBeenCalledWith(WORKTREE_ID, 0)
-  })
-
-  it('drops a same-turn status row on command finished for SSH PTYs only', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry()
-    const local = await createPolicy(PTY_ID_LOCAL)
-    local.onCommandFinished(0)
-    // Local drops require mounted foreground confirmation to distinguish nested-shell markers from agent exit.
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    local.dispose()
-
-    const ssh = await createPolicy(PTY_ID_SSH)
-    ssh.onCommandFinished(0)
-    expect(mockStoreState.dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
-    ssh.dispose()
-  })
-
-  it('keeps a finished OSC 7501 program result on SSH command finished until dismissed', async () => {
-    mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
-      state: 'done',
-      agentType: 'brew',
-      programStatus: { state: 'done', observedAt: 1000 }
-    })
-    const ssh = await createPolicy(PTY_ID_SSH)
-
-    ssh.onCommandFinished(0)
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-
-    const { dismissRetainedProgramResult } = await import('@/lib/program-status/result-retention')
-    const dropAgentStatus = vi.fn<(paneKey: string) => void>()
-    dismissRetainedProgramResult(PANE_KEY, {
-      agentStatusByPaneKey: mockStoreState.agentStatusByPaneKey,
-      dropAgentStatus
-    })
-    expect(dropAgentStatus).toHaveBeenCalledWith(PANE_KEY)
-    ssh.dispose()
-  })
-
-  it('clears the launch registry on SSH command finished when no status row exists', async () => {
-    const ssh = await createPolicy(PTY_ID_SSH)
-
-    ssh.onCommandFinished(0)
-
-    expect(mockStoreState.clearAgentLaunchConfig).toHaveBeenCalledWith(PANE_KEY)
-    expect(mockStoreState.dropAgentStatus).not.toHaveBeenCalled()
-    ssh.dispose()
-  })
-
-  it('does nothing after dispose', async () => {
-    const ssh = await createPolicy(PTY_ID_SSH)
-    ssh.dispose()
-
-    ssh.onCommandFinished(0)
-    ssh.onCommandCodeWorking('Fix the spinner')
-
-    expect(dispatchTerminalCommandFinishedEvent).not.toHaveBeenCalled()
-    expect(mockStoreState.setAgentStatus).not.toHaveBeenCalled()
-  })
 })
 
 describe('readInFlightCommandCodeTurn', () => {
   beforeEach(() => {
     vi.resetModules()
     mockStoreState = makeMockStoreState()
+    vi.stubGlobal('window', {
+      api: {
+        pty: {
+          inspectProcess: vi
+            .fn()
+            .mockResolvedValue({ foregroundProcess: null, hasChildProcesses: false })
+        }
+      }
+    })
   })
 
   it('returns only a working command-code turn', async () => {
-    const { readInFlightCommandCodeTurn } = await import('./parked-terminal-command-status')
+    const { readInFlightCommandCodeTurn } = await import('./terminal-command-code-status-policy')
 
     mockStoreState.agentStatusByPaneKey[PANE_KEY] = makeStatusEntry({
       state: 'working',

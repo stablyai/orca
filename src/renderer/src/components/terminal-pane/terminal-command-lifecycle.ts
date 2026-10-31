@@ -24,7 +24,15 @@ export function createTerminalCommandLifecycle(options: TerminalCommandLifecycle
       // Consume OSC 133 even without side-effect authority so integration markers never paint.
       const disposable = terminal.parser.registerOscHandler(133, () => true)
       disposables.push(disposable)
-      return disposable
+      return {
+        dispose: () => {
+          const index = disposables.indexOf(disposable)
+          if (index !== -1) {
+            disposables.splice(index, 1)
+          }
+          disposable.dispose()
+        }
+      }
     },
     dispose() {
       scanner.reset()

@@ -1,14 +1,14 @@
+import { getTerminalSemanticResident } from '../terminal-semantic-residents'
 import { installSavedResumeStartupCancellation } from './saved-resume-startup-cancellation'
 import { launchConfigsEqual } from '../../../../../shared/agent-resume-record-equivalence'
 import { useAppStore } from '@/store'
 import type { PtyConnectResult } from '../pty-transport-types'
 import { createBrowserUuid } from '@/lib/browser-uuid'
-import { findLegacyNumericSleepingRecord } from '../../../../../shared/sleeping-record-legacy-pane-key'
 import { neutralTerminalTitle } from '../../../../../shared/terminal-pane-title-reset'
 import {
-  agentProviderSessionsEqual,
-  type SleepingAgentSessionRecord
-} from '../../../../../shared/agent-session-resume'
+  getSleepingRecordForPane,
+  clearSleepingRecordProviderDuplicates
+} from '../terminal-sleeping-records'
 import { recognizeAgentProcessFromCommandLine } from '../../../../../shared/agent-process-recognition'
 import type { TuiAgent } from '../../../../../shared/tui-agent'
 import { TUI_AGENT_CONFIG } from '../../../../../shared/tui-agent-config'
@@ -19,44 +19,15 @@ import {
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
-import { installCommandInferredPaneAgent } from './command-inferred-pane-agent'
-
 export function installSleepingRecordAccess(session: ConnectPanePtySession): void {
-  session.getSleepingRecordForPane = (
-    state: ReturnType<typeof useAppStore.getState>
-  ): { paneKey: string; record: SleepingAgentSessionRecord } | null => {
-    const stableRecord = state.sleepingAgentSessionsByPaneKey[session.cacheKey]
-    if (stableRecord) {
-      return { paneKey: session.cacheKey, record: stableRecord }
-    }
-    const legacy = findLegacyNumericSleepingRecord(
-      state.sleepingAgentSessionsByPaneKey,
-      { tabId: session.deps.tabId, numericPaneId: String(session.pane.id) },
-      (record) => record.worktreeId === session.deps.worktreeId
-    )
-    return legacy ? { paneKey: legacy.paneKey, record: legacy.record } : null
-  }
-  session.clearSleepingRecordProviderDuplicates = (
-    state: ReturnType<typeof useAppStore.getState>,
-    consumed: { paneKey: string; record: SleepingAgentSessionRecord }
-  ): void => {
-    state.clearSleepingAgentSession(consumed.paneKey)
-    for (const [paneKey, record] of Object.entries(state.sleepingAgentSessionsByPaneKey)) {
-      if (
-        paneKey !== consumed.paneKey &&
-        record.worktreeId === consumed.record.worktreeId &&
-        record.agent === consumed.record.agent &&
-        agentProviderSessionsEqual(
-          record.agent,
-          record.providerSession,
-          consumed.record.providerSession
-        )
-      ) {
-        // Consume every alias of the resumed provider session so legacy rows cannot resume it twice.
-        state.clearSleepingAgentSession(paneKey)
-      }
-    }
-  }
+  session.getSleepingRecordForPane = (state: ReturnType<typeof useAppStore.getState>) =>
+    getSleepingRecordForPane(state, {
+      paneKey: session.cacheKey,
+      tabId: session.deps.tabId,
+      worktreeId: session.deps.worktreeId,
+      paneId: session.pane.id
+    })
+  session.clearSleepingRecordProviderDuplicates = clearSleepingRecordProviderDuplicates
   session.savedStartupAutomaticClaim = session.paneStartup?.resumeSource
     ? useAppStore.getState().automaticAgentResumeClaimsByTabId[session.deps.tabId]
     : undefined
@@ -137,12 +108,21 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
         // Daemon launch metadata can outlive its process; it requests confirmation without authorizing bytes.
         const state = useAppStore.getState()
         const current = state.paneForegroundAgentByPaneKey[session.cacheKey]
-        // Why: re-mounting a parked pane must not demote this session's own read of the same agent.
-        const keepsRead =
-          current?.agent === metadata.launchAgent && current.agentEvidence === 'process-read'
+        // Same E owns its observed source; metadata replay supplies no new process proof.
+        if (
+          current?.context?.execution &&
+          (current.agentEvidence === 'process-read' ||
+            current.agentEvidence === 'process-admitted') &&
+          current.context.ptyId === session.transport.getPtyId() &&
+          getTerminalSemanticResident(current.context.ptyId)?.policy.foreground.publication.owns(
+            current
+          )
+        ) {
+          return
+        }
         state.setPaneForegroundAgent(session.cacheKey, {
           agent: metadata.launchAgent,
-          agentEvidence: keepsRead ? 'process-read' : 'launch-record',
+          agentEvidence: 'launch-record',
           shellForeground: false
         })
       }
@@ -190,5 +170,4 @@ export function installSleepingRecordAccess(session: ConnectPanePtySession): voi
     )
     return neutralTerminalTitle(tab?.defaultTitle)
   }
-  installCommandInferredPaneAgent(session)
 }

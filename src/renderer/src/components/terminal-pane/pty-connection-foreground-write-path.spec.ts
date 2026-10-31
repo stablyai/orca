@@ -155,7 +155,10 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
 
       const forward = deferPtyInput.mock.calls[0]?.[2] as (data: string) => void
       forward('a')
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('forwards terminal input directly when the host supplies no deferPtyInput', async () => {
@@ -168,7 +171,10 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       await flushAsyncTicks()
       sendTerminalInputThroughPane(pane, 'a')
 
-      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
+      expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
     })
 
     it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {

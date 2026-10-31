@@ -104,6 +104,27 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     }
 
+    it.each([
+      { protocolVersion: 50, expected: ['bell'] },
+      { protocolVersion: PROTOCOL_VERSION, expected: ['command-finished', 'bell'] }
+    ])(
+      'drops a queued command exit from a v$protocolVersion relay that misreads app zones',
+      ({ protocolVersion, expected }) => {
+        const target = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+        try {
+          const captured = captureForwardedFacts(target)
+          target['removeEventListener'] = null
+          target['setupEventRouting']()
+          captured.emit({ kind: 'command-finished' })
+          captured.emit({ kind: 'bell' })
+          expect(captured.kinds()).toEqual(expected)
+        } finally {
+          target.dispose()
+          onEventSpy.mockRestore()
+        }
+      }
+    )
+
     it('drops a pre-v29 daemon 2031-subscribe it could never retract', () => {
       const legacy = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 28 })
       try {
@@ -137,20 +158,26 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('delegates scan authority to a v32 daemon with faithful snapshots', () => {
-      const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
-      try {
-        current.setPtyBackgrounded('v32-session', true)
-        expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
-          sessionId: 'v32-session',
-          background: true
-        })
-      } finally {
-        current.dispose()
-        notifySpy.mockRestore()
+    it.each([
+      { protocolVersion: 50, background: false },
+      { protocolVersion: PROTOCOL_VERSION, background: true }
+    ])(
+      'gives v$protocolVersion background scan authority: $background',
+      ({ protocolVersion, background }) => {
+        const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
+        const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion })
+        try {
+          current.setPtyBackgrounded('hidden-session', true)
+          expect(notifySpy).toHaveBeenCalledWith('setSessionBackground', {
+            sessionId: 'hidden-session',
+            background
+          })
+        } finally {
+          current.dispose()
+          notifySpy.mockRestore()
+        }
       }
-    })
+    )
 
     it('forwards a provisional subscribe with the foreground handoff marker', () => {
       const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 29 })
@@ -308,7 +335,8 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       { protocolVersion: 28, clearsHint: true },
       { protocolVersion: 29, clearsHint: true },
       { protocolVersion: 31, clearsHint: true },
-      { protocolVersion: 32, clearsHint: false }
+      { protocolVersion: 50, clearsHint: true },
+      { protocolVersion: PROTOCOL_VERSION, clearsHint: false }
     ])(
       'uses protocol v$protocolVersion background authority before spawn',
       async ({ protocolVersion, clearsHint }) => {
@@ -382,7 +410,7 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
       }
     })
 
-    it('leaves a v32 background hint alone on attach', async () => {
+    it('leaves a current daemon background hint alone on attach', async () => {
       const ensureConnectedSpy = vi
         .spyOn(DaemonClient.prototype, 'ensureConnected')
         .mockResolvedValue()
@@ -394,13 +422,17 @@ describe('DaemonPtyAdapter (IPtyProvider)', () => {
             : ({ isNew: false, pid: 4242, shellState: 'unsupported', snapshot: null } as never)
         )
       const notifySpy = vi.spyOn(DaemonClient.prototype, 'notify')
-      const current = new DaemonPtyAdapter({ socketPath, tokenPath, protocolVersion: 32 })
+      const current = new DaemonPtyAdapter({
+        socketPath,
+        tokenPath,
+        protocolVersion: PROTOCOL_VERSION
+      })
       try {
-        await current.attach('preserved-v32-session')
+        await current.attach('preserved-current-session')
 
         expect(notifySpy).not.toHaveBeenCalledWith(
           'setSessionBackground',
-          expect.objectContaining({ sessionId: 'preserved-v32-session' })
+          expect.objectContaining({ sessionId: 'preserved-current-session' })
         )
       } finally {
         current.dispose()

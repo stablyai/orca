@@ -1,3 +1,7 @@
+import type { PtySemanticSource } from '../providers/pty-provider-events'
+import type { TerminalSnapshotConsumption } from '../../shared/terminal-snapshot-consumption'
+import type { TerminalSnapshotState } from '../../shared/terminal-snapshot-state'
+import type { TerminalTransientObservation } from '../../shared/terminal-transient-observation'
 import type { AgentStatus } from '../../shared/agent-detection'
 import type { AgentStatusState } from '../../shared/agent-status-types'
 import type {
@@ -139,6 +143,13 @@ export type RuntimePtyTabCloseAuthority = {
 }
 
 export type RuntimePtyTitleTrackerEntry = {
+  /** In-memory physical observer ownership; display gaps and view changes cannot revoke it. */
+  transientSource?: PtySemanticSource
+  transientIncarnationId?: string
+  physicalIncarnationId?: string
+  transientConsumption?: TerminalSnapshotConsumption
+  sourceSnapshot?: TerminalTransientObservation
+  sideEffectState?: TerminalSnapshotState
   tracker: TerminalTitleTracker
   applyingChunk: boolean
   lastMobileTitleGateKey: string | null
@@ -146,8 +157,6 @@ export type RuntimePtyTitleTrackerEntry = {
   lastTitleFactAtMs: number | null
   chunkTouchedSessionTabs: boolean
   pendingFacts: TerminalSideEffectFact[]
-  /** Run once this chunk's facts are emitted: status that readers must see after them. */
-  afterFacts: (() => void)[]
   commandCodeDetector: { observe: (data: string) => boolean } | null
   /** The program's OSC 7501 activity; while set it, not the title glyph, is the PTY's status. */
   programActivity: AgentStatus | null
@@ -212,3 +221,25 @@ export type HeadlessSeedMetadata = {
   kittyKeyboardFlags?: number
   terminalOwner?: 'shell'
 }
+
+export type RuntimePtyWorktreeUpdate = Partial<
+  Pick<
+    RuntimePtyWorktreeRecord,
+    | 'connected'
+    | 'lastOutputAt'
+    | 'preview'
+    | 'tabId'
+    | 'paneKey'
+    | 'surfaceRecordedAtGraphSequence'
+    | 'title'
+    | 'connectionId'
+    | 'runtimeSessionOwned'
+    | 'isWsl'
+    | 'wslDistro'
+    | 'incarnationId'
+    | 'agentSessionOwners'
+  >
+>
+
+export type RuntimeOsc7Metadata = { cwd: string | null; cwdChanged: boolean }
+export type RuntimePaneKeySource = Pick<RuntimeSyncedLeaf, 'tabId' | 'leafId' | 'paneRuntimeId'>

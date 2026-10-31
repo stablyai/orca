@@ -1,40 +1,22 @@
+import type { TerminalHostSessionCreateDependencies } from './terminal-host-session-create-contract'
 import { terminalSessionExitCode } from './terminal-host-returned-process'
 import { settleUnpublishedTerminalSpawnLease } from './terminal-creation-work'
 import { spawnAndPublishSession } from './terminal-host-session-publish'
 import { getDaemonSessionResultMetadata } from './daemon-create-or-attach-result'
 import { normalizePtySize } from './daemon-pty-size'
-import type { Session } from './session'
 import type { InternalCreateOrAttachOptions } from './terminal-host-agent-session-claim'
 import type { CreateOrAttachResult } from './terminal-host-create-contract'
-import type { TerminalHostOptions } from './terminal-host-options'
-import type { TerminalHostTombstones } from './terminal-host-tombstones'
-import type { TerminalSessionTeardown } from './terminal-session-teardown'
-import type { TerminalSpawnGate } from './terminal-spawn-gate'
 import { TerminalAttachCanceledError } from './daemon-errors'
 import { waitForTerminalAttachOperation } from './terminal-attach-cancellation'
 import { SessionNotFoundError } from './types'
 import { resolveWslSessionContext } from './wsl-session-context'
 import { attachSessionInputViewer, isSessionInputClosed } from './session-input-path'
 import { describeAgentRestore } from './terminal-host-session-process'
-export type TerminalHostSessionCreateDependencies = {
-  sessions: Map<string, Session>
-  /** Re-checks the host's shutdown fence and this request's cancellation after any await. */
-  assertCreateAllowed: () => void
-  sessionTeardown: TerminalSessionTeardown
-  killedTombstones: TerminalHostTombstones
-  spawnSubprocess: TerminalHostOptions['spawnSubprocess']
-  spawnGate: TerminalSpawnGate | undefined
-  onDeadSessionRemoved: (sessionId: string) => void
-  onSessionCreated: (sessionId: string, generation: string | undefined, isAlive: boolean) => void
-  onSessionExit: (sessionId: string, generation: string | undefined) => void
-  reportReadinessEvent?: (event: string, details: Record<string, unknown>) => void
-}
 
 export async function createOrAttachTerminalSession(
   opts: InternalCreateOrAttachOptions,
   deps: TerminalHostSessionCreateDependencies
 ): Promise<CreateOrAttachResult> {
-  opts.onSessionResolved?.(opts.sessionId)
   let existing = deps.sessions.get(opts.sessionId)
 
   // Finish descendant capture before attaching to or replacing a session owned by teardown.
@@ -65,7 +47,14 @@ export async function createOrAttachTerminalSession(
       attachedSession.physicalCompletion,
       terminalSessionExitCode(attachedSession)
     )
+    const commit = opts.onSessionResolved?.(opts.sessionId)
+    if (commit === null) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
     const snapshot = existing.getSnapshot()
+    if (commit && !commit()) {
+      throw new TerminalAttachCanceledError(opts.sessionId)
+    }
     existing.detachAllClients()
     const token = existing.attachClient(opts.streamClient)
     attachSessionInputViewer(existing, opts.streamClient)

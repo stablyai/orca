@@ -1,4 +1,5 @@
-import { describe, expect, it, vi } from 'vitest'
+import { OrcaRuntimeService } from '../../runtime/orca-runtime'
+import { describe, expect, it, onTestFinished, vi } from 'vitest'
 import { spawnMock } from './pty-ipc-mock-registry'
 import { makeDeferred } from './pty-ipc-test-constants'
 import { setupPtyIpcSuite } from './pty-ipc-test-harness'
@@ -50,6 +51,17 @@ vi.mock('../../codex/codex-state-db-backfill-recovery', () =>
   import('./pty-ipc-mock-registry').then((m) => m.codexBackfillRecoveryModuleMock())
 )
 
+function legacySourceSelection() {
+  const sourceRuntime = new OrcaRuntimeService()
+  const select = vi.fn(sourceRuntime.selectPtyLegacySemanticSource.bind(sourceRuntime))
+  onTestFinished(() => {
+    for (const [ptyId] of select.mock.calls) {
+      sourceRuntime.onPtyExit(ptyId, 0)
+    }
+  })
+  return select
+}
+
 describe('registerPtyHandlers', () => {
   const { handlers, mainWindow, installDaemonTestProvider, installObservableDaemonTestProvider } =
     setupPtyIpcSuite()
@@ -57,6 +69,7 @@ describe('registerPtyHandlers', () => {
   it('does not flag droppedBacklog for ordinary small output under the cap', async () => {
     vi.useFakeTimers()
     const runtime = {
+      selectPtyLegacySemanticSource: legacySourceSelection(),
       setPtyController: vi.fn(),
       registerPty: vi.fn(),
       onPtySpawned: vi.fn(),

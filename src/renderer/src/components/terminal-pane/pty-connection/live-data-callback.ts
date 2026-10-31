@@ -1,5 +1,3 @@
-import { makePaneKey } from '../../../../../shared/stable-pane-id'
-import { useAppStore } from '@/store'
 import { takeCurrentTerminalDeliveryCredit } from '@/lib/pane-manager/terminal-delivery-credit'
 import { recordAgentHibernationPaneOutput } from '@/lib/agent-hibernation-output-activity'
 import { observeTerminalBracketedPasteModeOutput } from '../terminal-bracketed-paste'
@@ -36,7 +34,7 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
       session.hasReceivedPtyOutput = true
       recordAgentHibernationPaneOutput(session.cacheKey)
       // Why: output is the agent-start signal that ends the relaxed no-evidence process-scan cadence (a starting agent always prints).
-      session.agentCompletionCoordinator.observeOutputActivity()
+      session.agentCompletionCoordinator?.observeOutputActivity()
     }
     session.observeStartupDraftPasteReadiness(data)
     session.resetHiddenOutputRestoreIfPtyChanged()
@@ -58,19 +56,6 @@ export function bindLiveDataCallback(session: ConnectPanePtySession): void {
     }
     session.respondToTerminalPixelSizeQueries(data)
     observeTerminalBracketedPasteModeOutput(session.pane.terminal, data)
-    // Why: under main side-effect authority these facts arrive via pty:sideEffect; byte-scanning here would double-fire. Remote PTYs / kill-switch-off keep this path.
-    if (!session.mainSideEffectAuthority) {
-      for (const link of session.observeTerminalGitHubPRLink(data)) {
-        useAppStore.getState().observeTerminalGitHubPullRequestLink(session.deps.worktreeId, link, {
-          tabId: session.deps.tabId,
-          paneKey: makePaneKey(session.deps.tabId, session.pane.leafId),
-          ptyId: session.transport.getPtyId(),
-          executionHostId: session.transport.getExecutionHostId?.() ?? undefined
-        })
-      }
-      session.commandLifecycle.handlePtyData(data)
-    }
-    session.commandCodeOutputStatusDetector?.observe(data)
     const codexBackfillNotice = session.codexBackfillErrorDetector?.observe(data)
     if (codexBackfillNotice) {
       session.reportError(codexBackfillNotice)

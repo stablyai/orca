@@ -131,6 +131,7 @@ export const SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY =
   'agent-session.saved-resume-origin.v1' as const
 
 export const RUNTIME_CAPABILITIES = [
+  'terminal-side-effect-state.v1',
   SAVED_RESUME_ORIGIN_RUNTIME_CAPABILITY,
   ...HOST_RUNTIME_CAPABILITIES,
   ...DEVICE_KEY_RUNTIME_CAPABILITIES,

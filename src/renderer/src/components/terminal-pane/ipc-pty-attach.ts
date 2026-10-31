@@ -74,3 +74,18 @@ function replayEagerPtyBuffer(options: PtyAttachOptions, context: IpcPtyAttachCo
   }
   bufferHandle.dispose()
 }
+
+export function observeAttachedIpcPtySource(
+  id: string,
+  isCurrent: (id: string) => boolean,
+  onAdmitted: (id: string) => void
+): void {
+  void window.api.pty
+    .hasPty?.(id)
+    .then((present) => {
+      if (present === true && isCurrent(id)) {
+        onAdmitted(id)
+      }
+    })
+    .catch(() => {})
+}

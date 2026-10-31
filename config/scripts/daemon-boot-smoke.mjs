@@ -1,5 +1,6 @@
 // Run built daemon under plain Node: an Electron import escaped CI and broke v1.4.129-rc.1 at module load.
 // Require IPC ready and clean shutdown; PTY health is best-effort because constrained CI spawning can be flaky.
+import { parseDaemonProtocolFacts } from './daemon-protocol-facts.mjs'
 import { fork } from 'node:child_process'
 import { connect } from 'node:net'
 import { randomUUID } from 'node:crypto'
@@ -22,11 +23,7 @@ function log(message) {
 function readProtocolVersion() {
   const protocolSourcePath = 'src/main/daemon/daemon-protocol-version.ts'
   const source = readFileSync(join(projectDir, protocolSourcePath), 'utf8')
-  const match = source.match(/PROTOCOL_VERSION\s*=\s*(\d+)/)
-  if (!match) {
-    throw new Error(`could not read PROTOCOL_VERSION from ${protocolSourcePath}`)
-  }
-  return Number(match[1])
+  return parseDaemonProtocolFacts(source, protocolSourcePath).protocolVersion
 }
 
 function makeSocketPath(userDataDir) {

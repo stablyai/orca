@@ -1,3 +1,5 @@
+import type { SessionOptions } from './session-options'
+import type { SessionOutputPlane } from './session-output-plane'
 import { shellReadyMarkerComesFromLineEditor } from '../../shared/shell-ready-marker-timing'
 import {
   installDeviceAttributesResponder,
@@ -185,4 +187,24 @@ export class SessionShellReadyBarrier {
       this.deps.subprocess.write(data)
     }
   }
+}
+
+export function createSessionShellReady(
+  opts: SessionOptions,
+  sessionId: string,
+  subprocess: SubprocessHandle,
+  output: SessionOutputPlane,
+  acceptStartupIngress: (data: string) => void
+): SessionShellReadyBarrier {
+  return new SessionShellReadyBarrier({
+    sessionId: sessionId,
+    subprocess: subprocess,
+    responderParser: output.responderParser,
+    shellReadySupported: opts.shellReadySupported,
+    ...(opts.reportReadinessEvent ? { reportReadinessEvent: opts.reportReadinessEvent } : {}),
+    shellReadyTimeoutMs: opts.shellReadyTimeoutMs,
+    installDeviceAttributesFilter: () => output.installDeviceAttributesFilter(),
+    releaseDeviceAttributesFilter: () => output.releaseDeviceAttributesFilter(),
+    acceptStartupIngress
+  })
 }

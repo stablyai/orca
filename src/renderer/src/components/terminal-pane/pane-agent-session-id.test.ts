@@ -47,6 +47,24 @@ function sleeping(sessionId: string): SleepingAgentSessionRecord {
 }
 
 describe('resolvePaneAgentSessionId', () => {
+  it('uses only independent pane sessions across passive, current and absent foreground', () => {
+    for (const agentEvidence of ['process-admitted', 'process-read', null] as const) {
+      const foreground = agentEvidence
+        ? { [PANE_KEY]: { agent: 'claude' as const, agentEvidence, shellForeground: false } }
+        : {}
+      const resolve = (source: PaneAgentSessionIdState) =>
+        resolvePaneAgentSessionId({ ...source, paneForegroundAgentByPaneKey: foreground }, PANE_KEY)
+      expect(resolve(state())).toBeNull()
+      expect(resolve(state(live('live-session')))).toBe('live-session')
+      expect(resolve(state(undefined, sleeping('sleeping-session')))).toBe('sleeping-session')
+      expect(resolve(state(live(), sleeping('old-session')))).toBeNull()
+      expect(resolve(state(live('unconfirmed', true), sleeping('confirmed')))).toBe('confirmed')
+      expect(
+        resolvePaneAgentSessionId(state(live('live-session'), undefined, true), PANE_KEY)
+      ).toBeNull()
+    }
+  })
+
   it('returns the live provider session for the exact pane', () => {
     expect(resolvePaneAgentSessionId(state(live('live-session')), PANE_KEY)).toBe('live-session')
   })

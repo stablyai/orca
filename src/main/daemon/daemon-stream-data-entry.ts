@@ -1,5 +1,4 @@
 import type { PendingStreamDataBatch } from './daemon-stream-keep-tail-drop'
-import type { StreamFrames, StreamWriteChunk } from './daemon-stream-data-split'
 import { accountDaemonStreamEntry } from './daemon-stream-entry-accounting'
 
 export type DaemonStreamEnqueueOptions = {
@@ -21,6 +20,8 @@ export function appendDaemonStreamData(
   if (
     last?.sessionId === sessionId &&
     !last.control &&
+    !last.observation &&
+    !last.queryOnly &&
     !last.transformed &&
     options.transformed !== true
   ) {
@@ -46,53 +47,4 @@ export function appendDaemonStreamData(
   const queuedAfter = (batch.queuedCharsBySession.get(sessionId) ?? 0) + data.length
   batch.queuedCharsBySession.set(sessionId, queuedAfter)
   return queuedAfter
-}
-
-function takeDaemonStreamSession(
-  batch: PendingStreamDataBatch,
-  sessionId: string
-): PendingStreamDataBatch['queue'] {
-  const flushed: PendingStreamDataBatch['queue'] = []
-  const retained: PendingStreamDataBatch['queue'] = []
-  for (const entry of batch.queue) {
-    if (entry.sessionId === sessionId) {
-      flushed.push(entry)
-      batch.queuedChars -= entry.data.length
-    } else {
-      retained.push(entry)
-    }
-  }
-  batch.queue = retained
-  batch.queuedCharsBySession.delete(sessionId)
-  batch.queuedMetadataBytesBySession.delete(sessionId)
-  batch.droppableQueuedSessionIds.delete(sessionId)
-  if (batch.queue.length === 0 && batch.timer) {
-    clearTimeout(batch.timer)
-    batch.timer = null
-  }
-  return flushed
-}
-
-export function flushDaemonStreamSession(
-  batch: PendingStreamDataBatch,
-  sessionId: string,
-  maxLineBytes: number,
-  frames: StreamFrames,
-  write: (line: StreamWriteChunk) => void
-): void {
-  for (const entry of takeDaemonStreamSession(batch, sessionId)) {
-    if (entry.control) {
-      write(frames.control(entry.control))
-    } else {
-      frames.data(
-        { write },
-        entry.sessionId,
-        entry.data,
-        maxLineBytes,
-        entry.sequenceChars ?? entry.data.length,
-        entry.seq,
-        entry.transformed
-      )
-    }
-  }
 }

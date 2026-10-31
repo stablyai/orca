@@ -1,24 +1,23 @@
-import { isRemoteRuntimePtyId } from '../../../../../shared/remote-runtime/remote-runtime-pty-id'
+import {
+  getTerminalSemanticResident,
+  type TerminalSemanticResident
+} from '../terminal-semantic-residents'
+import type { TerminalInputCall } from '../terminal-input-call'
+import { installPtyResizeForward } from './pty-resize-forward'
+
 import { subscribeToTerminalInputData } from '../terminal-user-input-signal'
 import { isPassiveTerminalInputReport } from '../terminal-passive-input-report'
 import { installTerminalImeCompositionRoute } from '../terminal-ime-composition-route'
 import { useAppStore } from '@/store'
+import { clearUnchangedTitleOnlyWorking } from './terminal-pane-input'
 import { isTerminalQueryReply } from '../../../../../shared/terminal-query-reply'
-import { safeFitAndThen } from '@/lib/pane-manager/pane-tree-ops'
-import { getFitOverrideForPty } from '@/lib/pane-manager/mobile-fit-overrides'
+
 import { isPtyLocked } from '@/lib/pane-manager/mobile-driver-state'
-import { getAppliedSizeReadE2eDelayMs } from '../pty-applied-size-read-e2e-delay'
-import { createPtySizeReassertion } from '../pty-size-reassertion'
+
 import { isPaneReplaying } from '../replay-guard'
 import { isXtermMouseReport, isXtermWheelCursorKey } from '../terminal-pointer-input-sequences'
 import { shouldDropQuarantinedTerminalInput } from '../terminal-input-quarantine'
-import {
-  PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
-  queuePanePtyResizeIfHeld,
-  type PanePtyResizeHoldFlushDetail
-} from '@/lib/pane-manager/pane-pty-resize-hold'
 
-import { installForegroundGridDriftProbe } from './foreground-grid-drift-probe'
 import { TERMINAL_FOCUS_IN_SEQUENCE, TERMINAL_FOCUS_OUT_SEQUENCE } from './foreground-output-scan'
 import { isCodexPaneStale } from './codex-pane-stale'
 import { installTerminalSelectionFitGuard } from '../terminal-selection-fit-guard'
@@ -27,6 +26,18 @@ import { initializePaneGeometry, readPaneSize } from './read-pane-size'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
 
 export function installPtyInputForward(session: ConnectPanePtySession): void {
+  type InterruptWriter = ReturnType<
+    TerminalSemanticResident['policy']['input']['createInterruptWriter']
+  >
+  let writer: { resident: TerminalSemanticResident; inference: InterruptWriter } | undefined
+  const writerFor = (resident: TerminalSemanticResident) => {
+    if (writer?.resident !== resident) {
+      writer?.inference.release()
+      writer = { resident, inference: resident.policy.input.createInterruptWriter() }
+    }
+    return writer.inference
+  }
+  session.releaseTerminalInputWriter = () => writer?.inference.release()
   session.forwardPtyInput = (data: string, wasUserInput = false): void => {
     // During replay, drop query replies and pointer-generated mouse/arrows but preserve typing; stale TUI modes could send reports or recall history in the fresh shell (replay-guard.ts).
     if (
@@ -85,68 +96,120 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     const intent = session.pendingTerminalInputIntentFor(data)
     // Missed DOM keydowns can still yield exact Ctrl+C/Escape bytes; infer only on acknowledged transports, excluding fire-and-forget SSH.
     const acknowledgedIntent = intent ?? session.inferIntentFromExactTerminalInput(data)
-    if (acknowledgedIntent && session.transport.sendInputAccepted) {
-      const interruptStatusBaseline =
-        useAppStore.getState().agentStatusByPaneKey[session.cacheKey] ?? null
-      // Why: equal snapshots retain double-Escape semantics while older snapshots lose ack races.
-      if (session.sequencedInterruptStatusBaseline !== interruptStatusBaseline) {
-        session.sequencedInterruptStatusBaseline = interruptStatusBaseline
-        session.interruptStatusBaselineSequence += 1
-      }
-      const capturedBaselineSequence = session.interruptStatusBaselineSequence
-      session.claimViewportForUserActivity(data)
-      if (acknowledgedIntent === 'ctrl-c') {
-        // Async acknowledgments must not delay fresh inference after cancelling an oversized line.
-        session.cancelSuspendedShellCommandInference()
-      }
-      session.clearPendingTerminalInputIntent()
-      const writePromise = session.transport
-        .sendInputAccepted(data, inputKind)
-        .then((accepted): boolean | Promise<boolean> | null => {
-          if (accepted) {
-            // Why: rejected writes use transport recovery and must not arm a parser probe.
-            session.markAcceptedTerminalInputSent()
-            session.observeAcceptedShellCommandInput(data)
-            session.observeAcceptedTerminalInput(data, acknowledgedIntent)
-            const immediateResult = session.interruptInference.observeInputIntent(
-              acknowledgedIntent,
-              interruptStatusBaseline,
-              capturedBaselineSequence
-            )
-            session.observeTitleOnlyInterrupt()
-            return immediateResult ?? null
+    const baseline = useAppStore.getState().agentStatusByPaneKey[session.cacheKey] ?? null
+    const launch = useAppStore.getState().agentLaunchConfigByPaneKey[session.cacheKey]
+    const titleBaseline = session.getCurrentTerminalTitle()
+    const capturedTransport = session.transport
+    const acknowledged =
+      acknowledgedIntent !== null && capturedTransport.sendInputAccepted !== undefined
+    let folded = false
+    let dispatched:
+      | { resident: TerminalSemanticResident; inference: InterruptWriter; group: number }
+      | undefined
+    const pending = acknowledged ? Promise.withResolvers<boolean | null>() : undefined
+    const call: TerminalInputCall = {
+      onEligible: (ptyId) => {
+        if (folded || acknowledged) {
+          return
+        }
+        const resident = getTerminalSemanticResident(ptyId)
+        if (resident?.isLive) {
+          folded = true
+          resident.policy.acceptInput(data)
+        }
+      },
+      onDispatch: (ptyId) => {
+        if (!acknowledgedIntent && !intent) {
+          return
+        }
+        const resident = getTerminalSemanticResident(ptyId)
+        if (!resident?.isLive || dispatched) {
+          return
+        }
+        if (acknowledged) {
+          resident.policy.recordInputDispatch()
+        }
+        dispatched = {
+          resident,
+          inference: writerFor(resident),
+          group: resident.policy.input.reserveInterruptBaseline(baseline)
+        }
+        if (pending) {
+          const release = dispatched.inference.retain()
+          resident.policy.input.setPendingTerminalInputWrite(pending.promise)
+          void pending.promise.finally(release)
+          if (session.disposed) {
+            dispatched.inference.release()
           }
-          // Frozen-pane Escape/Ctrl+C rejects must still arm unbound recovery.
-          session.requestRecoveryForUndeliverableInput()
-          return null
-        })
-        .catch((err) => {
-          console.warn('[agent-interrupt] acknowledged terminal input failed:', err)
-          return null
-        })
-      session.setPendingTerminalInputWrite(writePromise)
-      return
-    }
-    if (intent) {
-      session.claimViewportForUserActivity(data)
-      if (session.transport.sendInput(data, inputKind)) {
-        session.markAcceptedTerminalInputSent()
-        session.observeAcceptedShellCommandInput(data)
-        session.observeAcceptedTerminalInput(data, intent)
-      } else {
-        session.requestRecoveryForUndeliverableInput()
+        }
       }
-      session.clearPendingTerminalInputIntent()
-      return
     }
     session.claimViewportForUserActivity(data)
-    if (session.transport.sendInput(data, inputKind)) {
+    session.clearPendingTerminalInputIntent()
+    if (acknowledgedIntent && capturedTransport.sendInputAccepted && pending) {
+      const view = new WeakRef(session)
+      const paneEffects = session.observePaneInputEffects
+      void capturedTransport
+        .sendInputAccepted(data, inputKind, { call })
+        .then((accepted) => {
+          if (!accepted) {
+            const mounted = view.deref()
+            if (!mounted?.disposed) {
+              mounted?.requestRecoveryForUndeliverableInput()
+            }
+            return null
+          }
+          if (dispatched && !dispatched.resident.isLive) {
+            return null
+          }
+          // Receipt-independent effects keep their original true-ACK stage without inventing an execution.
+          paneEffects(data, baseline)
+          const mounted = view.deref()
+          if (mounted && !mounted.disposed) {
+            mounted.markAcceptedTerminalInputSent()
+          }
+          const captured = dispatched
+          if (!captured) {
+            if (
+              mounted &&
+              !mounted.disposed &&
+              (useAppStore.getState().agentStatusByPaneKey[mounted.cacheKey] ?? null) ===
+                baseline &&
+              useAppStore.getState().agentLaunchConfigByPaneKey[mounted.cacheKey] === launch
+            ) {
+              clearUnchangedTitleOnlyWorking(mounted, titleBaseline)
+            }
+            return null
+          }
+          if (!captured.resident.isLive) {
+            return null
+          }
+          const policy = captured.resident.policy
+          policy.acceptInput(data, acknowledgedIntent)
+          const result = captured.inference.observeInputIntent(
+            acknowledgedIntent,
+            baseline,
+            captured.group
+          )
+          const current = useAppStore.getState()
+          if (
+            (current.agentStatusByPaneKey[policy.binding.paneKey] ?? null) === baseline &&
+            current.agentLaunchConfigByPaneKey[policy.binding.paneKey] === launch
+          ) {
+            policy.shellInput.observeTitleOnlyInterrupt()
+          }
+          return result ?? null
+        })
+        .then(pending.resolve, (error) => {
+          console.warn('[agent-interrupt] acknowledged terminal input failed:', error)
+          pending.resolve(null)
+        })
+      return
+    }
+    if (capturedTransport.sendInput(data, inputKind, call)) {
       session.markAcceptedTerminalInputSent()
-      session.observeAcceptedShellCommandInput(data)
-      session.observeAcceptedTerminalInput(data)
-      session.observeSentTerminalInputIntent(data)
+      session.observePaneInputEffects(data, baseline)
     } else {
-      session.clearPendingTerminalInputIntent()
       session.requestRecoveryForUndeliverableInput()
     }
   }
@@ -174,110 +237,8 @@ export function installPtyInputForward(session: ConnectPanePtySession): void {
     session.scheduleForegroundGridDriftCheck(true)
   )
 
-  session.shouldSuppressDesktopPtyResize = (): boolean => {
-    const currentPtyId = session.transport.getPtyId()
-    return Boolean(
-      currentPtyId && (getFitOverrideForPty(currentPtyId) || isPtyLocked(currentPtyId))
-    )
-  }
+  installPtyResizeForward(session)
 
-  session.isRendererPtyResizeAuthoritative = (): boolean => {
-    if (session.deps.isVisibleRef.current) {
-      return true
-    }
-    // Hidden layout churn cannot own the grid; hidden SIGWINCH can reset full-screen TUIs.
-    return false
-  }
-
-  session.forwardPtyResize = (cols: number, rows: number): void => {
-    if (!session.isRendererPtyResizeAuthoritative()) {
-      return
-    }
-    // Suppress desktop resize under phone-fit or mobile-driver ownership, including transitions without an override (docs/mobile-presence-lock.md).
-    if (session.shouldSuppressDesktopPtyResize()) {
-      return
-    }
-    if (queuePanePtyResizeIfHeld(session.pane.container, cols, rows)) {
-      return
-    }
-    session.transport.resize(cols, rows, { claim: true })
-  }
-
-  session.onHeldPtyResizeFlush = (event: Event): void => {
-    const detail = (event as CustomEvent<PanePtyResizeHoldFlushDetail>).detail
-    if (!detail) {
-      return
-    }
-    session.forwardPtyResize(detail.cols, detail.rows)
-  }
-  session.pane.container.addEventListener(
-    PANE_PTY_RESIZE_HOLD_FLUSH_EVENT,
-    session.onHeldPtyResizeFlush
-  )
-
-  session.onResizeDisposable = session.pane.terminal.onResize(({ cols, rows }) => {
-    session.foregroundGridDriftProbeSettled = false
-    if (session.suppressStructuralReplayPtyResize || session.suppressViewportClaimTerminalResize) {
-      return
-    }
-    session.forwardPtyResize(cols, rows)
-  })
-
-  // Resize is fire-and-forget; fit, then verify applied PTY size and repair drift so Codex cannot keep composing at stale columns.
-  session.ptySizeReassertion = createPtySizeReassertion({
-    isDisposed: () => session.disposed,
-    getPtyId: () => session.transport.getPtyId(),
-    isRemotePtyId: isRemoteRuntimePtyId,
-    shouldSuppressDesktopResize: () => session.shouldSuppressDesktopPtyResize(),
-    fitAndRun: (continuation) => safeFitAndThen(session.pane, 'pty-size-reassertion', continuation),
-    getTerminalDimensions: () => ({
-      cols: session.pane.terminal.cols,
-      rows: session.pane.terminal.rows
-    }),
-    getAppliedSize: async (ptyId) => {
-      // E2E-only delay races size readback behind reveal fit to model busy daemon/SSH ordering.
-      const delayMs = getAppliedSizeReadE2eDelayMs()
-      if (delayMs > 0) {
-        await new Promise((resolve) => setTimeout(resolve, delayMs))
-      }
-      return window.api.pty.getSize(ptyId)
-    },
-    forwardResize: session.forwardPtyResize
-  })
-  // Capture only generation and PTY ID here; a deferred reveal closure inside reattach would retain its entire multi-MB payload while hidden.
-  session.createReattachGridPush = (
-    attemptGeneration: number,
-    reattachPtyId: string
-  ): { shouldContinue: () => boolean; continuation: () => void } => {
-    const isCurrent = (): boolean =>
-      !session.disposed &&
-      attemptGeneration === session.transportStreamGeneration &&
-      session.transport.getPtyId() === reattachPtyId
-    return {
-      shouldContinue: isCurrent,
-      continuation: () => {
-        if (!isCurrent()) {
-          return
-        }
-        // Recheck mobile takeover after waiting for layout; direct transport.resize bypasses ordinary forwarding suppression.
-        if (session.shouldSuppressDesktopPtyResize()) {
-          return
-        }
-        const reattachCols = session.pane.terminal.cols
-        const reattachRows = session.pane.terminal.rows
-        if (reattachCols > 0 && reattachRows > 0) {
-          session.transport.resize(reattachCols, reattachRows)
-        }
-        if (!isRemoteRuntimePtyId(reattachPtyId)) {
-          window.api.pty.signal(reattachPtyId, 'SIGWINCH')
-        }
-        if (session.deps.isVisibleRef.current) {
-          session.ptySizeReassertion.request({ fit: false })
-        }
-      }
-    }
-  }
-  installForegroundGridDriftProbe(session)
   session.readPaneSize = () => readPaneSize(session)
   initializePaneGeometry(session)
 }

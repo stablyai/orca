@@ -4,7 +4,14 @@ import { existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { AgentHookServer, _internals } from './server'
-import { buildBody, postHookEvent, recentTs, PANE, RUNNING_SHELL } from './server.test-fixtures'
+import {
+  buildBody,
+  postHookEvent,
+  recentTs,
+  PANE,
+  RUNNING_SHELL,
+  installTestLaunchAuthority
+} from './server.test-fixtures'
 
 const { getCohortAtEmitMock, trackMock } = vi.hoisted(() => ({
   getCohortAtEmitMock: vi.fn(),
@@ -47,6 +54,14 @@ describe('Last-status persistence', () => {
 
   it('writes last-status.json after a hook event', async () => {
     const server = new AgentHookServer()
+    installTestLaunchAuthority(server, [
+      {
+        paneKey: PANE,
+        token: 'launch-bearer-must-not-persist',
+        connectionId: null,
+        worktreeId: 'wt-1'
+      }
+    ])
     await server.start({
       env: 'production',
       userDataPath
@@ -83,10 +98,12 @@ describe('Last-status persistence', () => {
         })
       })
       expect(file.entries[PANE].launchToken).toBeUndefined()
-      expect(file.entries[PANE].launchTokenHash).toBe(
-        createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
-      )
-      // Shell evidence determines whether a settled main agent held open by children can be restored.
+      expect(file.entries[PANE].launchTokenHash).toBeUndefined()
+      expect(file.authorityCommitments[PANE]).toMatchObject({
+        launchTokenHash: createHash('sha256').update('launch-bearer-must-not-persist').digest('hex')
+      })
+      // The shell fact is persisted: hydration reads it to decide whether a settled main agent held
+      // open by children may be seeded, which `mainAgent` alone cannot say (see server-types.ts).
       expect(file.entries[PANE].claudeRunningNonAgentTask).toBe(true)
       expect(file.entries[PANE].payload.mainAgent).toEqual({
         state: 'done',
@@ -137,7 +154,8 @@ describe('Last-status persistence', () => {
 
       const persisted = readFileSync(lastStatusPath(), 'utf8')
       expect(persisted).not.toContain(launchToken)
-      expect(JSON.parse(persisted).entries[PANE]).toMatchObject({ launchTokenHash })
+      expect(JSON.parse(persisted).entries[PANE].launchTokenHash).toBeUndefined()
+      expect(JSON.parse(persisted).authorityCommitments[PANE]).toMatchObject({ launchTokenHash })
     } finally {
       server.stop()
     }
