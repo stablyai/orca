@@ -125,6 +125,7 @@ export function createTerminalResidentPolicyMethods(
     },
     applyEffect,
     observePrLink,
+    isPtyShutdownPending: (ptyId: string) => useAppStore.getState().isPtyShutdownPending(ptyId),
     dispose(): void {
       context.foreground.publication.clear()
       context.ended = true

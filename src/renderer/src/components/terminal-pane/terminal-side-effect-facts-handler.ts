@@ -18,9 +18,6 @@ export type {
   TerminalSideEffectFactConsumerCallbacks,
   TerminalSideEffectFactConsumerOptions
 } from './terminal-side-effect-consumer'
-import { useAppStore } from '@/store'
-import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
-import { deferPtyShutdownExit } from './pty-shutdown-exit-deferral'
 import { createTerminalResidentPolicy } from './terminal-resident-policy'
 import { resolveTerminalResidentBinding } from './terminal-resident-binding'
 import { parseRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
@@ -32,11 +29,11 @@ import {
   residentRegistry,
   residentsByPtyId,
   legacySourcesByPtyId,
-  disposeLegacySource,
-  retireCapturedResident
+  disposeLegacySource
 } from './terminal-semantic-residents'
 export {
   getTerminalSemanticResident,
+  observeTerminalSemanticResidentExit,
   retireTerminalSemanticResident,
   retireTerminalSemanticResidentsForTab,
   type TerminalSemanticResident
@@ -58,33 +55,6 @@ export {
   followLocalTerminalSemanticSource,
   admitRemoteTerminalSemanticResident,
   installTerminalSideEffectSource
-}
-
-export function observeTerminalSemanticResidentExit(
-  ptyId: string,
-  code: number,
-  incarnationId?: string
-): void {
-  const resident = residentsByPtyId.get(ptyId)
-  if (
-    !resident ||
-    (incarnationId !== undefined && resident.identity.incarnationId !== incarnationId)
-  ) {
-    return
-  }
-  if (!isProvenProcessExit(code)) {
-    resident.policy.foreground.paneForegroundAgentTracker.suspend()
-    return
-  }
-  if (useAppStore.getState().isPtyShutdownPending(ptyId)) {
-    deferPtyShutdownExit(ptyId, (settlement) => {
-      if (settlement === 'committed') {
-        retireCapturedResident(resident)
-      }
-    })
-    return
-  }
-  retireCapturedResident(resident)
 }
 
 import type { TerminalSideEffectBatch } from '../../../../shared/terminal-side-effect-facts'
@@ -245,7 +215,7 @@ export function registerTerminalSideEffectFactConsumer(
   if (resident) {
     attachResidentConsumer(entry, resident)
   } else {
-    openHandoffFactBuffer(options.ptyId, entry.binding, true)
+    openHandoffFactBuffer(options.ptyId, entry.binding, captureTerminalFactSubject, true)
   }
 
   return () => {
@@ -256,7 +226,7 @@ export function registerTerminalSideEffectFactConsumer(
     if (entries.size === 0 && consumersByPtyId.get(options.ptyId) === entries) {
       consumersByPtyId.delete(options.ptyId)
       if (!residentsByPtyId.has(options.ptyId)) {
-        openHandoffFactBuffer(options.ptyId, entry.binding)
+        openHandoffFactBuffer(options.ptyId, entry.binding, captureTerminalFactSubject)
       }
     }
   }

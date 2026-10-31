@@ -1,3 +1,4 @@
+import type { PendingStreamDataBatch, StreamQueueEntry } from './daemon-stream-keep-tail-drop'
 import { Socket } from 'node:net'
 import { describe, expect, it, vi } from 'vitest'
 import { DaemonTransientReader } from './daemon-transient-reader'
@@ -8,6 +9,89 @@ import { TerminalSnapshotConsumption } from '../../shared/terminal-snapshot-cons
 import { SessionTransientObservations } from './session-transient-observations'
 import { SessionOutputPlane } from './session-output-plane'
 import type { DaemonEvent } from './daemon-stream-events'
+
+function readMeasuredProperty(target: object, key: PropertyKey, receiver: unknown): unknown {
+  let current: object | null = target
+  while (current) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, key)
+    if (descriptor) {
+      const value: unknown = descriptor.value
+      return 'value' in descriptor ? value : descriptor.get?.call(receiver)
+    }
+    const parent: unknown = Object.getPrototypeOf(current)
+    current =
+      parent !== null && (typeof parent === 'object' || typeof parent === 'function')
+        ? parent
+        : null
+  }
+  return undefined
+}
+
+function isQueueEntry(value: unknown): value is StreamQueueEntry {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'sessionId' in value &&
+    typeof value.sessionId === 'string' &&
+    'data' in value &&
+    typeof value.data === 'string'
+  )
+}
+
+function isQueueMap(value: unknown): value is Map<string, StreamQueueEntry> {
+  if (!(value instanceof Map)) {
+    return false
+  }
+  for (const [key, entry] of value) {
+    if (typeof key !== 'string' || !isQueueEntry(entry)) {
+      return false
+    }
+  }
+  return true
+}
+
+type MeasuredBatch = Pick<
+  PendingStreamDataBatch,
+  'queue' | 'queuedMetadataBytesBySession' | 'latestSnapshots' | 'discardedEntries'
+>
+function isMeasuredBatch(value: unknown): value is MeasuredBatch {
+  return (
+    typeof value === 'object' &&
+    value !== null &&
+    'queue' in value &&
+    Array.isArray(value.queue) &&
+    value.queue.every(isQueueEntry) &&
+    (!('latestSnapshots' in value) ||
+      value.latestSnapshots === undefined ||
+      isQueueMap(value.latestSnapshots)) &&
+    (!('discardedEntries' in value) ||
+      value.discardedEntries === undefined ||
+      typeof value.discardedEntries === 'number') &&
+    'queuedMetadataBytesBySession' in value &&
+    value.queuedMetadataBytesBySession instanceof Map &&
+    [...value.queuedMetadataBytesBySession].every(
+      ([key, bytes]) => typeof key === 'string' && typeof bytes === 'number'
+    )
+  )
+}
+function measuredBatch(batcher: DaemonStreamDataBatcher): MeasuredBatch {
+  const batches: unknown = Object.getOwnPropertyDescriptor(batcher, 'pendingByClient')?.value
+  if (!(batches instanceof Map)) {
+    throw new Error('Expected actual pending-client map')
+  }
+  const batch: unknown = batches.get('client')
+  if (!isMeasuredBatch(batch)) {
+    throw new Error('Expected initialized actual client batch')
+  }
+  return batch
+}
+
+function measuredLatest(batch: MeasuredBatch): Map<string, StreamQueueEntry> {
+  if (!batch.latestSnapshots) {
+    throw new Error('Expected committed actual latest-state map')
+  }
+  return batch.latestSnapshots
+}
 
 const tick = () => new Promise<void>((resolve) => setImmediate(resolve))
 
@@ -68,22 +152,21 @@ describe('complete terminal state delivery', () => {
         for (let index = 0; index < size; index++) {
           batcher.enqueue('client', `other-${index}`, 'x')
         }
-        const batches = Reflect.get(batcher, 'pendingByClient')
-        const batch = batches.get('client')
+        const batch = measuredBatch(batcher)
         let visits = 0
-        const wrap = (queue: unknown[]) =>
+        const wrap = (queue: StreamQueueEntry[]) =>
           new Proxy(queue, {
             get: (target, key, receiver) => {
               if (typeof key === 'string' && /^\d+$/.test(key)) {
                 visits++
               }
-              return Reflect.get(target, key, receiver)
+              return readMeasuredProperty(target, key, receiver)
             }
           })
         let queue = wrap(batch.queue)
         Object.defineProperty(batch, 'queue', {
           get: () => queue,
-          set: (value: unknown[]) => {
+          set: (value: StreamQueueEntry[]) => {
             queue = wrap(value)
           },
           configurable: true
@@ -93,7 +176,7 @@ describe('complete terminal state delivery', () => {
           state.record({ kind: 'bell' })
           sink.stage(state.snapshot())
           sink.commit()
-          expect(batch.latestSnapshots.size).toBe(1)
+          expect(measuredLatest(batch).size).toBe(1)
           expect(batch.queue.length).toBeLessThanOrEqual(2 * (size + 2))
         }
         expect(visits).toBeLessThanOrEqual(4 * updates + size)
@@ -111,7 +194,7 @@ describe('complete terminal state delivery', () => {
         expect(own[0]).toMatchObject({ payload: { effects: {} } })
         expect(own[1]).toMatchObject({ payload: { data: 'between' } })
         expect(own[2]).toMatchObject({ payload: { effects: { bell: { count: updates + 1 } } } })
-        expect(batch.latestSnapshots.size).toBe(0)
+        expect(measuredLatest(batch).size).toBe(0)
         expect(batch.discardedEntries).toBe(0)
         expect(batch.queuedMetadataBytesBySession.size).toBe(0)
         expect(batcher.queuedCharsForClient('client')).toBe(0)
@@ -141,15 +224,15 @@ describe('complete terminal state delivery', () => {
         for (const sink of sinks) {
           sink.install(state.snapshot(), 'incarnation', () => state.snapshot())
         }
-        const batch = Reflect.get(batcher, 'pendingByClient').get('client')
+        const batch = measuredBatch(batcher)
         let operations = 0
-        const wrap = (items: unknown[]) =>
+        const wrap = (items: StreamQueueEntry[]) =>
           new Proxy(items, {
             get: (target, key, receiver) => {
               if (typeof key === 'string' && /^\d+$/.test(key)) {
                 operations++
               }
-              return Reflect.get(target, key, receiver)
+              return readMeasuredProperty(target, key, receiver)
             },
             set: (target, key, value, receiver) => {
               if (typeof key === 'string' && /^\d+$/.test(key)) {
@@ -165,7 +248,7 @@ describe('complete terminal state delivery', () => {
         let queue = wrap(batch.queue)
         Object.defineProperty(batch, 'queue', {
           get: () => queue,
-          set: (items: unknown[]) => {
+          set: (items: StreamQueueEntry[]) => {
             queue = wrap(items)
           },
           configurable: true
@@ -185,7 +268,7 @@ describe('complete terminal state delivery', () => {
         }
         batcher.flush('client')
         expect(batch.discardedEntries).toBe(0)
-        expect(batch.latestSnapshots.size).toBe(size)
+        expect(measuredLatest(batch).size).toBe(size)
         expect(batcher.queuedCharsForClient('client')).toBe(unrelated * 8192)
         const beforeDrop = batcher.queuedCharsForClient('client')
         batcher.enqueue('client', 'dropper', 'x'.repeat(1200000))
@@ -196,7 +279,7 @@ describe('complete terminal state delivery', () => {
         expect(writes.mock.calls.some(([line]) => String(line).includes('"dataGap"'))).toBe(true)
         sinks.forEach((sink) => sink.dispose?.())
         expect(batch.queue).toHaveLength(0)
-        expect(batch.latestSnapshots.size).toBe(0)
+        expect(measuredLatest(batch).size).toBe(0)
         expect(batch.queuedMetadataBytesBySession.size).toBe(0)
         expect(batcher.queuedCharsForClient('client')).toBe(0)
         expect(operations).toBeLessThanOrEqual(30 * (size + unrelated))

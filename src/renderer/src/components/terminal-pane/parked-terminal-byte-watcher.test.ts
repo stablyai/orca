@@ -744,7 +744,11 @@ describe('startParkedTerminalByteWatcher', () => {
     const ptyId = 'remote:env-1@@terminal-1'
     mockStoreState.tabsByWorktree[WORKTREE_ID][0].ptyId = ptyId
     mockStoreState.ptyIdsByTabId[TAB_ID] = [ptyId]
-    mockStoreState.terminalLayoutsByTabId[TAB_ID].ptyIdsByLeafId[LEAF_ID] = ptyId
+    const layout = mockStoreState.terminalLayoutsByTabId?.[TAB_ID]
+    if (!layout) {
+      throw new Error('Expected the initialized terminal layout')
+    }
+    layout.ptyIdsByLeafId[LEAF_ID] = ptyId
     const { dispose, getResident } = await startWatcher({ ptyId })
     const resident = getResident()!
     const policy = resident.policy

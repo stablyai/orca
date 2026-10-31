@@ -13,6 +13,23 @@ import * as leaves from '../../../../shared/terminal-pane-layout-tree'
 import { createTerminalForegroundPublication } from '@/components/terminal-pane/pty-connection/terminal-foreground-services'
 import { whenCodexTerminalAppears } from '@/components/terminal-pane/codex-terminal-presence'
 
+function readMeasuredProperty(target: object, key: PropertyKey, receiver: unknown): unknown {
+  let current: object | null = target
+  while (current) {
+    const descriptor = Object.getOwnPropertyDescriptor(current, key)
+    if (descriptor) {
+      const value: unknown = descriptor.value
+      return 'value' in descriptor ? value : descriptor.get?.call(receiver)
+    }
+    const parent: unknown = Object.getPrototypeOf(current)
+    current =
+      parent !== null && (typeof parent === 'object' || typeof parent === 'function')
+        ? parent
+        : null
+  }
+  return undefined
+}
+
 const LEAF_1 = '11111111-1111-4111-8111-111111111111'
 const LEAF_2 = '22222222-2222-4222-8222-222222222222'
 const LEAF_3 = '33333333-3333-4333-8333-333333333333'
@@ -67,7 +84,7 @@ describe('setTabLayout PTY ownership', () => {
         },
         get(record, key, receiver) {
           reads++
-          return Reflect.get(record, key, receiver)
+          return readMeasuredProperty(record, key, receiver)
         }
       })
       store.setState({ paneForegroundAgentByPaneKey: tracked })
@@ -163,7 +180,7 @@ describe('setTabLayout PTY ownership', () => {
             } else {
               work.unrelatedSelectionReads++
             }
-            return Reflect.get(record, key, receiver)
+            return readMeasuredProperty(record, key, receiver)
           }
         })
         store.setState({

@@ -518,6 +518,8 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
         facts: [{ kind: 'title', normalizedTitle: 'stale', rawTitle: 'stale' }]
       })
       expect(deps.setRuntimePaneTitle).not.toHaveBeenCalled()
+      expect(mockStoreState.runtimePaneTitlesByTabId['tab-1'][1]).toBe('stale')
+      expect(mockStoreState.tabsByWorktree['wt-1'][0].title).toBe('stale')
     })
 
     it('locally gates hidden paired output when a legacy host cannot pause it', async () => {

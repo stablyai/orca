@@ -157,6 +157,9 @@ export function registerPtyConnectionDeferredReattachLiveOutputTests(): void {
             sessionId?: string
             callbacks?: ConnectCallbacks
           }) => {
+            if (!sessionId) {
+              throw new Error('Expected the adopted session id')
+            }
             callbacks?.onData?.('startup\r\n', { seq: 9, rawLength: 9 })
             callbacks?.onData?.('new output\r\n', { seq: 21, rawLength: 12 })
             return { id: sessionId, snapshot, snapshotSeq: seq }

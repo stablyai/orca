@@ -1,3 +1,4 @@
+import type { RuntimeClientEventSource } from '@/runtime/runtime-client-events'
 import type { TerminalSideEffectBatch } from '../../../../shared/terminal-side-effect-facts'
 import { createTerminalResidentPolicy } from './terminal-resident-policy'
 import type { TerminalResidentBinding, TerminalResidentServices } from './terminal-resident-policy'
@@ -28,7 +29,7 @@ export function createTerminalResidentSourceAdmissions(
     byteSource: boolean
     services?: TerminalResidentServices
     selectLegacy?: boolean
-    installationSource?: object
+    installationSource?: RuntimeClientEventSource
   }): TerminalSemanticResident {
     let existing = residentsByPtyId.get(options.ptyId)
     if (
@@ -180,12 +181,15 @@ export function createTerminalResidentSourceAdmissions(
     }
   })
 
-  const pendingSourceInstallations = new WeakMap<TerminalSemanticResident, object>()
+  const pendingSourceInstallations = new WeakMap<
+    TerminalSemanticResident,
+    RuntimeClientEventSource
+  >()
 
   /** Only the current endpoint subscription's positive ready may switch optional delivery. */
   function installTerminalSideEffectSource(
     endpoint: string,
-    source: object,
+    source: RuntimeClientEventSource,
     capable: boolean
   ): void {
     for (const [ptyId, resident] of residentsByPtyId) {
@@ -214,7 +218,7 @@ export function createTerminalResidentSourceAdmissions(
 
   function qualifyTerminalSideEffectSource(
     batch: TerminalSideEffectBatch,
-    source?: object
+    source?: RuntimeClientEventSource
   ): boolean {
     if (source && batch.terminalState && parseRemoteRuntimePtyId(batch.ptyId)) {
       const captured = residentsByPtyId.get(batch.ptyId)

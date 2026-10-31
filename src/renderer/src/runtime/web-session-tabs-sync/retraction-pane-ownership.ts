@@ -44,7 +44,7 @@ export function recordPaneKeysForTabs(
 }
 
 export function forgetRetractionPaneKey(
-  record: object,
+  record: NonNullable<WebSessionTabsSyncState['paneForegroundAgentByPaneKey']>,
   paneKey: string,
   batchContext?: WebSessionTabsBatchContext
 ): void {

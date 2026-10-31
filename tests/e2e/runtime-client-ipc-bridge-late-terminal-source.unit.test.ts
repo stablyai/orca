@@ -1,18 +1,41 @@
-import { getDefaultSettings } from '../../../../shared/constants'
+import { afterEach, beforeEach } from 'vitest'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { _resetTerminalSideEffectFactConsumersForTest } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import { createHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
+
+import { TerminalSnapshotConsumption } from '../../src/shared/terminal-snapshot-consumption'
+import { TerminalSnapshotObserver } from '../../src/shared/terminal-snapshot-observer'
+import { getDefaultSettings } from '../../src/shared/constants'
 import { expect, it, vi } from 'vitest'
-import * as terminalNotifications from '../../components/terminal-pane/use-notification-dispatch'
-import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-transitions'
-import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../../components/terminal-pane/agent-task-complete-policy'
+import * as terminalNotifications from '../../src/renderer/src/components/terminal-pane/use-notification-dispatch'
+import { AGENT_DONE_QUIET_MS } from '../../src/shared/agent-transitions'
+import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../../src/renderer/src/components/terminal-pane/agent-task-complete-policy'
 import { useAppStore } from '@/store'
-import { TerminalSnapshotState } from '../../../../shared/terminal-snapshot-state'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
+import { TerminalSnapshotState } from '../../src/shared/terminal-snapshot-state'
+import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
+import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
 import {
   getTerminalSemanticResident,
   dispatchTerminalSideEffectBatch,
   retireTerminalSemanticResident
-} from '../../components/terminal-pane/terminal-side-effect-facts-handler'
-import type { RuntimeClientEventBridgeHarness } from './runtime-client-ipc-bridge-ownership.test'
+} from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import type { RuntimeClientEventBridgeHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
+
+function measuredConsumption(resident: object): TerminalSnapshotConsumption {
+  const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value
+  if (!(value instanceof TerminalSnapshotConsumption)) {
+    throw new Error('Expected actual resident cursor')
+  }
+  return value
+}
+
+function measuredParser(source: object): TerminalSnapshotObserver {
+  const value: unknown = Object.getOwnPropertyDescriptor(source, 'bytes')?.value
+  if (!(value instanceof TerminalSnapshotObserver)) {
+    throw new Error('Expected actual legacy parser')
+  }
+  return value
+}
 
 export function registerLateTerminalSourceRetryTest(
   createHarness: () => RuntimeClientEventBridgeHarness
@@ -45,7 +68,7 @@ export function registerLateTerminalSourceRetryTest(
       { kind: 'agent-status', payload: { state: 'working', agentType: 'claude', prompt: '' } },
       Date.now()
     )
-    const { OrcaRuntimeService } = await import('../../../../main/runtime/orca-runtime')
+    const { OrcaRuntimeService } = await import('../../src/main/runtime/orca-runtime')
     const runtime = new OrcaRuntimeService()
     let unsubscribe: (() => void) | undefined
     let stopped = false
@@ -75,8 +98,8 @@ export function registerLateTerminalSourceRetryTest(
       })
       const resident = getTerminalSemanticResident(ptyId)!
       const policy = resident.policy
-      const parser = Reflect.get(policy.legacySource, 'bytes')
-      const cursor = Reflect.get(resident, 'consumption')
+      const parser = measuredParser(policy.legacySource)
+      const cursor = measuredConsumption(resident)
       h.pending[0].resolve({ subscriptionId: 'sub-0', requestId: 'r' })
       for (let index = 0; index < 30; index++) {
         await Promise.resolve()
@@ -169,8 +192,8 @@ export function registerLateTerminalSourceRetryTest(
       expect(markTerminalBell).toHaveBeenCalledOnce()
       expect(getTerminalSemanticResident(ptyId)).toBe(resident)
       expect(resident.policy).toBe(policy)
-      expect(Reflect.get(resident.policy.legacySource, 'bytes')).toBe(parser)
-      expect(Reflect.get(resident, 'consumption')).toBe(cursor)
+      expect(measuredParser(resident.policy.legacySource)).toBe(parser)
+      expect(measuredConsumption(resident)).toBe(cursor)
       expect(resident.identity.runtimeId).toBe(runtime.getRuntimeId())
       // The postbatch cursor fences duplicates/lower state and an arbitrary runtime after installation.
       h.emit(2, false, live)
@@ -221,3 +244,16 @@ export function registerLateTerminalSourceRetryTest(
     expect(stopped).toBe(true)
   })
 }
+
+const initialState = useAppStore.getState()
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => {
+  _resetTerminalSideEffectFactConsumersForTest()
+  useAppStore.setState(initialState, true)
+  replaceRuntimeEnvironmentRevisions(initialState.runtimeEnvironments)
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+registerLateTerminalSourceRetryTest(createHarness)

@@ -1,3 +1,6 @@
+import type { RuntimeClientEventSource } from '@/runtime/runtime-client-events'
+import { isProvenProcessExit } from '../../../../shared/terminal-exit-cause'
+import { deferPtyShutdownExit } from './pty-shutdown-exit-deferral'
 import { TerminalResidentRegistry, type TerminalResident } from './terminal-resident-registry'
 import type { createTerminalResidentPolicy } from './terminal-resident-policy'
 import type { TerminalResidentLegacySource } from './terminal-resident-legacy-source'
@@ -26,7 +29,7 @@ export const legacySourcesByPtyId = new Map<
     resident: TerminalSemanticResident
     source: TerminalResidentLegacySource
     unsubscribe?: () => void
-    installationSource?: object
+    installationSource?: RuntimeClientEventSource
   }
 >()
 
@@ -84,4 +87,31 @@ export function retireTerminalSemanticResidentsForTab(
       sourceSubscriptionsByPtyId.delete(ptyId)
     }
   }
+}
+
+export function observeTerminalSemanticResidentExit(
+  ptyId: string,
+  code: number,
+  incarnationId?: string
+): void {
+  const resident = residentsByPtyId.get(ptyId)
+  if (
+    !resident ||
+    (incarnationId !== undefined && resident.identity.incarnationId !== incarnationId)
+  ) {
+    return
+  }
+  if (!isProvenProcessExit(code)) {
+    resident.policy.foreground.paneForegroundAgentTracker.suspend()
+    return
+  }
+  if (resident.policy.isPtyShutdownPending(ptyId)) {
+    deferPtyShutdownExit(ptyId, (settlement) => {
+      if (settlement === 'committed') {
+        retireCapturedResident(resident)
+      }
+    })
+    return
+  }
+  retireCapturedResident(resident)
 }

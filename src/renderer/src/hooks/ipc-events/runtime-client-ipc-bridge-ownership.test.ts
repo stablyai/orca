@@ -1,22 +1,15 @@
+import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
+import { createHarness } from './runtime-client-ipc-bridge-harness-fixture'
+import { TerminalSnapshotConsumption } from '../../../../shared/terminal-snapshot-consumption'
 import { getDefaultSettings } from '../../../../shared/constants'
-import { registerLiveTerminalSourceCompletionTests } from './runtime-client-ipc-bridge-live-completion.spec'
-import { registerLateTerminalSourceRetryTest } from './runtime-client-ipc-bridge-late-terminal-source.spec'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
-import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
-import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
-import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import { TerminalSnapshotState } from '../../../../shared/terminal-snapshot-state'
 import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
 import {
   getTerminalSemanticResident,
   _resetTerminalSideEffectFactConsumersForTest
 } from '../../components/terminal-pane/terminal-side-effect-facts-handler'
-import type {
-  RuntimeClientEvent,
-  RuntimeClientEventStreamMessage
-} from '../../../../shared/runtime-client-events'
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import {
   beginWorktreeLineageRefresh,
@@ -34,134 +27,28 @@ afterEach(() => {
   vi.unstubAllGlobals()
 })
 
-export type RuntimeClientEventBridgeHarness = ReturnType<typeof createHarness>
+function measuredConsumption(resident: object): TerminalSnapshotConsumption {
+  const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value
+  if (!(value instanceof TerminalSnapshotConsumption)) {
+    throw new Error('Expected actual resident cursor')
+  }
+  return value
+}
 
-function createHarness() {
-  type Ipc = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[0]
-  type Args = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[1]
-  type Callbacks = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[2]
-  let listener: Parameters<Ipc['on']>[1] | undefined
-  const pending: ReturnType<typeof Promise.withResolvers<unknown>>[] = []
-  const issueRead = Promise.withResolvers<null>()
-  const ipc: Ipc = {
-    invoke: vi.fn((channel) => {
-      if (channel !== 'runtimeEnvironments:subscribe') {
-        return Promise.resolve()
-      }
-      const setup = Promise.withResolvers<unknown>()
-      pending.push(setup)
-      return setup.promise
-    }),
-    send: vi.fn(),
-    on: (_channel, callback) => {
-      listener = callback
-    },
-    removeListener: vi.fn()
+function measuredRevision(cursor: TerminalSnapshotConsumption): number | undefined {
+  const value: unknown = Object.getOwnPropertyDescriptor(cursor, 'previous')?.value
+  if (value === null) {
+    return undefined
   }
-  const getIssue = vi.fn(() => issueRead.promise)
-  const refreshStatus = vi.fn(async () => true)
-  const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
-  let nextId = 0
-  vi.stubGlobal('window', {
-    api: {
-      runtimeEnvironments: {
-        subscribe: (args: Args, callbacks: Callbacks) =>
-          subscribeRuntimeEnvironmentFromPreload(ipc, args, callbacks, () => `sub-${nextId++}`),
-        call: vi.fn(async () => ({ id: 'r', ok: true, result: [] }))
-      },
-      browser: { sessionClientRouteImportSources: async () => ({}) },
-      linear: { getIssue }
-    }
-  })
-  const status = createCompatibleRuntimeStatusResponse()
-  if (!status.ok) {
-    throw new Error('expected valid runtime status fixture')
+  if (
+    typeof value !== 'object' ||
+    value === null ||
+    !('revision' in value) ||
+    typeof value.revision !== 'number'
+  ) {
+    throw new Error('Expected actual installed snapshot revision')
   }
-  useAppStore.setState({
-    settings: null,
-    runtimeEnvironments: [
-      {
-        id: 'host-a',
-        name: 'Host A',
-        createdAt: 1,
-        updatedAt: 1,
-        lastUsedAt: null,
-        runtimeId: null,
-        endpoints: [
-          { id: 'ws-a', kind: 'websocket', label: 'WS', endpoint: 'ws://example.invalid' }
-        ],
-        preferredEndpointId: 'ws-a'
-      }
-    ],
-    runtimeStatusByEnvironmentId: new Map([['host-a', { status: status.result, checkedAt: 1 }]]),
-    linearIssueCache: {},
-    linearSearchCache: {},
-    linearListCache: {},
-    linearProjectIssueCache: {},
-    linearCustomViewIssueCache: {},
-    checkLinearConnection: vi.fn(async () => {}),
-    refreshRuntimeEnvironmentStatus: refreshStatus,
-    fetchRuntimeEnvironmentRepos
-  })
-  const starts: (() => void)[] = []
-  const activateNotifiedWorktree = vi.fn(async () => {})
-  const enqueue = vi.fn()
-  const start = (): (() => void) => {
-    const unsubs: (() => void)[] = []
-    const unsubscribeStore = registerRuntimeClientIpcBridge(unsubs, {
-      worktreeChangeRefreshQueue: { enqueue, dispose: vi.fn() },
-      activateNotifiedWorktree
-    })
-    const stop = (): void => {
-      unsubscribeStore()
-      unsubs.forEach((unsubscribe) => unsubscribe())
-    }
-    starts.push(stop)
-    return stop
-  }
-  return {
-    start,
-    getIssue,
-    refreshStatus,
-    fetchRuntimeEnvironmentRepos,
-    pending,
-    ipc,
-    activateNotifiedWorktree,
-    enqueue,
-    emit: (
-      index: number,
-      replay = false,
-      event?:
-        | RuntimeClientEventStreamMessage
-        | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown; sortOrders?: unknown }
-    ) => {
-      const response = {
-        id: 'r',
-        ok: true as const,
-        _meta: { runtimeId: 'remote-runtime' },
-        result: event ?? {
-          type: 'linearLinkedIssueUpdated',
-          identifier: 'ISSUE-1',
-          workspaceId: 'workspace-a'
-        }
-      }
-      listener?.(null, {
-        subscriptionId: `sub-${index}`,
-        type: 'response',
-        response: replay ? tagRuntimeSubscriptionReplayResponse(response) : response
-      })
-    },
-    finish: async () => {
-      starts.forEach((stop) => stop())
-      pending.forEach((setup, index) =>
-        setup.resolve({ subscriptionId: `sub-${index}`, requestId: 'r' })
-      )
-      issueRead.resolve(null)
-      for (let index = 0; index < 30; index += 1) {
-        await Promise.resolve()
-      }
-    }
-  }
+  return value.revision
 }
 
 it('does no Linear read dispatch or cache publication after cleanup while setup is pending', async () => {
@@ -592,7 +479,7 @@ it('R2-C3 follows actual empty-ready rollback and upgrade with stale or missing 
     const resident = getTerminalSemanticResident(ptyId)
     expect(resident).toBeDefined()
     const policy = resident?.policy
-    const cursor = resident && Reflect.get(resident, 'consumption')
+    const cursor = resident && measuredConsumption(resident)
     // Store capability deliberately remains stale-capable throughout rollback.
     h.emit(0, true, { type: 'ready', subscriptionId: 'sub-0', snapshot: {} })
     expect(h.pending).toHaveLength(2)
@@ -622,147 +509,17 @@ it('R2-C3 follows actual empty-ready rollback and upgrade with stale or missing 
     h.emit(3, false, legacy())
     expect(markTerminalBell).toHaveBeenCalledOnce()
     expect(getTerminalSemanticResident(ptyId)).toBe(resident)
-    expect(Reflect.get(cursor!, 'previous')?.revision).toBe(0)
+    expect(measuredRevision(cursor!)).toBe(0)
     source.record({ kind: 'bell' }, Date.now())
     h.emit(3, false, { type: 'terminalSideEffects', batch: batch() })
-    expect(Reflect.get(cursor!, 'previous')?.revision).toBe(1)
+    expect(measuredRevision(cursor!)).toBe(1)
     expect(markTerminalBell).toHaveBeenCalledTimes(2)
     h.emit(1, false, legacy())
     expect(markTerminalBell).toHaveBeenCalledTimes(2)
     expect(getTerminalSemanticResident(ptyId)).toBe(resident)
     expect(resident?.policy).toBe(policy)
-    expect(resident && Reflect.get(resident, 'consumption')).toBe(cursor)
+    expect(resident && measuredConsumption(resident)).toBe(cursor)
   } finally {
     await h.finish()
   }
 })
-
-it('R3 keeps a same-incarnation execution when restarted host state arrives after an empty capable ready', async () => {
-  const h = createHarness()
-  const markTerminalBell = vi.fn()
-  useAppStore.setState({ markTerminalBell, fetchHostWorkspaceStatuses: vi.fn(async () => {}) })
-  const source = new TerminalSnapshotState()
-  const ptyId = toRemoteRuntimePtyId('physical', 'host-a')
-  const { OrcaRuntimeService } = await import('../../../../main/runtime/orca-runtime')
-  const runtime = new OrcaRuntimeService()
-  let unsubscribe: (() => void) | undefined
-  const produced: RuntimeClientEvent[] = []
-  try {
-    h.start()
-    h.emit(0, false, {
-      type: 'ready',
-      subscriptionId: 'sub-0',
-      snapshot: {
-        terminalSideEffects: [
-          {
-            ptyId: 'physical',
-            paneKey: 'tab:leaf',
-            tabId: 'tab',
-            worktreeId: 'remote-wt',
-            seq: 0,
-            facts: [],
-            replay: true,
-            terminalState: {
-              runtimeId: 'old-runtime',
-              incarnationId: 'incarnation',
-              snapshot: source.snapshot()
-            }
-          }
-        ]
-      }
-    })
-    const resident = getTerminalSemanticResident(ptyId)
-    expect(resident).toBeDefined()
-    const cursor = resident && Reflect.get(resident, 'consumption')
-    const policy = resident!.policy
-    const parser = Reflect.get(policy.legacySource, 'bytes')
-    const controllers = [
-      policy.legacySource,
-      policy.input,
-      policy.completion,
-      policy.notification,
-      policy.foreground,
-      policy.commandCode
-    ]
-    const restore = vi.spyOn(policy, 'restoreCurrent')
-    const effects = vi.spyOn(policy, 'applyEffect')
-    h.emit(0, true, { type: 'ready', subscriptionId: 'sub-0', snapshot: {} })
-    expect(h.pending).toHaveLength(2)
-    unsubscribe = runtime.onClientEvent(
-      (event) => {
-        produced.push(event)
-        h.emit(1, false, event)
-      },
-      {
-        initialize: () =>
-          h.emit(1, false, {
-            type: 'ready',
-            subscriptionId: 'sub-1',
-            snapshot: { terminalSideEffects: runtime.getTerminalSideEffectClientEventSnapshot() }
-          })
-      }
-    )
-    expect(runtime.getTerminalSideEffectClientEventSnapshot()).toEqual([])
-    runtime.applyTerminalTransientObservation('physical', 'incarnation', source.snapshot())
-    expect(markTerminalBell).not.toHaveBeenCalled()
-    expect(effects).not.toHaveBeenCalled()
-    expect(restore).toHaveBeenCalledWith(expect.anything(), true, true, undefined, [])
-    source.record({ kind: 'bell' }, Date.now())
-    runtime.applyTerminalTransientObservation('physical', 'incarnation', source.snapshot())
-    expect(produced.filter((event) => event.type === 'terminalSideEffects')).toHaveLength(2)
-    expect(getTerminalSemanticResident(ptyId)).toBe(resident)
-    expect(resident && Reflect.get(resident, 'consumption')).toBe(cursor)
-    expect(produced[0]).toMatchObject({
-      type: 'terminalSideEffects',
-      batch: {
-        replay: true,
-        terminalState: { incarnationId: 'incarnation' }
-      }
-    })
-    expect(produced[1]).toMatchObject({
-      type: 'terminalSideEffects',
-      batch: {
-        terminalState: {
-          incarnationId: 'incarnation',
-          snapshot: { effects: { bell: { count: 1 } } }
-        }
-      }
-    })
-    expect.soft(markTerminalBell).toHaveBeenCalledOnce()
-    expect(resident!.policy).toBe(policy)
-    expect(Reflect.get(policy.legacySource, 'bytes')).toBe(parser)
-    ;[
-      policy.legacySource,
-      policy.input,
-      policy.completion,
-      policy.notification,
-      policy.foreground,
-      policy.commandCode
-    ].forEach((controller, index) => expect(controller).toBe(controllers[index]))
-    expect(effects).toHaveBeenCalledOnce()
-    // Control: the same actual producer frames deliver if only the runtime ID matches.
-    for (const event of produced) {
-      if (event.type === 'terminalSideEffects' && event.batch.terminalState) {
-        h.emit(1, false, {
-          ...event,
-          batch: {
-            ...event.batch,
-            terminalState: {
-              ...event.batch.terminalState,
-              runtimeId: 'old-runtime'
-            }
-          }
-        })
-      }
-    }
-    expect(markTerminalBell).toHaveBeenCalledOnce()
-  } finally {
-    unsubscribe?.()
-    runtime.onPtyExit('physical', 0)
-    await h.finish()
-  }
-})
-
-registerLateTerminalSourceRetryTest(createHarness)
-
-registerLiveTerminalSourceCompletionTests(createHarness)

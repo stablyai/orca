@@ -1,7 +1,7 @@
 import type { TerminalSideEffectBatch } from '../../../../shared/terminal-side-effect-facts'
 import type { TerminalResidentBinding } from './terminal-resident-binding'
 import type { TerminalSemanticResident } from './terminal-semantic-residents'
-import { captureTerminalFactSubject, type TerminalFactSubject } from './terminal-fact-subject'
+import type { captureTerminalFactSubject, TerminalFactSubject } from './terminal-fact-subject'
 
 // Bounded handoff buffering bridges watcher removal and async pane registration because replay cannot restore live bells/done. Never-consumed PTYs still drop facts.
 const HANDOFF_FACT_BUFFER_TTL_MS = 15_000
@@ -10,6 +10,7 @@ const MAX_HANDOFF_FACT_PTYS = 32
 
 type HandoffFactBuffer = {
   binding: TerminalResidentBinding
+  captureSubject: typeof captureTerminalFactSubject
   batches: { batch: TerminalSideEffectBatch; subject: TerminalFactSubject }[]
   expiresAtMs: number
   expiryTimer: ReturnType<typeof setTimeout>
@@ -18,8 +19,8 @@ const handoffFactBuffersByPtyId = new Map<string, HandoffFactBuffer>()
 
 /** Raw startup retention captures the same original subject without admitting an execution. */
 export function captureHandoffFactSubject(ptyId: string): TerminalFactSubject | undefined {
-  const binding = handoffFactBuffersByPtyId.get(ptyId)?.binding
-  return binding ? captureTerminalFactSubject(binding.paneKey) : undefined
+  const buffer = handoffFactBuffersByPtyId.get(ptyId)
+  return buffer ? buffer.captureSubject(buffer.binding.paneKey) : undefined
 }
 
 export function deleteHandoffFactBuffer(ptyId: string): void {
@@ -33,6 +34,7 @@ export function deleteHandoffFactBuffer(ptyId: string): void {
 export function openHandoffFactBuffer(
   ptyId: string,
   binding: TerminalResidentBinding,
+  captureSubject: typeof captureTerminalFactSubject,
   registration = false
 ): void {
   if (registration && handoffFactBuffersByPtyId.has(ptyId)) {
@@ -54,6 +56,7 @@ export function openHandoffFactBuffer(
   }
   const buffer: HandoffFactBuffer = {
     binding,
+    captureSubject,
     batches: retained,
     expiresAtMs: nowMs + HANDOFF_FACT_BUFFER_TTL_MS,
     expiryTimer: setTimeout(() => {
@@ -82,7 +85,7 @@ export function bufferHandoffFactBatch(batch: TerminalSideEffectBatch): void {
   if (buffer.batches.length >= MAX_HANDOFF_FACT_BATCHES) {
     buffer.batches.shift()
   }
-  buffer.batches.push({ batch, subject: captureTerminalFactSubject(buffer.binding.paneKey) })
+  buffer.batches.push({ batch, subject: buffer.captureSubject(buffer.binding.paneKey) })
 }
 
 export function drainHandoffFactBuffer(ptyId: string, resident: TerminalSemanticResident): void {

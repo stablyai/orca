@@ -503,7 +503,7 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         | undefined
       onPtyExit?.('tab-pty')
       await flushAsyncTicks()
-      const deferredSpawn = createDeferred<unknown>()
+      const deferredSpawn = createDeferred<Awaited<ReturnType<MockTransport['connect']>>>()
       transport.connect.mockImplementationOnce(() => deferredSpawn.promise)
 
       const claimKey = 'wt-1\0claude\0session_id\0sess-hibernated-inflight'
@@ -776,7 +776,10 @@ export function registerPtyConnectionHibernationWakeTests(): void {
         listener()
       }
       sendTerminalInputThroughPane(pane, 'x')
-      expect(transport.sendInput).toHaveBeenLastCalledWith('x', 'driving')
+      expect(transport.sendInput).toHaveBeenLastCalledWith('x', 'driving', {
+        onEligible: expect.any(Function),
+        onDispatch: expect.any(Function)
+      })
       expect(mockStoreState.recordTerminalInput).not.toHaveBeenCalled()
       await Promise.resolve()
       expect(mockStoreState.recordTerminalInput).toHaveBeenCalledTimes(1)

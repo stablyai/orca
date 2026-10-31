@@ -1,15 +1,29 @@
-import { getDefaultSettings } from '../../../../shared/constants'
+import { afterEach, beforeEach } from 'vitest'
+import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
+import { _resetTerminalSideEffectFactConsumersForTest } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import { createHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
+
+import { TerminalSnapshotConsumption } from '../../src/shared/terminal-snapshot-consumption'
+import { getDefaultSettings } from '../../src/shared/constants'
 import { expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
-import * as terminalNotifications from '../../components/terminal-pane/use-notification-dispatch'
-import { AGENT_DONE_QUIET_MS } from '../../../../shared/agent-transitions'
-import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../../components/terminal-pane/agent-task-complete-policy'
-import { COMMAND_CODE_OUTPUT_DONE_SETTLE_MS } from '../../components/terminal-pane/command-code-done-settle'
-import { TerminalSnapshotState } from '../../../../shared/terminal-snapshot-state'
-import { toRemoteRuntimePtyId } from '../../../../shared/remote-runtime/remote-runtime-pty-id'
-import { getTerminalSemanticResident } from '../../components/terminal-pane/terminal-side-effect-facts-handler'
-import type { RuntimeClientEvent } from '../../../../shared/runtime-client-events'
-import type { RuntimeClientEventBridgeHarness } from './runtime-client-ipc-bridge-ownership.test'
+import * as terminalNotifications from '../../src/renderer/src/components/terminal-pane/use-notification-dispatch'
+import { AGENT_DONE_QUIET_MS } from '../../src/shared/agent-transitions'
+import { AGENT_TASK_COMPLETE_NOTIFICATION_MAX_WAIT_MS } from '../../src/renderer/src/components/terminal-pane/agent-task-complete-policy'
+import { COMMAND_CODE_OUTPUT_DONE_SETTLE_MS } from '../../src/renderer/src/components/terminal-pane/command-code-done-settle'
+import { TerminalSnapshotState } from '../../src/shared/terminal-snapshot-state'
+import { toRemoteRuntimePtyId } from '../../src/shared/remote-runtime/remote-runtime-pty-id'
+import { getTerminalSemanticResident } from '../../src/renderer/src/components/terminal-pane/terminal-side-effect-facts-handler'
+import type { RuntimeClientEvent } from '../../src/shared/runtime-client-events'
+import type { RuntimeClientEventBridgeHarness } from '../../src/renderer/src/hooks/ipc-events/runtime-client-ipc-bridge-harness-fixture'
+
+function measuredConsumption(resident: object): TerminalSnapshotConsumption {
+  const value: unknown = Object.getOwnPropertyDescriptor(resident, 'consumption')?.value
+  if (!(value instanceof TerminalSnapshotConsumption)) {
+    throw new Error('Expected actual resident cursor')
+  }
+  return value
+}
 
 export function registerLiveTerminalSourceCompletionTests(
   createHarness: () => RuntimeClientEventBridgeHarness
@@ -46,7 +60,7 @@ export function registerLiveTerminalSourceCompletionTests(
         { kind: 'agent-status', payload: { state: 'working', agentType: 'claude', prompt: '' } },
         Date.now()
       )
-      const { OrcaRuntimeService } = await import('../../../../main/runtime/orca-runtime')
+      const { OrcaRuntimeService } = await import('../../src/main/runtime/orca-runtime')
       const runtime = new OrcaRuntimeService()
       let unsubscribe: (() => void) | undefined
       try {
@@ -216,7 +230,7 @@ export function registerLiveTerminalSourceCompletionTests(
     const source = new TerminalSnapshotState()
     source.record({ kind: 'command-started' }, Date.now())
     source.record({ kind: 'command-code-working', prompt: 'build' }, Date.now())
-    const { OrcaRuntimeService } = await import('../../../../main/runtime/orca-runtime')
+    const { OrcaRuntimeService } = await import('../../src/main/runtime/orca-runtime')
     const runtime = new OrcaRuntimeService()
     let unsubscribe: (() => void) | undefined
     try {
@@ -258,7 +272,7 @@ export function registerLiveTerminalSourceCompletionTests(
         clearFocusReportSuppression: vi.fn()
       })
       const controllers = [resident.policy.commandCode, resident.policy.completion]
-      const cursor = Reflect.get(resident, 'consumption')
+      const cursor = measuredConsumption(resident)
       expect(useAppStore.getState().agentStatusByPaneKey[paneKey]).toMatchObject({
         state: 'working',
         agentType: 'command-code'
@@ -288,7 +302,7 @@ export function registerLiveTerminalSourceCompletionTests(
       source.record({ kind: 'command-code-done', prompt: 'build' }, Date.now() + 1)
       runtime.applyTerminalTransientObservation('physical', 'incarnation', source.snapshot())
       expect(getTerminalSemanticResident(ptyId)).toBe(resident)
-      expect(Reflect.get(resident, 'consumption')).toBe(cursor)
+      expect(measuredConsumption(resident)).toBe(cursor)
       expect(resident.policy.commandCode).toBe(controllers[0])
       expect(resident.policy.completion).toBe(controllers[1])
       expect(showTitle).toHaveBeenCalledWith('Build output', 'Build output', false)
@@ -310,3 +324,16 @@ export function registerLiveTerminalSourceCompletionTests(
     }
   })
 }
+
+const initialState = useAppStore.getState()
+
+beforeEach(() => vi.useFakeTimers())
+afterEach(() => {
+  _resetTerminalSideEffectFactConsumersForTest()
+  useAppStore.setState(initialState, true)
+  replaceRuntimeEnvironmentRevisions(initialState.runtimeEnvironments)
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+registerLiveTerminalSourceCompletionTests(createHarness)

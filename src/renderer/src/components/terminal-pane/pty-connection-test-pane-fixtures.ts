@@ -1,7 +1,7 @@
 import type { TerminalInputCall } from './terminal-input-call'
 import { vi } from 'vitest'
 import type { Mock } from 'vitest'
-import type { PtyConnectResult, PtyReplayDataMeta, PtyTransport } from './pty-transport-types'
+import type { PtyTransport } from './pty-transport-types'
 
 export const LEAF_1 = '11111111-1111-4111-8111-111111111111' as const
 export const LEAF_2 = '22222222-2222-4222-8222-222222222222' as const
@@ -10,29 +10,15 @@ export function leafIdForPane(paneId: number): string {
   return paneId === 2 ? LEAF_2 : LEAF_1
 }
 
-export type ConnectCallbacks = {
-  onReattachDetermined?: () => void
-  onConnect?: () => void
-  onStreamRecovered?: () => void
-  onData?: (
-    data: string,
-    meta?: { seq?: number; rawLength?: number; background?: boolean; droppedOutput?: boolean }
-  ) => void
-  onReplayData?: (data: string, meta?: PtyReplayDataMeta) => void
-  onError?: (msg: string) => void
-  onErrorCleared?: (msg: string) => void
-  onWriteUnavailable?: () => void
-  onOutputPauseChanged?: (paused: boolean, supported: boolean, dropsReported?: boolean) => void
-  onPausedOutputDropped?: () => void
-}
+export type ConnectCallbacks = Parameters<PtyTransport['connect']>[0]['callbacks']
 
 export type MockTransport = {
   retryRecovery?: () => boolean
   attach: Mock<PtyTransport['attach']>
   connect: Mock<
     (
-      opts: { callbacks: ConnectCallbacks; sessionId?: string } & Record<string, unknown>
-    ) => Promise<string | PtyConnectResult | null | void>
+      opts: Parameters<PtyTransport['connect']>[0]
+    ) => Promise<Awaited<ReturnType<PtyTransport['connect']>> | null>
   >
   disconnect: ReturnType<typeof vi.fn>
   detach?: ReturnType<typeof vi.fn>

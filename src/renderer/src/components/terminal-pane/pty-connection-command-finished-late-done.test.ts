@@ -1,4 +1,4 @@
-import type * as React from 'react'
+import { bindPtyConnectionTestMocks } from './pty-connection-mocks.spec'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { makePaneKey } from '../../../../shared/stable-pane-id'
 import type { AgentStatusEntry } from '../../../../shared/agent-status-types'
@@ -20,112 +20,10 @@ import {
 } from './pty-connection-test-environment'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 
-const {
-  resetAndRefreshAllTerminalWebglAtlases,
-  scheduleTerminalWebglAtlasRecovery,
-  scheduleRuntimeGraphSync,
-  shouldSeedCacheTimerOnInitialTitle,
-  toastInfo,
-  notifyCodexPaneBoundForStaleSweep
-} = vi.hoisted(() => ({
-  resetAndRefreshAllTerminalWebglAtlases: vi.fn(),
-  scheduleTerminalWebglAtlasRecovery: vi.fn(),
-  scheduleRuntimeGraphSync: vi.fn(),
-  shouldSeedCacheTimerOnInitialTitle: vi.fn(() => false),
-  toastInfo: vi.fn(),
-  notifyCodexPaneBoundForStaleSweep: vi.fn()
-}))
-
 let mockStoreState: StoreState
 let transportFactoryQueue: MockTransport[] = []
 let createdTransportOptions: Record<string, unknown>[] = []
 let storeSubscribers: ((state: StoreState) => void)[] = []
-
-vi.mock('@/runtime/sync-runtime-graph', () => ({
-  scheduleRuntimeGraphSync
-}))
-
-vi.mock('@/lib/pane-manager/pane-manager-registry', async (importOriginal) => ({
-  ...(await importOriginal<Record<string, unknown>>()),
-  resetAndRefreshAllTerminalWebglAtlases
-}))
-
-vi.mock('./terminal-webgl-atlas-recovery', () => ({
-  scheduleTerminalWebglAtlasRecovery
-}))
-
-vi.mock('@/store', () => ({
-  useAppStore: {
-    getState: () => mockStoreState,
-    subscribe: (listener: (state: StoreState) => void) => {
-      storeSubscribers.push(listener)
-      return () => {
-        storeSubscribers = storeSubscribers.filter((candidate) => candidate !== listener)
-      }
-    }
-  }
-}))
-
-vi.mock('@/lib/agent-status', async (importOriginal) => {
-  const { buildAgentStatusModuleMock } = await import('./pty-connection-test-environment')
-  return buildAgentStatusModuleMock(await importOriginal<Record<string, unknown>>())
-})
-
-vi.mock('./cache-timer-seeding', () => ({
-  shouldSeedCacheTimerOnInitialTitle
-}))
-
-vi.mock('sonner', () => ({
-  toast: {
-    info: toastInfo
-  }
-}))
-
-vi.mock('@/lib/codex-stale-pane-sweep', () => ({
-  notifyCodexPaneBoundForStaleSweep
-}))
-
-// Why: useCallback must pass through; no test here renders React.
-vi.mock('react', async (importOriginal) => {
-  const actual = await importOriginal<typeof React>()
-  return {
-    ...actual,
-    useCallback: <T extends (...args: unknown[]) => unknown>(fn: T): T => fn
-  }
-})
-
-vi.mock('./pty-transport', () => ({
-  createIpcPtyTransport: vi.fn((options: Record<string, unknown>) => {
-    createdTransportOptions.push(options)
-    const nextTransport = transportFactoryQueue.shift()
-    if (!nextTransport) {
-      throw new Error('No mock transport queued')
-    }
-    return nextTransport
-  })
-}))
-
-vi.mock('./remote-runtime-pty-transport', () => ({
-  createRemoteRuntimePtyTransport: vi.fn(
-    (_environmentId: string, options: Record<string, unknown>) => {
-      createdTransportOptions.push(options)
-      const nextTransport = transportFactoryQueue.shift()
-      if (!nextTransport) {
-        throw new Error('No mock transport queued')
-      }
-      return nextTransport
-    }
-  )
-}))
-
-// Stub eager-buffer lookup to exercise live adoption without the IPC dispatcher.
-vi.mock('./pty-dispatcher', async (importOriginal) => {
-  const actual = await importOriginal<Record<string, unknown>>()
-  return {
-    ...actual,
-    getEagerPtyBufferHandle: vi.fn(() => undefined)
-  }
-})
 
 function createDeps(overrides: Record<string, unknown> = {}) {
   return buildPaneConnectionDeps(() => mockStoreState, overrides)
@@ -140,6 +38,15 @@ describe('command-finished drop and a Done that lands after it', () => {
     createdTransportOptions = []
     storeSubscribers = []
     mockStoreState = createInitialStoreState(() => mockStoreState)
+    bindPtyConnectionTestMocks({
+      getState: () => mockStoreState,
+      getTransportQueue: () => transportFactoryQueue,
+      getTransportOptions: () => createdTransportOptions,
+      getStoreSubscribers: () => storeSubscribers,
+      setStoreSubscribers: (subscribers) => {
+        storeSubscribers = subscribers
+      }
+    })
     await installTerminalTestGlobals()
   })
 
@@ -182,6 +89,13 @@ describe('command-finished drop and a Done that lands after it', () => {
     connectPanePty(...args)
     await vi.advanceTimersByTimeAsync(20)
     await flushAsyncTicks()
+    const { getTerminalSemanticResident } = await import('./terminal-semantic-residents')
+    const resident = getTerminalSemanticResident('pty-opencode-run')
+    if (!resident) {
+      throw new Error('Expected connect/admission to publish E before effects')
+    }
+    expect(resident.isLive).toBe(true)
+    expect(resident.identity.ptyId).toBe('pty-opencode-run')
     const realStore = createTestStore()
     mockStoreState.dropAgentStatus.mockImplementation((key: string) => {
       delete mockStoreState.agentStatusByPaneKey[key]

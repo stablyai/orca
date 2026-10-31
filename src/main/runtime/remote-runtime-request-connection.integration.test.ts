@@ -143,7 +143,11 @@ describe('remote runtime request connection integration', () => {
           }
           return repo
         },
-        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+        onClientEvent: (
+          listener: (event: RuntimeClientEvent) => void,
+          options?: { initialize?: () => void }
+        ) => {
+          options?.initialize?.()
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
@@ -304,7 +308,11 @@ describe('remote runtime request connection integration', () => {
           subscriptionCleanups.delete(id)
         },
         onClientDisconnected: () => {},
-        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+        onClientEvent: (
+          listener: (event: RuntimeClientEvent) => void,
+          options?: { initialize?: () => void }
+        ) => {
+          options?.initialize?.()
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },
@@ -551,7 +559,11 @@ describe('remote runtime request connection integration', () => {
           }
         },
         onClientDisconnected: () => {},
-        onClientEvent: (listener: (event: RuntimeClientEvent) => void) => {
+        onClientEvent: (
+          listener: (event: RuntimeClientEvent) => void,
+          options?: { initialize?: () => void }
+        ) => {
+          options?.initialize?.()
           clientEventListeners.add(listener)
           return () => clientEventListeners.delete(listener)
         },

@@ -1,30 +1,35 @@
 // @vitest-environment happy-dom
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import { resolveRemoteForegroundEvidence } from '../../../../main/providers/agent-foreground-process-batch'
-import { TerminalResidentRegistry } from './terminal-resident-registry'
-import { createTerminalResidentPolicy } from './terminal-resident-policy'
-import { createInitialStoreState } from './pty-connection-test-store-fixtures'
-import { makePaneKey } from '../../../../shared/stable-pane-id'
-import { LEAF_1 } from './pty-connection-test-pane-fixtures'
-import type { StoreState } from './pty-connection-test-store-state'
+import { resolveRemoteForegroundEvidence } from '../../src/main/providers/agent-foreground-process-batch'
+import { TerminalResidentRegistry } from '../../src/renderer/src/components/terminal-pane/terminal-resident-registry'
+import { createTerminalResidentPolicy } from '../../src/renderer/src/components/terminal-pane/terminal-resident-policy'
+import { createInitialStoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-fixtures'
+import { makePaneKey } from '../../src/shared/stable-pane-id'
+import { LEAF_1 } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
+import type { StoreState } from '../../src/renderer/src/components/terminal-pane/pty-connection-test-store-state'
 import type { RuntimeTerminalProcessInspection } from '@/runtime/runtime-terminal-inspection'
 import {
   installTerminalTestGlobals,
   restoreTerminalTestGlobals
-} from './pty-connection-test-environment'
-import { createTerminalKeyboardRuntime } from './terminal-keyboard-runtime'
-import { createPane, createManager } from './pty-connection-test-pane-fixtures'
+} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-environment'
+import { createTerminalKeyboardRuntime } from '../../src/renderer/src/components/terminal-pane/terminal-keyboard-runtime'
+import {
+  createPane,
+  createManager
+} from '../../src/renderer/src/components/terminal-pane/pty-connection-test-pane-fixtures'
 import { createTerminalLayoutActions } from '@/store/terminals/terminal-layout-state'
-import { foregroundAgentForActions } from '../../../../shared/agent-status-identity'
-import { hasCtrlEnterCsiUAuthorityForPane } from './terminal-ctrl-enter'
-import { resolveWindowsShiftEnterEncodingForPane } from './terminal-windows-shift-enter'
+import { foregroundAgentForActions } from '../../src/shared/agent-status-identity'
+import { hasCtrlEnterCsiUAuthorityForPane } from '../../src/renderer/src/components/terminal-pane/terminal-ctrl-enter'
+import { resolveWindowsShiftEnterEncodingForPane } from '../../src/renderer/src/components/terminal-pane/terminal-windows-shift-enter'
 
 let state: StoreState & Parameters<typeof resolveWindowsShiftEnterEncodingForPane>[0]
 const read = vi.fn<() => Promise<RuntimeTerminalProcessInspection>>()
 vi.mock('@/store', () => ({
   useAppStore: { getState: () => state, subscribe: () => () => {} }
 }))
-vi.mock('./use-notification-dispatch', () => ({ dispatchTerminalNotification: vi.fn() }))
+vi.mock('../../src/renderer/src/components/terminal-pane/use-notification-dispatch', () => ({
+  dispatchTerminalNotification: vi.fn()
+}))
 
 const paneKey = makePaneKey('tab-1', LEAF_1)
 let epoch = 0

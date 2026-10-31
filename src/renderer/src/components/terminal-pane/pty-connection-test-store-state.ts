@@ -105,6 +105,8 @@ export type StoreState = {
   consumePendingColdRestore: ReturnType<typeof vi.fn>
   consumePendingSnapshot: ReturnType<typeof vi.fn>
   consumeTabStartupCommand?: ReturnType<typeof vi.fn>
+  setRuntimePaneTitle: Mock<(tabId: string, paneId: number, title: string) => void>
+  updateTabTitle: Mock<(tabId: string, title: string) => void>
   runtimePaneTitlesByTabId: Record<string, Record<number, string>>
   agentStatusByPaneKey: Record<string, { agentType?: unknown; [key: string]: unknown }>
   retainedAgentsByPaneKey: Record<string, { agentType: AgentType }>

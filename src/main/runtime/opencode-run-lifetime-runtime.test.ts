@@ -26,8 +26,17 @@ const WORKTREE_ID = 'repo::/worktree'
 const LEAF_ID = '11111111-1111-4111-8111-111111111111'
 const PANE_KEY = `tab-1:${LEAF_ID}`
 
+class MeasuredRuntime extends OrcaRuntimeService {
+  get measuredPtys() {
+    return this.ptysById
+  }
+  get measuredTitleTrackers() {
+    return this.ptyTitleTrackersByPtyId
+  }
+}
+
 function createRuntime(deps: RuntimeConstructionDependencies = {}): {
-  runtime: OrcaRuntimeService
+  runtime: MeasuredRuntime
   statuses: RuntimeTerminalAgentStatusEvent[]
   channelOrder: string[]
   batches: TerminalSideEffectBatch[]
@@ -35,7 +44,7 @@ function createRuntime(deps: RuntimeConstructionDependencies = {}): {
   const statuses: RuntimeTerminalAgentStatusEvent[] = []
   const channelOrder: string[] = []
   const batches: TerminalSideEffectBatch[] = []
-  const runtime = new OrcaRuntimeService(undefined, undefined, {
+  const runtime = new MeasuredRuntime(undefined, undefined, {
     onTerminalAgentStatus: (event) => {
       statuses.push(event)
       channelOrder.push(`status:${event.payload.state}`)
@@ -115,7 +124,7 @@ function recordedReplay(mode: 'raw' | 'snapshot') {
     incarnationId: 'recorded-replay',
     agentLaunchAuthority: { launchToken: 'controlled-launch', launchAgent: 'opencode' }
   })
-  const ptys: ReadonlyMap<string, RuntimePtyWorktreeRecord> = Reflect.get(runtime, 'ptysById')
+  const ptys: ReadonlyMap<string, RuntimePtyWorktreeRecord> = runtime.measuredPtys
   const observer = new TerminalSnapshotObserver((observation) =>
     runtime.applyTerminalTransientObservation('pty-1', 'recorded-replay', observation)
   )
@@ -288,10 +297,8 @@ describe('generic terminal observation authority', () => {
       source.record(title, 1000)
       apply()
       expect(titleFacts(replay.batches)).toHaveLength(1)
-      const entries: ReadonlyMap<string, RuntimePtyTitleTrackerEntry> = Reflect.get(
-        replay.runtime,
-        'ptyTitleTrackersByPtyId'
-      )
+      const entries: ReadonlyMap<string, RuntimePtyTitleTrackerEntry> =
+        replay.runtime.measuredTitleTrackers
       const entry = entries.get('pty-1')
       if (!entry?.sideEffectState) {
         throw new Error('Expected installed runtime policy state')

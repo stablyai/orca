@@ -47,6 +47,21 @@ export function createInitialStoreState(getState: () => StoreState): StoreState 
     consumePendingColdRestore: vi.fn(() => null),
     consumePendingSnapshot: vi.fn(() => null),
     runtimePaneTitlesByTabId: {},
+    setRuntimePaneTitle: vi.fn((tabId: string, paneId: number, title: string) => {
+      const state = getState()
+      state.runtimePaneTitlesByTabId[tabId] = {
+        ...state.runtimePaneTitlesByTabId[tabId],
+        [paneId]: title
+      }
+    }),
+    updateTabTitle: vi.fn((tabId: string, title: string) => {
+      for (const tabs of Object.values(getState().tabsByWorktree)) {
+        const tab = tabs.find((entry) => entry.id === tabId)
+        if (tab) {
+          tab.title = title
+        }
+      }
+    }),
     agentStatusByPaneKey: {},
     retainedAgentsByPaneKey: {},
     paneForegroundAgentByPaneKey: {},
