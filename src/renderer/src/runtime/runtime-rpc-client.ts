@@ -2,7 +2,6 @@ import type {
   RuntimeRpcDispatchObservation,
   RuntimeRpcResponse
 } from '../../../shared/runtime-rpc-envelope'
-import { acceptAgentLaunchPaneAttempt } from '@/lib/agent-launch-pane-start'
 import { waitForPromiseWithSignal } from '../../../shared/abort-signal-reason'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
 import type { RuntimeCapability } from '../../../shared/protocol-version'
@@ -45,20 +44,6 @@ export async function callRuntimeRpc<TResult>(
     dispatchObservation?: () => RuntimeRpcDispatchObservation
   } = {}
 ): Promise<TResult> {
-  if (
-    (method === 'agent.launch' || method === 'agent.launchReplay') &&
-    params &&
-    typeof params === 'object' &&
-    'paneKey' in params &&
-    typeof params.paneKey === 'string'
-  ) {
-    acceptAgentLaunchPaneAttempt(
-      params.paneKey,
-      'operationId' in params && typeof params.operationId === 'string'
-        ? params.operationId
-        : undefined
-    )
-  }
   if (options.signal?.aborted) {
     throw createRuntimeRpcAbortError()
   }

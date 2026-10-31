@@ -1,9 +1,6 @@
 /** Remember explicit user closes so a racing spawn reveal stops the agent instead of resurrecting its tab; absence after reload is not a close. Keep store-free for teardown callers. */
 
-import {
-  settleAgentLaunchPaneStart,
-  forgetAgentLaunchPaneAttempts
-} from './agent-launch-pane-start'
+import { settleAgentLaunchPaneStart } from './agent-launch-pane-start'
 
 const MAX_REMEMBERED_CLOSES = 32
 const closedPaneKeys = new Set<string>()
@@ -15,7 +12,6 @@ function closeKey(tabId: string, leafId: string): string {
 
 export function noteAgentLaunchPaneClosedByUser(tabId: string, leafId: string): void {
   settleAgentLaunchPaneStart(tabId, leafId, null)
-  forgetAgentLaunchPaneAttempts(tabId, leafId)
   const paneKey = closeKey(tabId, leafId)
   closedPaneKeys.delete(paneKey)
   closedPaneKeys.add(paneKey)
