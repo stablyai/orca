@@ -1,5 +1,8 @@
 /** Singleton PTY event dispatcher and eager buffer helpers, split out from pty-transport.ts. */
-import { observeTerminalSemanticResidentExit } from './pty-shutdown-exit-deferral'
+import {
+  observeTerminalSemanticResidentExit,
+  markCommittedPtyShutdowns
+} from './pty-shutdown-exit-deferral'
 import { TERMINAL_SCROLLBACK_SESSION_BUFFER_BYTE_LIMIT } from '../../../../shared/terminal-scrollback-limits'
 import {
   clearProcessedPtyCharTotal,
@@ -32,7 +35,6 @@ import {
   ptyExitHandlers,
   ptyReplayHandlers
 } from './pty-shutdown-data-suspension'
-import { markCommittedPtyShutdowns } from './pty-shutdown-exit-deferral'
 
 export {
   ptyDataHandlers,

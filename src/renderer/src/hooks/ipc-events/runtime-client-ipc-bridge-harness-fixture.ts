@@ -1,14 +1,38 @@
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import { useAppStore } from '@/store'
 import { subscribeRuntimeEnvironmentFromPreload } from '../../../../preload/runtime-environment-subscriptions'
 import { tagRuntimeSubscriptionReplayResponse } from '../../../../shared/runtime-subscription-replay'
 import { createCompatibleRuntimeStatusResponse } from '@/runtime/runtime-compatibility-test-fixture'
 import { registerRuntimeClientIpcBridge } from './runtime-client-ipc-bridge'
 import type { RuntimeClientEventStreamMessage } from '../../../../shared/runtime-client-events'
+import type { LinearApi } from '../../../../preload/api/linear-api'
+import type { AppState } from '../../store/types'
+import type { WorktreeEventRuntime } from './worktree-event-runtime'
 
-export type RuntimeClientEventBridgeHarness = ReturnType<typeof createHarness>
+type RuntimeClientEventBridgeIpc = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[0]
 
-export function createHarness() {
+export type RuntimeClientEventBridgeHarness = {
+  start: () => () => void
+  getIssue: Mock<LinearApi['getIssue']>
+  refreshStatus: Mock<AppState['refreshRuntimeEnvironmentStatus']>
+  fetchRuntimeEnvironmentRepos: Mock<AppState['fetchRuntimeEnvironmentRepos']>
+  pending: ReturnType<
+    typeof Promise.withResolvers<Awaited<ReturnType<RuntimeClientEventBridgeIpc['invoke']>>>
+  >[]
+  ipc: RuntimeClientEventBridgeIpc
+  activateNotifiedWorktree: Mock<WorktreeEventRuntime['activateNotifiedWorktree']>
+  enqueue: Mock<WorktreeEventRuntime['worktreeChangeRefreshQueue']['enqueue']>
+  emit: (
+    index: number,
+    replay?: boolean,
+    event?:
+      | RuntimeClientEventStreamMessage
+      | { type: 'worktreesChanged'; repoId: string; sortOrderOnly: unknown; sortOrders?: unknown }
+  ) => void
+  finish: () => Promise<void>
+}
+
+export function createHarness(): RuntimeClientEventBridgeHarness {
   type Ipc = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[0]
   type Args = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[1]
   type Callbacks = Parameters<typeof subscribeRuntimeEnvironmentFromPreload>[2]
@@ -30,9 +54,11 @@ export function createHarness() {
     },
     removeListener: vi.fn()
   }
-  const getIssue = vi.fn(() => issueRead.promise)
-  const refreshStatus = vi.fn(async () => true)
-  const fetchRuntimeEnvironmentRepos = vi.fn(async () => [])
+  const getIssue = vi.fn<LinearApi['getIssue']>(() => issueRead.promise)
+  const refreshStatus = vi.fn<AppState['refreshRuntimeEnvironmentStatus']>(async () => true)
+  const fetchRuntimeEnvironmentRepos = vi.fn<AppState['fetchRuntimeEnvironmentRepos']>(
+    async () => []
+  )
   let nextId = 0
   vi.stubGlobal('window', {
     api: {
@@ -76,8 +102,10 @@ export function createHarness() {
     fetchRuntimeEnvironmentRepos
   })
   const starts: (() => void)[] = []
-  const activateNotifiedWorktree = vi.fn(async () => {})
-  const enqueue = vi.fn()
+  const activateNotifiedWorktree = vi.fn<WorktreeEventRuntime['activateNotifiedWorktree']>(
+    async () => {}
+  )
+  const enqueue = vi.fn<WorktreeEventRuntime['worktreeChangeRefreshQueue']['enqueue']>()
   const start = (): (() => void) => {
     const unsubs: (() => void)[] = []
     const unsubscribeStore = registerRuntimeClientIpcBridge(unsubs, {
