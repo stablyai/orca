@@ -80,6 +80,8 @@ export function createLocalWorkerStartDispatch(
     startOptions,
     runtimeEpoch: runtime.getRuntimeId(),
     mutationReceipt: orchestrationMutation,
-    followUpOf: followUp?.of
+    followUpOf: followUp?.of,
+    acceptedBy: followUp?.acceptedBy,
+    consumesMessageIds: followUp?.consumesMessageIds
   })
 }

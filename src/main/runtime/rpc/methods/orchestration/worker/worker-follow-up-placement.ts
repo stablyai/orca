@@ -12,7 +12,14 @@ import {
 export type WorkerFollowUp = {
   /** The settled Dispatch whose worker this one continues. */
   of: string
-  reopen?: (dispatchId: string) => Promise<ReopenedWorker>
+  /** Resolves null when the agent refused to resume before spawning anything; a fresh one starts instead. */
+  reopen?: (dispatchId: string) => Promise<ReopenedWorker | null>
+  /** The send this follow-up answers, whose pending receipt names the Dispatch it accepted. */
+  acceptedBy?: { callerFingerprint: string; requestId: string }
+  /** Unread mail this follow-up carries as its Task. */
+  consumesMessageIds?: readonly string[]
+  /** Appended to the Task when a reopen falls back to a fresh agent. */
+  earlierWork?: string
 }
 
 /** `userOpened`: the user's own tab, which stays theirs and is never closed by Orca. */
@@ -24,13 +31,13 @@ export type ReopenedWorker = {
   authority?: { paneKey: string; processIncarnation: string; hostScope: string }
 }
 
-/** Resume a closed terminal worker's conversation in a new background tab; never a shell or a fresh agent. */
+/** Resume a closed terminal worker's conversation in a new background tab; never a shell. Null: start a fresh agent. */
 export async function reopenWorkerTerminal(
   runtime: Pick<OrcaRuntimeService, 'resumeAgentSessionInWorkspace'>,
   worktreeId: string,
   session: WorkerResumeSession,
   dispatchId: string
-): Promise<ReopenedWorker> {
+): Promise<ReopenedWorker | null> {
   const resumed = await runtime.resumeAgentSessionInWorkspace(worktreeId, {
     ...session,
     // A retry of this follow-up reconciles the pane it may have started.
@@ -52,9 +59,11 @@ export async function reopenWorkerTerminal(
         'worker_unreachable',
         "The worker's conversation is open somewhere Orca cannot reach; nothing was sent."
       )
+    case 'no_resume_command':
+      // Refused before anything spawned, so a fresh agent cannot duplicate it.
+      return null
     case 'aborted':
     case 'create_failed':
-    case 'no_resume_command':
       throw new OrchestrationError(
         'worker_reopen_failed',
         `Orca could not reopen the worker's ${session.agent} conversation (${resumed.reason}).`

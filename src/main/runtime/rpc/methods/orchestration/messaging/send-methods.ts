@@ -33,9 +33,8 @@ import { sendGroupMessage } from './send-group'
 import { sendFederatedControlMail } from './send-control-mail'
 import { orchestrationCallerIdentity } from '../runs/run-scope'
 import { assertLifecycleCallerIsNotAnotherParty } from './lifecycle-caller-fence'
-import { sendWorkerFollowUp } from './worker-follow-up'
-import { followUpUnreadCoordinatorMail } from './settled-worker-follow-through'
-import { captureReportedWorkerResumeSession } from '../worker/worker-resume-session-capture'
+import { planWorkerFollowUp, startWorkerFollowUp } from './worker-follow-up'
+import { followThroughWorkerReport } from './settled-worker-follow-through'
 
 export const ORCHESTRATION_SEND_METHODS = [
   defineMethod({
@@ -54,6 +53,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         replayedMutationReceipt,
         orchestrationCaller,
         orchestrationCompatibilityEvidence,
+        orchestrationMutation,
         signal
       }
     ) => {
@@ -75,6 +75,9 @@ export const ORCHESTRATION_SEND_METHODS = [
         // Why: derived, since the executor's receipt rewrites drop stored hand-back targets.
         for (const target of settled ? handBackReplayTargets(db, settled) : []) {
           runtime.notifyMessageArrived(target.to, target.type)
+        }
+        if (settled) {
+          followThroughWorkerReport(runtime, db, settled)
         }
         return stripMutationReplayNudge(replayedMutationReceipt)
       }
@@ -201,18 +204,26 @@ export const ORCHESTRATION_SEND_METHODS = [
             : undefined
         // Federated targets perform their own liveness check before relaying.
         if (addressedDispatchId && !federatedTarget) {
-          const followUp = await sendWorkerFollowUp({
-            ctx: { runtime, orchestrationCompatibilityEvidence, orchestrationCaller },
-            db,
-            dispatchId: addressedDispatchId,
-            from,
-            type: params.type ?? 'status',
-            subject: params.subject,
-            body: params.body
-          })
+          const plan = planWorkerFollowUp(db, addressedDispatchId, params.type ?? 'status')
+          // Only a settled worker awaits; mail to a working one stays synchronous until it is inserted.
+          const followUp =
+            plan?.kind === 'start'
+              ? await startWorkerFollowUp({
+                  ctx: {
+                    runtime,
+                    orchestrationCompatibilityEvidence,
+                    orchestrationCaller,
+                    orchestrationMutation
+                  },
+                  db,
+                  plan,
+                  from,
+                  message: params
+                })
+              : plan
+          // A dispatch: address carries no recipient warnings, so `next` stays last.
           if (followUp?.kind === 'started') {
-            const { next, ...receipt } = followUp.receipt
-            return { ...withSendWarnings(receipt), ...(next ? { next } : {}) }
+            return followUp.receipt
           }
           if (followUp) {
             addressedDispatchId = followUp.dispatchId
@@ -266,8 +277,7 @@ export const ORCHESTRATION_SEND_METHODS = [
         })
         const settled = params.type === 'worker_done' ? settledDispatchId(sent) : undefined
         if (settled) {
-          captureReportedWorkerResumeSession(runtime, db, settled)
-          followUpUnreadCoordinatorMail(runtime, db, settled)
+          followThroughWorkerReport(runtime, db, settled)
         }
         return sent
       }

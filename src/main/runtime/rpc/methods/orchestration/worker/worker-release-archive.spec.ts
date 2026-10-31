@@ -121,7 +121,7 @@ export function registerWorkerReleaseArchiveTests(): void {
         agent: 'claude',
         processIncarnation: 'runtime_test:term_worker:1',
         providerSession: { key: 'session_id', id: 'after-clear' },
-        observedAt: Date.now()
+        observedAt: 1
       })
       await h.call('orchestration.workerRelease', { dispatch: dispatchId })
 

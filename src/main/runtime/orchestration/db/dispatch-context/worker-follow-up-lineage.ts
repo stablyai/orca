@@ -44,8 +44,18 @@ export function resolveWorkerLineage(
   let latest = addressed
   const resourceOf = (id: string) =>
     db.getWorkerTerminalResourceByOwner(id) ?? db.getWorkerTerminalResourceFormerlyOwnedBy(id)
-  let resource = resourceOf(latest.id)
   const seen = new Set([latest.id])
+  // A follow-up that never got a worker continues the nearest one before it that did.
+  let resource = resourceOf(latest.id)
+  for (let back = addressed; !resource && back.follow_up_of_dispatch_id;) {
+    const prior = db.getDispatchContextById(back.follow_up_of_dispatch_id)
+    if (!prior || seen.has(prior.id)) {
+      break
+    }
+    seen.add(prior.id)
+    back = prior
+    resource = resourceOf(prior.id)
+  }
   for (;;) {
     const transferred = resource && resource.owner_dispatch_id !== latest.id ? resource : undefined
     const next =
@@ -56,7 +66,6 @@ export function resolveWorkerLineage(
     }
     seen.add(next.id)
     latest = next
-    // A follow-up that never got a worker leaves the one before it as the worker.
     resource = resourceOf(next.id) ?? resource
   }
 }
@@ -129,4 +138,50 @@ export function carryWorkerResumeSession(
         WHERE owner_dispatch_id = ?`
     )
     .run(from.resume_session, toDispatchId)
+}
+
+/** Mail a coordinator sends a working worker, and so what continues one once it has reported. */
+export const FOLLOW_UP_MESSAGE_TYPES = ['status', 'dispatch', 'handoff'] as const
+
+const UNREAD_FOLLOW_UP_MAIL_SQL = `SELECT 1 FROM messages
+  WHERE to_handle = 'dispatch:' || dispatch_contexts.id AND read = 0
+    AND delivery_contract = 'current_delivery'
+    AND type IN (${FOLLOW_UP_MESSAGE_TYPES.map((type) => `'${type}'`).join(', ')})`
+
+/** In the report's own settlement, so a restart cannot lose mail the worker never read. */
+export function markUnreadFollowUpMail(db: OrchestrationDb, dispatchId: string): void {
+  db.db
+    .prepare(
+      `UPDATE dispatch_contexts SET follow_up_mail_at = datetime('now')
+        WHERE id = ? AND EXISTS (${UNREAD_FOLLOW_UP_MAIL_SQL})`
+    )
+    .run(dispatchId)
+}
+
+export function clearFollowUpMail(db: OrchestrationDb, dispatchId: string): void {
+  db.db
+    .prepare('UPDATE dispatch_contexts SET follow_up_mail_at = NULL WHERE id = ?')
+    .run(dispatchId)
+}
+
+export function listDispatchesWithFollowUpMail(db: OrchestrationDb): string[] {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: this projection selects exactly the id column.
+  const rows = db.db
+    .prepare('SELECT id FROM dispatch_contexts WHERE follow_up_mail_at IS NOT NULL')
+    .all() as { id: string }[]
+  return rows.map((row) => row.id)
+}
+
+/** The worker resource Orca still holds for a pane, whose conversation a provider-session change moves. */
+export function findHeldWorkerResourceForPane(
+  db: OrchestrationDb,
+  paneKey: string
+): WorkerTerminalResourceRow | undefined {
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
+  return db.db
+    .prepare(
+      `SELECT * FROM worker_terminal_resources
+        WHERE pane_key = ? AND ownership_state != 'released' ORDER BY updated_at DESC LIMIT 1`
+    )
+    .get(paneKey) as WorkerTerminalResourceRow | undefined
 }

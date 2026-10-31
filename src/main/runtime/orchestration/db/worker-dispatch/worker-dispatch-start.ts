@@ -46,6 +46,10 @@ export function createStartingWorkerDispatch(
     requiredCreatorDispatchId?: string
     /** The settled Dispatch whose worker this follow-up continues; only one follow-up claims it. */
     followUpOf?: string
+    /** Another mutation's pending receipt (a send's follow-up), told what this start accepted. */
+    acceptedBy?: { callerFingerprint: string; requestId: string }
+    /** Mail this start delivers as its Task, read in the same claim. */
+    consumesMessageIds?: readonly string[]
   }
 ): { dispatch: DispatchContextRow; worker: WorkerDispatchRow; task: TaskRow } {
   this.db.exec('BEGIN IMMEDIATE')
@@ -156,7 +160,8 @@ export function createStartingWorkerDispatch(
         { effectsApplied: false }
       )
     }
-    if (params.mutationReceipt) {
+    const accepting = params.mutationReceipt ?? params.acceptedBy
+    if (accepting) {
       this.db
         .prepare(
           `UPDATE mutation_receipts
@@ -165,9 +170,12 @@ export function createStartingWorkerDispatch(
         )
         .run(
           JSON.stringify({ accepted: { taskId: task.id, dispatchId: id } }),
-          params.mutationReceipt.callerFingerprint,
-          params.mutationReceipt.requestId
+          accepting.callerFingerprint,
+          accepting.requestId
         )
+    }
+    if (params.consumesMessageIds?.length) {
+      this.markAsReadAndDelivered([...params.consumesMessageIds])
     }
     insertStartingDispatchContextRow(this.db, {
       id,

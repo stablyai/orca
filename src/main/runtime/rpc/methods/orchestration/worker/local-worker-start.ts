@@ -180,7 +180,7 @@ export async function startLocalWorker(args: {
       onStage: (stage) => {
         failedStage = stage
       },
-      reopen: args.followUp?.reopen?.bind(null, started.dispatch.id)
+      followUp: args.followUp
     })
     // New worktrees resolve host support after creation, so the final mode receipt may differ from preflight.
     mode = placed.mode
@@ -260,7 +260,7 @@ export async function startLocalWorker(args: {
       runtime,
       db,
       run,
-      task,
+      task: placed.extraSpec ? { ...task, spec: `${task.spec}\n\n${placed.extraSpec}` } : task,
       dispatchId: started.dispatch.id,
       dispatchDepth: started.dispatch.depth,
       structuredSession,
