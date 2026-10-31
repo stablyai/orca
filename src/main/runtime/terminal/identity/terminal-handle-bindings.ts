@@ -137,9 +137,8 @@ export abstract class OrcaRuntimeWithBindPtyIncarnationHandle extends OrcaRuntim
     if (retained?.incarnationId === pty.incarnationId) {
       return retained.handle
     }
-    const existing = this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
-    const record = existing ? this.handles.get(existing) : undefined
-    return record?.runtimeId === this.runtimeId && record.ptyId === pty.ptyId ? existing : null
+    // Issuing reuses either one, record or not (a start-time handle outlives cleared records).
+    return this.handleByPtyId.get(pty.ptyId) ?? this.findHandleForPtyRecord(pty.ptyId)
   }
 
   protected issuePtyHandle(pty: RuntimePtyWorktreeRecord): string {
