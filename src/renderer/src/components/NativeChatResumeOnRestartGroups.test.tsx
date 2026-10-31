@@ -1,4 +1,5 @@
 import * as workspaceLookups from './native-chat-resume-workspace-lookups'
+import * as folderHostResolution from '../../../shared/folder-workspace-execution-host'
 import { getProjectGroupingIndexFromState } from '../store/project-host-setup-selector'
 import * as rawGroupIndex from '../lib/worktree-runtime-owner-index'
 import * as workspaceDisplay from './native-chat-resume-workspace-display'
@@ -459,9 +460,40 @@ it.each([
   ['folder', 100],
   ['folder', 1000]
 ] as const)(
-  'bounds mounted %s resume headers at N=%i with independently replaced G=100/1000',
+  'bounds %s resume display indexing at N=%i with independently replaced G=100/1000',
   (kind, count) => {
+    // Known main #31617 qualified-folder cost is measured separately, not bounded here.
+    let readSource: 'display' | 'qualified' | null = null
     let reads = 0
+    let qualifiedReads = 0
+    let unattributedReads = 0
+    let totalReads = 0
+    let qualifiedResolutions = 0
+    const originalQualified = folderHostResolution.resolveQualifiedFolderWorkspaceResult
+    vi.spyOn(folderHostResolution, 'resolveQualifiedFolderWorkspaceResult').mockImplementation(
+      (state, id, host) => {
+        qualifiedResolutions++
+        const previous = readSource
+        readSource = 'qualified'
+        try {
+          return originalQualified(state, id, host)
+        } finally {
+          readSource = previous
+        }
+      }
+    )
+    const originalDisplay = rawGroupIndex.findIndexedProjectGroupDisplay
+    const query = vi
+      .spyOn(rawGroupIndex, 'findIndexedProjectGroupDisplay')
+      .mockImplementation((groups, id) => {
+        const previous = readSource
+        readSource = 'display'
+        try {
+          return originalDisplay(groups, id)
+        } finally {
+          readSource = previous
+        }
+      })
     let offerReads = 0
     let offerQueries = 0
     const observed = new WeakMap<
@@ -495,7 +527,14 @@ it.each([
       Array.from({ length: size }, (_, i) => ({
         ...rawFolderGroup(`unselected-${i}`),
         get id() {
-          reads++
+          totalReads++
+          if (readSource === 'display') {
+            reads++
+          } else if (readSource === 'qualified') {
+            qualifiedReads++
+          } else {
+            unattributedReads++
+          }
           return `unselected-${i}`
         }
       }))
@@ -539,7 +578,6 @@ it.each([
       worktreesByRepo:
         kind === 'git' ? Object.fromEntries(rows.map((row) => [row.repoId, [row]])) : {}
     })
-    const query = vi.spyOn(rawGroupIndex, 'findIndexedProjectGroupDisplay')
     const headers = vi.spyOn(resumeGrouping, 'resolveResumeGroupHeader')
     const workspaceNames = vi.spyOn(workspaceDisplay, 'resolveNames')
     render({ candidates })
@@ -549,11 +587,37 @@ it.each([
     expect(offerReads).toBeLessThanOrEqual(12 * count)
     expect(offerQueries).toBeGreaterThanOrEqual(count)
     expect(offerQueries).toBeLessThanOrEqual(12 * count)
-    process.stdout.write(
-      `PG6-D ${JSON.stringify({ kind, count, stage: 'mount', offerReads, offerQueries })}\n`
-    )
+    const record = (stage: string, groupCount: number) => {
+      expect(unattributedReads).toBe(0)
+      expect(totalReads).toBe(reads + qualifiedReads + unattributedReads)
+      const measurement = {
+        kind,
+        count,
+        groupCount,
+        stage,
+        displayReads: reads,
+        qualifiedReads,
+        unattributedReads,
+        totalReads,
+        qualifiedResolutions,
+        offerReads,
+        offerQueries,
+        displayQueries: query.mock.calls.length,
+        headers: headers.mock.calls.length,
+        workspaceNames: workspaceNames.mock.calls.length,
+        workspaceOutputs: container.querySelectorAll('[role="treeitem"][aria-level="2"]').length,
+        promptOutputs: container.querySelectorAll('[aria-label*="Prompt chat-"]').length
+      }
+      process.stdout.write(`PG6-SCOPED ${JSON.stringify(measurement)}\n`)
+    }
+    record('mount', 100)
+    let coldReads = reads
     const reset = () => {
       reads = 0
+      qualifiedReads = 0
+      unattributedReads = 0
+      totalReads = 0
+      qualifiedResolutions = 0
       offerReads = 0
       offerQueries = 0
       query.mockClear()
@@ -567,9 +631,10 @@ it.each([
         expect(reads).toBe(kind === 'git' ? 0 : groupCount)
         expect(headers.mock.calls.length).toBe(0)
         expect(workspaceNames.mock.calls.length).toBe(0)
+        record('source-replacement', groupCount)
+        coldReads = reads
       }
-      const coldReads = kind === 'git' ? 0 : groupCount
-      for (const patch of [
+      for (const [patchIndex, patch] of [
         { activeRepoId: `unrelated-${groupCount}` },
         { settings: { ...useAppStore.getState().settings!, terminalFontSize: groupCount } },
         {
@@ -586,7 +651,7 @@ it.each([
           ]
         },
         { settings: { ...useAppStore.getState().settings!, projectGroupingOverrides: {} } }
-      ]) {
+      ].entries()) {
         reset()
         act(() => useAppStore.setState(patch))
         expect(reads).toBe(0)
@@ -595,6 +660,10 @@ it.each([
         expect(query.mock.calls.length).toBeLessThanOrEqual(kind === 'git' ? 0 : 4 * count)
         expect(headers.mock.calls.length).toBe(0)
         expect(workspaceNames.mock.calls.length).toBe(0)
+        record(
+          ['active-repo', 'font', 'other-host-repo', 'equal-overrides'][patchIndex],
+          groupCount
+        )
       }
       reset()
       const current = useAppStore.getState().projectGroups
@@ -610,6 +679,7 @@ it.each([
       expect(query.mock.calls.length).toBeLessThanOrEqual(kind === 'git' ? 0 : 4 * count)
       expect(headers.mock.calls.length).toBe(0)
       expect(workspaceNames.mock.calls.length).toBe(0)
+      record('last-row-replacement', groupCount)
       process.stdout.write(
         `PG6-C ${JSON.stringify({ kind, count, groupCount, coldReads, replacementReads: reads, replacementQueries: query.mock.calls.length })}\n`
       )

@@ -4,15 +4,13 @@ import {
   LOCAL_EXECUTION_HOST_ID,
   type ExecutionHostId
 } from '../execution-host'
-import type { RepoOfWorktree } from './row-types'
+import type { RepoOfWorktree, SidebarPRGroupReader, WorktreeGroupBy } from './row-types'
 import type { Repo } from '../repo-types'
 import type { WorkspaceStatusDefinition, Worktree } from '../worktree/types'
 import type { ProjectSectionModel } from '../project-section-grouping'
 import type { WorktreeOccurrenceSection } from '../worktree-occurrence-plan'
 import type { WorktreeGroupEntry, OrderedGroupEntry } from './worktree-group-entry'
-import { PINNED_GROUP_KEY } from './group-keys'
-import { ALL_GROUP_KEY } from './group-keys'
-import type { SidebarPRGroupReader, WorktreeGroupBy } from './row-types'
+import { PINNED_GROUP_KEY, ALL_GROUP_KEY } from './group-keys'
 import { getGroupKeyForWorktree } from './worktree-group-keys'
 
 export function getRenderedNaturalAnchorRepoIds({

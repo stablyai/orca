@@ -1,4 +1,4 @@
-import { beforeEach, describe, vi } from 'vitest'
+import { beforeEach, describe, vi, expect, it } from 'vitest'
 import { registerHeadlessCloseKeepsPublicationEpochTests } from './headless-close-keeps-publication-epoch.spec'
 import { registerHeadlessTabOrderStabilityTests } from './headless-tab-order-stability.spec'
 import { registerOrcaRuntimeMoveHeadlessMobileSessionTabTests } from './orca-runtime-move-headless-mobile-session-tab.spec'
@@ -22,7 +22,6 @@ describe.each([false, true])('layout owner on main: %s', (isMain) => {
   registerOrcaRuntimeHeadlessHydrationRepoGateTests()
 })
 
-import { expect, it } from 'vitest'
 import { OrcaRuntimeService } from './orca-runtime'
 import { partialRuntimeStore } from './runtime-store-partial-fixture'
 import { MOBILE_PROJECT_SECTIONS_METHODS } from './rpc/methods/mobile-project-sections'

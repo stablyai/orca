@@ -1,6 +1,5 @@
 import { getRepoHostIdentity, getRepoHostIdentityForParts } from '../repo-host-identity'
-import { getWorktreeExecutionHostId } from '../execution-host'
-import { getRepoExecutionHostId } from '../execution-host'
+import { getWorktreeExecutionHostId, getRepoExecutionHostId } from '../execution-host'
 import { projectRepoFilterMatcher } from '../project-grouping'
 import type { Repo } from '../repo-types'
 import type { Worktree } from '../worktree/types'

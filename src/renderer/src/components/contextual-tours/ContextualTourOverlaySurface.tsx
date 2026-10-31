@@ -1,5 +1,5 @@
 import { Trans } from 'react-i18next'
-import { i18n } from '@/i18n/i18n'
+import { i18n, translate } from '@/i18n/i18n'
 import { createPortal } from 'react-dom'
 import {
   useLayoutEffect,
@@ -27,7 +27,6 @@ import {
   watchContextualTourFloatingPosition,
   type ContextualTourFloatingPosition
 } from './contextual-tour-floating-position'
-import { translate } from '@/i18n/i18n'
 import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
 
 const FOCUSABLE_SELECTOR =

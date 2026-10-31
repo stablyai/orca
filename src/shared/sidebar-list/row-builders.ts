@@ -1,5 +1,5 @@
 import type { ExecutionHostId } from '../execution-host'
-import { ALL_GROUP_KEY } from './group-keys'
+import { ALL_GROUP_KEY, getWorktreeLineageGroupKey } from './group-keys'
 import { getLaneHostWorktreeCounts, getLaneHostWorktreeIds } from './host-labels'
 import { compareFolderWorkspacesForDisplay } from './folder-workspace-lanes'
 import { getRepoExecutionHostId } from '../execution-host'
@@ -10,7 +10,6 @@ import {
   getWorktreeHostIdentity
 } from '../worktree/host-qualified-identity'
 import { getFolderWorkspaceHostIdentity } from '../folder-workspace-worktree'
-import { getWorktreeLineageGroupKey } from './group-keys'
 import {
   getExpandedWorktreeOccurrences,
   type WorktreeOccurrencePlan

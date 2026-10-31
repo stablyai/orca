@@ -1,17 +1,20 @@
-import { setupsByOwnedExecutionHost } from './repository-host-setup-options'
-import { getProjectHostSetupSelectionKey } from '@/lib/project-host-setup-options'
-import { getRepoExecutionHostId } from '../../../../../../shared/execution-host'
-import type { Project } from '../../../../../../shared/project-types'
-import { useMemo, useState } from 'react'
 import {
+  setupsByOwnedExecutionHost,
+  buildSetupHostOptions,
+  getSetupStateLabel
+} from './repository-host-setup-options'
+import { getProjectHostSetupSelectionKey } from '@/lib/project-host-setup-options'
+import {
+  getRepoExecutionHostId,
   getExecutionHostLabel,
   parseExecutionHostId,
   toRuntimeExecutionHostId,
   type ExecutionHostId
 } from '../../../../../../shared/execution-host'
+import type { Project, ProjectHostSetup } from '../../../../../../shared/project-types'
+import { useMemo, useState } from 'react'
 import { buildExecutionHostRegistry } from '../../../../../../shared/execution-host-registry'
 import { getHostDisplayLabelOverrides } from '../../../../../../shared/host-setting-overrides'
-import type { ProjectHostSetup } from '../../../../../../shared/project-types'
 import type { Repo } from '../../../../../../shared/repo-types'
 import { useAppStore } from '../../../../store/index'
 import { getProjectHostSetupProjectionFromState } from '../../../../store/project-host-setup-selector'
@@ -24,7 +27,6 @@ import { SettingsBadge } from '../../SettingsFormControls'
 import { matchesSettingsSearch } from '../../settings-search'
 import type { SettingsSearchEntry } from '../../settings-search'
 import { translate } from '@/i18n/i18n'
-import { buildSetupHostOptions, getSetupStateLabel } from './repository-host-setup-options'
 import { RepositoryHostSetupActions } from './RepositoryHostSetupActions'
 import {
   selectRuntimeAwareSshStatus,
