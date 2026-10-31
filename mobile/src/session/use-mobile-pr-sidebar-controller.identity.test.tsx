@@ -1,4 +1,4 @@
-import React, { useLayoutEffect } from 'react'
+import React, { Suspense, startTransition, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, expect, it, vi } from 'vitest'
 import {
@@ -123,8 +123,8 @@ it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement
   const oldGeneration = pending.shift()!
   generation += 1
   await act(async () => renderer!.update(<Probe />))
-  // Layout sees the existing ready render; the original passive reset then hides it.
-  expect(beforeEffects).toEqual(['hidden', 'ready'])
+  // The newly selected scope is hidden before consumers observe its committed layout.
+  expect(beforeEffects).toEqual(['hidden', 'hidden'])
   expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
   await act(async () => oldGeneration.resolve(rpcSuccess('old-generation', details('upstream'))))
   expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
@@ -141,4 +141,343 @@ it('runs phase-two failure, Retry, prior isolation and late A/B claim settlement
       details: { body: 'new-generation body', pullRequestId: 'PR_new-generation' }
     }
   })
+})
+
+it('selects fresh branch/client/generation observations while old phase-one, phase-two and ensure work remains pending', async () => {
+  let generation = 1
+  let branch: string | null = 'a'
+  let responseOwner = 'a'
+  let holdPhaseOne = false
+  const phaseOne: ((reply: RpcResponse) => void)[] = []
+  const pendingDetails: { owner: string; resolve: (reply: RpcResponse) => void }[] = []
+  let client = createFakeRpcClient({ getGeneration: () => generation })
+  const sendRequest: typeof client.sendRequest = async (method) => {
+    if (method === 'github.prForBranch' && holdPhaseOne) {
+      holdPhaseOne = false
+      return new Promise((resolve) => phaseOne.push(resolve))
+    }
+    if (method === 'github.workItemDetails') {
+      return new Promise((resolve) => pendingDetails.push({ owner: responseOwner, resolve }))
+    }
+    const value =
+      method === 'github.repoSlug'
+        ? repo(responseOwner)
+        : method === 'worktree.show'
+          ? { worktree: { branch } }
+          : method === 'hostedReview.forBranch'
+            ? null
+            : method === 'github.prForBranch'
+              ? pr(responseOwner)
+              : method === 'github.prChecks'
+                ? []
+                : method === 'status.get'
+                  ? {
+                      runtimeId: 'a',
+                      hostDescriptor: { installationId: 'a' },
+                      capabilities: ['github.exact-work-item-target.v1']
+                    }
+                  : undefined
+    if (value === undefined) {
+      throw new Error(`unexpected ${method}`)
+    }
+    return rpcSuccess(method, value)
+  }
+  client.sendRequest = sendRequest
+  let controller: MobilePrSidebarController
+  const layouts: string[] = []
+  function Probe() {
+    controller = useMobilePrSidebarController({
+      client,
+      connState: 'connected',
+      worktreeId: 'clone::/wt',
+      branch,
+      headSha: 'head'
+    })
+    useLayoutEffect(() => {
+      layouts.push(controller.prSidebarState.kind)
+    }, [client, branch, generation])
+    return null
+  }
+  const update = async () => {
+    await act(async () => renderer!.update(<Probe />))
+  }
+  const settleDetails = async (bodyOwner: string) => {
+    const held = pendingDetails.shift()
+    if (!held) {
+      throw new Error('missing details request')
+    }
+    expect(held.owner).toBe(bodyOwner)
+    await act(async () => held.resolve(rpcSuccess('details', details(bodyOwner))))
+    expect(controller!.prSidebarState).toMatchObject({
+      kind: 'ready',
+      data: { details: { body: `${bodyOwner} body` } }
+    })
+  }
+  await act(async () => {
+    renderer = create(<Probe />)
+  })
+  await act(async () => controller.openPRSidebar())
+  await settleDetails('a')
+  const aRepo =
+    controller!.prSidebarState.kind === 'ready' ? controller!.prSidebarState.data.pr.prRepo : null
+  const sameScopeRefetch = controller!.refetchPRSidebar
+  await update()
+  expect(controller!.refetchPRSidebar).toBe(sameScopeRefetch)
+  expect(
+    controller!.prSidebarState.kind === 'ready' && controller!.prSidebarState.data.pr.prRepo
+  ).toBe(aRepo)
+
+  holdPhaseOne = true
+  await act(async () => {
+    void controller.refetchPRSidebar()
+  })
+  expect(phaseOne).toHaveLength(1)
+  branch = 'b'
+  responseOwner = 'b'
+  await update()
+  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
+  expect(controller!.showPRSidebar).toBe(true)
+  await act(async () => controller.openPRSidebar())
+  await settleDetails('b')
+  await act(async () => phaseOne.shift()!(rpcSuccess('late-phase-one', pr('a'))))
+  expect(pendingDetails).toHaveLength(0)
+  expect(controller!.prSidebarState).toMatchObject({ kind: 'ready', data: { pr: { title: 'b' } } })
+
+  await act(async () => {
+    void controller.retryPRSidebar()
+  })
+  const oldPhaseTwo = pendingDetails.shift()!
+  branch = null
+  await update()
+  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
+  branch = 'a'
+  responseOwner = 'a2'
+  await update()
+  await act(async () => controller.openPRSidebar())
+  expect(pendingDetails).toHaveLength(1)
+  await act(async () => oldPhaseTwo.resolve(rpcSuccess('old-phase-two', details('b'))))
+  await act(async () => controller.ensurePrSidebarDetails())
+  expect(pendingDetails).toHaveLength(1)
+  await settleDetails('a2')
+
+  // A new client starts immediately while the previous client's ensure is unresolved.
+  branch = 'ensure'
+  responseOwner = 'ensure-old'
+  await update()
+  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    void controller.ensurePrSidebarDetails()
+  })
+  const oldEnsure = pendingDetails.shift()!
+  const oldClient = client
+  client = createFakeRpcClient({ getGeneration: () => generation })
+  client.sendRequest = sendRequest
+  responseOwner = 'replacement'
+  await update()
+  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
+  expect(client).not.toBe(oldClient)
+  await act(async () => controller.retryPRSidebar())
+  await settleDetails('replacement')
+  await act(async () => oldEnsure.resolve(rpcSuccess('old-ensure', details('ensure-old'))))
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { details: { body: 'replacement body' } }
+  })
+
+  await act(async () => {
+    void controller.retryPRSidebar()
+  })
+  const oldGeneration = pendingDetails.shift()!
+  generation += 1
+  responseOwner = 'generation-two'
+  await update()
+  expect(controller!.prSidebarState).toEqual({ kind: 'hidden' })
+  await act(async () => controller.openPRSidebar())
+  await settleDetails('generation-two')
+  await act(async () =>
+    oldGeneration.resolve(rpcSuccess('late-generation', details('replacement')))
+  )
+  expect(controller!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { details: { body: 'generation-two body' } }
+  })
+  expect(layouts).toEqual(['hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'hidden', 'hidden'])
+})
+
+it('retires details on accepted chip-only resource departure and none, retaining same-resource details across HEAD refresh', async () => {
+  const client = createFakeRpcClient()
+  let resource: string | null = 'a'
+  let headSha = 'head-1'
+  const pending: ((reply: RpcResponse) => void)[] = []
+  const methods: string[] = []
+  client.sendRequest = async (method) => {
+    methods.push(method)
+    if (method === 'github.workItemDetails') {
+      return new Promise((resolve) => pending.push(resolve))
+    }
+    const value =
+      method === 'github.repoSlug'
+        ? repo('a')
+        : method === 'worktree.show'
+          ? { worktree: { branch: 'feat' } }
+          : method === 'hostedReview.forBranch'
+            ? null
+            : method === 'github.prForBranch'
+              ? resource
+                ? pr(resource)
+                : null
+              : method === 'github.prChecks'
+                ? []
+                : method === 'status.get'
+                  ? {
+                      runtimeId: 'a',
+                      hostDescriptor: { installationId: 'a' },
+                      capabilities: ['github.exact-work-item-target.v1']
+                    }
+                  : undefined
+    if (value === undefined) {
+      throw new Error(`unexpected ${method}`)
+    }
+    return rpcSuccess(method, value)
+  }
+  let controller: MobilePrSidebarController
+  function Probe() {
+    controller = useMobilePrSidebarController({
+      client,
+      connState: 'connected',
+      worktreeId: 'clone::/wt',
+      branch: 'feat',
+      headSha
+    })
+    return null
+  }
+  await act(async () => {
+    renderer = create(<Probe />)
+  })
+  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => {
+    void controller.ensurePrSidebarDetails()
+  })
+  const departedA = pending.shift()!
+  resource = 'b'
+  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  resource = 'a'
+  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => departedA(rpcSuccess('departed-a', details('a'))))
+  expect(controller!.prSidebarState).toMatchObject({ kind: 'ready', data: { details: null } })
+  await act(async () => {
+    void controller.ensurePrSidebarDetails()
+  })
+  expect(pending).toHaveLength(1)
+  const beforeNone = pending.shift()!
+  resource = null
+  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  expect(controller!.prSidebarState).toEqual({ kind: 'none' })
+  resource = 'a'
+  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => beforeNone(rpcSuccess('before-none', details('a'))))
+  expect(controller!.prSidebarState).toMatchObject({ kind: 'ready', data: { details: null } })
+
+  await act(async () => {
+    void controller.ensurePrSidebarDetails()
+  })
+  const sameResource = pending.shift()!
+  await act(async () => controller.refetchPRSidebar({ includeDetails: false }))
+  await act(async () => sameResource(rpcSuccess('same-resource', details('a'))))
+  if (controller!.prSidebarState.kind !== 'ready') {
+    throw new Error('expected ready')
+  }
+  const prior = controller!.prSidebarState.data.details
+  expect(prior).toMatchObject({ body: 'a body' })
+  headSha = 'head-2'
+  const checksBefore = methods.filter((m) => m === 'github.prChecks').length
+  await act(async () => renderer!.update(<Probe />))
+  expect(methods.filter((m) => m === 'github.prChecks')).toHaveLength(checksBefore + 1)
+  expect(
+    controller!.prSidebarState.kind === 'ready' && controller!.prSidebarState.data.details
+  ).toBe(prior)
+  expect(pending).toHaveLength(1)
+  await act(async () => pending.shift()!(rpcSuccess('head-details', details('a'))))
+})
+
+it('does not retire committed A for a discarded suspended B render or allow a queued old publication to select B', async () => {
+  const client = createFakeRpcClient()
+  const held: ((reply: RpcResponse) => void)[] = []
+  client.sendRequest = async (method) => {
+    if (method === 'github.workItemDetails') {
+      return new Promise((resolve) => held.push(resolve))
+    }
+    const value =
+      method === 'github.repoSlug'
+        ? repo('a')
+        : method === 'worktree.show'
+          ? { worktree: { branch: 'a' } }
+          : method === 'hostedReview.forBranch'
+            ? null
+            : method === 'github.prForBranch'
+              ? pr('a')
+              : method === 'github.prChecks'
+                ? []
+                : method === 'status.get'
+                  ? {
+                      runtimeId: 'a',
+                      hostDescriptor: { installationId: 'a' },
+                      capabilities: ['github.exact-work-item-target.v1']
+                    }
+                  : undefined
+    if (value === undefined) {
+      throw new Error(`unexpected ${method}`)
+    }
+    return rpcSuccess(method, value)
+  }
+  let committed: MobilePrSidebarController
+  const suspend = new Promise<never>(() => {})
+  function Probe({ branch, suspended = false }: { branch: string; suspended?: boolean }) {
+    const controller = useMobilePrSidebarController({
+      client,
+      connState: 'connected',
+      worktreeId: 'clone::/wt',
+      branch,
+      headSha: branch
+    })
+    useLayoutEffect(() => {
+      committed = controller
+    })
+    if (suspended) {
+      throw suspend
+    }
+    return null
+  }
+  const view = (branch: string, suspended = false) => (
+    <Suspense fallback={null}>
+      <Probe branch={branch} suspended={suspended} />
+    </Suspense>
+  )
+  await act(async () => {
+    renderer = create(view('a'))
+  })
+  await act(async () => committed.openPRSidebar())
+  const a = held.shift()!
+  await act(async () => {
+    startTransition(() => renderer!.update(view('b', true)))
+  })
+  await act(async () => a(rpcSuccess('a-still-committed', details('a'))))
+  expect(committed!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { details: { body: 'a body' } }
+  })
+  await act(async () => renderer!.update(view('a')))
+  expect(committed!.prSidebarState).toMatchObject({
+    kind: 'ready',
+    data: { details: { body: 'a body' } }
+  })
+  await act(async () => {
+    void committed.retryPRSidebar()
+  })
+  const queued = held.shift()!
+  await act(async () => {
+    queued(rpcSuccess('queued-a', details('a')))
+    renderer!.update(view('b'))
+  })
+  expect(committed!.prSidebarState).toEqual({ kind: 'hidden' })
 })

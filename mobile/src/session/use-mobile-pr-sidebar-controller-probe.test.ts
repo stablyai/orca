@@ -1,4 +1,4 @@
-import { createElement } from 'react'
+import { createElement, useLayoutEffect } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { RpcClient } from '../transport/rpc-client'
@@ -95,5 +95,77 @@ describe('useMobilePrSidebarController repo probe', () => {
 
     expect(fetchGithubRepoSlugMock).not.toHaveBeenCalled()
     expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
+  })
+
+  it('selects unknown for each worktree incarnation before layout, ignores late probes and retains same-worktree eligibility', async () => {
+    const replies: ((value: {
+      ok: true
+      result: { owner: string; repo: string } | null
+    }) => void)[] = []
+    fetchGithubRepoSlugMock.mockImplementation(
+      () => new Promise((resolve) => replies.push(resolve))
+    )
+    const layouts: { worktreeId: string; known: boolean; eligible: boolean }[] = []
+    function ObservedHarness(props: Parameters<typeof useMobilePrSidebarController>[0]) {
+      const current = useMobilePrSidebarController(props)
+      captured = current
+      useLayoutEffect(() => {
+        layouts.push({
+          worktreeId: props.worktreeId,
+          known: current.prSidebarRepoProbeLoaded,
+          eligible: current.prSidebarIsGithubRepo
+        })
+      }, [props.worktreeId])
+      return null
+    }
+    const update = async (
+      worktreeId: string,
+      connState: 'connected' | 'disconnected' = 'connected',
+      branch: string | null = null
+    ) => {
+      await act(async () => {
+        const view = createElement(ObservedHarness, {
+          client,
+          connState,
+          worktreeId,
+          branch,
+          headSha: 'head'
+        })
+        if (renderer) {
+          renderer.update(view)
+        } else {
+          renderer = create(view)
+        }
+      })
+    }
+    await update('a')
+    const firstA = replies.shift()!
+    await update('b')
+    const firstB = replies.shift()!
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
+    await update('a')
+    const secondA = replies.shift()!
+    await act(async () => firstA({ ok: true, result: { owner: 'old', repo: 'r' } }))
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
+    await act(async () => firstB({ ok: true, result: { owner: 'old-b', repo: 'r' } }))
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(false)
+    await act(async () => secondA({ ok: true, result: { owner: 'current', repo: 'r' } }))
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
+    await update('a', 'disconnected', 'changed-branch')
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
+    expect(fetchGithubRepoSlugMock).toHaveBeenCalledTimes(3)
+    await update('a', 'connected', null)
+    expect(captured?.prSidebarIsGithubRepo).toBe(true)
+    expect(fetchGithubRepoSlugMock).toHaveBeenCalledTimes(4)
+    await act(async () => replies.shift()!({ ok: true, result: null }))
+    expect(captured?.prSidebarIsGithubRepo).toBe(false)
+    expect(captured?.prSidebarRepoProbeLoaded).toBe(true)
+    expect(layouts).toEqual([
+      { worktreeId: 'a', known: false, eligible: false },
+      { worktreeId: 'b', known: false, eligible: false },
+      { worktreeId: 'a', known: false, eligible: false }
+    ])
   })
 })

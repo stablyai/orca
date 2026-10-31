@@ -1,6 +1,10 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
-import type { ConnectionState } from '../transport/types'
-import type { RpcClient } from '../transport/rpc-client'
+import { useCallback, useEffect, useLayoutEffect, useState } from 'react'
+import type {
+  PrSidebarControllerInput,
+  PrSidebarObservation,
+  RepoProbeObservation,
+  PrSidebarSelection
+} from './mobile-pr-sidebar-observation'
 import {
   fetchGithubRepoSlug,
   fetchHostedReviewForBranch,
@@ -24,14 +28,6 @@ import {
   fetchWorktreeGitHubPRLink
 } from '../source-control/mobile-pr-link'
 
-type PrSidebarControllerInput = {
-  client: RpcClient | null
-  connState: ConnectionState
-  worktreeId: string
-  branch: string | null
-  headSha: string | null
-}
-
 // Load body/comments only when the PR segment opens; the hub chip needs just PR/checks.
 export type PrSidebarLoadOptions = {
   includeDetails?: boolean
@@ -45,46 +41,88 @@ export function buildMobilePrSidebarIdentity(args: {
   return args.branch ? `${args.worktreeId}\u0000${args.branch}` : null
 }
 
+function createSidebarObservation(
+  input: PrSidebarControllerInput,
+  generation: number | undefined
+): PrSidebarObservation {
+  return {
+    client: input.client,
+    generation,
+    worktreeId: input.worktreeId,
+    identity: buildMobilePrSidebarIdentity(input),
+    live: false,
+    latest: { kind: 'hidden' },
+    loadSeq: 0,
+    detailsSeq: 0,
+    detailsInFlight: null,
+    headSha: input.headSha
+  }
+}
+
+function createRepoProbe(worktreeId: string): RepoProbeObservation {
+  return { owner: { worktreeId }, isGithubRepo: false, loaded: false }
+}
+
 export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const { client, connState, worktreeId, branch, headSha } = input
-  const [isGithubRepo, setIsGithubRepo] = useState(false)
-  // Wait for the probe before calling this repo unsupported.
-  const [repoProbeLoaded, setRepoProbeLoaded] = useState(false)
-  const [state, setRenderedState] = useState<PrSidebarState>({ kind: 'hidden' })
+  const connectionGeneration = client?.getGeneration?.()
+  const identity = buildMobilePrSidebarIdentity(input)
+  const [selection, setSelection] = useState<PrSidebarSelection>(() => {
+    const owner = createSidebarObservation(input, connectionGeneration)
+    return { owner, snapshot: owner.latest, probe: createRepoProbe(worktreeId) }
+  })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
-  const loadSeqRef = useRef(0)
-  // Give details their own sequence so chip refreshes and details fetches cannot cancel each other.
-  const detailsSeqRef = useRef(0)
-  // Claim in-flight details by sequence and PR to dedupe cold segment opens.
-  const detailsInFlightRef = useRef<{ seq: number; resourceKey: string } | null>(null)
-  const stateIdentityRef = useRef<string | null>(null)
-  const stateRef = useRef(state)
-  stateRef.current = state
-  const setState = useCallback((next: PrSidebarState) => {
-    stateRef.current = next
-    setRenderedState(next)
-  }, [])
-  const headShaRef = useRef(headSha)
+  let selected = selection
+  if (
+    selection.owner.client !== client ||
+    !Object.is(selection.owner.generation, connectionGeneration) ||
+    selection.owner.worktreeId !== worktreeId ||
+    selection.owner.identity !== identity
+  ) {
+    const owner = createSidebarObservation(input, connectionGeneration)
+    selected = { ...selected, owner, snapshot: owner.latest }
+  }
+  if (selection.probe.owner.worktreeId !== worktreeId) {
+    selected = { ...selected, probe: createRepoProbe(worktreeId) }
+  }
+  if (selected !== selection) {
+    setSelection(selected)
+  }
+  const { owner, snapshot: state, probe } = selected
+  const probeOwner = probe.owner
+
+  useLayoutEffect(() => {
+    owner.live = true
+    return () => {
+      owner.live = false
+      owner.loadSeq += 1
+      owner.detailsSeq += 1
+      owner.detailsInFlight = null
+    }
+  }, [owner])
+
+  const publishState = useCallback(
+    (next: PrSidebarState) => {
+      // A resource departure ends its details lifetime even if the same key later returns.
+      const previous = owner.latest
+      if (
+        previous.kind === 'ready' &&
+        (next.kind !== 'ready' ||
+          prSidebarResourceKey(previous.data.pr) !== prSidebarResourceKey(next.data.pr))
+      ) {
+        owner.detailsSeq += 1
+        owner.detailsInFlight = null
+      }
+      owner.latest = next
+      setSelection((current) =>
+        current.owner === owner ? { ...current, snapshot: next } : current
+      )
+    },
+    [owner]
+  )
 
   // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
   const probeReady = client !== null && connState === 'connected'
-  const connectionGeneration = client?.getGeneration?.()
-  const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
-  useEffect(() => {
-    loadSeqRef.current += 1
-    detailsSeqRef.current += 1
-    detailsInFlightRef.current = null
-    stateIdentityRef.current = null
-    const hidden: PrSidebarState = { kind: 'hidden' }
-    stateRef.current = hidden
-    setRenderedState(hidden)
-    return () => {
-      loadSeqRef.current += 1
-      detailsSeqRef.current += 1
-      detailsInFlightRef.current = null
-    }
-  }, [client, connectionGeneration, setState])
-
   const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
     if (!client) {
       return null
@@ -100,215 +138,174 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     }
   }, [client])
 
-  // Reset eligibility on workspace change, but retain it through disconnects so the chip stays visible.
-  useEffect(() => {
-    setIsGithubRepo(false)
-    setRepoProbeLoaded(false)
-  }, [worktreeId])
-
   useEffect(() => {
     let cancelled = false
     if (!probeReady || !client) {
       return
     }
+    const publishProbe = (isGithubRepo: boolean) => {
+      if (!cancelled) {
+        setSelection((current) =>
+          current.probe.owner === probeOwner
+            ? { ...current, probe: { owner: probeOwner, isGithubRepo, loaded: true } }
+            : current
+        )
+      }
+    }
     void fetchGithubRepoSlug(client, worktreeId)
-      .then((outcome) => {
-        if (!cancelled) {
-          setIsGithubRepo(outcome.ok && outcome.result !== null)
-          setRepoProbeLoaded(true)
-        }
-      })
+      .then((outcome) => publishProbe(outcome.ok && outcome.result !== null))
       .catch(() => {
         // Contain stray repo-probe rejection even during unmount.
-        if (!cancelled) {
-          setIsGithubRepo(false)
-          setRepoProbeLoaded(true)
-        }
+        publishProbe(false)
       })
     return () => {
       cancelled = true
     }
-  }, [probeReady, client, worktreeId])
-
-  useEffect(() => {
-    if (!identity) {
-      loadSeqRef.current += 1
-      detailsSeqRef.current += 1
-      stateIdentityRef.current = null
-      const hidden: PrSidebarState = { kind: 'hidden' }
-      stateRef.current = hidden
-      setRenderedState(hidden)
-      return
-    }
-    if (stateIdentityRef.current !== null && stateIdentityRef.current !== identity) {
-      // Invalidate branch-scoped data immediately so a switched branch cannot show the previous PR as fresh.
-      loadSeqRef.current += 1
-      detailsSeqRef.current += 1
-      stateIdentityRef.current = null
-      const hidden: PrSidebarState = { kind: 'hidden' }
-      stateRef.current = hidden
-      setRenderedState(hidden)
-    }
-  }, [identity])
+  }, [probeReady, client, worktreeId, probeOwner])
 
   const load = useCallback(
     async (options?: PrSidebarLoadOptions) => {
       const includeDetails = options?.includeDetails ?? true
       const deps = buildDeps()
       const loadIdentity = identity
-      if (!deps || !branch || !loadIdentity) {
+      if (!owner.live || !deps || !branch || !loadIdentity) {
         return
       }
-      const seq = loadSeqRef.current + 1
-      loadSeqRef.current = seq
-      // Claim details only when this load starts fetching them; superseded phase-one loads must not orphan existing details.
-      const previousIdentity = stateIdentityRef.current
-      stateIdentityRef.current = loadIdentity
-      // Refresh same-branch data in place; reserve loading state for first load or identity replacement.
+      const seq = owner.loadSeq + 1
+      owner.loadSeq = seq
+      // Refresh this observation in place; a fresh scope begins hidden.
       const keepVisible =
-        previousIdentity === loadIdentity &&
-        (stateRef.current.kind === 'ready' ||
-          stateRef.current.kind === 'none' ||
-          stateRef.current.kind === 'loading')
+        owner.latest.kind === 'ready' ||
+        owner.latest.kind === 'none' ||
+        owner.latest.kind === 'loading'
       if (!keepVisible) {
-        setState({ kind: 'loading' })
+        publishState({ kind: 'loading' })
       }
       const next = await loadPrSidebarData(deps, { worktreeId, branch, headSha })
-      if (
-        !shouldApplyResult(seq, loadSeqRef.current) ||
-        stateIdentityRef.current !== loadIdentity
-      ) {
+      if (!owner.live || !shouldApplyResult(seq, owner.loadSeq)) {
         return
       }
-      stateIdentityRef.current = loadIdentity
 
       // Keep prior details across phase one so refresh cannot blank the comment tree.
       const priorDetails =
         next.kind === 'ready' &&
-        stateRef.current.kind === 'ready' &&
-        stateRef.current.data.details != null &&
-        prSidebarResourceKey(stateRef.current.data.pr) === prSidebarResourceKey(next.data.pr)
-          ? stateRef.current.data.details
+        owner.latest.kind === 'ready' &&
+        owner.latest.data.details != null &&
+        prSidebarResourceKey(owner.latest.data.pr) === prSidebarResourceKey(next.data.pr)
+          ? owner.latest.data.details
           : null
 
       if (next.kind === 'ready' && priorDetails != null) {
-        setState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
+        publishState({ kind: 'ready', data: { ...next.data, details: priorDetails } })
         if (!includeDetails) {
           return
         }
       } else {
-        setState(next)
+        publishState(next)
         if (next.kind !== 'ready' || !includeDetails) {
           return
         }
       }
 
-      const detailsSeq = detailsSeqRef.current + 1
-      detailsSeqRef.current = detailsSeq
-      detailsInFlightRef.current = {
+      const detailsSeq = owner.detailsSeq + 1
+      owner.detailsSeq = detailsSeq
+      owner.detailsInFlight = {
         seq: detailsSeq,
         resourceKey: prSidebarResourceKey(next.data.pr)
       }
       const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, next.data.pr)
       // Release only this details claim; a newer load may already own it.
-      if (detailsInFlightRef.current?.seq === detailsSeq) {
-        detailsInFlightRef.current = null
+      if (owner.detailsInFlight?.seq === detailsSeq) {
+        owner.detailsInFlight = null
       }
       // Guard details by their own sequence; chip refresh advances loadSeq without replacing their owner.
       if (
-        detailsSeq !== detailsSeqRef.current ||
-        stateIdentityRef.current !== loadIdentity ||
-        stateRef.current.kind !== 'ready' ||
-        prSidebarResourceKey(stateRef.current.data.pr) !== prSidebarResourceKey(next.data.pr)
+        detailsSeq !== owner.detailsSeq ||
+        !owner.live ||
+        owner.latest.kind !== 'ready' ||
+        prSidebarResourceKey(owner.latest.data.pr) !== prSidebarResourceKey(next.data.pr)
       ) {
         return
       }
       // Replace nonfatal null with a placeholder so details cannot spin forever.
       const details = resolvePrSidebarDetailsAfterPhase2({
         fetched: fetchedDetails,
-        prior: stateRef.current.data.details,
-        pr: stateRef.current.data.pr
+        prior: owner.latest.data.details,
+        pr: owner.latest.data.pr
       })
-      setState({ kind: 'ready', data: { ...stateRef.current.data, details } })
+      publishState({ kind: 'ready', data: { ...owner.latest.data, details } })
     },
-    [buildDeps, branch, headSha, identity, worktreeId]
+    [buildDeps, branch, headSha, identity, worktreeId, owner, publishState]
   )
 
   const ensurePrSidebarDetails = useCallback(async () => {
-    const current = stateRef.current
-    if (current.kind !== 'ready' || !prSidebarDetailsNeedFetch(current.data.details)) {
+    const current = owner.latest
+    if (
+      !owner.live ||
+      current.kind !== 'ready' ||
+      !prSidebarDetailsNeedFetch(current.data.details)
+    ) {
       return
     }
     const deps = buildDeps()
     const loadIdentity = identity
-    if (!deps || !loadIdentity || stateIdentityRef.current !== loadIdentity) {
+    if (!deps || !loadIdentity) {
       return
     }
     const resourceKey = prSidebarResourceKey(current.data.pr)
-    const inFlight = detailsInFlightRef.current
-    if (
-      inFlight &&
-      inFlight.resourceKey === resourceKey &&
-      inFlight.seq === detailsSeqRef.current
-    ) {
+    const inFlight = owner.detailsInFlight
+    if (inFlight && inFlight.resourceKey === resourceKey && inFlight.seq === owner.detailsSeq) {
       return
     }
-    const detailsSeq = detailsSeqRef.current + 1
-    detailsSeqRef.current = detailsSeq
-    detailsInFlightRef.current = { seq: detailsSeq, resourceKey }
+    const detailsSeq = owner.detailsSeq + 1
+    owner.detailsSeq = detailsSeq
+    owner.detailsInFlight = { seq: detailsSeq, resourceKey }
     const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, current.data.pr)
-    if (detailsInFlightRef.current?.seq === detailsSeq) {
-      detailsInFlightRef.current = null
+    if (owner.detailsInFlight?.seq === detailsSeq) {
+      owner.detailsInFlight = null
     }
     if (
-      detailsSeq !== detailsSeqRef.current ||
-      stateIdentityRef.current !== loadIdentity ||
-      stateRef.current.kind !== 'ready' ||
-      prSidebarResourceKey(stateRef.current.data.pr) !== resourceKey
+      detailsSeq !== owner.detailsSeq ||
+      !owner.live ||
+      owner.latest.kind !== 'ready' ||
+      prSidebarResourceKey(owner.latest.data.pr) !== resourceKey
     ) {
       return
     }
     const details = resolvePrSidebarDetailsAfterPhase2({
       fetched: fetchedDetails,
-      prior: stateRef.current.data.details,
-      pr: stateRef.current.data.pr
+      prior: owner.latest.data.details,
+      pr: owner.latest.data.pr
     })
-    setState({
+    publishState({
       kind: 'ready',
-      data: { ...stateRef.current.data, details }
+      data: { ...owner.latest.data, details }
     })
-  }, [buildDeps, identity, worktreeId])
+  }, [buildDeps, identity, worktreeId, owner, publishState])
 
   // Restart same-branch reads on HEAD advance so their check lookup cannot keep a stale SHA.
   useEffect(() => {
-    if (headShaRef.current === headSha) {
+    if (owner.headSha === headSha) {
       return
     }
-    headShaRef.current = headSha
-    // After identity reset the ref still holds old state; let the hidden-state effects start the new load.
-    if (stateIdentityRef.current === null) {
-      return
-    }
-    const current = stateRef.current
+    owner.headSha = headSha
+    const current = owner.latest
     if (!shouldSoftRefreshPrSidebarOnHeadChange(current.kind)) {
       return
     }
     void load({
       includeDetails: current.kind === 'ready' && current.data.details != null
     })
-  }, [headSha, load])
+  }, [headSha, load, owner])
 
   const openPRSidebar = useCallback(() => {
     setShowPRSidebar(true)
-    if (
-      stateIdentityRef.current !== identity ||
-      (state.kind !== 'ready' && state.kind !== 'loading')
-    ) {
+    if (state.kind !== 'ready' && state.kind !== 'loading') {
       void load({ includeDetails: true })
     } else if (state.kind === 'ready' && prSidebarDetailsNeedFetch(state.data.details)) {
       void ensurePrSidebarDetails()
     }
-  }, [identity, state, load, ensurePrSidebarDetails])
+  }, [state, load, ensurePrSidebarDetails])
 
   const retry = useCallback(() => {
     void load({ includeDetails: true })
@@ -316,8 +313,8 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
   return {
     prSidebarState: state,
-    prSidebarIsGithubRepo: isGithubRepo,
-    prSidebarRepoProbeLoaded: repoProbeLoaded,
+    prSidebarIsGithubRepo: probe.isGithubRepo,
+    prSidebarRepoProbeLoaded: probe.loaded,
     showPRSidebar,
     setShowPRSidebar,
     openPRSidebar,
