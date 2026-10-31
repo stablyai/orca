@@ -18626,7 +18626,6 @@
         "imageAttachAgainLabel": "다시 첨부",
         "pastedImageNotKeptLabel": "보존되지 않음",
         "imageNumber": "이미지 #{{number}}",
-        "imageReferenceMissing": "이미지가 제거됨",
         "imagePasteFailed": "이미지 붙여넣기 실패.",
         "worktreeNotReady": "워크트리가 준비되지 않았습니다 — 잠시 후 다시 시도하세요.",
         "pasteUnavailable": "붙여넣을 수 없습니다 — 이 채팅은 지금 입력을 받을 수 없습니다.",
@@ -18707,7 +18706,8 @@
         },
         "imageUnavailable": "미리보기를 사용할 수 없음",
         "sessionAttachmentsStarting": "{{agent}} 채팅을 여는 중입니다. 열릴 때까지 기다린 후 파일을 다시 첨부하세요.",
-        "sessionAttachmentsFailed": "{{agent}} 채팅을 열 수 없습니다. 채팅에서 재시도를 사용한 후 파일을 다시 첨부하세요."
+        "sessionAttachmentsFailed": "{{agent}} 채팅을 열 수 없습니다. 채팅에서 재시도를 사용한 후 파일을 다시 첨부하세요.",
+        "imageReferenceMissing": "이미지가 제거됨"
       },
       "tool": {
         "result": "결과",

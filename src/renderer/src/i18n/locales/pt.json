@@ -20104,7 +20104,6 @@
         "imageAttachAgainLabel": "Anexar novamente",
         "pastedImageNotKeptLabel": "Não preservada",
         "imageNumber": "Imagem nº {{number}}",
-        "imageReferenceMissing": "Imagem removida",
         "sessionAttachmentsStarting": "O chat do {{agent}} ainda está abrindo. Aguarde a abertura e anexe os arquivos novamente.",
         "sessionAttachmentsFailed": "Não foi possível abrir o chat do {{agent}}. Use Tentar novamente no chat e anexe os arquivos outra vez.",
         "pasteUnavailable": "Não é possível colar — este chat não está aceitando entradas no momento.",
@@ -20137,7 +20136,8 @@
           "medium": "Méd",
           "xhigh": "Extra alto"
         },
-        "imageUnavailable": "Prévia indisponível"
+        "imageUnavailable": "Prévia indisponível",
+        "imageReferenceMissing": "Imagem removida"
       },
       "tool": {
         "exitCode": "saída {{value0}}",

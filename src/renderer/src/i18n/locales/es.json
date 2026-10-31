@@ -19074,7 +19074,6 @@
         "imageAttachAgainLabel": "Adjuntar de nuevo",
         "pastedImageNotKeptLabel": "No se conservó",
         "imageNumber": "Imagen #{{number}}",
-        "imageReferenceMissing": "Imagen quitada",
         "imagePasteFailed": "Error al pegar imagen.",
         "worktreeNotReady": "Worktree no está listo — intenta de nuevo en un momento.",
         "pasteUnavailable": "No se puede pegar — este chat no acepta entradas en este momento.",
@@ -19150,7 +19149,8 @@
           "xhigh": "Muy alto"
         },
         "sessionAttachmentsFailed": "El chat {{agent}} no se pudo abrir. Utilice Reintentar en el chat y luego adjunte los archivos nuevamente.",
-        "sessionAttachmentsStarting": "El chat de {{agent}} aún se está abriendo. Espera a que se abra y vuelve a adjuntar los archivos."
+        "sessionAttachmentsStarting": "El chat de {{agent}} aún se está abriendo. Espera a que se abra y vuelve a adjuntar los archivos.",
+        "imageReferenceMissing": "Imagen quitada"
       },
       "tool": {
         "result": "Resultado",

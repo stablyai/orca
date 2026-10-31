@@ -19463,7 +19463,6 @@
         "imageAttachAgainLabel": "Attach again",
         "pastedImageNotKeptLabel": "Not kept",
         "imageNumber": "Image #{{number}}",
-        "imageReferenceMissing": "Image removed",
         "imagePasteFailed": "Image paste failed.",
         "imageSaving": "Saving pasted image…",
         "worktreeNotReady": "Worktree not ready — try again in a moment.",
@@ -19528,7 +19527,8 @@
           "medium": "Med",
           "xhigh": "XHigh"
         },
-        "imageUnavailable": "Preview unavailable"
+        "imageUnavailable": "Preview unavailable",
+        "imageReferenceMissing": "Image removed"
       },
       "tool": {
         "exitCode": "exit {{value0}}",

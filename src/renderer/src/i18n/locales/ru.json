@@ -19931,7 +19931,6 @@
         "imageAttachAgainLabel": "Прикрепить снова",
         "pastedImageNotKeptLabel": "Не сохранено",
         "imageNumber": "Изображение №{{number}}",
-        "imageReferenceMissing": "Изображение удалено",
         "imagePasteFailed": "Не удалось вставить изображение.",
         "imageSaving": "Сохраняем вставленное изображение…",
         "worktreeNotReady": "Рабочее дерево ещё не готово. Повторите через несколько секунд.",
@@ -19996,7 +19995,8 @@
           "medium": "Сред.",
           "xhigh": "Очень выс."
         },
-        "imageUnavailable": "Предпросмотр недоступен"
+        "imageUnavailable": "Предпросмотр недоступен",
+        "imageReferenceMissing": "Изображение удалено"
       },
       "tool": {
         "exitCode": "код {{value0}}",

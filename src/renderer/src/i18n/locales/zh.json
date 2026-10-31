@@ -18593,7 +18593,6 @@
         "imageAttachAgainLabel": "重新附加",
         "pastedImageNotKeptLabel": "未保留",
         "imageNumber": "图片 #{{number}}",
-        "imageReferenceMissing": "图片已移除",
         "imagePasteFailed": "图片粘贴失败。",
         "worktreeNotReady": "工作树未就绪 — 请稍后重试。",
         "pasteUnavailable": "无法粘贴 — 此聊天当前不接受输入。",
@@ -18673,7 +18672,8 @@
           "xhigh": "极高"
         },
         "sessionAttachmentsFailed": "{{agent}} 聊天无法打开。在聊天中使用“重试”，然后再次附加文件。",
-        "sessionAttachmentsStarting": "正在打开 {{agent}} 聊天。请等待聊天打开后再重新附加文件。"
+        "sessionAttachmentsStarting": "正在打开 {{agent}} 聊天。请等待聊天打开后再重新附加文件。",
+        "imageReferenceMissing": "图片已移除"
       },
       "tool": {
         "result": "结果",

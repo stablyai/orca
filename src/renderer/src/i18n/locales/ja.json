@@ -18626,7 +18626,6 @@
         "imageAttachAgainLabel": "もう一度添付",
         "pastedImageNotKeptLabel": "保持されていません",
         "imageNumber": "画像 #{{number}}",
-        "imageReferenceMissing": "画像は削除されました",
         "imagePasteFailed": "画像の貼り付けに失敗しました。",
         "worktreeNotReady": "ワークツリーが準備できていません — しばらくしてから再試行してください。",
         "pasteUnavailable": "貼り付けできません — このチャットは現在入力を受け付けていません。",
@@ -18707,7 +18706,8 @@
         },
         "imageUnavailable": "プレビューを利用できません",
         "sessionAttachmentsStarting": "{{agent}} のチャットを起動中です。開くまで待ってから、ファイルを再度添付してください。",
-        "sessionAttachmentsFailed": "{{agent}} チャットを開けませんでした。チャットで [再試行] を使用して、ファイルを再度添付してください。"
+        "sessionAttachmentsFailed": "{{agent}} チャットを開けませんでした。チャットで [再試行] を使用して、ファイルを再度添付してください。",
+        "imageReferenceMissing": "画像は削除されました"
       },
       "tool": {
         "result": "結果",

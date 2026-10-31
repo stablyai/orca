@@ -86,6 +86,189 @@ afterEach(() => {
 })
 
 describe('the editor and the draft store', () => {
+  it.each([undefined, '', null, 42])(
+    'recovers saved literal text in the editor when an image token is unusable: %j',
+    async (token) => {
+      const text = 'typed [Image](orca-image:literal) keep this'
+      const images = [{ id: 'remote', path: '/remote/shot.png', connectionId: 'ssh-box' }]
+      const owner = { workspaceId: '/folder', executionHostId: 'ssh:box' as const }
+      await storage.write(SCOPE, {
+        text,
+        textFormat: 'literal',
+        document: {
+          type: 'doc',
+          content: [
+            {
+              type: 'paragraph',
+              content: [
+                { type: 'text', text: 'typed ' },
+                { type: 'nativeChatImageReference', attrs: { token } },
+                { type: 'text', text: ' keep this' }
+              ]
+            }
+          ]
+        },
+        images,
+        owner,
+        savedAt: 1
+      })
+      const recovered = await open()
+      const editor = await mountEditor(recovered)
+      expect(editor.input().value).toBe(text)
+      act(() => {
+        const input = editor.input()
+        input.setSelectionRange(input.value.length, input.value.length)
+        if (!input.insertText) {
+          throw new Error('The editor cannot insert text')
+        }
+        input.insertText(' edited')
+      })
+      recovered.store.flushNativeChatComposerDrafts()
+      await recovered.store.nativeChatComposerDraftWritesSettled()
+      editor.stopSync()
+      editor.unmount()
+      recovered.store.clearNativeChatComposerDraftsForTests()
+
+      const reloaded = await open()
+      const remounted = await mountEditor(reloaded)
+      expect(remounted.input().value).toBe(`${text} edited`)
+      expect(reloaded.store.readNativeChatComposerDraft(SCOPE)).toMatchObject({
+        text: `${text} edited`,
+        images,
+        owner
+      })
+      remounted.stopSync()
+    }
+  )
+
+  describe.each(['committed record', 'pagehide journal', 'unmarked record'] as const)(
+    '%s recovery',
+    (source) => {
+      it.each([false, true])(
+        'keeps literal text, picked content and remote tray on editor reload with rich content %s',
+        async (rich) => {
+          const text = `typed [Image](orca-image:literal) [Image #1]${rich ? ' @/folder/file.ts $review' : ''}`
+          const document = {
+            type: 'doc',
+            content: [
+              {
+                type: 'paragraph',
+                content: [
+                  { type: 'text', text: 'typed ' },
+                  {
+                    type: 'nativeChatImageReference',
+                    attrs: { token: '[Image](orca-image:literal)' }
+                  },
+                  { type: 'text', text: ' [Image #1]' },
+                  ...(rich
+                    ? [
+                        { type: 'text', text: ' ' },
+                        {
+                          type: 'nativeChatFileReference',
+                          attrs: { token: '@/folder/file.ts', path: '/folder/file.ts' }
+                        },
+                        { type: 'text', text: ' ' },
+                        {
+                          type: 'nativeChatSkill',
+                          attrs: { token: '$review', path: '/skills/review/SKILL.md' }
+                        }
+                      ]
+                    : [])
+                ]
+              }
+            ]
+          }
+          const images = [
+            { id: 'b', path: '/remote/b.png', connectionId: 'ssh-b' },
+            { id: 'a', path: '/remote/a.png', connectionId: 'ssh-a' }
+          ]
+          const owner = { workspaceId: '/folder', executionHostId: 'ssh:box' as const }
+          const stored = {
+            text,
+            ...(source === 'unmarked record' ? {} : { textFormat: 'literal' as const }),
+            document,
+            images,
+            owner,
+            savedAt: 1
+          }
+          const expected =
+            source === 'unmarked record'
+              ? `typed [Image #1]${rich ? ' @/folder/file.ts $review' : ''}`
+              : text
+          if (source === 'pagehide journal') {
+            localStorage.setItem(
+              'orca:nativeChatComposerDraftJournal:v1',
+              JSON.stringify([{ scopeKey: SCOPE, draft: stored, at: 1 }])
+            )
+            expect(storage.drafts.size).toBe(0)
+          } else {
+            await storage.write(SCOPE, stored)
+          }
+
+          const recovered = await open()
+          const editor = await mountEditor(recovered)
+          expect(editor.input().value).toBe(expected)
+          expect(recovered.store.readNativeChatComposerDraft(SCOPE)).toMatchObject({
+            text: expected,
+            images,
+            owner
+          })
+          await vi.waitFor(() => {
+            expect(
+              window.document
+                .querySelector('[data-native-chat-file-reference]')
+                ?.getAttribute('data-native-chat-file-reference')
+            ).toBe(rich ? '/folder/file.ts' : undefined)
+            expect(
+              window.document
+                .querySelector('[data-native-chat-skill]')
+                ?.getAttribute('data-native-chat-skill')
+            ).toBe(rich ? '$review' : undefined)
+          })
+          const { promptSkillRefs } = await import('./native-chat-prompt-document')
+          expect(
+            promptSkillRefs(recovered.drafts.readNativeChatDraftDocument(SCOPE, expected))
+          ).toEqual(rich ? [{ name: 'review', path: '/skills/review/SKILL.md' }] : [])
+          act(() => {
+            const input = editor.input()
+            input.setSelectionRange(input.value.length, input.value.length)
+            if (!input.insertText) {
+              throw new Error('The editor cannot insert text')
+            }
+            input.insertText(' edited')
+          })
+          recovered.store.flushNativeChatComposerDrafts()
+          await recovered.store.nativeChatComposerDraftWritesSettled()
+          editor.stopSync()
+          editor.unmount()
+          recovered.store.clearNativeChatComposerDraftsForTests()
+
+          const reloaded = await open()
+          const remounted = await mountEditor(reloaded)
+          expect(remounted.input().value).toBe(`${expected} edited`)
+          expect(reloaded.store.readNativeChatComposerDraft(SCOPE)).toMatchObject({
+            text: `${expected} edited`,
+            images,
+            owner
+          })
+          await vi.waitFor(() => {
+            expect(
+              window.document
+                .querySelector('[data-native-chat-file-reference]')
+                ?.getAttribute('data-native-chat-file-reference')
+            ).toBe(rich ? '/folder/file.ts' : undefined)
+            expect(
+              window.document
+                .querySelector('[data-native-chat-skill]')
+                ?.getAttribute('data-native-chat-skill')
+            ).toBe(rich ? '$review' : undefined)
+          })
+          remounted.stopSync()
+        }
+      )
+    }
+  )
+
   it('saves nothing when a draft that loads late is set on the editor', async () => {
     storage.drafts.set(SCOPE, { text: 'saved before the restart', images: [], savedAt: 1 })
     const renderer = await open({ hydrate: false })
