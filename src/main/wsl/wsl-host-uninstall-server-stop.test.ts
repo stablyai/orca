@@ -187,6 +187,37 @@ describe('stopWslHostServerFromGuest', () => {
     expect(execCommand.mock.calls.filter(([, c]) => c.includes('UNINSTALL_CENSUS'))).toHaveLength(1)
   })
 
+  it('counts a close that timed out (124) or never answered as a failure, not a success', async () => {
+    const live = terminals(3, 3)
+    execCommand.mockImplementation(async (_conn, command) => {
+      if (command.includes('UNINSTALL_CLOSE')) {
+        // Worktree 1 timed out; worktree 2 printed nothing.
+        return 'UNINSTALL_CLOSE 0 0\nUNINSTALL_CLOSE 1 124\n'
+      }
+      if (command.includes('UNINSTALL_CENSUS')) {
+        return 'UNINSTALL_CENSUS 2\n'
+      }
+      if (command.includes('terminal list')) {
+        return JSON.stringify({ result: { terminals: live } })
+      }
+      return JSON.stringify({ result: { runtime: { runtimeId: 'rt-1' } } })
+    })
+    decommission.mockResolvedValue({
+      outcome: 'refused',
+      verdict: 'live',
+      code: 'orcad_decommission_terminals_running',
+      reason: '2 terminals are still running'
+    })
+
+    const result = await stopWslHostServerFromGuest('Ubuntu', new AbortController().signal)
+
+    expect(result).toMatchObject({ stopped: false, verdict: 'live' })
+    const reason = result.stopped === false ? result.reason : ''
+    expect(reason).toContain('term_1 (repo::/home/u/w1): the close exited 124')
+    expect(reason).toContain('term_2 (repo::/home/u/w2): the close did not answer')
+    expect(reason).not.toContain('term_0')
+  })
+
   it('treats a census the CLI could not answer as unknown, never as zero', async () => {
     guest({ live: [], census: 'unknown' })
     decommission.mockResolvedValue({
