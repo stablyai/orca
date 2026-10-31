@@ -36,6 +36,7 @@ vi.mock('@/lib/activate-ai-vault-structured-session', async (original) => ({
 }))
 
 import { useAppStore } from '@/store'
+import { makeTab } from '@/store/slices/store-test-helpers'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
 import {
@@ -115,7 +116,15 @@ afterEach(() => {
 
 it('opens the very pane a reopened worker runs in, through the sidebar path', async () => {
   const paneKey = status(1).paneKey
-  useAppStore.setState({ agentStatusByPaneKey: { [paneKey]: status(1) } })
+  useAppStore.setState({
+    agentStatusByPaneKey: { [paneKey]: status(1) },
+    tabsByWorktree: {
+      workspace: [
+        makeTab({ id: 'tab-0', worktreeId: 'workspace' }),
+        makeTab({ id: 'tab-1', worktreeId: 'workspace' })
+      ]
+    }
+  })
   useAppStore.getState().setAgentSenderPublication('local', publication([row('dispatch:first', 1)]))
   const sender = terminal('term_before')
   expect(card(sender, 'first')).toEqual({

@@ -8,6 +8,7 @@ import type {
   OrchestrationPartyLocationResult
 } from '../../../shared/orchestration-caller-status'
 import { useAppStore } from '@/store'
+import type { AppState } from '@/store/types'
 import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 import { RuntimeRpcCallError } from '@/runtime/runtime-rpc-result'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -74,7 +75,16 @@ export function openAgentMessageSender(
     dispatchId
   )
   if (resolved.kind === 'located') {
-    return openLocatedSender(resolved.location)
+    const { sessionId } = resolved.location
+    if (sessionId) {
+      return openLocatedChat(resolved.location, sessionId)
+    }
+    const tabId = heldTabId(state, resolved.location)
+    if (tabId) {
+      activateWorktreeAgentPane(resolved.location.worktreeId, tabId, resolved.location.paneKey)
+      return Promise.resolve()
+    }
+    // A terminal this window shows no tab for yet: the host reveals it, as its lookup always has.
   }
   const label = name ?? sender.name ?? unnamedSenderLabel()
   // Only a publishing host's answer can say nothing opens; an older host keeps its own lookup.
@@ -113,26 +123,34 @@ export function openAgentMessageSender(
   return opening
 }
 
-/** The located pane or chat itself, through the same activation its sidebar row uses. */
-async function openLocatedSender(location: LocatedAgentSender): Promise<void> {
-  if (location.sessionId) {
-    const host = structuredAgentSessionTargetForHost(location.host)
-    if (!host) {
-      showLookupFailure('unreachable')
-      return
-    }
-    const session = {
-      structuredSession: { workspaceId: location.worktreeId, sessionId: location.sessionId }
-    }
-    await activateAiVaultStructuredSession(session, undefined, host)
+/** The located chat itself, through the same activation its sidebar row uses. */
+async function openLocatedChat(location: LocatedAgentSender, sessionId: string): Promise<void> {
+  const host = structuredAgentSessionTargetForHost(location.host)
+  if (!host) {
+    showLookupFailure('unreachable')
     return
   }
+  const session = {
+    structuredSession: { workspaceId: location.worktreeId, sessionId }
+  }
+  await activateAiVaultStructuredSession(session, undefined, host)
+}
+
+/** The tab the sidebar activation opens for the located pane, when this window holds one. */
+function heldTabId(
+  state: Pick<AppState, 'tabsByWorktree' | 'unifiedTabsByWorktree'>,
+  location: LocatedAgentSender
+): string | null {
   const tabId = parsePaneKey(location.paneKey)?.tabId
   if (!tabId) {
-    showAgentPaneUnavailable()
-    return
+    return null
   }
-  activateWorktreeAgentPane(location.worktreeId, tabId, location.paneKey)
+  const held =
+    (state.tabsByWorktree[location.worktreeId] ?? []).some((tab) => tab.id === tabId) ||
+    (state.unifiedTabsByWorktree[location.worktreeId] ?? []).some(
+      (tab) => tab.id === tabId && tab.contentType === 'agent-session'
+    )
+  return held ? tabId : null
 }
 
 async function openSender(
