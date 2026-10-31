@@ -6824,7 +6824,8 @@
           }
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "La carpeta {{path}} está vacía"
+          "pathEmpty": "La carpeta {{path}} está vacía",
+          "projectFolders": "Carpetas de proyectos"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "No se pudieron mantener ocultos los worktrees detectados. Inténtalo de nuevo.",

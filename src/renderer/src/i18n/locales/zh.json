@@ -6552,7 +6552,8 @@
           "underDistro": "此主机只能添加 \\\\wsl.localhost\\{{value0}} 下的文件夹。"
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "{{path}} 为空"
+          "pathEmpty": "{{path}} 为空",
+          "projectFolders": "项目文件夹"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "无法保持检测到的工作树为隐藏状态。请重试。",

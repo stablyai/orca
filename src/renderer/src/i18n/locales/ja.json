@@ -6552,7 +6552,8 @@
           "underDistro": "このホストで追加できるのは \\\\wsl.localhost\\{{value0}} 以下のフォルダーのみです。"
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "{{path}} は空です"
+          "pathEmpty": "{{path}} は空です",
+          "projectFolders": "プロジェクトのフォルダー"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "検出されたワークツリーを非表示のままにできませんでした。もう一度お試しください。",

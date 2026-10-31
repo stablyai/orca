@@ -7257,7 +7257,8 @@
           "underDistro": "This host can only add folders under \\\\wsl.localhost\\{{value0}}."
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "{{path}} is empty"
+          "pathEmpty": "{{path}} is empty",
+          "projectFolders": "Project folders"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "Could not keep discovered worktrees hidden. Try again.",

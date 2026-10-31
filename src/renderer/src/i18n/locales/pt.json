@@ -12634,7 +12634,8 @@
           "underDistro": "Este host só pode adicionar pastas em \\\\wsl.localhost\\{{value0}}."
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "A pasta {{path}} está vazia"
+          "pathEmpty": "A pasta {{path}} está vazia",
+          "projectFolders": "Pastas de projetos"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "Não foi possível manter ocultas as worktrees descobertas. Tente novamente.",

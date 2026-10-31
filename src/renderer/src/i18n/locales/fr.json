@@ -7048,7 +7048,8 @@
           }
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "Le dossier {{path}} est vide"
+          "pathEmpty": "Le dossier {{path}} est vide",
+          "projectFolders": "Dossiers de projets"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "Impossible de garder masqués les worktrees détectés. Réessayez.",

@@ -6552,7 +6552,8 @@
           "underDistro": "이 호스트는 \\\\wsl.localhost\\{{value0}} 아래의 폴더만 추가할 수 있습니다."
         },
         "RemoteFileBrowserEntryList": {
-          "pathEmpty": "{{path}}이(가) 비어 있습니다"
+          "pathEmpty": "{{path}}이(가) 비어 있습니다",
+          "projectFolders": "프로젝트 폴더"
         },
         "importedWorktreesCardActions": {
           "keepHiddenError": "발견된 워크트리를 숨김 상태로 유지할 수 없습니다. 다시 시도하세요.",
