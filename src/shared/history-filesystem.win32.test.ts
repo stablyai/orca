@@ -62,46 +62,51 @@ describe.skipIf(process.platform !== 'win32')('actual Windows directory capabili
       rmSync(path, { recursive: true, force: true })
     }
   })
-  it('treats a non-link reparse file as a file, like the runtime does', async () => {
-    const path = mkdtempSync(join(tmpdir(), 'orca-history-reparse-'))
-    const file = join(path, 'history.jsonl')
-    writeFileSync(file, 'prompt\n')
-    // A third-party tag stands in for dedup, cloud and compression tags: none of them is a link.
-    const script = join(path, 'tag.ps1')
-    writeFileSync(script, THIRD_PARTY_TAG)
-    const shell = spawnProcess({
-      program: 'powershell.exe',
-      args: [
-        '-NoLogo',
-        '-NoProfile',
-        '-NonInteractive',
-        '-ExecutionPolicy',
-        'Bypass',
-        '-File',
-        script,
-        file
-      ],
-      stdio: 'pipe'
-    })
-    let output = ''
-    shell.stdout.setEncoding('utf8')
-    shell.stdout.on('data', (chunk: string) => {
-      output += chunk
-    })
-    shell.stderr.setEncoding('utf8')
-    shell.stderr.on('data', (chunk: string) => {
-      output += chunk
-    })
-    await once(shell, 'close')
-    let root
-    try {
-      expect(output.trim()).toBe('tagged')
-      expect(lstatSync(file).isSymbolicLink()).toBe(false)
-      root = loadHistoryFilesystem().openDirectory(path, false)
-      expect(root.kind('history.jsonl')).toBe('file')
-    } finally {
-      root?.close()
-      rmSync(path, { recursive: true, force: true })
-    }
-  }, 60_000)
+  it(
+    'treats a non-link reparse file as a file, like the runtime does',
+    async () => {
+      const path = mkdtempSync(join(tmpdir(), 'orca-history-reparse-'))
+      const file = join(path, 'history.jsonl')
+      writeFileSync(file, 'prompt\n')
+      // A third-party tag stands in for dedup, cloud and compression tags: none of them is a link.
+      const script = join(path, 'tag.ps1')
+      writeFileSync(script, THIRD_PARTY_TAG)
+      const shell = spawnProcess({
+        program: 'powershell.exe',
+        args: [
+          '-NoLogo',
+          '-NoProfile',
+          '-NonInteractive',
+          '-ExecutionPolicy',
+          'Bypass',
+          '-File',
+          script,
+          file
+        ],
+        stdio: 'pipe'
+      })
+      let output = ''
+      shell.stdout.setEncoding('utf8')
+      shell.stdout.on('data', (chunk: string) => {
+        output += chunk
+      })
+      shell.stderr.setEncoding('utf8')
+      shell.stderr.on('data', (chunk: string) => {
+        output += chunk
+      })
+      await once(shell, 'close')
+      let root
+      try {
+        expect(output.trim()).toBe('tagged')
+        root = loadHistoryFilesystem().openDirectory(path, false)
+        expect(root.kind('history.jsonl')).toBe('file')
+        // No filter handles this tag, so only a reparse-point open can remove it.
+        root.unlink('history.jsonl')
+      } finally {
+        root?.close()
+        rmSync(path, { recursive: true, force: true })
+      }
+    }, // PowerShell compiles the tagging helper before the test can run.
+    60_000
+  )
 })
