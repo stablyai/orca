@@ -81,4 +81,51 @@ describe('WebRuntimeClient timeout budget', () => {
     await vi.advanceTimersByTimeAsync(1)
     await expect(call).rejects.toThrow('Request timed out: runtime.two-phase-timeout')
   })
+
+  it('reports a request sent only once its frame left, so a caller’s response deadline starts there', async () => {
+    const client = new WebRuntimeClient(
+      pairedRuntimeConnectionFromOffer({
+        v: 2,
+        endpoint: 'ws://127.0.0.1:6768',
+        deviceToken: 'token',
+        publicKeyB64: Buffer.alloc(32).toString('base64')
+      })
+    )
+    // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the test reaches the client's private transport state; a renamed field fails the test.
+    const internals = client as unknown as {
+      waitForConnected: () => Promise<void>
+      sendEncrypted: (message: unknown) => boolean
+      subscribeOnCurrentConnection: WebRuntimeClient['subscribe']
+    }
+    vi.spyOn(internals, 'waitForConnected').mockResolvedValue(undefined)
+    const order: string[] = []
+    const send = vi.spyOn(internals, 'sendEncrypted').mockImplementation(() => {
+      order.push('frame')
+      return true
+    })
+    const onSent = vi.fn(() => void order.push('sent'))
+    await internals.subscribeOnCurrentConnection(
+      'agentSession.switchToChat',
+      {},
+      {
+        onResponse: vi.fn(),
+        onSent
+      }
+    )
+    expect(order).toEqual(['frame', 'sent'])
+    send.mockReturnValue(false)
+    onSent.mockClear()
+    await expect(
+      internals.subscribeOnCurrentConnection(
+        'agentSession.switchToChat',
+        {},
+        {
+          onResponse: vi.fn(),
+          onSent
+        }
+      )
+    ).rejects.toThrow('not connected')
+    expect(onSent).not.toHaveBeenCalled()
+    client.close()
+  })
 })

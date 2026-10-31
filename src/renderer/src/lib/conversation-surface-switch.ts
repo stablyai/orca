@@ -30,6 +30,7 @@ import {
   type AgentSessionSwitchResult
 } from '../../../shared/agent-session-switch-execution'
 import { AgentSessionRefusalError } from '../../../shared/agent-session-wire-refusals'
+import { structuredLaunchFailure } from './structured-agent-session-launch-failure'
 import { prepareAiVaultSessionForResume } from './ai-vault-session-resume-preparation'
 import type { CliChatResumeSource } from '@/components/tab-bar/cli-chat-resume-source'
 import { runLegacyConversationSwitch } from './conversation-switch-legacy'
@@ -86,6 +87,7 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
   })
   conversationSwitchChanged()
   let consented = false
+  let sent = false
   let disposeDeadline: (() => void) | undefined
   try {
     const supported = await withinSwitchBudget(supportsInPlaceSwitch(target, args.agent, true))
@@ -129,7 +131,10 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
         {
           signal: deadline.signal,
           dispatchObservation: deadline.delegateSend,
-          beforeSend: (sentAt) => deadline.beforeSend(sentAt)
+          beforeSend: (sentAt) => {
+            deadline.beforeSend(sentAt)
+            sent = true
+          }
         }
       )
     )
@@ -145,7 +150,12 @@ export async function runConversationSwitch(args: ConversationSwitch): Promise<b
     }
     return true
   } catch (error) {
-    feedback(conversationSwitchFailureText(error, args), 'error')
+    // Once the request left, a failure that isn't the host's answer can't say what the host did.
+    const unknown = sent && !structuredLaunchFailure(error)
+    feedback(
+      conversationSwitchFailureText(error, args, unknown ? 'outcomeUnknown' : undefined),
+      'error'
+    )
     return false
   } finally {
     disposeDeadline?.()

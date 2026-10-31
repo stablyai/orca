@@ -84,13 +84,13 @@ export function conversationSwitchFailureText(
   }
   return args.direction === 'chat'
     ? translate(
-        'components.tab.bar.switch.chatStartFailed',
-        '{{agent}} could not start in chat. Check its setup and try again.',
+        'components.tab.bar.switch.chatSwitchFailed',
+        '{{agent}} could not switch to chat. Try again.',
         values
       )
     : translate(
-        'components.tab.bar.switch.terminalStartFailed',
-        '{{agent}} could not start in a terminal. Check its setup and try again.',
+        'components.tab.bar.switch.terminalSwitchFailed',
+        '{{agent}} could not switch to a terminal. Try again.',
         values
       )
 }

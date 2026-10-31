@@ -12,15 +12,9 @@ import {
   type AgentSessionSwitchDeadline,
   type AgentSessionSwitchResult
 } from '../../../../shared/agent-session-switch-execution'
-import {
-  AgentSessionRefusalError,
-  agentSessionRefusalError
-} from '../../../../shared/agent-session-wire-refusals'
-import {
-  nativeConversationContent,
-  prepareStructuredChatCliTranscript,
-  resolveStructuredChatCliSource
-} from '../../../ai-vault/structured-chat-cli-fork'
+import { AgentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
+import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
+import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
 import { structuredCallerFor } from './structured-agent-session-gate'
 import {
   prepareStructuredAgentSessionCreateForWorktree,
@@ -157,12 +151,10 @@ async function switchToChat(
   const adopt = createIdentity?.adopt
   const retainedSource =
     !adopt && source
-      ? await prepareStructuredChatCliTranscript(
-          await resolveStructuredChatCliSource(
-            { sessionId, workspaceId: recordWorkspace(host, sessionId) },
-            false
-          ),
-          (args) => ctx.runtime.prepareAiVaultSessionResume(args),
+      ? await prepareSwitchCliTranscript(
+          ctx.runtime,
+          sessionId,
+          recordWorkspace(host, sessionId),
           false
         )
       : undefined
@@ -173,7 +165,7 @@ async function switchToChat(
         filePath: adopt.transcriptPath,
         source: adopt.source
       }
-    : retainedSource?.cliForkSource
+    : retainedSource
   const stopped = before
     ? await captureSwitchStoppedCliTurn(
         before,
@@ -232,21 +224,15 @@ async function switchToChat(
   }
   const record = requireStructuredSwitchRecord(host, sessionId)
   const check = captureStructuredSwitchWorkCheck(host, sessionId, deadline, 'chat')
+  // Read before the stop (or shown as saved turns): a file gone now is history Orca can't read.
   if (source || nativeConversationContent(await host.journalSnapshot(sessionId)) === 'saved') {
-    const transcript = await prepareStructuredChatCliTranscript(
-      await resolveStructuredChatCliSource(
-        { sessionId, workspaceId: record.location.workspaceId },
-        false
-      ),
-      (args) => ctx.runtime.prepareAiVaultSessionResume(args),
-      false
+    const transcript = await prepareSwitchCliTranscript(
+      ctx.runtime,
+      sessionId,
+      record.location.workspaceId,
+      true
     )
     check()
-    if (!transcript.cliForkSource) {
-      throw agentSessionRefusalError('agent_session_identity_required', {
-        reason: 'transcriptUnreadable'
-      })
-    }
     // An open turn settles only when nothing can still write it: no CLI writer (a live one refuses
     // here, on every path, before the import) and a structured owner at rest.
     if (providerSessionId) {
@@ -260,7 +246,7 @@ async function switchToChat(
     const lease = providerSessionId ? host.deps.store.getRecord(sessionId)?.lease : undefined
     await host.refreshSwitchTranscript(
       sessionId,
-      transcript.cliForkSource,
+      transcript,
       deadline,
       stopped,
       check,

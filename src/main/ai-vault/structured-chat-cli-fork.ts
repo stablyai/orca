@@ -100,6 +100,17 @@ export function isStructuredChatCliForkSourceCurrent(
   )
 }
 
+/** The saved conversation file is missing or unreadable. The message keeps the copy path's words;
+ *  a switch reads the reason, so a history it cannot read is never shown as a setup problem. */
+export class StructuredChatTranscriptError extends Error {
+  constructor(
+    message: string,
+    readonly reason: 'transcriptNotFound' | 'transcriptUnreadable'
+  ) {
+    super(message)
+  }
+}
+
 /** The chat's current conversation on this host, as its CLI would open it; `fork` keeps its copy rules. */
 export async function resolveStructuredChatCliSource(
   sourceChat: AiVaultPrepareChatForkArgs['sourceChat'],
@@ -154,7 +165,10 @@ export async function resolveStructuredChatCliSource(
   }
   const providerSessionId = metadata.sessionHistory.rowSessionId(head)
   if (!providerSessionId.trim()) {
-    throw new Error('This chat has no saved conversation to copy.')
+    throw new StructuredChatTranscriptError(
+      'This chat has no saved conversation to copy.',
+      'transcriptNotFound'
+    )
   }
   assertNativeConversationContent(await host.journalSnapshot(record.sessionId))
   return { host, record, metadata, head, agent, cwd, providerSessionId, requireCurrent }
@@ -207,11 +221,17 @@ export async function prepareStructuredChatCliTranscript(
   if (importer.handleNamesTranscript) {
     filePath = head.handle.nativeId
     if (head.handle.transport !== 'jsonl-rpc' || !isAbsolute(filePath) || isWslUncPath(filePath)) {
-      throw new Error('The chat has no valid saved session file.')
+      throw new StructuredChatTranscriptError(
+        'The chat has no valid saved session file.',
+        'transcriptUnreadable'
+      )
     }
     const header = await readPiSessionHeader(filePath)
     if (!header || header.id !== providerSessionId) {
-      throw new Error('The saved conversation does not match this chat.')
+      throw new StructuredChatTranscriptError(
+        'The saved conversation does not match this chat.',
+        'transcriptUnreadable'
+      )
     }
   } else {
     const store = importer.conversationStore({ accountHome: record.accountHome, launchEnv })
@@ -219,12 +239,15 @@ export async function prepareStructuredChatCliTranscript(
       ? await importer.findTranscript({ providerSessionId, store, launchEnv, workspaceCwd: cwd })
       : null
   }
-  if (!filePath || !isAbsolute(filePath) || isWslUncPath(filePath)) {
-    throw new Error('This chat has no saved conversation to copy.')
-  }
-  const saved = await stat(filePath)
-  if (!saved.isFile() || saved.size === 0) {
-    throw new Error('This chat has no saved conversation to copy.')
+  const saved =
+    filePath && isAbsolute(filePath) && !isWslUncPath(filePath)
+      ? await stat(filePath).catch(() => null)
+      : null
+  if (!filePath || !saved?.isFile() || saved.size === 0) {
+    throw new StructuredChatTranscriptError(
+      'This chat has no saved conversation to copy.',
+      'transcriptNotFound'
+    )
   }
   const codexHome =
     agent === 'codex' && isLegacyAgentSessionAccountHome(record.accountHome)

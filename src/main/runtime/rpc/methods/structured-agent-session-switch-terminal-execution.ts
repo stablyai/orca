@@ -10,11 +10,8 @@ import type {
   AgentSessionSwitchResult
 } from '../../../../shared/agent-session-switch-execution'
 import { agentSessionRefusalError } from '../../../../shared/agent-session-wire-refusals'
-import {
-  nativeConversationContent,
-  prepareStructuredChatCliTranscript,
-  resolveStructuredChatCliSource
-} from '../../../ai-vault/structured-chat-cli-fork'
+import { nativeConversationContent } from '../../../ai-vault/structured-chat-cli-fork'
+import { prepareSwitchCliTranscript } from './structured-agent-session-switch-transcript'
 
 /** Stop the chat with proof, spawn the terminal parked, then one layout replace into the chat's slot. */
 export async function executeStructuredSessionTerminalSwitch(
@@ -55,28 +52,16 @@ export async function executeStructuredSessionTerminalSwitch(
   }
   const prepared =
     content === 'saved'
-      ? await prepareStructuredChatCliTranscript(
-          await resolveStructuredChatCliSource(
-            { sessionId, workspaceId: record.location.workspaceId },
-            false
-          ),
-          (args) => ctx.runtime.prepareAiVaultSessionResume(args),
-          false
-        )
+      ? await prepareSwitchCliTranscript(ctx.runtime, sessionId, record.location.workspaceId, true)
       : undefined
   check()
-  if (content === 'saved' && !prepared?.cliForkSource) {
-    throw agentSessionRefusalError('agent_session_identity_required', {
-      reason: 'transcriptNotFound'
-    })
-  }
   // Parked: bound to a pane no layout shows yet. A lost reply is answered by re-issuing this same
   // create, which adopts the running terminal through the conversation's claim.
   const terminal = await host.trackSwitchPhysical(
     sessionId,
     ctx.runtime.spawnSwitchTerminal(record.location.workspaceId, {
       agent,
-      source: prepared?.cliForkSource,
+      source: prepared,
       commandOverride: execution?.commandOverride,
       options: record.options,
       signal: deadline.signal

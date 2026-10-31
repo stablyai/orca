@@ -169,3 +169,28 @@ it('stops nothing when a chat switch races a host that cannot switch in place', 
   expect(mocks.call).not.toHaveBeenCalled()
   expect(mocks.error).toHaveBeenCalledOnce()
 })
+
+it.each([false, true])(
+  'reads a lost answer once the request left (sent=%s) as unconfirmed, never as a setup problem',
+  async (sent) => {
+    mocks.call.mockImplementation(
+      async (
+        _target: unknown,
+        _method: string,
+        _params: unknown,
+        options: { beforeSend: (sentAt?: number) => void }
+      ) => {
+        if (sent) {
+          options.beforeSend()
+        }
+        throw new Error('Runtime request closed before agentSession.switchToTerminal completed')
+      }
+    )
+    await expect(runConversationSwitch(subject)).resolves.toBe(false)
+    expect(mocks.error).toHaveBeenCalledExactlyOnceWith(
+      sent
+        ? 'Orca could not confirm the Codex switch. Check the open chat and terminal before trying again.'
+        : 'Codex could not switch to a terminal. Try again.'
+    )
+  }
+)

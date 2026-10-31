@@ -205,6 +205,7 @@ export class WebRuntimeClient {
       this.subscriptions.delete(id)
       throw new Error('Remote Orca runtime is not connected.')
     }
+    callbacks.onSent?.(Date.now())
     return {
       unsubscribe: () => {
         this.subscriptions.delete(subscription.id)

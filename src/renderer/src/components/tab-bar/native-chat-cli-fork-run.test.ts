@@ -225,7 +225,7 @@ it.each(['prepare', 'launch'])(
         })
     })
     expect(mocks.error).toHaveBeenCalledExactlyOnceWith(
-      'Claude could not start in a terminal. Check its setup and try again.'
+      'Claude could not switch to a terminal. Try again.'
     )
     expect(mocks.notify).not.toHaveBeenCalled()
   }
