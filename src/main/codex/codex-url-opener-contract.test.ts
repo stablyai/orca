@@ -103,6 +103,14 @@ it('hands complete actual elicitation addresses through projection, page helper,
       expect(pair.externalLinks).toEqual(urls.slice(0, id + 1))
       expect(codex.connections[0].replies).toEqual([])
     }
+    const aliases = ['  https://example.com/a\r\n  ', 'ht\ntps://example.com', 'https:example.com']
+    for (const alias of aliases) {
+      expect(canOpenExternalLink(alias)).toBe(true)
+      openExternalLink(alias)
+      await pair.flush()
+    }
+    const handedOff = [...urls, ...aliases]
+    expect(pair.externalLinks).toEqual(handedOff)
     const sent = pair.toShell.length
     const warn = vi.spyOn(console, 'warn').mockImplementation(() => {})
     for (const url of ['javascript:alert(1)', 'file:///a', '/relative', 'data:text/plain,hello']) {
@@ -112,10 +120,10 @@ it('hands complete actual elicitation addresses through projection, page helper,
       pair.host.receive(JSON.stringify({ v: 1, type: 'notify', name: 'externalLink', url }))
     }
     expect(pair.toShell).toHaveLength(sent)
-    expect(pair.externalLinks).toEqual(urls)
+    expect(pair.externalLinks).toEqual(handedOff)
     expect(warn).toHaveBeenCalledTimes(4)
     const frames = pair.toShell.filter((raw) => raw.includes('"name":"externalLink"'))
-    expect(frames).toHaveLength(urls.length)
+    expect(frames).toHaveLength(handedOff.length)
     for (const frame of frames) {
       expect(Buffer.byteLength(frame)).toBeLessThanOrEqual(655360)
       expect(readBridgeClientMessage(frame).ok).toBe(true)
