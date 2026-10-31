@@ -187,10 +187,6 @@ export function installDashboardPreviewLinkInteraction(
   }
   return {
     handlers,
-    clearHover: () => {
-      hovered = null
-      element?.removeAttribute('title')
-    },
     sendInput: (data: string): boolean | Promise<boolean> => {
       forwarded = undefined
       suppression.handlePtyInput(data, forward)

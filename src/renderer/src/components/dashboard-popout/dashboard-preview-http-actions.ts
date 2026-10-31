@@ -1,3 +1,5 @@
+import { toast } from 'sonner'
+import { intentPresentation } from '@/lib/workspace-browser-tab-presentation'
 import type { DashboardCard } from '../../../../shared/dashboard-snapshot'
 import { parseAppSshPtyId } from '../../../../shared/ssh-pty-id'
 import { parseRoutableExecutionHostId } from '../../../../shared/execution-host'
@@ -52,26 +54,27 @@ export function dashboardPreviewHttpActions(
   ) {
     return null
   }
+  const qualified = resolveOwner(state, { workspaceId: source.worktreeId, hostId: host.id })
+  const endpoint = qualified.kind === 'resolved' ? qualified.owner.endpoint : null
   const remote = parseRemoteRuntimePtyId(source.ptyId)
-  if ((host.kind === 'runtime') !== isRemoteRuntimePtyId(source.ptyId)) {
-    return null
-  }
-  if (
-    isRemoteRuntimePtyId(source.ptyId) &&
-    (!remote?.environmentId ||
-      host.kind !== 'runtime' ||
-      remote.environmentId !== host.environmentId)
-  ) {
+  if (isRemoteRuntimePtyId(source.ptyId)) {
+    if (
+      !remote?.environmentId ||
+      endpoint?.kind !== 'environment' ||
+      remote.environmentId !== endpoint.environmentId
+    ) {
+      return null
+    }
+  } else if (host.kind === 'runtime' || endpoint?.kind === 'environment') {
     return null
   }
   const owner: HttpLinkSourceOwner =
-    host.kind === 'runtime'
-      ? { kind: 'runtime', runtimeEnvironmentId: host.environmentId }
+    endpoint?.kind === 'environment'
+      ? { kind: 'runtime', runtimeEnvironmentId: endpoint.environmentId }
       : host.kind === 'ssh'
         ? { kind: 'ssh', connectionId: host.targetId }
         : { kind: 'local' }
   const route = resolveWorktreeOperationRoute(state, source.worktreeId)
-  const qualified = resolveOwner(state, { workspaceId: source.worktreeId, hostId: host.id })
   const matchesHost = createBrowserLinkHostMatcher(state, source.worktreeId, host.id)
   const canOpen = Boolean(
     onForegroundOpen &&
@@ -91,6 +94,7 @@ export function dashboardPreviewHttpActions(
   const open = (destination: HttpLinkDestination | undefined, inSourceGroup = false): void => {
     const current = dashboardPreviewHttpActions(source, url, onForegroundOpen)
     if (!current || (destination === 'orca' && !current.canOpen)) {
+      toast.error(intentPresentation({ kind: 'url' }, url).error)
       return
     }
     openRoutedHttpLink(url, {

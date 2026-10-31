@@ -166,7 +166,6 @@ export function AgentTerminalPreview({
     boxResizeObserver?.observe(container)
 
     const writeReplayed = (chunk: string, onDone?: () => void, live = false): void => {
-      linkInteraction?.clearHover()
       standalone?.write(chunk, {
         live,
         onDone: () => {

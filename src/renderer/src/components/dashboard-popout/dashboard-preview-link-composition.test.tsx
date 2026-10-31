@@ -2,6 +2,8 @@
 import { act, cleanup, fireEvent, render, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { Terminal } from '@xterm/xterm'
+import { toast } from 'sonner'
+import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
 import { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
 import { getDefaultSettings } from '../../../../shared/constants'
@@ -207,6 +209,140 @@ it('uses the real Dashboard constructor, OSC primer/provider and genuine claim; 
   expect(document.querySelector('[data-link-action-popover]')).toBeNull()
 })
 
+it.each(['actions', 'open'] as const)(
+  'retains the provider-owned hidden OSC target across unrelated live row output for %s and context',
+  async (behavior) => {
+    store.setState((state) => ({
+      settings: { ...state.settings!, terminalLinkClickBehavior: behavior }
+    }))
+    const view = render(<AgentTerminalPreview ptyId="pty-1" linkSource={source} />)
+    await waitFor(() => screenFor(view.container))
+    await output(`\x1b[?1000h\x1b[?1006h${osc}\x1b[3;1Hprogress 1`)
+    const screen = screenFor(view.container)
+    const terminal = view.container.querySelector('.xterm')!
+    pointer(screen, 'mousemove', { buttons: 0 })
+    await waitFor(() => expect(terminal.getAttribute('title')).toBe(URL_TO_OPEN))
+    await output('\x1b[3;1Hprogress 2')
+    expect(view.container.textContent).toContain('progress 2')
+    expect(terminal.getAttribute('title')).toBe(URL_TO_OPEN)
+    // Keep the pointer stationary: the retained provider does not emit another hover.
+    pointer(screen, 'mousedown')
+    pointer(screen, 'mouseup')
+    if (behavior === 'actions') {
+      const system = await view.findByRole('button', { name: /System Browser/ })
+      expect(document.querySelector('[data-terminal-link-destination]')?.textContent).toBe(
+        URL_TO_OPEN
+      )
+      fireEvent.click(system)
+    }
+    await waitFor(() => expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN))
+    expect(input.mock.calls.map(([, data]) => data)).toEqual([])
+    await output('\x1b[3;1Hprogress 3')
+    const context = pointer(screen, 'contextmenu', { button: 2, buttons: 0 })
+    expect(context.defaultPrevented).toBe(true)
+    const copy = await view.findByRole('button', { name: 'Copy link' })
+    expect(document.querySelector('[data-terminal-link-destination]')?.textContent).toBe(
+      URL_TO_OPEN
+    )
+    fireEvent.click(copy)
+    await waitFor(() => expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(URL_TO_OPEN))
+    pointer(screen, 'mouseleave', { buttons: 0 })
+    expect(terminal.hasAttribute('title')).toBe(false)
+  }
+)
+
+function seedRemoteWorkspace(hostId: string, environmentId: string, streaming: boolean): void {
+  store.setState((state) => ({
+    activeWorkspaceExecutionHostId: hostId,
+    worktreesByRepo: {
+      repo1: state.worktreesByRepo.repo1!.map((row) => ({
+        ...row,
+        hostId,
+        runtimeOwnerEnvironmentId: environmentId
+      }))
+    },
+    unifiedTabsByWorktree: {
+      [WORKSPACE]: state.unifiedTabsByWorktree[WORKSPACE]!.map((tab) => ({
+        ...tab,
+        executionHostId: hostId
+      }))
+    },
+    runtimeStatusByEnvironmentId: new Map([
+      [environmentId, runtimeStatuses(streaming ? ['browser.screencast.v1'] : []).get('env-1')!]
+    ]),
+    settings: { ...state.settings!, browserClientHostedRemoteEnabled: false }
+  }))
+}
+
+it.each([false, true])(
+  'routes the actual paired SSH card/remote PTY through its resolved serving endpoint (streaming=%s)',
+  async (streaming) => {
+    const hostId = 'ssh:private-target'
+    const ptyId = 'remote:hub-a@@handle-1'
+    const linkSource = { ...source, executionHostId: hostId, ptyId }
+    const foreground = vi.fn()
+    seedRemoteWorkspace(hostId, 'hub-a', streaming)
+    const props = { ptyId, linkSource, onBrowserForeground: foreground }
+    const view = render(<AgentTerminalPreview {...props} />)
+    await waitFor(() => screenFor(view.container))
+    await output(osc, ptyId)
+    const screen = screenFor(view.container)
+    pointer(screen, 'mousedown')
+    pointer(screen, 'mouseup')
+    await waitFor(() => expect(view.getByRole('button', { name: /System Browser/ })).toBeTruthy())
+    expect(Boolean(view.queryByRole('button', { name: /Orca Browser/ }))).toBe(streaming)
+    fireEvent.click(view.getByRole('button', { name: /System Browser/ }))
+    await waitFor(() => expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN))
+    pointer(screen, 'mousedown', { ctrlKey: true })
+    pointer(screen, 'mouseup', { ctrlKey: true })
+    await waitFor(() => expect(openUrl).toHaveBeenCalledTimes(2))
+    expect(foreground).not.toHaveBeenCalled()
+    expect(toast.error).not.toHaveBeenCalled()
+    const wrongPtyId = 'remote:hub-b@@handle-1'
+    view.rerender(
+      <AgentTerminalPreview
+        {...props}
+        ptyId={wrongPtyId}
+        linkSource={{ ...linkSource, ptyId: wrongPtyId }}
+      />
+    )
+    await waitFor(() => expect(window.api.terminalPreview.connect).toHaveBeenCalledTimes(2))
+    await output(osc, wrongPtyId)
+    const wrongScreen = screenFor(view.container)
+    pointer(wrongScreen, 'mousedown', { ctrlKey: true })
+    pointer(wrongScreen, 'mouseup', { ctrlKey: true })
+    pointer(wrongScreen, 'contextmenu', { button: 2 })
+    expect(document.querySelector('[data-link-action-popover]')).toBeNull()
+    expect(openUrl).toHaveBeenCalledTimes(2)
+  }
+)
+
+it('gives one useful refusal when a real saved chooser action loses runtime browser eligibility', async () => {
+  const hostId = 'runtime:e'
+  const ptyId = 'remote:e@@handle-1'
+  const linkSource = { ...source, executionHostId: hostId, ptyId }
+  const foreground = vi.fn()
+  seedRemoteWorkspace(hostId, 'e', true)
+  store.setState((state) => ({ settings: { ...state.settings!, openLinksInApp: true } }))
+  const props = { ptyId, linkSource, onBrowserForeground: foreground }
+  const view = render(<AgentTerminalPreview {...props} />)
+  await waitFor(() => screenFor(view.container))
+  await output(osc, ptyId)
+  const screen = screenFor(view.container)
+  pointer(screen, 'mousedown')
+  pointer(screen, 'mouseup')
+  const savedAction = await view.findByRole('button', { name: /Orca Browser/ })
+  // Actual failed-status refresh shape, after the real request has captured its action.
+  store.setState({ runtimeStatusByEnvironmentId: new Map([['e', { status: null, checkedAt: 2 }]]) })
+  fireEvent.click(savedAction)
+  await waitFor(() => expect(toast.error).toHaveBeenCalledExactlyOnceWith('Unable to open URL.'))
+  expect(document.querySelector('[data-link-action-popover]')).toBeNull()
+  expect(store.getState().browserPagesByWorkspace).toEqual({})
+  expect(openUrl).not.toHaveBeenCalled()
+  expect(foreground).not.toHaveBeenCalled()
+  expect(input.mock.calls.map(([, data]) => data)).toEqual([])
+})
+
 it('keeps None/middle/drag/nonlink reports and ordinary input live, refuses parser queries, and leaves native/paste context alone', async () => {
   store.setState((state) => ({
     settings: { ...state.settings!, terminalLinkClickBehavior: 'none' }
@@ -404,6 +540,7 @@ it.each([10, 100])(
         }
       })
     const interactions = previews.map((preview) => preview.install())
+    expect(provider).toHaveBeenCalledTimes(population)
     expect(active.size).toBe(9 * population)
     document.dispatchEvent(new MouseEvent('mousemove', { bubbles: true }))
     expect(callbacks).toBe(population)
@@ -451,6 +588,7 @@ it.each([10, 100])(
     cancelTimers.mockRestore()
     expect(active.size).toBe(0)
     const reset = previews.map((p) => p.install())
+    expect(provider).toHaveBeenCalledTimes(population)
     expect(active.size).toBe(9 * population)
     for (const interaction of reset) {
       interaction.dispose()
