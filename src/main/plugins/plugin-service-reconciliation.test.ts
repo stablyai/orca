@@ -10,6 +10,7 @@ import {
   type PluginManifest
 } from '../../shared/plugins/manifest/plugin-manifest'
 import type { PluginWorkerHandle } from './workers/plugin-host-process'
+import type { PluginRuntimeDelegate } from './workers/plugin-host-service-bindings'
 import { PluginService } from './plugin-service'
 import type { PluginWorkerFactory } from './workers/plugin-worker-manager'
 import { hashPluginTree } from './plugin-content-hash'
@@ -60,12 +61,12 @@ function testWorker(): PluginWorkerHandle & { dispose: ReturnType<typeof vi.fn> 
   }
 }
 
-async function createHarness(root: string) {
+async function createHarness(root: string, pluginManifest = manifest()) {
   let enabled = true
   let disabled: string[] = []
   let devPaths = [root]
   let killed = false
-  const consent = fingerprintPluginConsent(manifest(), await devFolderConsentIdentity(root))
+  const consent = fingerprintPluginConsent(pluginManifest, await devFolderConsentIdentity(root))
   const workers: ReturnType<typeof testWorker>[] = []
   const factory = vi.fn<PluginWorkerFactory>(async () => {
     const handle = testWorker()
@@ -479,5 +480,97 @@ describe('PluginService worker reconciliation', () => {
       'disabled'
     )
     expect(harness.service.workerState(pluginKey).state).toBe('inactive')
+  })
+})
+
+describe('PluginService commands.execute from a panel', () => {
+  const runtimeDelegate: PluginRuntimeDelegate = {
+    resolveActiveWorktreeContext: vi.fn().mockResolvedValue(null),
+    listTerminals: vi.fn().mockResolvedValue({ terminals: [] }),
+    sendTerminal: vi.fn().mockResolvedValue({ accepted: true }),
+    dispatchPluginNotification: vi.fn().mockResolvedValue({ delivered: true })
+  }
+  const commandsHarness = async (pluginManifest: PluginManifest) => {
+    const harness = await createHarness(await pluginRoot(pluginManifest), pluginManifest)
+    harness.service.setRuntimeDelegate(runtimeDelegate)
+    await harness.service.initialize()
+    return harness
+  }
+
+  const commandsManifest = (commands: PluginManifest['contributes']['commands']) =>
+    pluginManifestSchema.parse({
+      manifestVersion: 1,
+      id: 'demo',
+      publisher: 'samples',
+      name: 'Demo',
+      version: '1.0.0',
+      engines: { orca: '>=1.0.0' },
+      pluginApi: 1,
+      main: 'worker.js',
+      contributes: {
+        panels: [{ id: 'panel', title: 'Panel', entry: 'panel.html' }],
+        commands,
+        events: []
+      },
+      capabilities: [{ kind: 'commands:execute' }]
+    })
+
+  it('runs the plugin own contributed command through the panel call', async () => {
+    const pluginManifest = commandsManifest([{ id: 'run', title: 'Run' }])
+    const harness = await commandsHarness(pluginManifest)
+
+    await expect(
+      harness.service.executeHostCall(
+        pluginKey,
+        'commands.execute',
+        { commandId: 'run', params: { account: 'work' } },
+        'panel'
+      )
+    ).resolves.toEqual({ ok: true, value: { value: null } })
+    expect(harness.factory).toHaveBeenCalledTimes(1)
+    expect(harness.workers[0]!.invokeCommand).toHaveBeenCalledWith('run', { account: 'work' })
+  })
+
+  it('refuses a disabled plugin before any worker starts', async () => {
+    const pluginManifest = commandsManifest([{ id: 'run', title: 'Run' }])
+    const harness = await commandsHarness(pluginManifest)
+    harness.setDisabled([pluginKey])
+
+    await expect(
+      harness.service.executeHostCall(pluginKey, 'commands.execute', { commandId: 'run' }, 'panel')
+    ).resolves.toMatchObject({ ok: false, code: 'consent_required' })
+    expect(harness.factory).not.toHaveBeenCalled()
+  })
+
+  it('rejects a command the plugin does not contribute', async () => {
+    const pluginManifest = commandsManifest([{ id: 'run', title: 'Run' }])
+    const harness = await commandsHarness(pluginManifest)
+
+    await expect(
+      harness.service.executeHostCall(pluginKey, 'commands.execute', { commandId: 'nope' }, 'panel')
+    ).resolves.toMatchObject({
+      ok: false,
+      code: 'action_failed',
+      error: expect.stringContaining('does not contribute command nope')
+    })
+    expect(harness.factory).not.toHaveBeenCalled()
+  })
+
+  it('rejects a built-in action alias even when a panel names it', async () => {
+    const pluginManifest = commandsManifest([{ id: 'tasks', title: 'Tasks', action: 'view.tasks' }])
+    const harness = await commandsHarness(pluginManifest)
+
+    await expect(
+      harness.service.executeHostCall(
+        pluginKey,
+        'commands.execute',
+        { commandId: 'tasks' },
+        'panel'
+      )
+    ).resolves.toMatchObject({
+      ok: false,
+      error: expect.stringContaining('is a built-in action alias')
+    })
+    expect(harness.factory).not.toHaveBeenCalled()
   })
 })

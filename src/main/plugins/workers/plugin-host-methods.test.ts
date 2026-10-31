@@ -1,6 +1,7 @@
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { describe, expect, it, vi } from 'vitest'
+import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import { PLUGIN_WORKSPACE_TERMINAL_LIMIT } from '../../../shared/plugins/workers/plugin-host-api'
 import { bindPluginHostServices, type PluginRuntimeDelegate } from './plugin-host-service-bindings'
 import { executePluginHostCall, type PluginHostServices } from './plugin-host-methods'
@@ -17,6 +18,7 @@ function createServices(storageSet: PluginHostServices['storage']['set']): Plugi
       delete: vi.fn(),
       keys: vi.fn().mockReturnValue([])
     },
+    invokePluginCommand: vi.fn().mockResolvedValue(null),
     secrets: {
       get: vi.fn().mockReturnValue({ ok: true, value: null }),
       set: vi.fn().mockReturnValue({ ok: true }),
@@ -139,7 +141,8 @@ function createTerminalHarness(terminalHandles: string[]): {
     delegate,
     services: bindPluginHostServices({
       delegate,
-      pluginsDataDir: join(tmpdir(), 'plugin-host-methods-test')
+      pluginsDataDir: join(tmpdir(), 'plugin-host-methods-test'),
+      invokeCommand: vi.fn().mockResolvedValue(null)
     })
   }
 }
@@ -294,5 +297,146 @@ describe('terminal.sendText', () => {
 
     expect(outcome).toEqual({ ok: true, value: { accepted: true } })
     expect(delegate.sendTerminal).toHaveBeenCalledTimes(1)
+  })
+})
+
+describe('commands.execute', () => {
+  const panelCall = (
+    services: PluginHostServices,
+    params: unknown,
+    grantedCapabilities: PluginCapabilityKind[] = ['commands:execute'],
+    record = vi.fn().mockResolvedValue(undefined)
+  ) =>
+    executePluginHostCall({
+      pluginId: 'samples.demo',
+      method: 'commands.execute',
+      params,
+      surface: 'panel',
+      grantedCapabilities,
+      services,
+      audit: { record }
+    })
+
+  it('runs the calling plugin command and returns its JSON value', async () => {
+    const invokePluginCommand = vi.fn().mockResolvedValue({ ok: true, message: 'done' })
+    const services = { ...createServices(vi.fn()), invokePluginCommand }
+
+    const outcome = await panelCall(services, { commandId: 'swap', params: { account: 'work' } })
+
+    expect(outcome).toEqual({ ok: true, value: { value: { ok: true, message: 'done' } } })
+    expect(invokePluginCommand).toHaveBeenCalledWith('samples.demo', 'swap', { account: 'work' })
+  })
+
+  it('refuses a panel without the commands:execute capability', async () => {
+    const invokePluginCommand = vi.fn()
+    const services = { ...createServices(vi.fn()), invokePluginCommand }
+
+    const outcome = await panelCall(services, { commandId: 'swap' }, [])
+
+    expect(outcome).toMatchObject({ ok: false, code: 'capability_denied' })
+    expect(invokePluginCommand).not.toHaveBeenCalled()
+  })
+
+  it('refuses params over 16 KiB before running any command', async () => {
+    const invokePluginCommand = vi.fn()
+    const services = { ...createServices(vi.fn()), invokePluginCommand }
+
+    const outcome = await panelCall(services, {
+      commandId: 'swap',
+      params: { text: 'x'.repeat(16 * 1024) }
+    })
+
+    expect(outcome).toMatchObject({ ok: false, code: 'invalid_params' })
+    expect(invokePluginCommand).not.toHaveBeenCalled()
+  })
+
+  it('refuses a worker call because commands.execute is panel-only', async () => {
+    const invokePluginCommand = vi.fn()
+    const services = { ...createServices(vi.fn()), invokePluginCommand }
+
+    const outcome = await executePluginHostCall({
+      pluginId: 'samples.demo',
+      method: 'commands.execute',
+      params: { commandId: 'swap' },
+      surface: 'worker',
+      grantedCapabilities: ['commands:execute'],
+      services,
+      audit: { record: vi.fn().mockResolvedValue(undefined) }
+    })
+
+    expect(outcome).toMatchObject({ ok: false, code: 'not_permitted' })
+    expect(invokePluginCommand).not.toHaveBeenCalled()
+  })
+
+  it.each(['pluginId', 'pluginKey'])(
+    'refuses a %s param so a panel cannot pick another plugin',
+    async (field) => {
+      const invokePluginCommand = vi.fn()
+      const services = { ...createServices(vi.fn()), invokePluginCommand }
+
+      const outcome = await panelCall(services, {
+        commandId: 'swap',
+        [field]: 'samples.other'
+      })
+
+      expect(outcome).toMatchObject({ ok: false, code: 'invalid_params' })
+      expect(invokePluginCommand).not.toHaveBeenCalled()
+    }
+  )
+
+  it('refuses a result over 256 KiB with a named error', async () => {
+    const services = {
+      ...createServices(vi.fn()),
+      invokePluginCommand: vi.fn().mockResolvedValue('x'.repeat(256 * 1024))
+    }
+
+    const outcome = await panelCall(services, { commandId: 'swap' })
+
+    expect(outcome).toMatchObject({
+      ok: false,
+      code: 'action_failed',
+      error: 'command swap result exceeds 256 KiB'
+    })
+  })
+
+  it('maps an undefined command result to null', async () => {
+    const services = {
+      ...createServices(vi.fn()),
+      invokePluginCommand: vi.fn().mockResolvedValue(undefined)
+    }
+
+    await expect(panelCall(services, { commandId: 'refresh' })).resolves.toEqual({
+      ok: true,
+      value: { value: null }
+    })
+  })
+
+  it('turns a non-JSON command result into an action error', async () => {
+    const services = {
+      ...createServices(vi.fn()),
+      invokePluginCommand: vi.fn().mockResolvedValue(() => 1)
+    }
+
+    await expect(panelCall(services, { commandId: 'swap' })).resolves.toMatchObject({
+      ok: false,
+      code: 'action_failed'
+    })
+  })
+
+  it('audits the command id and params size, never the params', async () => {
+    const record = vi.fn().mockResolvedValue(undefined)
+    const services = {
+      ...createServices(vi.fn()),
+      invokePluginCommand: vi.fn().mockResolvedValue(null)
+    }
+    const params = { account: 'work' }
+
+    await panelCall(services, { commandId: 'swap', params }, ['commands:execute'], record)
+
+    expect(record).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        summary: `command=swap bytes=${Buffer.byteLength(JSON.stringify(params), 'utf8')}`
+      })
+    )
   })
 })

@@ -6,7 +6,7 @@
   "name": "Hello Orca",
   "version": "1.0.0",
   "description": "Sample plugin combining a panel, a worker command, and event subscriptions.",
-  "engines": { "orca": ">=1.4.245" },
+  "engines": { "orca": ">=1.4.247" },
   "pluginApi": 1,
   "main": "main.mjs",
   "contributes": {
@@ -18,6 +18,7 @@
     { "kind": "workspace:read" },
     { "kind": "notifications:show" },
     { "kind": "storage:own" },
-    { "kind": "agent:read" }
+    { "kind": "agent:read" },
+    { "kind": "commands:execute" }
   ]
 }

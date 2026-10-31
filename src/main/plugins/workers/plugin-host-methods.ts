@@ -120,6 +120,11 @@ function summarizeParams(method: string, params: unknown): string {
       const title = typeof record.title === 'string' ? record.title : ''
       return `titleChars=${title.length}`
     }
+    case 'commands.execute': {
+      const bytes =
+        record.params === undefined ? 0 : Buffer.byteLength(JSON.stringify(record.params), 'utf8')
+      return `command=${String(record.commandId)} bytes=${bytes}`
+    }
     case 'storage.set':
     case 'storage.delete':
     case 'secrets.set':

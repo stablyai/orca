@@ -1,6 +1,7 @@
 import { z } from 'zod'
 import type { PluginCapabilityKind } from '../capabilities/plugin-capabilities'
 import type { PluginSurface } from '../frames/plugin-protocol'
+import { pluginCommandIdSchema } from '../manifest/plugin-manifest-fields'
 
 /**
  * Host API 1 (`pluginApi: 1`) — the separately-versioned public facade plugins call. Every
@@ -64,7 +65,7 @@ const storageKeySchema = z
   .min(1)
   .max(256)
   .refine((key) => !RESERVED_STORAGE_KEYS.has(key), 'reserved storage key')
-const pluginJsonValueSchema = z.json()
+export const pluginJsonValueSchema = z.json()
 export type PluginJsonValue = z.infer<typeof pluginJsonValueSchema>
 /** Caps keep per-plugin storage an honest key-value store, not a database. */
 export const PLUGIN_STORAGE_VALUE_MAX_BYTES = 256 * 1024
@@ -91,6 +92,23 @@ const settingsGetParams = z.strictObject({}).optional()
 const settingsGetResult = z.object({ settings: z.record(z.string(), pluginJsonValueSchema) })
 const settingsSetParams = z.strictObject({ key: storageKeySchema, value: pluginJsonValueSchema })
 const settingsSetResult = z.object({ ok: z.literal(true) })
+
+export const PLUGIN_COMMAND_PARAMS_MAX_BYTES = 16 * 1024
+export const PLUGIN_COMMAND_RESULT_MAX_BYTES = 256 * 1024
+export const jsonByteLength = (value: unknown): number =>
+  new TextEncoder().encode(JSON.stringify(value)).byteLength
+
+const commandsExecuteParams = z.strictObject({
+  commandId: pluginCommandIdSchema,
+  params: pluginJsonValueSchema
+    .refine((value) => jsonByteLength(value) <= PLUGIN_COMMAND_PARAMS_MAX_BYTES, 'too large')
+    .optional()
+})
+const commandsExecuteResult = z.strictObject({
+  value: pluginJsonValueSchema
+    .nullable()
+    .refine((value) => jsonByteLength(value) <= PLUGIN_COMMAND_RESULT_MAX_BYTES, 'too large')
+})
 
 export type PluginHostMethodSpec<
   P extends z.ZodType = z.ZodType,
@@ -242,6 +260,17 @@ export const PLUGIN_HOST_API = {
     surfaces: WORKER_ONLY,
     params: settingsSetParams,
     result: settingsSetResult
+  }),
+  'commands.execute': spec({
+    summary:
+      "Runs one of this plugin's own commands and returns its JSON value, or null when it returns nothing.",
+    since: 1,
+    scope: 'plugin-private',
+    capability: 'commands:execute',
+    mutation: true,
+    surfaces: ['panel'],
+    params: commandsExecuteParams,
+    result: commandsExecuteResult
   })
 }
 

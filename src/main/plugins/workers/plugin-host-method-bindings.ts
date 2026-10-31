@@ -6,6 +6,9 @@ import {
   PLUGIN_TERMINAL_ID_MAX_LENGTH,
   PLUGIN_WORKSPACE_LABEL_MAX_LENGTH,
   PLUGIN_WORKSPACE_TERMINAL_LIMIT,
+  jsonByteLength,
+  PLUGIN_COMMAND_RESULT_MAX_BYTES,
+  pluginJsonValueSchema,
   type PluginHostMethodName,
   type PluginHostMethodSpec,
   type PluginJsonValue
@@ -30,6 +33,7 @@ export type PluginHostServices = {
     title: string
     body?: string
   }): Promise<{ delivered: boolean }>
+  invokePluginCommand(pluginId: string, commandId: string, params: unknown): Promise<unknown>
   storage: {
     get(pluginId: string, key: string): PluginJsonValue | undefined
     set(
@@ -171,6 +175,23 @@ const HANDLERS: Record<PluginHostMethodName, BoundPluginHostMethod> = {
   })),
   'settings.set': bind(api['settings.set'], async ({ key, value }, { pluginId, services }) =>
     okOrThrow(services.settings.set(pluginId, key, value))
+  ),
+  'commands.execute': bind(
+    api['commands.execute'],
+    async ({ commandId, params }, { pluginId, services }) => {
+      const result = await services.invokePluginCommand(pluginId, commandId, params)
+      if (result === undefined) {
+        return { value: null }
+      }
+      const json = pluginJsonValueSchema.safeParse(result)
+      if (!json.success) {
+        throw new Error(`command ${commandId} returned a value that is not JSON`)
+      }
+      if (jsonByteLength(json.data) > PLUGIN_COMMAND_RESULT_MAX_BYTES) {
+        throw new Error(`command ${commandId} result exceeds 256 KiB`)
+      }
+      return { value: json.data }
+    }
   )
 }
 

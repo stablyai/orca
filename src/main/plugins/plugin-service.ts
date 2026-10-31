@@ -259,7 +259,9 @@ export class PluginService {
         services: this.runtimeDelegate
           ? bindPluginHostServices({
               delegate: this.runtimeDelegate,
-              pluginsDataDir: getPluginsDataDir(this.options.userDataPath)
+              pluginsDataDir: getPluginsDataDir(this.options.userDataPath),
+              invokeCommand: (pluginKey, commandId, args) =>
+                this.invokeCommand(pluginKey, commandId, args)
             })
           : null,
         audit: this.audit

@@ -40,6 +40,7 @@
     <p>Panel + worker command + events, gated by consent.</p>
     <button id="ctx">Read workspace context</button>
     <button id="notify">Show a notification</button>
+    <button id="ping">Ping (runs hello-ping)</button>
     <p class="status" id="status"></p>
     <script>
       'use strict'
@@ -59,6 +60,17 @@
           },
           function (error) {
             statusEl.textContent = `context failed: ${error.code}: ${error.message}`
+          }
+        )
+      })
+
+      document.getElementById('ping').addEventListener('click', function () {
+        orca.host.call('commands.execute', { commandId: 'hello-ping' }).then(
+          function (result) {
+            statusEl.textContent = typeof result.value === 'string' ? result.value : 'Pinged.'
+          },
+          function (error) {
+            statusEl.textContent = `ping failed: ${error.code}: ${error.message}`
           }
         )
       })
