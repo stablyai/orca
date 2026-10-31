@@ -348,3 +348,46 @@ it('does no settlement work for store writes outside the held pane, however many
     kept.dispose()
   }
 })
+
+it('shows a pane that never saw its exit stopped from main’s frame, without reattaching', async () => {
+  const kept = await keptStoppedPane()
+  try {
+    // Parked before the stop, and its exit never reached this window: only the frame names it.
+    kept.park()
+    kept.modules.sources.noteFrameStoppedSwitchSources([
+      {
+        worktree: kept.source.worktreeId,
+        publicationEpoch: 'epoch-1',
+        snapshotVersion: 2,
+        activeGroupId: null,
+        activeTabId: null,
+        activeTabType: null,
+        tabs: [
+          {
+            type: 'terminal',
+            id: `${kept.tab.id}::${kept.pane.leafId}`,
+            parentTabId: kept.tab.id,
+            leafId: kept.pane.leafId,
+            title: 'Terminal',
+            isActive: true,
+            stoppedSwitchSource: {
+              ptyId: kept.source.ptyId,
+              incarnationId,
+              agent: 'claude',
+              providerSessionId: 'claude-conversation'
+            }
+          }
+        ]
+      }
+    ])
+    kept.spawn.mockClear()
+    await kept.reveal()
+    expect(kept.spawn).not.toHaveBeenCalled()
+    expect(kept.died).toHaveBeenCalledExactlyOnceWith(
+      expect.objectContaining({ reason: 'switch-stopped', agent: 'claude' })
+    )
+    expect(kept.automaticClose).not.toHaveBeenCalled()
+  } finally {
+    kept.dispose()
+  }
+})

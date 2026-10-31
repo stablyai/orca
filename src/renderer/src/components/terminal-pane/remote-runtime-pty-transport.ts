@@ -110,6 +110,7 @@ import { subscribeAcceptedWebSessionTerminalHandle } from '@/runtime/web-session
 import { hostSnapshotAffirmsWorktreeContents } from '@/runtime/host-session-snapshot-authority'
 import { runRemoteAgentSessionLaunch } from '@/runtime/remote-agent-session-launch'
 import { useAppStore } from '@/store'
+import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import { recordWebAgentSessionHandoff } from '@/runtime/web-agent-session-handoff'
 import { refreshWebRuntimeSessionTabsSnapshot } from '@/runtime/web-runtime-session-snapshot'
 import {
@@ -980,7 +981,7 @@ export function createRemoteRuntimePtyTransport(
     previousHandle: string,
     replacementPolicy: HostHandleReplacementPolicy,
     recoveryEpoch: number
-  ): Promise<string | null | undefined> {
+  ): Promise<string | null | undefined | { stopped: StoppedSwitchSourceFact }> {
     if (!worktreeId) {
       return null
     }
@@ -1042,6 +1043,16 @@ export function createRemoteRuntimePtyTransport(
               await activateHostSessionSurface(hostTabId, worktree, 'automatic', requestRemainingMs)
         lastRequestError = null
         const nextHandle = findReadyHostSessionHandle(listed, hostTabId)
+        // A switch stopped this exact process and kept its pane: nothing to reattach or replace.
+        const stopped =
+          nextHandle === previousHandle
+            ? getHostSessionTerminalSurfaces(listed, hostTabId, { matchRequestedLeaf: true }).find(
+                (tab) => tab.terminal === previousHandle
+              )?.stoppedSwitchSource
+            : undefined
+        if (stopped) {
+          return { stopped }
+        }
         if (nextHandle) {
           lastReadyHandle = nextHandle
         }
@@ -2306,7 +2317,10 @@ export function createRemoteRuntimePtyTransport(
     )
   }
 
-  function retireRemoteTerminalId(exitCode?: number): void {
+  function retireRemoteTerminalId(
+    exitCode?: number,
+    stoppedSwitchSource?: StoppedSwitchSourceFact
+  ): void {
     discardPendingInput()
     recovery.cancel()
     resetRecoveryReplacementPolicy()
@@ -2324,7 +2338,9 @@ export function createRemoteRuntimePtyTransport(
     setAttachmentUnavailable()
     emitRecoveryState()
     if (stalePtyId) {
-      if (exitCode === undefined) {
+      if (stoppedSwitchSource) {
+        onPtyExit?.(stalePtyId, exitCode, { stoppedSwitchSource })
+      } else if (exitCode === undefined) {
         onPtyExit?.(stalePtyId)
       } else {
         onPtyExit?.(stalePtyId, exitCode)
@@ -2505,6 +2521,11 @@ export function createRemoteRuntimePtyTransport(
           return
         }
         if (!update.terminalHandle) {
+          return
+        }
+        // A switch stopped this exact process and kept its pane: nothing to reattach or replace.
+        if (update.terminalHandle === previousHandle && update.stoppedSwitchSource) {
+          retireRemoteTerminalId(undefined, update.stoppedSwitchSource)
           return
         }
         if (update.terminalHandle === previousHandle) {
@@ -2688,6 +2709,10 @@ export function createRemoteRuntimePtyTransport(
         }
         // Unknown liveness needs scheduled backoff; healthy links may never emit online/resume to revive event-only parking (#27178).
         recovery.schedule(recoveryEpoch, retryResubscribe)
+        return
+      }
+      if (typeof nextHandle === 'object' && nextHandle) {
+        retireRemoteTerminalId(undefined, nextHandle.stopped)
         return
       }
       if (!nextHandle) {

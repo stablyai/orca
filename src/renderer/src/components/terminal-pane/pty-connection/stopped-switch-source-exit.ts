@@ -1,5 +1,27 @@
-import { readStoppedSwitchSource, watchStoppedSwitchSource } from '../stopped-switch-sources'
+import {
+  readMirroredStoppedSwitchSource,
+  readStoppedSwitchSource,
+  watchStoppedSwitchSource
+} from '../stopped-switch-sources'
+import type { AiVaultAgent } from '../../../../../shared/ai-vault-types'
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
+
+/** The pane takes the stopped state: the overlay naming the agent, with Restart and Close. */
+export function showSwitchStoppedPane(
+  session: ConnectPanePtySession,
+  ptyId: string,
+  exitCode: number,
+  agent: AiVaultAgent | undefined
+): void {
+  session.deps.onPaneProcessDied?.({
+    paneId: session.pane.id,
+    exitCode,
+    startup: null,
+    reason: 'switch-stopped',
+    replacesPtyId: ptyId,
+    ...(agent ? { agent } : {})
+  })
+}
 
 /**
  * A `closing` exit keeps the stopped process's screen for the replace that should remove its tab.
@@ -25,14 +47,17 @@ export function holdClosingExit(
       // Main keeps a `closing` stop's binding, so a Restart must name the stopped process as the
       // one it replaces; otherwise main reattaches to it and finds its session killed.
       // Only a switch's stop is named as one; a close that stopped it exits as any pane does.
-      session.deps.onPaneProcessDied?.({
-        paneId: session.pane.id,
-        exitCode,
-        startup: null,
-        reason: notice.switched ? 'switch-stopped' : 'process-failed',
-        replacesPtyId: ptyId,
-        ...(notice.switched?.agent ? { agent: notice.switched.agent } : {})
-      })
+      if (notice.switched) {
+        showSwitchStoppedPane(session, ptyId, exitCode, notice.switched.agent)
+      } else {
+        session.deps.onPaneProcessDied?.({
+          paneId: session.pane.id,
+          exitCode,
+          startup: null,
+          reason: 'process-failed',
+          replacesPtyId: ptyId
+        })
+      }
     }
   )
 }
@@ -45,13 +70,20 @@ export function remountStoppedSwitchSource(
   session: ConnectPanePtySession,
   ptyId: string | null
 ): boolean {
-  const stopped = ptyId
-    ? readStoppedSwitchSource(session.deps.tabId, session.pane.leafId, ptyId)
-    : null
-  if (!ptyId || !stopped) {
+  if (!ptyId) {
     return false
   }
-  session.handledExitPtyId = ptyId
-  holdClosingExit(session, ptyId, stopped.exitCode, stopped.incarnationId)
-  return true
+  const { tabId } = session.deps
+  const { leafId } = session.pane
+  // A paired client's leaf stays bound to the stopped process by main's frame: no attach, no hold.
+  const mirrored = readMirroredStoppedSwitchSource(tabId, leafId, ptyId)
+  const stopped = mirrored ? null : readStoppedSwitchSource(tabId, leafId, ptyId)
+  if (mirrored) {
+    session.handledExitPtyId = ptyId
+    showSwitchStoppedPane(session, ptyId, 0, mirrored.agent)
+  } else if (stopped) {
+    session.handledExitPtyId = ptyId
+    holdClosingExit(session, ptyId, stopped.exitCode, stopped.incarnationId)
+  }
+  return Boolean(mirrored || stopped)
 }

@@ -1,3 +1,4 @@
+import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import {
   bufferPreHandlerPtyExit,
   clearPreHandlerPtyState,
@@ -5,7 +6,11 @@ import {
   discardPreHandlerPtyState
 } from './pty-pre-handler-buffer'
 
-export type PtyExitOptions = { preserveRendererBinding?: boolean | 'closing' }
+export type PtyExitOptions = {
+  preserveRendererBinding?: boolean | 'closing'
+  /** Main's fact that a switch stopped this paired pane's process; its frame keeps the binding. */
+  stoppedSwitchSource?: StoppedSwitchSourceFact
+}
 export type PtyExitDeliveryContext = { hadPrimary: boolean; exitOptions?: PtyExitOptions }
 
 type PtyExitDelivery = {

@@ -35,6 +35,7 @@ import { LOCAL_STRUCTURED_SESSION_OWNER } from '../local-structured-session-owne
 import { closeStructuredAgentSession } from '../structured-agent-session-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { useAppStore } from '../../store'
+import { noteFrameStoppedSwitchSources } from '@/components/terminal-pane/stopped-switch-sources'
 import { closeTerminalTab } from '@/components/terminal/terminal-tab-actions'
 import { replacementSelection, selectReplacementInGroup } from '@/lib/replaced-tab-selection'
 import { takeReplacedTabSlot } from '@/lib/unified-tab-anchor-insertion'
@@ -103,6 +104,7 @@ export function applyStructuredSessionTabSnapshots(
     snapshots.map(({ worktree }) => worktree)
   )
   settleStructuredSessionMirror()
+  noteFrameStoppedSwitchSources(snapshots)
   const { setTabLabel } = useAppStore.getState()
   for (const { tabId, label } of drawnChatLabels) {
     setTabLabel(tabId, label)

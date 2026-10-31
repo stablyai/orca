@@ -1,6 +1,12 @@
 import { useAppStore } from '@/store'
 import type { AppState } from '@/store/types'
-import type { StoppedSwitchSource } from '../../../../shared/stopped-switch-source'
+import type {
+  StoppedSwitchSource,
+  StoppedSwitchSourceFact
+} from '../../../../shared/stopped-switch-source'
+import { isWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
+import { isTerminalLeafId, makePaneKey } from '../../../../shared/stable-pane-id'
+import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
 
 /**
  * A pane whose process a switch stopped for a replace, and main's word that no replace removed it.
@@ -131,6 +137,27 @@ export function noteStoppedSwitchSource(notice: StoppedSwitchSource): void {
   track()
 }
 
+/** Main's fact on the terminal rows of frames this window applied; its notice only wakes. */
+export function noteFrameStoppedSwitchSources(
+  snapshots: readonly RuntimeMobileSessionTabsResult[]
+): void {
+  for (const snapshot of snapshots) {
+    for (const row of snapshot.tabs) {
+      if (row.type === 'terminal' && row.stoppedSwitchSource) {
+        const fact = row.stoppedSwitchSource
+        noteStoppedSwitchSource({
+          worktreeId: snapshot.worktree,
+          tabId: row.parentTabId,
+          leafId: row.leafId,
+          ptyId: fact.ptyId,
+          incarnationId: fact.incarnationId,
+          switched: { agent: fact.agent }
+        })
+      }
+    }
+  }
+}
+
 /**
  * A pane that kept a stopped process's screen for a replace records that fact and watches for
  * main's settlement. The callback runs once, for this exact process; the returned function stops
@@ -152,14 +179,41 @@ export function watchStoppedSwitchSource(
   }
 }
 
-/** The stopped process a remounting leaf still shows, if a switch stopped it: nothing to reattach. */
+/**
+ * The stopped process a remounting leaf still shows, if a switch stopped it: nothing to reattach.
+ * A pane that never saw the exit (never mounted, or parked first) takes it from main's word.
+ */
 export function readStoppedSwitchSource(
   tabId: string,
   leafId: string,
   ptyId: string
 ): StoppedPane | null {
-  const stopped = entries.get(keyOf(tabId, leafId))?.stopped
-  return stopped?.ptyId === ptyId ? stopped : null
+  const entry = entries.get(keyOf(tabId, leafId))
+  if (entry?.stopped?.ptyId === ptyId) {
+    return entry.stopped
+  }
+  const notice = entry?.notice
+  return notice?.switched && notice.ptyId === ptyId
+    ? { ptyId, incarnationId: notice.incarnationId ?? null, exitCode: 0 }
+    : null
+}
+
+/**
+ * Main's fact for the process a paired client's leaf shows, from the frame its store holds; that
+ * frame also keeps the leaf bound to the stopped process, so nothing here outlives the binding.
+ */
+export function readMirroredStoppedSwitchSource(
+  tabId: string,
+  leafId: string,
+  ptyId: string
+): StoppedSwitchSourceFact | null {
+  if (!isWebTerminalSurfaceTabId(tabId) || !isTerminalLeafId(leafId)) {
+    return null
+  }
+  const state = useAppStore.getState()
+  return shownPtyId(state, tabId, leafId) === ptyId
+    ? (state.agentConversationsByPaneKey[makePaneKey(tabId, leafId)]?.stoppedSwitchSource ?? null)
+    : null
 }
 
 export function getStoppedSwitchSourceReconcileCountForTests(): number {

@@ -14,9 +14,10 @@ import type { SleepingAgentSessionRecord } from '../../../../../shared/agent-ses
 import { agentTurnEndedUncleanly } from '../../../../../shared/agent-main-agent-verdict'
 
 import type { ConnectPanePtySession } from './connect-pane-pty-session'
-import { isPtyExitReplacedByRestart } from '../pty-exit-delivery'
+import { isPtyExitReplacedByRestart, type PtyExitOptions } from '../pty-exit-delivery'
 import { armRestartReplacement } from './restart-replacement-on-show'
-import { holdClosingExit } from './stopped-switch-source-exit'
+import { holdClosingExit, showSwitchStoppedPane } from './stopped-switch-source-exit'
+import { readMirroredStoppedSwitchSource } from '../stopped-switch-sources'
 import { noteHiddenAgentResumePtyEnded } from './hidden-agent-resume-deferral'
 import { expectExitedSplitPaneClose } from './exited-split-pane-close'
 import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../../shared/layout-owner-switch'
@@ -130,11 +131,7 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
       })
     return claimKey
   }
-  session.onExit = (
-    ptyId: string,
-    exitCode = 0,
-    opts: { preserveRendererBinding?: boolean | 'closing' } = {}
-  ): void => {
+  session.onExit = (ptyId: string, exitCode = 0, opts: PtyExitOptions = {}): void => {
     if (session.handledExitPtyId === ptyId) {
       return
     }
@@ -153,8 +150,14 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
     const isUnverifiedExit = !isProvenProcessExit(exitCode)
     const committedExit = consumeCommittedPtyShutdownExit(ptyId, session.runtimeEnvironmentId)
     const reversibleExit = opts.preserveRendererBinding === true || committedExit === true
+    const switchStopped =
+      opts.stoppedSwitchSource ??
+      readMirroredStoppedSwitchSource(session.deps.tabId, session.pane.leafId, ptyId)
     const preserveRendererBinding =
-      reversibleExit || opts.preserveRendererBinding === 'closing' || committedExit === 'closing'
+      reversibleExit ||
+      !!switchStopped ||
+      opts.preserveRendererBinding === 'closing' ||
+      committedExit === 'closing'
     session.resetRendererOrderedSeqForPtyExit(ptyId)
     const currentPaneTransport = session.deps.paneTransportsRef.current.get(session.pane.id)
     if (currentPaneTransport && currentPaneTransport !== session.transport) {
@@ -212,7 +215,9 @@ export function installPtyExitHibernate(session: ConnectPanePtySession): void {
         armRestartReplacement(session, ptyId)
         return
       }
-      if (preserveRendererBinding && !reversibleExit) {
+      if (switchStopped && !reversibleExit) {
+        showSwitchStoppedPane(session, ptyId, exitCode, switchStopped.agent)
+      } else if (preserveRendererBinding && !reversibleExit) {
         holdClosingExit(session, ptyId, exitCode)
       }
       const sleepingRecordEntry = session.getSleepingRecordForPane(useAppStore.getState())
