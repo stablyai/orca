@@ -137,22 +137,22 @@ export class JournalInputCardIndex {
       marks.reopenedSequence,
       floor?.epoch === state.epoch ? floor.sequence : 0
     )
-    const key = [
+    const pauseInputs = [
       journalQueueStopHolds(marks, state.latestAcceptedTurnSequence) ? marks.latestStop : null,
       reopened > lifted ? reopened : 0,
       marks.cleared && !marks.cleared.lifted && marks.cleared.sequence > lifted
         ? marks.cleared
         : null
     ]
-    if (!this.index || key.some((value, i) => value !== this.pauseKey[i])) {
-      this.pauseKey = key
-      this.cleared = new Set(key[2] ? marks.cleared?.messageIds : [])
+    if (!this.index || pauseInputs.some((value, i) => value !== this.pauseKey[i])) {
+      this.pauseKey = pauseInputs
+      this.cleared = new Set(pauseInputs[2] ? marks.cleared?.messageIds : [])
       this.index = new JournalInputPlaceIndex('introduction')
       this.currentCoordinates = new JournalInputPlaceIndex(state.epoch)
       this.domains = undefined
       this.indexed.clear()
       this.pauses = [
-        ...(key[0] && marks.latestStop
+        ...(pauseInputs[0] && marks.latestStop
           ? [
               {
                 reason: 'stopped' as const,
@@ -160,7 +160,7 @@ export class JournalInputCardIndex {
               }
             ]
           : []),
-        ...(key[1]
+        ...(pauseInputs[1]
           ? [
               {
                 reason: 'restarted' as const,
