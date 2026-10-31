@@ -14,6 +14,7 @@ import type { ForgeProviderId } from './forge-provider'
 import { getForgeProviderForRepository } from './forge-provider-detection'
 import { hostedReviewSshConnectionId } from './hosted-review-execution-host'
 import { readHostedReviewBranchCache } from './hosted-review-branch-cache'
+import { withCachedGitLabApproval } from '../gitlab/merge-requests/mr-approval-batch'
 import {
   getHostedReviewLocalGitOptions,
   type HostedReviewExecutionOptions
@@ -99,7 +100,18 @@ export async function readHostedReviewForBranch(
     }
   )
 
-  function lookup(resolvedInput: Parameters<typeof readHostedReviewForBranch>[0]) {
+  async function lookup(resolvedInput: Parameters<typeof readHostedReviewForBranch>[0]) {
+    const outcome = await cachedLookup(resolvedInput)
+    // Why: approval comes from its own batched cache so the 60s review cache cannot pin it stale.
+    return outcome.review
+      ? {
+          ...outcome,
+          review: withCachedGitLabApproval(outcome.review, input.repoPath, connectionId, input)
+        }
+      : outcome
+  }
+
+  function cachedLookup(resolvedInput: Parameters<typeof readHostedReviewForBranch>[0]) {
     const headOid = input.currentHeadOid?.trim() || null
     // Cache review API results by the resolved account and execution identity (#11532).
     return readHostedReviewBranchCache(
