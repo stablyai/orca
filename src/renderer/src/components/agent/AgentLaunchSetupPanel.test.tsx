@@ -1,11 +1,22 @@
 // @vitest-environment happy-dom
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
+
 import { act } from 'react'
 import { fireEvent, getByText, isInaccessible, waitFor } from '@testing-library/react'
 import { expect, it, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
+import {
+  resolveAgentLaunchCommand,
+  terminalSessionOptionInputs
+} from '../../../../shared/tui-agent-launch-command'
+
 import { fetchCodexModelCatalogListing } from '../../lib/codex-model-catalog-reader-test-fixture'
 import {
   agentPickerDraft,
@@ -77,24 +88,6 @@ it('shows a raw Arguments value in the shared Permissions menu; removing its chi
   expect(entry.arguments).toBe('--permission-mode plan --add-dir docs')
   expect(host.textContent).not.toContain('Reset to default')
   expect(host.textContent).toContain('Only applies to terminal (CLI) launches')
-})
-
-it('leaves chat Permissions enabled even with launch-owned raw CLI permission text', () => {
-  act(() =>
-    root.render(
-      <TooltipProvider>
-        <AgentLaunchSetupPanel
-          entry={entry}
-          initial={{ ...agentPickerDraft(entry, 'chat'), arguments: '--permission-mode plan' }}
-          onUse={onUse}
-        />
-      </TooltipProvider>
-    )
-  )
-  expect(
-    host.querySelector<HTMLButtonElement>('button[aria-label$=" permissions"]')?.disabled
-  ).toBe(false)
-  expect(host.querySelector('button[aria-label="Remove --permission-mode plan"]')).not.toBeNull()
 })
 
 it('shows remembered chat defaults without turning displayed values into launch intent', () => {
@@ -434,7 +427,7 @@ it('searches current and supplied legacy models, keeps unknown explicit choices,
 })
 
 it.each(['chat', 'terminal'] as const)(
-  'uses the %s default exactly once from Enter in CLI Arguments, keeping CLI changes out of Chat intent',
+  'accepts raw model and permission for both footers and uses the %s default exactly once from Enter',
   (surface) => {
     const own = { ...entry, defaultSurface: surface }
     act(() =>
@@ -468,9 +461,32 @@ it.each(['chat', 'terminal'] as const)(
       expect(onUse).toHaveBeenCalledOnce()
       const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
       if (way === 'chat') {
-        expect(launch).toEqual({ sessionOptions: { model: 'opus', permissionMode: 'full-access' } })
+        expect(launch).toEqual({
+          agentArgs: '--dangerously-skip-permissions',
+          sessionOptions: { model: 'haiku', permissionMode: 'full-access' }
+        })
       } else {
-        expect(launch.agentArgs).toContain('--dangerously-skip-permissions')
+        const compiled = resolveAgentLaunchCommand({
+          agent: 'claude',
+          cmdOverrides: { claude: 'claude' },
+          platform: 'linux',
+          shell: 'posix',
+          ...terminalSessionOptionInputs({
+            agent: 'claude',
+            ...launch,
+            agentArgs: launch.agentArgs,
+            sessionOptions: launch.sessionOptions,
+            shell: 'posix'
+          })
+        })
+        expect(compiled.ok).toBe(true)
+        if (!compiled.ok) {
+          throw new Error(compiled.error)
+        }
+        expect(shell.tokenizeStartupCommand(compiled.command, 'posix')).toMatchObject({
+          ok: true,
+          tokens: ['claude', '--dangerously-skip-permissions', '--model', 'haiku']
+        })
       }
     }
     onUse.mockClear()
@@ -478,7 +494,7 @@ it.each(['chat', 'terminal'] as const)(
     expect(onUse).toHaveBeenCalledExactlyOnceWith(
       expect.objectContaining({
         surface,
-        choices: { model: 'opus', permissionMode: 'full-access' }
+        choices: { model: 'haiku', permissionMode: 'full-access' }
       })
     )
   }
@@ -503,11 +519,7 @@ it.each(['chat', 'terminal'] as const)(
       fireEvent.click(disclosure)
     }
     const text = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')!
-    const chip = host.querySelector(
-      surface === 'chat'
-        ? 'button[aria-label="Remove --permission-mode default"]'
-        : 'button[aria-label="Remove --permission-mode plan"]'
-    )!
+    const chip = host.querySelector('button[aria-label="Remove --permission-mode plan"]')!
     expect(text.parentElement?.contains(chip)).toBe(true)
     expect(text.value).toBe('--add-dir docs')
     expect(host.textContent).not.toContain('Reset')
@@ -556,14 +568,18 @@ it('uses the shared permission menu without its inheritance row and couples raw,
   expect(items.some((item) => item.textContent?.includes('Same as all agents'))).toBe(false)
   expect(items.some((item) => item.textContent === 'plan')).toBe(true)
   fireEvent.click(items.find((item) => item.textContent?.startsWith('Full access'))!)
+
   expect(
-    host.querySelector('button[aria-label="Remove --dangerously-skip-permissions"]')
+    host.querySelector(
+      'button[aria-label="Remove --dangerously-skip-permissions and use Claude\'s own settings"]'
+    )
   ).not.toBeNull()
   const input = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')!
   expect(input.value).toBe('--add-dir docs')
   fireEvent.change(input, {
     target: { value: '--permission-mode acceptEdits --add-dir "keep spaces"' }
   })
+  fireEvent.blur(input)
   expect(permission().textContent).toBe('Accept edits')
   expect(input.value).toBe('--add-dir "keep spaces"')
   for (const way of ['Launch chat', 'Launch terminal']) {
@@ -637,14 +653,17 @@ it.each(['chat', 'terminal'] as const)(
     fireEvent.change(input, {
       target: { value: '--settings \'{"fastMode":true,"theme":"light"}\' --add-dir src' }
     })
+    fireEvent.blur(input)
     expect(fast.getAttribute('aria-checked')).toBe('true')
     onUse.mockClear()
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(onUse).toHaveBeenCalledOnce()
     expect(onUse.mock.calls[0][0].surface).toBe(surface)
-    expect(agentPickerLaunchInputs(onUse.mock.calls[0][0], own).sessionOptions?.fastMode).toBe(
-      'true'
-    )
+    const rawLaunch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
+    expect(rawLaunch.chatSessionOptions?.fastMode).toBe('true')
+    expect(rawLaunch.sessionOptions?.fastMode).toBeUndefined()
+    expect(rawLaunch.agentArgs).toContain('"fastMode":true')
+    expect(rawLaunch.agentArgs).toContain('"theme":"light"')
   }
 )
 
@@ -679,7 +698,7 @@ it.each([
     expect(chip).not.toBeNull()
     const input = host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')!
     expect(input.parentElement?.contains(chip)).toBe(true)
-    expect(input.value).toContain(`--model ${model}`)
+    expect(host.querySelector(`button[aria-label="Remove --model ${model}"]`)).not.toBeNull()
     expect(input.value).toContain('"theme":"light"')
     expect(input.value).toContain('--add-dir docs')
     for (const way of ['Launch chat', 'Launch terminal']) {
@@ -699,9 +718,27 @@ it.each([
       const launch = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
       expect(launch.sessionOptions?.fastMode).toBe('false')
       if (way === 'Launch terminal') {
-        expect(shell.tokenizeStartupCommand(launch.agentArgs ?? '', 'posix')).toMatchObject({
+        const compiled = resolveAgentLaunchCommand({
+          agent: 'claude',
+          cmdOverrides: { claude: 'claude' },
+          platform: 'linux',
+          shell: 'posix',
+          ...terminalSessionOptionInputs({
+            agent: 'claude',
+            ...launch,
+            agentArgs: launch.agentArgs,
+            sessionOptions: launch.sessionOptions,
+            shell: 'posix'
+          })
+        })
+        expect(compiled.ok).toBe(true)
+        if (!compiled.ok) {
+          throw new Error(compiled.error)
+        }
+        expect(shell.tokenizeStartupCommand(compiled.command, 'posix')).toMatchObject({
           ok: true,
           tokens: [
+            'claude',
             '--model',
             model,
             '--settings',
@@ -768,51 +805,11 @@ it('enables recorded Codex tier choices after defaults become known without inve
   const terminal = launch('Launch terminal')
   expect(terminal.sessionOptions?.serviceTier).toBe(tier.value)
   expect(terminal.agentArgs).toContain(`service_tier=${tier.value}`)
-  expect(terminal.sessionOptions?.permissionMode).toBe('ask')
+  expect(terminal.sessionOptions?.permissionMode).toBeUndefined()
+  expect(terminal.chatSessionOptions?.permissionMode).toBeUndefined()
+  expect(terminal.agentArgs).toContain('-a on-request -s read-only -c approvals_reviewer=user')
   fireEvent.click(standard())
   expect(standard().getAttribute('aria-checked')).toBe('true')
   expect(launch('Launch chat').sessionOptions?.serviceTier).toBe('default')
   expect(launch('Launch terminal').agentArgs).toContain('service_tier=default')
 })
-
-it.each([`--settings '{"fastMode":true}' --settings ./team.json`, `--settings '{broken'`])(
-  'keeps opaque effective settings literal and Fast unclaimed: %s',
-  (args) => {
-    const own: AgentPickerEntry = {
-      ...entry,
-      defaultSurface: 'terminal',
-      terminal: { model: 'opus', permissionMode: 'ask' },
-      structured: { model: 'opus', permissionMode: 'ask', options: { fastMode: 'true' } },
-      arguments: args,
-      catalog: {
-        origin: 'probe',
-        fetchedAt: 1,
-        models: [
-          { id: 'opus', label: 'Opus', isDefault: true, efforts: [], supportsFastMode: true }
-        ]
-      }
-    }
-    act(() =>
-      root.render(
-        <TooltipProvider>
-          <AgentLaunchSetupPanel entry={own} onUse={onUse} />
-        </TooltipProvider>
-      )
-    )
-    expect(host.textContent).toContain('Set by your Arguments')
-    expect(host.querySelector('[role="switch"]')).toBeNull()
-    expect(host.querySelector('button[aria-label*="Remove --settings"]')).toBeNull()
-    expect(host.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')?.value).toBe(
-      args
-    )
-    for (const way of ['Launch chat', 'Launch terminal']) {
-      onUse.mockClear()
-      fireEvent.click(
-        [...host.querySelectorAll('button')].find((button) => button.textContent === way)!
-      )
-      const input = agentPickerLaunchInputs(onUse.mock.calls[0][0], own)
-      expect(input.sessionOptions?.fastMode).toBeUndefined()
-      expect(input).not.toHaveProperty('agentArgs')
-    }
-  }
-)

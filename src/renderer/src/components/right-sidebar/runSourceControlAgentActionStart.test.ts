@@ -414,7 +414,9 @@ describe('runSourceControlAgentActionStart', () => {
     expect(onStart).toHaveBeenCalledWith({
       agent: 'codex',
       commandInput: 'Fix the bug',
-      agentArgs: '--model gpt-5'
+      agentArgs: '--model gpt-5',
+      agentLaunchPreferences: undefined,
+      chatSessionOptions: { model: 'gpt-5' }
     })
     expect(mocks.launchAgentInNewTab).not.toHaveBeenCalled()
     expect(mocks.onLaunched).toHaveBeenCalledTimes(1)
@@ -654,7 +656,7 @@ it.each(['--model gpt-5.6-luna', '--model gpt-5.6-sol'])(
     })
     const next = resolveSourceControlActionRecipe({ settings, repo, actionId: 'fixCommitFailure' })
     const nextOptions = sourceControlActionLaunchOptions(next, 'codex')
-    expect(nextOptions).toEqual({})
+    expect(nextOptions).toEqual({ chatSessionOptions: { model: agentArgs.split(' ')[1] } })
     const command = resolveAgentLaunchCommand({
       agent: 'codex',
       cmdOverrides: {},

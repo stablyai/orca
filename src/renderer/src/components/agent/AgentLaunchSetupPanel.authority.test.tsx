@@ -1,13 +1,19 @@
 // @vitest-environment happy-dom
-import { entry, host, root, onUse } from './agent-launch-setup-panel-test-fixture'
+import {
+  AgentLaunchSetupPanel,
+  entry,
+  host,
+  root,
+  onUse
+} from './agent-launch-setup-panel-test-fixture'
 import { act } from 'react'
 import { fireEvent } from '@testing-library/react'
 import { expect, it } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
 import { resolveAgentLaunchCommand } from '../../../../shared/tui-agent-launch-command'
 import {
+  agentPickerDraft,
   agentPickerLaunchInputs,
   type AgentPickerEntry
 } from '../../../../shared/agent-launch-picker'
@@ -190,4 +196,22 @@ it('keeps the QA unclosed permission literal once after Ask and preserves actual
       ...launch
     })
   ).toEqual({ ok: false, error: 'CLI arguments are invalid: Unclosed quote in command template.' })
+})
+
+it('leaves chat Permissions enabled even with launch-owned raw CLI permission text', () => {
+  act(() =>
+    root.render(
+      <TooltipProvider>
+        <AgentLaunchSetupPanel
+          entry={entry}
+          initial={{ ...agentPickerDraft(entry, 'chat'), arguments: '--permission-mode plan' }}
+          onUse={onUse}
+        />
+      </TooltipProvider>
+    )
+  )
+  expect(
+    host.querySelector<HTMLButtonElement>('button[aria-label$=" permissions"]')?.disabled
+  ).toBe(false)
+  expect(host.querySelector('button[aria-label="Remove --permission-mode plan"]')).not.toBeNull()
 })

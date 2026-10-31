@@ -1,3 +1,10 @@
+import { hostWorktreeTarget } from '../../../../shared/worktree/host-qualified-identity'
+import { parseExecutionHostId } from '../../../../shared/execution-host'
+import {
+  selectWorkspaceByHostTarget,
+  selectWorktreesByRepo,
+  selectFolderWorkspaces
+} from '@/store/workspace-record-selectors'
 import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
 import { readHostAgentLaunchSettings } from '../settings/agent-launch-settings-transport'
 import type { NewTabAgentMenuModel } from '../tab-bar/use-new-tab-agent-menu-rows'
@@ -47,6 +54,54 @@ export function useAgentLaunchPickerInventory(
       }
     }).executionHostId
   const target = structuredAgentSessionTargetForHost(executionHostId)
+  const repo = context?.workspace.repoId
+    ? useAppStore.getState().repos.find((candidate) => candidate.id === context.workspace.repoId)
+    : undefined
+  const workspaceId = worktreeId ?? context?.workspace.worktreeId
+  const selector = workspaceId ? `id:${workspaceId}` : repo ? `path:${repo.path}` : undefined
+  const state = useAppStore.getState()
+  const hostId = parseExecutionHostId(executionHostId)?.id
+  const worktrees = selectWorktreesByRepo(state)
+  const folders = selectFolderWorkspaces(state)
+  const concreteWorkspace = useMemo(
+    () =>
+      !!(
+        workspaceId &&
+        hostId &&
+        selectWorkspaceByHostTarget(
+          { worktreesByRepo: worktrees ?? {}, folderWorkspaces: folders ?? [] },
+          hostWorktreeTarget({ id: workspaceId, hostId })
+        )
+      ),
+    [workspaceId, hostId, worktrees, folders]
+  )
+  const draftTarget = useMemo(
+    () => ({
+      key: JSON.stringify([
+        context?.workspace.kind,
+        workspaceId,
+        context?.workspace.repoId,
+        repo?.path,
+        context?.launchCwd,
+        context?.workspace.executionContext,
+        executionHostId
+      ]),
+      worktreeId: concreteWorkspace ? workspaceId : undefined,
+      repoId: repo?.id,
+      executionHostId
+    }),
+    [
+      context?.workspace.kind,
+      workspaceId,
+      context?.workspace.repoId,
+      repo?.path,
+      repo?.id,
+      context?.launchCwd,
+      context?.workspace.executionContext,
+      executionHostId,
+      concreteWorkspace
+    ]
+  )
   const key = useMemo(
     () =>
       JSON.stringify([
@@ -55,6 +110,7 @@ export function useAgentLaunchPickerInventory(
         context?.pairingRevision,
         context?.runtimeId,
         worktreeId,
+        selector,
         executionHostId,
         model.state === 'settled' ? model.rows : [],
         model.state === 'settled' ? model.detection.detectedIds : [],
@@ -67,7 +123,7 @@ export function useAgentLaunchPickerInventory(
           nativeChatPermissionMode: settings.nativeChatPermissionMode
         }
       ]),
-    [context, worktreeId, executionHostId, model, settings]
+    [context, worktreeId, selector, executionHostId, model, settings]
   )
   const generation = useMemo(() => ({ key, open }), [key, open])
   const [snapshot, setSnapshot] = useState<{
@@ -93,14 +149,15 @@ export function useAgentLaunchPickerInventory(
             arguments: undefined,
             defaultsPending: true,
             structuredDefaultsPending: entry.surfaces.includes('chat'),
-            ownerKey: key
+            ownerKey: key,
+            draftTarget
           }))
-        : build(settings).map((entry) => ({ ...entry, ownerKey: key })),
+        : build(settings).map((entry) => ({ ...entry, ownerKey: key, draftTarget })),
     // oxlint-disable-next-line react-hooks/exhaustive-deps -- The semantic key covers rows, detection, target and defaults without restarting for object identity.
     [key]
   )
   useEffect(() => {
-    if (!open || !target || !worktreeId || model.state !== 'settled') {
+    if (!open || !target || model.state !== 'settled') {
       return
     }
     const controller = new AbortController()
@@ -179,7 +236,8 @@ export function useAgentLaunchPickerInventory(
                       defaultsPending: false,
                       structuredDefaultsPending:
                         entry.surfaces.includes('chat') && !structuredKnown,
-                      ownerKey: key
+                      ownerKey: key,
+                      draftTarget
                     }))
                   : undefined
               },
@@ -187,13 +245,20 @@ export function useAgentLaunchPickerInventory(
           await callStructuredAgentSession<AgentSessionModelCatalogResult>(
             target,
             'agentSession.modelCatalog',
-            { worktree: `id:${worktreeId}`, agent: entry.agent, waitForListing: true }
+            {
+              ...(selector ? { worktree: selector } : {}),
+              agent: entry.agent,
+              waitForListing: true
+            }
           ).catch(() => undefined),
         support: async (entry) => {
+          if (!selector) {
+            return undefined
+          }
           const support = await callStructuredAgentSession<{
             seedOptions?: Record<string, string>
           }>(target, 'agentSession.createSupport', {
-            worktree: `id:${worktreeId}`,
+            worktree: selector,
             agent: entry.agent
           })
           const parsed = parseStructuredLaunchSeedOptions(support?.seedOptions)

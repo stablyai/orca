@@ -73,3 +73,5 @@ export function analyzeAgentChoiceArgs(
     publishedKeys: new Set(emitted.map((entry) => entry.key))
   }
 }
+
+export type { ChoiceOccurrence } from './agent-choice-args-analysis'

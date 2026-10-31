@@ -1,8 +1,16 @@
+import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent
+} from '@/components/ui/dropdown-menu'
+import { projectAgentLaunchSettings } from '../../../../shared/agent-launch-settings'
 import { createElement } from 'react'
 import { act, fireEvent, render } from '@testing-library/react'
 import { expect, vi } from 'vitest'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
+import { useAgentPickerSetup, useAgentPickerDraftScope } from './agent-launch-picker-drafts'
 import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-inventory'
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 import type { NewTabAgentMenuModel } from '../tab-bar/new-tab-agent-menu-model'
@@ -51,12 +59,20 @@ export async function exerciseAgentPickerFreshness({
     const [entry] = useAgentLaunchPickerInventory('wt', value, true)
     current.entry = entry
     snapshots.push(entry)
+    const draftScope = useAgentPickerDraftScope()
+    const setup = useAgentPickerSetup({ entry, draftScope, open: true })
+    if (!setup.ready) {
+      return null
+    }
     return createElement(
       TooltipProvider,
       null,
       createElement(AgentLaunchSetupPanel, {
         key: entry.ownerKey,
         entry,
+        draft: setup.draft,
+        getDraft: setup.getDraft,
+        onDraftChange: setup.change,
         onUse: (draft) => launches(picker.agentPickerLaunchInputs(draft, entry))
       })
     )
@@ -186,5 +202,164 @@ export async function exerciseAgentPickerFreshness({
       )
     )
     expect(stats()).toEqual([])
+  }
+}
+
+export function inventoryModel(
+  host = 'alpha',
+  agents: picker.AgentPickerEntry['agent'][] = ['codex']
+): Extract<NewTabAgentMenuModel, { state: 'settled' }> {
+  return {
+    state: 'settled',
+    rows: agents.map((agent) => ({ agent, kind: 'chat', executionHostId: `runtime:${host}` })),
+    detection: {
+      detectedIds: agents,
+      isLoading: false,
+      isRefreshing: false,
+      detectionFailed: false,
+      needsServerUpdate: false,
+      refresh: async () => agents
+    },
+    pickerContext: {
+      workspace: { kind: 'git-worktree', worktreeId: 'wt' },
+      executionHostId: `runtime:${host}`,
+      pairingRevision: 7,
+      runtimeId: `process-${host}`,
+      settings: null,
+      key: host
+    }
+  }
+}
+export const inventoryCatalog = {
+  origin: 'probe',
+  fetchedAt: 1,
+  models: [
+    {
+      id: 'host-model',
+      label: 'Host model',
+      isDefault: true,
+      efforts: [{ value: 'low', label: 'Low' }]
+    }
+  ]
+} satisfies picker.AgentPickerEntry['catalog']
+
+export async function exerciseRetainedAgentPickerPublications({
+  menu,
+  settings,
+  session
+}: {
+  menu: Extract<NewTabAgentMenuModel, { state: 'settled' }>
+  settings: ReturnType<typeof vi.fn>
+  session: ReturnType<typeof vi.fn>
+}) {
+  const sibling = Promise.withResolvers<unknown>()
+  const nextSupport = Promise.withResolvers<unknown>()
+  const settingsRead =
+    Promise.withResolvers<Awaited<ReturnType<typeof projectAgentLaunchSettings>>>()
+  let supportReads = 0
+  settings.mockImplementationOnce(() => settingsRead.promise)
+  session.mockImplementation(async (_target, method, input) => {
+    if (input.agent === 'claude') {
+      return sibling.promise
+    }
+    if (method === 'agentSession.modelCatalog') {
+      return {
+        origin: 'probe',
+        fetchedAt: 1,
+        models: [
+          {
+            id: 'live',
+            label: 'Live',
+            isDefault: true,
+            efforts: [{ value: 'high', label: 'High' }]
+          }
+        ]
+      }
+    }
+    return ++supportReads === 1
+      ? { seedOptions: { model: 'live', effort: 'high', permissionMode: 'ask' } }
+      : nextSupport.promise
+  })
+  function Owner({ open }: { open: boolean }) {
+    const draftScope = useAgentPickerDraftScope()
+    const entries = useAgentLaunchPickerInventory('wt', menu, open)
+    return createElement(
+      TooltipProvider,
+      null,
+      createElement(
+        DropdownMenu,
+        { open, modal: false },
+        createElement(DropdownMenuTrigger, null, 'New tab'),
+        createElement(
+          DropdownMenuContent,
+          null,
+          createElement(AgentLaunchPickerMenu, { entries, draftScope, runLaunch: () => {} })
+        )
+      )
+    )
+  }
+  const view = render(createElement(Owner, { open: true }))
+  const open = async () => {
+    fireEvent.change(document.querySelector('input[placeholder="Search agents and setups…"]')!, {
+      target: { value: 'Live high' }
+    })
+    await vi.waitFor(() =>
+      expect(document.querySelector('[role="menuitem"]')?.textContent).toContain('Live · High')
+    )
+    fireEvent.click(document.querySelector('[role="menuitem"] button')!)
+    if (!document.querySelector('textarea')) {
+      fireEvent.click(document.querySelector('button[aria-label="Toggle Arguments"]')!)
+    }
+  }
+  try {
+    await act(async () => {})
+    await open()
+    await act(async () =>
+      settingsRead.resolve(
+        projectAgentLaunchSettings({
+          agentPermissionDefault: 'ask',
+          agentDefaultArgs: { codex: '--current-host' }
+        })
+      )
+    )
+    fireEvent.change(document.querySelector('textarea')!, {
+      target: { value: '--model private/retained --accepted' }
+    })
+    fireEvent.blur(document.querySelector('textarea')!)
+    fireEvent.change(document.querySelector('textarea')!, { target: { value: '--latest-pending' } })
+    fireEvent.change(document.querySelector('input[placeholder="Search agents and setups…"]')!, {
+      target: { value: 'no results' }
+    })
+    expect(document.querySelector('textarea')).toHaveProperty('value', '--latest-pending')
+    fireEvent.keyDown(document.querySelector('textarea')!, { key: 'Escape' })
+    view.rerender(createElement(Owner, { open: false }))
+    await act(async () => {})
+    view.rerender(createElement(Owner, { open: true }))
+    await act(async () => {})
+    await open()
+    expect(document.querySelector('textarea')).toHaveProperty('value', '--latest-pending')
+    await act(async () =>
+      nextSupport.resolve({
+        seedOptions: { model: 'different-default', effort: 'low', permissionMode: 'full-access' }
+      })
+    )
+    expect(document.querySelector('textarea')).toHaveProperty('value', '--latest-pending')
+    expect(document.body.textContent).toContain('private/retained')
+    await act(async () => sibling.resolve({ origin: 'probe', fetchedAt: 2, models: [] }))
+    expect(document.querySelector('textarea')).toHaveProperty('value', '--latest-pending')
+    expect(document.body.textContent).toContain('private/retained')
+    expect(supportReads).toBe(2)
+    expect(
+      session.mock.calls.filter(
+        ([, method, input]) => method === 'agentSession.modelCatalog' && input.agent === 'codex'
+      )
+    ).toHaveLength(1)
+  } finally {
+    view.unmount()
+    await act(async () => {
+      sibling.resolve({})
+      nextSupport.resolve({})
+      settingsRead.resolve(projectAgentLaunchSettings({}))
+    })
   }
 }

@@ -106,6 +106,7 @@ export function useFolderSubmitOrchestration(input: FolderSubmitOrchestrationInp
           note,
           quickAgent: agent,
           launchChoice: options?.launchChoice,
+          launchInputs: options?.launchInputs,
           autoRenameBranchFromWork: settings?.autoRenameBranchFromWork,
           settings: settings ?? undefined,
           agentCmdOverrides: settings?.agentCmdOverrides,

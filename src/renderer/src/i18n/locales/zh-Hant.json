@@ -20120,7 +20120,8 @@
     },
     "newWorkspace": {
       "agentOptional": "代理程式 [選填]",
-      "createDescription": "選擇專案和工作區名稱。如果想啟動代理程式，請選擇一個。"
+      "createDescription": "選擇專案和工作區名稱。如果想啟動代理程式，請選擇一個。",
+      "setupOnly": "僅設定"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一個議題更改正在進行中。"
@@ -22744,6 +22745,11 @@
     "arguments": "引數",
     "argumentsHint": "僅適用於 CLI 啟動。",
     "launchChat": "啟動聊天",
-    "launchTerminal": "啟動終端機"
+    "launchTerminal": "啟動終端機",
+    "use": "使用",
+    "select": "選擇代理程式",
+    "openIn": "開啟方式",
+    "chat": "聊天",
+    "terminal": "終端機"
   }
 }

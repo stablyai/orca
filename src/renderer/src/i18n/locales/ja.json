@@ -19726,7 +19726,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [オプション]",
-      "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。"
+      "createDescription": "プロジェクトとワークスペース名を選択します。開始する場合は Agent を選択してください。",
+      "setupOnly": "セットアップのみ"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "別の Issue の変更が進行中です。"
@@ -22272,7 +22273,12 @@
     "toggleArguments": "引数の表示を切り替え",
     "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
     "searchAgentModels": "{{agent}} のモデルを検索…",
-    "legacyModelCount": "{{total}} 個のモデル"
+    "legacyModelCount": "{{total}} 個のモデル",
+    "use": "使用",
+    "select": "Agent を選択",
+    "openIn": "起動先",
+    "chat": "チャット",
+    "terminal": "ターミナル"
   },
   "wslMove": {
     "entry": {

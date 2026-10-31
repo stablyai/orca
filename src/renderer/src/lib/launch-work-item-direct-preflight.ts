@@ -1,6 +1,9 @@
 import { readAgentLaunchPreferencesForWorkspace } from '@/components/settings/use-host-agent-launch-preferences'
 import { useAppStore, type AppState } from '@/store'
-import { ensureDetectedAgentsForRepo } from './agent-detection-target-inventory'
+import {
+  ensureDetectedAgentsForRepo,
+  loadProjectLaunchContext
+} from './agent-detection-target-inventory'
 import { isTuiAgentEnabled } from '../../../shared/tui-agent-selection'
 import { resolveDefaultAgentForWorkspace } from './agent-tab-shortcuts'
 import { isTuiAgent } from '../../../shared/tui-agent-config'
@@ -22,7 +25,10 @@ import type { Repo } from '../../../shared/repo-types'
 import type { OrcaHooks, RepoHookSettings } from '../../../shared/orca-yaml-hook-types'
 import type { SetupDecision } from '../../../shared/worktree/create-types'
 import type { GitHubPrStartPoint } from '../../../shared/worktree/types'
-import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
+import type {
+  DirectWorkItemLaunchInputs,
+  LaunchWorkItemDirectArgs
+} from './launch-work-item-direct-types'
 
 export async function resolveDirectPrStartPoint(
   repoId: string,
@@ -101,15 +107,22 @@ export async function planDirectWorkItemLaunch(args: {
   promptDelivery: 'draft' | 'submit-after-ready'
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  launchInputs?: DirectWorkItemLaunchInputs
   launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
 }) {
   const { prospectiveAgent, projectContext } = args
   if (!prospectiveAgent) {
     return undefined
   }
-  const sessionOptions = args.resolveSessionOptions
-    ? args.resolveSessionOptions(prospectiveAgent)
-    : args.sessionOptions
+  const sessionOptions = args.launchInputs
+    ? args.launchInputs.sessionOptions
+    : args.resolveSessionOptions
+      ? args.resolveSessionOptions(prospectiveAgent)
+      : args.sessionOptions
+  const chatSessionOptions = args.launchInputs
+    ? args.launchInputs.chatSessionOptions
+    : args.chatSessionOptions
   const request: AgentSessionLaunchRequest = {
     requestId: args.requestId,
     agent: prospectiveAgent,
@@ -122,17 +135,25 @@ export async function planDirectWorkItemLaunch(args: {
     prompt: args.draftContent,
     promptDelivery: args.promptDelivery,
     ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
-    ...directLaunchSurfaceRequest(args.launchChoice)
+    ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
+    ...directLaunchSurfaceRequest(args.launchChoice, args.launchInputs)
   }
   await awaitStructuredRouteHostAnswer(useAppStore.getState(), request, 3000)
   return planAgentSessionLaunch(useAppStore.getState(), request)
 }
 
-/** A picked surface stays explicit through both planning sites; none follows the settings route. */
+/** Preserve explicit operations and captured saved preferences through both planning sites. */
 export function directLaunchSurfaceRequest(
-  choice: LaunchWorkItemDirectArgs['launchChoice']
-): Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'selectedExecutionHostId'> {
+  choice: LaunchWorkItemDirectArgs['launchChoice'],
+  inputs?: Pick<AgentSessionLaunchRequest, 'requestedSurface' | 'preferredSurface'>
+): Pick<
+  AgentSessionLaunchRequest,
+  'requestedSurface' | 'preferredSurface' | 'selectedExecutionHostId'
+> {
+  const preferredSurface = inputs?.preferredSurface ?? choice?.preferredSurface
   return {
+    ...(preferredSurface ? { preferredSurface } : {}),
+    ...(inputs?.requestedSurface ? { requestedSurface: inputs.requestedSurface } : {}),
     ...(choice?.requestedSurface ? { requestedSurface: choice.requestedSurface } : {}),
     ...(choice?.executionHostId ? { selectedExecutionHostId: choice.executionHostId } : {})
   }
@@ -174,4 +195,23 @@ export async function resolveDirectProspectiveAgent(
     !isTuiAgentEnabled(agentOverride, agentLaunchPreferences.disabledTuiAgents)
   )
   return { prospectiveAgent, unavailable }
+}
+
+export function captureDirectWorkItemLaunchArgs(
+  args: LaunchWorkItemDirectArgs
+): LaunchWorkItemDirectArgs {
+  return {
+    ...args,
+    ...(args.sessionOptions ? { sessionOptions: { ...args.sessionOptions } } : {}),
+    ...(args.chatSessionOptions !== undefined
+      ? { chatSessionOptions: { ...args.chatSessionOptions } }
+      : {})
+  }
+}
+
+export function loadDirectWorkItemProjectPreflight(target: RuntimeClientTarget, repoId: string) {
+  return loadProjectLaunchContext(target, repoId).then(
+    (context) => ({ context }),
+    () => null
+  )
 }

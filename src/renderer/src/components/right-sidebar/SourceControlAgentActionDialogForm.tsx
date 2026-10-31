@@ -1,7 +1,12 @@
-import type { SelectedSourceControlActionRecipe } from '../../../../shared/source-control-action-selection'
-import React from 'react'
+import type { AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import React, { useCallback, useLayoutEffect, useMemo, useRef } from 'react'
+import {
+  canonicalSourceControlActionSelection,
+  type SelectedSourceControlActionRecipe
+} from '../../../../shared/source-control-action-selection'
 import { Info, RefreshCw, RotateCcw, Settings, Sparkles, TriangleAlert } from 'lucide-react'
-import AgentCombobox from '@/components/agent/AgentCombobox'
+import { AgentLaunchPicker } from '@/components/agent/AgentLaunchPicker'
+import { sourceControlPickerDraft } from '../settings/source-control-agent-launch-picker'
 import { Button } from '@/components/ui/button'
 import { DialogFooter } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
@@ -19,14 +24,13 @@ import type { SourceControlAiWriteTarget } from '../../../../shared/source-contr
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { Repo } from '../../../../shared/repo-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
-import type { AgentComboboxSurfaceRows } from '@/components/agent/agent-combobox-surface-items'
-import { SourceControlAgentCliArgsField } from './SourceControlAgentCliArgsField'
 import { SourceControlActionVariableChips } from '../source-control/SourceControlActionVariableChips'
-import { describeSourceControlActionModel } from '../settings/source-control-action-model-copy'
 import { sourceControlActionRecipeSaveMatchesTarget } from './source-control-action-recipe-match'
-import type { SourceControlAgentScopeNote } from './source-control-agent-action-dialog-result'
+import type {
+  SourceControlAgentScopeNote,
+  UseSourceControlAgentActionDialogResult
+} from './source-control-agent-action-dialog-result'
 import { translate } from '@/i18n/i18n'
-import { selectedSourceControlActionPreferences } from '../../../../shared/source-control-action-launch-preferences'
 
 /** Expose only delivery errors the user can fix before launch. */
 export type SourceControlAgentActionDeliveryPlanState =
@@ -41,7 +45,7 @@ type SourceControlAgentActionDialogFormProps = {
   selectedAgent: TuiAgent | null
   hasEnabledAgents: boolean
   detecting: boolean
-  surfaceRows: AgentComboboxSurfaceRows
+  surfaceRows: UseSourceControlAgentActionDialogResult['surfaceRows']
   statusCopy: string | null
   agentArgs: string
   /** False when the launch would be structured native chat; the field is then absent, not disabled. */
@@ -59,7 +63,7 @@ type SourceControlAgentActionDialogFormProps = {
   canStart: boolean
   isStarting: boolean
   startLabel: string
-  onAgentPick: (agent: TuiAgent) => void
+  onAgentPick: UseSourceControlAgentActionDialogResult['onAgentPick']
   onAgentArgsChange: (value: string) => void
   onCommandTemplateChange: (value: string) => void
   onSaveLaunchRecipeChange: (value: boolean) => void
@@ -86,14 +90,11 @@ export function SourceControlAgentActionDialogForm({
   actionId,
   baseCommandInput,
   agentScopeNote,
-  agentOptions,
   selectedAgent,
   hasEnabledAgents,
   detecting,
   surfaceRows,
   statusCopy,
-  agentArgs,
-  agentArgsApply,
   recipe,
   commandTemplate,
   savedCommandInputTemplate,
@@ -108,7 +109,6 @@ export function SourceControlAgentActionDialogForm({
   isStarting,
   startLabel,
   onAgentPick,
-  onAgentArgsChange,
   onCommandTemplateChange,
   onSaveLaunchRecipeChange,
   onSaveAgentDefaultChange,
@@ -119,9 +119,6 @@ export function SourceControlAgentActionDialogForm({
   const defaultCommandTemplate = savedCommandInputTemplate ?? '{basePrompt}'
   const commandTemplateIncludesBasePrompt = commandTemplate.includes('{basePrompt}')
   const selectedRecipe = recipe
-  const selectedPreferences = selectedAgent
-    ? selectedSourceControlActionPreferences(selectedRecipe, selectedAgent)
-    : undefined
   const selectedSaveTarget = sourceControlLaunchSaveTargetFromValue(saveTargetValue, repo)
   // Copy describes only the selected save target, which is the only one start/save writes.
   const selectedLaunchRecipeAlreadySaved = Boolean(
@@ -145,6 +142,38 @@ export function SourceControlAgentActionDialogForm({
         )
       : startLabel
 
+  const currentPick = useRef(onAgentPick)
+  useLayoutEffect(() => {
+    currentPick.current = onAgentPick
+  }, [onAgentPick])
+  const onPickerPick = useCallback<
+    NonNullable<React.ComponentProps<typeof AgentLaunchPicker>['onPick']>
+  >((agent, draft, entry, surface) => currentPick.current(agent, surface, draft, entry), [])
+  const selectedSetup = surfaceRows.launchSelection ?? canonicalSourceControlActionSelection(recipe)
+  const {
+    agentId,
+    agentArgs: sourceArgs,
+    argumentChoices,
+    surface: sourceSurface
+  } = selectedSetup.current
+  const source = selectedSetup.source
+  const setupSelection = useMemo(
+    () => ({
+      current: { agentId, agentArgs: sourceArgs, argumentChoices, surface: sourceSurface },
+      source
+    }),
+    [agentId, sourceArgs, argumentChoices, sourceSurface, source]
+  )
+  const draftForEntry = useCallback(
+    (entry: AgentPickerEntry) =>
+      sourceControlPickerDraft(
+        setupSelection,
+        entry,
+        (selectedAgent === entry.agent ? surfaceRows.surface : undefined) ?? entry.defaultSurface,
+        selectedAgent
+      ),
+    [setupSelection, surfaceRows.surface, selectedAgent]
+  )
   return (
     <div className="flex min-h-0 flex-col gap-4">
       <div className="min-h-0 min-w-0 max-h-[min(60vh,31rem)] space-y-4 overflow-y-auto pr-1 scrollbar-sleek">
@@ -156,14 +185,13 @@ export function SourceControlAgentActionDialogForm({
             )}
           </Label>
           {hasEnabledAgents || selectedAgent ? (
-            <AgentCombobox
-              agents={agentOptions}
-              value={selectedAgent}
-              onValueChange={onAgentPick}
-              surfaceRows={surfaceRows}
-              disabled={!surfaceRows.selection.ready}
-              allowNarrowTrigger
-              triggerClassName="w-full"
+            <AgentLaunchPicker
+              model={surfaceRows.model}
+              worktreeId={surfaceRows.worktreeId}
+              agent={selectedAgent}
+              disabled={!surfaceRows.selection.ready || isStarting}
+              draftForEntry={draftForEntry}
+              onPick={onPickerPick}
             />
           ) : (
             <div className="flex items-center justify-between gap-3 rounded-md border border-border bg-muted/30 px-3 py-2 text-xs text-muted-foreground">
@@ -194,18 +222,8 @@ export function SourceControlAgentActionDialogForm({
               <TriangleAlert className="mt-px size-3 shrink-0" />
               <span>{statusCopy}</span>
             </p>
-          ) : selectedAgent && selectedPreferences ? (
-            <p className="text-[11px] text-muted-foreground">
-              {describeSourceControlActionModel(selectedAgent, selectedPreferences)}
-            </p>
           ) : null}
         </div>
-
-        <SourceControlAgentCliArgsField
-          applies={agentArgsApply}
-          value={agentArgs}
-          onChange={onAgentArgsChange}
-        />
 
         <div className="space-y-2">
           <div className="flex items-start justify-between gap-3">

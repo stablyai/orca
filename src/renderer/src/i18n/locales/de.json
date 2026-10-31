@@ -20434,7 +20434,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [optional]",
-      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen."
+      "createDescription": "Projekt und Namen des Arbeitsbereichs auswählen. Optional einen Agenten zum Starten auswählen.",
+      "setupOnly": "Nur Einrichtung"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Eine weitere Issue-Änderung ist in Bearbeitung."
@@ -23076,6 +23077,11 @@
     "arguments": "Argumente",
     "argumentsHint": "Gilt nur für CLI-Starts.",
     "launchChat": "Chat starten",
-    "launchTerminal": "Terminal starten"
+    "launchTerminal": "Terminal starten",
+    "use": "Verwenden",
+    "select": "Agent auswählen",
+    "openIn": "Öffnen in",
+    "chat": "Chat",
+    "terminal": "Terminal"
   }
 }

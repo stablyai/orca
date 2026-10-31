@@ -2,6 +2,7 @@
   "extends": "./tsconfig.web.json",
   "exclude": [
     "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../src/renderer/src/components/right-sidebar/SourceControlAgentActionDialog.picker.test.tsx",
     "../src/shared/**/*.test.ts",
     "../src/shared/**/*.test.tsx",
     "../src/shared/**/*.spec.ts",
@@ -24,6 +25,8 @@
     "../src/preload/renderer-restart-wiring.ts",
     "../src/preload/runtime-environment-subscriptions.ts",
     "../src/preload/usage-provider-api.ts",
+    "../src/main/pi/rpc-model-schema.ts",
+    "../src/main/pi/rpc-model-options.ts",
     "../src/shared/**/*",
     "../mobile/src/worktree/worktree-agent-child-rows.ts",
     "../src/packages/process-host/src/__fixtures__/**/*",

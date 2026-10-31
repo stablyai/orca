@@ -78,20 +78,26 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
   expect(mocks.launch).not.toHaveBeenCalled()
   mocks.detection.mockReturnValue(detection)
   view.rerender(<AgentSessionContinuationDialog {...props} />)
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('option', { name: /Codex/ }))
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls[0][0]).toMatchObject({
     initialCwd: '/repo/.',
     groupId: 'group-1',
-    launchChoice: { route: 'structured-native-chat', requestedSurface: 'chat' }
+    launchChoice: { route: 'structured-native-chat' }
   })
-  fireEvent.click(screen.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('button', { name: 'Start Codex in a terminal' }))
-  expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
+  expect(mocks.launch.mock.calls[0][0].launchChoice.requestedSurface).toBeUndefined()
+  fireEvent.click(screen.getByRole('radio', { name: 'Terminal' }))
+  await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
+  expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice).toMatchObject({
+    route: 'terminal-tui',
+    requestedSurface: 'terminal'
+  })
   view.rerender(<AgentSessionContinuationDialog {...props} open={false} />)
   view.rerender(<AgentSessionContinuationDialog {...props} />)
-  expect(screen.getAllByRole('combobox')[0].textContent).not.toContain('(CLI)')
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0].launchChoice.requestedSurface).toBeUndefined()
   view.rerender(
@@ -100,14 +106,16 @@ it('clears failed detection, gates unresolved Start, and submits the displayed r
       request={{ ...request, initialCwd: '/repo/packages/app' }}
     />
   )
-  expect(screen.getAllByRole('combobox')[0].textContent).toContain('Codex (CLI)')
-  fireEvent.click(screen.getAllByRole('combobox')[0])
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
   expect(screen.getAllByText('No chat in a subfolder').length).toBeGreaterThan(0)
-  fireEvent.click(screen.getByRole('option', { name: 'Codex (CLI)' }))
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   await act(async () => fireEvent.click(screen.getByRole('button', { name: 'Start New Session' })))
   expect(mocks.launch.mock.calls.at(-1)?.[0]).toMatchObject({
     initialCwd: '/repo/packages/app',
-    launchChoice: { route: 'terminal-tui', requestedSurface: 'terminal' }
+    launchChoice: { route: 'terminal-tui' }
   })
 })
 

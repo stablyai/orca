@@ -1,17 +1,19 @@
+import { registerRepoSourceExtentTests } from './repository-source-extent.test-fixture'
+import type { SourceControlAiRepoUpdate } from '../../../../../../shared/source-control-ai-recipe-save'
 // @vitest-environment happy-dom
 import { EVERY_AGENT_CHAT } from '../../../../../../shared/native-chat/every-agent-chat.test-fixture'
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { act, render, cleanup, fireEvent } from '@testing-library/react'
-import '../../__fixtures__/settings-persistence-test-fixture'
+import { act, render, cleanup, fireEvent, screen, within, waitFor } from '@testing-library/react'
+import { pickerLocaleFixture } from '../../__fixtures__/settings-persistence-test-fixture'
 import React from 'react'
 import type { TuiAgent } from '../../../../../../shared/tui-agent'
-import { normalizeRepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-repo-settings'
+import { createRepoActionTextDraftEditors } from '../../repository-source-control-ai-text-draft'
 import type { RepoSourceControlAiOverrides } from '../../../../../../shared/source-control-ai-types'
 import { setSourceControlActionAgentDefault } from '../../../../../../shared/source-control-ai-actions'
 import {
   computeActionDirtyById,
-  dropRepoLegacyInstructionForAction,
-  withRepoAiActionMode
+  withRepoAiActionMode,
+  withRepoAiActionRecipeText
 } from './repository-source-control-ai-draft'
 import { withRepoAiActionAgent } from '../../repository-source-control-ai-action-agent-draft'
 import { resolveSourceControlActionRecipe } from '../../../../../../shared/source-control-ai-operation-policy'
@@ -21,17 +23,22 @@ import {
 } from '../../../../../../shared/source-control-ai-recipe-save'
 import { sourceControlActionRecipeMatchesTarget } from '../../../right-sidebar/source-control-action-recipe-match'
 import { SourceControlActionAgentPicker } from '../../SourceControlActionAgentPicker'
+import { RepositorySourceControlAiSection } from './RepositorySourceControlAiSection'
 import { RepositorySourceControlAiActionRows } from './RepositorySourceControlAiActionRows'
 import { SourceControlAiActionRecipeDefaults } from '../../SourceControlAiActionRecipeDefaults'
 import { useAppStore } from '../../../../store/index'
 import { TooltipProvider } from '../../../ui/tooltip'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
+import { projectSourceControlActionLaunch } from '../../../../../../shared/source-control-action-launch-preferences'
 import { projectAgentLaunchSettings } from '../../../../../../shared/agent-launch-settings'
 import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
 import { clearHostAgentMenuSettingsForTests } from '../../use-host-agent-launch-preferences'
 import { mutateHostAgentLaunchSettings } from '../../agent-launch-settings-transport'
 import { getRuntimeAgentInventoryKey } from '@/store/slices/runtime-agent-inventory-key'
 import { resetHostStructuredAgentsForTests } from '@/runtime/host-structured-agents'
+import { resolveAgentStartupPlanInputs } from '../../../../../../shared/agent-startup-plan-inputs'
+import { buildAgentStartupPlan } from '../../../../../../shared/tui-agent-startup'
+import { tokenizeStartupCommand } from '../../../../../../shared/tui-agent-startup-shell'
 const rpc = vi.hoisted(() => vi.fn())
 vi.mock('@/runtime/runtime-rpc-client', () => ({
   callRuntimeRpc: rpc,
@@ -185,43 +192,13 @@ describe('RepositorySourceControlAiActionRows', () => {
       expect(cards).toHaveLength(2)
       expect(ensure).toHaveBeenCalledTimes(2)
       expect(detectAgents).toHaveBeenCalledTimes(1)
-      for (const card of cards) {
-        expect(card.textContent).toContain('Model')
-        expect(card.textContent).toContain('Permissions')
-        expect(card.textContent).toContain('Ask')
-        expect(card.querySelector('button[aria-label="saved"]')).not.toBeNull()
-        const controls = Array.from(
-          card.querySelectorAll<HTMLButtonElement>(
-            'button[role="combobox"].min-w-0, button[aria-haspopup="menu"]'
-          )
+      const triggers = () =>
+        cards.map((card) =>
+          card.querySelector<HTMLButtonElement>('button[aria-label="Select agent"]')!
         )
-        expect(controls.length).toBeGreaterThan(0)
-        expect(controls.every((control) => control.disabled)).toBe(true)
-        expect(card.querySelector('textarea[aria-label="Arguments"]')).toBeNull()
-      }
-      await act(async () => {
-        finish([...detected])
-      })
-      for (const card of cards) {
-        const controls = Array.from(
-          card.querySelectorAll<HTMLButtonElement>(
-            'button[role="combobox"].min-w-0, button[aria-haspopup="menu"]'
-          )
-        )
-        expect(controls.length).toBeGreaterThan(0)
-        expect(controls.every((control) => !control.disabled)).toBe(true)
-        expect(card.textContent).toContain('Model')
-        expect(card.textContent?.includes('Reasoning effort')).toBe(agent === 'codex')
-        expect(card.textContent).toContain('Permissions')
-        expect(
-          card.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')?.value
-        ).toBe(surface === 'chat' ? undefined : '--saved-cli')
-        expect(
-          Array.from(card.querySelectorAll('textarea')).some(
-            (field) => field.value === 'kept-template'
-          )
-        ).toBe(true)
-      }
+      expect(triggers().every((trigger) => trigger.disabled)).toBe(true)
+      await act(async () => finish([...detected]))
+      expect(triggers().every((trigger) => !trigger.disabled)).toBe(true)
       for (const chat of [true, false]) {
         await act(() =>
           useAppStore.setState({
@@ -232,14 +209,11 @@ describe('RepositorySourceControlAiActionRows', () => {
           })
         )
         for (const card of cards) {
-          const input = card.querySelector<HTMLTextAreaElement>('textarea[aria-label="Arguments"]')
-          expect(input?.value).toBe(
-            surface === 'terminal'
-              ? '--saved-cli'
-              : surface === 'chat' || (chat && agent !== 'opencode')
-                ? undefined
-                : '--saved-cli'
-          )
+          expect(
+            card.querySelector('button[aria-label="Select agent"]')?.textContent?.toLowerCase()
+          ).toContain(agent)
+          expect(card.querySelector('textarea[aria-label="Arguments"]')).toBeNull()
+          expect(card.querySelector('textarea')?.value).toBe('kept-template')
         }
       }
       expect(JSON.stringify(source.actions.fixCommitFailure)).toBe(originalRecipe)
@@ -247,28 +221,6 @@ describe('RepositorySourceControlAiActionRows', () => {
       expect(onEdit).not.toHaveBeenCalled()
     }
   )
-})
-
-describe('dropRepoLegacyInstructionForAction', () => {
-  it('prevents legacy text instructions from remigrating after an action override is cleared', () => {
-    const next = dropRepoLegacyInstructionForAction(
-      {
-        instructionsByOperation: {
-          commitMessage: 'Use repo style.',
-          pullRequest: 'Use PR style.'
-        },
-        actionOverrides: {}
-      },
-      'commitMessage'
-    )
-
-    expect(next.instructionsByOperation).toEqual({ pullRequest: 'Use PR style.' })
-    const normalized = normalizeRepoSourceControlAiOverrides(next)
-    expect(normalized?.actionOverrides?.commitMessage).toBeUndefined()
-    expect(normalized?.actionOverrides?.pullRequest).toEqual({
-      commandInputTemplate: '{basePrompt}\n\nUse PR style.'
-    })
-  })
 })
 
 it.each(['', '--model raw'])(
@@ -316,6 +268,136 @@ it.each(['', '--model raw'])(
   }
 )
 
+it.each(['own', 'parent'] as const)(
+  'removes the %s action model through the repository writer and delegates startup without owning Arguments',
+  async (owner) => {
+    rpc.mockReset().mockResolvedValue(undefined)
+    setLocalRuntimeCapabilitiesForTests([])
+    const base = useAppStore.getState().settings!
+    const model = { agentId: 'claude' as const, model: 'sonnet' }
+    const source = {
+      ...base.sourceControlAi!,
+      actions: {
+        resolveConflicts: {
+          agentId: 'claude' as const,
+          ...(owner === 'parent' ? { launchPreferences: model } : {})
+        }
+      }
+    }
+    const own: RepoSourceControlAiOverrides = {
+      actionOverrides: {
+        resolveConflicts: {
+          commandInputTemplate: '{basePrompt}',
+          ...(owner === 'own' ? { launchPreferences: model } : {})
+        }
+      }
+    }
+    const settings = {
+      ...base,
+      nativeChatProviders: {},
+      agentPermissionDefault: 'own' as const,
+      agentDefaultArgs: { claude: '--model opus --verbose' },
+      sourceControlAi: source
+    }
+    useAppStore.setState({
+      settings,
+      repos: [TEST_REPO],
+      localDetectedAgentIdsByContext: { host: ['claude'] }
+    })
+    const change = vi.fn()
+    const tree = (repoAi: RepoSourceControlAiOverrides) =>
+      React.createElement(
+        TooltipProvider,
+        null,
+        React.createElement(RepositorySourceControlAiActionRows, {
+          repoId: TEST_REPO.id,
+          repoAi,
+          source,
+          defaultTuiAgent: 'claude',
+          savingActionIds: {},
+          actionDirtyById: computeActionDirtyById({}, {}, {}),
+          onActionModeChange: vi.fn(),
+          onActionAgentChange: vi.fn(),
+          onActionLaunchPreferencesChange: change,
+          onActionTemplateChange: vi.fn(),
+          onActionAgentArgsChange: vi.fn(),
+          onAppendVariable: vi.fn(),
+          onActionDiscard: vi.fn(),
+          onActionSave: vi.fn()
+        })
+      )
+    const view = render(tree(own))
+    const configure = async () => {
+      const row = within(screen.getByText('Conflict resolution').closest<HTMLElement>('[id]')!)
+      const trigger = row.getByRole('button', { name: 'Select agent' })
+      await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+      fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    }
+    await configure()
+    fireEvent.click(screen.getByRole('button', { name: 'Remove --model sonnet' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(change).toHaveBeenCalledOnce()
+    const [actionId, preferences, args, nodes] = change.mock.calls[0]
+    expect(args).toBeUndefined()
+    expect(preferences.modelSelection.model).toEqual({ agentId: 'claude', value: null })
+    let drafts: Parameters<typeof withRepoAiActionRecipeText>[3] | undefined
+    const writers = createRepoActionTextDraftEditors(
+      (update) => {
+        const next = typeof update === 'function' ? update({}) : update
+        drafts = next.resolveConflicts
+      },
+      { current: own },
+      source
+    )
+    writers.updateActionLaunchPreferences(actionId, preferences, args, nodes)
+    if (!drafts) {
+      throw new Error('Expected authored recipe draft')
+    }
+    const saved = withRepoAiActionRecipeText(own, settings, actionId, drafts)
+    expect(saved.actionOverrides?.resolveConflicts?.agentArgs).toBeUndefined()
+    expect(source.actions.resolveConflicts).toEqual({
+      agentId: 'claude',
+      ...(owner === 'parent' ? { launchPreferences: model } : {})
+    })
+    const reopened = resolveSourceControlActionRecipe({
+      settings,
+      repo: { sourceControlAi: saved },
+      actionId
+    })
+    const launch = projectSourceControlActionLaunch(reopened, 'claude', { basePrompt: 'fix' })
+    expect(launch.sessionOptions?.model).toBeUndefined()
+    expect(launch.agentArgs).toBeUndefined()
+    const startup = buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent: 'claude',
+        settings,
+        platform: 'darwin',
+        isRemote: false,
+        shell: 'posix',
+        agentArgs: launch.agentArgs,
+        sessionOptions: launch.sessionOptions
+      }),
+      prompt: 'fix'
+    })
+    if (!startup) {
+      throw new Error('Expected terminal startup')
+    }
+    const command = tokenizeStartupCommand(startup.launchCommand, 'posix')
+    expect(command.ok).toBe(true)
+    if (!command.ok) {
+      throw new Error(command.error)
+    }
+    expect(command.tokens).toEqual(['claude', '--model', 'opus', '--verbose', 'fix'])
+    fireEvent.keyDown(document, { key: 'Escape' })
+    view.rerender(tree(saved))
+    await configure()
+    expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
+    expect(screen.queryByRole('button', { name: 'Remove --model opus' })).toBeNull()
+    expect(document.querySelector('[cmdk-item][data-current="true"]')).toBeNull()
+  }
+)
+
 it('keeps default and missing-agent editors disabled only until the host inventory settles', async () => {
   const settings = useAppStore.getState().settings!
   useAppStore.setState({
@@ -331,14 +413,17 @@ it('keeps default and missing-agent editors disabled only until the host invento
       React.createElement(SourceControlActionAgentPicker, { agent, onPick })
     )
   const view = render(picker(null))
-  expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(true)
+  expect(view.getByRole('button', { name: 'Select agent' }).hasAttribute('disabled')).toBe(true)
   view.rerender(picker('codex'))
-  expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(true)
+  expect(view.getByRole('button', { name: 'Select agent' }).hasAttribute('disabled')).toBe(true)
   await act(async () => useAppStore.setState({ detectedAgentIds: ['claude'] }))
-  expect(view.getByRole('combobox').hasAttribute('disabled')).toBe(false)
+  expect(view.getByRole('button', { name: 'Select agent' }).hasAttribute('disabled')).toBe(false)
   expect(onPick).not.toHaveBeenCalled()
-  fireEvent.click(view.getByRole('combobox'))
-  const available = view.getAllByRole('option').find((row) => row.textContent?.includes('Claude'))
+  fireEvent.pointerDown(view.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  const available = view.getAllByRole('menuitem').find((row) => row.textContent?.includes('Claude'))
   expect(available).toBeDefined()
   fireEvent.click(available!)
   expect(onPick).toHaveBeenCalledWith('claude', {})
@@ -347,7 +432,6 @@ it('keeps default and missing-agent editors disabled only until the host invento
 it.each([1, 10])(
   'shares one host request lifetime across %i real Settings sections and all five launch rows',
   async (sections) => {
-    vi.useFakeTimers()
     const settings = useAppStore.getState().settings!
     const recipe = {
       agentId: null,
@@ -426,20 +510,9 @@ it.each([1, 10])(
       expect(
         deadlines().every((id) => cleared.mock.calls.some(([clearedId]) => clearedId === id))
       ).toBe(true)
-      const previews = () => view.queryAllByRole('button', { name: 'Codex permissions' })
+      const previews = () => view.queryAllByRole('button', { name: 'Select agent' })
       expect(previews()).toHaveLength(5 * sections)
       fireEvent.change(view.container.querySelector('textarea')!, { target: { value: 'edited' } })
-      fireEvent.change(view.container.querySelector('textarea[aria-label="Arguments"]')!, {
-        target: { value: '--edited' }
-      })
-      fireEvent.pointerDown(previews()[0], { button: 0, ctrlKey: false })
-      fireEvent.click(view.getByRole('menuitemradio', { name: /^Ask/ }))
-      expect(edit).toHaveBeenCalledWith(
-        'fixCommitFailure',
-        expect.objectContaining({ agentId: 'codex' }),
-        undefined,
-        null
-      )
       expect(gets()).toHaveLength(1)
       view.rerender(tree(1))
       const refresh = Promise.withResolvers<{ settings: typeof host }>()
@@ -457,7 +530,7 @@ it.each([1, 10])(
       await act(async () =>
         refresh.resolve({ settings: projectAgentLaunchSettings({ defaultTuiAgent: 'claude' }) })
       )
-      expect(previews()).toHaveLength(0)
+      expect(previews()).toHaveLength(5)
       rpc.mockImplementation((_target, method) =>
         method === 'settings.getAgentLaunch'
           ? new Promise(() => {})
@@ -478,7 +551,110 @@ it.each([1, 10])(
       ).toBe(true)
     } finally {
       view.unmount()
-      vi.useRealTimers()
+      timers.mockRestore()
+      cleared.mockRestore()
     }
   }
 )
+
+registerRepoSourceExtentTests(rpc)
+
+it('keeps staged repository setup through template edits and saves/reopens only current own fields', async () => {
+  const locale = await pickerLocaleFixture()
+  const menu = await import('../../../tab-bar/use-new-tab-agent-menu-rows')
+  const { sameAgentLaunchPickerModel } = await import('../../../tab-bar/new-tab-agent-menu-model')
+  const observation = vi.spyOn(menu, 'useAgentMenuObservation')
+  try {
+    useAppStore.setState(({ settings }) => ({
+      settings: settings && { ...settings, nativeChatProviders: {} },
+      detectedAgentIds: ['claude'],
+      localDetectedAgentIdsByContext: { host: ['claude'] }
+    }))
+    const repo = {
+      ...TEST_REPO,
+      sourceControlAi: {
+        actionOverrides: {
+          fixChecks: {
+            agentId: 'claude' as const,
+            agentArgs: '--saved',
+            commandInputTemplate: 'Old repo'
+          }
+        }
+      }
+    }
+    useAppStore.setState({ repos: [repo] })
+    const update = vi.fn<(id: string, updates: SourceControlAiRepoUpdate) => Promise<boolean>>(
+      async () => true
+    )
+    const view = render(
+      React.createElement(RepositorySourceControlAiSection, { repo, updateRepo: update }),
+      { wrapper: TooltipProvider }
+    )
+    const card = screen.getByText('Broken checks fixes').closest('[data-settings-section]')!
+    if (!(card instanceof HTMLElement)) {
+      throw new Error('Missing repository card')
+    }
+    const own = within(card)
+    const open = async () => {
+      const trigger = own.getByRole('button', { name: 'Select agent' })
+      await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+      fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+      fireEvent.click(await screen.findByRole('button', { name: 'Configure Claude' }))
+    }
+    await open()
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+      target: { value: '--model claude-sonnet-5-5 --accepted' }
+    })
+    fireEvent.blur(screen.getByRole('textbox', { name: 'Arguments' }))
+    fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+      target: { value: '--pending' }
+    })
+    const input = screen.getByRole('textbox', { name: 'Arguments' })
+    const model = observation.mock.results.at(-1)?.value.model
+    expect(model).toBeDefined()
+    for (const host of [null, ['codex'], ['claude']] as const) {
+      act(() =>
+        useAppStore.setState({ localDetectedAgentIdsByContext: { host: host && [...host] } })
+      )
+      expect(sameAgentLaunchPickerModel(model!, observation.mock.results.at(-1)!.value.model)).toBe(
+        true
+      )
+      expect(screen.getByRole('textbox', { name: 'Arguments' })).toBe(input)
+      expect(input).toHaveProperty('value', '--pending')
+      expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
+      expect(update).not.toHaveBeenCalled()
+    }
+    await act(() => locale.i18n.changeLanguage('es'))
+    expect(screen.getByRole('textbox', { name: 'Argumentos' })).toBe(input)
+    expect(input).toHaveProperty('value', '--pending')
+    expect(screen.getByRole('button', { name: 'Usar' })).toBeDefined()
+    expect(update).not.toHaveBeenCalled()
+    await act(() => locale.i18n.changeLanguage('en'))
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+    fireEvent.keyDown(document, { key: 'Escape' })
+    fireEvent.change(own.getByDisplayValue('Old repo'), {
+      target: { value: 'CURRENT {basePrompt}' }
+    })
+    await open()
+    expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--pending')
+    expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    expect(own.getByDisplayValue('CURRENT {basePrompt}')).toBeDefined()
+    fireEvent.click(own.getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(update).toHaveBeenCalledOnce())
+    const saved = update.mock.calls[0]![1].sourceControlAi!
+    expect(saved.actionOverrides!.fixChecks!.commandInputTemplate).toBe('CURRENT {basePrompt}')
+    expect(saved.actionOverrides!.fixChecks!.agentArgs).toBe('--pending')
+    view.unmount()
+    render(
+      React.createElement(RepositorySourceControlAiSection, {
+        repo: { ...repo, sourceControlAi: saved },
+        updateRepo: update
+      }),
+      { wrapper: TooltipProvider }
+    )
+    expect(screen.getByDisplayValue('CURRENT {basePrompt}')).toBeDefined()
+  } finally {
+    await locale.restore()
+  }
+})

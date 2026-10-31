@@ -4,6 +4,9 @@ import { createTabsSliceMockApi } from '../store/slices/tabs-slice-test-harness'
 import { createTestStore } from '../store/slices/store-test-helpers'
 import { toAgentLaunchPreferences } from '../../../shared/agent-launch-preferences'
 import { resolveAgentSessionOptionLaunch } from '../../../shared/agent-session-option-launch'
+import { projectSourceControlActionLaunch } from '../../../shared/source-control-action-launch-preferences'
+import { buildAgentStartupPlan } from '../../../shared/tui-agent-startup'
+import { resolveAgentStartupPlanInputs } from '../../../shared/agent-startup-plan-inputs'
 import { terminalSessionOptionInputs } from '../../../shared/tui-agent-launch-command'
 
 vi.mock('sonner', () => ({ toast: { info: vi.fn(), success: vi.fn(), error: vi.fn() } }))
@@ -87,6 +90,59 @@ describe('a desktop AI-button launch', () => {
         launchSource: 'source_control_recovery'
       }
     })
+  })
+
+  it('carries the source-owned Terminal base and exact raw bytes through the real generic pane wire and startup', () => {
+    const raw = `-c 'model="true"'  --search`
+    const projection = projectSourceControlActionLaunch(
+      {
+        agentArgs: raw,
+        launchPreferences: {
+          agentId: 'codex',
+          modelSelection: {
+            base: 'default',
+            options: { effort: { agentId: 'codex', value: 'high' } }
+          }
+        }
+      },
+      'codex',
+      { basePrompt: 'Fix checks' }
+    )
+    const { tabId } = launchAgentThroughHost({
+      agent: 'codex',
+      worktreeId: WT,
+      prompt: 'Fix checks',
+      ...projection
+    })
+    const wire = queuedLaunch(tabId)!.launch
+    expect(wire).toEqual({
+      agent: 'codex',
+      target: { kind: 'existing', worktree: `id:${WT}` },
+      agentArgs: raw,
+      sessionOptions: { effort: 'high' }
+    })
+    const startup = buildAgentStartupPlan({
+      ...resolveAgentStartupPlanInputs({
+        agent: wire.agent,
+        settings: { agentCmdOverrides: { codex: 'cx' } },
+        agentArgs: wire.agentArgs,
+        sessionOptions: wire.sessionOptions,
+        platform: 'linux',
+        shell: 'posix',
+        isRemote: false
+      }),
+      prompt: '',
+      allowEmptyPromptLaunch: true
+    })
+    expect(startup?.launchCommand).toBe(
+      `cx '-c' 'model="true"' '--search' '-c' 'model_reasoning_effort=high'`
+    )
+    expect(startup?.launchConfig.agentArgs).toBe(raw)
+    expect(JSON.stringify(store.getState().pendingStartupByTabId[tabId])).not.toContain(
+      'chatSessionOptions'
+    )
+    expect(JSON.stringify(store.getState().tabsByWorktree[WT])).not.toContain('chatLaunchOptions')
+    settleAgentLaunchPaneStart(tabId, launchTab(tabId)!.agentLaunchPane!.leafId, 'pty-proof')
   })
 
   // Nothing reads a click's launch record, so its launch carries no operation and writes none.

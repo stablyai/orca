@@ -20563,7 +20563,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Agent [Optional]",
-      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one."
+      "createDescription": "Choose the project and workspace name. Select an agent if you want to start one.",
+      "setupOnly": "Setup only"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Another issue change is in progress."
@@ -22890,6 +22891,7 @@
     }
   },
   "agentPicker": {
+    "workspaceStartupFailed": "Could not start {{agent}}. Check Arguments in this setup and try again.",
     "search": "Search agents and setups…",
     "configure": "Configure {{agent}}",
     "arguments": "Arguments",
@@ -22902,8 +22904,15 @@
     "legacyModels": "Legacy models",
     "toggleArguments": "Toggle Arguments",
     "argumentsTerminalHint": "Only applies to terminal (CLI) launches",
+    "chatChoicesNote": "{{agent}} model or effort choices without a CLI flag apply to chats.",
+    "composedChoicesNote": "{{agent}} effort and speed choices are included in the model argument.",
     "searchAgentModels": "Search {{agent}} models…",
-    "legacyModelCount": "{{total}} models"
+    "legacyModelCount": "{{total}} models",
+    "use": "Use",
+    "select": "Select agent",
+    "openIn": "Open in",
+    "chat": "Chat",
+    "terminal": "Terminal"
   },
   "automations": {
     "runFailures": {

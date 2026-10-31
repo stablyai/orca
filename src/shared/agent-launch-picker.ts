@@ -1,8 +1,5 @@
-import { analyzeAgentChoiceArgs } from './agent-choice-args'
-import {
-  agentPickerArgumentsKnown,
-  agentPickerArgumentsText
-} from './agent-launch-picker-authority'
+import { agentPickerPanelArguments } from './agent-launch-picker-arguments'
+import { agentPickerArgumentsKnown } from './agent-launch-picker-authority'
 export {
   agentPickerArgumentsKnown,
   agentPickerArgumentsText
@@ -18,15 +15,20 @@ export {
   agentPickerEntryOptions,
   agentPickerPermissions
 } from './agent-launch-picker-catalog'
-import { projectAgentLaunchProfile } from './agent-launch-profile'
+import { projectAgentLaunchInputViews } from './agent-launch-profile'
 import type { AgentChoicePatch, AgentDedicatedChoices } from './agent-launch-choices'
-import { reconcileAgentChoiceArgs } from './agent-choice-reconciliation'
+import {
+  reconcileAgentChoiceArgs,
+  reconcileAgentChoiceArgsDetailed
+} from './agent-choice-reconciliation'
 import { resolveAgentChoiceLayers } from './agent-choice-layers'
 import type { AgentSessionModelCatalogResult, AgentSessionModelOption } from './agent-session-wire'
 import type { NewTabAgentMenuRow } from './agent-launch-picker-rows'
 import type { TuiAgent } from './tui-agent'
+import type { CurrentActionSelection } from './source-control-action-selection'
 
 export type AgentPickerSurface = 'chat' | 'terminal'
+export type AgentPickerDraftOwner = object
 export type AgentPickerModel = AgentSessionModelOption & { isLegacy?: true; hidden?: true }
 export type AgentPickerEntry = {
   agent: TuiAgent
@@ -40,6 +42,7 @@ export type AgentPickerEntry = {
   arguments?: string | null
   catalog: AgentSessionModelCatalogResult
   ownerKey?: string
+  draftTarget?: { key: string; worktreeId?: string; repoId?: string; executionHostId: string }
   defaultsPending?: boolean
   structuredDefaultsPending?: boolean
 }
@@ -49,6 +52,15 @@ export type AgentPickerDraft = {
   choices: AgentDedicatedChoices
   argumentsOwner?: string
   arguments?: string | null
+  pendingArguments?: string
+  delegated?: readonly string[]
+  literalKeys?: readonly string[]
+  /** A folded sparse edit receipt; never part of a launch or persisted recipe. */
+  recipeEdits?: {
+    selection: CurrentActionSelection
+    changed: boolean
+    argumentsAuthored: boolean
+  }
 }
 export type AgentPickerSetup = {
   entry: AgentPickerEntry
@@ -86,7 +98,7 @@ export function agentPickerEffectiveChoices(
               )
             ])
           }).choices
-  return resolveAgentChoiceLayers({
+  const resolved = resolveAgentChoiceLayers({
     agent: entry.agent,
     defaults,
     explicit: agentPickerLaunchChoices(draft).choices,
@@ -98,6 +110,15 @@ export function agentPickerEffectiveChoices(
           : draft.arguments,
     argumentOwner: draft.arguments === undefined ? 'defaults' : 'launch'
   })
+  if (draft.delegated?.includes('model')) {
+    delete resolved.model
+  }
+  for (const key of draft.delegated ?? []) {
+    if (resolved.options) {
+      delete resolved.options[key]
+    }
+  }
+  return resolved
 }
 
 export function editAgentPickerDraft(
@@ -143,7 +164,7 @@ function agentPickerLaunchChoices(draft: AgentPickerDraft) {
   if (draft.surface !== 'terminal' || draft.arguments === undefined) {
     return { choices: draft.choices, userArgs: draft.arguments }
   }
-  const result = reconcileAgentChoiceArgs({
+  const result = reconcileAgentChoiceArgsDetailed({
     agent: draft.agent,
     userArgs: draft.arguments ?? '',
     choices: draft.choices,
@@ -155,47 +176,73 @@ function agentPickerLaunchChoices(draft: AgentPickerDraft) {
       ...agentPickerOptions(draft.agent, draft.choices.model, 'terminal').map((option) => option.id)
     ])
   })
+  const literal = new Set(draft.literalKeys)
+  // Inline boolean Settings keep their existing typed domain projection and JSON siblings.
+  for (const occurrence of result.recognized) {
+    if (occurrence.valueType === 'boolean') {
+      literal.delete(occurrence.key)
+    }
+  }
+  const sourced = {
+    ...(literal.has('model') ? { model: result.choices.model } : {}),
+    ...(literal.has('permissionMode') ? { permissionMode: result.choices.permissionMode } : {}),
+    options: Object.fromEntries(
+      Object.entries(result.choices.options ?? {}).filter(([key]) => literal.has(key))
+    )
+  }
+  const explicit = {
+    ...(!literal.has('model') ? { model: result.choices.model } : {}),
+    ...(!literal.has('permissionMode') ? { permissionMode: result.choices.permissionMode } : {}),
+    options: Object.fromEntries(
+      Object.entries(result.choices.options ?? {}).filter(([key]) => !literal.has(key))
+    )
+  }
+  result.choices = resolveAgentChoiceLayers({
+    agent: draft.agent,
+    defaults: sourced,
+    explicit,
+    userArgs: result.userArgs,
+    argumentOwner: 'launch'
+  })
   return result
 }
 
 export function agentPickerLaunchInputs(draft: AgentPickerDraft, entry?: AgentPickerEntry) {
   const authorized = !entry || agentPickerArgumentsKnown(entry, draft)
-  const { choices: launchChoices, userArgs } = agentPickerLaunchChoices(
-    authorized ? draft : { ...draft, arguments: undefined }
-  )
-  const choices = {
-    ...launchChoices,
-    ...(launchChoices.options ? { options: { ...launchChoices.options } } : {})
+  const current = entry ? agentPickerPanelArguments(entry, draft) : undefined
+  const choices = { ...draft.choices, options: { ...draft.choices.options } }
+  for (const occurrence of current?.context.occurrences ?? []) {
+    if (!draft.literalKeys?.includes(occurrence.key)) {
+      continue
+    }
+    if (occurrence.key === 'model') {
+      delete choices.model
+    } else if (occurrence.key === 'permissionMode') {
+      delete choices.permissionMode
+    } else {
+      delete choices.options[occurrence.key]
+    }
   }
-  const text = entry ? agentPickerArgumentsText(entry, draft) : draft.arguments
-  if (
-    text &&
-    analyzeAgentChoiceArgs(draft.agent, text).opaqueKeys.has('fastMode') &&
-    choices.options
-  ) {
-    choices.options = Object.fromEntries(
-      Object.entries(choices.options).filter(([key]) => key !== 'fastMode')
-    )
-  }
-  // The existing dispatcher treats an Arguments override as the complete terminal profile.
-  const sessionOptions = agentPickerSessionOptions(choices)
-  return {
-    ...(Object.keys(sessionOptions).length ? { sessionOptions } : {}),
-    ...(draft.surface === 'terminal' && userArgs !== undefined
-      ? {
-          agentArgs: projectAgentLaunchProfile(draft.agent, undefined, {
-            target: 'terminal',
-            userArgs: userArgs ?? '',
-            choices: {
-              ...(entry?.terminal.permissionMode
-                ? { permissionMode: entry.terminal.permissionMode }
-                : {}),
-              ...choices
-            }
-          }).args
-        }
-      : {})
-  }
+  const result =
+    current?.context.result ??
+    reconcileAgentChoiceArgsDetailed({
+      agent: draft.agent,
+      userArgs: authorized ? (draft.arguments ?? '') : '',
+      choices,
+      mode: 'load',
+      keys: new Set([
+        'model',
+        'permissionMode',
+        ...Object.keys(choices.options ?? {}),
+        ...agentPickerOptions(draft.agent, choices.model, 'terminal').map((option) => option.id)
+      ])
+    })
+  return projectAgentLaunchInputViews(draft.agent, choices, result, {
+    ...(authorized && draft.arguments !== undefined ? { agentArgs: draft.arguments } : {}),
+    modelContext: entry?.terminal.model,
+    sourceKeys: current?.context.literalKeys,
+    permissionContext: entry?.terminal.permissionMode
+  })
 }
 
 export function agentPickerButtonOrder(entry: AgentPickerEntry): AgentPickerSurface[] {

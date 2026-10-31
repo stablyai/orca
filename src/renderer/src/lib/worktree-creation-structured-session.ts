@@ -94,6 +94,12 @@ export async function launchStructuredWorktreeSession(
     // One create is one user action: a retry of it re-delivers the same request.
     requestId: args.creationId,
     agent,
+    ...(args.request.launchInputs?.sessionOptions
+      ? { launchOptions: args.request.launchInputs.sessionOptions }
+      : {}),
+    ...(args.request.launchInputs?.chatSessionOptions !== undefined
+      ? { chatLaunchOptions: args.request.launchInputs.chatSessionOptions }
+      : {}),
     prompt: request.launchDraftPrompt ?? request.quickPrompt,
     ...(request.promptDelivery ? { promptDelivery: request.promptDelivery } : {}),
     // What the user left unsent in the chat shown while the worktree was created.
@@ -110,6 +116,7 @@ export async function launchStructuredWorktreeSession(
     const launch = beginStructuredAgentSessionProvisionalLaunch({
       plan,
       hooks: { signal: abandoned.signal },
+      declinedTerminal: { agentArgs: args.request.launchInputs?.agentArgs },
       target: { worktreeId: args.worktreeId },
       activate: args.shouldActivateOnCompletion,
       ...(args.shouldActivateOnCompletion

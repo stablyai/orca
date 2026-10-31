@@ -20418,7 +20418,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Ajan [İsteğe bağlı]",
-      "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin."
+      "createDescription": "Projeyi ve çalışma alanı adını seçin. Bir ajan başlatmak istiyorsanız ajan seçin.",
+      "setupOnly": "Yalnızca kurulum"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Başka bir sorun değişikliği devam ediyor."
@@ -23059,6 +23060,11 @@
     "arguments": "Argümanlar",
     "argumentsHint": "Yalnızca CLI başlatmaları için geçerlidir.",
     "launchChat": "Sohbet başlat",
-    "launchTerminal": "Terminal başlat"
+    "launchTerminal": "Terminal başlat",
+    "use": "Kullan",
+    "select": "Aracı seç",
+    "openIn": "Açılacağı yer",
+    "chat": "Sohbet",
+    "terminal": "Terminal"
   }
 }

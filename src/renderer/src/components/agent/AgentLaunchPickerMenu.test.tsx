@@ -1,3 +1,4 @@
+import { entry } from './agent-launch-picker-menu-test-fixture'
 // @vitest-environment happy-dom
 import { act } from 'react'
 import { fireEvent, getByRole, waitFor } from '@testing-library/react'
@@ -19,22 +20,6 @@ import {
 } from '../../../../shared/agent-launch-picker'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
-const entry: AgentPickerEntry = {
-  agent: 'codex',
-  label: 'Codex',
-  rows: [{ agent: 'codex', kind: 'chat' }],
-  surfaces: ['chat', 'terminal'],
-  defaultSurface: 'chat',
-  terminal: {},
-  structured: {},
-  catalog: {
-    origin: 'probe',
-    fetchedAt: 1,
-    models: [
-      { id: 'astra', label: 'Astra', isDefault: true, efforts: [{ value: 'low', label: 'Low' }] }
-    ]
-  }
-}
 let root: Root
 let host: HTMLDivElement
 let owner = 0
@@ -771,7 +756,9 @@ it('retains the whole row draft after outside dismissal, menu remount and launch
     expect(getByRole(document.body, 'switch').getAttribute('aria-checked')).toBe('true')
     expect(document.querySelector<HTMLTextAreaElement>('textarea')?.value).toBe(argumentsText)
     expect(
-      document.querySelector('button[aria-label="Remove --dangerously-skip-permissions"]')
+      document.querySelector(
+        'button[aria-label="Remove --dangerously-skip-permissions and use Claude\'s own settings"]'
+      )
     ).not.toBeNull()
     expect(document.querySelector('button[aria-label*="Remove --settings"]')).not.toBeNull()
   }

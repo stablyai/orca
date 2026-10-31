@@ -1,9 +1,22 @@
+import type * as MenuObservation from '../tab-bar/use-new-tab-agent-menu-rows'
+import type * as PickerModule from '../agent/AgentLaunchPicker'
+import { RepositorySourceControlAiSection } from './repository/source-control/RepositorySourceControlAiSection'
+import { SourceControlAiActionRecipeDefaults } from './SourceControlAiActionRecipeDefaults'
+import { TEST_REPO } from '@/store/slices/worktrees-slice-test-fixtures'
+import { callRuntimeRpc } from '@/runtime/runtime-rpc-client'
 // @vitest-environment happy-dom
 import { shouldShowSourceControlActionArguments } from './source-control-action-arguments-visibility'
 import { useState } from 'react'
-import { act, fireEvent, render, screen, within } from '@testing-library/react'
+import * as sourceProjection from './source-control-agent-launch-picker'
+import * as choiceAnalysis from '../../../../shared/agent-choice-args'
+import * as pickerCatalog from '../../../../shared/agent-session-option-catalog'
+import * as reconciliation from '../../../../shared/agent-choice-reconciliation'
+import * as launchProfile from '../../../../shared/agent-launch-profile'
+import { SourceControlActionAgentPicker } from './SourceControlActionAgentPicker'
+import { canonicalSourceControlActionSelection } from '../../../../shared/source-control-action-selection'
+import { act, fireEvent, render, screen, within, waitFor } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
-import './__fixtures__/settings-persistence-test-fixture'
+import { pickerLocaleFixture } from './__fixtures__/settings-persistence-test-fixture'
 import { useAppStore } from '@/store'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
@@ -14,6 +27,7 @@ import type {
 import { STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY } from '../../../../shared/protocol-version'
 import {
   loadHostStructuredAgents,
+  retainHostStructuredAgents,
   resetHostStructuredAgentsForTests
 } from '@/runtime/host-structured-agents'
 import { TooltipProvider } from '../ui/tooltip'
@@ -26,18 +40,54 @@ import { RepositorySourceControlAiActionRows } from './repository/source-control
 import { SourceControlActionRecipeRow } from './SourceControlActionRecipeRow'
 
 vi.mock('@/runtime/runtime-rpc-client', () => ({
-  callRuntimeRpc: vi.fn(async () => ({ agents: [{ agent: 'grok', capabilities: {} }] }))
+  callRuntimeRpc: vi.fn(async (_target, method) =>
+    method === 'agentSession.modelCatalog'
+      ? { origin: 'unknown' }
+      : { agents: [{ agent: 'grok', capabilities: {} }] }
+  )
 }))
+const renderWork = vi.hoisted(() => ({
+  observers: vi.fn<(model: MenuObservation.NewTabAgentMenuModel) => void>(),
+  consumers: vi.fn()
+}))
+vi.mock('../tab-bar/use-new-tab-agent-menu-rows', async (importOriginal) => {
+  const actual = await importOriginal<typeof MenuObservation>()
+  return {
+    ...actual,
+    useAgentMenuObservation: (...args: Parameters<typeof actual.useAgentMenuObservation>) => {
+      const result = actual.useAgentMenuObservation(...args)
+      renderWork.observers(result.model)
+      return result
+    }
+  }
+})
+vi.mock('@/components/agent/AgentLaunchPicker', async (importOriginal) => {
+  const actual = await importOriginal<typeof PickerModule>()
+  return {
+    ...actual,
+    AgentLaunchPicker: (props: React.ComponentProps<typeof actual.AgentLaunchPicker>) => {
+      renderWork.consumers()
+      return <actual.AgentLaunchPicker {...props} />
+    }
+  }
+})
+const localeWork = {
+  producers: new Map<number, number[]>(),
+  customize: new Map<number, number[]>(),
+  native: new Map<number, number[]>()
+}
 const unused = vi.fn()
 function configure(patch: Partial<GlobalSettings>) {
   useAppStore.setState(({ settings }) => ({ settings: settings && { ...settings, ...patch } }))
 }
 function Row({
   agent = 'claude',
-  actionId = 'fixChecks'
+  actionId = 'fixChecks',
+  dirty = false
 }: {
   agent?: TuiAgent
   actionId?: AiActionId
+  dirty?: boolean
 }) {
   const [draft, setDraft] = useState({ agentArgs: '--saved', commandInputTemplate: 'Do the work' })
   const [preferences, setPreferences] = useState<SourceControlActionLaunchPreferences | undefined>({
@@ -55,11 +105,19 @@ function Row({
         draftValue={draft}
         baseValue={draft}
         isSavingTemplate={false}
+        hasUnsavedChanges={dirty}
         launchPreferences={preferences}
-        onLaunchPreferencesChange={(_id, value) => setPreferences(value)}
+        onLaunchPreferencesChange={(_id, value, agentArgs) => {
+          setPreferences(value)
+          if (agentArgs !== undefined) {
+            setDraft({ ...draft, agentArgs })
+          }
+        }}
         onAgentArgsChange={(_id, agentArgs) => setDraft({ ...draft, agentArgs })}
         onAgentChange={unused}
-        onTemplateChange={unused}
+        onTemplateChange={(_id, commandInputTemplate) =>
+          setDraft((draft) => ({ ...draft, commandInputTemplate }))
+        }
         onAppendVariable={unused}
         onDiscard={unused}
         onSave={unused}
@@ -74,14 +132,15 @@ beforeEach(() => {
 afterEach(resetHostStructuredAgentsForTests)
 
 it.each([
-  ['chat on', 'claude', { claude: true }, false],
-  ['no saved choice', 'claude', undefined, true],
-  ['provider off', 'claude', { claude: false }, true],
-  ['no chat support', 'goose', { goose: true }, true]
-] as const)('%s: shows Arguments only for the CLI', (_name, agent, providers, visible) => {
+  ['chat on', 'claude', { claude: true }],
+  ['no saved choice', 'claude', undefined],
+  ['provider off', 'claude', { claude: false }],
+  ['no chat support', 'goose', { goose: true }]
+] as const)('%s: keeps launch setup behind the common picker', (_name, agent, providers) => {
   configure({ nativeChatProviders: providers })
   render(<Row agent={agent} />)
-  expect(Boolean(screen.queryByRole('textbox', { name: 'Arguments' }))).toBe(visible)
+  expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Select agent' })).toBeDefined()
   expect(screen.getByText('Command template')).toBeDefined()
 })
 
@@ -94,33 +153,30 @@ it('hides an unresolved launch even with chat off, but always shows text action 
   expect(screen.getByDisplayValue('--saved')).toBeDefined()
 })
 
-it('keeps the draft while Arguments hide and renders the model and effort beside Permissions', () => {
+it('edits launch arguments in the common setup and keeps the recipe when chat availability changes', async () => {
   configure({ nativeChatProviders: {} })
   render(<Row />)
-  fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
-    target: { value: '--draft' }
-  })
+  const trigger = screen.getByRole('button', { name: 'Select agent' })
+  await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+  const input = screen.getByRole('textbox', { name: 'Arguments' })
+  expect(input).toHaveProperty('value', '--saved')
+  fireEvent.change(input, { target: { value: '--draft' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
   act(() => configure({ nativeChatProviders: { claude: true } }))
   expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+  act(() => configure({ nativeChatProviders: {} }))
+  fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--draft')
   expect(screen.getByRole('button', { name: 'Claude permissions' }).textContent).toContain(
     'Full access'
   )
-  expect(screen.getByRole('button', { name: 'Claude permissions' }).getAttribute('data-size')).toBe(
-    'sm'
-  )
-  act(() => configure({ nativeChatProviders: {} }))
-  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--draft')
-  expect(
-    screen.getByRole('button', { name: /Remove --dangerously-skip-permissions/ })
-  ).toBeDefined()
-  expect(screen.getByRole('combobox', { name: 'Sonnet' })).toBeDefined()
-  expect(screen.getByRole('combobox', { name: 'High' })).toBeDefined()
-  expect(unused).not.toHaveBeenCalled()
 })
 
-it('reacts to the real host registry when another agent gains chat support', async () => {
+it('reacts to the host registry without adding an inline launch editor', async () => {
   render(<Row agent="grok" />)
-  expect(screen.getByRole('textbox', { name: 'Arguments' })).toBeDefined()
   await act(() =>
     loadHostStructuredAgents(
       'local',
@@ -129,6 +185,7 @@ it('reacts to the real host registry when another agent gains chat support', asy
     )
   )
   expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+  expect(screen.getByRole('button', { name: 'Select agent' })).toBeDefined()
 })
 
 it('honors an explicit future surface only after an agent resolves', () => {
@@ -208,45 +265,548 @@ it.each(['', null, '--verbose', undefined])(
       throw new Error('Missing action card')
     }
     const controls = within(card)
-    const model = controls.getByRole('combobox', {
-      name: agentArgs === undefined ? 'Sonnet' : 'Same as Claude · Agent default'
-    })
-    expect(
-      controls.getByRole('combobox', {
-        name: agentArgs === undefined ? 'High' : 'Same as Claude · Default'
-      })
-    ).toBeDefined()
-    expect(
-      controls.getByText(
-        agentArgs === undefined
-          ? 'Global custom args'
-          : agentArgs
-            ? 'Repository custom args'
-            : 'No args'
-      )
-    ).toBeDefined()
-    const row = model.closest('.flex-wrap')
-    expect(row?.contains(controls.getByRole('button', { name: 'Claude permissions' }))).toBe(true)
-    const input = controls.getByRole('textbox', { name: 'Arguments' })
-    expect(row?.querySelector(':scope > .w-full')?.contains(input)).toBe(true)
-    expect(row?.parentElement?.className).toContain('grid-cols-1')
-    expect(
-      row?.parentElement?.lastElementChild?.contains(controls.getByText('Command template'))
-    ).toBe(true)
-    expect(Boolean(controls.queryByRole('button', { name: 'Remove --model sonnet' }))).toBe(
-      agentArgs === undefined
-    )
+    expect(controls.getByRole('button', { name: 'Select agent' })).toBeDefined()
+    expect(controls.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+    expect(controls.getByText('Command template')).toBeDefined()
     act(() => configure({ nativeChatProviders: { claude: true } }))
     expect(controls.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
-    expect(
-      controls.getByRole('combobox', {
-        name: agentArgs === undefined ? 'Sonnet' : 'Same as Claude · Agent default'
-      })
-    ).toBeDefined()
-    act(() => configure({ nativeChatProviders: {} }))
-    expect(controls.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(
-      'value',
-      agentArgs ?? ''
+  }
+)
+
+it('isolates equal-baseline row buffers and delegation, retains them on close, and invalidates both on Discard', async () => {
+  configure({ nativeChatProviders: {} })
+  render(
+    <>
+      <div data-testid="first-row">
+        <Row dirty />
+      </div>
+      <div data-testid="second-row">
+        <Row dirty />
+      </div>
+    </>
+  )
+  const first = within(screen.getByTestId('first-row'))
+  const second = within(screen.getByTestId('second-row'))
+  const open = async (row: typeof first) => {
+    const trigger = row.getByRole('button', { name: 'Select agent' })
+    await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    await waitFor(() =>
+      expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('disabled', false)
     )
+  }
+  const close = () => {
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+    expect(screen.queryByRole('textbox', { name: 'Arguments' })).toBeNull()
+    fireEvent.keyDown(document, { key: 'Escape' })
+  }
+  await open(first)
+  fireEvent.click(screen.getByRole('button', { name: 'Remove --model sonnet' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+    target: { value: '--unaccepted' }
+  })
+  close()
+  await open(second)
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--saved')
+  expect(screen.getByRole('button', { name: 'Remove --model sonnet' })).toBeDefined()
+  close()
+  await open(first)
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--unaccepted')
+  expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
+  close()
+  fireEvent.click(first.getByRole('button', { name: 'Discard' }))
+  await open(first)
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty('value', '--saved')
+  expect(screen.getByRole('button', { name: 'Remove --model sonnet' })).toBeDefined()
+})
+
+it('labels an own raw Sonnet recipe from the same source as its setup chips', async () => {
+  configure({
+    nativeChatProviders: {},
+    agentPermissionDefault: 'own',
+    agentLaunchChoices: { claude: { model: 'claude-opus-5-5' } }
+  })
+  const recipe = { agentArgs: '--model claude-sonnet-5-5', commandInputTemplate: 'Do the work' }
+  render(
+    <TooltipProvider>
+      <SourceControlActionRecipeRow
+        actionId="fixChecks"
+        selectedAgent="claude"
+        defaultTuiAgent="claude"
+        draftValue={recipe}
+        baseValue={recipe}
+        isSavingTemplate={false}
+        onAgentChange={unused}
+        onTemplateChange={unused}
+        onAgentArgsChange={unused}
+        onAppendVariable={unused}
+        onDiscard={unused}
+        onSave={unused}
+      />
+    </TooltipProvider>
+  )
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Select agent' }).textContent).toMatch(
+      /Sonnet|claude-sonnet-5-5/
+    )
+  )
+  expect(screen.getByRole('button', { name: 'Select agent' }).textContent).not.toContain('opus')
+  fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Configure Claude' })).toBeDefined()
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Remove --model claude-sonnet-5-5' })).toBeDefined()
+  )
+  const { projectSourceControlActionLaunch } =
+    await import('../../../../shared/source-control-action-launch-preferences')
+  const { resolveAgentStartupPlanInputs } =
+    await import('../../../../shared/agent-startup-plan-inputs')
+  const { buildAgentStartupPlan } = await import('../../../../shared/tui-agent-startup')
+  const settings = useAppStore.getState().settings
+  if (!settings) {
+    throw new Error('Missing configured settings')
+  }
+  const projection = projectSourceControlActionLaunch(recipe, 'claude', {
+    basePrompt: 'Do the work',
+    settings
+  })
+  const startup = buildAgentStartupPlan({
+    ...resolveAgentStartupPlanInputs({
+      agent: 'claude',
+      settings,
+      agentArgs: projection.agentArgs,
+      sessionOptions: projection.sessionOptions,
+      platform: 'linux',
+      shell: 'posix',
+      isRemote: false
+    }),
+    prompt: '',
+    allowEmptyPromptLaunch: true
+  })
+  expect(startup?.launchCommand).toContain("'--model' 'claude-sonnet-5-5'")
+  expect(startup?.launchCommand).not.toContain('claude-opus-5-5')
+})
+
+it.each([5, 50])(
+  'isolates closed owner projection work across unrelated publications for %s actual rows',
+  async (rows) => {
+    configure({ nativeChatProviders: {}, agentPermissionDefault: 'own' })
+    const sources = vi.spyOn(sourceProjection, 'sourceControlPickerDraft')
+    const analyses = vi.spyOn(choiceAnalysis, 'analyzeAgentChoiceArgs')
+    const catalogs = vi.spyOn(pickerCatalog, 'getAgentSessionOptionLaunchCatalog')
+    const reconciliations = vi.spyOn(reconciliation, 'reconcileAgentChoiceArgsDetailed')
+    const profiles = vi.spyOn(launchProfile, 'projectAgentLaunchProfile')
+    const setters: ((raw: string) => void)[] = []
+    const raw = `${Array.from({ length: rows * 6 }, (_, i) => `--settings '{"theme":"${i}"}'`).join(' ')} --model claude-sonnet-5-5`
+    function Recipe({ index }: { index: number }) {
+      const [args, setArgs] = useState(raw)
+      setters[index] = setArgs
+      return (
+        <SourceControlActionAgentPicker
+          agent="claude"
+          selection={canonicalSourceControlActionSelection({ agentId: 'claude', agentArgs: args })}
+          onPick={unused}
+        />
+      )
+    }
+    render(
+      <TooltipProvider>
+        {Array.from({ length: rows }, (_, index) => (
+          <Recipe key={index} index={index} />
+        ))}
+      </TooltipProvider>
+    )
+    await waitFor(() =>
+      expect(screen.getAllByRole('button', { name: 'Select agent' })).toHaveLength(rows)
+    )
+    await act(async () => {})
+    const counts = () => ({
+      observers: renderWork.observers.mock.calls.length,
+      consumers: renderWork.consumers.mock.calls.length,
+      sources: sources.mock.calls.length,
+      analyses: analyses.mock.calls.length,
+      catalogs: catalogs.mock.calls.length,
+      reconciliations: reconciliations.mock.calls.length,
+      profiles: profiles.mock.calls.length
+    })
+    const before = counts()
+    await act(() =>
+      loadHostStructuredAgents(
+        'runtime:beta',
+        [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+        'beta-1'
+      )
+    )
+    expect(counts().observers).toBeGreaterThan(before.observers)
+    expect(counts()).toEqual({ ...before, observers: counts().observers })
+    act(() => useAppStore.setState({ settingsSearchQuery: 'unrelated search' }))
+    expect(counts()).toEqual({ ...before, observers: counts().observers })
+    // A new whole settings object must not make unrelated settings an owner input.
+    act(() => configure({ theme: 'light' }))
+    await act(() =>
+      loadHostStructuredAgents(
+        'runtime:beta',
+        [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+        'beta-2'
+      )
+    )
+    expect(counts()).toEqual({ ...before, observers: counts().observers })
+    act(() => setters[0]('--model claude-opus-5-5'))
+    expect(counts().consumers - before.consumers).toBe(1)
+    expect(counts().sources).toBeGreaterThan(before.sources)
+    expect(counts().analyses).toBeGreaterThan(before.analyses)
+    expect(screen.getAllByRole('button', { name: 'Select agent' })[0].textContent).toMatch(
+      /Opus|claude-opus-5-5/
+    )
+    for (const button of screen.getAllByRole('button', { name: 'Select agent' }).slice(1)) {
+      expect(button.textContent).toMatch(/Sonnet|claude-sonnet-5-5/)
+    }
+    fireEvent.pointerDown(screen.getAllByRole('button', { name: 'Select agent' })[0], {
+      button: 0,
+      ctrlKey: false
+    })
+    fireEvent.click(await screen.findByRole('button', { name: 'Configure Claude' }))
+    expect(
+      await screen.findByRole('button', { name: 'Remove --model claude-opus-5-5' })
+    ).toBeDefined()
+  }
+)
+
+it('keeps the complete staged global setup across a template-only edit and applies Use onto the current card', async () => {
+  configure({ nativeChatProviders: {} })
+  render(<Row />)
+  const trigger = screen.getByRole('button', { name: 'Select agent' })
+  const open = async () => {
+    await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+  }
+  await open()
+  fireEvent.click(screen.getByRole('button', { name: 'Remove --model sonnet' }))
+  fireEvent.change(screen.getByRole('textbox', { name: 'Arguments' }), {
+    target: { value: '--latest-pending' }
+  })
+  fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+  fireEvent.keyDown(document, { key: 'Escape' })
+  const template = screen.getByDisplayValue('Do the work')
+  fireEvent.change(template, { target: { value: 'New unrelated template' } })
+  await open()
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(
+    'value',
+    '--latest-pending'
+  )
+  expect(screen.queryByRole('button', { name: 'Remove --model sonnet' })).toBeNull()
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  expect(template).toHaveProperty('value', 'New unrelated template')
+  await open()
+  expect(screen.getByRole('textbox', { name: 'Arguments' })).toHaveProperty(
+    'value',
+    '--latest-pending'
+  )
+})
+
+it.each([5, 50])(
+  'selects actual global/repo producer inputs before lower source work for %s owner rows',
+  async (count) => {
+    const config = normalizeSourceControlAiSettings({
+      ...getDefaultSourceControlAiSettings(),
+      actions: {
+        fixChecks: {
+          agentId: 'claude',
+          agentArgs: '--model claude-sonnet-5-5',
+          commandInputTemplate: 'Do work'
+        }
+      }
+    })
+    configure({ nativeChatProviders: {}, sourceControlAi: config })
+    const repo = {
+      ...TEST_REPO,
+      sourceControlAi: {
+        actionOverrides: {
+          fixChecks: { agentId: 'claude' as const, agentArgs: '--model claude-sonnet-5-5' }
+        }
+      }
+    }
+    useAppStore.setState({ repos: [repo] })
+    const sources = vi.spyOn(sourceProjection, 'sourceControlPickerDraft')
+    const analyses = vi.spyOn(choiceAnalysis, 'analyzeAgentChoiceArgs')
+    const catalogs = vi.spyOn(pickerCatalog, 'getAgentSessionOptionLaunchCatalog')
+    const reconciliations = vi.spyOn(reconciliation, 'reconcileAgentChoiceArgsDetailed')
+    const profiles = vi.spyOn(launchProfile, 'projectAgentLaunchProfile')
+    const notices = vi.fn()
+    const unsubscribe = useAppStore.subscribe(notices)
+    function Producers() {
+      const settings = useAppStore((state) => state.settings)
+      const config = settings!.sourceControlAi!
+      return (
+        <>
+          {Array.from({ length: count }, (_, index) => (
+            <div key={index}>
+              <SourceControlAiActionRecipeDefaults
+                config={config}
+                defaultTuiAgent="claude"
+                searchQuery=""
+                writeConfig={async () => {}}
+              />
+              <RepositorySourceControlAiSection repo={repo} updateRepo={unused} />
+            </div>
+          ))}
+        </>
+      )
+    }
+    try {
+      render(
+        <TooltipProvider>
+          <Producers />
+        </TooltipProvider>
+      )
+      await act(async () => {})
+      const lower = () => ({
+        sources: sources.mock.calls.length,
+        analyses: analyses.mock.calls.length,
+        catalogs: catalogs.mock.calls.length,
+        reconciliations: reconciliations.mock.calls.length,
+        profiles: profiles.mock.calls.length,
+        renders: renderWork.consumers.mock.calls.length
+      })
+      const before = lower()
+      expect(before.sources).toBeGreaterThan(0)
+      expect(before.catalogs).toBeGreaterThan(0)
+      expect(before.profiles).toBeGreaterThan(0)
+      const observed = renderWork.observers.mock.calls.length
+      await act(() =>
+        loadHostStructuredAgents(
+          'runtime:beta',
+          [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+          'actual-success'
+        )
+      )
+      expect(lower()).toEqual(before)
+      expect(renderWork.observers.mock.calls.length).toBeGreaterThan(observed)
+      vi.mocked(callRuntimeRpc).mockRejectedValueOnce(new Error('beta offline'))
+      await act(() =>
+        loadHostStructuredAgents(
+          'runtime:beta',
+          [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+          'actual-failure'
+        )
+      )
+      expect(lower()).toEqual(before)
+      act(() => retainHostStructuredAgents(new Set(['local'])))
+      expect(lower()).toEqual(before)
+      act(() => configure({ theme: 'light' }))
+      expect(notices).toHaveBeenCalled()
+      expect(lower()).toEqual(before)
+      act(() => useAppStore.setState({ settingsSearchQuery: 'unrelated' }))
+      expect(lower()).toEqual(before)
+      const locale = await act(() => pickerLocaleFixture())
+      const workKeys = [
+        'sources',
+        'analyses',
+        'catalogs',
+        'reconciliations',
+        'profiles',
+        'renders'
+      ] as const
+      const presentationStart = lower()
+      const catalogRequests = vi.mocked(callRuntimeRpc).mock.calls.length
+      try {
+        await act(() => locale.i18n.changeLanguage('es'))
+        expect(screen.getAllByText('Recetas de acción')).toHaveLength(count)
+        expect(
+          screen.getAllByRole('button', { name: 'Seleccionar agente' }).length
+        ).toBeGreaterThan(count)
+        const localized = lower()
+        for (const key of workKeys) {
+          expect(localized[key] - presentationStart[key]).toBeLessThanOrEqual(1000 * count)
+        }
+        expect(vi.mocked(callRuntimeRpc).mock.calls).toHaveLength(catalogRequests)
+        act(() =>
+          locale.i18n.addResource(
+            'es',
+            'translation',
+            'auto.components.settings.RepositorySourceControlAiActionRows.f0aa2cfaea',
+            'Filas actualizadas'
+          )
+        )
+        expect(screen.getAllByText('Filas actualizadas')).toHaveLength(count)
+        for (const key of workKeys) {
+          expect(lower()[key] - localized[key]).toBeLessThanOrEqual(1000 * count)
+        }
+        expect(vi.mocked(callRuntimeRpc).mock.calls).toHaveLength(catalogRequests)
+        const delta = workKeys.map((key) => lower()[key] - presentationStart[key])
+        process.stdout.write(`${JSON.stringify({ metric: 'locale-producers', count, delta })}\n`)
+        localeWork.producers.set(count, delta)
+        if (count === 50) {
+          delta.forEach((value, index) =>
+            expect(value).toBeLessThanOrEqual(10 * localeWork.producers.get(5)![index])
+          )
+        }
+      } finally {
+        await act(() => locale.restore())
+      }
+      const nativeStart = lower()
+      const requests = vi.mocked(callRuntimeRpc).mock.calls.length
+      act(() => useAppStore.setState({ localDetectedAgentIdsByContext: { host: ['codex'] } }))
+      const nativeDelta = workKeys.map((key) => lower()[key] - nativeStart[key])
+      localeWork.native.set(count, nativeDelta)
+      if (count === 50) {
+        nativeDelta.forEach((value, index) =>
+          expect(value).toBeLessThanOrEqual(10 * localeWork.native.get(5)![index])
+        )
+      }
+      expect(vi.mocked(callRuntimeRpc).mock.calls).toHaveLength(requests)
+      act(() => configure({ agentDefaultArgs: { claude: '--model claude-opus-5-5' } }))
+      expect(lower().sources).toBeGreaterThan(before.sources)
+      expect(lower().catalogs).toBeGreaterThan(before.catalogs)
+      expect(lower().renders).toBeGreaterThan(before.renders)
+    } finally {
+      unsubscribe()
+    }
+  }
+)
+
+it.each([5, 50])(
+  'isolates actual Customize labels from unrelated publications for %s mounted forms',
+  async (rows) => {
+    const { mountSourceDialog } =
+      await import('../right-sidebar/source-control-action-dialog.test-fixture')
+    const { SourceControlAgentActionDialog } =
+      await import('../right-sidebar/SourceControlAgentActionDialog')
+    const inventory = await import('../agent/use-agent-launch-picker-inventory')
+    const inner = vi.spyOn(inventory, 'useAgentLaunchPickerInventory')
+    const sources = vi.spyOn(sourceProjection, 'sourceControlPickerDraft')
+    const analyses = vi.spyOn(choiceAnalysis, 'analyzeAgentChoiceArgs')
+    const catalogs = vi.spyOn(pickerCatalog, 'getAgentSessionOptionLaunchCatalog')
+    const reconciliations = vi.spyOn(reconciliation, 'reconcileAgentChoiceArgsDetailed')
+    const profiles = vi.spyOn(launchProfile, 'projectAgentLaunchProfile')
+    const mounted = mountSourceDialog(
+      { agentId: 'claude', agentArgs: '--model claude-sonnet-5-5', surface: 'terminal' },
+      {}
+    )
+    const dialogs = Array.from({ length: rows - 1 }, (_, index) => ({
+      id: `customize-dialog-${index}`
+    }))
+    render(
+      <TooltipProvider>
+        {dialogs.map((dialog) => (
+          <SourceControlAgentActionDialog key={dialog.id} {...mounted.props} />
+        ))}
+      </TooltipProvider>
+    )
+    await waitFor(() =>
+      expect(
+        Array.from(
+          document.querySelectorAll<HTMLButtonElement>('button[aria-label="Select agent"]')
+        )
+      ).toHaveLength(rows)
+    )
+    await act(async () => {})
+    const work = () => ({
+      sources: sources.mock.calls.length,
+      analyses: analyses.mock.calls.length,
+      catalogs: catalogs.mock.calls.length,
+      reconciliations: reconciliations.mock.calls.length,
+      profiles: profiles.mock.calls.length,
+      inner: inner.mock.calls.length
+    })
+    const baseline = work()
+    expect(baseline.sources).toBeGreaterThan(0)
+    expect(baseline.catalogs).toBeGreaterThan(0)
+    const observed = renderWork.observers.mock.calls.length
+    await act(() =>
+      loadHostStructuredAgents(
+        'runtime:beta',
+        [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+        'customize-success'
+      )
+    )
+    expect(work()).toEqual(baseline)
+    expect(renderWork.observers.mock.calls.length).toBeGreaterThan(observed)
+    vi.mocked(callRuntimeRpc).mockRejectedValueOnce(new Error('beta offline'))
+    await act(() =>
+      loadHostStructuredAgents(
+        'runtime:beta',
+        [STRUCTURED_AGENT_SESSION_REGISTERED_AGENTS_RUNTIME_CAPABILITY],
+        'customize-failure'
+      )
+    )
+    expect(work()).toEqual(baseline)
+    act(() => retainHostStructuredAgents(new Set(['local'])))
+    expect(work()).toEqual(baseline)
+    act(() => configure({ theme: 'light' }))
+    expect(work()).toEqual(baseline)
+    act(() => useAppStore.setState({ settingsSearchQuery: 'unrelated customize search' }))
+    expect(work()).toEqual(baseline)
+    const locale = await act(() => pickerLocaleFixture())
+    const presentationStart = work()
+    try {
+      await act(() => locale.i18n.changeLanguage('es'))
+      expect(document.querySelectorAll('button[aria-label="Seleccionar agente"]')).toHaveLength(
+        rows
+      )
+      const localized = work()
+      for (const key of [
+        'sources',
+        'analyses',
+        'catalogs',
+        'reconciliations',
+        'profiles',
+        'inner'
+      ] as const) {
+        expect(localized[key] - presentationStart[key]).toBeLessThanOrEqual(100 * rows)
+      }
+      act(() =>
+        locale.i18n.addResource('es', 'translation', 'agentPicker.select', 'Agente actualizado')
+      )
+      expect(document.querySelectorAll('button[aria-label="Agente actualizado"]')).toHaveLength(
+        rows
+      )
+      for (const key of [
+        'sources',
+        'analyses',
+        'catalogs',
+        'reconciliations',
+        'profiles',
+        'inner'
+      ] as const) {
+        expect(work()[key] - localized[key]).toBeLessThanOrEqual(100 * rows)
+      }
+      const delta = (
+        ['sources', 'analyses', 'catalogs', 'reconciliations', 'profiles', 'inner'] as const
+      ).map((key) => work()[key] - presentationStart[key])
+      process.stdout.write(`${JSON.stringify({ metric: 'locale-customize', rows, delta })}\n`)
+      localeWork.customize.set(rows, delta)
+      if (rows === 50) {
+        delta.forEach((value, index) =>
+          expect(value).toBeLessThanOrEqual(10 * localeWork.customize.get(5)![index])
+        )
+      }
+      expect(mounted.persist).not.toHaveBeenCalled()
+      expect(mounted.onStart).not.toHaveBeenCalled()
+    } finally {
+      await act(() => locale.restore())
+    }
+    act(() => configure({ agentLaunchChoices: { claude: { model: 'claude-opus-5-5' } } }))
+    expect(work().inner).toBeGreaterThan(baseline.inner)
+    expect(work().sources).toBeGreaterThan(baseline.sources)
+    // The own raw choice still outranks the changed fallback default.
+    expect(
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>('button[aria-label="Select agent"]')
+      ).every((button) => /Sonnet|claude-sonnet-5-5/.test(button.textContent ?? ''))
+    ).toBe(true)
+    act(() => mounted.controller.onAgentArgsChange('--model claude-opus-5-5'))
+    expect(
+      Array.from(
+        document.querySelectorAll<HTMLButtonElement>('button[aria-label="Select agent"]')
+      ).filter((button) => /Opus|claude-opus-5-5/.test(button.textContent ?? ''))
+    ).toHaveLength(1)
   }
 )

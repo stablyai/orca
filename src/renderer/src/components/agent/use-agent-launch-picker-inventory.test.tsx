@@ -3,7 +3,12 @@ import { createElement, Suspense, startTransition, useLayoutEffect, useState } f
 import { act, cleanup, fireEvent, render, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { AgentLaunchPickerMenu } from './AgentLaunchPickerMenu'
-import { exerciseAgentPickerFreshness } from './agent-launch-picker-freshness-test-fixture'
+import {
+  inventoryModel as model,
+  inventoryCatalog as catalog,
+  exerciseAgentPickerFreshness,
+  exerciseRetainedAgentPickerPublications
+} from './agent-launch-picker-freshness-test-fixture'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import {
   DropdownMenu,
@@ -22,7 +27,12 @@ import { useAgentLaunchPickerInventory } from './use-agent-launch-picker-invento
 import { agentPickerAcquisitionDiagnostics } from './agent-launch-picker-acquisition'
 
 vi.mock('@/hooks/useShortcutLabel', () => ({ useOptionalShortcutLabel: () => null }))
-const mocks = vi.hoisted(() => ({ settings: vi.fn(), rpc: vi.fn(), session: vi.fn() }))
+const mocks = vi.hoisted(() => ({
+  settings: vi.fn(),
+  rpc: vi.fn(),
+  session: vi.fn(),
+  store: { repos: [{ id: 'repo-prospective', path: '/host/repo' }] }
+}))
 vi.mock('../settings/agent-launch-settings-transport', () => ({
   readHostAgentLaunchSettings: mocks.settings
 }))
@@ -30,7 +40,7 @@ vi.mock('@/store', () => ({
   useAppStore: Object.assign(
     (select: (state: unknown) => unknown) =>
       select({ settings: { agentDefaultArgs: { codex: '--desktop-only' } } }),
-    { getState: () => ({}) }
+    { getState: () => mocks.store }
   )
 }))
 vi.mock('@/lib/agent-launch-route-input', () => ({
@@ -50,43 +60,6 @@ vi.mock('@/runtime/structured-agent-session-client', () => ({
   callStructuredAgentSession: mocks.session
 }))
 
-function model(
-  host = 'alpha',
-  agents: picker.AgentPickerEntry['agent'][] = ['codex']
-): Extract<NewTabAgentMenuModel, { state: 'settled' }> {
-  return {
-    state: 'settled',
-    rows: agents.map((agent) => ({ agent, kind: 'chat', executionHostId: `runtime:${host}` })),
-    detection: {
-      detectedIds: agents,
-      isLoading: false,
-      isRefreshing: false,
-      detectionFailed: false,
-      needsServerUpdate: false,
-      refresh: async () => agents
-    },
-    pickerContext: {
-      workspace: { kind: 'git-worktree', worktreeId: 'wt' },
-      executionHostId: `runtime:${host}`,
-      pairingRevision: 7,
-      runtimeId: `process-${host}`,
-      settings: null,
-      key: host
-    }
-  }
-}
-const catalog: AgentSessionModelCatalogResult = {
-  origin: 'probe',
-  fetchedAt: 1,
-  models: [
-    {
-      id: 'host-model',
-      label: 'Host model',
-      isDefault: true,
-      efforts: [{ value: 'low', label: 'Low' }]
-    }
-  ]
-}
 beforeEach(() => {
   mocks.settings.mockReset().mockResolvedValue(
     projectAgentLaunchSettings({
@@ -717,4 +690,33 @@ it('updates a mounted setup from current host rows without making ordinary actio
   )
   view.unmount()
   await act(async () => optional.resolve())
+})
+
+it('acquires setup for a not-yet-created workspace against its existing project directory', async () => {
+  const menu = model('prospective-project')
+  if (menu.state !== 'settled' || !menu.pickerContext) {
+    throw new Error('Expected settled picker context')
+  }
+  menu.pickerContext.workspace = { kind: 'git-worktree', repoId: 'repo-prospective' }
+  const { result } = renderHook(() => useAgentLaunchPickerInventory(undefined, menu, true))
+  await vi.waitFor(() => expect(result.current[0]?.catalog.origin).toBe('probe'))
+  expect(mocks.settings).toHaveBeenCalledOnce()
+  expect(mocks.session).toHaveBeenCalledWith(
+    expect.objectContaining({ environmentId: 'prospective-project' }),
+    'agentSession.modelCatalog',
+    { worktree: 'path:/host/repo', agent: 'codex', waitForListing: true }
+  )
+  expect(mocks.session).toHaveBeenCalledWith(
+    expect.objectContaining({ environmentId: 'prospective-project' }),
+    'agentSession.createSupport',
+    { worktree: 'path:/host/repo', agent: 'codex' }
+  )
+})
+
+it('keeps the active accepted and pending envelope through real same-authority sibling, settings and support publications', async () => {
+  await exerciseRetainedAgentPickerPublications({
+    menu: model('retained-publications', ['codex', 'claude']),
+    settings: mocks.settings,
+    session: mocks.session
+  })
 })

@@ -1,4 +1,5 @@
 // @vitest-environment happy-dom
+import type { ComponentProps } from 'react'
 import { act, fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '../../store'
@@ -7,6 +8,7 @@ import { CommitMessageAiPane } from './CommitMessageAiPane'
 import { useSettingsInteractionController } from './use-settings-interaction-controller'
 import {
   persist,
+  pickerLocaleFixture,
   settingsModel,
   type SettingsPersistenceModel
 } from './__fixtures__/settings-persistence-test-fixture'
@@ -14,6 +16,7 @@ import * as selection from '../../../../shared/source-control-launch-agent-selec
 import * as lifts from '../../../../shared/source-control-action-permission-lift'
 import * as shell from '../../../../shared/tui-agent-startup-shell'
 import { TooltipProvider } from '../ui/tooltip'
+import { RUNTIME_CAPABILITIES } from '../../../../shared/protocol-version'
 import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 import {
   getDefaultSourceControlAiSettings,
@@ -168,12 +171,20 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
     throw new Error('Missing recipe row')
   }
   const row = within(container)
-  const input = row.getByRole('textbox', { name: 'Arguments' })
+  const openSetup = async () => {
+    const trigger = row.getByRole('button', { name: 'Select agent' })
+    await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    return screen.getByRole('textbox', { name: 'Arguments' })
+  }
+  let input = await openSetup()
   await waitFor(() => expect(input).toHaveProperty('disabled', false))
   summary.mockClear()
   lift.mockClear()
   const inputWork: number[][] = []
   for (const n of [32, 320]) {
+    fireEvent.change(input, { target: { value: '--verbose 999' } })
     tokenize.mockClear()
     for (let i = 0; i < n; i++) {
       fireEvent.change(input, { target: { value: `--verbose ${String(i).padStart(3, '0')}` } })
@@ -195,8 +206,7 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
     )
   }
   fireEvent.change(input, { target: { value: '--dangerously-skip-permissions --verbose' } })
-  fireEvent.keyDown(input, { key: 'Enter' })
-  expect(lift).toHaveBeenCalledTimes(1)
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
   let reject = (_error: Error): void => {}
   persist.mockImplementationOnce(
     () =>
@@ -204,11 +214,16 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
         reject = fail
       })
   )
-  fireEvent.click(row.getAllByRole('combobox')[0])
-  fireEvent.click(screen.getByRole('option', { name: 'Codex' }))
+  fireEvent.pointerDown(row.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
+  fireEvent.click(screen.getByRole('menuitem', { name: /Codex/ }))
   await waitFor(() => expect(persist).toHaveBeenCalledTimes(1))
   // Actual global writer publishes only after success; failed selection must retain this later edit.
+  input = await openSetup()
   fireEvent.change(input, { target: { value: '--verbose newer' } })
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
   await act(async () => reject(new Error('disk unavailable')))
   await waitFor(() =>
     expect(console.error).toHaveBeenCalledWith(
@@ -216,14 +231,16 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
       expect.any(Error)
     )
   )
-  expect(input).toHaveProperty('value', '--verbose newer')
-  fireEvent.click(row.getAllByRole('combobox')[0])
+  expect(row.getByRole('button', { name: 'Select agent' }).textContent).toContain('Claude')
+  fireEvent.pointerDown(row.getByRole('button', { name: 'Select agent' }), {
+    button: 0,
+    ctrlKey: false
+  })
   await act(async () => {
-    fireEvent.click(screen.getByRole('option', { name: 'Claude' }))
+    fireEvent.click(screen.getByRole('menuitem', { name: /Claude/ }))
   })
   expect(persist).toHaveBeenCalledTimes(2)
-  expect(input).toHaveProperty('value', '--verbose newer')
-  expect(row.getByRole('button', { name: /Remove --dangerously/ })).toBeDefined()
+  expect(row.getByRole('button', { name: 'Select agent' }).textContent).toContain('Claude')
   persist.mockRejectedValueOnce(new Error('Save disk unavailable'))
   fireEvent.click(row.getByRole('button', { name: 'Save' }))
   await waitFor(() =>
@@ -249,3 +266,449 @@ it('global owner: bounded controlled edits, failed/same selection and no-op save
   )
   expect(summary).not.toHaveBeenCalled()
 })
+
+it('isolates equal recipe drafts, invalidates Discard and saves permission-only edits without Args ownership', async () => {
+  setLocalRuntimeCapabilitiesForTests([])
+  const settings = useAppStore.getState().settings!
+  useAppStore.setState({
+    localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+    settings: {
+      ...settings,
+      nativeChatProviders: {},
+      agentDefaultArgs: { claude: '--verbose' },
+      agentPermissionDefault: 'own',
+      sourceControlAi: normalizeSourceControlAiSettings({
+        ...getDefaultSourceControlAiSettings(),
+        enabled: true,
+        actions: { fixChecks: { agentId: 'claude' }, resolveConflicts: { agentId: 'claude' } }
+      })
+    }
+  })
+  render(
+    <TooltipProvider>
+      <GitPersistenceHarness model={settingsModel()} />
+    </TooltipProvider>
+  )
+  const row = (label: string) =>
+    within(screen.getByText(label).closest<HTMLElement>('.rounded-md')!)
+  const first = row('Broken checks fixes')
+  const second = row('Conflict resolution')
+  const open = async (target: ReturnType<typeof row>) => {
+    const trigger = target.getByRole('button', { name: 'Select agent' })
+    await waitFor(() => expect(trigger).toHaveProperty('disabled', false))
+    fireEvent.pointerDown(trigger, { button: 0, ctrlKey: false })
+    fireEvent.click(screen.getByRole('button', { name: 'Configure Claude' }))
+    const input = screen.getByRole('textbox', { name: 'Arguments' })
+    await waitFor(() => expect(input).toHaveProperty('disabled', false))
+    return input
+  }
+  const dismiss = () => {
+    fireEvent.keyDown(screen.getByRole('textbox', { name: 'Arguments' }), { key: 'Escape' })
+    fireEvent.keyDown(screen.getByRole('menu'), { key: 'Escape' })
+  }
+  let input = await open(first)
+  fireEvent.change(input, { target: { value: '--unaccepted' } })
+  dismiss()
+  input = await open(second)
+  expect(input).toHaveProperty('value', '--verbose')
+  dismiss()
+  input = await open(first)
+  expect(input).toHaveProperty('value', '--unaccepted')
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(first.getByRole('button', { name: 'Discard' }))
+  input = await open(first)
+  expect(input).toHaveProperty('value', '--verbose')
+  fireEvent.keyDown(screen.getByRole('button', { name: 'Claude permissions' }), {
+    key: 'ArrowDown'
+  })
+  fireEvent.click(
+    screen.getAllByRole('menuitemradio').find((item) => item.textContent?.startsWith('Ask'))!
+  )
+  fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+  fireEvent.click(first.getByRole('button', { name: 'Save' }))
+  await waitFor(() =>
+    expect(
+      useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks?.launchPreferences
+        ?.permissionMode
+    ).toBe('ask')
+  )
+  expect(
+    useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks?.agentArgs
+  ).toBeUndefined()
+  act(() =>
+    useAppStore.setState(({ settings }) => ({
+      settings: settings && { ...settings, agentDefaultArgs: { claude: '--debug' } }
+    }))
+  )
+  input = await open(first)
+  expect(input).toHaveProperty('value', '--debug')
+})
+
+it.each(['global', 'repo'] as const)(
+  'updates the mounted %s default picker and cached row text on language and resource events',
+  async (scope) => {
+    const locale = await pickerLocaleFixture()
+    const { i18n } = locale
+    const { SourceControlAiActionRecipeDefaults } =
+      await import('./SourceControlAiActionRecipeDefaults')
+    const { RepositorySourceControlAiSection } =
+      await import('./repository/source-control/RepositorySourceControlAiSection')
+    const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+    const config = normalizeSourceControlAiSettings({
+      ...getDefaultSourceControlAiSettings(),
+      enabled: true,
+      actions: { fixChecks: { agentId: null } }
+    })
+    useAppStore.setState(({ settings }) => ({
+      settings: settings && { ...settings, sourceControlAi: config },
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+      repos: [TEST_REPO]
+    }))
+    const write = vi.fn()
+    const revisions = await import('@/i18n/translation-resource-version')
+    const subscribe = revisions.subscribeTranslationResourceVersion
+    const disposals: ReturnType<typeof vi.fn>[] = []
+    vi.spyOn(revisions, 'subscribeTranslationResourceVersion').mockImplementation((listener) => {
+      const stop = vi.fn(subscribe(listener))
+      disposals.push(stop)
+      return stop
+    })
+    const view = render(
+      <TooltipProvider>
+        {scope === 'global' ? (
+          <SourceControlAiActionRecipeDefaults
+            config={config}
+            searchQuery=""
+            defaultTuiAgent="claude"
+            writeConfig={write}
+          />
+        ) : (
+          <RepositorySourceControlAiSection repo={TEST_REPO} updateRepo={write} />
+        )}
+      </TooltipProvider>
+    )
+    try {
+      await act(async () => {})
+      expect(screen.getAllByText('Use default agent').length).toBeGreaterThan(0)
+      if (scope === 'repo') {
+        expect(screen.getByText('Action recipes')).toBeTruthy()
+      }
+      await act(() => i18n.changeLanguage('es'))
+      expect(
+        screen
+          .getAllByRole('button', { name: 'Seleccionar agente' })
+          .some((button) => button.textContent?.includes('Use default agent'))
+      ).toBe(false)
+      expect(screen.getAllByText('Usar agente predeterminado').length).toBeGreaterThan(0)
+      if (scope === 'repo') {
+        expect(screen.getByText('Recetas de acción')).toBeTruthy()
+      }
+      act(() =>
+        i18n.addResource(
+          'es',
+          'translation',
+          'auto.components.settings.SourceControlAiActionRecipeDefaults.ee0e5c2a48',
+          'Predeterminado actualizado'
+        )
+      )
+      expect(screen.getAllByText('Predeterminado actualizado').length).toBeGreaterThan(0)
+      act(() =>
+        i18n.addResource(
+          'es',
+          'translation',
+          'auto.components.settings.source.control.action.recipe.options.fixChecks',
+          'Descripción actualizada'
+        )
+      )
+      if (scope === 'repo') {
+        expect(screen.getByText('Descripción actualizada')).toBeTruthy()
+      }
+      expect(write).not.toHaveBeenCalled()
+    } finally {
+      try {
+        view.unmount()
+      } finally {
+        await locale.restore()
+      }
+    }
+    expect(disposals.length).toBeGreaterThan(0)
+    for (const stop of disposals) {
+      expect(stop).toHaveBeenCalledOnce()
+    }
+  }
+)
+
+it('renders current native text-agent facts for a normalized legacy model recipe', async () => {
+  const { RepositorySourceControlAiSection } =
+    await import('./repository/source-control/RepositorySourceControlAiSection')
+  const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+  const menu = await import('../tab-bar/use-new-tab-agent-menu-rows')
+  const observation = vi.spyOn(menu, 'useAgentMenuObservation')
+  const unused = vi.fn()
+  const configure = (
+    patch: Partial<NonNullable<ReturnType<typeof useAppStore.getState>['settings']>>
+  ) => useAppStore.setState(({ settings }) => ({ settings: settings && { ...settings, ...patch } }))
+  const { agentLaunchSettingsMutationUpdates } =
+    await import('../../../../shared/agent-launch-settings')
+  const config = normalizeSourceControlAiSettings({
+    ...getDefaultSourceControlAiSettings(),
+    actions: {
+      commitMessage: { agentId: null, launchPreferences: { agentId: 'claude', model: 'opus' } }
+    }
+  })
+  configure({ sourceControlAi: config, defaultTuiAgent: 'claude', disabledTuiAgents: [] })
+  useAppStore.setState({
+    repos: [TEST_REPO],
+    detectedAgentIds: ['claude', 'codex'],
+    localDetectedAgentIdsByContext: { host: ['claude', 'codex'] }
+  })
+  render(
+    <TooltipProvider>
+      <RepositorySourceControlAiSection repo={TEST_REPO} updateRepo={unused} />
+    </TooltipProvider>
+  )
+  await act(async () => {})
+  const section =
+    document.querySelector<HTMLElement>('[data-settings-section$="commitMessage"]') ??
+    screen.getByText('Commit message').closest<HTMLElement>('.rounded-md')
+  if (!section) {
+    throw new Error('Missing Commit message row')
+  }
+  const row = within(section)
+  expect(row.getByText('Global custom args')).toBeTruthy()
+  const input = row.getByPlaceholderText('--model sonnet')
+  expect(input).toHaveProperty('value', '')
+  const { sameAgentLaunchPickerModel } = await import('../tab-bar/new-tab-agent-menu-model')
+  const model = observation.mock.results.at(-1)!.value.model
+  for (const [host, label] of [
+    [null, 'Global custom args'],
+    [['codex'], 'No args'],
+    [['claude', 'codex'], 'Global custom args']
+  ] as const) {
+    act(() => useAppStore.setState({ localDetectedAgentIdsByContext: { host: host && [...host] } }))
+    expect(sameAgentLaunchPickerModel(model, observation.mock.results.at(-1)!.value.model)).toBe(
+      true
+    )
+    expect(row.getByText(label)).toBeTruthy()
+    expect(input).toHaveProperty('value', '')
+  }
+  const settings = useAppStore.getState().settings
+  if (!settings) {
+    throw new Error('Missing settings')
+  }
+  act(() =>
+    configure(
+      agentLaunchSettingsMutationUpdates(
+        settings,
+        { type: 'availability', agent: 'claude', enabled: false },
+        'darwin'
+      )
+    )
+  )
+  expect(row.getByText('No args')).toBeTruthy()
+  expect(input).toHaveProperty('value', '')
+  expect(input).toHaveProperty('placeholder', '--model sonnet')
+  expect(useAppStore.getState().settings?.sourceControlAi?.actions?.commitMessage).toEqual(
+    config.actions?.commitMessage
+  )
+  expect(unused).not.toHaveBeenCalled()
+})
+
+it.each([
+  { agent: 'claude', scope: 'global' },
+  { agent: 'codex', scope: 'global' },
+  { agent: 'claude', scope: 'repo' },
+  { agent: 'codex', scope: 'repo' }
+] as const)(
+  'persists only deliberate $agent route events from the actual CLI-default $scope row',
+  async ({ agent, scope }) => {
+    setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES)
+    const settings = useAppStore.getState().settings!
+    const recipe = {
+      agentId: agent,
+      agentArgs: '--add-dir "two words"',
+      commandInputTemplate: 'current {basePrompt}',
+      launchPreferences: {
+        agentId: agent,
+        modelSelection: {
+          base: 'default' as const,
+          model: { agentId: agent, value: agent === 'claude' ? 'sonnet' : 'gpt-5.5' },
+          options: { effort: { agentId: agent, value: 'high' } }
+        },
+        permissionMode: 'own' as const
+      }
+    }
+    const { TEST_REPO } = await import('@/store/slices/worktrees-slice-test-fixtures')
+    const { RepositorySourceControlAiSection } =
+      await import('./repository/source-control/RepositorySourceControlAiSection')
+    useAppStore.setState({
+      repos: [{ ...TEST_REPO, sourceControlAi: { actionOverrides: { fixChecks: recipe } } }],
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+      settings: {
+        ...settings,
+        nativeChatProviders: {},
+        sourceControlAi: normalizeSourceControlAiSettings({
+          ...getDefaultSourceControlAiSettings(),
+          enabled: true,
+          actions: { fixChecks: recipe }
+        })
+      }
+    })
+    const model = settingsModel()
+    const updateRepo = vi.fn(async (repoId, patch) => {
+      useAppStore.setState((state) => ({
+        repos: state.repos.map((repo) => (repo.id === repoId ? { ...repo, ...patch } : repo))
+      }))
+      return true
+    }) satisfies ComponentProps<typeof RepositorySourceControlAiSection>['updateRepo']
+    function ActualOwner() {
+      const repo = useAppStore((state) => state.repos[0])
+      return scope === 'repo' ? (
+        <RepositorySourceControlAiSection repo={repo} updateRepo={updateRepo} />
+      ) : (
+        <GitPersistenceHarness model={model} />
+      )
+    }
+    const mount = () =>
+      render(
+        <TooltipProvider>
+          <ActualOwner />
+        </TooltipProvider>
+      )
+    let view = mount()
+    const container = () => screen.getByText('Broken checks fixes').closest('.rounded-md')!
+    const row = () => {
+      const element = container()
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('Missing row')
+      }
+      return within(element)
+    }
+    const read = () =>
+      scope === 'repo'
+        ? useAppStore.getState().repos[0].sourceControlAi?.actionOverrides?.fixChecks
+        : useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks
+    const before = structuredClone(read())
+    const open = async () => {
+      await waitFor(() =>
+        expect(row().getByRole('button', { name: 'Select agent' })).toHaveProperty(
+          'disabled',
+          false
+        )
+      )
+      fireEvent.pointerDown(row().getByRole('button', { name: 'Select agent' }), {
+        button: 0,
+        ctrlKey: false
+      })
+    }
+    await open()
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
+    )
+    await act(async () => {})
+    expect(read()).toEqual(before)
+    await open()
+    fireEvent.click(
+      screen.getByRole('button', {
+        name: agent === 'claude' ? 'Configure Claude' : 'Configure Codex'
+      })
+    )
+    fireEvent.click(screen.getByRole('button', { name: 'Use' }))
+    await act(async () => {})
+    expect(read()).toEqual(before)
+    fireEvent.click(row().getByRole('radio', { name: 'Chat' }))
+    await waitFor(() => expect(read()).toEqual({ ...before, surface: 'chat' }))
+    expect(row().getByRole('radio', { name: 'Chat' }).getAttribute('aria-checked')).toBe('true')
+    await open()
+    fireEvent.click(
+      screen.getByRole('menuitem', { name: new RegExp(agent === 'claude' ? '^Claude' : '^Codex') })
+    )
+    await act(async () => {})
+    expect(read()).toEqual({ ...before, surface: 'chat' })
+    fireEvent.click(row().getByRole('radio', { name: 'Terminal' }))
+    await waitFor(() => expect(read()).toEqual({ ...before, surface: 'terminal' }))
+    view.unmount()
+    view = mount()
+    expect(read()).toEqual({ ...before, surface: 'terminal' })
+    expect(row().getByRole('radio', { name: 'Terminal' }).getAttribute('aria-checked')).toBe('true')
+    view.unmount()
+  }
+)
+
+it.each([false, true])(
+  'initial Source Control selection follows Chat default %s without overriding a saved choice',
+  async (chatDefault) => {
+    setLocalRuntimeCapabilitiesForTests(RUNTIME_CAPABILITIES)
+    const settings = useAppStore.getState().settings!
+    useAppStore.setState({
+      localDetectedAgentIdsByContext: { host: ['claude', 'codex'] },
+      settings: {
+        ...settings,
+        nativeChatProviders: { claude: chatDefault, codex: chatDefault },
+        sourceControlAi: normalizeSourceControlAiSettings({
+          ...getDefaultSourceControlAiSettings(),
+          enabled: true,
+          actions: { fixChecks: { agentId: null, commandInputTemplate: 'current {basePrompt}' } }
+        })
+      }
+    })
+    const model = settingsModel()
+    const mount = () =>
+      render(
+        <TooltipProvider>
+          <GitPersistenceHarness model={model} />
+        </TooltipProvider>
+      )
+    let view = mount()
+    const row = () => {
+      const element = screen.getByText('Broken checks fixes').closest('.rounded-md')
+      if (!(element instanceof HTMLElement)) {
+        throw new Error('Missing action row')
+      }
+      return within(element)
+    }
+    const open = async () => {
+      await waitFor(() =>
+        expect(row().getByRole('button', { name: 'Select agent' })).toHaveProperty(
+          'disabled',
+          false
+        )
+      )
+      fireEvent.pointerDown(row().getByRole('button', { name: 'Select agent' }), {
+        button: 0,
+        ctrlKey: false
+      })
+    }
+    await open()
+    fireEvent.click(screen.getByRole('menuitem', { name: /^Codex/ }))
+    const initialSurface = chatDefault ? 'Chat' : 'Terminal'
+    await waitFor(() =>
+      expect(row().getByRole('radio', { name: initialSurface }).getAttribute('aria-checked')).toBe(
+        'true'
+      )
+    )
+    expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual({
+      agentId: 'codex',
+      commandInputTemplate: 'current {basePrompt}',
+      ...(chatDefault ? { surface: 'chat' } : {})
+    })
+    fireEvent.click(row().getByRole('radio', { name: chatDefault ? 'Terminal' : 'Chat' }))
+    const saved = {
+      agentId: 'codex',
+      commandInputTemplate: 'current {basePrompt}',
+      surface: chatDefault ? 'terminal' : 'chat'
+    }
+    await waitFor(() =>
+      expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual(saved)
+    )
+    view.unmount()
+    view = mount()
+    expect(
+      row()
+        .getByRole('radio', { name: chatDefault ? 'Terminal' : 'Chat' })
+        .getAttribute('aria-checked')
+    ).toBe('true')
+    expect(useAppStore.getState().settings?.sourceControlAi?.actions?.fixChecks).toEqual(saved)
+    view.unmount()
+  }
+)

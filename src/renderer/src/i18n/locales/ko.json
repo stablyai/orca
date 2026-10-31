@@ -19726,7 +19726,8 @@
     },
     "newWorkspace": {
       "agentOptional": "에이전트 [선택 사항]",
-      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요."
+      "createDescription": "프로젝트와 워크스페이스 이름을 선택하세요. 원하면 시작할 에이전트를 선택하세요.",
+      "setupOnly": "설정만"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "다른 이슈 변경이 진행 중입니다."
@@ -22272,7 +22273,12 @@
     "toggleArguments": "인수 표시 전환",
     "argumentsTerminalHint": "터미널(CLI) 실행에만 적용",
     "searchAgentModels": "{{agent}} 모델 검색…",
-    "legacyModelCount": "모델 {{total}}개"
+    "legacyModelCount": "모델 {{total}}개",
+    "use": "사용",
+    "select": "에이전트 선택",
+    "openIn": "열기 위치",
+    "chat": "채팅",
+    "terminal": "터미널"
   },
   "wslMove": {
     "entry": {

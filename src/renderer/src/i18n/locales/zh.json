@@ -19727,7 +19727,8 @@
     },
     "newWorkspace": {
       "agentOptional": "智能体 [可选]",
-      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。"
+      "createDescription": "选择项目和工作区名称。如果想启动智能体，请选择一个。",
+      "setupOnly": "仅设置"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "另一个议题更改正在进行中。"
@@ -22273,7 +22274,12 @@
     "toggleArguments": "切换参数显示",
     "argumentsTerminalHint": "仅适用于终端（CLI）启动",
     "searchAgentModels": "搜索 {{agent}} 模型…",
-    "legacyModelCount": "{{total}} 个模型"
+    "legacyModelCount": "{{total}} 个模型",
+    "use": "使用",
+    "select": "选择智能体",
+    "openIn": "打开方式",
+    "chat": "聊天",
+    "terminal": "终端"
   },
   "wslMove": {
     "entry": {

@@ -421,68 +421,77 @@ it('updates actual inventory for native presentation and local permission change
 })
 
 it.each([30, 300])(
-  'skips all fallback route/worktree work for a supplied context host across %i worktrees',
+  'indexes %i worktrees once and skips supplied-host fallback and subsequent query reads',
   async (count) => {
     const route = await import('@/lib/agent-launch-route-input')
     const builder = vi.spyOn(route, 'buildAgentLaunchRouteInput')
-    let visited = 0
-    const worktrees = Array.from({ length: count }, (_, i) => {
-      const worktree = makeWorktree({
-        id: `scale-${i}`,
-        repoId: TEST_REPO.id,
-        hostId: 'runtime:alpha'
+    try {
+      let visited = 0
+      const worktrees = Array.from({ length: count }, (_, i) => {
+        const worktree = makeWorktree({
+          id: `scale-${i}`,
+          repoId: TEST_REPO.id,
+          hostId: 'runtime:alpha'
+        })
+        Object.defineProperty(worktree, 'id', {
+          get: () => {
+            visited++
+            return `scale-${i}`
+          },
+          enumerable: true
+        })
+        return worktree
       })
-      Object.defineProperty(worktree, 'id', {
-        get: () => {
-          visited++
-          return `scale-${i}`
+      useAppStore.setState({ worktreesByRepo: { [TEST_REPO.id]: worktrees } })
+      visited = 0
+      const id = `scale-${count - 1}`
+      const model = {
+        state: 'settled' as const,
+        rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
+        detection: {
+          detectedIds: ['claude' as const],
+          isLoading: false,
+          isRefreshing: false,
+          detectionFailed: false,
+          needsServerUpdate: false,
+          refresh: async () => ['claude' as const]
         },
-        enumerable: true
-      })
-      return worktree
-    })
-    useAppStore.setState({ worktreesByRepo: { [TEST_REPO.id]: worktrees } })
-    visited = 0
-    const id = `scale-${count - 1}`
-    const model = {
-      state: 'settled' as const,
-      rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
-      detection: {
-        detectedIds: ['claude' as const],
-        isLoading: false,
-        isRefreshing: false,
-        detectionFailed: false,
-        needsServerUpdate: false,
-        refresh: async () => ['claude' as const]
-      },
-      pickerContext: {
-        workspace: { kind: 'git-worktree' as const, worktreeId: id },
-        executionHostId: 'runtime:alpha',
-        settings: null,
-        key: `route-${count}`
+        pickerContext: {
+          workspace: { kind: 'git-worktree' as const, worktreeId: id },
+          executionHostId: 'runtime:alpha',
+          settings: null,
+          key: `route-${count}`
+        }
       }
+      const hook = renderHook(
+        ({ supplied, query }) => {
+          void query
+          return useAgentLaunchPickerInventory(
+            id,
+            supplied ? model : { ...model, pickerContext: undefined },
+            false
+          )
+        },
+        { initialProps: { supplied: true, query: '' } }
+      )
+      await act(async () => {})
+      expect(builder).not.toHaveBeenCalled()
+      expect(visited).toBe(count)
+      const coldReads = visited
+      for (const query of ['c', 'cl', 'cla', 'claude']) {
+        await act(async () => hook.rerender({ supplied: true, query }))
+        expect(visited - coldReads).toBe(0)
+        expect(builder).not.toHaveBeenCalled()
+      }
+      expect(builder).not.toHaveBeenCalled()
+      expect(visited - coldReads).toBe(0)
+      await act(async () => hook.rerender({ supplied: false, query: 'fallback' }))
+      expect(builder).toHaveBeenCalledOnce()
+      expect(builder.mock.results[0].value.executionHostId).toBe('runtime:alpha')
+      expect(visited).toBeGreaterThanOrEqual(count)
+    } finally {
+      builder.mockRestore()
     }
-    const hook = renderHook(
-      ({ supplied, query }) => {
-        void query
-        return useAgentLaunchPickerInventory(
-          id,
-          supplied ? model : { ...model, pickerContext: undefined },
-          false
-        )
-      },
-      { initialProps: { supplied: true, query: '' } }
-    )
-    for (const query of ['c', 'cl', 'cla', 'claude']) {
-      await act(async () => hook.rerender({ supplied: true, query }))
-    }
-    expect(builder).not.toHaveBeenCalled()
-    expect(visited).toBe(0)
-    await act(async () => hook.rerender({ supplied: false, query: 'fallback' }))
-    expect(builder).toHaveBeenCalledOnce()
-    expect(builder.mock.results[0].value.executionHostId).toBe('runtime:alpha')
-    expect(visited).toBeGreaterThanOrEqual(count)
-    builder.mockRestore()
   }
 )
 
@@ -627,56 +636,62 @@ it('invalidates mounted picker seeds only for their effective authored-default s
 it('reprojects a supplied local authored map once without host acquisition', async () => {
   const route = await import('@/lib/agent-launch-route-input')
   const builder = vi.spyOn(route, 'buildAgentLaunchRouteInput')
-  const model = {
-    state: 'settled' as const,
-    rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
-    detection: {
-      detectedIds: ['claude' as const],
-      isLoading: false,
-      isRefreshing: false,
-      detectionFailed: false,
-      needsServerUpdate: false,
-      refresh: async () => ['claude' as const]
-    },
-    pickerContext: {
-      workspace: { kind: 'floating' as const },
-      executionHostId: 'local',
-      key: 'bounded-local',
-      settings: {
-        ...getDefaultSettings('/home/me'),
-        agentLaunchChoices: { claude: { model: 'opus' } }
-      }
-    }
-  }
-  const profiles = vi.spyOn(
-    await import('../../../../shared/agent-launch-profile'),
-    'projectAgentLaunchProfile'
-  )
-  const before = compositions.mock.calls.length
-  const profileBefore = profiles.mock.calls.length
-  const hook = renderHook(
-    ({ supplied }) => useAgentLaunchPickerInventory(undefined, supplied, false),
-    { initialProps: { supplied: model } }
-  )
-  await act(async () => {})
-  await act(async () =>
-    hook.rerender({
-      supplied: {
-        ...model,
-        pickerContext: {
-          ...model.pickerContext,
-          settings: {
-            ...model.pickerContext.settings,
-            agentLaunchChoices: { claude: { model: 'sonnet' } }
-          }
+  try {
+    const model = {
+      state: 'settled' as const,
+      rows: [{ kind: 'terminal' as const, agent: 'claude' as const }],
+      detection: {
+        detectedIds: ['claude' as const],
+        isLoading: false,
+        isRefreshing: false,
+        detectionFailed: false,
+        needsServerUpdate: false,
+        refresh: async () => ['claude' as const]
+      },
+      pickerContext: {
+        workspace: { kind: 'floating' as const },
+        executionHostId: 'local',
+        key: 'bounded-local',
+        settings: {
+          ...getDefaultSettings('/home/me'),
+          agentLaunchChoices: { claude: { model: 'opus' } }
         }
       }
-    })
-  )
-  expect(hook.result.current[0]?.terminal.model).toBe('sonnet')
-  expect(builder).not.toHaveBeenCalled()
-  expect(compositions.mock.calls.length - before).toBe(0)
-  expect(profiles.mock.calls.length - profileBefore).toBe(2)
-  profiles.mockRestore()
-  builder.mockRestore()
+    }
+    const profiles = vi.spyOn(
+      await import('../../../../shared/agent-launch-profile'),
+      'projectAgentLaunchProfile'
+    )
+    try {
+      const before = compositions.mock.calls.length
+      const profileBefore = profiles.mock.calls.length
+      const hook = renderHook(
+        ({ supplied }) => useAgentLaunchPickerInventory(undefined, supplied, false),
+        { initialProps: { supplied: model } }
+      )
+      await act(async () => {})
+      await act(async () =>
+        hook.rerender({
+          supplied: {
+            ...model,
+            pickerContext: {
+              ...model.pickerContext,
+              settings: {
+                ...model.pickerContext.settings,
+                agentLaunchChoices: { claude: { model: 'sonnet' } }
+              }
+            }
+          }
+        })
+      )
+      expect(hook.result.current[0]?.terminal.model).toBe('sonnet')
+      expect(builder).not.toHaveBeenCalled()
+      expect(compositions.mock.calls.length - before).toBe(0)
+      expect(profiles.mock.calls.length - profileBefore).toBe(2)
+    } finally {
+      profiles.mockRestore()
+    }
+  } finally {
+    builder.mockRestore()
+  }
 })

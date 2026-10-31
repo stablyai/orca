@@ -8,8 +8,17 @@ import { translate } from '@/i18n/i18n'
 import { AgentLaunchSetupPanel } from './AgentLaunchSetupPanel'
 import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
 
-// The menu and its popovers unmount on dismissal; authored setups live for this app session.
-const sessionDrafts = new Map<string, AgentPickerDraft>()
+import {
+  useAgentPickerSetup,
+  type AgentPickerSetupIdentity,
+  type AgentPickerDraftOwner
+} from './agent-launch-picker-drafts'
+export {
+  invalidateAgentPickerDrafts,
+  retireAgentPickerDrafts,
+  useAgentPickerDraftScope
+} from './agent-launch-picker-drafts'
+export type { AgentPickerSetupIdentity } from './agent-launch-picker-drafts'
 
 function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
   if (event.key === 'Enter' || event.key === ' ') {
@@ -31,7 +40,13 @@ function setupKeyDown(event: KeyboardEvent<HTMLButtonElement>) {
 
 export function AgentLaunchSetupButton({
   entry,
+  draftScope,
+  draftId = 'agent',
+  preset,
   initial,
+  seed,
+  surface,
+  mode,
   renderAnchor,
   disabled,
   open: controlledOpen,
@@ -40,7 +55,13 @@ export function AgentLaunchSetupButton({
   onUse
 }: {
   entry: AgentPickerEntry
+  draftScope?: AgentPickerDraftOwner
+  draftId?: string
+  preset?: AgentPickerSetupIdentity
   initial?: AgentPickerDraft
+  seed?: AgentPickerDraft
+  surface?: AgentPickerDraft['surface']
+  mode?: 'launch' | 'select'
   renderAnchor?: (trigger: ReactElement) => ReactElement
   disabled?: boolean
   open?: boolean
@@ -48,9 +69,18 @@ export function AgentLaunchSetupButton({
   onOpenChange?: (open: boolean) => void
   onUse: (draft: AgentPickerDraft) => void
 }) {
-  const draftKey = JSON.stringify([entry.ownerKey, entry.agent, initial])
   const [localOpen, setOpen] = useState(false)
   const open = controlledOpen ?? localOpen
+  const setup = useAgentPickerSetup({
+    entry,
+    initial,
+    seed,
+    surface,
+    draftScope,
+    draftId,
+    preset,
+    open
+  })
   const closeFocus = useRef({ open, restore: true })
   useLayoutEffect(() => {
     if (closeFocus.current.open && !open) {
@@ -99,6 +129,7 @@ export function AgentLaunchSetupButton({
   }, [open])
   const changeOpen = (next: boolean) => {
     if (next) {
+      setup.activate()
       setPlacement('right')
     }
     if (controlledOpen === undefined) {
@@ -155,17 +186,26 @@ export function AgentLaunchSetupButton({
         }}
       >
         <div className="min-h-0 overflow-y-auto scrollbar-sleek">
-          <AgentLaunchSetupPanel
-            key={draftKey}
-            entry={entry}
-            initial={sessionDrafts.get(draftKey) ?? initial}
-            disabled={disabled}
-            onDraftChange={(draft) => sessionDrafts.set(draftKey, draft)}
-            onUse={(draft) => {
-              onUse(draft)
-              changeOpen(false)
-            }}
-          />
+          {setup.ready ? (
+            <AgentLaunchSetupPanel
+              entry={entry}
+              mode={mode}
+              draft={setup.draft}
+              getDraft={setup.getDraft}
+              disabled={disabled}
+              onDraftChange={setup.change}
+              onUse={(draft) => {
+                if (
+                  setup.accept(
+                    mode === 'select' ? draft : { ...draft, surface: setup.draft.surface }
+                  )
+                ) {
+                  onUse(draft)
+                }
+                changeOpen(false)
+              }}
+            />
+          ) : null}
         </div>
       </PopoverContent>
     </Popover>

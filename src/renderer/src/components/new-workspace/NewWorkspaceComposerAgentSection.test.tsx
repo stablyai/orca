@@ -15,6 +15,23 @@ describe('NewWorkspaceComposerAgentSection agent picker', () => {
       <TooltipProvider>
         <NewWorkspaceComposerAgentSection
           quickAgent="codex"
+          agentSurfaceRows={{
+            model: {
+              state: 'settled',
+              rows: [{ agent: 'codex', kind: 'terminal' }],
+              detection: {
+                detectedIds: ['codex'],
+                isLoading: false,
+                isRefreshing: false,
+                detectionFailed: false,
+                needsServerUpdate: false,
+                refresh: async () => ['codex']
+              }
+            },
+            selection: { ready: true, cli: false },
+            contextKey: 'test',
+            onPick: vi.fn()
+          }}
           onQuickAgentChange={onQuickAgentChange}
           onOpenAgentSettings={vi.fn()}
           createDisabled={false}
@@ -28,8 +45,11 @@ describe('NewWorkspaceComposerAgentSection agent picker', () => {
       </TooltipProvider>
     )
 
-    fireEvent.click(screen.getByRole('combobox'))
-    fireEvent.click(screen.getByRole('option', { name: 'Blank Terminal' }))
+    fireEvent.pointerDown(screen.getByRole('button', { name: 'Select agent' }), {
+      button: 0,
+      ctrlKey: false
+    })
+    fireEvent.click(screen.getByRole('menuitem', { name: 'Blank Terminal' }))
 
     expect(onQuickAgentChange).toHaveBeenCalledWith(null)
   })

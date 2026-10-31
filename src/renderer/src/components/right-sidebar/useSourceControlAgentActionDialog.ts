@@ -1,3 +1,5 @@
+import type { AgentPickerDraft, AgentPickerEntry } from '../../../../shared/agent-launch-picker'
+import { applySourceControlPickerDraft } from '../settings/source-control-agent-launch-picker'
 import {
   canonicalSourceControlActionSelection,
   commitSourceControlActionArguments,
@@ -169,11 +171,19 @@ export function useSourceControlAgentActionDialog({
     [resetDeliveryPlan]
   )
   // A pick changes route even for the same agent, so it always invalidates the previewed plan.
-  const onAgentPick = (agent: TuiAgent, surface?: AgentLaunchSurface): void => {
-    const saved = savedSurfaceForPick(choice.observation.model, agent, surface)
-    setLivePick(surface)
-    setCurrentSelection((previous) =>
-      pickSourceControlActionAgent(
+  const onAgentPick = (
+    agent: TuiAgent,
+    surface?: AgentLaunchSurface,
+    draft?: AgentPickerDraft,
+    entry?: AgentPickerEntry
+  ): void => {
+    const saved =
+      surface === undefined && selectedAgent === agent
+        ? currentSelection.current.surface
+        : savedSurfaceForPick(choice.observation.model, agent, surface, entry)
+    setLivePick((current) => (selectedAgent === agent && surface === undefined ? current : surface))
+    setCurrentSelection((previous) => {
+      const picked = pickSourceControlActionAgent(
         argumentsEdited && selectedAgent !== agent
           ? commitSourceControlActionArguments(previous, selectedAgent ?? agent).selection
           : previous,
@@ -181,8 +191,9 @@ export function useSourceControlAgentActionDialog({
         selectedAgent,
         saved
       )
-    )
-    if (selectedAgent !== agent) {
+      return draft && entry ? applySourceControlPickerDraft(picked, entry, draft) : picked
+    })
+    if (draft || selectedAgent !== agent) {
       setArgumentsEdited(false)
     }
     resetDeliveryPlan()
@@ -220,6 +231,8 @@ export function useSourceControlAgentActionDialog({
     hasEnabledAgents: choice.hasEnabledAgents,
     detecting,
     surfaceRows: {
+      launchSelection: currentSelection,
+      worktreeId: worktreeId ?? undefined,
       model: choice.observation.model,
       selection: choice.pickerSelection,
       contextKey: choice.observation.contextKey,

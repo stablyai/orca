@@ -20312,7 +20312,8 @@
     },
     "newWorkspace": {
       "agentOptional": "Agente [Opcional]",
-      "createDescription": "Elige el proyecto y el nombre del espacio de trabajo. Selecciona un agente si quieres iniciar uno."
+      "createDescription": "Elige el proyecto y el nombre del espacio de trabajo. Selecciona un agente si quieres iniciar uno.",
+      "setupOnly": "Solo configuración"
     },
     "JiraIssueWorkspace": {
       "pendingChange": "Ya hay otro cambio de incidencia en curso."
@@ -22962,7 +22963,12 @@
     "toggleArguments": "Mostrar u ocultar argumentos",
     "argumentsTerminalHint": "Solo se aplica a los lanzamientos en terminal (CLI)",
     "searchAgentModels": "Buscar modelos de {{agent}}…",
-    "legacyModelCount": "{{total}} modelos"
+    "legacyModelCount": "{{total}} modelos",
+    "use": "Usar",
+    "select": "Seleccionar agente",
+    "openIn": "Abrir en",
+    "chat": "Chat",
+    "terminal": "Terminal"
   },
   "wslMove": {
     "entry": {

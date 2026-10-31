@@ -17,6 +17,7 @@ export function hostPlannableAgentLaunch(
 ): HostAgentLaunch | undefined {
   if (
     !request.agent ||
+    request.launchInputs !== undefined ||
     !request.startupPlan ||
     request.launchDraftPrompt ||
     request.agentLaunchRoute === 'structured-native-chat' ||

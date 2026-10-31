@@ -256,9 +256,7 @@ export const electronViteConfig: UserConfig = {
   },
   preload: {
     build: {
-      externalizeDeps: {
-        exclude: ['zod']
-      },
+      externalizeDeps: false,
       rollupOptions: {
         // Unminified preload keeps dependency JSDoc whose em dashes would force two-byte storage in every renderer.
         output: { charset: 'ascii', comments: { legal: true, annotation: true, jsdoc: false } }

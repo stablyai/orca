@@ -52,10 +52,6 @@ vi.mock('@/lib/agent-catalog', () => ({
   ],
   AgentIcon: ({ agent }: { agent: string }) => <span>{agent}</span>
 }))
-vi.mock('@/i18n/i18n', () => ({
-  translate: (_key: string, fallback: string, values?: Record<string, string>) =>
-    fallback.replace('{{value0}}', values?.value0 ?? '')
-}))
 const launchMock = vi.hoisted(() => vi.fn())
 const toastError = vi.hoisted(() => vi.fn())
 const toastMessage = vi.hoisted(() => vi.fn())
@@ -173,6 +169,35 @@ function expectLaunch(surface: 'chat' | 'terminal'): void {
 afterEach(() => {
   cleanup()
   vi.restoreAllMocks()
+})
+
+it('updates the stable new-tab menu through real language and resource publications', async () => {
+  const { i18n } = await import('@/i18n/i18n')
+  const { default: spanish } = await import('@/i18n/locales/es.json')
+  const language = i18n.language
+  const previous = structuredClone(i18n.getResourceBundle('es', 'translation') ?? {})
+  await i18n.changeLanguage('en')
+  i18n.addResourceBundle('es', 'translation', spanish, true, true)
+  try {
+    const { row } = renderChoice('cli')
+    await act(() => i18n.changeLanguage('es'))
+    expect(screen.getByRole('menuitem', { name: 'Iniciar Codex en un nuevo terminal' })).toBe(row)
+    act(() =>
+      i18n.addResource(
+        'es',
+        'translation',
+        'auto.components.tab.bar.QuickLaunchButton.ec2adf093e',
+        'Terminal actualizada {{value0}}'
+      )
+    )
+    expect(screen.getByRole('menuitem', { name: 'Terminal actualizada Codex' })).toBe(row)
+    expect(launchMock).not.toHaveBeenCalled()
+  } finally {
+    cleanup()
+    i18n.removeResourceBundle('es', 'translation')
+    i18n.addResourceBundle('es', 'translation', previous)
+    await i18n.changeLanguage(language)
+  }
 })
 
 it.each(['cli', 'chat'] as const)(
@@ -663,7 +688,7 @@ describe('QuickLaunchAgentMenuItems launches', () => {
   })
 })
 
-it('forwards configured choices through the existing dispatcher and launch-only Arguments only to terminals', () => {
+it('forwards configured choices and retains matching Terminal Arguments for either requested surface', () => {
   launchMock.mockClear()
   launchMock.mockReturnValue({ surface: { kind: 'local-terminal', tabId: 'new-tab' } })
   const hook = renderHook(() =>
@@ -702,5 +727,5 @@ it('forwards configured choices through the existing dispatcher and launch-only 
     requestedSurface: 'chat',
     sessionOptions: { model: 'astra', effort: 'low', permissionMode: 'ask' }
   })
-  expect(launchMock.mock.calls[1][0]).not.toHaveProperty('agentArgs')
+  expect(launchMock.mock.calls[1][0].agentArgs).toBe('--add-dir docs')
 })

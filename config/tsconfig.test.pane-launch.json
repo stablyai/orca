@@ -2,6 +2,7 @@
   "extends": "./tsconfig.web.json",
   "include": [
     "../src/renderer/src/components/terminal-pane/pty-agent-pane-launch.test.ts",
+    "../src/renderer/src/components/right-sidebar/SourceControlAgentActionDialog.picker.test.tsx",
     "../src/renderer/src/env.d.ts",
     "../src/types/build-constants.d.ts",
     "../src/shared/**/*"

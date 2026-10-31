@@ -1,3 +1,4 @@
+import { agentLaunchSetupOptionRows } from './agent-launch-setup-option-rows'
 import { useState } from 'react'
 import { Check, ChevronDown, ChevronLeft, ChevronRight, CornerDownLeft } from 'lucide-react'
 import { getAgentSessionOptionLaunchCatalog } from '../../../../shared/agent-session-option-catalog'
@@ -11,28 +12,25 @@ import {
   CommandItem
 } from '@/components/ui/command'
 import { translate } from '@/i18n/i18n'
+import { agentModelChoiceChips } from '../settings/agent-model-choice-chips'
 import { AgentDefaultArgsInput } from '../settings/AgentLaunchDefaultsEditor'
 import { NativeChatSessionOptionRows } from '../native-chat/NativeChatSessionOptionRows'
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from '@/components/ui/collapsible'
 import type { SessionOptionDescriptor } from '../../../../shared/native-chat/input/native-chat-session-options'
 import { AgentPermissionMenu } from '../settings/AgentPermissionChoiceControls'
+import { agentPickerPanelArguments } from '../../../../shared/agent-launch-picker-arguments'
 import {
-  agentPickerPanelArguments,
-  agentPickerSpeedValue,
-  editAgentPickerSpeed,
-  editAgentPickerPanelText
-} from '../../../../shared/agent-launch-picker-arguments'
-import { agentPickerSpeedIsOpaque } from '../../../../shared/agent-launch-picker-speed'
-import { editAgentPickerPermission } from '../../../../shared/agent-launch-picker-permission'
+  acceptAgentPickerArguments,
+  applyAgentPickerEdit,
+  type AgentPickerEdit
+} from '../../../../shared/agent-launch-picker-edits'
 import {
   agentPickerButtonOrder,
   agentPickerArgumentsKnown,
-  agentPickerDraft,
   agentPickerEffectiveChoices,
   agentPickerModels,
   agentPickerEntryOptions,
   agentPickerPermissions,
-  editAgentPickerDraft,
   type AgentPickerEntry,
   type AgentPickerDraft,
   type AgentPickerSurface
@@ -40,27 +38,33 @@ import {
 
 export function AgentLaunchSetupPanel({
   entry,
-  initial,
+  draft,
+  getDraft,
+  mode = 'launch',
   disabled,
   onDraftChange,
   onUse
 }: {
   entry: AgentPickerEntry
-  initial?: AgentPickerDraft
+  draft: AgentPickerDraft
+  getDraft: () => AgentPickerDraft | undefined
+  mode?: 'launch' | 'select'
   disabled?: boolean
-  onDraftChange?: (draft: AgentPickerDraft) => void
+  onDraftChange: (draft: AgentPickerDraft) => void
   onUse: (draft: AgentPickerDraft) => void
 }) {
-  const [draft, updateDraft] = useState(() => initial ?? agentPickerDraft(entry))
-  const setDraft = (next: AgentPickerDraft) => {
-    updateDraft(next)
-    onDraftChange?.(next)
+  const editDraft = (edit: AgentPickerEdit) => {
+    const current = getDraft()
+    if (current) {
+      onDraftChange(applyAgentPickerEdit(entry, current, edit))
+    }
   }
   const [modelQuery, setModelQuery] = useState('')
   const [legacy, setLegacy] = useState(false)
   const [argumentsOpen, setArgumentsOpen] = useState(entry.defaultSurface === 'terminal')
   const argumentsKnown = agentPickerArgumentsKnown(entry, draft)
   const effective = agentPickerEffectiveChoices(entry, draft)
+  const argumentsView = agentPickerPanelArguments(entry, draft)
   const models = agentPickerModels(entry)
   const defaultsPending =
     draft.surface === 'chat' ? entry.structuredDefaultsPending : entry.defaultsPending
@@ -69,99 +73,92 @@ export function AgentLaunchSetupPanel({
     entry.catalog.origin !== 'unknown' &&
     (entry.catalog.listingNamesConfiguredModel ?? seed?.hostListingNamesConfiguredModel === true)
   const currentModel =
+    argumentsView.choices.model ??
     effective.model ??
-    (!defaultsPending && listedDefaultKnown
+    (!draft.delegated?.includes('model') && !defaultsPending && listedDefaultKnown
       ? models.find((model) => model.isDefault)?.id
       : undefined)
   // Settled with nothing chosen still lets the user pick; nothing is checked and the agent keeps its own default.
   const modelDisabled = disabled || defaultsPending
   const options = agentPickerEntryOptions(entry, currentModel, draft.surface)
-  const argumentsView = agentPickerPanelArguments(entry, draft, currentModel)
-  const optionRows: SessionOptionDescriptor[] = options.map((option) => {
-    const liveModel = models.find((model) => model.id === currentModel)
-    const current =
-      (option.id === 'fastMode' || option.id === 'serviceTier'
-        ? agentPickerSpeedValue(entry, draft, option.id)
-        : effective.options?.[option.id]) ??
-      (currentModel && !defaultsPending
-        ? option.kind.type === 'boolean'
-          ? String(option.kind.defaultValue)
-          : option.id === 'effort'
-            ? liveModel?.defaultEffort
-            : option.kind.defaultIsCliDefault
-              ? option.kind.defaultValue
-              : undefined
-        : undefined)
-    if (agentPickerSpeedIsOpaque(entry, draft, option.id)) {
-      return {
-        id: option.id,
-        label: option.label,
-        category: option.category,
-        kind: {
-          type: 'select',
-          choices: [
-            {
-              value: 'arguments',
-              label: translate('agentPicker.setByArguments', 'Set by your Arguments')
-            }
-          ],
-          currentValue: 'arguments'
-        },
-        valueSource: 'default',
-        transport: 'agent-session',
-        settable: false
-      }
-    }
-    const valueKnown =
-      current !== undefined ||
-      (option.id === 'serviceTier' &&
-        entry.catalog.origin !== 'unknown' &&
-        Boolean(liveModel?.serviceTiers?.length))
-    return {
-      id: option.id,
-      label: option.label,
-      category: option.category,
-      kind:
-        option.kind.type === 'boolean'
-          ? { type: 'boolean', currentValue: current === 'true' }
-          : {
-              type: 'select',
-              choices:
-                current && !option.kind.choices.some((choice) => choice.value === current)
-                  ? [...option.kind.choices, { value: current, label: current }]
-                  : option.kind.choices,
-              currentValue: current
-            },
-      valueSource: valueKnown ? 'default' : 'unknown',
-      transport: 'agent-session',
-      settable:
-        !disabled &&
-        !defaultsPending &&
-        // A settled level the agent picks itself shows unselected but stays pickable.
-        (valueKnown || option.kind.type === 'select') &&
-        (!(option.id === 'fastMode' || option.id === 'serviceTier') ||
-          !entry.surfaces.includes('terminal') ||
-          argumentsKnown)
-    }
+  const optionRows = agentLaunchSetupOptionRows({
+    options,
+    models,
+    entry,
+    draft,
+    currentModel,
+    argumentsView,
+    defaultsPending,
+    disabled,
+    argumentsKnown
   })
-  const renderOptions = (rows: SessionOptionDescriptor[]) => (
-    <NativeChatSessionOptionRows
-      options={rows}
-      shownReason={null}
-      pendingIds={new Set()}
-      divided={false}
-      layout="settings"
-      onSet={(option, value) =>
-        setDraft(
-          option.id === 'fastMode' || option.id === 'serviceTier'
-            ? editAgentPickerSpeed(entry, draft, option.id, String(value), currentModel)
-            : editAgentPickerDraft(draft, { options: { [option.id]: String(value) } })
-        )
-      }
-      onAction={() => {}}
-    />
+  const renderOptions = (rows: SessionOptionDescriptor[]) =>
+    rows.length ? (
+      <NativeChatSessionOptionRows
+        options={rows}
+        shownReason={null}
+        pendingIds={new Set()}
+        divided={false}
+        layout="settings"
+        onSet={(option, value) =>
+          editDraft(
+            option.id === 'fastMode' || option.id === 'serviceTier'
+              ? {
+                  kind: 'speed',
+                  key: option.id,
+                  value: String(value),
+                  model: currentModel
+                }
+              : {
+                  kind: 'choice',
+                  patch: { options: { [option.id]: String(value) } }
+                }
+          )
+        }
+        onAction={() => {}}
+      />
+    ) : null
+  const handleUse = (surface: AgentPickerSurface) => {
+    const current = getDraft()
+    if (current) {
+      onUse({ ...acceptAgentPickerArguments(entry, current), surface })
+    }
+  }
+  const choiceChips = agentModelChoiceChips(
+    entry.agent,
+    entry.label,
+    argumentsView.choices,
+    (patch) => {
+      const key =
+        patch.model !== undefined
+          ? 'model'
+          : patch.permissionMode !== undefined
+            ? 'permissionMode'
+            : Object.keys(patch.options ?? {})[0]
+      editDraft({ kind: 'remove-chip', key })
+      return agentPickerPanelArguments(entry, getDraft() ?? draft).text
+    },
+    argumentsView.context
   )
-  const use = (surface: AgentPickerSurface) => onUse({ ...draft, surface })
+  const noModelFlag = !seed?.modelApply.cli?.length
+  const composed = options.some((option) => option.apply.composedIntoModel)
+  const noOptionFlag = options.some(
+    (option) => !option.apply.cli?.length && !option.apply.composedIntoModel
+  )
+  const note =
+    noModelFlag || noOptionFlag
+      ? translate(
+          'agentPicker.chatChoicesNote',
+          '{{agent}} model or effort choices without a CLI flag apply to chats.',
+          { agent: entry.label }
+        )
+      : composed
+        ? translate(
+            'agentPicker.composedChoicesNote',
+            '{{agent}} effort and speed choices are included in the model argument.',
+            { agent: entry.label }
+          )
+        : undefined
   const legacyCount = models.filter((model) => model.isLegacy && !model.hidden).length
   return (
     <div
@@ -174,7 +171,7 @@ export function AgentLaunchSetupPanel({
           (event.target instanceof HTMLInputElement || event.target instanceof HTMLTextAreaElement)
         ) {
           event.preventDefault()
-          use(entry.defaultSurface)
+          handleUse(mode === 'select' ? draft.surface : entry.defaultSurface)
         }
       }}
     >
@@ -191,7 +188,7 @@ export function AgentLaunchSetupPanel({
           ) {
             event.preventDefault()
             event.stopPropagation()
-            use(entry.defaultSurface)
+            handleUse(mode === 'select' ? draft.surface : entry.defaultSurface)
           }
         }}
         onKeyDown={(event) => {
@@ -233,7 +230,7 @@ export function AgentLaunchSetupPanel({
                   keywords={[model.label]}
                   disabled={modelDisabled}
                   data-current={currentModel === model.id}
-                  onSelect={() => setDraft(editAgentPickerDraft(draft, { model: model.id }))}
+                  onSelect={() => editDraft({ kind: 'choice', patch: { model: model.id } })}
                 >
                   {model.label}
                   <span className="ml-auto flex size-3.5 shrink-0 items-center justify-center">
@@ -296,7 +293,7 @@ export function AgentLaunchSetupPanel({
               argsSetPermission: false,
               onSelect: (choice) => {
                 if (choice !== 'default') {
-                  setDraft(editAgentPickerPermission(entry, draft, choice))
+                  editDraft({ kind: 'permission', value: choice })
                 }
               }
             }}
@@ -339,20 +336,12 @@ export function AgentLaunchSetupPanel({
                     defaultArgs={argumentsView.text}
                     argsOverride={argumentsView.text}
                     disabled={disabled || !argumentsKnown}
-                    onSaveArgs={() => {}}
+                    note={note}
+                    onSaveArgs={() => editDraft({ kind: 'accept-arguments' })}
                     onDraftChange={(text) =>
-                      setDraft(editAgentPickerPanelText(entry, draft, text, currentModel))
+                      editDraft({ kind: 'arguments', text, model: currentModel })
                     }
-                    choiceChips={argumentsView.chips.map((chip) => ({
-                      key: chip.key,
-                      label: entry.label,
-                      source: 'arguments',
-                      flag: chip.flag,
-                      onRemove: (text) => {
-                        setDraft(chip.remove())
-                        return text
-                      }
-                    }))}
+                    choiceChips={choiceChips}
                   />
                 </div>
               </CollapsibleContent>
@@ -361,23 +350,34 @@ export function AgentLaunchSetupPanel({
         ) : null}
       </div>
       <div className="flex items-center justify-end gap-2 border-t border-border px-2.5 py-2">
-        {agentPickerButtonOrder(entry).map((surface) => (
+        {mode === 'select' ? (
           <Button
-            key={surface}
             type="button"
             size="xs"
             disabled={disabled}
-            variant={surface === entry.defaultSurface ? 'default' : 'outline'}
-            onClick={() => use(surface)}
+            onClick={() => handleUse(draft.surface)}
           >
-            {surface === 'chat'
-              ? translate('agentPicker.launchChat', 'Launch chat')
-              : translate('agentPicker.launchTerminal', 'Launch terminal')}
-            {surface === entry.defaultSurface ? (
-              <CornerDownLeft className="size-3 opacity-60" />
-            ) : null}
+            {translate('agentPicker.use', 'Use')}
           </Button>
-        ))}
+        ) : (
+          agentPickerButtonOrder(entry).map((surface) => (
+            <Button
+              key={surface}
+              type="button"
+              size="xs"
+              disabled={disabled}
+              variant={surface === entry.defaultSurface ? 'default' : 'outline'}
+              onClick={() => handleUse(surface)}
+            >
+              {surface === 'chat'
+                ? translate('agentPicker.launchChat', 'Launch chat')
+                : translate('agentPicker.launchTerminal', 'Launch terminal')}
+              {surface === entry.defaultSurface ? (
+                <CornerDownLeft className="size-3 opacity-60" />
+              ) : null}
+            </Button>
+          ))
+        )}
       </div>
     </div>
   )

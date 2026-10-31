@@ -19,7 +19,10 @@ import type {
 } from '@/lib/agent-session-launch-plan'
 import { adoptAgentSessionLaunchVerdict } from './agent-session-launch-plan'
 import { directLaunchSurfaceRequest } from './launch-work-item-direct-preflight'
-import type { LaunchWorkItemDirectArgs } from './launch-work-item-direct-types'
+import type {
+  DirectWorkItemLaunchInputs,
+  LaunchWorkItemDirectArgs
+} from './launch-work-item-direct-types'
 import type { AgentLaunchRequestId } from '@/lib/agent-launch-request-id'
 import {
   buildDirectWorkItemStartup,
@@ -89,6 +92,9 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
   agentOverride?: TuiAgent
   agentArgs?: string | null
   sessionOptions?: Readonly<Record<string, string>>
+  chatSessionOptions?: Readonly<Record<string, string>>
+  resolveLaunchInputs?: LaunchWorkItemDirectArgs['resolveLaunchInputs']
+  preflightInputs?: DirectWorkItemLaunchInputs
   resolveAgentArgs?: (agent: TuiAgent) => string | null | undefined
   resolveSessionOptions?: (agent: TuiAgent) => Readonly<Record<string, string>> | undefined
   launchChoice?: LaunchWorkItemDirectArgs['launchChoice']
@@ -108,6 +114,7 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
 }): Promise<DirectWorkItemAgentLaunchPreparation> {
   const agentSelection = await resolveDirectWorkItemAgent({
     agentOverride: args.agentOverride,
+    preferredSurface: args.preflightInputs?.preferredSurface ?? args.launchChoice?.preferredSurface,
     agentLaunchPreferences: args.agentLaunchPreferences,
     worktreeId: args.worktreeId,
     repoHost: args.repoHost,
@@ -139,13 +146,25 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
         // Non-critical: activation still has the explicit startup below.
       })
   }
-  const agentArgs =
-    effectiveAgent && args.resolveAgentArgs ? args.resolveAgentArgs(effectiveAgent) : args.agentArgs
-  const sessionOptions = effectiveAgent
-    ? args.resolveSessionOptions
-      ? args.resolveSessionOptions(effectiveAgent)
-      : args.sessionOptions
-    : undefined
+  const inputs =
+    effectiveAgent && args.resolveLaunchInputs
+      ? args.preflightPlan?.agent === effectiveAgent && args.preflightInputs
+        ? args.preflightInputs
+        : structuredClone(args.resolveLaunchInputs(effectiveAgent))
+      : undefined
+  const agentArgs = inputs
+    ? inputs.agentArgs
+    : effectiveAgent && args.resolveAgentArgs
+      ? args.resolveAgentArgs(effectiveAgent)
+      : args.agentArgs
+  const sessionOptions = inputs
+    ? inputs.sessionOptions
+    : effectiveAgent
+      ? args.resolveSessionOptions
+        ? args.resolveSessionOptions(effectiveAgent)
+        : args.sessionOptions
+      : undefined
+  const chatSessionOptions = inputs ? inputs.chatSessionOptions : args.chatSessionOptions
   const plan =
     effectiveAgent === null
       ? null
@@ -158,7 +177,8 @@ export async function prepareDirectWorkItemAgentLaunch(args: {
             prompt: args.draftContent,
             promptDelivery: args.promptDelivery,
             ...(sessionOptions ? { launchOptions: sessionOptions } : {}),
-            ...directLaunchSurfaceRequest(args.launchChoice)
+            ...(chatSessionOptions !== undefined ? { chatLaunchOptions: chatSessionOptions } : {}),
+            ...directLaunchSurfaceRequest(args.launchChoice, inputs)
           })
   const structuredLaunch = plan?.route === 'structured-native-chat'
 
