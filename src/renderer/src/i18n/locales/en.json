@@ -20130,6 +20130,10 @@
       },
       "webPeek": {
         "unavailable": "No preview for this page."
+      },
+      "usageLimitAccount": {
+        "add": "Add account",
+        "switch": "Switch to {{account}} · {{percent}}% left and continue"
       }
     },
     "tab": {

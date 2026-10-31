@@ -28,6 +28,7 @@ import {
 } from '../../../../shared/native-chat/native-chat-usage-limit-cut'
 import { AGENT_SESSION_CONTINUE_INTERRUPTED_RUNTIME_CAPABILITY } from '../../../../shared/agent-session-continue-interrupted-capability'
 import type { NativeChatOrcaStopView } from './native-chat-orca-stop-context'
+import { useNativeChatUsageLimitAccountOffer } from './use-native-chat-usage-limit-account-offer'
 import { useStructuredAgentSessionHostLabel } from './use-structured-agent-session-host-label'
 import { useNativeChatTargetRestartResuming } from '../native-chat-restart-runtimes'
 import { useNativeChatLaunchResumePending } from '../native-chat-launch-resume-decision'
@@ -147,6 +148,13 @@ export function useNativeChatInterruptedContinuation(input: {
     },
     [usageLimitTurnItemId, usageCapability, sessionId, reportComposerError, focusComposer, agent]
   )
+  const usageLimitAccountOffer = useNativeChatUsageLimitAccountOffer({
+    agent,
+    target,
+    wslDistro,
+    blocked: usageLimitTurnItemId !== null && usageCapability !== 'unknown',
+    continueUsageLimit
+  })
   const continueNow = useCallback((): void => {
     if (offered === null) {
       return
@@ -178,7 +186,8 @@ export function useNativeChatInterruptedContinuation(input: {
       continueNow,
       usageLimitTurnItemId,
       usageLimitContinueDisabled: usageCapability === 'unknown',
-      continueUsageLimit
+      continueUsageLimit,
+      usageLimitAccountOffer
     }),
     [
       hostLabel,
@@ -189,7 +198,8 @@ export function useNativeChatInterruptedContinuation(input: {
       continueNow,
       usageLimitTurnItemId,
       usageCapability,
-      continueUsageLimit
+      continueUsageLimit,
+      usageLimitAccountOffer
     ]
   )
   const failedHere =
