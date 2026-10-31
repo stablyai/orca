@@ -30,7 +30,9 @@ function acquireReuseDispatchTab(tabId: string): (() => void) | null {
 export async function handleAutomationDispatchRequest({
   automation,
   run,
-  dispatchToken
+  dispatchToken,
+  agentPrompt = automation.prompt,
+  resultReporting
 }: AutomationDispatchRequest): Promise<void> {
   const markDispatchResult = async (result: AutomationDispatchResult): Promise<void> => {
     // The writer publishes host-scoped change before reply; another unscoped emit would invalidate every host.
@@ -107,10 +109,18 @@ export async function handleAutomationDispatchRequest({
         if (releaseTab) {
           completion.setReuseDispatchTabRelease(releaseTab)
           try {
+            await markDispatchResult({
+              runId: run.id,
+              status: 'dispatching',
+              workspaceId: worktree.id,
+              terminalSessionId: reusableSession.tabId,
+              terminalPaneKey: reusableSession.paneKey,
+              terminalPtyId: reusableSession.ptyId
+            })
             const submitted = await submitPromptToAgentPty({
               tabId: reusableSession.tabId,
               ptyId: reusableSession.ptyId,
-              content: automation.prompt
+              content: agentPrompt
             })
             if (!submitted) {
               completion.cleanupRunObservers()
@@ -145,6 +155,7 @@ export async function handleAutomationDispatchRequest({
               await markDispatchResult({
                 runId: run.id,
                 status: 'dispatched',
+                ...(resultReporting ? { resultReporting } : {}),
                 workspaceId: worktree.id,
                 workspaceDisplayName: worktree.displayName,
                 terminalSessionId: reusableSession.tabId,
@@ -166,10 +177,19 @@ export async function handleAutomationDispatchRequest({
     const result = await launchAgentBackgroundSession({
       agent: automation.agentId,
       worktreeId: worktree.id,
-      prompt: automation.prompt,
+      prompt: agentPrompt,
       ...(automation.extraAgentArgs ? { extraAgentArgs: automation.extraAgentArgs } : {}),
       launchSource: 'unknown',
       title: run.title,
+      onSurfacePublished: (session) =>
+        markDispatchResult({
+          runId: run.id,
+          status: 'dispatching',
+          workspaceId: worktree.id,
+          terminalSessionId: session.tabId,
+          terminalPaneKey: session.paneKey,
+          terminalPtyId: session.ptyId
+        }),
       onData: completion.appendOutput,
       onAgentStatus: (payload) => {
         completion.captureAssistantMessage(payload.lastAssistantMessage)
@@ -198,6 +218,7 @@ export async function handleAutomationDispatchRequest({
       await markDispatchResult({
         runId: run.id,
         status: 'dispatched',
+        ...(resultReporting ? { resultReporting } : {}),
         workspaceId: worktree.id,
         workspaceDisplayName: worktree.displayName,
         terminalSessionId: launchedTabId,

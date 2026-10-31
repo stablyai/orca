@@ -3,6 +3,7 @@ import { AUTOMATION_RUN_REPORT_GRACE_MS } from '../../shared/automation-run-resu
 import type { OrchestrationCompatibilityEvidence } from '../../shared/orchestration-compatibility-evidence'
 import { InvalidArgumentError } from '../runtime/rpc/core'
 import { isEquivalentPaneKey } from '../runtime/orchestration/db/pane-key-match'
+import { automationRunRecency } from '../../shared/automation-session-reuse'
 
 export const NOT_IN_AUTOMATION_RUN_MESSAGE =
   'Not running inside an Orca automation run on this host. Run this command from the automation agent.'
@@ -72,10 +73,7 @@ export function resolveCallerAutomationRun(
 ): AutomationRun {
   const run = runs
     .filter((entry) => runBelongsToSession(entry, session))
-    .toSorted(
-      (left, right) =>
-        (right.dispatchedAt ?? right.createdAt) - (left.dispatchedAt ?? left.createdAt)
-    )[0]
+    .toSorted((left, right) => automationRunRecency(right) - automationRunRecency(left))[0]
   if (!run || !acceptsReports(run, now)) {
     throw new InvalidArgumentError(NOT_IN_AUTOMATION_RUN_MESSAGE)
   }

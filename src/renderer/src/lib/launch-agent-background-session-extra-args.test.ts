@@ -77,6 +77,7 @@ vi.mock('@/components/terminal-pane/pty-data-sidecar-subscriptions', () => ({
 describe('launchAgentBackgroundSession with automation extras', () => {
   beforeEach(() => {
     currentStoreState = state
+    mockPasteDraftWhenAgentReady.mockResolvedValue(true)
     resetAgentBackgroundSessionTestHarness({
       state,
       createTab: mockCreateTab,

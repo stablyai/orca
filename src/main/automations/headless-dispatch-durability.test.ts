@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from 'vitest'
 import { buildProfileStateCutoverFixture } from '../persistence/profile-state-cutover-fixture'
-import type { AutomationRun } from '../../shared/automations-types'
+import type { AutomationRun, AutomationDispatchResult } from '../../shared/automations-types'
 import type { HeadlessAutomationDispatchLaunch } from './headless-dispatch'
 import { runHeadlessAutomationDispatch } from './headless-dispatch-runner'
 
@@ -15,12 +15,13 @@ function fixture(launch: HeadlessAutomationDispatchLaunch) {
   const dispatched: AutomationRun = { ...run, ...launch, status: 'dispatched' }
   return {
     automation,
+    agentPrompt: automation.prompt,
     run,
     target: { ok: true as const, cwd: state.repos[0].path, repo: state.repos[0] },
     dispatcher: vi.fn(async () => launch),
     runs: {
       createRun: vi.fn(async () => run),
-      updateRun: vi.fn(async () => dispatched),
+      updateRun: vi.fn(async (_result: AutomationDispatchResult) => dispatched),
       recordReport: vi.fn(async () => ({ ok: true as const, run })),
       repeatSkip: vi.fn(async () => null),
       advanceNextRun: vi.fn(async () => automation)
@@ -41,6 +42,17 @@ const terminal = {
 }
 
 describe('headless automation observation during persistence', () => {
+  it.each([undefined, 'offered'] as const)(
+    'records the explicit reporting offer %s after handoff',
+    async (resultReporting) => {
+      const context = fixture(terminal)
+      await runHeadlessAutomationDispatch({ ...context, resultReporting })
+      const update = context.runs.updateRun.mock.calls[0]?.[0]
+      expect(update).toEqual(expect.objectContaining({ status: 'dispatched' }))
+      expect(update?.resultReporting).toBe(resultReporting)
+    }
+  )
+
   it('handles an early completion rejection while the dispatched write is stalled', async () => {
     const completion = Promise.withResolvers<never>()
     const acknowledgement = Promise.withResolvers<AutomationRun>()

@@ -1,3 +1,4 @@
+import { isFinalAutomationRunStatus } from '../../shared/automations-types'
 import type { OrcaRuntimeService } from '../runtime/orca-runtime'
 import type {
   AutomationChatLaunchRequest,
@@ -15,7 +16,7 @@ import { automationRunAcceptedTarget } from './automation-agent-run-result'
 
 export async function reuseAutomationChat(
   runtime: OrcaRuntimeService,
-  { automation, run, runs }: AutomationChatLaunchRequest
+  { automation, run, runs, agentPrompt, bindSession }: AutomationChatLaunchRequest
 ): Promise<AutomationChatAgentLaunch | null> {
   let preparationError: { error: unknown } | undefined
   const store = await runtime.openAgentSessionRecordStore().catch((error: unknown) => {
@@ -37,6 +38,17 @@ export async function reuseAutomationChat(
       continue
     }
     seen.add(id)
+    if (
+      previous.status !== 'completed' ||
+      runs.some(
+        (entry) =>
+          entry.id !== run.id &&
+          entry.chatSessionId === id &&
+          !isFinalAutomationRunStatus(entry.status)
+      )
+    ) {
+      continue
+    }
     const target: AutomationChatAgentLaunch = {
       // The caller only attempts Chat reuse for a stable workspace.
       workspaceId: automation.workspaceId!,
@@ -75,6 +87,7 @@ export async function reuseAutomationChat(
       }
       const operationId = automationRunOperationId(run, 'reuse-send')
       const callerKey = rpcCallerOperationKey(AUTOMATION_AGENT_CALLER)
+      bindSession(target)
       const sent = await host.send(
         { callerKey },
         structuredAgentSessionMessageSendMutation({
@@ -82,7 +95,7 @@ export async function reuseAutomationChat(
           clientOperationId: operationId,
           expectedRuntimeFence: current.currentFence,
           delivery: 'queue-if-active',
-          body: structuredAgentSessionSendBody(automation.prompt, [])
+          body: structuredAgentSessionSendBody(agentPrompt, [])
         })
       )
       if (sent.ok) {

@@ -109,6 +109,7 @@ describe('host-owned automation execution', () => {
       const dispatcher = captured.options.chatDispatcher!
       const result = await dispatcher({
         automation: { ...state.automations[0], surface: 'chat' },
+        agentPrompt: state.automations[0].prompt,
         run,
         target: { ok: true, cwd: '/fixture', repo: state.repos[0] }
       })
@@ -301,13 +302,14 @@ describe('headless automation dispatch', () => {
     }
     createRuntimeAutomationService({
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the mocked service never reads the store; the dispatcher reads only past runs.
-      store: { listAutomationRuns: () => [] } as never,
+      store: { listAutomationRuns: () => [], updateAutomationRun: vi.fn() } as never,
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the dispatcher reads only the members faked above.
       runtime: runtime as never,
       headless: true
     })
     const dispatcher = capturedOption('headlessDispatcher')
     const launch = await dispatcher({
+      agentPrompt: '',
       // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: a reuse-workspace automation; only these fields are read.
       automation: {
         workspaceMode: 'existing',
