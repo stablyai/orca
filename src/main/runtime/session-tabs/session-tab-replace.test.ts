@@ -137,4 +137,30 @@ describe('replaceSessionTabInSnapshot', () => {
       expect(next.activeTabId).toBe(takes ? 'agent-session:s2' : snapshot.activeTabId)
     }
   )
+
+  it('keeps a pinned slot pinned for a client that never showed the source', () => {
+    const pinned = {
+      ...snapshot,
+      tabs: snapshot.tabs.map((tab) =>
+        tab.id === 'agent-session:s1' ? { ...tab, isPinned: true } : tab
+      )
+    }
+    const terminal = {
+      type: 'terminal' as const,
+      id: 't9::l9',
+      parentTabId: 't9',
+      leafId: 'l9',
+      title: 'C',
+      isActive: false
+    }
+    const replace = (existing: RuntimeMobileSessionTabsSnapshot) =>
+      replaceSessionTabInSnapshot(existing, {
+        workspaceId: 'ws',
+        replacedTabId: 'agent-session:s1',
+        row: terminal,
+        activate: false
+      }).tabs.at(-1)?.isPinned
+    expect(replace(pinned)).toBe(true)
+    expect(replace(snapshot)).toBeUndefined()
+  })
 })

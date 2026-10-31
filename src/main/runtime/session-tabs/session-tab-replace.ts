@@ -35,7 +35,8 @@ export function replaceSessionTabInSnapshot(
   }
 ): RuntimeMobileSessionTabsSnapshot {
   const { replacedTabId } = input
-  const replaced = new Set(existing ? rowsOfTab(existing, replacedTabId).map((row) => row.id) : [])
+  const replacedRows = existing ? rowsOfTab(existing, replacedTabId) : []
+  const replaced = new Set(replacedRows.map((row) => row.id))
   const groups = existing?.tabGroups ?? [
     { id: getHeadlessMobileSessionGroupId(input.workspaceId), activeTabId: null, tabOrder: [] }
   ]
@@ -49,9 +50,11 @@ export function replaceSessionTabInSnapshot(
       ? held == null || held === replacedTabId || replaced.has(held)
       : input.selectionDecided === true)
   // The hint names the confirmed source even when this snapshot no longer lists it (the window can
-  // drop it first); a client that still shows that tab puts the row there.
+  // drop it first); a client that still shows that tab puts the row there. A pinned slot stays
+  // pinned here too, so a client that never showed the source still sees the pin.
   const row: ReplacementRow = {
     ...input.row,
+    ...(replacedRows.some((candidate) => candidate.isPinned) ? { isPinned: true } : {}),
     replaces: { tabId: replacedTabId },
     isActive: activate
   }
