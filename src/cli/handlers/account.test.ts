@@ -886,6 +886,35 @@ describe('account CLI handlers', () => {
     )
   })
 
+
+  it('prints a custom Claude name in `account list` output', async () => {
+    callMock.mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: {
+        claude: {
+          accounts: [
+            { id: 'work', email: 'me@example.com', displayName: 'Work org' },
+            { id: 'personal', email: 'me@example.com', organizationName: 'Personal' }
+          ],
+          activeAccountId: null
+        },
+        codex: { accounts: [{ id: 'codex-1', email: 'me@example.com' }], activeAccountId: null }
+      },
+      _meta: { runtimeId: 'test-runtime' }
+    })
+
+    await ACCOUNT_HANDLERS['account list']({ ...context('claude'), flags: new Map() })
+
+    const output = String(logSpy.mock.calls[0]?.[0])
+    expect(output).toContain('Work org (me@example.com)')
+    expect(output).toContain('me@example.com · Personal')
+    const claudeLines = output
+      .split('\n')
+      .filter((line) => line.startsWith('  ') && line.includes('me@example.com'))
+    expect(new Set(claudeLines.slice(0, 2)).size).toBe(2)
+  })
+
   it('lists accounts without forcing a provider usage refresh', async () => {
     callMock.mockResolvedValue({
       id: 'test',
