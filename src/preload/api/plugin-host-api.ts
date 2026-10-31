@@ -35,6 +35,12 @@ export type {
   PluginHostStatus
 } from '../../shared/plugins/plugin-list-entry'
 import type { PluginHostListEntry } from '../../shared/plugins/plugin-list-entry'
+import type {
+  PluginTaskDetail,
+  PluginTaskListParamsInput,
+  PluginTaskListResult
+} from '../../shared/plugins/tasks/plugin-task-source'
+import type { PluginSettingValue } from '../../shared/plugins/contributions/plugin-settings-contribution'
 
 export type PluginHostLogLine = {
   ts: number
@@ -160,6 +166,25 @@ export type PluginsApi = {
     commandId: string
     args?: unknown
   }) => Promise<unknown>
+  /** Lists a plugin task source; main validates the worker's answer. */
+  listTaskSourceItems: (args: {
+    pluginKey: string
+    sourceId: string
+    params: PluginTaskListParamsInput
+  }) => Promise<PluginTaskListResult>
+  getTaskSourceItem: (args: {
+    pluginKey: string
+    sourceId: string
+    itemId: string
+  }) => Promise<PluginTaskDetail>
+  /** User-set values of a plugin's declared settings (defaults are not filled in). */
+  readSettings: (args: { pluginKey: string }) => Promise<Record<string, PluginSettingValue>>
+  /** Sets one declared setting; null resets it to the plugin's default. */
+  writeSetting: (args: {
+    pluginKey: string
+    key: string
+    value: PluginSettingValue | null
+  }) => Promise<Record<string, PluginSettingValue>>
   /** One frame host call; main enforces consented capabilities and the frame's surface. */
   panelAction: (args: {
     sessionToken: string

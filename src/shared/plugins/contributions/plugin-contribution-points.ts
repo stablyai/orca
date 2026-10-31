@@ -33,6 +33,14 @@ import {
 } from './plugin-new-file-contribution'
 import { PLUGIN_PANEL_LIMIT, pluginPanelContributionSchema } from './plugin-panel-contribution'
 import {
+  PLUGIN_SETTING_LIMIT,
+  pluginSettingContributionSchema
+} from './plugin-settings-contribution'
+import {
+  PLUGIN_TASK_SOURCE_LIMIT,
+  pluginTaskSourceContributionSchema
+} from '../tasks/plugin-task-source'
+import {
   pluginFieldDoc,
   PLUGIN_MANIFEST_V2_SINCE,
   PLUGIN_SCHEMA_SINCE_V1
@@ -51,7 +59,9 @@ export const PLUGIN_CONTRIBUTION_POINTS = [
   'iconThemes',
   'syntaxes',
   'customEditors',
-  'newFiles'
+  'newFiles',
+  'taskSources',
+  'settings'
 ] as const
 
 export type PluginContributionPoint = (typeof PLUGIN_CONTRIBUTION_POINTS)[number]
@@ -65,9 +75,7 @@ export const PLUGIN_RESERVED_CONTRIBUTION_POINTS = {
   skills: 'agent skills',
   mcpServers: 'MCP server definitions',
   hooks: 'agent hooks',
-  taskSources: 'task sources',
   connections: 'account connections',
-  settings: 'plugin settings',
   statusBarItems: 'status bar items',
   sidebarCards: 'sidebar cards'
 } as const
@@ -78,8 +86,6 @@ export type PluginReservedContributionPoint = keyof typeof PLUGIN_RESERVED_CONTR
 export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
   Record<PluginReservedContributionPoint, string>
 > = {
-  taskSources:
-    'Issue and task providers such as Asana, Linear or Jira, declared as data that a worker fills with tasks.',
   connections:
     'Account providers with a host-run sign-in, so a plugin never handles credentials itself.',
   agentHarnesses:
@@ -90,8 +96,7 @@ export const PLUGIN_PLANNED_CONTRIBUTION_POINTS: Readonly<
   mcpServers: 'MCP server definitions that Orca offers to the agents it launches.',
   skills: 'Agent skills shipped as files that Orca installs for the agents it launches.',
   hooks:
-    'Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.',
-  settings: 'Typed plugin settings that Orca renders in its own settings UI.'
+    'Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.'
 }
 
 function reservedList(purpose: string) {
@@ -197,6 +202,18 @@ export const pluginContributesFields = {
     PLUGIN_NEW_FILE_LIMIT,
     'Untitled files the user can create from the + menu and the command palette.',
     NEXT
+  ),
+  taskSources: contributionList(
+    pluginTaskSourceContributionSchema,
+    PLUGIN_TASK_SOURCE_LIMIT,
+    'Task lists shown on the Tasks page, filled by the plugin worker.',
+    NEXT
+  ),
+  settings: contributionList(
+    pluginSettingContributionSchema,
+    PLUGIN_SETTING_LIMIT,
+    "Options the user edits on the plugin's page; the worker reads them with settings.get.",
+    NEXT
   )
 } satisfies Record<PluginContributionPoint, z.ZodType>
 
@@ -205,9 +222,7 @@ export const pluginReservedContributesFields = {
   skills: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.skills),
   mcpServers: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.mcpServers),
   hooks: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.hooks),
-  taskSources: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.taskSources),
   connections: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.connections),
-  settings: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.settings),
   statusBarItems: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.statusBarItems),
   sidebarCards: reservedList(PLUGIN_RESERVED_CONTRIBUTION_POINTS.sidebarCards)
 } satisfies Record<PluginReservedContributionPoint, z.ZodType>
@@ -241,5 +256,9 @@ export const PLUGIN_CONTRIBUTION_POINT_POLICY: Record<
   customEditors: { execution: 'sandboxed-ui', catalogType: 'editor', bindsContent: false },
   // Why data and no catalog type: a template is inert text that seeds a file the user asked for;
   // whatever opens that file (a syntax, an editor) carries its own type.
-  newFiles: { execution: 'data', catalogType: null, bindsContent: false }
+  newFiles: { execution: 'data', catalogType: null, bindsContent: false },
+  // Why no catalog type: a task source needs a worker, which `main` already declares.
+  taskSources: { execution: 'trusted-worker', catalogType: null, bindsContent: false },
+  // Why data: the declaration is inert (it never acts), so it must not draw the commands warning.
+  settings: { execution: 'data', catalogType: null, bindsContent: false }
 }

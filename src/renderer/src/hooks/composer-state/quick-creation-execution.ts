@@ -105,7 +105,10 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
         isRemote: selectedRepoIsRemote,
         telemetrySource,
         repoId,
-        executionHostId: selectedRepoExecutionHostId
+        executionHostId: selectedRepoExecutionHostId,
+        // Why: without an agent there is nothing to type a plugin task's prompt into.
+        agentDraft: agent ? options?.agentDraft : null,
+        sessionOptionOverrides: options?.sessionOptions
       })
       if (isSubmissionCancelled()) {
         return
@@ -171,6 +174,7 @@ export function useQuickCreationExecution(input: QuickCreationExecutionInput) {
           Boolean(activeEphemeralVmRecipeId) || selectedRepoTarget?.kind === 'environment',
         taskSourceContext,
         linkedWorkItem: submitLinkedWorkItem,
+        linkedPluginTask: options?.linkedPluginTask,
         workspaceRunContext,
         workspaceName,
         nameWasGenerated,

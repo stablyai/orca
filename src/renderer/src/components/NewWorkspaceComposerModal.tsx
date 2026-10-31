@@ -28,6 +28,12 @@ import type { TuiAgent } from '../../../shared/tui-agent'
 import type { WorkspaceSource as WorkspaceCreateTelemetrySource } from '../../../shared/workspace-source'
 import type { WorkspaceStatus } from '../../../shared/worktree/types'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
+import type { LinkedPluginTask } from '../../../shared/plugins/tasks/plugin-task-link'
+import {
+  describePluginTaskSessionOptions,
+  sessionOptionsForAgent,
+  type PluginTaskSessionOptions
+} from '@/lib/plugin-task-session-options'
 import { translate } from '@/i18n/i18n'
 import { getWorkspaceComposerInitialFocusTarget } from '@/lib/workspace-composer-initial-focus'
 import { getFolderWorkspacePrimaryActionLabel } from '@/components/sidebar/folder-workspace-composer-helpers'
@@ -50,6 +56,12 @@ type ComposerModalData = {
   taskSourceContext?: TaskSourceContext | null
   initialWorkspaceTarget?: WorkspaceCreationTargetHint | null
   initialBaseBranch?: string
+  /** Editable draft typed into the agent after launch (e.g. a plugin task's prompt). */
+  initialAgentDraft?: string
+  /** Per-launch agent session options (e.g. model, effort) from the opener. */
+  initialAgentSessionOptions?: PluginTaskSessionOptions
+  /** Plugin task the new workspace links back to. */
+  linkedPluginTask?: LinkedPluginTask
   initialWorkspaceStatus?: WorkspaceStatus
   enableIssueAutomation?: boolean
   /** Creation-surface telemetry; each opener supplies it, otherwise use unknown. */
@@ -222,16 +234,34 @@ function QuickTabBody({
     setQuickAgentOverride(null)
     setQuickSelectionCleared(true)
   }, [])
+  const [agentDraft, setAgentDraft] = useState<string | null>(modalData.initialAgentDraft ?? null)
 
+  const { initialAgentSessionOptions, linkedPluginTask } = modalData
+  const launchSessionOptions = useMemo(
+    () => sessionOptionsForAgent(initialAgentSessionOptions, quickAgent),
+    [initialAgentSessionOptions, quickAgent]
+  )
   const handleCreate = useCallback(async (): Promise<void> => {
     if (createDisabled) {
       return
     }
     await submitQuick(quickAgent, {
       setupOnly: quickSetupOnly,
-      launchChoice: launchSelection.choice
+      launchChoice: launchSelection.choice,
+      ...(agentDraft?.trim() ? { agentDraft } : {}),
+      ...(launchSessionOptions ? { sessionOptions: launchSessionOptions } : {}),
+      ...(linkedPluginTask ? { linkedPluginTask } : {})
     })
-  }, [createDisabled, quickAgent, launchSelection.choice, quickSetupOnly, submitQuick])
+  }, [
+    agentDraft,
+    createDisabled,
+    launchSessionOptions,
+    linkedPluginTask,
+    quickAgent,
+    launchSelection.choice,
+    quickSetupOnly,
+    submitQuick
+  ])
   // Layer Add Project without replacing the composer. Retain it for close animation and clone/scan cancellation; folder/non-Git navigation still tears down the modal.
   const [addProjectOpen, setAddProjectOpen] = useState(false)
   const [addProjectMounted, setAddProjectMounted] = useState(false)
@@ -273,6 +303,17 @@ function QuickTabBody({
     : cardProps.selectedRepoIsGit
       ? translate('auto.components.NewWorkspaceComposerModal.createWorktree', 'Create worktree')
       : translate('auto.components.NewWorkspaceComposerModal.createWorkspace', 'Create workspace')
+  const agentDraftUnavailableReason = isFolderWorkspaceTarget
+    ? translate(
+        'auto.components.NewWorkspaceComposerModal.agentDraftFolderGroup',
+        'Folder workspaces do not take an agent prompt, so this one will not be sent.'
+      )
+    : quickAgent === null
+      ? translate(
+          'auto.components.NewWorkspaceComposerModal.agentDraftNoAgent',
+          'Pick an agent to send this prompt.'
+        )
+      : null
 
   // Let Radix own Escape for the topmost layer. This dialog auto-focuses input, so page-style blur-first handling swallowed its first Escape.
   const nestedDialogOpen = agentSettingsOpen || addProjectOpen || setLocationOpen
@@ -331,6 +372,10 @@ function QuickTabBody({
         nameInputRef={nameInputRef}
         quickAgent={quickAgent}
         onQuickAgentChange={handleQuickAgentChange}
+        agentDraft={agentDraft}
+        onAgentDraftChange={setAgentDraft}
+        agentDraftUnavailableReason={agentDraftUnavailableReason}
+        agentSessionNote={describePluginTaskSessionOptions(initialAgentSessionOptions, quickAgent)}
         quickSetupOnly={quickSetupOnly}
         onQuickSetupOnlySelect={handleQuickSetupOnlySelect}
         {...cardProps}

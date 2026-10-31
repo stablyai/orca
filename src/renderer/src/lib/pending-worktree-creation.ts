@@ -19,6 +19,7 @@ import type { AgentStartupPlan } from '@/lib/tui-agent-startup'
 import type { AgentStartedTelemetry } from '@/lib/worktree-startup-payload'
 import type { TaskSourceContext, WorkspaceRunContext } from '../../../shared/task-source-context'
 import type { AgentLaunchRoute } from '@/lib/agent-launch-routing'
+import type { LinkedPluginTask } from '../../../shared/plugins/tasks/plugin-task-link'
 import { translate } from '@/i18n/i18n'
 
 /** Creation phases include renderer preflight, base fetch and worktree add; remote/runtime can skip git phases, while VM recipes provision before runtime creation. */
@@ -36,6 +37,8 @@ export type WorktreeCreationRequest = {
   taskSourceContext?: TaskSourceContext | null
   linkedWorkItem?: WorkspaceLinkedItem | null
   linkedTaskSourceContext?: TaskSourceContext | null
+  /** Plugin task this workspace is started from; written to its metadata once it exists. */
+  linkedPluginTask?: LinkedPluginTask
   // Preserve project-first host intent for retry/diagnostics/metadata; repoId remains for older create APIs.
   workspaceRunContext?: WorkspaceRunContext | null
   // Best-effort cleanup owns this VM runtime until workspace handoff succeeds.

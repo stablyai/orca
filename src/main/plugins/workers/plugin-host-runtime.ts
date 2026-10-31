@@ -31,6 +31,7 @@ import {
   pluginHostMethodsFor
 } from '../../../shared/plugins/workers/plugin-host-api'
 import { PLUGIN_HOST_API_MAJOR } from '../../../shared/plugins/workers/plugin-host-api-major'
+import { createWorkerTaskSources, type PluginWorkerTasksApi } from './plugin-worker-task-sources'
 
 /** A failed host call or command: the same `{ code, message, retryable }` frames get. */
 // Why: format 1 handlers read `worktreeId`; newer payloads name it `workspaceId`.
@@ -58,6 +59,7 @@ export type PluginWorkerOrcaApi = {
       handler: (args: unknown, context: { signal: AbortSignal }) => unknown
     ): PluginDisposable
   }
+  tasks: PluginWorkerTasksApi
   events: {
     on(
       event: PluginEventName,
@@ -110,6 +112,7 @@ export function createPluginWorkerRuntime(
     string,
     (args: unknown, context: { signal: AbortSignal }) => unknown
   >()
+  const taskSources = createWorkerTaskSources()
   const eventHandlers = new Map<string, Set<(payload: unknown) => void | Promise<void>>>()
   const pendingHostCalls = new Map<number, (response: PluginResponse) => void>()
   const runningCommands = new Map<number, AbortController>()
@@ -175,6 +178,7 @@ export function createPluginWorkerRuntime(
           }
         }
       }),
+      tasks: taskSources.api,
       events: Object.freeze({
         on(event: PluginEventName, handler: (payload: unknown) => void | Promise<void>) {
           // Why: format 1 workers still listen under the old worktree.* names.
@@ -203,7 +207,27 @@ export function createPluginWorkerRuntime(
       }
     })
     await activate(orca)
-    send(pluginEvent(WORKER_EVENTS.ready, { commands: [...commandHandlers.keys()] }))
+    const ready = { commands: [...commandHandlers.keys()], taskSources: taskSources.ids() }
+    send(pluginEvent(WORKER_EVENTS.ready, ready))
+  }
+
+  async function runHandler(
+    id: number,
+    run: (context: { signal: AbortSignal }) => unknown
+  ): Promise<void> {
+    const controller = new AbortController()
+    runningCommands.set(id, controller)
+    try {
+      send(pluginResult(id, await run({ signal: controller.signal })))
+    } catch (error) {
+      send(pluginFailure(id, pluginError('action_failed', toErrorMessage(error))))
+    } finally {
+      runningCommands.delete(id)
+    }
+  }
+
+  function sendUnhandled(id: number, what: string): void {
+    send(pluginFailure(id, pluginError('unknown_method', `no handler registered for ${what}`)))
   }
 
   async function handleRequest(request: PluginRequest): Promise<void> {
@@ -211,26 +235,15 @@ export function createPluginWorkerRuntime(
       const parsed = pluginWorkerInvokeParamsSchema.safeParse(request.params)
       const handler = parsed.success ? commandHandlers.get(parsed.data.commandId) : undefined
       if (!parsed.success || !handler) {
-        const commandId = parsed.success ? parsed.data.commandId : '(invalid)'
-        send(
-          pluginFailure(
-            request.id,
-            pluginError('unknown_method', `no handler registered for command ${commandId}`)
-          )
-        )
+        sendUnhandled(request.id, `command ${parsed.success ? parsed.data.commandId : '(invalid)'}`)
         return
       }
-      const controller = new AbortController()
-      runningCommands.set(request.id, controller)
-      try {
-        const value = await handler(parsed.data.args, { signal: controller.signal })
-        send(pluginResult(request.id, value))
-      } catch (error) {
-        send(pluginFailure(request.id, pluginError('action_failed', toErrorMessage(error))))
-      } finally {
-        runningCommands.delete(request.id)
-      }
+      await runHandler(request.id, (context) => handler(parsed.data.args, context))
       return
+    }
+    if (request.method === WORKER_METHODS.invokeTaskSource) {
+      const call = taskSources.resolve(request.params)
+      return 'run' in call ? runHandler(request.id, call.run) : sendUnhandled(request.id, call.what)
     }
     if (request.method === WORKER_METHODS.deliverEvent) {
       const parsed = pluginWorkerDeliverParamsSchema.safeParse(request.params)

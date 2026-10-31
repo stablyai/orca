@@ -42,13 +42,13 @@ Add `"$schema": "https://raw.githubusercontent.com/stablyai/orca/main/docs/schem
 | `contributes.syntaxes` | [SyntaxContribution](#syntaxcontribution)[] | no | 1.4.245 | Syntax highlighting for editor languages. At most 16. |
 | `contributes.customEditors` | [CustomEditorContribution](#customeditorcontribution)[] | no | 1.4.245 | Editors that open files of given types in the editor tab. At most 16. |
 | `contributes.newFiles` | [NewFileContribution](#newfilecontribution)[] | no | 1.4.245 | Untitled files the user can create from the + menu and the command palette. At most 16. |
+| `contributes.taskSources` | object[] | no | 1.4.245 | Task lists shown on the Tasks page, filled by the plugin worker. At most 8. |
+| `contributes.settings` | object[] | no | 1.4.245 | Options the user edits on the plugin's page; the worker reads them with settings.get. At most 32. |
 | `contributes.agentHarnesses` | any[] | no | 1.4.245 | Reserved for coding-agent harness definitions; must be empty until their format is defined. |
 | `contributes.skills` | any[] | no | 1.4.245 | Reserved for agent skills; must be empty until their format is defined. |
 | `contributes.mcpServers` | any[] | no | 1.4.245 | Reserved for MCP server definitions; must be empty until their format is defined. |
 | `contributes.hooks` | any[] | no | 1.4.245 | Reserved for agent hooks; must be empty until their format is defined. |
-| `contributes.taskSources` | any[] | no | 1.4.245 | Reserved for task sources; must be empty until their format is defined. |
 | `contributes.connections` | any[] | no | 1.4.245 | Reserved for account connections; must be empty until their format is defined. |
-| `contributes.settings` | any[] | no | 1.4.245 | Reserved for plugin settings; must be empty until their format is defined. |
 | `contributes.statusBarItems` | any[] | no | 1.4.245 | Reserved for status bar items; must be empty until their format is defined. |
 | `contributes.sidebarCards` | any[] | no | 1.4.245 | Reserved for sidebar cards; must be empty until their format is defined. |
 | `capabilities` | [Capability](#capability)[] | no | 1.4.160 | Host APIs the plugin asks the user to grant. At most 32. |
@@ -173,7 +173,7 @@ A host API the plugin may call once the user consents.
 
 | Field | Type | Required | Since | Description |
 | --- | --- | --- | --- | --- |
-| `kind` | `"workspace:read"` \| `"agent:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` | yes | 1.4.160 | Capability granted on user consent. |
+| `kind` | `"workspace:read"` \| `"agent:read"` \| `"terminal:send"` \| `"notifications:show"` \| `"storage:own"` \| `"secrets:own"` \| `"settings:own"` \| `"tasks:provide"` | yes | 1.4.160 | Capability granted on user consent. |
 
 ## Screenshot
 
@@ -194,13 +194,12 @@ One screenshot of the plugin in use.
 - **`terminal:send` needs `trusted-worker`.** Panels get no host method that types into a terminal, so Orca refuses the capability on any other profile instead of asking the user to grant something the plugin can never use.
 - **New fields, contribution points and values are additive.** They arrive with a `Since` version; nothing else changes. `manifestVersion` rises only if an existing field changes meaning.
 - **Deprecation.** A field to be removed is marked deprecated here and keeps working for at least one release; it is removed only together with a higher `engines.orca` requirement, and its name is never reused.
-- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `hooks`, `taskSources`, `connections`, `settings`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
+- **Reserved contribution points.** `contributes.agentHarnesses`, `skills`, `mcpServers`, `hooks`, `connections`, `statusBarItems` and `sidebarCards` are held for planned features and must stay empty until their format is defined. Each will arrive as an additive point with its own `Since`, without a new manifest format. `skills`, `mcpServers` and `hooks` keep the meaning agent-plugin formats such as Claude Code's give them; `agents` stays unclaimed because those formats use it for subagent files.
 
 ## Planned contribution points
 
 Each reserved point is planned as declared data that Orca renders and enforces, never arbitrary plugin UI. The intended shapes, which may still change:
 
-- `taskSources`: Issue and task providers such as Asana, Linear or Jira, declared as data that a worker fills with tasks.
 - `connections`: Account providers with a host-run sign-in, so a plugin never handles credentials itself.
 - `agentHarnesses`: New coding-agent harnesses described as data: how to launch them and read their status.
 - `statusBarItems`: Declarative status bar widgets (label, icon, tooltip) whose values a worker updates.
@@ -208,7 +207,6 @@ Each reserved point is planned as declared data that Orca renders and enforces, 
 - `mcpServers`: MCP server definitions that Orca offers to the agents it launches.
 - `skills`: Agent skills shipped as files that Orca installs for the agents it launches.
 - `hooks`: Agent lifecycle hooks, such as before and after a tool call, for the agents Orca launches.
-- `settings`: Typed plugin settings that Orca renders in its own settings UI.
 
 ## Legacy format 1
 

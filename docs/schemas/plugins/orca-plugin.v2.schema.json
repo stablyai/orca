@@ -305,6 +305,124 @@
             "$ref": "#/$defs/NewFileContribution"
           }
         },
+        "taskSources": {
+          "default": [],
+          "description": "Task lists shown on the Tasks page, filled by the plugin worker. At most 8.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 8,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "string",
+                "maxLength": 64,
+                "pattern": "^[a-z0-9]+(?:-[a-z0-9]+)*$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "icon": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              }
+            },
+            "required": [
+              "id",
+              "title"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "settings": {
+          "default": [],
+          "description": "Options the user edits on the plugin's page; the worker reads them with settings.get. At most 32.",
+          "x-orca-since": "1.4.245",
+          "maxItems": 32,
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "key": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64,
+                "pattern": "^[A-Za-z][A-Za-z0-9_.-]*$"
+              },
+              "title": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 64
+              },
+              "description": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 512
+              },
+              "type": {
+                "type": "string",
+                "enum": [
+                  "string",
+                  "boolean",
+                  "enum"
+                ]
+              },
+              "default": {
+                "anyOf": [
+                  {
+                    "type": "string",
+                    "maxLength": 4096
+                  },
+                  {
+                    "type": "boolean"
+                  }
+                ]
+              },
+              "placeholder": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              },
+              "multiline": {
+                "type": "boolean"
+              },
+              "options": {
+                "minItems": 1,
+                "maxItems": 32,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "value": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 256
+                    },
+                    "label": {
+                      "type": "string",
+                      "minLength": 1,
+                      "maxLength": 128
+                    }
+                  },
+                  "required": [
+                    "value",
+                    "label"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "key",
+              "title",
+              "type"
+            ],
+            "additionalProperties": false
+          }
+        },
         "agentHarnesses": {
           "description": "Reserved for coding-agent harness definitions; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
@@ -333,22 +451,8 @@
           "type": "array",
           "items": {}
         },
-        "taskSources": {
-          "description": "Reserved for task sources; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
         "connections": {
           "description": "Reserved for account connections; must be empty until their format is defined.",
-          "x-orca-since": "1.4.245",
-          "maxItems": 0,
-          "type": "array",
-          "items": {}
-        },
-        "settings": {
-          "description": "Reserved for plugin settings; must be empty until their format is defined.",
           "x-orca-since": "1.4.245",
           "maxItems": 0,
           "type": "array",
@@ -1073,7 +1177,8 @@
             "notifications:show",
             "storage:own",
             "secrets:own",
-            "settings:own"
+            "settings:own",
+            "tasks:provide"
           ],
           "description": "Capability granted on user consent.",
           "x-orca-since": "1.4.160",
@@ -1084,7 +1189,8 @@
             "notifications:show": "1.4.160",
             "storage:own": "1.4.245",
             "secrets:own": "1.4.245",
-            "settings:own": "1.4.160"
+            "settings:own": "1.4.160",
+            "tasks:provide": "1.4.245"
           }
         }
       },

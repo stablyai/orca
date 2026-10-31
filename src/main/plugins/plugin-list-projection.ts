@@ -97,6 +97,8 @@ export async function buildPluginList(
           newFiles: [],
           commands: [],
           hasWorker: false,
+          taskSources: [],
+          settings: [],
           vmRecipes: [],
           restarts: 0,
           ...lockEntrySource(lockEntry)
@@ -194,6 +196,12 @@ export async function buildPluginList(
           keybindings: command.keybindings
         })),
         hasWorker: Boolean(plugin.manifest.main),
+        settings: plugin.manifest.contributes.settings,
+        taskSources: plugin.manifest.contributes.taskSources.map((source) => ({
+          id: source.id,
+          title: source.title,
+          ...(source.icon ? { icon: source.icon } : {})
+        })),
         vmRecipes: service.contentPacks.vmRecipes.preview(plugin.pluginKey).map(({ recipe }) => ({
           id: recipe.id,
           name: recipe.name,

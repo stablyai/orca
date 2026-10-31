@@ -117,6 +117,7 @@ describe('mergeRuntimeFolderWorkspace', () => {
       linkedGiteaPR: null,
       linkedWorkItem: null,
       linkedTaskSourceContext: null,
+      linkedPluginTask: null,
       isArchived: false,
       isUnread: false,
       isPinned: false,

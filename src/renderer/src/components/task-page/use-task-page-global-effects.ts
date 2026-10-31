@@ -1,6 +1,6 @@
 import type { TaskPageJiraSummaryGenerationModel } from './jira/use-task-page-jira-summary-generation'
 import { useEffect } from 'react'
-import { addAppKeyListener, removeAppKeyListener } from '@/lib/app-keyboard-router'
+import { useTaskPageEscapeToClose } from './use-task-page-escape-to-close'
 export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationModel) {
   const {
     closeTaskPage,
@@ -28,9 +28,8 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
     newJiraIssueOpen
   } = model
   const githubTasksBusy = tasksLoading || tasksRefreshing || tasksFiltering
-  useEffect(() => {
-    // Why: when a modal is open, let it own Esc dismissal.
-    if (
+  useTaskPageEscapeToClose(
+    Boolean(
       dialogWorkItem ||
       selectedJiraIssue ||
       selectedLinearIssue ||
@@ -38,53 +37,9 @@ export function useTaskPageGlobalEffects(model: TaskPageJiraSummaryGenerationMod
       newLinearIssueOpen ||
       newJiraIssueOpen ||
       activeModal !== 'none'
-    ) {
-      return
-    }
-    const onKeyDown = (event: KeyboardEvent): void => {
-      if (event.key !== 'Escape') {
-        return
-      }
-      const target = event.target
-      if (!(target instanceof HTMLElement)) {
-        return
-      }
-
-      // Why: open menus/popovers/selects own Esc; capture-phase leave would steal it from Radix.
-      if (
-        document.querySelector(
-          '[data-slot="dropdown-menu-content"], [data-slot="popover-content"], [data-slot="select-content"], [role="menu"]'
-        )
-      ) {
-        return
-      }
-
-      // Esc first blurs input; leave the page only when focus is outside one.
-      if (
-        target instanceof HTMLInputElement ||
-        target instanceof HTMLTextAreaElement ||
-        target instanceof HTMLSelectElement ||
-        target.isContentEditable
-      ) {
-        event.preventDefault()
-        target.blur()
-        return
-      }
-      event.preventDefault()
-      closeTaskPage()
-    }
-    addAppKeyListener('keydown', onKeyDown)
-    return () => removeAppKeyListener('keydown', onKeyDown)
-  }, [
-    activeModal,
-    closeTaskPage,
-    dialogWorkItem,
-    newIssueOpen,
-    newLinearIssueOpen,
-    newJiraIssueOpen,
-    selectedLinearIssue,
-    selectedJiraIssue
-  ])
+    ),
+    closeTaskPage
+  )
   useEffect(() => {
     if (!preflightStatusCurrent || !preflightStatusChecked) {
       void refreshPreflightStatus()

@@ -11,6 +11,10 @@ import {
 import type { PluginCapabilityKind } from '../../../shared/plugins/capabilities/plugin-capabilities'
 import type { PluginEventName } from '../../../shared/plugins/manifest/plugin-manifest'
 import {
+  PLUGIN_TASK_SOURCE_INVOKE_TIMEOUT_MS,
+  type PluginTaskSourceOperation
+} from '../../../shared/plugins/tasks/plugin-task-source'
+import {
   pluginCancel,
   pluginEvent,
   pluginOutcomeResponse,
@@ -21,6 +25,7 @@ import {
 } from '../../../shared/plugins/frames/plugin-protocol'
 import { buildPluginWorkerEnv } from './plugin-worker-env'
 import { pipePluginWorkerOutput } from './plugin-worker-output-buffer'
+import { createPluginWorkerPendingCalls } from './plugin-worker-pending-calls'
 
 const PLUGIN_WORKER_SHUTDOWN_GRACE_MS = 2_000
 const PLUGIN_WORKER_EVENT_TIMEOUT_MS = 5 * 60_000
@@ -37,6 +42,14 @@ export type PluginWorkerHandle = {
   /** Command ids the worker registered on activate (⊆ manifest commands). */
   commands: readonly string[]
   invokeCommand(commandId: string, args?: unknown): Promise<unknown>
+  /** Task source ids the worker registered on activate (⊆ manifest taskSources). */
+  taskSources: readonly string[]
+  /** Raw worker result; callers validate it against the operation's schema. */
+  invokeTaskSource(
+    sourceId: string,
+    operation: PluginTaskSourceOperation,
+    params: unknown
+  ): Promise<unknown>
   deliverEvent(event: PluginEventName, payload: unknown): void
   /** Last completed work timestamp, in milliseconds, for idle reaping. */
   lastActivityAt(): number
@@ -57,6 +70,7 @@ export type StartPluginWorkerOptions = {
   log: PluginWorkerLogSink
   readyTimeoutMs?: number
   invokeTimeoutMs?: number
+  taskSourceTimeoutMs?: number
   eventTimeoutMs?: number
   signal?: AbortSignal
 }
@@ -71,11 +85,7 @@ export function resolvePluginHostEntryPath(appPath: string, isPackaged: boolean)
   return join(basePath, 'out', 'main', 'plugin-host-entry.js')
 }
 
-type PendingCall = {
-  resolve: (value: unknown) => void
-  reject: (error: Error) => void
-  timer: ReturnType<typeof setTimeout>
-}
+type WorkerRegistrations = { commands: string[]; taskSources: string[] }
 
 export async function startPluginWorker(
   options: StartPluginWorkerOptions
@@ -83,6 +93,7 @@ export async function startPluginWorker(
   const { pluginId, rootDir, mainEntry, entryPath, log } = options
   const readyTimeoutMs = options.readyTimeoutMs ?? PLUGIN_WORKER_READY_TIMEOUT_MS
   const invokeTimeoutMs = options.invokeTimeoutMs ?? PLUGIN_WORKER_INVOKE_TIMEOUT_MS
+  const taskSourceTimeoutMs = options.taskSourceTimeoutMs ?? PLUGIN_TASK_SOURCE_INVOKE_TIMEOUT_MS
   const eventTimeoutMs = options.eventTimeoutMs ?? PLUGIN_WORKER_EVENT_TIMEOUT_MS
   const tag = `[plugin:${pluginId}]`
 
@@ -98,10 +109,10 @@ export async function startPluginWorker(
   pipePluginWorkerOutput(child.stdout, 'info', log)
   pipePluginWorkerOutput(child.stderr, 'error', log)
 
-  const pendingCommands = new Map<number, PendingCall>()
+  const pendingCalls = createPluginWorkerPendingCalls(tag, (id) => sendToChild(pluginCancel(id)))
   const pendingEvents = new Map<number, ReturnType<typeof setTimeout>>()
   const exitCallbacks: ((code: number | null) => void)[] = []
-  // One id space for host → worker requests: commands and event deliveries share `res`.
+  // One id space for host → worker requests: commands, task sources and events share `res`.
   let nextId = 0
   let exited = false
   let exitCode: number | null = null
@@ -115,11 +126,7 @@ export async function startPluginWorker(
   }
 
   function rejectAllPending(reason: string): void {
-    for (const [callId, entry] of pendingCommands) {
-      clearTimeout(entry.timer)
-      pendingCommands.delete(callId)
-      entry.reject(new Error(reason))
-    }
+    pendingCalls.rejectAll(reason)
     for (const timer of pendingEvents.values()) {
       clearTimeout(timer)
     }
@@ -142,7 +149,7 @@ export async function startPluginWorker(
     }
   })
 
-  const commands = await new Promise<string[]>((resolve, reject) => {
+  const registered = await new Promise<WorkerRegistrations>((resolve, reject) => {
     let settled = false
     const timer = setTimeout(() => {
       fail(new Error(`${tag} worker did not become ready within ${readyTimeoutMs}ms`))
@@ -181,16 +188,8 @@ export async function startPluginWorker(
         case 'res': {
           lastActivityAt = Date.now()
           clearTimeout(pendingEvents.get(message.id))
-          const entry = pendingCommands.get(message.id)
-          if (pendingEvents.delete(message.id) || !entry) {
-            return
-          }
-          clearTimeout(entry.timer)
-          pendingCommands.delete(message.id)
-          if (message.error) {
-            entry.reject(new Error(message.error.message || 'plugin command failed'))
-          } else {
-            entry.resolve(message.result)
+          if (!pendingEvents.delete(message.id)) {
+            pendingCalls.settle(message)
           }
           return
         }
@@ -217,7 +216,7 @@ export async function startPluginWorker(
         settled = true
         clearTimeout(timer)
         options.signal?.removeEventListener('abort', onAbort)
-        resolve(event.payload.commands)
+        resolve({ commands: event.payload.commands, taskSources: event.payload.taskSources })
       } else if (event?.event === WORKER_EVENTS.log) {
         log(event.payload.level, event.payload.message)
       } else if (event?.event === WORKER_EVENTS.fatal) {
@@ -239,23 +238,37 @@ export async function startPluginWorker(
     }
   })
 
+  function invokeWorker(
+    label: string,
+    timeoutMs: number,
+    method: string,
+    params: unknown
+  ): Promise<unknown> {
+    if (exited || disposed) {
+      return Promise.reject(new Error(`${tag} worker is not running`))
+    }
+    const id = nextId++
+    return pendingCalls.start(id, label, timeoutMs, () =>
+      sendToChild(pluginRequest(id, method, params))
+    )
+  }
+
   return {
-    commands,
+    commands: registered.commands,
+    taskSources: registered.taskSources,
     invokeCommand(commandId, args) {
-      if (exited || disposed) {
-        return Promise.reject(new Error(`${tag} worker is not running`))
-      }
-      const callId = nextId++
-      return new Promise<unknown>((resolve, reject) => {
-        const timer = setTimeout(() => {
-          pendingCommands.delete(callId)
-          // Tell the handler too, so it stops instead of running on unobserved.
-          sendToChild(pluginCancel(callId))
-          reject(new Error(`${tag} ${commandId} timed out after ${invokeTimeoutMs}ms`))
-        }, invokeTimeoutMs)
-        pendingCommands.set(callId, { resolve, reject, timer })
-        sendToChild(pluginRequest(callId, WORKER_METHODS.invokeCommand, { commandId, args }))
+      return invokeWorker(commandId, invokeTimeoutMs, WORKER_METHODS.invokeCommand, {
+        commandId,
+        args
       })
+    },
+    invokeTaskSource(sourceId, operation, params) {
+      return invokeWorker(
+        `task source ${sourceId}.${operation}`,
+        taskSourceTimeoutMs,
+        WORKER_METHODS.invokeTaskSource,
+        { sourceId, operation, params }
+      )
     },
     deliverEvent(event, payload) {
       if (exited || disposed) {
@@ -277,7 +290,7 @@ export async function startPluginWorker(
       sendToChild(pluginRequest(eventId, WORKER_METHODS.deliverEvent, { event, payload }))
     },
     lastActivityAt: () => lastActivityAt,
-    inFlightCount: () => pendingCommands.size + pendingEvents.size,
+    inFlightCount: () => pendingCalls.size() + pendingEvents.size,
     async dispose() {
       if (disposed) {
         return

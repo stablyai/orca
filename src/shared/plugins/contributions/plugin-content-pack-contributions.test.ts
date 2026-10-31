@@ -83,7 +83,9 @@ describe('content-pack manifest contributions', () => {
       iconThemes: [],
       syntaxes: [],
       customEditors: [],
-      newFiles: []
+      newFiles: [],
+      taskSources: [],
+      settings: []
     })
   })
 

@@ -17,6 +17,8 @@ function worker(): PluginWorkerHandle & { exit: (code: number) => void } {
   return {
     commands: [],
     invokeCommand: vi.fn(async () => null),
+    taskSources: [],
+    invokeTaskSource: vi.fn(async () => null),
     deliverEvent: vi.fn(),
     // ast-grep-ignore: test-no-wall-clock -- idle checks compare against the real clock, so "now" keeps the worker active
     lastActivityAt: () => Date.now(),

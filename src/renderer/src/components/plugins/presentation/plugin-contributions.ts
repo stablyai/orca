@@ -8,10 +8,10 @@ import {
 import type { PluginManifest } from '../../../../../shared/plugins/manifest/plugin-manifest'
 import { getIntlLocale, translate } from '@/i18n/i18n'
 
-/** The manifest points shown as named rows; commands, shortcuts and events have their own lists. */
+/** The manifest points shown as named rows; commands, shortcuts, events and settings have their own lists. */
 export type PluginContributionKind = Exclude<
   PluginContributionPoint,
-  'commands' | 'keybindings' | 'events'
+  'commands' | 'keybindings' | 'events' | 'settings'
 >
 
 /** One named thing a plugin adds, ready to show as a row. */
@@ -45,6 +45,7 @@ export type PluginContributionSource = {
   }[]
   vmRecipes: readonly string[]
   newFiles: readonly { title: string; extension: string }[]
+  taskSources: readonly string[]
 }
 
 export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
@@ -56,7 +57,8 @@ export const EMPTY_CONTRIBUTION_SOURCE: PluginContributionSource = {
   panels: [],
   customEditors: [],
   vmRecipes: [],
-  newFiles: []
+  newFiles: [],
+  taskSources: []
 }
 
 const FILE_LIST_LIMIT = 4
@@ -95,7 +97,8 @@ export function manifestContributionSource(manifest: PluginManifest): PluginCont
     panels: contributes.panels.map((panel) => panel.title),
     customEditors: contributes.customEditors,
     vmRecipes: contributes.vmRecipes.map((recipe) => nameFromContributionPath(recipe.path)),
-    newFiles: contributes.newFiles
+    newFiles: contributes.newFiles,
+    taskSources: contributes.taskSources.map((source) => source.title)
   }
 }
 
@@ -133,7 +136,8 @@ export function summaryContributionSource(
       filenames: []
     })),
     vmRecipes: of('vmRecipes').map((item) => nameFromContributionPath(item.name)),
-    newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' }))
+    newFiles: of('newFiles').map((item) => ({ title: item.name, extension: item.detail ?? '' })),
+    taskSources: of('taskSources').map((item) => item.name)
   }
 }
 
@@ -254,14 +258,17 @@ export function describePluginContributions(
       ...languageDetail(language.coverage)
     })
   }
-  for (const [index, title] of source.panels.entries()) {
-    rows.push({
-      key: `panels:${index}`,
-      kind: 'panels',
-      title,
-      detail: translate('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel'),
-      tone: 'default'
-    })
+  const titledKinds = [
+    ['panels', translate('auto.components.settings.PluginDetailSections.panel', 'Sidebar panel')],
+    [
+      'taskSources',
+      translate('auto.components.settings.PluginDetailSections.taskSource', 'Task list')
+    ]
+  ] as const
+  for (const [kind, detail] of titledKinds) {
+    for (const [index, title] of source[kind].entries()) {
+      rows.push({ key: `${kind}:${index}`, kind, title, detail, tone: 'default' })
+    }
   }
   for (const [index, editor] of source.customEditors.entries()) {
     const label = translate('auto.components.settings.PluginDetailSections.customEditor', 'Editor')

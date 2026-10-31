@@ -43,9 +43,9 @@ import { PluginContentPackRegistry } from './contributions/plugin-content-pack-r
 import type { PluginServiceOptions } from './plugin-service-options'
 import type { PluginChangeEvent } from '../../shared/plugins/events/plugin-change-event'
 import { waitForPluginRefreshSettlement } from './plugin-refresh-settlement'
-import { assertPluginWorkerCommand } from './plugin-command-invocation'
 import { deliverPluginEvent } from './plugin-event-delivery'
 import { PluginInstallationState } from './installation/plugin-installation-state'
+import { invokePluginTaskSource, invokePluginWorkerCommand } from './plugin-worker-invocation'
 
 export class PluginService {
   readonly options: PluginServiceOptions
@@ -267,17 +267,16 @@ export class PluginService {
     })
   }
 
-  async invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
-    const plugin = this.findValidPlugin(pluginKey)
-    if (!plugin || !this.canStartPluginWork(plugin)) {
-      throw new Error(`plugin ${pluginKey} is not enabled`)
-    }
-    assertPluginWorkerCommand(plugin, commandId)
-    const handle = await this.workerController.ensure(plugin)
-    if (!handle.commands.includes(commandId)) {
-      throw new Error(`plugin ${pluginKey} registered no handler for ${commandId}`)
-    }
-    return handle.invokeCommand(commandId, args)
+  ensureWorker(plugin: ValidDiscoveredPlugin): ReturnType<PluginWorkerController['ensure']> {
+    return this.workerController.ensure(plugin)
+  }
+
+  invokeCommand(pluginKey: string, commandId: string, args?: unknown): Promise<unknown> {
+    return invokePluginWorkerCommand(this, pluginKey, commandId, args)
+  }
+
+  invokeTaskSource(request: unknown): ReturnType<typeof invokePluginTaskSource> {
+    return invokePluginTaskSource(this, request)
   }
 
   emitEvent(event: PluginEventName, payload: unknown): void {

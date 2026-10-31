@@ -25,6 +25,8 @@ type ContributionValidationManifest = {
     syntaxes: (IdentifiedContribution & PluginFileMatch & { scopeName: string })[]
     customEditors: (IdentifiedContribution & PluginFileMatch)[]
     newFiles: IdentifiedContribution[]
+    taskSources: IdentifiedContribution[]
+    settings: { key: string }[]
   }
   capabilities: { kind: string }[]
 }
@@ -62,7 +64,8 @@ export function validatePluginManifestContributions(
     'iconThemes',
     'syntaxes',
     'customEditors',
-    'newFiles'
+    'newFiles',
+    'taskSources'
   ] as const) {
     rejectDuplicateValues(
       manifest.contributes[path],
@@ -185,6 +188,45 @@ export function validatePluginManifestContributions(
         code: 'custom',
         path: ['contributes', 'events', index, 'on'],
         message: `${subscription.on} requires the ${required} capability`
+      })
+    }
+  }
+  const settingKeys = new Set<string>()
+  for (const [index, setting] of manifest.contributes.settings.entries()) {
+    if (settingKeys.has(setting.key)) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['contributes', 'settings', index],
+        message: `duplicate settings key: ${setting.key}`
+      })
+    }
+    settingKeys.add(setting.key)
+  }
+  if (
+    manifest.contributes.settings.length > 0 &&
+    !manifest.capabilities.some((capability) => capability.kind === 'settings:own')
+  ) {
+    ctx.addIssue({
+      code: 'custom',
+      path: ['capabilities'],
+      message: 'settings:own capability required when contributes.settings is non-empty'
+    })
+  }
+  if (manifest.contributes.taskSources.length > 0) {
+    if (!manifest.main) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['main'],
+        message: 'required when contributes.taskSources is non-empty'
+      })
+    }
+    // Why: a task source's start recipe pre-fills agent prompts, so the
+    // consent dialog must name it rather than letting it ride in silently.
+    if (!manifest.capabilities.some((capability) => capability.kind === 'tasks:provide')) {
+      ctx.addIssue({
+        code: 'custom',
+        path: ['capabilities'],
+        message: 'tasks:provide capability required when contributes.taskSources is non-empty'
       })
     }
   }

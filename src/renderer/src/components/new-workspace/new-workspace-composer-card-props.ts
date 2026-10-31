@@ -46,6 +46,12 @@ export type NewWorkspaceComposerCardProps = {
   ) => void
   /** Where the quick agent would start; null keeps the picker's plain agent list. */
   agentRows?: ComposerAgentRows | null
+  /** Present only when the opener prefilled an agent prompt. */
+  agentDraft?: string | null
+  onAgentDraftChange?: (value: string) => void
+  agentDraftUnavailableReason?: string | null
+  /** Shown under the agent prompt when the opener pinned session options. */
+  agentSessionNote?: string | null
   /** Cleared picker: skip the agent and the extra shell when setup runs. */
   quickSetupOnly?: boolean
   onQuickSetupOnlySelect?: () => void

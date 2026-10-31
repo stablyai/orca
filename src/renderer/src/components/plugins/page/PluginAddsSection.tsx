@@ -6,6 +6,7 @@ import {
   FilePlus,
   Highlighter,
   Languages,
+  ListTodo,
   Palette,
   PanelRight,
   PenTool,
@@ -103,7 +104,8 @@ const CONTRIBUTION_ICON: Record<PluginContributionKind, React.ReactNode> = {
   panels: <PanelRight />,
   customEditors: <PenTool />,
   vmRecipes: <Server />,
-  newFiles: <FilePlus />
+  newFiles: <FilePlus />,
+  taskSources: <ListTodo />
 }
 
 type AddsCommand = {
@@ -249,7 +251,8 @@ function useContributionRowActions(
       case 'terminalThemes':
       case 'customEditors':
       case 'vmRecipes':
-        // Themes have "Use now" above the list; editors open from their new files; recipes have nothing to try here.
+      case 'taskSources':
+        // Themes have "Use now" above the list; editors open from their new files; recipes and task lists have nothing to try here.
         return null
     }
   }

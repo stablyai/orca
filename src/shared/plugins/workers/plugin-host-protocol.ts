@@ -6,6 +6,11 @@ import {
 } from '../manifest/plugin-manifest'
 import { PLUGIN_CAPABILITY_KINDS } from '../capabilities/plugin-capabilities'
 import { pluginEvent, type PluginEvent } from '../frames/plugin-protocol'
+import { pluginIdSchema } from '../manifest/plugin-manifest-fields'
+import {
+  PLUGIN_TASK_SOURCE_LIMIT,
+  PLUGIN_TASK_SOURCE_OPERATIONS
+} from '../tasks/plugin-task-source'
 
 /**
  * The worker fork channel, on the shared envelope (plugin-protocol.ts). Validate both sides:
@@ -16,7 +21,7 @@ import { pluginEvent, type PluginEvent } from '../frames/plugin-protocol'
 export const WORKER_EVENTS = {
   /** host → worker, {@link PluginWorkerInit}. */
   init: 'init',
-  /** worker → host, `{ commands }` registered on activate. */
+  /** worker → host, `{ commands, taskSources }` registered on activate. */
   ready: 'ready',
   log: 'log',
   fatal: 'fatal',
@@ -26,6 +31,7 @@ export const WORKER_EVENTS = {
 /** host → worker requests; the worker answers each with a `res`. */
 export const WORKER_METHODS = {
   invokeCommand: 'command.invoke',
+  invokeTaskSource: 'taskSource.invoke',
   deliverEvent: 'event.deliver'
 } as const
 
@@ -43,6 +49,13 @@ export const pluginWorkerInvokeParamsSchema = z.object({
   args: z.unknown().optional()
 })
 
+/** Params are validated host-side before they are sent. */
+export const pluginWorkerInvokeTaskSourceParamsSchema = z.object({
+  sourceId: pluginIdSchema,
+  operation: z.enum(PLUGIN_TASK_SOURCE_OPERATIONS),
+  params: z.unknown().optional()
+})
+
 export const pluginWorkerDeliverParamsSchema = z.object({
   event: z.enum(PLUGIN_EVENT_NAMES),
   payload: z.unknown()
@@ -50,7 +63,9 @@ export const pluginWorkerDeliverParamsSchema = z.object({
 
 export const pluginWorkerReadySchema = z.object({
   /** Command ids the worker registered handlers for (⊆ manifest commands). */
-  commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT)
+  commands: z.array(pluginCommandIdSchema).max(PLUGIN_COMMAND_LIMIT),
+  /** Task source ids the worker registered (⊆ manifest taskSources). */
+  taskSources: z.array(pluginIdSchema).max(PLUGIN_TASK_SOURCE_LIMIT).default([])
 })
 
 export const pluginWorkerLogSchema = z.object({

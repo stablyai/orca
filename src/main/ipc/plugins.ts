@@ -16,6 +16,7 @@ import { applyPluginConsent, applyPluginEnablement } from '../plugins/plugin-ena
 import { readApprovedPluginNewFileTemplate } from '../plugins/plugin-new-file-template'
 import type { PluginService } from '../plugins/plugin-service'
 import { bindPluginPanelOwnerLifecycle } from '../plugins/panels/plugin-panel-owner-lifecycle'
+import { readPluginUserSettings, writePluginUserSetting } from '../plugins/plugin-user-settings'
 import { isQualifiedPluginKey } from '../../shared/plugins/manifest/plugin-manifest'
 import { pluginConsentRequestSchema } from '../../shared/plugins/approval/plugin-consent-request'
 import { normalizePluginIdList } from '../../shared/plugins/approval/plugin-consent-state'
@@ -220,6 +221,25 @@ export function registerPluginHandlers(
     await pluginService.whenReady()
     const parsed = invokeCommandArgsSchema.parse(args)
     return pluginService.invokeCommand(parsed.pluginKey, parsed.commandId, parsed.args)
+  })
+
+  ipcMain.handle('plugins:invokeTaskSource', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    return pluginService.invokeTaskSource(args)
+  })
+
+  const userSettingsDeps = () => ({
+    findValidPlugin: (pluginKey: string) => pluginService.findValidPlugin(pluginKey),
+    pluginsDataDir: getPluginsDataDir(pluginService.options.userDataPath)
+  })
+  ipcMain.handle('plugins:readSettings', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    return readPluginUserSettings(userSettingsDeps(), args)
+  })
+
+  ipcMain.handle('plugins:writeSetting', async (_event, args: unknown) => {
+    await pluginService.whenReady()
+    return writePluginUserSetting(userSettingsDeps(), args)
   })
 
   ipcMain.handle('plugins:resolveGitSource', async (_event, args: unknown) =>

@@ -16,6 +16,7 @@ completion, or from one of:
 | ------------------------------------ | ---------------- | ------------------------------------ |
 | `examples/plugins/orca-gleam-syntax` | `data`           | A syntax, no code                    |
 | `examples/plugins/hello-orca`        | `trusted-worker` | A panel, a worker command and events |
+| `examples/plugins/hello-tasks`       | `trusted-worker` | A task source and a setting          |
 
 Leave `publisher` out. Orca names the publisher after where the plugin comes from, the way a
 [Go module path](https://go.dev/ref/mod#module-path) is its repository path: the owner of the
@@ -52,7 +53,7 @@ asked to approve:
   Orca's colors reach frame CSS as `--orca-background`, `--orca-foreground`, `--orca-primary`
   and the rest of its panel token set, so they never collide with a frame's own variables.
 - `trusted-worker`: `main` runs in a separate Node process and can call every host method its
-  `capabilities` allow. There is no global switch for these full-access plugins: each one runs
+  `capabilities` allow. Task sources need it. There is no global switch for these full-access plugins: each one runs
   only after the user approves it on install. An enterprise policy to block full-access plugins
   may come later.
 
@@ -86,10 +87,24 @@ Aborting the `signal` rejects the call with `cancelled`. Treat an error `code` y
 
 Workers get the same calls on the `orca` object passed to `activate(orca)`:
 `orca.api`, `orca.host.call(method, params, { signal })`, `orca.host.has(method)`, plus
-`orca.commands.register(id, (args, { signal }) => …)` and `orca.events.on(event, handler)`, which
-both return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it. In
+`orca.commands.register(id, (args, { signal }) => …)`, `orca.tasks.registerSource(id, { list, get })`
+and `orca.events.on(event, handler)`, which all return `{ dispose() }`. A command's `signal` aborts when Orca stops waiting for it. In
 `agent.status.changed`, `state` and `mainAgent.state` are one of `working`, `blocked`, `waiting`
 and `done`.
+
+### Task sources and settings
+
+A `contributes.taskSources` entry adds a list to the Tasks page and needs the `tasks:provide`
+capability. The worker registers the same id with `orca.tasks.registerSource(id, { list, get })`.
+`list({ query, filters, cursor })` returns `{ items, nextCursor?, filters?, notice? }`, and
+`get({ itemId })` returns `{ item, bodyMarkdown? }`. Each item may carry a `start` recipe
+(workspace name, base, agent prompt, project, agent session) that pre-fills Create workspace; the
+user reviews it there before anything runs. Orca validates every answer and shows an error
+instead of a list that doesn't match.
+
+A `contributes.settings` entry (`string`, `boolean` or `enum`, with an optional `default`) shows
+on the plugin's page in Settings → Plugins and needs `settings:own`. Orca stores only values the
+user sets; the worker reads them with `settings.get` and applies its own defaults for the rest.
 
 ### Custom editors
 
@@ -248,7 +263,6 @@ These `contributes` keys are reserved: a manifest may list them only as empty ar
 their format ships. Each is planned as declared data that Orca renders and enforces, not
 arbitrary plugin UI:
 
-- `taskSources`: issue and task providers such as Asana, Linear or Jira, filled by a worker.
 - `connections`: account providers with a host-run sign-in.
 - `agentHarnesses`: new coding-agent harnesses described as data.
 - `statusBarItems`: declarative status bar widgets whose values a worker updates.
@@ -256,7 +270,6 @@ arbitrary plugin UI:
 - `mcpServers`: MCP server definitions offered to the agents Orca launches.
 - `skills`: agent skills shipped as files.
 - `hooks`: agent lifecycle hooks for the agents Orca launches.
-- `settings`: typed plugin settings shown in Orca's settings UI.
 
 `skills`, `mcpServers` and `hooks` will mean what they mean in agent-plugin formats such as
 Claude Code's. Orca does not reserve `agents`, because those formats use it for subagent files.
@@ -287,7 +300,8 @@ Experimental; these may still change without a new format:
   get best-effort coverage per release;
 - `pnpm validate:plugin` output; only its exit codes (`0` valid, `1` invalid, `2` usage) are
   stable;
-- `settings:own`, which stores untyped values until plugins can declare settings;
+- task sources: `orca.tasks`, the `list` and `get` params and results, and the start recipe;
+- `settings.set` from a worker, which stores untyped values even for a declared setting;
 - manifest format 1, which is deprecated. Catalogs need format 2.
 
 Data folders, `orca-plugin-image://` URLs, tab keys and the `pluginRoot` a worker receives are

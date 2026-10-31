@@ -1,6 +1,7 @@
 import type { PluginCatalogType } from './catalog/plugin-catalog-types'
 import type { PluginExecutionProfile } from './contributions/plugin-execution-profile'
 import type { PluginHostImages } from './images/plugin-image-url'
+import type { PluginSettingContribution } from './contributions/plugin-settings-contribution'
 
 /** One installed plugin as main projects it for every client (preload IPC and the `plugins.list`
  *  RPC). Optional fields are absent on older hosts, so paired clients must tolerate them. */
@@ -83,6 +84,10 @@ export type PluginHostListEntry = {
     keybindings: { key: string; when: 'global' | 'workspace' | 'worktree' }[]
   }[]
   hasWorker: boolean
+  /** Absent on hosts that predate plugin task sources. */
+  taskSources?: { id: string; title: string; icon?: string }[]
+  /** Absent on hosts that predate plugin settings contributions. */
+  settings?: PluginSettingContribution[]
   vmRecipes?: {
     id: string
     name: string

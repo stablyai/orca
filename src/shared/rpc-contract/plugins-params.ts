@@ -1,5 +1,6 @@
 import { z } from 'zod'
 import { isQualifiedPluginKey } from '../plugins/manifest/plugin-manifest'
+import { pluginTaskSourceRequestSchema } from '../plugins/tasks/plugin-task-source'
 
 // Why optional: only `approval_required` hands it out; older hosts strip it and older callers omit it.
 const approvalFingerprintParam = z.string().min(1).max(128).optional()
@@ -32,6 +33,8 @@ export const PluginInvokeCommandParams = z.object({
 })
 
 export const PluginsPanelActionParams = z.unknown()
+
+export const PluginInvokeTaskSourceParams = pluginTaskSourceRequestSchema
 
 // Why 32 KiB: the same bound settings keep for each development folder entry.
 const devFolderPathParam = z

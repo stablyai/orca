@@ -146,7 +146,7 @@ describe('worker orca API parity with frames', () => {
       orca: 1,
       kind: 'evt',
       event: 'ready',
-      payload: { commands: ['run'] }
+      payload: { commands: ['run'], taskSources: [] }
     })
     const running = runtime.handleMessage({
       orca: 1,
