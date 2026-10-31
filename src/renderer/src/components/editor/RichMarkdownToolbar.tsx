@@ -28,6 +28,7 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { RichMarkdownToolbarButton } from './RichMarkdownToolbarButton'
 import { translate } from '@/i18n/i18n'
 import { insertToggle } from './rich-markdown-slash-command-primitives'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 
 type RichMarkdownToolbarProps = {
   editor: Editor | null
@@ -98,7 +99,14 @@ export function RichMarkdownToolbar({
   onImagePick
 }: RichMarkdownToolbarProps): React.JSX.Element {
   return (
-    <div className="rich-markdown-editor-toolbar">
+    <div
+      className="rich-markdown-editor-toolbar"
+      onClickCapture={() => {
+        if (editor) {
+          flushPendingProseMirrorSelection(editor)
+        }
+      }}
+    >
       <RichMarkdownToolbarButton
         active={false}
         label={translate('auto.components.editor.RichMarkdownToolbar.b462641ed2', 'Body text')}

@@ -1,4 +1,5 @@
 import { useEffect } from 'react'
+import { flushPendingProseMirrorSelection } from './rich-markdown-selection-flush'
 import type { Dispatch, MutableRefObject, SetStateAction } from 'react'
 import type { Editor } from '@tiptap/react'
 import type { MarkdownDocument } from '../../../../shared/filesystem-entry-types'
@@ -184,6 +185,7 @@ function applyExternalRichMarkdownContent(
 ): void {
   try {
     const hadFocus = editor.isFocused
+    flushPendingProseMirrorSelection(editor)
     const { from: prevFrom, to: prevTo } = editor.state.selection
     // Exclude other views’ edits/reloads from this view’s undo so it cannot revert or resurrect their text.
     editor

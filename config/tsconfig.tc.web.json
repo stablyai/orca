@@ -8,6 +8,10 @@
     "../src/shared/**/*.spec.tsx"
   ],
   "include": [
+    "./scripts/vitest-dom-setup.ts",
+    "./scripts/happy-dom-offscreen-canvas.ts",
+    "./scripts/happy-dom-mutation-observer-retention.ts",
+    "./scripts/happy-dom-animation-cancel.ts",
     "../src/renderer/src/env.d.ts",
     "../src/renderer/src/**/*",
     "../src/renderer/src/**/*.tsx",

@@ -1,7 +1,8 @@
 // @vitest-environment happy-dom
 import { describe, expect, it, vi } from 'vitest'
-import { renderHook } from '@testing-library/react'
+import { fireEvent, renderHook } from '@testing-library/react'
 import { Editor } from '@tiptap/core'
+import { richMarkdownSelectionCompletionEvents } from './drag-selection-guard'
 import { useRichMarkdownProgrammaticSync } from './useRichMarkdownProgrammaticSync'
 import { createRichMarkdownExtensions } from './rich-markdown-extensions'
 import {
@@ -34,7 +35,8 @@ function buildEditor(
       htmlSuperscriptLinkContext
     }),
     content: encodeRawMarkdownHtmlForRichEditor(markdown, codec, { htmlSuperscriptLinks: true }),
-    contentType: 'markdown'
+    contentType: 'markdown',
+    editorProps: { handleDOMEvents: richMarkdownSelectionCompletionEvents }
   })
 }
 
@@ -94,7 +96,11 @@ describe('useRichMarkdownProgrammaticSync external-reload baseline adoption (#60
 })
 
 describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
-  function renderPane(paneText: string, pendingCommit: (() => void) | null) {
+  function renderPane(
+    paneText: string,
+    pendingCommit: (() => void) | null,
+    element: HTMLElement | null = null
+  ) {
     const codec = createRichMarkdownEditorCodec()
     const editor = buildEditor(
       codec,
@@ -104,7 +110,8 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
         worktreeRoot: null,
         sourceOwner: { kind: 'unknown' as const }
       }),
-      paneText
+      paneText,
+      element
     )
     const lastCommittedMarkdownRef = { current: 'base' }
     const originalSourceRef = { current: 'base' }
@@ -141,6 +148,78 @@ describe('useRichMarkdownProgrammaticSync stale pending edit', () => {
     )
     return { editor, hook, serializeTimerRef, onContentChangeRef }
   }
+
+  it.each(['editor', 'other'] as const)(
+    'uses the current selection owner through external replacement and later release (%s)',
+    (owner) => {
+      vi.useFakeTimers()
+      const host = document.createElement('div')
+      document.body.append(host)
+      const { editor, hook } = renderPane('base', null, host)
+      const outside = document.createElement('input')
+      host.append(outside)
+      try {
+        editor.view.focus()
+        vi.spyOn(editor.view, 'posAtCoords').mockReturnValue({ pos: 1, inside: -1 })
+        fireEvent.mouseDown(editor.view.dom, { button: 0, buttons: 1, shiftKey: true })
+        if (owner === 'other') {
+          outside.focus()
+          editor.commands.setTextSelection({ from: 1, to: 2 })
+        }
+        const text = editor.view.dom.querySelector('p')?.firstChild
+        if (!text) {
+          throw new Error('Expected native source text')
+        }
+        const holdNotification = (event: Event) => event.stopImmediatePropagation()
+        document.addEventListener('selectionchange', holdNotification, true)
+        try {
+          document.getSelection()?.setBaseAndExtent(text, 1, text, 3)
+        } finally {
+          document.removeEventListener('selectionchange', holdNotification, true)
+        }
+        expect(editor.state.selection.to).not.toBe(4)
+        const mappings = vi.spyOn(editor.view, 'posAtDOM')
+        hook.rerender({ content: 'replacement' })
+        expect(editor.getMarkdown()).toBe('replacement')
+        if (owner === 'editor') {
+          expect(editor.state.selection.from).toBe(2)
+          expect(editor.state.selection.to).toBe(4)
+          expect(document.activeElement).toBe(editor.view.dom)
+        } else {
+          expect(document.activeElement).toBe(outside)
+          expect(mappings).not.toHaveBeenCalled()
+        }
+        const replacedSelection = editor.state.selection
+        fireEvent.mouseUp(document, { button: 0 })
+        document.dispatchEvent(new Event('selectionchange'))
+        vi.runAllTimers()
+        expect(editor.getMarkdown()).toBe('replacement')
+        expect(editor.state.selection.eq(replacedSelection)).toBe(true)
+        if (owner === 'editor') {
+          expect(
+            editor.state.doc.textBetween(editor.state.selection.from, editor.state.selection.to)
+          ).toBe('ep')
+          hook.rerender({ content: 'x' })
+          vi.runAllTimers()
+          expect(editor.state.selection.from).toBe(2)
+          expect(editor.state.selection.to).toBe(2)
+          editor.commands.insertContent('!')
+          expect(editor.getMarkdown()).toBe('x!')
+        } else {
+          expect(document.activeElement).toBe(outside)
+          editor.view.focus()
+          editor.commands.insertContent('!')
+          expect(editor.getMarkdown()).not.toContain('base')
+          expect(editor.getMarkdown()).toContain('!')
+        }
+      } finally {
+        hook.unmount()
+        editor.destroy()
+        host.remove()
+        vi.useRealTimers()
+      }
+    }
+  )
 
   it('rejects a split pane pending edit once the other pane replaced the shared text', () => {
     vi.useFakeTimers()

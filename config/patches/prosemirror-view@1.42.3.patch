@@ -1,0 +1,1235 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -1003,6 +1003,12 @@
+         if (_after2 && _after2.contentEditable == "false") force = true;
+       }
+       if (!(force || brKludge && safari) && isEquivalentPosition(anchorDOM.node, anchorDOM.offset, selRange.anchorNode, selRange.anchorOffset) && isEquivalentPosition(headDOM.node, headDOM.offset, selRange.focusNode, selRange.focusOffset)) return;
++      if (view.someProp("nativeSelectionIntegration") && domSel.setBaseAndExtent && !brKludge) {
++        try {
++          domSel.setBaseAndExtent(anchorDOM.node, anchorDOM.offset, headDOM.node, headDOM.offset)
++          return
++        } catch (_) {}
++      }
+       var domSelExtended = false;
+       if ((domSel.extend || anchor == head) && !(brKludge && gecko)) {
+         domSel.collapse(anchorDOM.node, anchorDOM.offset);
+@@ -2160,8 +2166,7 @@
+   }
+   return result;
+ }
+-function selectionFromDOM(view) {
+-  var origin = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : null;
++function selectionFromDOM(view, origin = null, nativeOnly = false) {
+   var domSel = view.domSelectionRange(),
+     doc = view.state.doc;
+   if (!domSel.focusNode) return null;
+@@ -2203,18 +2208,30 @@
+   var $anchor = doc.resolve(anchor);
+   if (!selection) {
+     var bias = origin == "pointer" || view.state.selection.head < $head.pos && !inWidget ? 1 : -1;
+-    selection = selectionBetween(view, $anchor, $head, bias);
++    selection = nativeOnly ? prosemirrorState.TextSelection.between($anchor, $head, bias) : selectionBetween(view, $anchor, $head, bias);
+   }
+   return selection;
+ }
+ function editorOwnsSelection(view) {
+   return view.editable ? view.hasFocus() : hasSelection(view) && document.activeElement && document.activeElement.contains(view.dom);
+ }
+-function selectionToDOM(view) {
+-  var force = arguments.length > 1 && arguments[1] !== undefined ? arguments[1] : false;
+-  var sel = view.state.selection;
+-  syncNodeSelection(view, sel);
+-  if (!editorOwnsSelection(view)) return;
++function selectionToDOM(view, force = false, outgoing = false) {
++  if (!view.someProp("nativeSelectionIntegration")) return projectSelection(view, force, outgoing)
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing) {
++    let state = view.state, owner = view.root.activeElement
++    projectSelection(view, force, outgoing)
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    if (view.state.doc == state.doc && view.state.plugins == state.plugins && view.state.selection.eq(state.selection)) return
++    force = true
++  }
++}
++function projectSelection(view, force, outgoing) {
++  let state = view.state, owner = view.root.activeElement, sel = state.selection
++  let integrated = view.someProp("nativeSelectionIntegration")
++  syncNodeSelection(view, sel)
++  if (integrated && (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner ||
++      view.state.doc != state.doc || view.state.plugins != state.plugins || !view.state.selection.eq(sel))) return
++  if (!outgoing && !editorOwnsSelection(view)) return;
+   var mouseDown = view.input.mouseDown;
+   if (!force && chrome && mouseDown) {
+     var domSel = view.domSelectionRange(),
+@@ -2237,9 +2254,15 @@
+       if (!sel.empty && !sel.$from.parent.inlineContent) resetEditableTo = temporarilyEditableNear(view, sel.to);
+     }
+     view.docView.setSelection(anchor, head, view, force);
++
+     if (brokenSelectBetweenUneditable) {
+       if (resetEditableFrom) resetEditable(resetEditableFrom);
+       if (resetEditableTo) resetEditable(resetEditableTo);
++    }
++    if (integrated && (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner ||
++        view.state.doc != state.doc || view.state.plugins != state.plugins || !view.state.selection.eq(sel))) {
++      if (!view.isDestroyed) view.domObserver.connectSelection()
++      return
+     }
+     if (sel.visible) {
+       view.dom.classList.remove("ProseMirror-hideselection");
+@@ -2965,7 +2988,7 @@
+   var _loop2 = function _loop2() {
+     var handler = handlers[event];
+     view.dom.addEventListener(event, view.input.eventHandlers[event] = function (event) {
+-      if (eventBelongsToView(view, event) && !runCustomHandler(view, event) && (view.editable || !(event.type in editHandlers))) handler(view, event);
++      if (eventBelongsToView(view, event)) runInputHandler(view, event, handler);
+     }, passiveHandlers[event] ? {
+       passive: true
+     } : undefined);
+@@ -2998,6 +3021,8 @@
+ }
+ function runCustomHandler(view, event) {
+   return view.someProp("handleDOMEvents", function (handlers) {
++    if (event.type == "focus" && view.someProp("nativeSelectionIntegration") &&
++        (view.isDestroyed || !view.hasFocus())) return true
+     var handler = handlers[event.type];
+     return handler ? handler(view, event) || event.defaultPrevented : false;
+   });
+@@ -3008,9 +3033,23 @@
+   for (var node = event.target; node != view.dom; node = node.parentNode) if (!node || node.nodeType == 11 || node.pmViewDesc && node.pmViewDesc.stopEvent(event)) return false;
+   return true;
+ }
++function runInputHandler(view, event, handler) {
++  if (event.type == "focus" && view.someProp("nativeSelectionIntegration")) {
++    handler(view, event)
++    if (!view.isDestroyed && view.hasFocus()) {
++      view.domObserver.forceFlush()
++      if (!view.isDestroyed && view.hasFocus()) view.domObserver.flush()
++    }
++    if (!view.isDestroyed && view.hasFocus()) runCustomHandler(view, event)
++  } else if (!runCustomHandler(view, event) && (view.editable || !(event.type in editHandlers))) {
++    handler(view, event)
++  }
++}
+ function _dispatchEvent(view, event) {
+-  if (!runCustomHandler(view, event) && handlers[event.type] && (view.editable || !(event.type in editHandlers))) handlers[event.type](view, event);
+-}
++  if (handlers[event.type]) runInputHandler(view, event, handlers[event.type])
++  else runCustomHandler(view, event)
++}
++
+ editHandlers.keydown = function (view, _event) {
+   var event = _event;
+   view.input.shiftKey = event.keyCode == 16 || event.shiftKey;
+@@ -3668,7 +3707,14 @@
+     view.domObserver.start();
+     view.focused = true;
+     setTimeout(function () {
+-      if (view.docView && view.hasFocus() && !view.domObserver.currentSelection.eq(view.domSelectionRange())) selectionToDOM(view);
++      if (view.docView && view.hasFocus()) {
++        if (view.someProp("nativeSelectionIntegration")) {
++          view.domObserver.forceFlush();
++          if (view.docView && view.hasFocus()) view.domObserver.flush();
++          if (!view.docView || !view.hasFocus() || view.composing || view.input.mouseDown?.allowDefault) return
++        }
++        if (!view.domObserver.currentSelection.eq(view.domSelectionRange())) selectionToDOM(view)
++      }
+     }, 20);
+   }
+ };
+@@ -4326,6 +4372,112 @@
+   }]);
+   return SelectionState;
+ }();
++function sameSelectionContext(view, state, owner) {
++  return !view.isDestroyed && view.dom.isConnected && !view.composing &&
++    view.root.activeElement == owner && view.state.doc == state.doc &&
++    view.state.plugins == state.plugins && view.state.selection.eq(state.selection)
++}
++
++function focusReset(view, sel, nativeOnly = false) {
++  let readSel
++  return view.input.lastFocus > Date.now() - 200 &&
++    Math.max(view.input.lastTouch, view.input.lastClick.time) < Date.now() - 300 &&
++    selectionCollapsed(sel) && (readSel = selectionFromDOM(view, null, nativeOnly)) &&
++    readSel.eq(prosemirrorState.Selection.near(view.state.doc.resolve(0), 1))
++}
++
++function readNativeSelection(observer, intent, outgoing,
++                             initialSelection) {
++  let view = observer.view
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing && view.someProp("nativeSelectionIntegration")) {
++    if (!(outgoing ? hasSelection(view) : hasFocusAndSelection(view))) return
++    let state = view.state, owner = view.root.activeElement
++    let native = view.domSelectionRange()
++    let sel = {anchorNode: native.anchorNode, anchorOffset: native.anchorOffset,
++               focusNode: native.focusNode, focusOffset: native.focusOffset}
++    if (!sel.anchorNode || !sel.focusNode || !view.dom.contains(sel.anchorNode) || !view.dom.contains(sel.focusNode)) return
++    let ignored = observer.ignoreSelectionChange(sel)
++    if (view.isDestroyed || view.root.activeElement != owner) return
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    if (ignored) return
++    if (observer.suppressingSelectionUpdates) {
++      if (!view.input.mouseDown?.allowDefault) selectionToDOM(view)
++      return
++    }
++    // Classify native presentation before a rich constructor can retain its structured owner.
++    let reset = focusReset(view, sel, true)
++    if (view.isDestroyed || view.root.activeElement != owner) return
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    if (reset) {
++      view.input.lastFocus = 0
++      selectionToDOM(view, true, outgoing)
++      if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
++        let projected = view.state
++        view.scrollToSelection()
++        if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
++          if (!sameSelectionContext(view, projected, owner)) selectionToDOM(view, true, outgoing)
++          if (!view.isDestroyed && view.root.activeElement == owner) observer.setCurSelection()
++        }
++      }
++      return
++    }
++    if (intent == "observe" && view.input.mouseDown?.allowDefault) {
++      observer.setCurSelection()
++      return
++    }
++    if (intent == "observe" && observer.currentSelection.eq(sel)) return
++    let selection = view.state.selection
++    if (!(selection instanceof prosemirrorState.TextSelection)) {
++      let anchor = view.posAtDOM(sel.anchorNode, sel.anchorOffset)
++      let head = view.posAtDOM(sel.focusNode, sel.focusOffset)
++      let presentation = prosemirrorState.TextSelection.between(selection.$anchor, selection.$head)
++      if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++      if (anchor == selection.anchor && head == selection.head ||
++          anchor == presentation.anchor && head == presentation.head) {
++        observer.setCurSelection()
++        return
++      }
++    }
++    let anchor = view.posAtDOM(sel.anchorNode, sel.anchorOffset)
++    let head = view.posAtDOM(sel.focusNode, sel.focusOffset)
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    observer.stop()
++    try {
++      observer.handleDOMChange(-1, -1, false, [])
++      if (!view.isDestroyed && view.dom.isConnected && !view.composing &&
++          view.root.activeElement == owner && view.state.doc == state.doc && view.state.plugins == state.plugins &&
++          intent == "consume" && !view.state.selection.eq(initialSelection) &&
++          view.state.selection instanceof prosemirrorState.TextSelection && view.state.selection.anchor == anchor &&
++          view.state.selection.head == head && sel.anchorNode.isConnected && sel.focusNode.isConnected) {
++        view.dom.ownerDocument.getSelection()?.setBaseAndExtent(sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset)
++      }
++      if (sameSelectionContext(view, view.state, owner)) observer.setCurSelection()
++    } finally {
++      if (!view.isDestroyed) observer.start()
++    }
++    return
++  }
++}
++
++function sameNativeSelection(view, sel) {
++  let current = view.domSelectionRange()
++  return current.anchorNode == sel.anchorNode && current.anchorOffset == sel.anchorOffset &&
++    current.focusNode == sel.focusNode && current.focusOffset == sel.focusOffset
++}
++
++function completeNativeSelection(view, outgoing) {
++  if (!view.someProp("nativeSelectionIntegration")) return
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing && view.someProp("nativeSelectionIntegration")) {
++    let observer = view.domObserver, state = view.state, owner = view.root.activeElement
++    observer.forceFlush()
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    observer.flush("consume", outgoing, state.selection)
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    // Continue only for actual newly owed work or a changed authoritative context.
++    if (view.state.doc == state.doc && view.state.plugins == state.plugins && !observer.pendingRecords().length) return
++  }
++}
++
+ var DOMObserver = function () {
+   function DOMObserver(view, handleDOMChange) {
+     var _this12 = this;
+@@ -4433,6 +4585,7 @@
+   }, {
+     key: "onSelectionChange",
+     value: function onSelectionChange() {
++      if (this.view.someProp("nativeSelectionIntegration")) return this.flush();
+       if (!hasFocusAndSelection(this.view)) return;
+       if (this.suppressingSelectionUpdates) return selectionToDOM(this.view);
+       if (ie && ie_version <= 11 && !this.view.state.selection.empty) {
+@@ -4487,13 +4640,16 @@
+     }
+   }, {
+     key: "flush",
+-    value: function flush() {
++    value: function flush(intent = "observe", outgoing = false, initialSelection = this.view.state.selection) {
+       var view = this.view;
+       if (!view.docView || this.flushingSoon > -1) return;
++      let state = view.state, owner = view.root.activeElement;
++      let integrated = view.someProp("nativeSelectionIntegration");
++      if (integrated && !view.dom.isConnected) return;
+       var mutations = this.pendingRecords();
+       if (mutations.length) this.queue = [];
+       var sel = view.domSelectionRange();
+-      var newSel = !this.suppressingSelectionUpdates && !this.currentSelection.eq(sel) && hasFocusAndSelection(view) && !this.ignoreSelectionChange(sel);
++      var newSel = !integrated && !this.suppressingSelectionUpdates && !this.currentSelection.eq(sel) && hasFocusAndSelection(view) && !this.ignoreSelectionChange(sel);
+       var from = -1,
+         to = -1,
+         typeOver = false,
+@@ -4560,8 +4716,16 @@
+           }
+         }
+       }
+-      var readSel = null;
+-      if (from < 0 && newSel && view.input.lastFocus > Date.now() - 200 && Math.max(view.input.lastTouch, view.input.lastClick.time) < Date.now() - 300 && selectionCollapsed(sel) && (readSel = selectionFromDOM(view)) && readSel.eq(prosemirrorState.Selection.near(view.state.doc.resolve(0), 1))) {
++      if (integrated && !sameSelectionContext(view, state, owner) && !view.composing) {
++        this.queue = mutations.concat(this.queue);
++        if (view.isDestroyed || !view.dom.isConnected || view.root.activeElement != owner) return;
++        return this.flush(intent, outgoing, initialSelection);
++      }
++      if (integrated && from < 0) {
++        readNativeSelection(this, intent, outgoing, initialSelection);
++        return;
++      }
++      if (from < 0 && newSel && focusReset(view, sel)) {
+         view.input.lastFocus = 0;
+         selectionToDOM(view);
+         this.currentSelection.set(sel);
+@@ -4813,18 +4977,34 @@
+   var compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
+   view.input.compositionPendingChanges = 0;
+   if (from < 0) {
+-    var origin = view.input.lastSelectionTime > Date.now() - 50 ? view.input.lastSelectionOrigin : null;
+-    var newSel = selectionFromDOM(view, origin);
+-    if (newSel && !view.state.selection.eq(newSel)) {
+-      if (chrome && android && view.input.lastKeyCode === 13 && Date.now() - 100 < view.input.lastKeyCodeTime && view.someProp("handleKeyDown", function (f) {
+-        return f(view, keyEvent(13, "Enter"));
+-      })) return;
+-      var tr = view.state.tr.setSelection(newSel);
+-      if (origin == "pointer") tr.setMeta("pointer", true);else if (origin == "key") tr.scrollIntoView();
+-      if (compositionID) tr.setMeta("composition", compositionID);
+-      view.dispatch(tr);
+-    }
+-    return;
++    for (;;) {
++      let integrated = view.someProp("nativeSelectionIntegration"), state = view.state, owner = view.root.activeElement
++      let native = view.domSelectionRange()
++      let before = {anchorNode: native.anchorNode, anchorOffset: native.anchorOffset,
++                    focusNode: native.focusNode, focusOffset: native.focusOffset}
++      var origin = view.input.lastSelectionTime > Date.now() - 50 ? view.input.lastSelectionOrigin : null;
++      var newSel = selectionFromDOM(view, origin);
++      if (integrated && (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, before))) {
++        if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++        if (sameNativeSelection(view, before)) selectionToDOM(view, true, !view.hasFocus())
++        continue
++      }
++      if (newSel && !view.state.selection.eq(newSel)) {
++        if (chrome && android && view.input.lastKeyCode === 13 && Date.now() - 100 < view.input.lastKeyCodeTime && view.someProp("handleKeyDown", function (f) {
++          return f(view, keyEvent(13, "Enter"));
++        })) return;
++        if (integrated && (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, before))) {
++          if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++          if (sameNativeSelection(view, before)) selectionToDOM(view, true, !view.hasFocus())
++          continue
++        }
++        var tr = view.state.tr.setSelection(newSel);
++        if (origin == "pointer") tr.setMeta("pointer", true);else if (origin == "key") tr.scrollIntoView();
++        if (compositionID) tr.setMeta("composition", compositionID);
++        view.dispatch(tr);
++      }
++      return;
++  }
+   }
+   var $before = view.state.doc.resolve(from);
+   var shared = $before.sharedDepth(to);
+@@ -5282,10 +5462,15 @@
+   }, {
+     key: "focus",
+     value: function focus() {
+-      this.domObserver.stop();
+-      if (this.editable) focusPreventScroll(this.dom);
+-      selectionToDOM(this);
+-      this.domObserver.start();
++      this.domObserver.stop()
++          let integrated = this.someProp("nativeSelectionIntegration"), owner = this.root.activeElement
++          if (integrated) selectionToDOM(this, !this.hasFocus(), true)
++          if (this.isDestroyed) return
++          if (!integrated || this.root.activeElement == owner || this.hasFocus()) {
++            if (this.editable) focusPreventScroll(this.dom)
++            if (!integrated && !this.isDestroyed) selectionToDOM(this)
++          }
++          if (!this.isDestroyed) this.domObserver.start()
+     }
+   }, {
+     key: "root",
+@@ -5389,6 +5574,9 @@
+       return this.docView == null;
+     }
+   }, {
++    key: "completeNativeSelection",
++    value: function completeNativeSelectionMethod(outgoing = false) { completeNativeSelection(this, outgoing); }
++  }, {
+     key: "dispatchEvent",
+     value: function dispatchEvent(event) {
+       return _dispatchEvent(this, event);
+diff --git a/dist/index.d.cts b/dist/index.d.cts
+--- a/dist/index.d.cts
++++ b/dist/index.d.cts
+@@ -598,6 +598,7 @@
+     /**
+     Used for testing.
+     */
++    completeNativeSelection(outgoing?: boolean): void;
+     dispatchEvent(event: Event): void;
+     /**
+     Dispatch a transaction. Will call
+@@ -648,6 +649,7 @@
+ [plugin](https://prosemirror.net/docs/ref/#state.Plugin).
+ */
+ interface EditorProps<P = any> {
++    nativeSelectionIntegration?: boolean;
+     /**
+     Can be an object mapping DOM event type names to functions that
+     handle them. Such functions will be called before any handling
+diff --git a/dist/index.d.ts b/dist/index.d.ts
+--- a/dist/index.d.ts
++++ b/dist/index.d.ts
+@@ -598,6 +598,7 @@
+     /**
+     Used for testing.
+     */
++    completeNativeSelection(outgoing?: boolean): void;
+     dispatchEvent(event: Event): void;
+     /**
+     Dispatch a transaction. Will call
+@@ -648,6 +649,7 @@
+ [plugin](https://prosemirror.net/docs/ref/#state.Plugin).
+ */
+ interface EditorProps<P = any> {
++    nativeSelectionIntegration?: boolean;
+     /**
+     Can be an object mapping DOM event type names to functions that
+     handle them. Such functions will be called before any handling
+diff --git a/dist/index.js b/dist/index.js
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -1077,6 +1077,12 @@
+         // Selection.extend can be used to create an 'inverted' selection
+         // (one where the focus is before the anchor), but not all
+         // browsers support it yet.
++        if (view.someProp("nativeSelectionIntegration") && domSel.setBaseAndExtent && !brKludge) {
++          try {
++            domSel.setBaseAndExtent(anchorDOM.node, anchorDOM.offset, headDOM.node, headDOM.offset)
++            return
++          } catch (_) {}
++        }
+         let domSelExtended = false;
+         if ((domSel.extend || anchor == head) && !(brKludge && gecko)) {
+             domSel.collapse(anchorDOM.node, anchorDOM.offset);
+@@ -2212,7 +2218,7 @@
+     return result;
+ }
+ 
+-function selectionFromDOM(view, origin = null) {
++function selectionFromDOM(view, origin = null, nativeOnly = false) {
+     let domSel = view.domSelectionRange(), doc = view.state.doc;
+     if (!domSel.focusNode)
+         return null;
+@@ -2254,7 +2260,7 @@
+     let $anchor = doc.resolve(anchor);
+     if (!selection) {
+         let bias = origin == "pointer" || (view.state.selection.head < $head.pos && !inWidget) ? 1 : -1;
+-        selection = selectionBetween(view, $anchor, $head, bias);
++        selection = nativeOnly ? TextSelection.between($anchor, $head, bias) : selectionBetween(view, $anchor, $head, bias);
+     }
+     return selection;
+ }
+@@ -2262,10 +2268,23 @@
+     return view.editable ? view.hasFocus() :
+         hasSelection(view) && document.activeElement && document.activeElement.contains(view.dom);
+ }
+-function selectionToDOM(view, force = false) {
+-    let sel = view.state.selection;
+-    syncNodeSelection(view, sel);
+-    if (!editorOwnsSelection(view))
++function selectionToDOM(view, force = false, outgoing = false) {
++  if (!view.someProp("nativeSelectionIntegration")) return projectSelection(view, force, outgoing)
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing) {
++    let state = view.state, owner = view.root.activeElement
++    projectSelection(view, force, outgoing)
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    if (view.state.doc == state.doc && view.state.plugins == state.plugins && view.state.selection.eq(state.selection)) return
++    force = true
++  }
++}
++function projectSelection(view, force, outgoing) {
++  let state = view.state, owner = view.root.activeElement, sel = state.selection
++  let integrated = view.someProp("nativeSelectionIntegration")
++  syncNodeSelection(view, sel)
++  if (integrated && (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner ||
++      view.state.doc != state.doc || view.state.plugins != state.plugins || !view.state.selection.eq(sel))) return
++    if (!outgoing && !editorOwnsSelection(view))
+         return;
+     // Need to delay selection normalization during a native selection
+     // drag on Chrome, or it will cause further dragging to glitch.
+@@ -2292,13 +2311,19 @@
+                 resetEditableTo = temporarilyEditableNear(view, sel.to);
+         }
+         view.docView.setSelection(anchor, head, view, force);
++
+         if (brokenSelectBetweenUneditable) {
+             if (resetEditableFrom)
+                 resetEditable(resetEditableFrom);
+             if (resetEditableTo)
+                 resetEditable(resetEditableTo);
+         }
+-        if (sel.visible) {
++        if (integrated && (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner ||
++        view.state.doc != state.doc || view.state.plugins != state.plugins || !view.state.selection.eq(sel))) {
++      if (!view.isDestroyed) view.domObserver.connectSelection()
++      return
++    }
++    if (sel.visible) {
+             view.dom.classList.remove("ProseMirror-hideselection");
+         }
+         else {
+@@ -3132,9 +3157,7 @@
+     for (let event in handlers) {
+         let handler = handlers[event];
+         view.dom.addEventListener(event, view.input.eventHandlers[event] = (event) => {
+-            if (eventBelongsToView(view, event) && !runCustomHandler(view, event) &&
+-                (view.editable || !(event.type in editHandlers)))
+-                handler(view, event);
++            if (eventBelongsToView(view, event)) runInputHandler(view, event, handler);
+         }, passiveHandlers[event] ? { passive: true } : undefined);
+     }
+     // On Safari, for reasons beyond my understanding, adding an input
+@@ -3166,6 +3189,8 @@
+ }
+ function runCustomHandler(view, event) {
+     return view.someProp("handleDOMEvents", handlers => {
++    if (event.type == "focus" && view.someProp("nativeSelectionIntegration") &&
++        (view.isDestroyed || !view.hasFocus())) return true
+         let handler = handlers[event.type];
+         return handler ? handler(view, event) || event.defaultPrevented : false;
+     });
+@@ -3181,10 +3206,22 @@
+             return false;
+     return true;
+ }
++function runInputHandler(view, event, handler) {
++  if (event.type == "focus" && view.someProp("nativeSelectionIntegration")) {
++    handler(view, event)
++    if (!view.isDestroyed && view.hasFocus()) {
++      view.domObserver.forceFlush()
++      if (!view.isDestroyed && view.hasFocus()) view.domObserver.flush()
++    }
++    if (!view.isDestroyed && view.hasFocus()) runCustomHandler(view, event)
++  } else if (!runCustomHandler(view, event) && (view.editable || !(event.type in editHandlers))) {
++    handler(view, event)
++  }
++}
++
+ function dispatchEvent(view, event) {
+-    if (!runCustomHandler(view, event) && handlers[event.type] &&
+-        (view.editable || !(event.type in editHandlers)))
+-        handlers[event.type](view, event);
++  if (handlers[event.type]) runInputHandler(view, event, handlers[event.type])
++  else runCustomHandler(view, event)
+ }
+ editHandlers.keydown = (view, _event) => {
+     let event = _event;
+@@ -3909,8 +3946,14 @@
+         view.domObserver.start();
+         view.focused = true;
+         setTimeout(() => {
+-            if (view.docView && view.hasFocus() && !view.domObserver.currentSelection.eq(view.domSelectionRange()))
+-                selectionToDOM(view);
++      if (view.docView && view.hasFocus()) {
++        if (view.someProp("nativeSelectionIntegration")) {
++          view.domObserver.forceFlush();
++          if (view.docView && view.hasFocus()) view.domObserver.flush();
++          if (!view.docView || !view.hasFocus() || view.composing || view.input.mouseDown?.allowDefault) return;
++        }
++        if (!view.domObserver.currentSelection.eq(view.domSelectionRange())) selectionToDOM(view);
++      }
+         }, 20);
+     }
+ };
+@@ -4665,6 +4708,112 @@
+             sel.focusNode == this.focusNode && sel.focusOffset == this.focusOffset;
+     }
+ }
++function sameSelectionContext(view, state, owner) {
++  return !view.isDestroyed && view.dom.isConnected && !view.composing &&
++    view.root.activeElement == owner && view.state.doc == state.doc &&
++    view.state.plugins == state.plugins && view.state.selection.eq(state.selection)
++}
++
++function focusReset(view, sel, nativeOnly = false) {
++  let readSel
++  return view.input.lastFocus > Date.now() - 200 &&
++    Math.max(view.input.lastTouch, view.input.lastClick.time) < Date.now() - 300 &&
++    selectionCollapsed(sel) && (readSel = selectionFromDOM(view, null, nativeOnly)) &&
++    readSel.eq(Selection.near(view.state.doc.resolve(0), 1))
++}
++
++function readNativeSelection(observer, intent, outgoing,
++                             initialSelection) {
++  let view = observer.view
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing && view.someProp("nativeSelectionIntegration")) {
++    if (!(outgoing ? hasSelection(view) : hasFocusAndSelection(view))) return
++    let state = view.state, owner = view.root.activeElement
++    let native = view.domSelectionRange()
++    let sel = {anchorNode: native.anchorNode, anchorOffset: native.anchorOffset,
++               focusNode: native.focusNode, focusOffset: native.focusOffset}
++    if (!sel.anchorNode || !sel.focusNode || !view.dom.contains(sel.anchorNode) || !view.dom.contains(sel.focusNode)) return
++    let ignored = observer.ignoreSelectionChange(sel)
++    if (view.isDestroyed || view.root.activeElement != owner) return
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    if (ignored) return
++    if (observer.suppressingSelectionUpdates) {
++      if (!view.input.mouseDown?.allowDefault) selectionToDOM(view)
++      return
++    }
++    // Classify native presentation before a rich constructor can retain its structured owner.
++    let reset = focusReset(view, sel, true)
++    if (view.isDestroyed || view.root.activeElement != owner) return
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    if (reset) {
++      view.input.lastFocus = 0
++      selectionToDOM(view, true, outgoing)
++      if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
++        let projected = view.state
++        view.scrollToSelection()
++        if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
++          if (!sameSelectionContext(view, projected, owner)) selectionToDOM(view, true, outgoing)
++          if (!view.isDestroyed && view.root.activeElement == owner) observer.setCurSelection()
++        }
++      }
++      return
++    }
++    if (intent == "observe" && view.input.mouseDown?.allowDefault) {
++      observer.setCurSelection()
++      return
++    }
++    if (intent == "observe" && observer.currentSelection.eq(sel)) return
++    let selection = view.state.selection
++    if (!(selection instanceof TextSelection)) {
++      let anchor = view.posAtDOM(sel.anchorNode, sel.anchorOffset)
++      let head = view.posAtDOM(sel.focusNode, sel.focusOffset)
++      let presentation = TextSelection.between(selection.$anchor, selection.$head)
++      if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++      if (anchor == selection.anchor && head == selection.head ||
++          anchor == presentation.anchor && head == presentation.head) {
++        observer.setCurSelection()
++        return
++      }
++    }
++    let anchor = view.posAtDOM(sel.anchorNode, sel.anchorOffset)
++    let head = view.posAtDOM(sel.focusNode, sel.focusOffset)
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    observer.stop()
++    try {
++      observer.handleDOMChange(-1, -1, false, [])
++      if (!view.isDestroyed && view.dom.isConnected && !view.composing &&
++          view.root.activeElement == owner && view.state.doc == state.doc && view.state.plugins == state.plugins &&
++          intent == "consume" && !view.state.selection.eq(initialSelection) &&
++          view.state.selection instanceof TextSelection && view.state.selection.anchor == anchor &&
++          view.state.selection.head == head && sel.anchorNode.isConnected && sel.focusNode.isConnected) {
++        view.dom.ownerDocument.getSelection()?.setBaseAndExtent(sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset)
++      }
++      if (sameSelectionContext(view, view.state, owner)) observer.setCurSelection()
++    } finally {
++      if (!view.isDestroyed) observer.start()
++    }
++    return
++  }
++}
++
++function sameNativeSelection(view, sel) {
++  let current = view.domSelectionRange()
++  return current.anchorNode == sel.anchorNode && current.anchorOffset == sel.anchorOffset &&
++    current.focusNode == sel.focusNode && current.focusOffset == sel.focusOffset
++}
++
++function completeNativeSelection(view, outgoing) {
++  if (!view.someProp("nativeSelectionIntegration")) return
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing && view.someProp("nativeSelectionIntegration")) {
++    let observer = view.domObserver, state = view.state, owner = view.root.activeElement
++    observer.forceFlush()
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    observer.flush("consume", outgoing, state.selection)
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    // Continue only for actual newly owed work or a changed authoritative context.
++    if (view.state.doc == state.doc && view.state.plugins == state.plugins && !observer.pendingRecords().length) return
++  }
++}
++
+ class DOMObserver {
+     constructor(view, handleDOMChange) {
+         this.view = view;
+@@ -4752,6 +4901,7 @@
+         setTimeout(() => this.suppressingSelectionUpdates = false, 50);
+     }
+     onSelectionChange() {
++        if (this.view.someProp("nativeSelectionIntegration")) return this.flush();
+         if (!hasFocusAndSelection(this.view))
+             return;
+         if (this.suppressingSelectionUpdates)
+@@ -4796,15 +4946,18 @@
+                 this.queue.push(mut);
+         return this.queue;
+     }
+-    flush() {
++    flush(intent = "observe", outgoing = false, initialSelection = this.view.state.selection) {
+         let { view } = this;
+         if (!view.docView || this.flushingSoon > -1)
+             return;
++        let state = view.state, owner = view.root.activeElement;
++        let integrated = view.someProp("nativeSelectionIntegration");
++        if (integrated && !view.dom.isConnected) return;
+         let mutations = this.pendingRecords();
+         if (mutations.length)
+             this.queue = [];
+         let sel = view.domSelectionRange();
+-        let newSel = !this.suppressingSelectionUpdates && !this.currentSelection.eq(sel) && hasFocusAndSelection(view) && !this.ignoreSelectionChange(sel);
++        let newSel = !integrated && !this.suppressingSelectionUpdates && !this.currentSelection.eq(sel) && hasFocusAndSelection(view) && !this.ignoreSelectionChange(sel);
+         let from = -1, to = -1, typeOver = false, added = [];
+         if (view.editable) {
+             for (let i = 0; i < mutations.length; i++) {
+@@ -4853,14 +5006,16 @@
+                 }
+             }
+         }
+-        let readSel = null;
+-        // If it looks like the browser has reset the selection to the
+-        // start of the document after focus, restore the selection from
+-        // the state
+-        if (from < 0 && newSel && view.input.lastFocus > Date.now() - 200 &&
+-            Math.max(view.input.lastTouch, view.input.lastClick.time) < Date.now() - 300 &&
+-            selectionCollapsed(sel) && (readSel = selectionFromDOM(view)) &&
+-            readSel.eq(Selection.near(view.state.doc.resolve(0), 1))) {
++        if (integrated && !sameSelectionContext(view, state, owner) && !view.composing) {
++          this.queue = mutations.concat(this.queue);
++          if (view.isDestroyed || !view.dom.isConnected || view.root.activeElement != owner) return;
++          return this.flush(intent, outgoing, initialSelection);
++        }
++        if (integrated && from < 0) {
++          readNativeSelection(this, intent, outgoing, initialSelection);
++          return;
++        }
++        if (from < 0 && newSel && focusReset(view, sel)) {
+             view.input.lastFocus = 0;
+             selectionToDOM(view);
+             this.currentSelection.set(sel);
+@@ -5108,13 +5263,28 @@
+     let compositionID = view.input.compositionPendingChanges || (view.composing ? view.input.compositionID : 0);
+     view.input.compositionPendingChanges = 0;
+     if (from < 0) {
+-        let origin = view.input.lastSelectionTime > Date.now() - 50 ? view.input.lastSelectionOrigin : null;
++    for (;;) {
++        let integrated = view.someProp("nativeSelectionIntegration"), state = view.state, owner = view.root.activeElement
++    let native = view.domSelectionRange()
++    let before = {anchorNode: native.anchorNode, anchorOffset: native.anchorOffset,
++                  focusNode: native.focusNode, focusOffset: native.focusOffset}
++    let origin = view.input.lastSelectionTime > Date.now() - 50 ? view.input.lastSelectionOrigin : null;
+         let newSel = selectionFromDOM(view, origin);
++    if (integrated && (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, before))) {
++      if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++      if (sameNativeSelection(view, before)) selectionToDOM(view, true, !view.hasFocus())
++      continue
++    }
+         if (newSel && !view.state.selection.eq(newSel)) {
+             if (chrome && android &&
+                 view.input.lastKeyCode === 13 && Date.now() - 100 < view.input.lastKeyCodeTime &&
+                 view.someProp("handleKeyDown", f => f(view, keyEvent(13, "Enter"))))
+                 return;
++      if (integrated && (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, before))) {
++        if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++        if (sameNativeSelection(view, before)) selectionToDOM(view, true, !view.hasFocus())
++        continue
++      }
+             let tr = view.state.tr.setSelection(newSel);
+             if (origin == "pointer")
+                 tr.setMeta("pointer", true);
+@@ -5126,6 +5296,7 @@
+         }
+         return;
+     }
++  }
+     let $before = view.state.doc.resolve(from);
+     let shared = $before.sharedDepth(to);
+     from = $before.before(shared + 1);
+@@ -5726,11 +5897,15 @@
+     Focus the editor.
+     */
+     focus() {
+-        this.domObserver.stop();
+-        if (this.editable)
+-            focusPreventScroll(this.dom);
+-        selectionToDOM(this);
+-        this.domObserver.start();
++        this.domObserver.stop()
++            let integrated = this.someProp("nativeSelectionIntegration"), owner = this.root.activeElement
++            if (integrated) selectionToDOM(this, !this.hasFocus(), true)
++            if (this.isDestroyed) return
++            if (!integrated || this.root.activeElement == owner || this.hasFocus()) {
++              if (this.editable) focusPreventScroll(this.dom)
++              if (!integrated && !this.isDestroyed) selectionToDOM(this)
++            }
++            if (!this.isDestroyed) this.domObserver.start()
+     }
+     /**
+     Get the document root in which the editor exists. This will
+@@ -5890,6 +6065,7 @@
+     /**
+     Used for testing.
+     */
++    completeNativeSelection(outgoing = false) { completeNativeSelection(this, outgoing); }
+     dispatchEvent(event) {
+         return dispatchEvent(this, event);
+     }
+diff --git a/src/domchange.ts b/src/domchange.ts
+--- a/src/domchange.ts
++++ b/src/domchange.ts
+@@ -5,6 +5,7 @@
+ import {selectionCollapsed, keyEvent, DOMNode} from "./dom"
+ import * as browser from "./browser"
+ import {EditorView} from "./index"
++import {sameSelectionContext, sameNativeSelection} from "./domobserver"
+ 
+ // Note that all referencing and parsing is done with the
+ // start-of-operation selection and document, since that's the one
+@@ -83,20 +84,36 @@
+   view.input.compositionPendingChanges = 0
+ 
+   if (from < 0) {
+-    let origin = view.input.lastSelectionTime > Date.now() - 50 ? view.input.lastSelectionOrigin : null
+-    let newSel = selectionFromDOM(view, origin)
+-    if (newSel && !view.state.selection.eq(newSel)) {
+-      if (browser.chrome && browser.android &&
+-          view.input.lastKeyCode === 13 && Date.now() - 100 < view.input.lastKeyCodeTime &&
+-          view.someProp("handleKeyDown", f => f(view, keyEvent(13, "Enter"))))
+-        return
+-      let tr = view.state.tr.setSelection(newSel)
+-      if (origin == "pointer") tr.setMeta("pointer", true)
+-      else if (origin == "key") tr.scrollIntoView()
+-      if (compositionID) tr.setMeta("composition", compositionID)
+-      view.dispatch(tr)
+-    }
+-    return
++    for (;;) {
++      let integrated = view.someProp("nativeSelectionIntegration"), state = view.state, owner = view.root.activeElement
++      let native = view.domSelectionRange()
++      let before = {anchorNode: native.anchorNode, anchorOffset: native.anchorOffset,
++                    focusNode: native.focusNode, focusOffset: native.focusOffset}
++      let origin = view.input.lastSelectionTime > Date.now() - 50 ? view.input.lastSelectionOrigin : null
++      let newSel = selectionFromDOM(view, origin)
++      if (integrated && (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, before))) {
++        if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++        if (sameNativeSelection(view, before)) selectionToDOM(view, true, !view.hasFocus())
++        continue
++      }
++      if (newSel && !view.state.selection.eq(newSel)) {
++        if (browser.chrome && browser.android &&
++            view.input.lastKeyCode === 13 && Date.now() - 100 < view.input.lastKeyCodeTime &&
++            view.someProp("handleKeyDown", f => f(view, keyEvent(13, "Enter"))))
++          return
++        if (integrated && (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, before))) {
++          if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++          if (sameNativeSelection(view, before)) selectionToDOM(view, true, !view.hasFocus())
++          continue
++        }
++        let tr = view.state.tr.setSelection(newSel)
++        if (origin == "pointer") tr.setMeta("pointer", true)
++        else if (origin == "key") tr.scrollIntoView()
++        if (compositionID) tr.setMeta("composition", compositionID)
++        view.dispatch(tr)
++      }
++      return
++  }
+   }
+ 
+   let $before = view.state.doc.resolve(from)
+diff --git a/src/domobserver.ts b/src/domobserver.ts
+--- a/src/domobserver.ts
++++ b/src/domobserver.ts
+@@ -1,7 +1,7 @@
+-import {Selection} from "prosemirror-state"
++import {Selection, TextSelection, EditorState} from "prosemirror-state"
+ import * as browser from "./browser"
+ import {domIndex, isEquivalentPosition, selectionCollapsed, parentNode, DOMSelectionRange, DOMNode, DOMSelection} from "./dom"
+-import {hasFocusAndSelection, selectionToDOM, selectionFromDOM} from "./selection"
++import {hasFocusAndSelection, hasSelection, selectionToDOM, selectionFromDOM} from "./selection"
+ import {EditorView} from "./index"
+ 
+ const observeOptions = {
+@@ -33,6 +33,112 @@
+   eq(sel: DOMSelectionRange) {
+     return sel.anchorNode == this.anchorNode && sel.anchorOffset == this.anchorOffset &&
+       sel.focusNode == this.focusNode && sel.focusOffset == this.focusOffset
++  }
++}
++
++export function sameSelectionContext(view: EditorView, state: EditorState, owner: Element | null) {
++  return !view.isDestroyed && view.dom.isConnected && !view.composing &&
++    view.root.activeElement == owner && view.state.doc == state.doc &&
++    view.state.plugins == state.plugins && view.state.selection.eq(state.selection)
++}
++
++function focusReset(view: EditorView, sel: DOMSelectionRange, nativeOnly = false) {
++  let readSel
++  return view.input.lastFocus > Date.now() - 200 &&
++    Math.max(view.input.lastTouch, view.input.lastClick.time) < Date.now() - 300 &&
++    selectionCollapsed(sel) && (readSel = selectionFromDOM(view, null, nativeOnly)) &&
++    readSel.eq(Selection.near(view.state.doc.resolve(0), 1))
++}
++
++function readNativeSelection(observer: DOMObserver, intent: "observe" | "consume", outgoing: boolean,
++                             initialSelection: Selection) {
++  let view = observer.view
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing && view.someProp("nativeSelectionIntegration")) {
++    if (!(outgoing ? hasSelection(view) : hasFocusAndSelection(view))) return
++    let state = view.state, owner = view.root.activeElement
++    let native = view.domSelectionRange()
++    let sel = {anchorNode: native.anchorNode, anchorOffset: native.anchorOffset,
++               focusNode: native.focusNode, focusOffset: native.focusOffset}
++    if (!sel.anchorNode || !sel.focusNode || !view.dom.contains(sel.anchorNode) || !view.dom.contains(sel.focusNode)) return
++    let ignored = observer.ignoreSelectionChange(sel)
++    if (view.isDestroyed || view.root.activeElement != owner) return
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    if (ignored) return
++    if (observer.suppressingSelectionUpdates) {
++      if (!view.input.mouseDown?.allowDefault) selectionToDOM(view)
++      return
++    }
++    // Classify native presentation before a rich constructor can retain its structured owner.
++    let reset = focusReset(view, sel, true)
++    if (view.isDestroyed || view.root.activeElement != owner) return
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    if (reset) {
++      view.input.lastFocus = 0
++      selectionToDOM(view, true, outgoing)
++      if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
++        let projected = view.state
++        view.scrollToSelection()
++        if (!view.isDestroyed && view.dom.isConnected && !view.composing && view.root.activeElement == owner) {
++          if (!sameSelectionContext(view, projected, owner)) selectionToDOM(view, true, outgoing)
++          if (!view.isDestroyed && view.root.activeElement == owner) observer.setCurSelection()
++        }
++      }
++      return
++    }
++    if (intent == "observe" && view.input.mouseDown?.allowDefault) {
++      observer.setCurSelection()
++      return
++    }
++    if (intent == "observe" && observer.currentSelection.eq(sel)) return
++    let selection = view.state.selection
++    if (!(selection instanceof TextSelection)) {
++      let anchor = view.posAtDOM(sel.anchorNode, sel.anchorOffset)
++      let head = view.posAtDOM(sel.focusNode, sel.focusOffset)
++      let presentation = TextSelection.between(selection.$anchor, selection.$head)
++      if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++      if (anchor == selection.anchor && head == selection.head ||
++          anchor == presentation.anchor && head == presentation.head) {
++        observer.setCurSelection()
++        return
++      }
++    }
++    let anchor = view.posAtDOM(sel.anchorNode, sel.anchorOffset)
++    let head = view.posAtDOM(sel.focusNode, sel.focusOffset)
++    if (!sameSelectionContext(view, state, owner) || !sameNativeSelection(view, sel)) continue
++    observer.stop()
++    try {
++      observer.handleDOMChange(-1, -1, false, [])
++      if (!view.isDestroyed && view.dom.isConnected && !view.composing &&
++          view.root.activeElement == owner && view.state.doc == state.doc && view.state.plugins == state.plugins &&
++          intent == "consume" && !view.state.selection.eq(initialSelection) &&
++          view.state.selection instanceof TextSelection && view.state.selection.anchor == anchor &&
++          view.state.selection.head == head && sel.anchorNode.isConnected && sel.focusNode.isConnected) {
++        view.dom.ownerDocument.getSelection()?.setBaseAndExtent(sel.anchorNode, sel.anchorOffset, sel.focusNode, sel.focusOffset)
++      }
++      if (sameSelectionContext(view, view.state, owner)) observer.setCurSelection()
++    } finally {
++      if (!view.isDestroyed) observer.start()
++    }
++    return
++  }
++}
++
++export function sameNativeSelection(view: EditorView, sel: DOMSelectionRange) {
++  let current = view.domSelectionRange()
++  return current.anchorNode == sel.anchorNode && current.anchorOffset == sel.anchorOffset &&
++    current.focusNode == sel.focusNode && current.focusOffset == sel.focusOffset
++}
++
++export function completeNativeSelection(view: EditorView, outgoing: boolean) {
++  if (!view.someProp("nativeSelectionIntegration")) return
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing && view.someProp("nativeSelectionIntegration")) {
++    let observer = view.domObserver, state = view.state, owner = view.root.activeElement
++    observer.forceFlush()
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    observer.flush("consume", outgoing, state.selection)
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    // Continue only for actual newly owed work or a changed authoritative context.
++    if (view.state.doc == state.doc && view.state.plugins == state.plugins && !observer.pendingRecords().length) return
+   }
+ }
+ 
+@@ -130,6 +236,7 @@
+   }
+ 
+   onSelectionChange() {
++    if (this.view.someProp("nativeSelectionIntegration")) return this.flush()
+     if (!hasFocusAndSelection(this.view)) return
+     if (this.suppressingSelectionUpdates) return selectionToDOM(this.view)
+     // Deletions on IE11 fire their events in the wrong order, giving
+@@ -171,14 +278,17 @@
+     return this.queue
+   }
+ 
+-  flush() {
++  flush(intent: "observe" | "consume" = "observe", outgoing = false, initialSelection = this.view.state.selection): void {
+     let {view} = this
+     if (!view.docView || this.flushingSoon > -1) return
++    let state = view.state, owner = view.root.activeElement
++    let integrated = view.someProp("nativeSelectionIntegration")
++    if (integrated && !view.dom.isConnected) return
+     let mutations = this.pendingRecords()
+     if (mutations.length) this.queue = []
+ 
+     let sel = view.domSelectionRange()
+-    let newSel = !this.suppressingSelectionUpdates && !this.currentSelection.eq(sel) && hasFocusAndSelection(view) && !this.ignoreSelectionChange(sel)
++    let newSel = !integrated && !this.suppressingSelectionUpdates && !this.currentSelection.eq(sel) && hasFocusAndSelection(view) && !this.ignoreSelectionChange(sel)
+ 
+     let from = -1, to = -1, typeOver = false, added: Node[] = []
+     if (view.editable) {
+@@ -224,14 +334,16 @@
+       }
+     }
+ 
+-    let readSel: Selection | null = null
+-    // If it looks like the browser has reset the selection to the
+-    // start of the document after focus, restore the selection from
+-    // the state
+-    if (from < 0 && newSel && view.input.lastFocus > Date.now() - 200 &&
+-        Math.max(view.input.lastTouch, view.input.lastClick.time) < Date.now() - 300 &&
+-        selectionCollapsed(sel) && (readSel = selectionFromDOM(view)) &&
+-        readSel.eq(Selection.near(view.state.doc.resolve(0), 1))) {
++    if (integrated && !sameSelectionContext(view, state, owner) && !view.composing) {
++      this.queue = mutations.concat(this.queue)
++      if (view.isDestroyed || !view.dom.isConnected || view.root.activeElement != owner) return
++      return this.flush(intent, outgoing, initialSelection)
++    }
++    if (integrated && from < 0) {
++      readNativeSelection(this, intent, outgoing, initialSelection)
++      return
++    }
++    if (from < 0 && newSel && focusReset(view, sel)) {
+       view.input.lastFocus = 0
+       selectionToDOM(view)
+       this.currentSelection.set(sel)
+diff --git a/src/index.ts b/src/index.ts
+--- a/src/index.ts
++++ b/src/index.ts
+@@ -8,7 +8,7 @@
+         InputState, doPaste, Dragging, findCompositionNode} from "./input"
+ import {selectionToDOM, anchorInRightPlace, syncNodeSelection} from "./selection"
+ import {Decoration, viewDecorations, DecorationSource} from "./decoration"
+-import {DOMObserver, safariShadowSelectionRange} from "./domobserver"
++import {completeNativeSelection, DOMObserver, safariShadowSelectionRange} from "./domobserver"
+ import {readDOMChange} from "./domchange"
+ import {DOMSelection, DOMNode, DOMSelectionRange, deepActiveElement, clearReusedRange} from "./dom"
+ import * as browser from "./browser"
+@@ -337,9 +337,14 @@
+   /// Focus the editor.
+   focus() {
+     this.domObserver.stop()
+-    if (this.editable) focusPreventScroll(this.dom)
+-    selectionToDOM(this)
+-    this.domObserver.start()
++    let integrated = this.someProp("nativeSelectionIntegration"), owner = this.root.activeElement
++    if (integrated) selectionToDOM(this, !this.hasFocus(), true)
++    if (this.isDestroyed) return
++    if (!integrated || this.root.activeElement == owner || this.hasFocus()) {
++      if (this.editable) focusPreventScroll(this.dom)
++      if (!integrated && !this.isDestroyed) selectionToDOM(this)
++    }
++    if (!this.isDestroyed) this.domObserver.start()
+   }
+ 
+   /// Get the document root in which the editor exists. This will
+@@ -478,6 +483,11 @@
+   /// used anymore).
+   get isDestroyed() {
+     return this.docView == null
++  }
++
++  /// Complete opted-in native input before a model consumer or outgoing handoff.
++  completeNativeSelection(outgoing = false) {
++    completeNativeSelection(this, outgoing)
+   }
+ 
+   /// Used for testing.
+@@ -619,6 +629,9 @@
+ /// functions, and is used to pass in the plugin type when defining a
+ /// [plugin](#state.Plugin).
+ export interface EditorProps<P = any> {
++  /// Classify focus presentation before deferring held input or accepting a completed range.
++  nativeSelectionIntegration?: boolean
++
+   /// Can be an object mapping DOM event type names to functions that
+   /// handle them. Such functions will be called before any handling
+   /// ProseMirror does of events fired on the editable DOM element.
+diff --git a/src/input.ts b/src/input.ts
+--- a/src/input.ts
++++ b/src/input.ts
+@@ -47,9 +47,7 @@
+   for (let event in handlers) {
+     let handler = handlers[event]
+     view.dom.addEventListener(event, view.input.eventHandlers[event] = (event: Event) => {
+-      if (eventBelongsToView(view, event) && !runCustomHandler(view, event) &&
+-          (view.editable || !(event.type in editHandlers)))
+-        handler(view, event)
++      if (eventBelongsToView(view, event)) runInputHandler(view, event, handler)
+     }, passiveHandlers[event] ? {passive: true} : undefined)
+   }
+   // On Safari, for reasons beyond my understanding, adding an input
+@@ -83,6 +81,8 @@
+ 
+ function runCustomHandler(view: EditorView, event: Event) {
+   return view.someProp("handleDOMEvents", handlers => {
++    if (event.type == "focus" && view.someProp("nativeSelectionIntegration") &&
++        (view.isDestroyed || !view.hasFocus())) return true
+     let handler = handlers[event.type]
+     return handler ? handler(view, event) || event.defaultPrevented : false
+   })
+@@ -98,10 +98,22 @@
+   return true
+ }
+ 
++function runInputHandler(view: EditorView, event: Event, handler: (view: EditorView, event: Event) => void) {
++  if (event.type == "focus" && view.someProp("nativeSelectionIntegration")) {
++    handler(view, event)
++    if (!view.isDestroyed && view.hasFocus()) {
++      view.domObserver.forceFlush()
++      if (!view.isDestroyed && view.hasFocus()) view.domObserver.flush()
++    }
++    if (!view.isDestroyed && view.hasFocus()) runCustomHandler(view, event)
++  } else if (!runCustomHandler(view, event) && (view.editable || !(event.type in editHandlers))) {
++    handler(view, event)
++  }
++}
++
+ export function dispatchEvent(view: EditorView, event: Event) {
+-  if (!runCustomHandler(view, event) && handlers[event.type] &&
+-      (view.editable || !(event.type in editHandlers)))
+-    handlers[event.type](view, event)
++  if (handlers[event.type]) runInputHandler(view, event, handlers[event.type])
++  else runCustomHandler(view, event)
+ }
+ 
+ editHandlers.keydown = (view: EditorView, _event: Event) => {
+@@ -840,8 +852,14 @@
+     view.domObserver.start()
+     view.focused = true
+     setTimeout(() => {
+-      if (view.docView && view.hasFocus() && !view.domObserver.currentSelection.eq(view.domSelectionRange()))
+-        selectionToDOM(view)
++      if (view.docView && view.hasFocus()) {
++        if (view.someProp("nativeSelectionIntegration")) {
++          view.domObserver.forceFlush()
++          if (view.docView && view.hasFocus()) view.domObserver.flush()
++          if (!view.docView || !view.hasFocus() || view.composing || view.input.mouseDown?.allowDefault) return
++        }
++        if (!view.domObserver.currentSelection.eq(view.domSelectionRange())) selectionToDOM(view)
++      }
+     }, 20)
+   }
+ }
+diff --git a/src/selection.ts b/src/selection.ts
+--- a/src/selection.ts
++++ b/src/selection.ts
+@@ -6,7 +6,7 @@
+ import {EditorView} from "./index"
+ import {NodeViewDesc} from "./viewdesc"
+ 
+-export function selectionFromDOM(view: EditorView, origin: string | null = null) {
++export function selectionFromDOM(view: EditorView, origin: string | null = null, nativeOnly = false) {
+   let domSel = view.domSelectionRange(), doc = view.state.doc
+   if (!domSel.focusNode) return null
+   let nearestDesc = view.docView.nearestDesc(domSel.focusNode), inWidget = nearestDesc && nearestDesc.size == 0
+@@ -42,7 +42,7 @@
+ 
+   if (!selection) {
+     let bias = origin == "pointer" || (view.state.selection.head < $head.pos && !inWidget) ? 1 : -1
+-    selection = selectionBetween(view, $anchor, $head, bias)
++    selection = nativeOnly ? TextSelection.between($anchor, $head, bias) : selectionBetween(view, $anchor, $head, bias)
+   }
+   return selection
+ }
+@@ -52,11 +52,25 @@
+     hasSelection(view) && document.activeElement && document.activeElement.contains(view.dom)
+ }
+ 
+-export function selectionToDOM(view: EditorView, force = false) {
+-  let sel = view.state.selection
++export function selectionToDOM(view: EditorView, force = false, outgoing = false) {
++  if (!view.someProp("nativeSelectionIntegration")) return projectSelection(view, force, outgoing)
++  while (!view.isDestroyed && view.dom.isConnected && !view.composing) {
++    let state = view.state, owner = view.root.activeElement
++    projectSelection(view, force, outgoing)
++    if (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner) return
++    if (view.state.doc == state.doc && view.state.plugins == state.plugins && view.state.selection.eq(state.selection)) return
++    force = true
++  }
++}
++
++function projectSelection(view: EditorView, force: boolean, outgoing: boolean) {
++  let state = view.state, owner = view.root.activeElement, sel = state.selection
++  let integrated = view.someProp("nativeSelectionIntegration")
+   syncNodeSelection(view, sel)
+-
+-  if (!editorOwnsSelection(view)) return
++  if (integrated && (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner ||
++      view.state.doc != state.doc || view.state.plugins != state.plugins || !view.state.selection.eq(sel))) return
++
++  if (!outgoing && !editorOwnsSelection(view)) return
+ 
+   // Need to delay selection normalization during a native selection
+   // drag on Chrome, or it will cause further dragging to glitch.
+@@ -85,9 +99,15 @@
+         resetEditableTo = temporarilyEditableNear(view, sel.to)
+     }
+     view.docView.setSelection(anchor, head, view, force)
++
+     if (brokenSelectBetweenUneditable) {
+       if (resetEditableFrom) resetEditable(resetEditableFrom)
+       if (resetEditableTo) resetEditable(resetEditableTo)
++    }
++    if (integrated && (view.isDestroyed || !view.dom.isConnected || view.composing || view.root.activeElement != owner ||
++        view.state.doc != state.doc || view.state.plugins != state.plugins || !view.state.selection.eq(sel))) {
++      if (!view.isDestroyed) view.domObserver.connectSelection()
++      return
+     }
+     if (sel.visible) {
+       view.dom.classList.remove("ProseMirror-hideselection")
+diff --git a/src/viewdesc.ts b/src/viewdesc.ts
+--- a/src/viewdesc.ts
++++ b/src/viewdesc.ts
+@@ -466,6 +466,12 @@
+     // Selection.extend can be used to create an 'inverted' selection
+     // (one where the focus is before the anchor), but not all
+     // browsers support it yet.
++    if (view.someProp("nativeSelectionIntegration") && domSel.setBaseAndExtent && !brKludge) {
++      try {
++        domSel.setBaseAndExtent(anchorDOM.node, anchorDOM.offset, headDOM.node, headDOM.offset)
++        return
++      } catch (_) {} // Unsupported endpoints use the existing browser fallbacks.
++    }
+     let domSelExtended = false
+     if ((domSel.extend || anchor == head) && !(brKludge && browser.gecko)) {
+       domSel.collapse(anchorDOM.node, anchorDOM.offset)
