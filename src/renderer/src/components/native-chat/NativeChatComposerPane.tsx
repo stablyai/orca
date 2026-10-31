@@ -381,6 +381,7 @@ export const NativeChatComposerPane = forwardRef<ComposerHandle, C.NativeChatCom
           numberImages={Boolean(structuredTransport)}
           attachmentEnvironmentId={structuredTransport?.runtimeEnvironmentId ?? undefined}
           sendButtonDisabled={sendButtonDisabled}
+          sendHeld={sendHeld}
           sendBlockedReason={sendBlockedReason}
           isWorking={isWorking}
           isStopping={isStopping}

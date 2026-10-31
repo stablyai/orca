@@ -128,7 +128,10 @@ describe('NativeChatComposerActions', () => {
     ).toEqual(['Attach file', 'Start dictation', 'Stop the agent'])
 
     rerender(
-      <NativeChatComposerActions {...props} followUp={{ action: 'queue', offersChoice: true }} />
+      <NativeChatComposerActions
+        {...props}
+        followUp={{ action: 'queue', offersChoice: true, held: false }}
+      />
     )
     fireEvent.click(screen.getByRole('button', { name: 'Queue message' }))
     expect(onSend).toHaveBeenCalledExactlyOnceWith()
@@ -138,7 +141,10 @@ describe('NativeChatComposerActions', () => {
     expect(container.textContent).toContain('Send into the running turn⌘+⏎')
 
     rerender(
-      <NativeChatComposerActions {...props} followUp={{ action: 'steer', offersChoice: false }} />
+      <NativeChatComposerActions
+        {...props}
+        followUp={{ action: 'steer', offersChoice: false, held: false }}
+      />
     )
     expect(screen.getByRole('button', { name: 'Steer message' })).toBeTruthy()
     expect(container.textContent).toContain('Send into the running turn⏎')

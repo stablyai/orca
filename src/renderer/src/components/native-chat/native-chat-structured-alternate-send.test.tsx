@@ -57,8 +57,17 @@ import { useStructuredAgentSession } from './use-structured-agent-session'
 import { useNativeChatStructuredComposerTransport } from './use-native-chat-structured-composer-transport'
 import { nativeChatStructuredStopControls } from './native-chat-structured-stop-controls'
 import { changePrompt } from './native-chat-prompt-editor.test-support'
+import type { NativeChatStructuredComposerTransport } from './native-chat-composer-types'
 
-function Chat({ queueFollowUps }: { queueFollowUps: boolean }): React.JSX.Element {
+function Chat({
+  queueFollowUps,
+  canSend,
+  overrides
+}: {
+  queueFollowUps: boolean
+  canSend?: boolean
+  overrides?: Partial<NativeChatStructuredComposerTransport>
+}): React.JSX.Element {
   const props = { agent: 'claude', sessionId: 'session-1', target: { kind: 'local' } } as const
   const controller = useStructuredAgentSession({
     ...props,
@@ -86,7 +95,8 @@ function Chat({ queueFollowUps }: { queueFollowUps: boolean }): React.JSX.Elemen
       targetPtyId={null}
       agent="claude"
       {...nativeChatStructuredStopControls(controller, false).composer}
-      structuredTransport={transport}
+      canSend={canSend}
+      structuredTransport={{ ...transport, ...overrides }}
     />
   )
 }
@@ -165,4 +175,36 @@ describe('mid-turn send keys on a host that queues', () => {
       expect(sends().map((params) => params.delivery)).toEqual([enter, alternate])
     }
   )
+
+  it('disables the control beside Stop wherever the idle Send would be, with the same reason', async () => {
+    const view = render(
+      <TooltipProvider>
+        <Chat queueFollowUps />
+      </TooltipProvider>
+    )
+    changePrompt(screen.getByRole('textbox'), 'draft')
+    expect(screen.getByRole('button', { name: 'Queue message' }).hasAttribute('disabled')).toBe(
+      false
+    )
+
+    // Another device holds the input: disabled, and like Send it gives no reason.
+    view.rerender(
+      <TooltipProvider>
+        <Chat queueFollowUps canSend={false} />
+      </TooltipProvider>
+    )
+    expect(screen.getByRole('button', { name: 'Queue message' }).hasAttribute('disabled')).toBe(
+      true
+    )
+
+    view.rerender(
+      <TooltipProvider>
+        <Chat queueFollowUps overrides={{ sendBlockedReason: 'Reconnect to send.' }} />
+      </TooltipProvider>
+    )
+    const held = screen.getByRole('button', { name: 'Reconnect to send.' })
+    expect(held.hasAttribute('disabled')).toBe(true)
+    fireEvent.click(held)
+    expect(sends()).toEqual([])
+  })
 })

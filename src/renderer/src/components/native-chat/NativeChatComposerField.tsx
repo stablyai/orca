@@ -54,6 +54,8 @@ export type NativeChatComposerFieldProps = {
   /** The paired server a structured chat runs on, which reads back files stored there. */
   attachmentEnvironmentId?: string
   sendButtonDisabled: boolean
+  /** No send can leave this device now; mid-turn this disables the follow-up control as it does Send. */
+  sendHeld: boolean
   /** Why the send button is disabled, when the user can do something about it. */
   sendBlockedReason?: string | null
   isWorking: boolean
@@ -142,6 +144,7 @@ export function NativeChatComposerField({
   numberImages = false,
   attachmentEnvironmentId,
   sendButtonDisabled,
+  sendHeld,
   sendBlockedReason,
   isWorking,
   isStopping = false,
@@ -185,8 +188,10 @@ export function NativeChatComposerField({
   // Keyed on its parts: a fresh object each keystroke would re-render the memoized actions.
   const followUp = useMemo(
     () =>
-      followUpAction ? { action: followUpAction, offersChoice: followUpOffersChoice } : undefined,
-    [followUpAction, followUpOffersChoice]
+      followUpAction
+        ? { action: followUpAction, offersChoice: followUpOffersChoice, held: sendHeld }
+        : undefined,
+    [followUpAction, followUpOffersChoice, sendHeld]
   )
   const optionCount =
     autocomplete.mode === 'slash'

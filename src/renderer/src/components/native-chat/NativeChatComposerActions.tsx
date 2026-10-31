@@ -21,6 +21,9 @@ import type {
 } from '../../../../shared/native-chat-follow-up-behavior'
 import { isMacPlatform } from './native-chat-shortcut'
 
+/** `held`: the idle Send would be disabled here, so this control is too, with the same reason. */
+export type NativeChatComposerFollowUp = NativeChatSendFollowUp & { held: boolean }
+
 export type NativeChatComposerActionsProps = {
   editSession?: { cancel: () => void }
   attachDisabled: boolean
@@ -34,7 +37,7 @@ export type NativeChatComposerActionsProps = {
   /** This client's Stop request is in flight: the Stop control is disabled and says so. */
   isStopping?: boolean
   /** Mid-turn: a send control beside Stop, so the user sees what Enter does. */
-  followUp?: NativeChatSendFollowUp
+  followUp?: NativeChatComposerFollowUp
   isDictating: boolean
   isDictationHoldMode: boolean
   onAttach: () => void
@@ -221,21 +224,13 @@ export const NativeChatComposerActions = memo(function NativeChatComposerActions
           </Button>
         ) : null}
         {followUp && stops && !editSession ? (
-          <NativeChatFollowUpSendButton followUp={followUp} onSend={onSend} />
+          <NativeChatFollowUpSendButton
+            followUp={followUp}
+            reason={followUp.held ? (sendBlockedReason ?? null) : null}
+            onSend={onSend}
+          />
         ) : null}
-        {sendReason ? (
-          <Tooltip>
-            <TooltipTrigger asChild>
-              {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
-              <span className="inline-flex">{sendButton}</span>
-            </TooltipTrigger>
-            <TooltipContent side="top" sideOffset={4}>
-              {sendReason}
-            </TooltipContent>
-          </Tooltip>
-        ) : (
-          sendButton
-        )}
+        <HeldSendReason reason={sendReason}>{sendButton}</HeldSendReason>
       </div>
     </div>
   )
@@ -246,9 +241,11 @@ const FOLLOW_UP_ICON = { queue: ListEnd, steer: CornerDownRight } as const
 /** Sends exactly as Enter does; its tooltip names Enter and, when it would differ, Cmd/Ctrl+Enter. */
 function NativeChatFollowUpSendButton({
   followUp,
+  reason,
   onSend
 }: {
-  followUp: NativeChatSendFollowUp
+  followUp: NativeChatComposerFollowUp
+  reason: string | null
   onSend: () => void
 }): React.JSX.Element {
   const label = {
@@ -262,25 +259,31 @@ function NativeChatFollowUpSendButton({
   const alternate: NativeChatFollowUpBehavior = followUp.action === 'queue' ? 'steer' : 'queue'
   const isMac = isMacPlatform()
   const Icon = FOLLOW_UP_ICON[followUp.action]
+  const button = (
+    <Button
+      type="button"
+      aria-label={reason ?? label[followUp.action]}
+      disabled={followUp.held}
+      // A press keeps focus in the draft, and a double-click's second press sends nothing more.
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => {
+        if (event.detail <= 1) {
+          onSend()
+        }
+      }}
+      size="icon"
+      className="size-8 rounded-full pointer-coarse:size-10"
+    >
+      <Icon className="size-4" />
+    </Button>
+  )
+  // Held, it reads as the idle Send does: the reason when there is one, otherwise nothing.
+  if (followUp.held) {
+    return <HeldSendReason reason={reason}>{button}</HeldSendReason>
+  }
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
-        <Button
-          type="button"
-          aria-label={label[followUp.action]}
-          // A press keeps focus in the draft, and a double-click's second press sends nothing more.
-          onMouseDown={(event) => event.preventDefault()}
-          onClick={(event) => {
-            if (event.detail <= 1) {
-              onSend()
-            }
-          }}
-          size="icon"
-          className="size-8 rounded-full pointer-coarse:size-10"
-        >
-          <Icon className="size-4" />
-        </Button>
-      </TooltipTrigger>
+      <TooltipTrigger asChild>{button}</TooltipTrigger>
       <TooltipContent side="top" sideOffset={4}>
         <span className="flex flex-col gap-1">
           <span className="flex items-center justify-between gap-2">
@@ -294,6 +297,30 @@ function NativeChatFollowUpSendButton({
             </span>
           ) : null}
         </span>
+      </TooltipContent>
+    </Tooltip>
+  )
+}
+
+/** A disabled send control that says why, when the user can do something about it. */
+function HeldSendReason({
+  reason,
+  children
+}: {
+  reason: string | null
+  children: React.JSX.Element
+}): React.JSX.Element {
+  if (!reason) {
+    return children
+  }
+  return (
+    <Tooltip>
+      <TooltipTrigger asChild>
+        {/* A disabled button gets no pointer events, so the wrapper carries the hover. */}
+        <span className="inline-flex">{children}</span>
+      </TooltipTrigger>
+      <TooltipContent side="top" sideOffset={4}>
+        {reason}
       </TooltipContent>
     </Tooltip>
   )
