@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto'
 import { mkdtempSync, rmSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { afterEach, beforeEach, expect, vi } from 'vitest'
+import { afterEach, beforeEach, expect, vi, type MockInstance } from 'vitest'
 import { z } from 'zod'
 import { OrcaRuntimeRpcServer } from '../../../../runtime-rpc'
 import { ORCHESTRATION_METHODS } from '../../orchestration'
@@ -47,7 +47,7 @@ export function useHelperFollowUpCli() {
   let directory: string
   let server: OrcaRuntimeRpcServer | undefined
   let main: (argv: string[]) => Promise<void>
-  let logs: ReturnType<typeof vi.spyOn<typeof console, 'log'>>
+  let logs: MockInstance<typeof console.log>
   let nextTerminal = 'term_worker'
   let rig: QueuedMessageTestRig | undefined
   let structuredHandle: string | undefined
