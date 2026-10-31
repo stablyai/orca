@@ -5320,7 +5320,7 @@
             },
             "sections": {
               "32330a6e66": "{{value0}}: {{value1}} tokens",
-              "57d1448ef8": "Enable",
+              "enableProviderAnalytics": "Enable {{provider}} usage analytics",
               "f6df0d7d6d": "More",
               "1dd166c920": "Less",
               "52d9221dc0": "Recent token activity heatmap",

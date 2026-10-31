@@ -5132,7 +5132,7 @@
             },
             "sections": {
               "32330a6e66": "{{value0}}：{{value1}} token",
-              "57d1448ef8": "啟用",
+              "enableProviderAnalytics": "啟用 {{provider}} 用量分析",
               "f6df0d7d6d": "更多的",
               "1dd166c920": "較少的",
               "52d9221dc0": "近期 token 活動熱圖",

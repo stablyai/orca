@@ -4682,7 +4682,7 @@
             },
             "sections": {
               "32330a6e66": "{{value0}}：{{value1}} token",
-              "57d1448ef8": "启用",
+              "enableProviderAnalytics": "启用 {{provider}} 使用量分析",
               "f6df0d7d6d": "更多的",
               "1dd166c920": "较少的",
               "52d9221dc0": "近期token活动热图",

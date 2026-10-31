@@ -4682,7 +4682,7 @@
             },
             "sections": {
               "32330a6e66": "{{value0}}: {{value1}} 토큰",
-              "57d1448ef8": "활성화",
+              "enableProviderAnalytics": "{{provider}} 사용량 분석 활성화",
               "f6df0d7d6d": "많음",
               "1dd166c920": "적음",
               "52d9221dc0": "최근 토큰 활동 히트맵",

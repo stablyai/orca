@@ -5246,7 +5246,7 @@
             },
             "sections": {
               "32330a6e66": "{{value0}}: {{value1}} Token",
-              "57d1448ef8": "Aktivieren",
+              "enableProviderAnalytics": "Nutzungsanalyse für {{provider}} aktivieren",
               "f6df0d7d6d": "Mehr",
               "1dd166c920": "Weniger",
               "52d9221dc0": "Wärmekarte der jüngsten Token-Aktivität",

@@ -5232,7 +5232,7 @@
             },
             "sections": {
               "32330a6e66": "{{value0}}: {{value1}} token",
-              "57d1448ef8": "Etkinleştir",
+              "enableProviderAnalytics": "{{provider}} kullanım analizlerini etkinleştir",
               "f6df0d7d6d": "Daha fazla",
               "1dd166c920": "Daha az",
               "52d9221dc0": "Son token etkinliği ısı haritası",

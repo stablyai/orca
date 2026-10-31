@@ -1,6 +1,6 @@
 import { AlertCircle } from 'lucide-react'
 import { Badge } from '../ui/badge'
-import { Button } from '../ui/button'
+import { Switch } from '../ui/switch'
 import { formatUsageCost, formatUsageTokens } from './usage-overview-model'
 import type {
   UsageOverviewDailyPoint,
@@ -235,11 +235,11 @@ export function DailyIntensityGrid({
 export function ProviderUsageRow({
   provider,
   totalTokens,
-  onEnable
+  onEnabledChange
 }: {
   provider: UsageProviderOverview
   totalTokens: number
-  onEnable: () => void
+  onEnabledChange: (enabled: boolean) => void
 }): React.JSX.Element {
   const share = totalTokens > 0 ? provider.totalTokens / totalTokens : 0
   const status = provider.enabled
@@ -263,11 +263,15 @@ export function ProviderUsageRow({
             {provider.topProject ? ` - ${provider.topProject}` : ''}
           </p>
         </div>
-        {!provider.enabled ? (
-          <Button variant="outline" size="xs" onClick={onEnable}>
-            {translate('auto.components.stats.usage.overview.sections.57d1448ef8', 'Enable')}
-          </Button>
-        ) : null}
+        <Switch
+          checked={provider.enabled}
+          aria-label={translate(
+            'auto.components.stats.usage.overview.sections.enableProviderAnalytics',
+            'Enable {{provider}} usage analytics',
+            { provider: provider.label }
+          )}
+          onCheckedChange={onEnabledChange}
+        />
       </div>
 
       <div className="mt-3 grid gap-2 text-xs text-muted-foreground sm:grid-cols-3">

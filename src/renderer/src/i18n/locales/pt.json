@@ -15535,7 +15535,7 @@
             },
             "sections": {
               "32330a6e66": "{{value0}}: {{value1}} tokens",
-              "57d1448ef8": "Ativar",
+              "enableProviderAnalytics": "Ativar análise de uso do {{provider}}",
               "f6df0d7d6d": "Mais",
               "1dd166c920": "Menos",
               "52d9221dc0": "Mapa de calor de atividade recente de tokens",

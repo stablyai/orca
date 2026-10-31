@@ -49,10 +49,10 @@ export function UsageOverviewPane(): React.JSX.Element {
   const refreshCodexUsage = useAppStore((state) => state.refreshCodexUsage)
   const refreshOpenCodeUsage = useAppStore((state) => state.refreshOpenCodeUsage)
   const refreshMuseUsage = useAppStore((state) => state.refreshMuseUsage)
-  const enableClaudeUsage = useAppStore((state) => state.enableClaudeUsage)
-  const enableCodexUsage = useAppStore((state) => state.enableCodexUsage)
-  const enableOpenCodeUsage = useAppStore((state) => state.enableOpenCodeUsage)
-  const enableMuseUsage = useAppStore((state) => state.enableMuseUsage)
+  const setClaudeUsageEnabled = useAppStore((state) => state.setClaudeUsageEnabled)
+  const setCodexUsageEnabled = useAppStore((state) => state.setCodexUsageEnabled)
+  const setOpenCodeUsageEnabled = useAppStore((state) => state.setOpenCodeUsageEnabled)
+  const setMuseUsageEnabled = useAppStore((state) => state.setMuseUsageEnabled)
   const recordFeatureInteraction = useAppStore((state) => state.recordFeatureInteraction)
 
   useEffect(() => {
@@ -177,7 +177,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                   size="sm"
                   onClick={() => {
                     recordFeatureInteraction('usage-tracking')
-                    void enableClaudeUsage()
+                    void setClaudeUsageEnabled(true)
                   }}
                 >
                   {translate('auto.components.stats.UsageOverviewPane.0ea0cae435', 'Enable Claude')}
@@ -187,7 +187,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                   size="sm"
                   onClick={() => {
                     recordFeatureInteraction('usage-tracking')
-                    void enableCodexUsage()
+                    void setCodexUsageEnabled(true)
                   }}
                 >
                   {translate('auto.components.stats.UsageOverviewPane.2f1ee2878b', 'Enable Codex')}
@@ -197,7 +197,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                   size="sm"
                   onClick={() => {
                     recordFeatureInteraction('usage-tracking')
-                    void enableOpenCodeUsage()
+                    void setOpenCodeUsageEnabled(true)
                   }}
                 >
                   {translate(
@@ -210,7 +210,7 @@ export function UsageOverviewPane(): React.JSX.Element {
                   size="sm"
                   onClick={() => {
                     recordFeatureInteraction('usage-tracking')
-                    void enableMuseUsage()
+                    void setMuseUsageEnabled(true)
                   }}
                 >
                   {translate('auto.components.stats.UsageOverviewPane.enableMuse', 'Enable Muse')}
@@ -302,16 +302,16 @@ export function UsageOverviewPane(): React.JSX.Element {
               key={provider.id}
               provider={provider}
               totalTokens={overview.totalTokens}
-              onEnable={() => {
+              onEnabledChange={(enabled) => {
                 recordFeatureInteraction('usage-tracking')
                 if (provider.id === 'claude') {
-                  void enableClaudeUsage()
+                  void setClaudeUsageEnabled(enabled)
                 } else if (provider.id === 'codex') {
-                  void enableCodexUsage()
+                  void setCodexUsageEnabled(enabled)
                 } else if (provider.id === 'opencode') {
-                  void enableOpenCodeUsage()
+                  void setOpenCodeUsageEnabled(enabled)
                 } else {
-                  void enableMuseUsage()
+                  void setMuseUsageEnabled(enabled)
                 }
               }}
             />
