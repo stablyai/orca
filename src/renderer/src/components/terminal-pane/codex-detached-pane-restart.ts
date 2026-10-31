@@ -222,6 +222,8 @@ async function executeDetachedCodexPaneRestart(
     tabId: tab.id,
     leafId,
     replacesPtyId: ptyId,
+    // Why: an account restart is the user's; undeclared, critical pressure refuses it after main stopped the PTY.
+    spawnIntent: 'user-resume',
     ...(paneOwner === 'window' &&
     restartReplacesLayoutRoot(currentState.terminalLayoutsByTabId[tab.id], leafId)
       ? { placement: { kind: 'root' as const } }
