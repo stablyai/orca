@@ -3,6 +3,7 @@ import {
   structuredAgentSessionPaneKey,
   structuredAgentSessionTabId
 } from '../../../src/shared/structured-agent-session-projection'
+import type { RuntimeWorktreeAgentRow } from '../../../src/shared/runtime-types'
 import type { Worktree } from '../worktree/workspace-list-types'
 import {
   buildMobileProject,
@@ -29,6 +30,25 @@ function row(name = 'Frontend_Auth', overrides: Partial<Worktree> = {}): Worktre
     unread: false,
     isPinned: false,
     linkedPR: null,
+    ...overrides
+  }
+}
+function agentRow(
+  overrides: Partial<RuntimeWorktreeAgentRow> & Pick<RuntimeWorktreeAgentRow, 'paneKey'>
+): RuntimeWorktreeAgentRow {
+  return {
+    parentPaneKey: null,
+    state: 'done',
+    agentType: 'codex',
+    prompt: '',
+    taskTitle: null,
+    displayName: null,
+    lastAssistantMessage: null,
+    toolName: null,
+    toolInput: null,
+    interrupted: false,
+    stateStartedAt: 0,
+    updatedAt: 1,
     ...overrides
   }
 }
@@ -168,7 +188,7 @@ describe('mobile project navigation boundaries', () => {
   it('reports live attention while refusing to call disconnected rows running', () => {
     const paneKey = structuredAgentSessionPaneKey(structuredAgentSessionTabId('chat-0'), 'chat-0')
     const workspace = row('Frontend_Auth', {
-      agents: [{ paneKey, state: 'blocked', agentType: 'codex', updatedAt: 1 }]
+      agents: [agentRow({ paneKey, state: 'blocked', agentType: 'codex', updatedAt: 1 })]
     })
     const tabs = snapshot(['Frontend_Auth_Owner'])
     expect(projectMatchesFilter(buildMobileProject(workspace, tabs, true), 'attention')).toBe(true)
@@ -183,13 +203,13 @@ describe('mobile project navigation boundaries', () => {
     const paneKey = structuredAgentSessionPaneKey(structuredAgentSessionTabId('chat-0'), 'chat-0')
     const workspace = row('Frontend_Auth', {
       agents: [
-        {
+        agentRow({
           paneKey,
           state: 'done',
           agentType: 'codex',
           updatedAt: 1,
           lastAssistantMessage: 'Usage limit reached'
-        }
+        })
       ]
     })
     const project = buildMobileProject(workspace, snapshot(['Frontend_Auth_Owner']), true)
@@ -215,7 +235,7 @@ describe('mobile project navigation boundaries', () => {
   })
   it('preserves idle fallback agents when snapshot marks agentSessionsUnverifiable', () => {
     const workspace = row('Frontend_Auth', {
-      agents: [{ paneKey: 'pane-idle', state: 'done', agentType: 'claude', updatedAt: 1 }]
+      agents: [agentRow({ paneKey: 'pane-idle', state: 'done', agentType: 'claude', updatedAt: 1 })]
     })
     const unverifiable = {
       worktree: workspace.worktreeId,

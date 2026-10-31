@@ -67,6 +67,9 @@ export const projectListStyles = themedStyleSheet(() => ({
   },
   host: { flex: 1, minWidth: 0 },
   icon: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
+  reconnect: { paddingHorizontal: spacing.sm, minHeight: 36, justifyContent: 'center' },
+  reconnectText: { color: colors.textPrimary, fontSize: typography.metaSize, fontWeight: '600' },
+  menuDisabled: { opacity: 0.45 },
   menu: {
     backgroundColor: colors.bgPanel,
     paddingHorizontal: spacing.lg,

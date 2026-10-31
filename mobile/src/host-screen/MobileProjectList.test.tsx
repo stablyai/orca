@@ -21,6 +21,7 @@ vi.mock('lucide-react-native', () => ({
   Search: 'Search'
 }))
 vi.mock('../components/AuthFailedBanner', () => ({ AuthFailedBanner: 'AuthFailedBanner' }))
+vi.mock('../components/StatusDot', () => ({ StatusDot: 'StatusDot' }))
 vi.mock('../components/HostRouteNoticeBanner', () => ({
   HostRouteNoticeBanner: 'HostRouteNoticeBanner'
 }))
@@ -31,6 +32,11 @@ vi.mock('./use-mobile-project-sessions', () => ({
   useMobileProjectSessions: () => new Map(),
   projectSnapshotKey: (host: string, id: string) => JSON.stringify([host, id])
 }))
+import {
+  buildRequestStreamUnsubscribe,
+  buildStreamUnsubscribe
+} from '../transport/rpc-client-terminal-subscription'
+import { MobileProjectHeader } from './MobileProjectHeader'
 import { MobileProjectList, MobileProjectRow } from './MobileProjectList'
 
 const workspace: Worktree = {
@@ -156,5 +162,78 @@ describe('mobile project row navigation', () => {
       )
     })
     expect(renderer!.root.findAllByType('AuthFailedBanner' as never)).toHaveLength(1)
+
+    const routerPush = vi.fn()
+    act(() => {
+      renderer!.update(
+        <MobileProjectList
+          bottomBarHeight={0}
+          controller={baseController({
+            connState: 'disconnected',
+            reconnectAttempts: 3,
+            router: { push: routerPush } as never
+          })}
+        />
+      )
+    })
+    const diagLink = renderer!.root.findByProps({ accessibilityLabel: 'View network diagnostics' })
+    act(() => diagLink.props.onPress())
+    expect(routerPush).toHaveBeenCalledWith({
+      pathname: '/connection-log',
+      params: { hostId: 'host-1' }
+    })
+  })
+
+  it('exposes manual reconnect, Tasks/Automations routes, disconnected guards, and subscribeAll release frames', () => {
+    expect(buildRequestStreamUnsubscribe('session.tabs.subscribeAll', {}, 'sub-7')).toEqual({
+      method: 'session.tabs.unsubscribeAll',
+      params: { subscriptionId: 'sub-7' }
+    })
+    expect(buildStreamUnsubscribe('session.tabs.subscribeAll', null)).toBeNull()
+
+    const forceReconnectHost = vi.fn()
+    const navigateFromHostList = vi.fn()
+    const makeHeaderController = (connected: boolean) =>
+      ({
+        hostId: 'host-1',
+        hostDisplay: { title: 'Studio Mac', descriptorLine: null },
+        connState: connected ? 'connected' : 'disconnected',
+        connectionVerdict: connected
+          ? { kind: 'normal', label: 'Connected' }
+          : { kind: 'unreachable', label: 'Host unreachable' },
+        forceReconnectHost,
+        floatingWorkspaceEnabled: true,
+        actions: {
+          leaveHost: vi.fn(),
+          navigateFromHostList,
+          openFloatingWorkspace: vi.fn()
+        },
+        state: { setShowWorkspaceOptions: vi.fn() }
+      }) as unknown as HostScreenController
+
+    act(() => {
+      renderer = create(<MobileProjectHeader controller={makeHeaderController(false)} />)
+    })
+    const reconnectBtn = renderer!.root.findByProps({ accessibilityLabel: 'Reconnect' })
+    act(() => reconnectBtn.props.onPress())
+    expect(forceReconnectHost).toHaveBeenCalledWith('host-1')
+
+    act(() => renderer!.root.findByProps({ accessibilityLabel: 'More' }).props.onPress())
+    const disabledPressables = renderer!.root
+      .findAllByType('Pressable' as never)
+      .filter((node) => node.props.disabled === true)
+    expect(disabledPressables).toHaveLength(4)
+
+    act(() => {
+      renderer!.update(<MobileProjectHeader controller={makeHeaderController(true)} />)
+    })
+    const tasksItem = renderer!.root.findByProps({ accessibilityLabel: 'Tasks' })
+    act(() => tasksItem.props.onPress())
+    expect(navigateFromHostList).toHaveBeenCalledWith('/h/host-1/tasks')
+
+    act(() => renderer!.root.findByProps({ accessibilityLabel: 'More' }).props.onPress())
+    const autoItem = renderer!.root.findByProps({ accessibilityLabel: 'Automations' })
+    act(() => autoItem.props.onPress())
+    expect(navigateFromHostList).toHaveBeenCalledWith('/h/host-1/automations')
   })
 })

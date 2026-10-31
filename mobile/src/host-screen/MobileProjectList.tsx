@@ -5,6 +5,7 @@ import { ChevronDown, ChevronRight } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { AuthFailedBanner } from '../components/AuthFailedBanner'
+import { HostDiagnosticsLink } from '../components/HostDiagnosticsLink'
 import { HostRouteNoticeBanner } from '../components/HostRouteNoticeBanner'
 import { filterWorktrees } from '../worktree/workspace-list-sections'
 import { rowFiltersForView } from '../worktree/workspace-view-settings'
@@ -99,6 +100,19 @@ export function MobileProjectList({
           onRemove={() => state.setConfirmRemoveHost(true)}
         />
       )}
+      {connState !== 'connected' &&
+      !relayRecovery?.pairingRejected &&
+      controller.reconnectAttempts >= 3 &&
+      hostId ? (
+        <HostDiagnosticsLink
+          onPress={() =>
+            controller.router.push({
+              pathname: '/connection-log',
+              params: { hostId: String(hostId) }
+            })
+          }
+        />
+      ) : null}
       {(() => {
         const noticeKey =
           connState !== 'connected' &&

@@ -5,6 +5,7 @@ import { ChevronLeft, Ellipsis } from 'lucide-react-native'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { StatusDot } from '../components/StatusDot'
+import { isConnectionOutage } from '../transport/connection-health'
 import { projectListStyles as styles } from './mobile-project-list-styles'
 import type { HostScreenController } from './use-host-screen-controller'
 
@@ -12,7 +13,10 @@ export function MobileProjectHeader({ controller }: { controller: HostScreenCont
   useMobileColorScheme()
   const t = useMobileTranslation()
   const [menu, setMenu] = useState(false)
-  const { actions, connState, connectionVerdict, hostDisplay, hostId, state } = controller
+  const { actions, connState, connectionVerdict, forceReconnectHost, hostDisplay, hostId, state } =
+    controller
+  const disconnected = connState !== 'connected'
+  const hostPath = `/h/${encodeURIComponent(hostId ?? '')}`
   return (
     <>
       <View style={styles.top}>
@@ -32,6 +36,19 @@ export function MobileProjectHeader({ controller }: { controller: HostScreenCont
             </Text>
           </View>
         </View>
+        {isConnectionOutage(connectionVerdict) && hostId && forceReconnectHost !== null ? (
+          <Pressable
+            style={styles.reconnect}
+            accessibilityRole="button"
+            accessibilityLabel={t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
+            hitSlop={8}
+            onPress={() => void forceReconnectHost(hostId)}
+          >
+            <Text style={styles.reconnectText}>
+              {t('hostScreen.hostScreenHeader.reconnect', 'Reconnect')}
+            </Text>
+          </Pressable>
+        ) : null}
         <Pressable
           style={styles.icon}
           accessibilityRole="button"
@@ -60,11 +77,38 @@ export function MobileProjectHeader({ controller }: { controller: HostScreenCont
             </Text>
           </Pressable>
           <Pressable
-            style={styles.menuRow}
+            style={[styles.menuRow, disconnected && styles.menuDisabled]}
             accessibilityRole="button"
+            accessibilityLabel={t('hostScreen.hostScreenHeader.tasks', 'Tasks')}
+            disabled={disconnected}
             onPress={() => {
               setMenu(false)
-              actions.navigateFromHostList(`/h/${encodeURIComponent(hostId ?? '')}/accounts`)
+              actions.navigateFromHostList(`${hostPath}/tasks`)
+            }}
+          >
+            <Text style={styles.title}>{t('hostScreen.hostScreenHeader.tasks', 'Tasks')}</Text>
+          </Pressable>
+          <Pressable
+            style={[styles.menuRow, disconnected && styles.menuDisabled]}
+            accessibilityRole="button"
+            accessibilityLabel={t('hostScreen.hostScreenHeader.automations', 'Automations')}
+            disabled={disconnected}
+            onPress={() => {
+              setMenu(false)
+              actions.navigateFromHostList(`${hostPath}/automations`)
+            }}
+          >
+            <Text style={styles.title}>
+              {t('hostScreen.hostScreenHeader.automations', 'Automations')}
+            </Text>
+          </Pressable>
+          <Pressable
+            style={[styles.menuRow, disconnected && styles.menuDisabled]}
+            accessibilityRole="button"
+            disabled={disconnected}
+            onPress={() => {
+              setMenu(false)
+              actions.navigateFromHostList(`${hostPath}/accounts`)
             }}
           >
             <Text style={styles.title}>
@@ -73,10 +117,13 @@ export function MobileProjectHeader({ controller }: { controller: HostScreenCont
           </Pressable>
           {controller.floatingWorkspaceEnabled && (
             <Pressable
-              style={styles.menuRow}
+              style={[styles.menuRow, disconnected && styles.menuDisabled]}
               accessibilityRole="button"
-              disabled={connState !== 'connected'}
-              onPress={actions.openFloatingWorkspace}
+              disabled={disconnected}
+              onPress={() => {
+                setMenu(false)
+                actions.openFloatingWorkspace()
+              }}
             >
               <Text style={styles.title}>
                 {t('hostScreen.projectNavigation.floating', 'Floating workspace')}
