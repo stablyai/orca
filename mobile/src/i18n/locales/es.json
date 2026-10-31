@@ -1003,7 +1003,13 @@
       "empty": "Aún no hay atajos personalizados definidos.",
       "removeShortcut": "Eliminar {{label}}",
       "resetDefaults": "Restablecer valores predeterminados",
-      "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original"
+      "resetDescription": "Mostrar todas las teclas de atajo integradas en su orden original",
+      "moreKeys": "MÁS TECLAS",
+      "moreKeysDescription": "Estas teclas están bajo ⋯ en la fila de teclas del terminal. Activa o desactiva las teclas para mostrarlas u ocultarlas y mantén pulsado el asa para arrastrarlas al orden que quieras. Las teclas que ya están en la fila, como Esc o las flechas, no aparecen en ⋯.",
+      "directionPad": "CRUCETA",
+      "showDirectionPad": "Mostrar cruceta",
+      "showDirectionPadDescription": "Fija la cruceta en la barra lateral. Si está desactivada, la barra muestra las teclas de flecha.",
+      "showShortcut": "Mostrar atajo {{label}}"
     },
     "useCodexResetCreditAction": {
       "confirmTitle": "¿Usar un restablecimiento de límites de uso?",
@@ -1447,7 +1453,8 @@
       "reconnect": "Reconectar",
       "searchWorkspaces": "Buscar espacios de trabajo",
       "tasks": "Tareas",
-      "workspaceOptions": "Opciones de espacio de trabajo"
+      "workspaceOptions": "Opciones de espacio de trabajo",
+      "newWorkspace": "Nuevo espacio de trabajo"
     },
     "hostScreenOverlays": {
       "deleteConfirmMessage": "¿Eliminar \"{{name}}\" ({{branch}})?",
@@ -1888,7 +1895,16 @@
   "session": {
     "accessoryKeys": {
       "dismissKeyboard": "Ocultar teclado",
-      "sendKey": "Enviar {{label}}"
+      "sendKey": "Enviar {{label}}",
+      "modifierHint": "Se aplica a la siguiente tecla. Toca dos veces para mantenerla activa.",
+      "typeCharacter": "Escribir {{character}}",
+      "interrupt": "Interrumpir terminal",
+      "keysModeLabel": "Modo teclas: lo que escribes va directamente al terminal. Cambiar al modo mensaje",
+      "messageModeLabel": "Modo mensaje: escribe y luego envía. Cambiar al modo teclas",
+      "keysMode": "Teclas",
+      "messageMode": "Mensaje",
+      "moreKeys": "Más teclas y acciones",
+      "showKeyboard": "Mostrar teclado"
     },
     "activeContent": {
       "createTab": "Crear pestaña",
@@ -2016,7 +2032,10 @@
     "commandDock": {
       "liveInputHint": "El texto que escribes se envía directamente a la terminal activa.",
       "liveInputLabel": "Entrada al terminal en tiempo real",
-      "sendCommand": "Enviar comando"
+      "sendCommand": "Enviar comando",
+      "messageAgentPlaceholder": "Mensaje para {{agent}}",
+      "writeCommandPlaceholder": "Escribe un comando y luego envíalo",
+      "theAgent": "el agente"
     },
     "contentRow": {
       "dismissCreationWarning": "Descartar la advertencia de creación del espacio de trabajo"
@@ -2198,7 +2217,12 @@
       "openSourceControl": "Abrir control de código fuente",
       "reconnectToDesktop": "Volver a conectar con el escritorio",
       "showSidebar": "Mostrar barra lateral",
-      "terminalTitle": "Terminal"
+      "terminalTitle": "Terminal",
+      "terminalLayout": "Diseño del terminal",
+      "fileExplorer": "Explorador de archivos",
+      "sourceControl": "Control de código fuente",
+      "newTab": "Nueva pestaña",
+      "quickCommands": "Comandos rápidos"
     },
     "headerMoreActionsSheet": {
       "agentHistory": "Historial de agentes",
@@ -2399,7 +2423,8 @@
       "terminal": "Terminal",
       "terminalName": "Nombre de la terminal",
       "unsavedMarkdown": "Cambios en Markdown sin guardar",
-      "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva."
+      "urlPrompt": "Introduce una URL o deja el campo en blanco para abrir una pestaña nueva.",
+      "allowAutoClose": "Permitir cierre automático"
     },
     "sourceControlLaunchAgent": {
       "noEnabledAgent": "No se detectó ningún agente de IA habilitado en este host de espacio de trabajo.",
@@ -2416,7 +2441,8 @@
       "checkingCapabilities": "Comprobando las funciones del escritorio. Inténtalo de nuevo en un momento.",
       "newTab": "Nueva pestaña",
       "quickCommandsUpdateRequired": "Actualiza el escritorio para usar los comandos rápidos.",
-      "tabStatus": "{{title}}, {{status}}"
+      "tabStatus": "{{title}}, {{status}}",
+      "terminalLayout": "Diseño del terminal"
     },
     "terminalActionSheetActions": {
       "clearTerminal": "Limpiar terminal",
@@ -2679,6 +2705,56 @@
       "waitForStart": "Espere a que el agente termine de iniciarse.",
       "waitForTurn": "Espere a que el agente termine de responder o deténgalo.",
       "waitMoment": "Espere un momento."
+    },
+    "workerAutoClose": {
+      "running": "Agente de orquestación temporal · Se cierra 2 minutos después de terminar",
+      "finished": "Agente de orquestación temporal finalizado · Se cierra en {{countdown}}",
+      "keepOpen": "Mantener abierto"
+    },
+    "terminalLayoutSheet": {
+      "title": "Diseño del terminal",
+      "oneTerminal": "Un terminal",
+      "selected": "Seleccionado",
+      "auto": "Automático",
+      "autoHint": "Dividir según el espacio disponible",
+      "sideBySide": "En paralelo",
+      "sideBySideHint": "Dos columnas, incluso con la barra lateral abierta",
+      "stacked": "Apilados",
+      "stackedHint": "Dos filas en cualquier orientación",
+      "selectedHint": "Seleccionado · {{hint}}"
+    },
+    "terminalSplitLayout": {
+      "saveFailedTitle": "No se pudo guardar el diseño",
+      "saveFailedMessage": "Este diseño se aplica por ahora. Vuelve a seleccionarlo para intentar guardarlo de nuevo."
+    },
+    "terminalArrowPad": {
+      "label": "Teclas de dirección",
+      "hint": "Toca un lado para pulsar una flecha o mantén pulsado y arrastra para repetir",
+      "up": "Arriba",
+      "down": "Abajo",
+      "left": "Izquierda",
+      "right": "Derecha"
+    },
+    "terminalMoreKeys": {
+      "sendKey": "Enviar {{label}}",
+      "paste": "Pegar",
+      "sending": "Enviando…",
+      "photo": "Foto",
+      "file": "Archivo",
+      "desktopWidth": "Ancho de escritorio",
+      "phoneWidth": "Ancho de teléfono",
+      "keys": "Teclas",
+      "combos": "Combinaciones",
+      "yourKeys": "Tus teclas",
+      "deleteKeyHint": "Mantén pulsado para eliminar esta tecla",
+      "addCustomKey": "Añadir tecla personalizada",
+      "addKey": "Añadir tecla"
+    },
+    "terminalPaneView": {
+      "focusedPane": "{{title}}, enfocado",
+      "terminal": "Terminal",
+      "tapToFocusPane": "{{title}}, toca para enfocar",
+      "inputPane": "{{title}} · Entrada"
     }
   },
   "settings": {
@@ -2876,7 +2952,9 @@
       "cherryPickState": "cherry-pick",
       "mergeState": "merge",
       "rebaseState": "rebase",
-      "stagedCount": "{{count}} en stage"
+      "stagedCount": "{{count}} en stage",
+      "completingMerge": "Finalizando…",
+      "completeMerge": "Completar fusión"
     },
     "branchCompare": {
       "commits_many": "{{count}} commits",
@@ -3330,6 +3408,13 @@
       "branchUnavailable": "Estado de la rama no disponible",
       "commitFailed": "No se pudo hacer commit",
       "waitingForDesktop": "Esperando al escritorio…"
+    },
+    "conflictActions": {
+      "needsNewerHost": "Actualiza Orca en el equipo que ejecuta este espacio de trabajo para resolver conflictos de fusión desde el teléfono.",
+      "markResolved": "Marcar como resuelto",
+      "keepFile": "Conservar archivo",
+      "keepDeletion": "Conservar eliminación",
+      "completeMergeFailed": "No se pudo completar la fusión"
     }
   },
   "tasks": {
@@ -4008,6 +4093,15 @@
       "inProgress": "En curso",
       "inReview": "En revisión",
       "pinned": "Fijados"
+    }
+  },
+  "mobileWebShell": {
+    "terminalDirectionPad": {
+      "up": "Cruceta arriba",
+      "left": "Cruceta izquierda",
+      "right": "Cruceta derecha",
+      "down": "Cruceta abajo",
+      "hint": "Envía una tecla de dirección. Mantén pulsado para repetir."
     }
   }
 }

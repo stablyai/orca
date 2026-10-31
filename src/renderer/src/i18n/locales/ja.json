@@ -4,7 +4,9 @@
       "updateRequired": "このバージョンの OpenCode では、選択したモデルで安全に起動できません。OpenCode を対応バージョンに更新するか、モデルの指定を省略してください。",
       "invalidConfig": "OpenCode は選択したモデルを起動設定に適用できませんでした。OpenCode の起動設定を確認して再試行するか、モデルの指定を省略してください。",
       "unsupportedLaunch": "OpenCode はこの起動に選択したモデルを適用できません。対応する起動引数で新しいローカルターミナルを開くか、モデルの指定を省略してください。"
-    }
+    },
+    "terminalPreparationFailed": "{{value0}} のターミナルを開けませんでした。ワークスペースの接続と Agent の設定を確認して、もう一度お試しください。",
+    "terminalPromptFailed": "Orca は {{value0}} のターミナルを開きましたが、プロンプトを渡せませんでした。そのターミナルでプロンプトを送信してください。"
   },
   "app": {
     "saving": {
@@ -376,7 +378,8 @@
       "installCliForTerminal": "ターミナルで開くには {{value0}} CLI をインストールしてください。",
       "chatRuntime": "チャットランタイム",
       "chatChoiceTitle": "チャットまたは CLI で開く",
-      "chatChoiceDescription": "各 Agent をチャットで開くか CLI で開くかを選びます。"
+      "chatChoiceDescription": "各 Agent をチャットで開くか CLI で開くかを選びます。",
+      "sameAsChoice": "{{agent}} と同じ · {{choice}}"
     },
     "followSymlinkedDirectoriesKeywords": {
       "symlink": "シンボリックリンク",
@@ -7148,7 +7151,8 @@
           "506f2acf7a": "アクセスをリセットしています…",
           "statusGranted": "付与された",
           "statusUnsupported": "macOSのみ",
-          "statusNotEnabled": "有効になっていません"
+          "statusNotEnabled": "有効になっていません",
+          "794807aa21": "macOS の「プライバシーとセキュリティ」をキューに追加しました。後からのリクエストやリセットによって置き換わる場合があります"
         },
         "DeveloperPermissionsPane": {
           "4c17304beb": "更新",
@@ -7734,7 +7738,11 @@
           "191ac34567": "Agent オーケストレーション",
           "nestedWorkerDepthTitle": "ネストされたワーカーの深さ",
           "nestedWorkerDepthDescription": "起動されたワーカーが、さらに自分のワーカーを起動できる世代数です。1 にすると Agent ツリーはフラットになります。コーディネーターがワーカーを起動し、そのワーカーはワーカーを起動しません。",
-          "7bc082f4de": "インストールコマンドのコピー"
+          "7bc082f4de": "インストールコマンドのコピー",
+          "workerAutoReleaseTitle": "完了したワーカーを自動的に閉じる",
+          "workerAutoReleaseDescription": "「開いたままにする」を選ばない限り、ワーカーの終了から2分後にターミナルまたはチャットを閉じます。再び作業を開始した場合、終了時に2分のカウントがやり直されます。",
+          "workerAutoReleaseKeywordClose": "閉じる",
+          "workerAutoReleaseKeywordRelease": "解放"
         },
         "OrchestrationSetupCard": {
           "e7d2a5146c": "Agent がコンテキストを引き継ぎ、Orca を通じて作業を調整できるようにします。",
@@ -11389,7 +11397,10 @@
         "PluginThemeUseNow": {
           "label": "今すぐ使う:",
           "useForLight": "ライトで使う:",
-          "useForDark": "ダークで使う:"
+          "useForDark": "ダークで使う:",
+          "assignedLight": "{{value0}} をライトテーマに設定しました",
+          "assignedDark": "{{value0}} をダークテーマに設定しました",
+          "saveFailed": "テーマを保存できませんでした。もう一度お試しください。"
         },
         "PluginContributionActionCommand": {
           "run": "実行",
@@ -13125,7 +13136,10 @@
             "abortRebaseFailed": "リベースの中止に失敗しました",
             "abortMergeFailed": "マージの中止に失敗しました",
             "clearNotesFromWorkspace_other": "このワークスペースから {{count}} 件のメモを削除しますか？",
-            "clearNotesFromFile_other": "{{path}} から {{count}} 件のメモを削除しますか？"
+            "clearNotesFromFile_other": "{{path}} から {{count}} 件のメモを削除しますか？",
+            "markResolved": "解決済みとしてマーク",
+            "keepFile": "ファイルを残す",
+            "keepDeletion": "削除を維持"
           },
           "SourceControlAgentActionDialog": {
             "8e856842d1": "選択した Agent を開始できませんでした。",
@@ -13701,7 +13715,8 @@
                     "edc2d82a2b": "結合が進行中です",
                     "5c3707aa44": "リベースが進行中です",
                     "ffe53a1da6": "チェリーピック進行中",
-                    "35eb76d323": "操作が進行中です"
+                    "35eb76d323": "操作が進行中です",
+                    "completeMerge": "マージを完了"
                   }
                 }
               },
@@ -13730,7 +13745,8 @@
                   "e7876a2bde": "少なくとも 1 つのファイルをステージングしてメッセージを生成します。",
                   "0904be2505": "メッセージをクリアして再生成します。",
                   "1ea9ba37aa": "[設定] -> [Git] -> [ソース管理 AI] で Agent を選択します。"
-                }
+                },
+                "completeMergeFailed": "マージを完了できませんでした"
               }
             }
           },
@@ -16067,6 +16083,12 @@
           "view": "プラグインを表示",
           "notNow": "今はしない",
           "never": ".{{value0}} では提案しない"
+        },
+        "RichMarkdownEmojiMenu": {
+          "chooseEmoji": "絵文字を選択"
+        },
+        "richMarkdownBlobImagePaste": {
+          "saveFailed": "貼り付けた画像をドキュメントの隣に保存できませんでした。Orca の再起動後に読み込めない場合があります。"
         }
       },
       "diff": {
@@ -18109,6 +18131,13 @@
           "noMovableChat": "「{{action}}」を実行できません。移動できるアクティブなチャットがありません。",
           "clientUnsupported": "「{{action}}」を実行できません。このクライアントとランタイムは対応していません。"
         }
+      },
+      "plugins": {
+        "list": {
+          "PluginsSectionDescription": {
+            "openWith": "次で開く（編集可能なフィールドにフォーカスがない場合）"
+          }
+        }
       }
     },
     "i18n": {
@@ -18156,6 +18185,12 @@
       "forgeCredentialTarget": {
         "unknownHost": "このリポジトリを所有するマシンはまだ判明していません。再接続して再試行してください。",
         "thisComputer": "このコンピュータ"
+      },
+      "runtimeGitSyncClient": {
+        "completeMergeNeedsNewerHost": "マージを完了するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。"
+      },
+      "runtimeGitWorkingTreeClient": {
+        "resolveConflictNeedsNewerHost": "競合を解決するには、このホストに新しいバージョンの Orca が必要です。このホストの Orca を更新してください。"
       }
     },
     "ssh": {
@@ -18877,7 +18912,11 @@
       },
       "agentMessage": {
         "messageFrom": "送信元:",
-        "unnamedSender": "Agent"
+        "unnamedSender": "Agent",
+        "messageFromCoordinator": "コーディネーターからのメッセージ",
+        "startedWorker": "ワーカーを開始しました",
+        "taskFromCoordinator": "コーディネーターからのタスク",
+        "updateFromWorker": "ワーカーからの更新"
       },
       "goal": {
         "placeholder": "目標を説明し、最良の結果を得るために測定可能な結果を​​定義する",
@@ -19160,7 +19199,8 @@
       "bar": {
         "SortableTabContextMenu": {
           "switchToTerminalView": "ターミナル Agent で続ける",
-          "switchToChatView": "チャット UI で続ける"
+          "switchToChatView": "チャット UI で続ける",
+          "allowAutoClose": "自動終了を許可"
         },
         "BrowserTab": {
           "closeOthers": "その他を閉じる",
@@ -19660,6 +19700,20 @@
       "stepDownload": "ダウンロード",
       "stepUnpack": "展開",
       "stepCheck": "確認"
+    },
+    "linearWorkspacePicker": {
+      "search": "Linear ワークスペースを検索",
+      "empty": "ワークスペースが見つかりません。",
+      "label": "Linear ワークスペース",
+      "all": "すべての Linear ワークスペース",
+      "unavailable": "利用できない Linear ワークスペース"
+    },
+    "orchestration": {
+      "workerAutoClose": {
+        "running": "一時的なオーケストレーションワーカー · 完了の2分後に閉じます",
+        "finished": "一時的なオーケストレーションワーカーが完了 · {{countdown}}後に閉じます",
+        "keepOpen": "開いたままにする"
+      }
     }
   },
   "dashboardPopout": {
@@ -20130,6 +20184,9 @@
         "unconfirmed_other": "全 {{count}} 個の Agent が未確認",
         "needsAttention_other": "全 {{count}} 個の Agent に対応が必要"
       }
+    },
+    "cardProperties": {
+      "agentModel": "Agent のモデル"
     }
   },
   "editor": {
@@ -20659,7 +20716,9 @@
       "scannerBusy": "実行中のセッションスキャンが多すぎます。少し待ってから更新してください。",
       "scannerMissing": "この Orca にはセッションスキャナーが含まれていません。Orca を再インストールすると復元されます。",
       "scannerStopped": "セッションスキャナーが予期せず停止しました。更新して再試行してください。"
-    }
+    },
+    "sessionAccount": "アカウント",
+    "sessionAccountUnknown": "不明"
   },
   "common": {
     "retry": "再試行",
@@ -21692,7 +21751,8 @@
       "terminalSplitRight": "ターミナルを右に分割",
       "terminalSplitDown": "ターミナルを下に分割",
       "terminalSwitchInputSource": "入力ソース / 言語を切り替え（ネイティブ）",
-      "newAgentTab": "新規 {{agent}} タブ"
+      "newAgentTab": "新規 {{agent}} タブ",
+      "viewPlugins": "プラグインを開く"
     },
     "group": {
       "global": "グローバル",
@@ -22080,7 +22140,15 @@
     "arguments": "引数",
     "argumentsHint": "CLI での起動にのみ適用されます。",
     "launchChat": "チャットを起動",
-    "launchTerminal": "ターミナルを起動"
+    "launchTerminal": "ターミナルを起動",
+    "setByArguments": "引数で設定",
+    "searchModels": "モデルを検索",
+    "noModels": "検索に一致するモデルがありません。",
+    "legacyModels": "旧モデル",
+    "toggleArguments": "引数の表示を切り替え",
+    "argumentsTerminalHint": "ターミナル（CLI）からの起動にのみ適用",
+    "searchAgentModels": "{{agent}} のモデルを検索…",
+    "legacyModelCount": "{{total}} 個のモデル"
   },
   "wslMove": {
     "entry": {

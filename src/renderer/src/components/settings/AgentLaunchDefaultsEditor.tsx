@@ -278,16 +278,14 @@ export function AgentDefaultArgsInput({
 }
 
 export function AgentDefaultEnvInput({
-  showEmpty = false,
   defaultEnv,
   envOverride,
   onSaveEnv
 }: {
-  showEmpty?: boolean
   defaultEnv: Record<string, string>
   envOverride: Record<string, string>
   onSaveEnv: (value: Record<string, string>) => void | Promise<void>
-}): React.JSX.Element | null {
+}): React.JSX.Element {
   const defaultEnvText = stringifyAgentDefaultEnvDraft(defaultEnv)
   const draftSeed = stringifyAgentDefaultEnvDraft(envOverride)
   const [draft, setDraft] = useState<string | null>(null)
@@ -315,9 +313,6 @@ export function AgentDefaultEnvInput({
     }
   }
 
-  if (!showEmpty && !defaultEnvText && !draftSeed && draft === null && !pending) {
-    return null
-  }
   return (
     <div className="flex flex-col gap-1">
       <span className="text-xs text-muted-foreground">

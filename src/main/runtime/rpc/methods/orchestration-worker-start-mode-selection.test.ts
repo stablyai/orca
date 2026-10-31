@@ -14,6 +14,7 @@ import { OrcaRuntimeService } from '../../orca-runtime'
 import { OrchestrationDb } from '../../orchestration/db'
 import { ORCHESTRATION_METHODS } from './orchestration'
 import { OrchestrationError } from '../../orchestration/orchestration-error'
+import type { RuntimeTerminalCreate } from '../../../../shared/runtime-terminal-create-contract'
 import { OPENCODE_MODEL_VERSION_REFUSAL } from '../../../../shared/agent-launch-model-preferences'
 
 const STRUCTURED_HANDLE = 'structworker_abc'
@@ -27,7 +28,9 @@ const createStructuredWorkerSessionForWorktree = vi.fn(
     return { identity: { handle: STRUCTURED_HANDLE, sessionId: STRUCTURED_SESSION_ID }, host: {} }
   }
 )
-const createExistingWorktreeWorkerTerminal = vi.fn(async () => ({ handle: TERMINAL_HANDLE }))
+const createExistingWorktreeWorkerTerminal = vi.fn<
+  () => Promise<Partial<RuntimeTerminalCreate> & { handle: string }>
+>(async () => ({ handle: TERMINAL_HANDLE }))
 const sendStructuredWorkerPreamble = vi.fn(async (_args: { preamble: string }) => 'accepted')
 
 vi.mock('./orchestration/worker/worker-topology', async (importOriginal) => ({
@@ -158,6 +161,56 @@ describe('worker-start honours the settings default', () => {
         }) as never
     )
   }
+
+  it.each(['fresh', 'reattach', 'adopted'] as const)(
+    'uses actual %s creation for a terminal worker readiness failure',
+    async (context) => {
+      createExistingWorktreeWorkerTerminal.mockResolvedValueOnce({
+        handle: TERMINAL_HANDLE,
+        ptyId: 'pty-created',
+        incarnationId: 'inc-created',
+        worktreeId: 'repo::wt',
+        title: null,
+        ...(context === 'reattach' ? { isReattach: true as const } : {}),
+        ...(context === 'adopted' ? { agentSessionDisposition: 'adopted' as const } : {})
+      })
+      vi.spyOn(runtime, 'getPtyLivenessVerdict').mockReturnValue({
+        status: 'exited',
+        incarnationId: 'inc-created',
+        cause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      vi.mocked(runtime.waitForTerminal).mockResolvedValue({
+        handle: TERMINAL_HANDLE,
+        condition: 'tui-idle',
+        satisfied: false,
+        status: 'exited',
+        exitCode: 256,
+        exitCause: {
+          kind: 'exited',
+          exitCode: 256,
+          initialOutputDiagnostic: 'git-bash-console-capacity'
+        }
+      })
+      await expect(
+        startWorker({
+          ...STRUCTURED_DEFAULT,
+          nativeChatProviders: { claude: false, codex: false }
+        })
+      ).resolves.toMatchObject({
+        state: 'failed',
+        failedStage: 'agent_readiness',
+        lastError:
+          context === 'fresh'
+            ? expect.stringContaining('Close some Git Bash terminals')
+            : expect.not.stringContaining('Git Bash')
+      })
+      expect(runtime.sendTerminalAgentPrompt).not.toHaveBeenCalled()
+    }
+  )
 
   it('starts a structured chat worker when structured native chat is the default', async () => {
     const result = await startWorker(STRUCTURED_DEFAULT)
