@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { agentMessageSenderCanOpen } from '../../../../shared/agent-session/agent-message-presentation'
+import { useAppStore } from '@/store'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import {
   agentMessageSendersShown,
@@ -15,8 +15,12 @@ import {
   unnamedSenderLabel,
   useAgentMessageSenderLabel
 } from './native-chat-agent-message-sender-label'
+import {
+  agentMessageSenderOpens,
+  resolveAgentMessageSenderTarget
+} from './native-chat-agent-message-sender-target'
 
-/** Open resolvable local senders; use plain names when chat context is absent or the sender belongs to another host. */
+/** Link a sender only where its one resolution can open something; otherwise a plain name. */
 export function NativeChatAgentMessageSenders({
   from,
   chatWorktreeId,
@@ -44,7 +48,7 @@ export function NativeChatAgentMessageSenders({
         <span className={queued ? 'px-2' : 'px-2.5'}>{unnamedSenderLabel()}</span>
       ) : null}
       {shown.map((sender, index) => (
-        <Fragment key={JSON.stringify([sender.party.address, sender.identity])}>
+        <Fragment key={sender.party.address}>
           <SenderName
             dispatchId={dispatchId}
             from={from}
@@ -82,7 +86,13 @@ function SenderName({
   queued: boolean
 }): React.JSX.Element {
   const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
-  if (!agentMessageSenderCanOpen(sender, Boolean(chatWorktreeId)) || !chatWorktreeId) {
+  const opens = useAppStore((state) =>
+    agentMessageSenderOpens(
+      resolveAgentMessageSenderTarget(state, sender, chatWorktreeId, target, dispatchId),
+      sender
+    )
+  )
+  if (!opens || !chatWorktreeId) {
     return (
       <span className={`max-w-48 truncate ${queued ? 'px-2' : 'px-2.5'}`} title={label}>
         {label}
@@ -97,7 +107,9 @@ function SenderName({
       title={
         queued ? label : translate('components.native-chat.agentMessage.goToAgent', 'Go to agent')
       }
-      onClick={() => void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId)}
+      onClick={() =>
+        void openAgentMessageSender(from, sender, chatWorktreeId, target, dispatchId, label)
+      }
     >
       <span className="max-w-48 truncate">{label}</span>
       {!queued ? <ArrowUpRight className="size-3" aria-hidden /> : null}

@@ -105,8 +105,16 @@ function readSource(state: AppState, location: SenderLocation): Source {
   return source
 }
 
+/** The sidebar row at a located sender, read through the same per-worktree projection cards share. */
+export function readAgentMessageSenderRow(
+  state: AppState,
+  location: SenderLocation
+): AgentMessageSenderView | undefined {
+  return readSource(state, location).read(state, location.paneKey)
+}
+
 /** Share the sidebar projection before notifying cards; only subscription leases retain a source.
- *  `savedAgent`: the kind written on the message, drawn when no live row names the agent. */
+ *  `savedAgent`: the kind written on the message, drawn ahead of any live row's guess. */
 export function useAgentMessageSenderSource(
   locate: LocateSender,
   savedAgent?: AgentMessageSenderView['agentType']
@@ -117,7 +125,7 @@ export function useAgentMessageSenderSource(
       const location = locate(state)
       const next = agentMessageSenderView(
         location ? readSource(state, location).read(state, location.paneKey) : undefined,
-        location?.agentType ?? savedAgent
+        savedAgent ?? location?.agentType
       )
       if (!equalView(previous, next)) {
         previous = next

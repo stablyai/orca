@@ -94,7 +94,6 @@ export function createDispatchContext(
       from: 'ready',
       to: 'dispatched'
     })
-    this.recordDispatchCreatorIdentity(id, params.creator)
     const dispatch = this.db
       .prepare('SELECT * FROM dispatch_contexts WHERE id = ?')
       .get(id) as DispatchContextRow

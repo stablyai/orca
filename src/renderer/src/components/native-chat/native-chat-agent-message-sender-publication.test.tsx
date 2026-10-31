@@ -29,21 +29,20 @@ const publication = (
   associations: AgentSenderPublication['associations'] = []
 ): AgentSenderPublication => ({ associations, principals: [], attachments: [] })
 const association = (i: number) => ({
-  identity: `conversation:${i}`,
+  identity: `term_${i}`,
   paneKey: status(i).paneKey,
   worktreeId: 'workspace'
 })
-// A federated sender is named by its Dispatch address; any other by the identity saved with it.
+// A federated sender is named by its Dispatch address; any other by the handle it sent from.
 const sender = (identity: string): AgentMessageSender =>
   identity.startsWith('dispatch:')
     ? { party: { address: identity, terminalHandle: null, orcaSessionId: null }, name: 'Sender' }
     : {
-        party: { address: 'term_sender', terminalHandle: 'term_sender', orcaSessionId: null },
-        identity,
+        party: { address: identity, terminalHandle: identity, orcaSessionId: null },
         name: 'Sender',
-        agent: 'codex'
+        agent: 'claude'
       }
-const proved = { ...from.senders[0], identity: 'conversation:0' }
+const proved = from.senders[0]
 beforeEach(() => {
   vi.useFakeTimers({ toFake: ['Date'] })
   vi.setSystemTime(2_000_000)
@@ -109,7 +108,7 @@ it('resolves Started-worker dispatches after restart; old-host absence and autho
   )
   expect(hook.result.current.dot).toBe('working')
   act(() => useAppStore.getState().setAgentSenderPublication('local', publication()))
-  expect(hook.result.current).toEqual({ agentType: 'codex' })
+  expect(hook.result.current).toEqual({ agentType: 'claude' })
   const legacy = renderHook(() =>
     useAgentMessageSenderView(from.senders[0], 'workspace', { kind: 'local' })
   )
@@ -176,16 +175,12 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
   })
   const apply = (snapshot: Parameters<typeof applyWebSessionTabsSnapshot>[1]) =>
     useAppStore.setState(applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, 'remote'))
-  const worker = { ...association(0), identity: 'conversation:worker', worktreeId: 'w3' }
+  const worker = { ...association(0), identity: 'term_worker', worktreeId: 'w3' }
   apply(frame('w2', publication()))
   apply(frame('w3', publication([worker])))
   apply({ ...frame('w1', publication([{ ...association(1), worktreeId: 'w1' }])) })
   const located = () =>
-    selectAgentSenderAssociation(
-      useAppStore.getState(),
-      'runtime:remote',
-      sender('conversation:worker')
-    )
+    selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', sender('term_worker'))
   expect(located()?.worktreeId).toBe('w3')
   apply({ ...frame('w1'), removed: true } as Parameters<typeof applyWebSessionTabsSnapshot>[1])
   apply(frame('w2', publication()))
@@ -197,12 +192,12 @@ it('a worktree removal frame drops only its own scope and keeps the host authori
   apply(frame('w2'))
   apply({ ...frame('w3'), removed: true } as Parameters<typeof applyWebSessionTabsSnapshot>[1])
   const view = renderHook(() =>
-    useAgentMessageSenderView(sender('conversation:worker'), 'w2', {
+    useAgentMessageSenderView(sender('term_worker'), 'w2', {
       kind: 'environment',
       environmentId: 'remote'
     })
   )
-  expect(view.result.current).toEqual({ agentType: 'codex' })
+  expect(view.result.current).toEqual({ agentType: 'claude' })
 })
 it('a located chat keeps its tab agent icon for a card saved without one', () => {
   const sessionId = testOrcaSessionId('33333333-3333-4333-8333-333333333333')
@@ -252,24 +247,15 @@ it('receives an authoritative remote publication on the same snapshot path as re
     activeTabId: null,
     activeTabType: null,
     tabs: [],
-    agentSenderAssociations: publication([
-      { ...association(0), identity: 'conversation:same-session' }
-    ])
+    agentSenderAssociations: publication([{ ...association(0), identity: 'term_same' }])
   } as const
   useAppStore.setState(applyWebSessionTabsSnapshot(useAppStore.getState(), snapshot, 'remote'))
   expect(
-    selectAgentSenderAssociation(
-      useAppStore.getState(),
-      'runtime:remote',
-      sender('conversation:same-session')
-    )?.host
+    selectAgentSenderAssociation(useAppStore.getState(), 'runtime:remote', sender('term_same'))
+      ?.host
   ).toBe('runtime:remote')
   expect(
-    selectAgentSenderAssociation(
-      useAppStore.getState(),
-      'local',
-      sender('conversation:same-session')
-    )
+    selectAgentSenderAssociation(useAppStore.getState(), 'local', sender('term_same'))
   ).toBeUndefined()
 })
 it.each([100, 1000])(
@@ -299,8 +285,7 @@ it.each([100, 1000])(
     })
     for (let i = 0; i < n; i++) {
       expect(
-        selectAgentSenderAssociation(useAppStore.getState(), 'local', sender(`conversation:${i}`))
-          ?.paneKey
+        selectAgentSenderAssociation(useAppStore.getState(), 'local', sender(`term_${i}`))?.paneKey
       ).toBe(status(i).paneKey)
     }
     expect(agentSenderIndexWorkForTest()).toEqual({

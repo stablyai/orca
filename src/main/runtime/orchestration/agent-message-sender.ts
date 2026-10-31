@@ -32,14 +32,6 @@ export function agentMessageSender(
   }
 }
 
-/** The identity captured at accept time rides on the saved sender; none stays absent. */
-export function withSenderIdentity(
-  sender: AgentMessageSender,
-  identity: string | null | undefined
-): AgentMessageSender {
-  return identity ? { ...sender, identity } : sender
-}
-
 function senderParty(address: string, db: OrchestrationDb | null): AgentMessageSender['party'] {
   try {
     const { paneKey: _credential, ...party } = resolveOrchestrationParty(address, db)

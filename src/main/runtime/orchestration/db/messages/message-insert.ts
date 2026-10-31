@@ -63,12 +63,6 @@ export function insertMessage(this: OrchestrationDb, msg: MessageInsert): Messag
     handled,
     handled
   )
-  if (!handled) {
-    this.recordAgentSenderIdentity(
-      `message:${id}`,
-      this.agentSenderIdentityOf?.(msg.from, msg.senderPaneKey ?? null)
-    )
-  }
   return exposeMessageTimestamps(
     this.db.prepare('SELECT * FROM messages WHERE id = ?').get(id) as MessageRow
   )

@@ -159,7 +159,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     if (!this._orchestrationDb) {
       this._orchestrationDb = new OrchestrationDb(this.orchestrationDbPath())
       this.bindMailHandBack(this._orchestrationDb)
-      this.bindAgentSenderIdentity(this._orchestrationDb)
       this.ensureOrchestrationFederationRelay()
       this.scheduleRestoredMessageRepoints()
       this.bindWorkerTerminalAutoRelease(this._orchestrationDb)
@@ -186,7 +185,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
     this.mailPointerRepointScheduler.clear()
     this._orchestrationDb = db
     this.bindMailHandBack(db)
-    this.bindAgentSenderIdentity(db)
     this.ensureOrchestrationFederationRelay()
     this.scheduleRestoredMessageRepoints()
     this.bindWorkerTerminalAutoRelease(db)
@@ -208,18 +206,6 @@ export abstract class OrcaRuntimeWithAutomationOperations extends OrcaRuntimeWit
           getWorkerTerminalAutoReleaseScheduler(this).rearm()
         }
       })
-    }
-  }
-
-  // Display bookkeeping: a failed lookup saves no identity and never refuses the send or dispatch.
-  private bindAgentSenderIdentity(db: OrchestrationDb): void {
-    db.agentSenderIdentityOf = (address, paneKey) => {
-      try {
-        return this.agentProjections.senders.identityAt(db, address, paneKey)
-      } catch (error) {
-        console.warn('[runtime] Sender identity capture failed', error)
-        return null
-      }
     }
   }
 

@@ -7,11 +7,7 @@ import type {
 import type { AgentJournalMessageItem } from '../../../shared/agent-session-journal-types'
 import type { MessageRow, OrchestrationDb } from './db'
 import { agentMessageRelation } from './agent-message-relation'
-import {
-  agentMessageSender,
-  withSenderIdentity,
-  type SenderSnapshotResolver
-} from './agent-message-sender'
+import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationCliCommand } from './cli-command'
 import { formatMessagePointer } from './formatter'
 import type { OrchestrationPointerBatch } from './mailbox-pointer-eligibility'
@@ -28,36 +24,23 @@ export function structuredMailSource(input: {
   batch: readonly MailSourceMessage[]
   senderSnapshot: SenderSnapshotResolver
 }): AgentMessageSource {
-  // Group by who sent, not by address: two agents that used one handle are two senders.
-  const groups = new Map<
-    string,
-    {
-      address: string
-      identity: string | null
-      entries: { message: MailSourceMessage; report: ReportFact }[]
-    }
-  >()
+  const groups = new Map<string, { message: MailSourceMessage; report: ReportFact }[]>()
   for (const message of input.batch) {
-    const identity = input.db?.getAgentSenderIdentity(`message:${message.id}`) ?? null
-    const key = JSON.stringify([message.from_handle, identity])
-    let group = groups.get(key)
+    let group = groups.get(message.from_handle)
     if (!group) {
-      group = { address: message.from_handle, identity, entries: [] }
-      groups.set(key, group)
+      group = []
+      groups.set(message.from_handle, group)
     }
-    group.entries.push({ message, report: reportFact(message) })
+    group.push({ message, report: reportFact(message) })
   }
   const senders: AgentMessageSender[] = []
-  for (const { address, identity, entries: group } of groups.values()) {
+  for (const [address, group] of groups) {
     const reported = group.find(({ report }) => report.kind === 'valid')?.report
-    const sender = withSenderIdentity(
-      agentMessageSender(
-        address,
-        input.db,
-        input.senderSnapshot,
-        reported?.kind === 'valid' ? reported.dispatchId : undefined
-      ),
-      identity
+    const sender = agentMessageSender(
+      address,
+      input.db,
+      input.senderSnapshot,
+      reported?.kind === 'valid' ? reported.dispatchId : undefined
     )
     const relations = new Map<string, AgentMessageSender['relation']>()
     const values = group.map(({ message, report }) => {

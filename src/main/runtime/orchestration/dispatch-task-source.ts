@@ -1,9 +1,5 @@
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
-import {
-  agentMessageSender,
-  withSenderIdentity,
-  type SenderSnapshotResolver
-} from './agent-message-sender'
+import { agentMessageSender, type SenderSnapshotResolver } from './agent-message-sender'
 import type { OrchestrationDb } from './db'
 import type { DispatchContextRow } from './types'
 
@@ -20,13 +16,10 @@ export function dispatchTaskSource(args: {
     kind: 'agent',
     senders: args.from
       ? [
-          withSenderIdentity(
-            {
-              ...agentMessageSender(args.from, args.db, args.senderSnapshot),
-              relation: 'coordinator'
-            },
-            args.db.getAgentSenderIdentity(`creator:${dispatch.id}`)
-          )
+          {
+            ...agentMessageSender(args.from, args.db, args.senderSnapshot),
+            relation: 'coordinator'
+          }
         ]
       : [],
     orchestration: {

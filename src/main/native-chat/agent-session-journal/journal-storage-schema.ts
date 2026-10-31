@@ -83,7 +83,6 @@ const sender = z.object({
     .optional(),
   name: salvaged,
   agent: salvaged,
-  identity: salvaged,
   relation: salvaged
 })
 const orchestration = z.discriminatedUnion('message', [

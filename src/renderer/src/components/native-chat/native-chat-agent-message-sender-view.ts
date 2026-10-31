@@ -3,12 +3,9 @@ import { useAgentMessageSenderSource } from './native-chat-agent-message-sender-
 import type { AppState } from '@/store/types'
 import type { AgentMessageSender } from '../../../../shared/agent-session/agent-session-message-source'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import {
-  hasAgentSenderPublication,
-  selectAgentSenderAssociation
-} from '@/runtime/agent-sender-associations'
 import { agentMessageSenderOwner } from './native-chat-agent-message-sender-label'
 import { locateLegacyAgentMessageSender } from './native-chat-agent-message-sender-compatibility'
+import { resolveAgentMessageSenderTarget } from './native-chat-agent-message-sender-target'
 
 export function useAgentMessageSenderView(
   sender: AgentMessageSender | undefined,
@@ -19,7 +16,7 @@ export function useAgentMessageSenderView(
   const address = sender?.party.address
   const sessionId = sender?.party.orcaSessionId
   const handle = sender?.party.terminalHandle
-  const savedIdentity = sender?.identity
+  const savedAgent = sender?.agent
   const targetKind = target?.kind
   const environmentId = target?.kind === 'environment' ? target.environmentId : undefined
   const stableTarget = useMemo<RuntimeClientTarget | undefined>(
@@ -39,20 +36,24 @@ export function useAgentMessageSenderView(
       const identity = {
         party: { address, orcaSessionId: sessionId ?? null, terminalHandle: handle ?? null },
         name: null,
-        ...(savedIdentity ? { identity: savedIdentity } : {})
+        ...(savedAgent ? { agent: savedAgent } : {})
       }
-      const owner = agentMessageSenderOwner(state, chatWorktreeId, stableTarget)
-      if (!owner) {
-        return undefined
+      const resolved = resolveAgentMessageSenderTarget(
+        state,
+        identity,
+        chatWorktreeId,
+        stableTarget,
+        dispatchId
+      )
+      if (resolved.kind === 'legacy') {
+        const owner = agentMessageSenderOwner(state, chatWorktreeId, stableTarget)
+        return owner ? locateLegacyAgentMessageSender(state, identity, owner) : undefined
       }
-      if (!hasAgentSenderPublication(state, owner)) {
-        return locateLegacyAgentMessageSender(state, identity, owner)
-      }
-      const located = selectAgentSenderAssociation(state, owner, identity, dispatchId)
+      const located = resolved.kind === 'located' ? resolved.location : undefined
       // A located chat's own tab names its agent for cards saved before the agent kind was.
       return located && { ...located, agentType: located.tab?.agentSessionAgent }
     },
-    [address, sessionId, handle, savedIdentity, chatWorktreeId, stableTarget, dispatchId]
+    [address, sessionId, handle, savedAgent, chatWorktreeId, stableTarget, dispatchId]
   )
   return useAgentMessageSenderSource(locate, sender?.agent)
 }

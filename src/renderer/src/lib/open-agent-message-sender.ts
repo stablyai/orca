@@ -1,4 +1,4 @@
-// Open the sender the card resolved; an older host's lookup chooses feedback from its own evidence, never the sender's address shape.
+// Open the sender the card resolved; a host lookup chooses feedback from its own evidence, never the sender's address shape.
 
 import { toast } from 'sonner'
 import type { AgentMessageSource } from '../../../shared/agent-session/agent-session-message-source'
@@ -22,12 +22,14 @@ import {
   structuredSessionOpenFeedback
 } from './activate-ai-vault-structured-session'
 import { getKnownExecutionHostIdForWorktree } from './worktree-runtime-owner'
+import type { LocatedAgentSender } from '@/runtime/agent-sender-associations'
+import { unnamedSenderLabel } from '@/components/native-chat/native-chat-agent-message-sender-label'
 import {
-  resolveAgentMessageSender,
-  UNPROVED_SENDER_CLICK,
-  type LocatedAgentSender
-} from '@/runtime/agent-sender-associations'
-import { agentMessageSenderOwner } from '@/components/native-chat/native-chat-agent-message-sender-label'
+  agentMessageSenderOpens,
+  agentMessageSenderReplacedOnHandle,
+  agentMessageSenderUnavailableText,
+  resolveAgentMessageSenderTarget
+} from '@/components/native-chat/native-chat-agent-message-sender-target'
 import { activateWorktreeAgentPane } from '@/components/sidebar/use-worktree-agent-activation'
 import { parsePaneKey } from '../../../shared/stable-pane-id'
 import {
@@ -52,30 +54,36 @@ const TERMINAL_GONE_CODES = new Set([
 
 const opensInFlight = new Map<string, Promise<void>>()
 
-/** Open what the card's own sender resolution names; only an older host, or a chat the host can
- *  still reopen, goes back to the host lookup. */
+/** Open what the card's own sender resolution names; an older host, a closed chat or an exited
+ *  terminal goes back to the host lookup, and nothing else ever looks a pane up again. */
 export function openAgentMessageSender(
   source: AgentMessageSource,
   sender: Sender,
   chatWorktreeId: string,
   target?: RuntimeClientTarget,
-  dispatchId?: string
+  dispatchId?: string,
+  name?: string
 ): Promise<void> {
   const state = useAppStore.getState()
-  const owner = agentMessageSenderOwner(state, chatWorktreeId, target)
   // Read at click time, so a stale render cannot open what the host has since rejected.
-  const resolution = owner
-    ? resolveAgentMessageSender(state, owner, sender, dispatchId)
-    : { kind: 'legacy' as const }
-  if (resolution.kind === 'located') {
-    return openLocatedSender(resolution.location)
+  const resolved = resolveAgentMessageSenderTarget(
+    state,
+    sender,
+    chatWorktreeId,
+    target,
+    dispatchId
+  )
+  if (resolved.kind === 'located') {
+    return openLocatedSender(resolved.location)
   }
-  const hostLookup =
-    resolution.kind === 'legacy' ||
-    (resolution.kind === 'gone' && resolution.chat) ||
-    (resolution.kind === 'unproved' && UNPROVED_SENDER_CLICK === 'legacy-lookup')
-  if (!hostLookup) {
-    showAgentPaneUnavailable()
+  const label = name ?? sender.name ?? unnamedSenderLabel()
+  // Only a publishing host's answer can say nothing opens; an older host keeps its own lookup.
+  if (
+    resolved.kind !== 'none' &&
+    resolved.kind !== 'legacy' &&
+    !agentMessageSenderOpens(resolved, sender)
+  ) {
+    toast.info(agentMessageSenderUnavailableText(resolved, label))
     return Promise.resolve()
   }
   const host =
@@ -94,7 +102,7 @@ export function openAgentMessageSender(
   if (inFlight) {
     return inFlight
   }
-  const opening = openSender(source, sender, host)
+  const opening = openSender(source, sender, host, label)
     .catch((error: unknown) => {
       // Every answer above shows its own words; one that threw showed none.
       console.warn('[agent-message-sender] opening the sender failed', error)
@@ -129,9 +137,11 @@ async function openLocatedSender(location: LocatedAgentSender): Promise<void> {
 
 async function openSender(
   source: AgentMessageSource,
-  { party }: Sender,
-  host: RuntimeClientTarget
+  sender: Sender,
+  host: RuntimeClientTarget,
+  name: string
 ): Promise<void> {
+  const { party } = sender
   const environmentId = host.kind === 'environment' ? host.environmentId : null
   // Mail identifies senders beyond old terminal handles; tasks carry no mail and resolve coordinators by address.
   const mail = source.orchestration?.message === 'mail-notice' ? source.orchestration.messages : []
@@ -165,6 +175,11 @@ async function openSender(
   if (location.kind !== 'terminal') {
     // A kind a newer host answers with.
     showLookupFailure('update')
+    return
+  }
+  // The host's lookup may find whatever shell now holds the old pane; a known other agent isn't it.
+  if (agentMessageSenderReplacedOnHandle(useAppStore.getState(), sender, location.handle)) {
+    toast.info(agentMessageSenderUnavailableText({ kind: 'replaced' }, name))
     return
   }
   await focusTerminal(location.handle, environmentId)

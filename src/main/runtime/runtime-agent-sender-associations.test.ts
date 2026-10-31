@@ -8,8 +8,11 @@ import { devicePrincipalOf } from './device-principal'
 import { OrchestrationDb } from './orchestration/db'
 import { createRootDispatch } from './orchestration/db/root-dispatch-test-fixture'
 import { MIRROR_LEAVES_STEP_1 } from './runtime-leaf-record-projection.test-fixture'
-import type { RuntimeLeafRecord } from './runtime-terminal-state-records'
-import type { AgentSessionRecordReader } from './orchestration/structured-session-lineage'
+import type { RuntimeLeafRecord, RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
+import {
+  conversationRecordReader,
+  type AgentSessionRecordReader
+} from './orchestration/structured-session-lineage'
 import { agentSessionConversationView } from '../../shared/agent-session-conversation-view'
 import {
   agentSessionLeaseFixture,
@@ -19,12 +22,11 @@ import {
   mintStructuredWorkerHandle,
   mintStructuredWorkerPaneKey
 } from './structured-worker-identity'
-import type { RuntimePtyWorktreeRecord } from './runtime-terminal-state-records'
-import { agentConversationIdentity } from './runtime-agent-sender-conversations'
-import { structuredMailSource } from './orchestration/structured-mail-source'
-import { dispatchTaskSource } from './orchestration/dispatch-task-source'
 import { testOrcaSessionId } from '../../shared/orca-session-address-test-fixture'
 import { projectSessionTabsForClient } from './rpc/methods/session-tabs-inventory'
+import { AGENT_SENDER_PANE_READS } from './runtime-agent-sender-history'
+import { structuredMailSource } from './orchestration/structured-mail-source'
+import { scaleStore } from './agent-session-scale.test-fixture'
 
 const dbs: OrchestrationDb[] = []
 afterEach(() => {
@@ -36,8 +38,7 @@ afterEach(() => {
 const leaf = (id: string) =>
   `${(Number(id.replace('tab-', '')) + 1).toString(16).padStart(8, '0')}-1111-4111-8111-111111111111`
 const pane = (id: string) => `${id}:${leaf(id)}`
-const conversation = agentConversationIdentity
-const claudeProcess = { pid: 4242, platform: 'darwin' as const, startTime: 'boot-1' }
+const handle = (i: number) => `term_tab-${i}`
 function harness(n = 1, records: AgentSessionRecordReader | null = null) {
   const db = new OrchestrationDb(':memory:')
   const run = db.createRun({
@@ -61,11 +62,11 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
         worktreeId: 'workspace'
       }) as RuntimePtyWorktreeRecord
   )
+  // A warm restart keeps each terminal's handle; tests replace one to model a fresh terminal.
+  const handles = new Map(leaves.map((l, i) => [l.tabId, handle(i)]))
   let openedDb: OrchestrationDb | null = null
   const openHistory = vi.fn(() => (openedDb = db))
-  let generation = 0
   const start = () => {
-    generation++
     const { senders, setPeerKey } = createRuntimeAgentProjections(
       {
         getExistingOrchestrationDb: openHistory,
@@ -81,10 +82,9 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
         getLeaves: () => leaves,
         getPtys: () => ptys,
         paneOf: () => ({ tabId: null, paneKey: null, recordedAtGraphSequence: 0 }),
-        // Handles are reissued on every start; identities must not depend on them.
-        issueLeafHandle: (leaf) => `term_${generation}_${leaf.tabId}`,
+        issueLeafHandle: (l) => handles.get(l.tabId) ?? '',
         issuePtyHandle: () => '',
-        makePaneKey: (leaf) => pane(leaf.tabId),
+        makePaneKey: (l) => pane(l.tabId),
         getWorktreeId: () => null,
         getHandleForPaneKey: () => null,
         getPaneKey: () => null,
@@ -94,156 +94,169 @@ function harness(n = 1, records: AgentSessionRecordReader | null = null) {
       }
     )
     setPeerKey(() => 'execution-key')
-    db.agentSenderIdentityOf = (address, paneKey) => senders.identityAt(db, address, paneKey)
     return senders
   }
   let projection = start()
-  const dispatch = (id: number, handle = `term_old_${id}`, key = pane(`tab-${id}`)) =>
-    createRootDispatch(db, db.createTask({ runId: run.id, spec: `worker ${id}` }).id, handle, key)
-  const hook = (
-    tab: number,
-    agent: string,
-    session: string,
-    options: { dispatchId?: string; process?: typeof claudeProcess } = {}
-  ) =>
-    projection.observeHook(db, {
-      paneKey: pane(`tab-${tab}`),
-      agent,
-      session,
-      process: options.process,
-      dispatchId: options.dispatchId ?? null
-    })
+  /** A worker Dispatch in tab-i whose terminal Orca holds on that very process. */
+  const worker = (i: number, incarnation: string | null = `pty-${i}:inc-1`) => {
+    const dispatch = createRootDispatch(
+      db,
+      db.createTask({ runId: run.id, spec: `worker ${i}` }).id,
+      handle(i),
+      pane(`tab-${i}`)
+    )
+    db.db
+      .prepare(
+        `INSERT INTO worker_terminal_resources (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, process_incarnation)
+         VALUES (?, ?, ?, ?, ?, ?)`
+      )
+      .run(
+        `resource-${dispatch.id}`,
+        dispatch.id,
+        dispatch.id,
+        pane(`tab-${i}`),
+        handle(i),
+        incarnation
+      )
+    return dispatch
+  }
   const located = (identity: string) =>
     projection.build().associations.find((row) => row.identity === identity)?.paneKey
   return {
     db,
     run,
     leaves,
+    ptys,
+    handles,
     get projection() {
       return projection
     },
     restart: () => (projection = start()),
-    dispatch,
-    hook,
+    worker,
     located,
     openHistory
   }
 }
 
-it('locates a worker by its Dispatch only while the conversation it was attached with runs there', () => {
-  const h = harness(2)
-  const worker = h.dispatch(0)
-  // Before its first hook, the Dispatch's own launch is the proof.
-  expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
-  h.hook(0, 'claude', 'worker-session', { dispatchId: worker.id })
-  expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
-  expect(h.located(conversation('claude', 'worker-session'))).toBe(pane('tab-0'))
-  // A different agent in the same terminal is not the worker.
-  h.hook(0, 'codex', 'someone-else', { dispatchId: worker.id })
-  expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
-  expect(h.located(conversation('claude', 'worker-session'))).toBeUndefined()
-  // Nor is an unrelated new conversation of the same agent.
-  h.hook(0, 'claude', 'fresh-claude', { dispatchId: worker.id })
-  expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
-  expect(h.located(conversation('claude', 'fresh-claude'))).toBe(pane('tab-0'))
-  expect(h.projection.build().associations.some((r) => r.identity.startsWith('term_'))).toBe(false)
+it('locates every sender by the handle or Dispatch its card saved after a warm restart, with no agent event', () => {
+  const h = harness(3)
+  const idleWorker = h.worker(0)
+  // Dispatched to tab-1's own terminal; Orca hasn't recorded that terminal for it yet.
+  const starting = createRootDispatch(
+    h.db,
+    h.db.createTask({ runId: h.run.id, spec: 'starting' }).id,
+    handle(1),
+    pane('tab-1')
+  )
+  for (const check of [() => undefined, () => h.restart()]) {
+    check()
+    // Started-worker cards name the Dispatch; Message, Task and Update cards name the handle,
+    // whether the sender is a hooked agent, a hooks-off agent, a plain shell or a reply.
+    expect(h.located(`dispatch:${idleWorker.id}`)).toBe(pane('tab-0'))
+    expect(h.located(`dispatch:${starting.id}`)).toBe(pane('tab-1'))
+    expect(h.located(handle(0))).toBe(pane('tab-0'))
+    expect(h.located(handle(2))).toBe(pane('tab-2'))
+  }
 })
 
-it('keeps a sender across /clear only when the same agent process reports the new session', () => {
+it('names a reply or a hooks-off sender by the handle it sent from, once per batch', () => {
   const h = harness(1)
-  const worker = h.dispatch(0)
-  h.hook(0, 'claude', 'before-clear', { dispatchId: worker.id, process: claudeProcess })
-  h.hook(0, 'claude', 'after-clear', { dispatchId: worker.id, process: claudeProcess })
-  expect(h.located(conversation('claude', 'before-clear'))).toBe(pane('tab-0'))
-  expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
-  h.hook(0, 'claude', 'new-process', { process: { ...claudeProcess, pid: 4343 } })
-  expect(h.located(conversation('claude', 'before-clear'))).toBeUndefined()
-  expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
-})
-
-it('saves who sent mail when it is accepted, so delivery after a replacement keeps the real sender', () => {
-  const h = harness(2)
-  h.hook(1, 'claude', 'coordinator')
-  const before = h.db.insertMessage({
-    from: 'term_coord',
-    to: 'worker',
-    subject: 'a',
-    senderPaneKey: pane('tab-1')
-  })
-  h.hook(1, 'codex', 'replacement')
-  const after = h.db.insertMessage({
-    from: 'term_coord',
-    to: 'worker',
-    subject: 'b',
-    senderPaneKey: pane('tab-1')
-  })
+  // A reply records no sender pane, and a plain shell or hooks-off agent sends no hook.
+  const batch = [
+    h.db.insertMessage({ from: handle(0), to: 'coordinator', subject: 'Re: plan' }),
+    h.db.insertMessage({ from: handle(0), to: 'coordinator', subject: 'done' })
+  ]
   const source = structuredMailSource({
     db: h.db,
-    mailboxHandle: 'worker',
+    mailboxHandle: 'coordinator',
     dispatchId: null,
-    batch: [before, after],
-    senderSnapshot: () => ({ name: 'Coordinator', agent: 'claude' })
+    batch,
+    senderSnapshot: () => ({ name: 'Worker', agent: 'claude' })
   })
-  // One handle, two agents: two senders, each with what ran when Orca accepted its mail.
-  expect(source.senders.map((s) => [s.party.address, s.identity])).toEqual([
-    ['term_coord', conversation('claude', 'coordinator')],
-    ['term_coord', conversation('codex', 'replacement')]
-  ])
-  expect(h.located(conversation('claude', 'coordinator'))).toBeUndefined()
-  expect(h.located(conversation('codex', 'replacement'))).toBe(pane('tab-1'))
+  expect(source.senders.map((sender) => sender.party.terminalHandle)).toEqual([handle(0)])
+  expect(h.located(handle(0))).toBe(pane('tab-0'))
 })
 
-it('names a terminal coordinator on its Task card from dispatch creation, even after a restart', () => {
+it('follows a follow-up into the pane that reopened the worker; a live old handle keeps its own pane', () => {
   const h = harness(2)
-  h.hook(1, 'claude', 'coordinator')
-  const task = h.db.createTask({ runId: h.run.id, spec: 'task' })
-  const created = h.db.createDispatchContext({
-    taskId: task.id,
-    assigneeHandle: 'term_worker',
-    assigneePaneKey: pane('tab-0'),
-    creator: { kind: 'terminal', handle: 'term_coord', paneKey: pane('tab-1') },
-    maxDepth: Number.MAX_SAFE_INTEGER
-  })
-  const card = dispatchTaskSource({
-    db: h.db,
-    dispatch: created,
-    from: 'term_coord',
-    senderSnapshot: () => ({ name: 'Coordinator', agent: 'claude' })
-  })
-  expect(card.senders[0]?.identity).toBe(conversation('claude', 'coordinator'))
-  h.restart()
-  h.hook(1, 'claude', 'coordinator')
-  expect(h.located(conversation('claude', 'coordinator'))).toBe(pane('tab-1'))
-})
-
-it('follows an explicit follow-up into the pane that reopened the worker, not the old pane', () => {
-  const h = harness(3)
-  const old = h.dispatch(0)
-  const latest = h.dispatch(1)
-  h.db.db
-    .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
-    .run(old.id, latest.id)
-  h.hook(1, 'claude', 'reopened', { dispatchId: latest.id })
-  expect(h.located(`dispatch:${old.id}`)).toBe(pane('tab-1'))
-  // After a restart the same Dispatch still resolves; no reissued handle is consulted.
-  h.restart()
-  h.hook(1, 'claude', 'reopened', { dispatchId: latest.id })
-  expect(h.located(`dispatch:${old.id}`)).toBe(pane('tab-1'))
-})
-
-it('rejects a worker resource whose pane now runs another process', () => {
-  const h = harness(1)
-  const worker = h.dispatch(0)
+  const first = h.worker(0)
   h.db.db
     .prepare(
-      `INSERT INTO worker_terminal_resources (id, origin_dispatch_id, owner_dispatch_id, pane_key, terminal_handle, process_incarnation, prior_owner_dispatch_ids)
-       VALUES ('resource', ?, ?, ?, 'term_old_0', 'pty-0:replaced', 'not json')`
+      "UPDATE worker_terminal_resources SET ownership_state = 'released' WHERE owner_dispatch_id = ?"
     )
-    .run(worker.id, worker.id, pane('tab-0'))
-  expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
-  h.db.db.prepare("UPDATE worker_terminal_resources SET process_incarnation = 'pty-0:inc-1'").run()
+    .run(first.id)
+  const reopened = h.worker(1)
+  h.db.db
+    .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
+    .run(first.id, reopened.id)
+  expect(h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
+  // Its first terminal is still open: cards from there open it, not the reopened worker.
+  expect(h.located(handle(0))).toBe(pane('tab-0'))
+  h.leaves.splice(0, 1)
+  h.ptys.splice(0, 1)
+  expect(h.located(handle(0))).toBe(pane('tab-1'))
+  expect(h.located(`dispatch:${first.id}`)).toBe(pane('tab-1'))
+})
+
+it('rejects a worker whose terminal is released, unproven or on another process, and a settled one with none', () => {
+  const h = harness(2)
+  const worker = h.worker(0)
+  const settled = createRootDispatch(
+    h.db,
+    h.db.createTask({ runId: h.run.id, spec: 'settled' }).id,
+    handle(1),
+    pane('tab-1')
+  )
+  h.db.db.prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?").run(settled.id)
+  expect(h.located(`dispatch:${settled.id}`)).toBeUndefined()
   // A malformed former-owner list loses only that row's former owners.
+  h.db.db
+    .prepare("UPDATE worker_terminal_resources SET prior_owner_dispatch_ids = 'not json'")
+    .run()
   expect(h.located(`dispatch:${worker.id}`)).toBe(pane('tab-0'))
+  for (const [column, value] of [
+    ['process_incarnation', 'pty-0:replaced'],
+    ['process_incarnation', null],
+    ['ownership_state', 'released'],
+    ['retained_reason', 'identity_unproven']
+  ] as const) {
+    h.db.db.prepare(`UPDATE worker_terminal_resources SET ${column} = ?`).run(value)
+    expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
+    h.db.db
+      .prepare(
+        "UPDATE worker_terminal_resources SET process_incarnation = 'pty-0:inc-1', ownership_state = 'owned', retained_reason = NULL"
+      )
+      .run()
+  }
+  // The terminal itself is still the one that sent the worker's cards.
+  expect(h.located(handle(0))).toBe(pane('tab-0'))
+})
+
+it('does not take a respawned or fresh terminal for the one a card was sent from', () => {
+  const h = harness(2)
+  const worker = h.worker(0)
+  expect(h.located(handle(0))).toBe(pane('tab-0'))
+  // Same pane and handle, new process: a respawn that kept the handle runs a fresh shell.
+  h.ptys[0] = { ...h.ptys[0], incarnationId: 'inc-2' }
+  expect(h.located(handle(0))).toBeUndefined()
+  expect(h.located(`dispatch:${worker.id}`)).toBeUndefined()
+  // A cold restart restores the pane under a new handle; the old one names nothing.
+  h.restart()
+  h.handles.set('tab-1', 'term_fresh')
+  expect(h.located(handle(1))).toBeUndefined()
+  expect(h.located('term_fresh')).toBe(pane('tab-1'))
+})
+
+it('reads each live pane through an index, never every Dispatch or attachment it once had', () => {
+  const h = harness()
+  for (const sql of Object.values(AGENT_SENDER_PANE_READS)) {
+    const plan = h.db.db
+      .prepare(`EXPLAIN QUERY PLAN ${sql}`)
+      .all('pane')
+      .map((row) => String((row as { detail: unknown }).detail))
+    expect(plan.join('\n')).toMatch(/USING (COVERING )?INDEX/)
+    expect(plan.some((detail) => detail.startsWith('SCAN '))).toBe(false)
+  }
 })
 
 it('publishes plain chats and canonical /clear successors without credential handles or credential panes', () => {
@@ -267,9 +280,14 @@ it('publishes plain chats and canonical /clear successors without credential han
     getRecord: (id) => rows.find((r) => r.sessionId === id) ?? null,
     listRecords: () => rows
   })
-  const handle = mintStructuredWorkerHandle()
+  const structured = mintStructuredWorkerHandle()
   const credentialPane = mintStructuredWorkerPaneKey(root)
-  h.dispatch(0, handle, credentialPane)
+  createRootDispatch(
+    h.db,
+    h.db.createTask({ runId: h.run.id, spec: 's' }).id,
+    structured,
+    credentialPane
+  )
   const associations = h.projection.build().associations
   expect(associations.find((r) => r.identity === `orca_session_id:${root}`)).toMatchObject({
     sessionId: live
@@ -277,7 +295,7 @@ it('publishes plain chats and canonical /clear successors without credential han
   expect(associations.find((r) => r.identity === `orca_session_id:${live}`)).toMatchObject({
     sessionId: live
   })
-  expect(JSON.stringify(h.projection.build())).not.toContain(handle)
+  expect(JSON.stringify(h.projection.build())).not.toContain(structured)
   expect(JSON.stringify(h.projection.build())).not.toContain(credentialPane)
 })
 
@@ -285,7 +303,7 @@ it.each([100, 1000])(
   'does no identity work for heartbeats, read marks, mail or status at %i dispatches',
   (n) => {
     const h = harness(n)
-    const chain = Array.from({ length: n }, (_, i) => h.dispatch(i))
+    const chain = Array.from({ length: n }, (_, i) => h.worker(i))
     for (let i = 1; i < n; i++) {
       h.db.db
         .prepare('UPDATE dispatch_contexts SET follow_up_of_dispatch_id = ? WHERE id = ?')
@@ -296,24 +314,49 @@ it.each([100, 1000])(
     expect(first.associations.some((r) => r.identity === `dispatch:${chain[0].id}`)).toBe(true)
     const settled = h.projection.workForTest()
     const sent = h.db.insertMessage({
-      from: 'term_old_0',
+      from: handle(0),
       to: 'recipient',
       subject: 'beat',
       type: 'heartbeat'
     })
     h.db.recordHeartbeat(chain[n - 1].id, new Date().toISOString())
     h.db.db.prepare('UPDATE messages SET read = 1 WHERE id = ?').run(sent.id)
-    h.db.insertMessage({
-      from: 'term_old_1',
-      to: 'recipient',
-      subject: 'update',
-      senderPaneKey: pane('tab-1')
-    })
+    h.db.insertMessage({ from: handle(1), to: 'recipient', subject: 'update' })
     h.leaves[0].lastOutputAt = 100
     expect(h.projection.build()).toBe(first)
     expect(h.projection.build('other')).toBe(other)
     expect(h.projection.workForTest()).toEqual(settled)
     expect(h.projection.changedScopes(['other', 'workspace'])).toEqual([])
+    // Settling a worker is an identity fact: it rebuilds once.
+    h.db.db
+      .prepare("UPDATE dispatch_contexts SET status = 'completed' WHERE id = ?")
+      .run(chain[0].id)
+    h.projection.build()
+    expect(h.projection.workForTest().historyReads).toBe(settled.historyReads + 1)
+  }
+)
+
+it.each([100, 1000])(
+  'rebuilds chat senders only when a chat appears, moves, clears or closes, not on other writes, at %i chats',
+  async (n) => {
+    const { store } = await scaleStore(n)
+    const h = harness(1, conversationRecordReader(store))
+    const first = h.projection.build()
+    expect(
+      first.associations.filter((r) => r.identity.startsWith('orca_session_id:')).length
+    ).toBeGreaterThanOrEqual(n)
+    const settled = h.projection.workForTest()
+    // A record write that leaves its location, /clear successor and tab alone, as lease
+    // renewals and receipts do, rebuilds nothing.
+    for (let i = 0; i < 5; i++) {
+      await store.setConversationName(`chat-0000${i}`, `renamed ${i}`)
+      expect(h.projection.build()).toBe(first)
+    }
+    expect(h.projection.workForTest()).toEqual(settled)
+    await store.setSessionTabVisibility('chat-00000', false)
+    const closed = h.projection.build()
+    expect(closed.associations.some((r) => r.identity === 'orca_session_id:chat-00000')).toBe(false)
+    expect(h.projection.workForTest()).toEqual({ ...settled, chatReads: settled.chatReads + 1 })
   }
 )
 
@@ -321,7 +364,7 @@ it('reports only worktrees whose scope changed since their last frame', () => {
   const h = harness(1)
   const workspace = h.projection.buildForFrame('workspace')
   const other = h.projection.buildForFrame('other')
-  h.hook(0, 'claude', 'first')
+  h.worker(0)
   expect(h.projection.changedScopes(['workspace', 'other', 'never-framed'])).toEqual(['workspace'])
   expect(h.projection.build('other')).toBe(other)
   expect(h.projection.build('workspace')).not.toBe(workspace)
@@ -329,22 +372,22 @@ it('reports only worktrees whose scope changed since their last frame', () => {
 
 it('keeps the last good publication when a read fails and retries on the next identity change', () => {
   const h = harness(3)
-  h.dispatch(0)
+  h.worker(0)
   const good = h.projection.build()
   const prepare = h.db.db.prepare.bind(h.db.db)
   vi.spyOn(h.db.db, 'prepare').mockImplementation((sql: string) => {
-    if (sql === 'SELECT * FROM worker_terminal_resources WHERE pane_key = ?') {
+    if (sql === AGENT_SENDER_PANE_READS.resources) {
       throw new Error('disk I/O error')
     }
     return prepare(sql)
   })
   vi.spyOn(console, 'warn').mockImplementation(() => {})
-  h.dispatch(1)
+  h.worker(1)
   expect(h.projection.build()).toBe(good)
   expect(h.projection.build()).toBe(good)
   expect(h.projection.workForTest().historyReads).toBe(2)
   vi.mocked(h.db.db.prepare).mockRestore()
-  const third = h.dispatch(2)
+  const third = h.worker(2)
   expect(h.located(`dispatch:${third.id}`)).toBe(pane('tab-2'))
 })
 
@@ -391,9 +434,8 @@ it('publishes one principal per paired peer and attachments only while their wor
   }
   expect(publicRows.attachments).toEqual([attached])
   expect(publicRows.associations.some((row) => row.identity === 'dispatch:federated')).toBe(false)
-  h.hook(0, 'codex', 'federated-worker')
-  expect(h.projection.build('workspace').attachments).toEqual([attached])
-  h.hook(0, 'claude', 'someone-else')
+  // A settled attachment no longer names a worker running there.
+  h.db.db.prepare("UPDATE remote_dispatch_attachments SET state = 'stopped'").run()
   expect(h.projection.build('workspace').attachments).toEqual([])
 })
 

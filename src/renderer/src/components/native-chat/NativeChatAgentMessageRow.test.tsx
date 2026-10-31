@@ -62,7 +62,8 @@ describe("another agent's message in the transcript", () => {
       source.senders[0],
       'wt-chat',
       { kind: 'local' },
-      undefined
+      undefined,
+      'Coder'
     )
   })
 })
@@ -102,7 +103,8 @@ describe("another agent's queued card", () => {
       source.senders[0],
       'wt-chat',
       undefined,
-      undefined
+      undefined,
+      'Coder'
     )
   })
 })

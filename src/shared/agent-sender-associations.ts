@@ -1,7 +1,7 @@
-/** Where a sender identity runs now: derived display data, never a mailbox address, handle or
- *  structured-worker credential pane. */
+/** Where a sender a card saved runs now: derived display data, never a structured-worker
+ *  credential pane. */
 export type AgentSenderAssociation = {
-  /** `conversation:<digest>`, `dispatch:<id>` or `orca_session_id:<id>`, as saved senders carry. */
+  /** The terminal handle, `dispatch:<id>` or `orca_session_id:<id>` a saved sender carries. */
   identity: string
   paneKey: string
   worktreeId: string

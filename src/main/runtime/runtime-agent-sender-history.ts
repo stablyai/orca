@@ -18,18 +18,19 @@ import {
 } from './orchestration/db/dispatch-context/worker-follow-up-lineage'
 import { parseWorkerTerminalPriorOwnerIds } from './orchestration/db/pane-key-match'
 import type { WorkerTerminalResourceRow } from './orchestration/worker-terminal-ownership'
+import { potentiallyLiveRemoteAttachmentSql } from './orchestration/db/federation/remote-attachment-liveness'
+import { isStructuredWorkerHandle } from '../../shared/structured-worker-handle'
 import type { OrchestrationDb } from './orchestration/db'
 
 export type AgentSenderPrincipal = AgentSenderPublication['principals'][number]
-/** A live pane as this host runs it now. */
+/** A live terminal as this host runs it now. */
 export type AgentSenderPane = {
   paneKey: string
   worktreeId: string
+  handle: string
   processIncarnation: string | null
-  /** Conversations proved to be the one running here now, newest first. */
-  conversations: readonly string[]
 }
-/** A worker identity whose Dispatch lineage ends in a pane that still holds that worker. */
+/** An identity (`dispatch:<id>`, or an earlier handle of that worker) located in a live pane. */
 export type AgentSenderWorker = { identity: string; paneKey: string }
 
 const remoteRow = z.object({
@@ -37,6 +38,7 @@ const remoteRow = z.object({
   homePeerFingerprint: z.string(),
   processIncarnation: z.string().nullable()
 })
+const assignedRow = z.object({ id: z.string(), handle: z.string().nullable() })
 const environmentRow = z.object({ environmentId: z.string() })
 
 const tolerant = <T>(schema: z.ZodType<T>, rows: unknown[]): T[] =>
@@ -48,13 +50,13 @@ const tolerant = <T>(schema: z.ZodType<T>, rows: unknown[]): T[] =>
 const HISTORY_TRIGGERS = [
   [
     'dispatch_contexts',
-    'assignee_handle, assignee_pane_key, assignee_orca_session_id, follow_up_of_dispatch_id'
+    'status, assignee_handle, assignee_pane_key, assignee_orca_session_id, follow_up_of_dispatch_id'
   ],
   [
     'worker_terminal_resources',
-    'owner_dispatch_id, pane_key, terminal_handle, prior_owner_dispatch_ids, ownership_state, retained_reason, process_incarnation'
+    'owner_dispatch_id, pane_key, terminal_handle, prior_owner_dispatch_ids, ownership_state, release_state, retained_reason, process_incarnation'
   ],
-  ['remote_dispatch_attachments', 'pane_key, home_peer_fingerprint, process_incarnation'],
+  ['remote_dispatch_attachments', 'state, pane_key, home_peer_fingerprint, process_incarnation'],
   ['federated_dispatches', 'environment_id']
 ] as const
 
@@ -74,10 +76,7 @@ ${HISTORY_TRIGGERS.flatMap(([table, columns]) =>
 ${event} ON main.${table}
 BEGIN UPDATE temp.agent_sender_generation SET history = history + 1; END;`
   )
-).join('\n')}
-CREATE TEMP TRIGGER IF NOT EXISTS agent_sender_assignee_insert
-AFTER INSERT ON main.agent_sender_identities WHEN NEW.subject LIKE 'assignee:%'
-BEGIN UPDATE temp.agent_sender_generation SET history = history + 1; END;`
+).join('\n')}`
 
 /** Install the triggers once per connection, then read the generation they keep. */
 export function readAgentSenderGeneration(db: OrchestrationDb, install: boolean): string {
@@ -91,15 +90,31 @@ export function readAgentSenderGeneration(db: OrchestrationDb, install: boolean)
   return `${row.history}:${String(db.db.pragma('data_version', { simple: true }))}`
 }
 
-/** The worker a pane holds counts only while the conversation it was attached with still runs
- *  there; before its first hook, only while nothing else has claimed the pane. */
-function holdsWorker(db: OrchestrationDb, dispatchId: string, pane: AgentSenderPane): boolean {
-  const attached = db.getAgentSenderIdentity(`assignee:${dispatchId}`)
-  return attached ? pane.conversations.includes(attached) : pane.conversations.length === 0
+// Each reads one live pane through an index; the active and potentially-live predicates are the
+// partial indexes' own, so neither scans every Dispatch or attachment that pane ever had.
+export const AGENT_SENDER_PANE_READS = {
+  resources: 'SELECT * FROM worker_terminal_resources WHERE pane_key = ?',
+  assigned: `SELECT id, assignee_handle AS handle FROM dispatch_contexts
+    WHERE assignee_pane_key = ? AND status IN ('pending', 'dispatched')`,
+  attachments: `SELECT dispatch_id AS dispatchId, home_peer_fingerprint AS homePeerFingerprint,
+      process_incarnation AS processIncarnation
+    FROM remote_dispatch_attachments WHERE pane_key = ? AND ${potentiallyLiveRemoteAttachmentSql()}`
+} as const
+
+/** The worker still runs this very execution: its terminal is held and was recorded on this
+ *  process. A missing incarnation proves nothing. */
+function holdsWorker(resource: WorkerTerminalResourceRow, pane: AgentSenderPane): boolean {
+  return (
+    resource.ownership_state !== 'released' &&
+    resource.release_state !== 'released' &&
+    resource.retained_reason !== 'identity_unproven' &&
+    resource.process_incarnation !== null &&
+    resource.process_incarnation === pane.processIncarnation
+  )
 }
 
-/** Bounded by live panes: their resources and Dispatches, the lineage that continues into each,
- *  and federated attachments. */
+/** Bounded by live panes: the workers each holds, the lineage that continues into each, and
+ *  federated workers still potentially running there. */
 export function readAgentSenderWorkers(
   db: OrchestrationDb,
   panes: readonly AgentSenderPane[],
@@ -107,29 +122,20 @@ export function readAgentSenderWorkers(
 ): {
   workers: AgentSenderWorker[]
   remote: (AgentSenderWorker & { homePeerFingerprint: string })[]
-  /** Each live pane's attached federated Dispatch, proved or not, so its first hook can attach it. */
-  attachedByPane: Map<string, string>
 } {
   const byKey = new Map(panes.map((pane) => [pane.paneKey, pane]))
   const remote: (AgentSenderWorker & { homePeerFingerprint: string })[] = []
-  const attachedByPane = new Map<string, string>()
-  const resources = db.db.prepare('SELECT * FROM worker_terminal_resources WHERE pane_key = ?')
-  const assigned = db.db.prepare(
-    'SELECT id FROM dispatch_contexts WHERE assignee_pane_key = ? AND assignee_orca_session_id IS NULL'
-  )
-  const attachments = db.db.prepare(
-    `SELECT dispatch_id AS dispatchId, home_peer_fingerprint AS homePeerFingerprint,
-       process_incarnation AS processIncarnation
-     FROM remote_dispatch_attachments WHERE pane_key = ?`
-  )
-  // A replaced process or a released resource is evidence against the worker; neither proves it.
-  const fenced = (recorded: string | null, pane: AgentSenderPane) =>
-    Boolean(recorded && pane.processIncarnation && recorded !== pane.processIncarnation)
+  const resources = db.db.prepare(AGENT_SENDER_PANE_READS.resources)
+  const assigned = db.db.prepare(AGENT_SENDER_PANE_READS.assigned)
+  const attachments = db.db.prepare(AGENT_SENDER_PANE_READS.attachments)
   const former = new Map<string, WorkerTerminalResourceRow>()
   const candidates = new Set<string>()
   for (const pane of panes) {
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: SELECT * over this table is exactly its row shape.
     for (const row of resources.all(pane.paneKey) as WorkerTerminalResourceRow[]) {
+      if (!holdsWorker(row, pane)) {
+        continue
+      }
       // A malformed list loses only that row's former owners, as the release path tolerates it.
       const priors = parseWorkerTerminalPriorOwnerIds(row.prior_owner_dispatch_ids) ?? []
       for (const id of [row.owner_dispatch_id, row.origin_dispatch_id, ...priors]) {
@@ -139,15 +145,17 @@ export function readAgentSenderWorkers(
         former.set(id, row)
       }
     }
-    for (const { id } of tolerant(z.object({ id: z.string() }), assigned.all(pane.paneKey))) {
-      candidates.add(id)
+    // Before its terminal is recorded, an active Dispatch counts only on the execution it names.
+    for (const row of tolerant(assignedRow, assigned.all(pane.paneKey))) {
+      if (row.handle === pane.handle) {
+        candidates.add(row.id)
+      }
     }
     for (const attachment of tolerant(remoteRow, attachments.all(pane.paneKey))) {
-      if (fenced(attachment.processIncarnation, pane)) {
-        continue
-      }
-      attachedByPane.set(pane.paneKey, attachment.dispatchId)
-      if (holdsWorker(db, attachment.dispatchId, pane)) {
+      if (
+        attachment.processIncarnation &&
+        attachment.processIncarnation === pane.processIncarnation
+      ) {
         remote.push({
           identity: `dispatch:${attachment.dispatchId}`,
           paneKey: pane.paneKey,
@@ -177,23 +185,28 @@ export function readAgentSenderWorkers(
   const lineages = new Map<string, WorkerLineage>()
   for (const id of candidates) {
     const lineage = resolveWorkerLineage(reader, id, undefined, lineages)
-    const resource = lineage?.resource
-    const pane = byKey.get(resource?.pane_key ?? lineage?.latest.assignee_pane_key ?? '')
-    if (
-      !lineage ||
-      !pane ||
-      lineage.latest.assignee_orca_session_id ||
-      (resource &&
-        (resource.ownership_state === 'released' ||
-          resource.retained_reason === 'identity_unproven' ||
-          fenced(resource.process_incarnation, pane))) ||
-      !holdsWorker(db, lineage.latest.id, pane)
-    ) {
+    if (!lineage || lineage.latest.assignee_orca_session_id) {
+      continue
+    }
+    const { latest, resource } = lineage
+    const pane = byKey.get(resource?.pane_key ?? latest.assignee_pane_key ?? '')
+    const runs = resource
+      ? pane && holdsWorker(resource, pane)
+      : pane &&
+        latest.assignee_handle === pane.handle &&
+        (latest.status === 'pending' || latest.status === 'dispatched') &&
+        (!latest.process_incarnation || latest.process_incarnation === pane.processIncarnation)
+    if (!pane || !runs) {
       continue
     }
     workers.push({ identity: `dispatch:${id}`, paneKey: pane.paneKey })
+    // Cards from the worker's earlier terminal follow it; a live handle still names its own pane.
+    const handle = reader.getDispatchContextById(id)?.assignee_handle
+    if (handle && !isStructuredWorkerHandle(handle)) {
+      workers.push({ identity: handle, paneKey: pane.paneKey })
+    }
   }
-  return { workers, remote, attachedByPane }
+  return { workers, remote }
 }
 
 /** One principal per paired peer, not one route per federated Dispatch ever made. */

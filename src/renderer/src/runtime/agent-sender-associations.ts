@@ -248,40 +248,34 @@ function senderIndex(state: AppState) {
   return cache
 }
 
-/** What a card's sender is on its host now; avatar, label and click all read this one answer. */
+/** Where a card's sender runs on its host now, before the saved-kind check the card layer adds. */
 export type AgentSenderResolution =
   | { kind: 'located'; location: LocatedAgentSender }
   /** Two hosts or rows claim it: no live link, and never a guess between them. */
   | { kind: 'ambiguous' }
-  /** Its identity is known but runs nowhere visible; a chat can still be reopened by its session. */
-  | { kind: 'gone'; chat: boolean }
-  /** A card saved without an identity the host can prove (written before sender records). */
-  | { kind: 'unproved' }
+  /** The host runs nothing under the identities the card saved: a closed chat, a terminal that
+   *  exited or was respawned, or a sender with no identity this host can name. */
+  | { kind: 'gone'; sender: 'chat' | 'terminal' | 'other' }
   /** The host publishes nothing: an older Orca, read through its own lookup. */
   | { kind: 'legacy' }
 
-/** Switch point for unproved senders' clicks (product decision): 'unavailable' says the agent is no
- *  longer available; 'legacy-lookup' asks the host's old lookup, which may find a replacement. */
-export const UNPROVED_SENDER_CLICK: 'unavailable' | 'legacy-lookup' = 'unavailable'
-
 const AMBIGUOUS: AgentSenderResolution = Object.freeze({ kind: 'ambiguous' })
-const UNPROVED: AgentSenderResolution = Object.freeze({ kind: 'unproved' })
 const LEGACY: AgentSenderResolution = Object.freeze({ kind: 'legacy' })
 
 /** The identities a card names its sender by, most specific first: the Dispatch a Started-worker
- *  card records, the identity saved when Orca accepted the event, the chat session, a federated
- *  Dispatch address. A terminal handle alone is never one: handles outlive their agents. */
+ *  card records, the chat session, the terminal handle it sent from, a federated Dispatch. */
 function senderIdentities(sender: AgentMessageSender, dispatchId: string | undefined): string[] {
-  const { address, orcaSessionId } = sender.party
+  const { address, orcaSessionId, terminalHandle } = sender.party
   return [
     dispatchId ? `dispatch:${dispatchId}` : undefined,
-    sender.identity,
     orcaSessionId ? `orca_session_id:${orcaSessionId}` : undefined,
+    terminalHandle && !terminalHandle.startsWith('dispatch:') ? terminalHandle : undefined,
     address.startsWith('dispatch:') ? address : undefined
   ].filter((identity): identity is string => Boolean(identity))
 }
 
-/** Undefined publication is old-host compatibility; an authoritative miss never falls back. */
+/** Undefined publication is old-host compatibility; the first identity the host proves selects
+ *  the one target, and an ambiguous one never falls through to another. */
 export function resolveAgentMessageSender(
   state: AppState,
   host: string,
@@ -292,8 +286,7 @@ export function resolveAgentMessageSender(
     return LEGACY
   }
   const { index } = senderIndex(state)
-  const identities = senderIdentities(sender, dispatchId)
-  for (const identity of identities) {
+  for (const identity of senderIdentities(sender, dispatchId)) {
     const location = index.get(key(host, identity))
     if (location === null) {
       return AMBIGUOUS
@@ -302,9 +295,15 @@ export function resolveAgentMessageSender(
       return { kind: 'located', location }
     }
   }
-  return identities.length === 0
-    ? UNPROVED
-    : { kind: 'gone', chat: Boolean(sender.party.orcaSessionId) }
+  const { orcaSessionId, terminalHandle } = sender.party
+  return {
+    kind: 'gone',
+    sender: orcaSessionId
+      ? 'chat'
+      : terminalHandle && !terminalHandle.startsWith('dispatch:')
+        ? 'terminal'
+        : 'other'
+  }
 }
 
 /** Undefined publication is old-host compatibility; an authoritative miss never falls back. */

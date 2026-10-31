@@ -230,7 +230,8 @@ it.each([false, true])(
       from.senders[0],
       RECIPIENT,
       undefined,
-      undefined
+      undefined,
+      'Original sender'
     )
     expect(feeds.get('local')!.activations).toBe(0)
   }

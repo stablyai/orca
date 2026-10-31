@@ -82,13 +82,12 @@ it.each([50, 500])(
     expect(senders.workForTest()).toEqual(settled)
     expect(touch).not.toHaveBeenCalled()
 
-    // A real identity change reaches only the worktree whose scope changed.
-    senders.observeHook(db, {
-      paneKey: `${leaves.get('live')!.tabId}:${leaves.get('live')!.leafId}`,
-      agent: 'claude',
-      session: 'live',
-      process: undefined,
-      dispatchId: null
+    // A real identity change, a new terminal, reaches only the worktree whose scope changed.
+    leaves.set('opened', {
+      ...MIRROR_LEAVES_STEP_1[0],
+      tabId: 'tab_h1',
+      worktreeId: 'workspace',
+      ptyId: 'pty-opened'
     })
     await send('after identity change')
     await new Promise((resolve) => setTimeout(resolve, 0))
