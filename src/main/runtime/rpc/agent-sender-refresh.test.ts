@@ -22,9 +22,15 @@ const paneOf = (i: number) =>
 type Internals = {
   agentProjections: { senders: RuntimeAgentSenderAssociations }
   leaves: Map<string, RuntimeLeafRecord>
+  ptysById: Map<string, unknown>
   mobileSessionTabsByWorktree: Map<string, unknown>
 }
 const internals = (runtime: OrcaRuntimeService) => runtime as unknown as Internals
+/** History, chat and lineage reads, apart from the live-terminal walk each refresh makes. */
+const identityReads = (senders: RuntimeAgentSenderAssociations) => {
+  const { leafVisits: _leaves, ptyVisits: _ptys, ...reads } = senders.workForTest()
+  return reads
+}
 
 it.each([50, 500])(
   'orchestration RPCs that change no identity do no identity work and republish nothing at %i dispatches',
@@ -43,6 +49,7 @@ it.each([50, 500])(
     const {
       agentProjections: { senders },
       leaves,
+      ptysById,
       mobileSessionTabsByWorktree
     } = internals(runtime)
     leaves.set('live', {
@@ -56,7 +63,8 @@ it.each([50, 500])(
       .spyOn(runtime, 'touchMobileSessionTabsForWorktree')
       .mockImplementation(() => undefined)
     senders.buildForFrame('workspace')
-    const settled = senders.workForTest()
+    const settled = identityReads(senders)
+    const walked = senders.workForTest()
     expect(settled.historyReads).toBe(1)
     const dispatcher = new RpcDispatcher({ runtime, methods: ORCHESTRATION_METHODS })
     const send = (subject: string, type?: string) =>
@@ -73,13 +81,19 @@ it.each([50, 500])(
         orchestrationContractVersion: ORCHESTRATION_CONTRACT_VERSION,
         orchestrationRequestId: `mutation_${subject}`
       })
-    for (let k = 0; k < 5; k++) {
+    const rpcs = 10
+    for (let k = 0; k < rpcs / 2; k++) {
       await send(`status ${k}`)
       await send(`beat ${k}`, 'heartbeat')
     }
     // The refresh runs in a microtask after each RPC.
     await new Promise((resolve) => setTimeout(resolve, 0))
-    expect(senders.workForTest()).toEqual(settled)
+    expect(identityReads(senders)).toEqual(settled)
+    // Each RPC's refresh walks the live terminals once, and nothing more.
+    expect({
+      leaves: senders.workForTest().leafVisits - walked.leafVisits,
+      ptys: senders.workForTest().ptyVisits - walked.ptyVisits
+    }).toEqual({ leaves: rpcs * leaves.size, ptys: rpcs * ptysById.size })
     expect(touch).not.toHaveBeenCalled()
 
     // A real identity change, a new terminal, reaches only the worktree whose scope changed.
