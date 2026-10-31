@@ -5,6 +5,7 @@ import type {
   RuntimeTerminalWaitBlockedReason
 } from '../shared/runtime-terminal-contracts'
 import {
+  formatTerminalAgentStatus,
   formatTerminalClose,
   formatTerminalFocus,
   formatTerminalRead,
@@ -291,5 +292,23 @@ describe('formatTerminalRead draft separation', () => {
 
     expect(output).toContain('draft: "proceed with the release"')
     expect(output).toContain('\n\nBuild passed\n❯')
+  })
+})
+
+describe('formatTerminalAgentStatus', () => {
+  it('prints handle, running flag, and status', () => {
+    expect(
+      formatTerminalAgentStatus({
+        agentStatus: { handle: 'term_worker', isRunningAgent: true, status: 'permission' }
+      })
+    ).toBe(['handle: term_worker', 'isRunningAgent: true', 'status: permission'].join('\n'))
+  })
+
+  it('prints null when the terminal is not running an agent', () => {
+    expect(
+      formatTerminalAgentStatus({
+        agentStatus: { handle: 'term_shell', isRunningAgent: false, status: null }
+      })
+    ).toBe(['handle: term_shell', 'isRunningAgent: false', 'status: null'].join('\n'))
   })
 })
