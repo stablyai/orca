@@ -11,7 +11,10 @@ import {
 } from '../agent-hooks/installer-utils'
 import { refreshManagedScriptIfPresent } from '../agent-hooks/managed-hook-script-refresh'
 import { isOrcaOwnedRemnant, removeManagedGrokHookEntries } from './grok-hook-config-cleanup'
-import { removeGrokHookBackupEntries } from './grok-hook-backup-cleanup'
+import {
+  removeGrokHookBackupEntries,
+  removeGrokHookBackupEntriesAsync
+} from './grok-hook-backup-cleanup'
 import { buildInstalledGrokConfig, GROK_EVENTS, GROK_TOOL_EVENT_MATCHER } from './grok-hook-config'
 import { installRemoteGrokHook } from './grok-hook-remote-install'
 import {
@@ -284,7 +287,7 @@ export class GrokHookService {
       await recordGrokSymlinkCleanup(configPath, serialized)
     }
     if (updated) {
-      removeGrokHookBackupEntries(configPath)
+      await removeGrokHookBackupEntriesAsync(configPath)
     }
     return updated
       ? notInstalledStatus(configPath)
