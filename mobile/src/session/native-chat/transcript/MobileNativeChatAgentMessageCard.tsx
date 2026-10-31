@@ -60,7 +60,8 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
   useLayoutEffect(() => {
     currentIdentity.current = identity
   }, [identity])
-  const height = measurement.identity === identity ? measurement.height : 0
+  const measured = measurement.identity === identity
+  const height = measured ? measurement.height : 0
   const lineHeight = markdownStyles.paragraph.lineHeight * CHAT_PROSE_SCALE * fontScale
   const overflows = agentMessageOverflows(height, lineHeight)
   const heading = {
@@ -94,12 +95,11 @@ export const MobileNativeChatAgentMessageCard = memo(function MobileNativeChatAg
           style={{
             position: 'relative',
             overflow: 'hidden',
-            height:
-              height > 0
-                ? open
-                  ? height
-                  : Math.min(height, lineHeight * AGENT_MESSAGE_FOLDED_LINES)
-                : lineHeight * AGENT_MESSAGE_FOLDED_LINES
+            height: measured
+              ? open
+                ? height
+                : Math.min(height, lineHeight * AGENT_MESSAGE_FOLDED_LINES)
+              : lineHeight * AGENT_MESSAGE_FOLDED_LINES
           }}
         >
           <View
@@ -225,7 +225,7 @@ const styles = themedStyleSheet(() => ({
     padding: spacing.md,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
-    borderRadius: radii.card,
+    borderRadius: radii.surface,
     backgroundColor: colors.bgPanel
   },
   content: { flex: 1, minWidth: 0, gap: spacing.xs },
@@ -261,7 +261,7 @@ const styles = themedStyleSheet(() => ({
     position: 'absolute',
     right: -2,
     bottom: -2,
-    borderRadius: radii.card,
+    borderRadius: radii.pill,
     backgroundColor: colors.bgPanel
   }
 }))

@@ -257,6 +257,8 @@ describe('message selection actions', () => {
     })
     const recovery = nodes('Pressable').find(
       (node) =>
+        node.props.accessibilityRole === 'button' &&
+        typeof node.props.onPress === 'function' &&
         node.findAll(
           (child) => String(child.type) === 'Text' && child.props.children === 'Show full message'
         ).length > 0

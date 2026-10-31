@@ -21,10 +21,16 @@ import {
 import type { AgentMessageSource } from '../../../../../src/shared/agent-session/agent-session-message-source'
 
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
+import { useMobileStructuredAgentSession } from '../../use-mobile-structured-agent-session'
+import { snapshotEvent, ok } from '../../use-mobile-structured-agent-session-queued.test-fixture'
 import {
   findAllByHostType,
   findByHostType
 } from '../../../test-support/react-test-renderer-host-nodes'
+
+vi.mock('@react-native-async-storage/async-storage', () => ({
+  default: { getItem: async () => null, setItem: async () => {}, removeItem: async () => {} }
+}))
 
 const PNG =
   'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg=='
@@ -122,6 +128,65 @@ describe('MobileNativeChatMessage', () => {
         /^Asked: Do you prefer tea or coffee\?CoffeeResolved · Answered on desktop-renderer\d{1,2}:\d{2}(\s[AP]M)?$/
       )
     ])
+  })
+
+  it('keeps answered receipts beside Started worker through the production structured hook', async () => {
+    const items = [
+      {
+        itemId: 'start',
+        revision: 1,
+        sequence: 42,
+        observedAt: 1,
+        body: {
+          kind: 'agent-start' as const,
+          dispatchId: 'dispatch',
+          task: 'Worker assignment',
+          worker: {
+            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null },
+            name: 'Worker'
+          }
+        }
+      },
+      ...ANSWERED_PROMPT_ITEMS
+    ]
+    const client = stubRpcClient({
+      sendRequest: async () => ok({}),
+      subscribe: (method, _params, onData) => {
+        if (method === 'agentSession.subscribe') {
+          onData(snapshotEvent({ items }))
+        }
+        return () => {}
+      }
+    })
+    const onSendError = vi.fn()
+    function Transcript() {
+      const structured = useMobileStructuredAgentSession({
+        client,
+        sessionId: 'session-1',
+        agent: 'claude',
+        enabled: true,
+        connected: true,
+        hostSupport: null,
+        onSendError
+      })
+      return structured.session.messages.map((message) =>
+        createElement(MobileNativeChatMessage, {
+          key: message.id,
+          message,
+          receipt: structured.receipts.get(message.id)
+        })
+      )
+    }
+    await act(async () => {
+      renderer = create(createElement(Transcript))
+    })
+    const drawn = words(renderer!.root).join('')
+    expect(drawn).toContain('Started worker')
+    expect(drawn).toContain(
+      'Asked: Do you prefer tea or coffee?CoffeeResolved · Answered on desktop-renderer'
+    )
+    expect(drawn).toContain('AllowResolved · Answered on desktop-renderer')
+    expect(markdownIn(renderer!.root)[0]).toBe('Worker assignment')
   })
 
   it("keeps an answered prompt's receipt when its settled turn folds away, as desktop does", () => {
@@ -349,6 +414,32 @@ describe('MobileNativeChatMessage', () => {
     }
   )
 
+  it('finishes an agent image-only card with zero body extent and keeps its attachment', () => {
+    const tree = render({
+      ...userMessage([{ type: 'image-ref', url: 'file:///a.jpg', alt: 'a photo' }]),
+      from: {
+        kind: 'agent',
+        orchestration: null,
+        senders: [
+          {
+            name: 'Worker',
+            party: { address: 'term_worker', terminalHandle: 'term_worker', orcaSessionId: null }
+          }
+        ]
+      }
+    })
+    expect(tree.root.findAllByProps({ testID: 'agent-message-card' })).toHaveLength(1)
+    expect(findAllByHostType(tree.root, 'Image')).toHaveLength(1)
+    act(() =>
+      tree.root
+        .findByProps({ testID: 'agent-message-body' })
+        .props.onLayout({ nativeEvent: { layout: { height: 0 } } })
+    )
+    expect(tree.root.findByProps({ testID: 'agent-message-viewport' }).props.style.height).toBe(0)
+    expect(textIn(tree.root)).not.toContain('Show more')
+    expect(tree.root.findAllByProps({ accessibilityLabel: 'Copy message' })).toHaveLength(0)
+  })
+
   it('measures the natural layer, expands and refolds, and preserves old-server body', () => {
     const from: AgentMessageSource = { kind: 'agent', orchestration: null, senders: [] }
     const message = {
@@ -374,6 +465,34 @@ describe('MobileNativeChatMessage', () => {
     act(() => toggle().props.onPress())
     expect(clip.props.style.height).toBe(folded)
     expect(textIn(tree.root)).toContain('Show more')
+    const body = () => tree.root.findByProps({ testID: 'agent-message-body' })
+    const viewport = () => tree.root.findByProps({ testID: 'agent-message-viewport' })
+    let stale = body().props.onLayout
+    act(() => viewport().props.onLayout({ nativeEvent: { layout: { width: 320 } } }))
+    act(() => stale({ nativeEvent: { layout: { height: 900 } } }))
+    expect(viewport().props.style.height).toBe(folded)
+    expect(textIn(tree.root)).not.toContain('Show more')
+    act(() => body().props.onLayout({ nativeEvent: { layout: { height: folded * 2 } } }))
+    expect(textIn(tree.root)).toContain('Show more')
+    stale = body().props.onLayout
+    act(() => tree.update(createElement(MobileNativeChatMessage, { message, fontScale: 1.5 })))
+    act(() => stale({ nativeEvent: { layout: { height: 900 } } }))
+    expect(viewport().props.style.height).toBe(folded * 1.5)
+    act(() => body().props.onLayout({ nativeEvent: { layout: { height: 10 } } }))
+    expect(viewport().props.style.height).toBe(10)
+    stale = body().props.onLayout
+    const recovered = {
+      ...message,
+      blocks: [{ type: 'text' as const, text: 'Recovered current body' }]
+    }
+    act(() =>
+      tree.update(createElement(MobileNativeChatMessage, { message: recovered, fontScale: 1.5 }))
+    )
+    act(() => stale({ nativeEvent: { layout: { height: 900 } } }))
+    expect(viewport().props.style.height).toBe(folded * 1.5)
+    act(() => body().props.onLayout({ nativeEvent: { layout: { height: 20 } } }))
+    expect(viewport().props.style.height).toBe(20)
+    expect(markdownIn(tree.root)).toEqual(['Recovered current body'])
     act(() => tree.unmount())
     const oldServer = render({ ...message, from: undefined })
     expect(oldServer.root.findAllByProps({ testID: 'agent-message-card' })).toHaveLength(0)
