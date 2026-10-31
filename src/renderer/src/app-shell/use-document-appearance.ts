@@ -47,7 +47,7 @@ export function useDocumentAppearance(): void {
     // Why wait for the list: until it loads, the startup cache is still the right paint.
     // Why theme too: contrast is checked against the built-ins of the current mode.
     if (pluginThemesLoaded && theme) {
-      applyPluginAppTheme(pluginTheme)
+      const painted = applyPluginAppTheme(pluginTheme)
       // Why read the document: the editor should match what was painted, built-ins included.
       const computed = getComputedStyle(document.documentElement)
       usePluginMonacoThemeStore.setState({
@@ -55,6 +55,7 @@ export function useDocumentAppearance(): void {
           ? derivePluginMonacoTheme({
               base: pluginTheme.base,
               read: (token) => computed.getPropertyValue(token),
+              painted,
               probe: browserColorProbe,
               tokenColors: pluginTheme.tokenColors
             })

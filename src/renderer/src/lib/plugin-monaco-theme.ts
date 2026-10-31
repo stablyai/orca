@@ -15,11 +15,20 @@ const BUILT_IN_SYNTAX: Record<'light' | 'dark', readonly string[]> = {
   dark: ['#608b4e', '#ce9178', '#569cd6', '#3dc9b0', '#b5cea8']
 }
 
-// Why only the ruler: main.css repaints the diff rows from these tokens through Monaco's CSS
-// variables, but the overview ruler is a canvas drawn from the theme's colors.
-const MONACO_DIFF_RULER_COLORS: readonly (readonly [string, string])[] = [
-  ['diffEditorOverview.insertedForeground', '--diff-added'],
-  ['diffEditorOverview.removedForeground', '--diff-removed']
+// [Monaco color, token, hue the token follows when omitted]. Why only when the theme painted one:
+// themes that set none keep Monaco's stock diff and link colors, exactly as before these tokens.
+const MONACO_OPT_IN_COLORS: readonly (readonly [string, string, string])[] = [
+  ...(['inserted', 'removed'] as const).flatMap((kind) => {
+    const hue = kind === 'inserted' ? '--diff-added' : '--diff-removed'
+    return [
+      [`diffEditor.${kind}LineBackground`, `${hue}-background`, hue],
+      [`diffEditor.${kind}TextBackground`, `${hue}-emphasis`, hue],
+      [`diffEditorGutter.${kind}LineBackground`, `${hue}-gutter`, hue],
+      [`diffEditorOverview.${kind}Foreground`, hue, hue]
+    ] as const
+  }),
+  ['textLink.foreground', '--text-link', '--text-link'],
+  ['textLink.activeForeground', '--text-link', '--text-link']
 ]
 
 function hex([r, g, b, a]: Rgba): string {
@@ -48,6 +57,8 @@ export function derivePluginMonacoTheme(input: {
   base: 'light' | 'dark'
   /** A document CSS variable's computed value. */
   read: (token: string) => string
+  /** The tokens the theme painted, after the contrast check. */
+  painted: Readonly<Record<string, string>>
   probe: ColorProbe
   tokenColors?: readonly PluginThemeTokenColorRule[]
 }): PluginMonacoTheme | null {
@@ -95,16 +106,11 @@ export function derivePluginMonacoTheme(input: {
   if (border) {
     colors['editorWidget.border'] = hex(border)
   }
-  for (const [key, token] of MONACO_DIFF_RULER_COLORS) {
-    const value = color(token)
+  for (const [key, token, hue] of MONACO_OPT_IN_COLORS) {
+    const value = input.painted[token] || input.painted[hue] ? color(token) : null
     if (value) {
       colors[key] = hex(value)
     }
-  }
-  const link = color('--text-link')
-  if (link) {
-    colors['textLink.foreground'] = hex(link)
-    colors['textLink.activeForeground'] = hex(link)
   }
   const data: Monaco.editor.IStandaloneThemeData = {
     base: input.base === 'dark' ? 'vs-dark' : 'vs',

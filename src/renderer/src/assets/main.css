@@ -149,6 +149,14 @@
   --color-workspace-status-progress: var(--workspace-status-progress);
   --color-tab-active: var(--tab-active);
   --color-tab-inactive: var(--tab-inactive);
+  /* Public tokens a theme may omit; resolved per element so unthemed tabs paint exactly as before. */
+  --color-tab-bar: var(--tab-bar, var(--card));
+  --color-tab-active-foreground: var(--tab-active-foreground, var(--foreground));
+  --color-tab-active-indicator: var(
+    --tab-active-indicator,
+    var(--tab-active-foreground, var(--foreground))
+  );
+  --color-tab-inactive-foreground: var(--tab-inactive-foreground, var(--muted-foreground));
   --color-git-graph-ref: var(--git-graph-ref);
   --color-git-graph-remote-ref: var(--git-graph-remote-ref);
   --color-git-graph-base-ref: var(--git-graph-base-ref);
@@ -295,15 +303,10 @@
   /* Split dividers must clear 3:1 against --card even before hover; --border is too faint. */
   --split-divider: #868690;
   --split-divider-hover: #71717a;
-  --text-link: #0969da;
-  /* Public theme tokens; keep in sync with PLUGIN_APP_THEME_CSS_FALLBACKS. */
-  --tab-bar: var(--card);
+  /* `--tab-bar` is set only by themes; keep in sync with PLUGIN_APP_THEME_CSS_FALLBACKS. */
   /* White --card can't be lifted, so light mode recesses inactive tabs to keep the active one lighter. */
-  --tab-active: var(--tab-bar);
-  --tab-active-foreground: var(--foreground);
-  --tab-active-indicator: var(--tab-active-foreground);
-  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--tab-bar));
-  --tab-inactive-foreground: var(--muted-foreground);
+  --tab-active: var(--tab-bar, var(--card));
+  --tab-inactive: color-mix(in srgb, var(--foreground) 4%, var(--tab-bar, var(--card)));
 }
 
 .dark {
@@ -418,9 +421,8 @@
   /* Brighter than terminal defaults so the always-visible line clears 3:1 on `--card`. */
   --split-divider: #71717a;
   --split-divider-hover: #a1a1aa;
-  --text-link: #58a6ff;
-  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--tab-bar));
-  --tab-inactive: var(--tab-bar);
+  --tab-active: color-mix(in srgb, var(--foreground) 6%, var(--tab-bar, var(--card)));
+  --tab-inactive: var(--tab-bar, var(--card));
 }
 
 /* Status and diff colors follow the chat scheme without copying the app palette. */
@@ -452,14 +454,13 @@
   --git-decoration-untracked: #007100;
   --git-decoration-copied: #007acc;
   --git-decoration-ignored: #8c8c8c;
-  /* Diff hunks use saturated hues; the git decoration hues wash out once tinted onto a row. */
-  --diff-added: #0dbe4e;
-  --diff-removed: #ff2e3f;
-  --diff-added-background: color-mix(in srgb, var(--diff-added) 12%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 24%, transparent);
+  --diff-added: var(--git-decoration-added);
+  --diff-removed: var(--git-decoration-deleted);
+  --diff-added-background: color-mix(in srgb, var(--diff-added) 13%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 26%, transparent);
   --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 15%, transparent);
-  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 12%, transparent);
-  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 24%, transparent);
+  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 11%, transparent);
+  --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 22%, transparent);
   --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 15%, transparent);
 }
 
@@ -487,14 +488,13 @@
   --git-decoration-renamed: #73c991;
   --git-decoration-untracked: #73c991;
   --git-decoration-copied: #73c991;
-  /* #35910: #6e6e6e was unreadable for whole ignored folders; this keeps a dim step at 5:1. */
-  --git-decoration-ignored: #8c8c8c;
-  --diff-added: #5ecc71;
-  --diff-removed: #ff6762;
-  --diff-added-background: color-mix(in srgb, var(--diff-added) 20%, transparent);
-  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 32%, transparent);
+  --git-decoration-ignored: #6e6e6e;
+  --diff-added: var(--git-decoration-added);
+  --diff-removed: var(--git-decoration-deleted);
+  --diff-added-background: color-mix(in srgb, var(--diff-added) 16%, transparent);
+  --diff-added-gutter: color-mix(in srgb, var(--diff-added) 30%, transparent);
   --diff-added-emphasis: color-mix(in srgb, var(--diff-added) 20%, transparent);
-  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 20%, transparent);
+  --diff-removed-background: color-mix(in srgb, var(--diff-removed) 18%, transparent);
   --diff-removed-gutter: color-mix(in srgb, var(--diff-removed) 32%, transparent);
   --diff-removed-emphasis: color-mix(in srgb, var(--diff-removed) 20%, transparent);
 }
@@ -688,9 +688,8 @@ body[data-modal-overlay-open]
   --chat-warning: color-mix(in srgb, var(--status-warning) 70%, var(--chat-source-foreground));
   /* What the reader has not seen yet: the transcript's "New" marker, in the note hue. */
   --chat-unread: color-mix(in srgb, var(--callout-note) 70%, var(--chat-source-foreground));
-  /* 60% keeps diff text at 5:1 or more on its tinted row in both schemes. */
-  --chat-diff-added: color-mix(in srgb, var(--diff-added) 60%, var(--chat-source-foreground));
-  --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 60%, var(--chat-source-foreground));
+  --chat-diff-added: color-mix(in srgb, var(--diff-added) 70%, var(--chat-source-foreground));
+  --chat-diff-removed: color-mix(in srgb, var(--diff-removed) 70%, var(--chat-source-foreground));
 }
 
 @layer base {
@@ -1004,7 +1003,7 @@ html.native-shell .app-layout {
   flex-direction: row;
   align-items: center;
   /* Tabs can sit in the title bar, so it paints the tab strip color. */
-  background: var(--bg-titlebar, var(--tab-bar));
+  background: var(--bg-titlebar, var(--tab-bar, var(--card)));
   border-bottom: 1px solid var(--border);
   -webkit-app-region: drag;
   user-select: none;
@@ -2437,7 +2436,7 @@ html.native-shell .app-layout {
 }
 
 .monaco-editor .monaco-markdown-doc-link {
-  color: var(--text-link) !important;
+  color: var(--text-link, #58a6ff) !important;
   text-decoration: underline;
   text-decoration-color: color-mix(in srgb, currentColor 45%, transparent);
   text-underline-offset: 2px;
@@ -2457,17 +2456,6 @@ html.native-shell .app-layout {
 .monaco-editor .reference-zone-widget .preview.inline {
   height: 100%;
   width: 100%;
-}
-
-/* Monaco's stock diff tints are a pale lime; `div.` and the nested selector outrank its theme rule. */
-div.monaco-diff-editor,
-.monaco-diff-editor .monaco-editor {
-  --vscode-diffEditor-insertedLineBackground: var(--diff-added-background);
-  --vscode-diffEditor-insertedTextBackground: var(--diff-added-emphasis);
-  --vscode-diffEditorGutter-insertedLineBackground: var(--diff-added-gutter);
-  --vscode-diffEditor-removedLineBackground: var(--diff-removed-background);
-  --vscode-diffEditor-removedTextBackground: var(--diff-removed-emphasis);
-  --vscode-diffEditorGutter-removedLineBackground: var(--diff-removed-gutter);
 }
 
 .monaco-editor .orca-conflict-marker-line {

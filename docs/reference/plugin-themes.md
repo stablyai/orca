@@ -36,8 +36,10 @@ Each entry is `{ "id", "title", "path" }` pointing at a JSON file of at most 16 
   `--worktree-sidebar-active`, `--chat-user-message` and the diff line and character tints
   4.5:1 with the text drawn on them. Those surfaces and `--host-badge` may be translucent; they
   are checked as painted over the surface beneath.
-- Diff tokens also color the code editor's diff view. Setting only `--diff-added` and
-  `--diff-removed` is enough; the line, gutter and changed-character tints follow them.
+- An omitted surface token paints exactly what Orca paints without a theme. The code editor's
+  diff view and links keep Monaco's own colors unless the theme sets a diff token or
+  `--text-link`. Setting only `--diff-added` and `--diff-removed` is enough; the line, gutter and
+  changed-character tints follow them.
 - When the user picks **Match terminal** or **Tinted** for the left sidebar, it ignores the
   theme's current-row colors (and, for Match terminal, its host badge colors); a chat set to
   match the terminal ignores the theme's chat and diff colors.

@@ -190,6 +190,15 @@ export function safePluginThemeTokens(
   for (let changed = true; changed;) {
     changed = false
     for (const rule of CONTRAST_RULES) {
+      const dropped = [...(rule.drop ?? [rule.surface, rule.text])]
+      if (rule.surfaceSource && tokens[rule.surface] === undefined) {
+        dropped.push(rule.surfaceSource)
+      }
+      // Why skip: a check with nothing of the theme's to drop can't change the result, so a
+      // theme that sets none of a check's tokens pays no probes for it.
+      if (!dropped.some((token) => accepted.has(token))) {
+        continue
+      }
       const textColor = effective(rule.text)
       const ownSurface = effective(rule.surface)
       const beneath = rule.over ? effective(rule.over) : null
@@ -201,10 +210,6 @@ export function safePluginThemeTokens(
           textColor[3] < 1 ||
           contrastRatio(surfaceColor, textColor) < rule.min)
       ) {
-        const dropped = [...(rule.drop ?? [rule.surface, rule.text])]
-        if (rule.surfaceSource && tokens[rule.surface] === undefined) {
-          dropped.push(rule.surfaceSource)
-        }
         changed = drop(...dropped) || changed
       }
     }

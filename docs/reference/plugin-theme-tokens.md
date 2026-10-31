@@ -57,14 +57,14 @@ Every key an app theme may set in `tokens` (see [plugin themes](plugin-themes.md
 | `--split-divider-hover` | Split divider while hovered or dragged | no | Orca's built-in color |
 | `--chat-user-message` | Your messages in chat; may be translucent, it paints over the chat | no | `--foreground` mixed lightly into the chat background |
 | `--text-link` | Links in Markdown previews and editors | no | Orca's built-in color |
-| `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | Orca's built-in color |
-| `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 12% opacity; dark: `--diff-added` at 20% opacity |
+| `--diff-added` | Added-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-added` |
+| `--diff-added-background` | Added lines in diffs | no | light: `--diff-added` at 13% opacity; dark: `--diff-added` at 16% opacity |
 | `--diff-added-emphasis` | Added characters within a changed line | no | light: `--diff-added` at 15% opacity; dark: `--diff-added` at 20% opacity |
-| `--diff-added-gutter` | Gutter beside added lines | no | light: `--diff-added` at 24% opacity; dark: `--diff-added` at 32% opacity |
-| `--diff-removed` | Removed-line hue: Monaco overview ruler and chat diff text | no | Orca's built-in color |
-| `--diff-removed-background` | Removed lines in diffs | no | light: `--diff-removed` at 12% opacity; dark: `--diff-removed` at 20% opacity |
+| `--diff-added-gutter` | Gutter beside added lines | no | light: `--diff-added` at 26% opacity; dark: `--diff-added` at 30% opacity |
+| `--diff-removed` | Removed-line hue: Monaco overview ruler and chat diff text | no | same as `--git-decoration-deleted` |
+| `--diff-removed-background` | Removed lines in diffs | no | light: `--diff-removed` at 11% opacity; dark: `--diff-removed` at 18% opacity |
 | `--diff-removed-emphasis` | Removed characters within a changed line | no | light: `--diff-removed` at 15% opacity; dark: `--diff-removed` at 20% opacity |
-| `--diff-removed-gutter` | Gutter beside removed lines | no | light: `--diff-removed` at 24% opacity; dark: `--diff-removed` at 32% opacity |
+| `--diff-removed-gutter` | Gutter beside removed lines | no | light: `--diff-removed` at 22% opacity; dark: `--diff-removed` at 32% opacity |
 | `--git-decoration-added` | Added files in the file explorer and source control | no | Orca's built-in color |
 | `--git-decoration-modified` | Modified files | no | Orca's built-in color |
 | `--git-decoration-deleted` | Deleted files | no | Orca's built-in color |

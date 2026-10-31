@@ -185,20 +185,21 @@ function writeCache(storage: Storage | null, cached: CachedPluginAppTheme | null
   }
 }
 
-/** Overlays a plugin theme's safe tokens; tokens it no longer sets fall back to main.css. Call
- *  after the document's light/dark mode matches the theme's base. */
+/** Overlays a plugin theme's safe tokens and returns them; tokens it no longer sets fall back to
+ *  main.css. Call after the document's light/dark mode matches the theme's base. */
 export function applyPluginAppTheme(
   theme: PluginThemeRegistration | null,
   options: PluginThemePaintOptions & { storage?: Storage | null } = {}
-): void {
+): Record<string, string> {
   const storage = options.storage === undefined ? globalThis.localStorage : options.storage
   if (!theme) {
     setPluginTokens(options.root ?? document.documentElement, {})
     writeCache(storage, null)
-    return
+    return {}
   }
   const tokens = paintPluginTokens(theme, options)
   writeCache(storage, { id: theme.id, revision: theme.revision, base: theme.base, tokens })
+  return tokens
 }
 
 /** The last applied plugin theme, for painting before settings and plugins load. */

@@ -600,8 +600,12 @@
   text-decoration-style: dotted;
 }
 
-.markdown-body a {
-  color: var(--text-link);
+.markdown-light .markdown-body a {
+  color: var(--text-link, #0969da);
+}
+
+.markdown-dark .markdown-body a {
+  color: var(--text-link, #58a6ff);
 }
 
 .markdown-light .markdown-body .markdown-doc-link-broken,
