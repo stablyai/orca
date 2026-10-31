@@ -40,6 +40,7 @@ import { stageOrcadMobileWebBundle } from './orcad-mobile-web-bundle.mjs'
 import {
   ORCAD_EMOJI_SHORTCODE_DATASET,
   ORCAD_CLI_ENTRY_FILENAME,
+  ORCAD_HISTORY_FILESYSTEM_FILENAME,
   ORCAD_CLI_PACKAGE_FILENAME,
   ORCAD_COMPUTER_USE_RUNTIME_ARTIFACTS,
   ORCAD_LAUNCHER_FILENAME,
@@ -135,7 +136,10 @@ function stageNodePty(target) {
   if (problems.length > 0) {
     throw new Error(`[build-orcad] node-pty prebuild for ${target}: ${problems.join('; ')}`)
   }
-  const slotFiles = Object.keys(readManifest(PREBUILDS_DIR).slots[target].files).sort()
+  // The history addon shares the slot but is staged beside orcad.js, not inside node-pty.
+  const slotFiles = Object.keys(readManifest(PREBUILDS_DIR).slots[target].files)
+    .filter((file) => file !== ORCAD_HISTORY_FILESYSTEM_FILENAME)
+    .sort()
   const expected = orcadNodePtySlotFiles(target).sort()
   if (slotFiles.join('\0') !== expected.join('\0')) {
     throw new Error(
@@ -171,8 +175,8 @@ writeFileSync(
 )
 stageNodePty(BUILD_TARGET)
 copyFileSync(
-  join(PREBUILDS_DIR, BUILD_TARGET, 'history-filesystem.node'),
-  join(OUT_DIR, 'history-filesystem.node')
+  join(PREBUILDS_DIR, BUILD_TARGET, ORCAD_HISTORY_FILESYSTEM_FILENAME),
+  join(OUT_DIR, ORCAD_HISTORY_FILESYSTEM_FILENAME)
 )
 await stageParcelWatcher(BUILD_TARGET)
 stageOrcadWindowsProcessTree(ROOT, OUT_DIR, BUILD_TARGET)

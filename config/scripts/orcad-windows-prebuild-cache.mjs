@@ -18,8 +18,9 @@ import {
 const require = createRequire(import.meta.url)
 const root = resolve(import.meta.dirname, '../..')
 const ownership = require('./node-pty-job-ownership.cjs')
-// The locked node-pty and node-gyp closures stand in for pnpm-lock.yaml and package.json.
-export const WINDOWS_PREBUILD_LOCKED_PACKAGES = ['node-pty', 'node-gyp', 'node-addon-api']
+// The locked node-pty, node-gyp and history addon closures stand in for pnpm-lock.yaml and package.json.
+export const WINDOWS_PREBUILD_LOCKED_PACKAGES = ['node-pty', 'node-gyp']
+const WINDOWS_PREBUILD_LOCKED_WORKSPACES = ['native/history-filesystem']
 const WINDOWS_PREBUILD_PACKAGE_SCRIPTS = ['build:orcad-prebuilds', 'build:packages']
 export const WINDOWS_PREBUILD_CACHE_INPUTS = [
   '.github/actions/prepare-orcad-prebuilds/action.yml',
@@ -86,7 +87,8 @@ export function windowsPrebuildCacheIdentity({
   const { scripts } = JSON.parse(readFileSync(join(repository, 'package.json'), 'utf8'))
   const locked = nativeDependencyLockDigest({
     repository,
-    packages: WINDOWS_PREBUILD_LOCKED_PACKAGES
+    packages: WINDOWS_PREBUILD_LOCKED_PACKAGES,
+    workspaces: WINDOWS_PREBUILD_LOCKED_WORKSPACES
   }).digest
   const digest = createHash('sha256').update(
     JSON.stringify({

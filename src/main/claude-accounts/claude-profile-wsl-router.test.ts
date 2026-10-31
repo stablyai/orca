@@ -150,7 +150,8 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
     })
     expect(setupModules.materialize).toHaveBeenCalledWith('linux-arm64-musl', {
       cacheRoot: expect.stringContaining('orcad-artifacts'),
-      signal: expect.any(AbortSignal)
+      signal: expect.any(AbortSignal),
+      trustVerificationRecord: true
     })
     expect(setupModules.runtime.mock.calls).toHaveLength(1)
     const setup = guest.commands.find((spec) => spec.program === '/usr/bin/env')
@@ -444,7 +445,7 @@ describe.skipIf(!posixHost)('ClaudeWslProfileRouter', () => {
 })
 
 it.skipIf(!posixHost)(
-  'the guest helper requires the actual host addon before standalone profile setup',
+  'the guest helper leaves history and the setup marker alone until the actual host addon loads',
   async () => {
     const root = mkdtempSync(join(tmpdir(), 'claude-wsl-helper-'))
     roots.push(root)
@@ -465,7 +466,10 @@ it.skipIf(!posixHost)(
     const run = (accountId: string, distro = 'Ubuntu') =>
       spawnSync(process.execPath, [helper, home, distro, accountId], { encoding: 'utf8' })
 
-    expect(run('a').status).not.toBe(0)
+    const withoutBinding = run('a')
+    expect(withoutBinding.status).toBe(0)
+    expect(withoutBinding.stdout).toContain('History filesystem build')
+    expect(existsSync(join(profileHome, 'projects'))).toBe(false)
     expect(existsSync(join(profileHome, '..', 'profile.json'))).toBe(false)
     copyFileSync(
       resolve('native/history-filesystem/build/Release/history_filesystem.node'),

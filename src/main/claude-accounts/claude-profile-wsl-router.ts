@@ -279,7 +279,12 @@ const runWslSetup: WslSetup = async (distro, home, accountId) => {
   const cacheRoot = join(getAppEnvironment().getPath('userData'), 'orcad-artifacts')
   const signal = AbortSignal.timeout(180_000)
   const { executable: node, target } = await ensureWslPinnedRuntimeTarget(run, cacheRoot, signal)
-  const slot = await materializeOrcadArtifact(target, { cacheRoot, signal })
+  // The same local WSL cache the orcad deploy trusts; rehashing it would run on every launch refresh.
+  const slot = await materializeOrcadArtifact(target, {
+    cacheRoot,
+    signal,
+    trustVerificationRecord: true
+  })
   const helper = join(slot, 'claude-profile-wsl-entry.js')
   const guestHelper = await run({
     program: 'wslpath',

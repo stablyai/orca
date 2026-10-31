@@ -17,6 +17,7 @@ const paths = [
   'node_modules/.pnpm/node-pty@*/node_modules/node-pty/build',
   'native/windows-registry/build',
   'native/windows-security/build',
+  'native/history-filesystem/build',
   'node_modules/.pnpm/@vscode+windows-process-tre*/node_modules/@vscode/windows-process-tree/build'
 ]
 

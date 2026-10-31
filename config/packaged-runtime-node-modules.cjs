@@ -47,6 +47,10 @@ const WORKSPACE_WINDOWS_ADDON_BINARIES = [
   ['@orca/windows-registry', 'build/Release/orca_windows_registry.node'],
   ['@orca/windows-security', 'build/Release/orca_windows_security.node']
 ]
+/** The history addon every platform's Claude account setup loads, relative to its package. */
+const HISTORY_FILESYSTEM_ADDON = 'build/Release/history_filesystem.node'
+// Mach-O CPU types of the packaged mac slices; ELF arch is judged by the Linux glibc gate.
+const MACH_O_CPU_TYPE = { x64: 0x01000007, arm64: 0x0100000c }
 const WINDOWS_PACKAGED_RUNTIME_PACKAGE_ROOTS = [
   '@vscode/windows-process-tree',
   '@orca/windows-registry',
@@ -547,6 +551,17 @@ function prunePackagedZodSources(resourcesDir) {
   rmSync(join(resourcesDir, 'node_modules', 'zod', 'src'), { recursive: true, force: true })
 }
 
+function machOCpuTypes(binary) {
+  if (binary.length >= 8 && binary.readUInt32LE(0) === 0xfeedfacf) {
+    return [binary.readInt32LE(4)]
+  }
+  if (binary.length >= 8 && binary.readUInt32BE(0) === 0xcafebabe) {
+    const count = binary.readUInt32BE(4)
+    return Array.from({ length: count }, (_, index) => binary.readInt32BE(8 + index * 20))
+  }
+  return []
+}
+
 // Fail missing target natives: electron-builder only warns for absent extraResources and could ship host-only installs as foreign slices.
 function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArch) {
   const architecture = normalizeElectronArchitecture(electronArch)
@@ -601,6 +616,18 @@ function assertPackagedNativeVariantsInstalled(electronPlatformName, electronArc
         missingWindowsAddons.push(`${name} (${binary} for ${architecture})`)
       }
     }
+  }
+
+  // Like the Windows addons: the workspace link exists on every host, so check the built target binary.
+  const historyAddon = join(nodeModulesDir, '@orca', 'history-filesystem', HISTORY_FILESYSTEM_ADDON)
+  if (
+    !existsSync(historyAddon) ||
+    (electronPlatformName === 'win32' &&
+      readPeMachine(historyAddon) !== PE_MACHINE[architecture]) ||
+    (electronPlatformName === 'darwin' &&
+      !machOCpuTypes(readFileSync(historyAddon)).includes(MACH_O_CPU_TYPE[architecture]))
+  ) {
+    missing.push(`@orca/history-filesystem (${HISTORY_FILESYSTEM_ADDON} for ${architecture})`)
   }
 
   if (missing.length === 0 && missingWindowsAddons.length === 0) {

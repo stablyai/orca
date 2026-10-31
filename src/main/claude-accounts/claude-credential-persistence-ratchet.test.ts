@@ -31,13 +31,15 @@ const credentialRoots: readonly (string | { root: string; only: RegExp })[] = [
 
 // New persistence primitives require explicit review, even in an allowed module.
 const fsAllowances: Record<string, readonly string[]> = {
+  // `open`/`link`/`mkdir` are the history addon's directory-handle operations.
   'claude-accounts/claude-profile-history.ts': [
+    'link',
     'mkdirSync',
-    'renameSync',
+    'open',
     'rmdirSync',
-    'symlinkSync',
     'unlinkSync'
   ],
+  'claude-accounts/claude-profile-history-drain.ts': ['mkdir', 'open'],
   // Stores Claude config folder paths only.
   'claude-accounts/claude-observed-config-dirs.ts': ['writeFileAtomically'],
   'claude-accounts/claude-profile-paths.ts': ['mkdirSync', 'writeFileAtomically'],
