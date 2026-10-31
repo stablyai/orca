@@ -26,6 +26,7 @@ function MobileNativeChatComposer({
   return createElement(NativeChatComposer, { ...props, getComposerEditGeneration })
 }
 
+vi.mock('../../../components/MobileSwitch', () => ({ MobileSwitch: 'Switch' }))
 vi.mock('react-native', async () => {
   const React = await import('react')
   return {
@@ -37,10 +38,7 @@ vi.mock('react-native', async () => {
     Pressable: 'Pressable',
     ScrollView: ({ children, ...props }: { children?: ReactNode }) =>
       React.createElement('ScrollView', props, children),
-    StyleSheet: {
-      create: (styles: unknown) => styles,
-      hairlineWidth: 1
-    },
+    StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 1 },
     Text: 'Text',
     TextInput: 'TextInput',
     View: 'View'
@@ -457,7 +455,7 @@ describe('MobileNativeChatComposer', () => {
     await act(async () => field().props.onBlur())
     await press('Effort, Not set')
     await press('Back to models')
-    await press('Close picker')
+    await press('Done')
     await act(async () => findByHostType(renderer!.root, 'BottomDrawer').props.onHidden())
     expect(focus).toHaveBeenCalledTimes(1)
     for (const id of ['model', 'effort']) {

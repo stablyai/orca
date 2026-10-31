@@ -449,10 +449,23 @@ describe('installPluginFromGit', () => {
     await serveRepositoriesOverTestSsh(await tempRoot('orca-plugin-ssh-shim-'), {
       '/demo.git': sourcePath
     })
+    // Why: a tag moved after the dialog showed its commit must not install the new bytes.
+    await expect(
+      installPluginFromGit({
+        pluginsDir,
+        url: 'ssh://git@plugin.test/demo.git',
+        ref: 'v1.0.0',
+        expectedCommit: 'f'.repeat(40),
+        hostVersion: '1.4.0'
+      })
+    ).resolves.toEqual({ ok: false, error: 'plugin Git ref moved after it was checked; try again' })
+    expect((await readPluginLockfile(pluginsDir)).plugins).toEqual({})
+
     const result = await installPluginFromGit({
       pluginsDir,
       url: 'ssh://git@plugin.test/demo.git',
       ref: 'v1.0.0',
+      expectedCommit: commitStdout.trim(),
       hostVersion: '1.4.0'
     })
 

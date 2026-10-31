@@ -44,6 +44,9 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     paddingHorizontal: spacing.md,
     paddingVertical: spacing.sm + 2
   },
+  targetButtonOnSheet: {
+    backgroundColor: colors.sheetGroup
+  },
   targetButtonText: {
     flex: 1,
     color: colors.textPrimary,
@@ -53,7 +56,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.surface,
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     padding: spacing.sm,
     gap: spacing.xs
   },
@@ -66,7 +69,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     borderWidth: 1,
     borderColor: colors.borderSubtle,
     borderRadius: radii.control,
-    backgroundColor: colors.bgBase,
+    backgroundColor: colors.sheetSurface,
     padding: 2,
     gap: 2
   },
@@ -77,7 +80,7 @@ export const mobileTasksComposerActionStyles = themedStyleSheet(() => ({
     paddingVertical: spacing.xs
   },
   issueSourceSegmentButtonActive: {
-    backgroundColor: colors.bgRaised
+    backgroundColor: colors.sheetGroup
   },
   issueSourceSegmentText: {
     fontSize: 12,

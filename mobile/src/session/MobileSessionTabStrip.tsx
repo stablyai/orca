@@ -1,21 +1,19 @@
-import { useCallback, useMemo, useRef, useState } from 'react'
-import { View, Text, ScrollView, Pressable } from 'react-native'
-import { File, FileText, Globe, Plus, SquareTerminal, Columns2 } from 'lucide-react-native'
+import { memo, useCallback, useMemo, useRef, useState } from 'react'
+import { View, ScrollView, StyleSheet } from 'react-native'
+import { Plus } from 'lucide-react-native'
 import { triggerMediumImpact } from '../platform/haptics'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
-import { MobileAgentIcon } from '../components/MobileAgentIcon'
 import { AgentStateDot } from '../components/AgentStateDot'
 import { useNow } from '../hooks/use-now'
-import { agentDotState, agentStateLabel, type AgentDotState } from '../worktree/agent-row-display'
+import { agentDotState, type AgentDotState } from '../worktree/agent-row-display'
 import {
   getMobileTerminalTabHostAgentIdentity,
   getMobileSessionTabTitle,
   resolveMobileTerminalTabAgentId
 } from './mobile-terminal-tab-agent'
-import { colors } from '../theme/mobile-theme'
+import { spacing } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
-import { MobileSessionHeaderIconButton } from './MobileSessionHeaderIconButton'
-import { QuickCommandsTabButton } from './QuickCommandsTabButton'
+import { NavBarButton } from '../components/nav-bar/NavBarButton'
 import {
   resolveTabStripEdgeHint,
   resolveTabStripHiddenTabs,
@@ -26,15 +24,20 @@ import { styles } from './mobile-session-styles'
 import { useKeyboardPersistingTaps } from '../platform/keyboard-persisting-taps'
 import type { MobileSessionController } from './use-mobile-session-controller'
 
+import { MobileSessionTab } from './MobileSessionTab'
+import type { SessionTitleCard } from './use-session-title-card'
+
 const DOUBLE_TAP_RENAME_MS = 300
 
-export function MobileSessionTabStrip({
+export const MobileSessionTabStrip = memo(function MobileSessionTabStrip({
   controller,
   inTopBar,
+  details,
   actionsCollapsed = false
 }: {
   controller: MobileSessionController
   inTopBar: boolean
+  details: SessionTitleCard['tabDetails']
   actionsCollapsed?: boolean
 }) {
   useMobileColorScheme()
@@ -50,7 +53,6 @@ export function MobileSessionTabStrip({
     connState,
     createTabBusy,
     handleOpenNewTab,
-    handleOpenQuickCommands,
     scrollActiveTabIntoView,
     holdTabStripReveal,
     cancelHeldTabStripReveal,
@@ -59,12 +61,19 @@ export function MobileSessionTabStrip({
     setRenameTarget,
     activeHandleRef,
     visibleTabs,
-    canSplitTerminals,
-    terminalSplitActive,
-    setShowTerminalLayout,
     terminals
   } = controller
+  const stripBarRef = useRef<View>(null)
+  const tabBarRef = inTopBar ? details.barRef : stripBarRef
+  const { dismiss, toggleSource, refreshSource } = details
   const tabBarKeepsKeyboard = useKeyboardPersistingTaps('handled')
+  const attachTabBar = useCallback(
+    (view: View | null) => {
+      stripBarRef.current = view
+      tabBarKeepsKeyboard(view)
+    },
+    [tabBarKeepsKeyboard]
+  )
   const lastTabTapRef = useRef<{ id: string; at: number } | null>(null)
   const now = useNow(60_000)
   const tabStates = useMemo(() => {
@@ -79,6 +88,22 @@ export function MobileSessionTabStrip({
     }
     return states
   }, [visibleTabs, now])
+  const tabLabels = useMemo(
+    () =>
+      visibleTabs.map((tab) => {
+        const identity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
+        return {
+          title: getMobileSessionTabTitle(tab, identity),
+          agentId:
+            tab.type === 'agent-session'
+              ? tab.agent
+              : tab.type === 'terminal'
+                ? resolveMobileTerminalTabAgentId(tab, identity)
+                : null
+        }
+      }),
+    [visibleTabs, terminals, t]
+  )
   const [hiddenTabs, setHiddenTabs] = useState<TabStripHiddenTabs>({ left: [], right: [] })
   const refreshHiddenTabs = () => {
     const next = resolveTabStripHiddenTabs({
@@ -97,7 +122,7 @@ export function MobileSessionTabStrip({
   const leftHint = resolveTabStripEdgeHint(hiddenTabs.left, tabStates)
   const rightHint = resolveTabStripEdgeHint(hiddenTabs.right, tabStates)
   const pressTab = useCallback(
-    (t: (typeof visibleTabs)[number]) => {
+    (t: (typeof visibleTabs)[number], source: Parameters<typeof toggleSource>[0]) => {
       const at = Date.now()
       const lastTap = lastTabTapRef.current
       lastTabTapRef.current = { id: t.id, at }
@@ -108,6 +133,7 @@ export function MobileSessionTabStrip({
         typeof t.terminal === 'string'
       ) {
         lastTabTapRef.current = null
+        dismiss()
         triggerMediumImpact()
         setRenameTarget({
           handle: t.terminal,
@@ -130,9 +156,12 @@ export function MobileSessionTabStrip({
         holdTabStripReveal(nextOffset, DOUBLE_TAP_RENAME_MS)
       }
       switchSessionTab(t)
+      toggleSource(source)
     },
     [
       activeHandleRef,
+      dismiss,
+      toggleSource,
       cancelHeldTabStripReveal,
       holdTabStripReveal,
       setRenameTarget,
@@ -164,7 +193,11 @@ export function MobileSessionTabStrip({
     ]
   )
   return (
-    <View ref={tabBarKeepsKeyboard} style={inTopBar ? styles.tabBarInTopBar : styles.tabBar}>
+    <View
+      ref={attachTabBar}
+      onLayout={() => refreshSource()}
+      style={inTopBar ? styles.tabBarInTopBar : styles.tabBar}
+    >
       {/* Why: tab taps must register on first press with the keyboard open instead of being eaten by dismissal (#5106). */}
       <View style={styles.tabScrollFrame}>
         <ScrollView
@@ -175,34 +208,42 @@ export function MobileSessionTabStrip({
           contentContainerStyle={[styles.tabContent, inTopBar && styles.tabContentInTopBar]}
           keyboardShouldPersistTaps="handled"
           scrollEventThrottle={16}
-          onScrollBeginDrag={cancelHeldTabStripReveal}
+          onScrollBeginDrag={() => {
+            cancelHeldTabStripReveal()
+            dismiss()
+          }}
           onScroll={(e) => {
             tabStripOffsetRef.current = e.nativeEvent.contentOffset.x
             refreshHiddenTabs()
+            refreshSource()
           }}
           onLayout={(e) => {
             tabStripViewportWidthRef.current = e.nativeEvent.layout.width
             scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
             refreshHiddenTabs()
+            refreshSource()
           }}
           onContentSizeChange={(width) => {
             tabStripContentWidthRef.current = width
             scrollActiveTabIntoView(activeSessionTabIdRef.current, false)
             refreshHiddenTabs()
+            refreshSource()
           }}
         >
           {visibleTabs.map((tab, index) => {
             const tabState = tabStates.get(tab.id)
-            const hostAgentIdentity = getMobileTerminalTabHostAgentIdentity(tab, terminals)
-            const title = getMobileSessionTabTitle(tab, hostAgentIdentity)
+            const { title, agentId } = tabLabels[index]
             return (
-              <Pressable
+              <MobileSessionTab
                 key={tab.id}
-                style={[
-                  styles.tab,
-                  index === 0 && !inTopBar && styles.tabFirst,
-                  tab.id === activeSessionTabId && styles.tabActive
-                ]}
+                tab={tab}
+                first={index === 0 && !inTopBar}
+                active={tab.id === activeSessionTabId}
+                title={title}
+                tabState={tabState}
+                agentId={agentId}
+                details={details}
+                barRef={tabBarRef}
                 onLayout={(e) => {
                   const { x, width } = e.nativeEvent.layout
                   tabLayoutsRef.current.set(tab.id, { x, width })
@@ -211,60 +252,13 @@ export function MobileSessionTabStrip({
                   }
                   refreshHiddenTabs()
                 }}
-                onPress={() => pressTab(tab)}
-                accessibilityRole="tab"
-                accessibilityLabel={
-                  tabState && tabState !== 'idle'
-                    ? t('session.tabStrip.tabStatus', '{{title}}, {{status}}', {
-                        title,
-                        status: agentStateLabel(tabState)
-                      })
-                    : title
-                }
-                accessibilityState={{ selected: tab.id === activeSessionTabId }}
+                onPress={(source) => pressTab(tab, source)}
                 onLongPress={() => {
+                  dismiss()
                   triggerMediumImpact()
                   openSessionTabActionSheetAfterKeyboardDismiss(tab)
                 }}
-                delayLongPress={400}
-              >
-                <View style={styles.tabLabelRow}>
-                  {tabState && tabState !== 'idle' ? <AgentStateDot state={tabState} /> : null}
-                  <View style={styles.tabIcon}>
-                    {tab.type === 'browser' && (
-                      <Globe size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                    )}
-                    {tab.type === 'markdown' && (
-                      <FileText size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                    )}
-                    {tab.type === 'file' && (
-                      <File size={13} color={colors.textSecondary} strokeWidth={2.1} />
-                    )}
-                    {tab.type === 'agent-session' && (
-                      <MobileAgentIcon agentId={tab.agent} size={13} />
-                    )}
-                    {tab.type === 'terminal' &&
-                      (() => {
-                        const agentId = resolveMobileTerminalTabAgentId(tab, hostAgentIdentity)
-                        return agentId ? (
-                          <MobileAgentIcon agentId={agentId} size={13} />
-                        ) : (
-                          <SquareTerminal
-                            size={13}
-                            color={colors.textSecondary}
-                            strokeWidth={2.1}
-                          />
-                        )
-                      })()}
-                  </View>
-                  <Text
-                    style={[styles.tabText, tab.id === activeSessionTabId && styles.tabTextActive]}
-                    numberOfLines={1}
-                  >
-                    {title}
-                  </Text>
-                </View>
-              </Pressable>
+              />
             )
           })}
         </ScrollView>
@@ -279,28 +273,23 @@ export function MobileSessionTabStrip({
           </View>
         ) : null}
       </View>
-      {!actionsCollapsed && (canSplitTerminals || terminalSplitActive) && (
-        <MobileSessionHeaderIconButton
-          active={terminalSplitActive}
-          accessibilityLabel={t('session.tabStrip.terminalLayout', 'Terminal layout')}
-          icon={Columns2}
-          onPress={() => setShowTerminalLayout(true)}
-        />
-      )}
+      {/* Terminal layout and Quick commands live in the header's ⋯ menu. */}
       {!actionsCollapsed ? (
-        <>
-          <MobileSessionHeaderIconButton
+        <View style={newTabStyles.slot}>
+          <NavBarButton
             disabled={createTabBusy || connState !== 'connected'}
             onPress={handleOpenNewTab}
             accessibilityLabel={t('session.tabStrip.newTab', 'New tab')}
             icon={Plus}
           />
-          <QuickCommandsTabButton
-            disabled={createTabBusy || connState !== 'connected'}
-            onPress={handleOpenQuickCommands}
-          />
-        </>
+        </View>
       ) : null}
     </View>
   )
-}
+})
+
+const newTabStyles = StyleSheet.create({
+  slot: {
+    paddingHorizontal: spacing.sm
+  }
+})

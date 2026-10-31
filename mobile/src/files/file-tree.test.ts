@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  filterDirectoryCache,
   flattenDirectoryCache,
   getMobileFileKind,
   isMarkdownPath,
@@ -32,6 +33,23 @@ describe('file-tree', () => {
       'file:readme.md',
       'file:zeta.txt'
     ])
+  })
+
+  it('filters loaded folders by name and keeps the parents of nested matches', () => {
+    const cache: DirectoryCache = {
+      '': { entries: [entry('README.md'), entry('src', true), entry('node_modules', true)] },
+      src: { entries: [entry('App.ts'), entry('lib', true)] },
+      'src/lib': { entries: [entry('app-state.ts'), entry('other.ts')] },
+      node_modules: { entries: [entry('app.js')] }
+    }
+
+    expect(filterDirectoryCache(cache, ' APP ').map((row) => row.id)).toEqual([
+      'dir:src',
+      'dir:src/lib',
+      'file:src/lib/app-state.ts',
+      'file:src/App.ts'
+    ])
+    expect(filterDirectoryCache(cache, 'missing')).toEqual([])
   })
 
   it('orders numbered names naturally, matching the desktop explorer', () => {
