@@ -33,3 +33,31 @@ export function instrumentUnrelatedTerminalBindings(size: number, worktreeId: st
   )
   return { tabs, ptyIdsByTabId, counts }
 }
+
+export function makeInitialTerminalCensusRow(
+  tabId: string,
+  ptyId: string,
+  leafId: string,
+  isActive = false
+) {
+  return {
+    type: 'terminal' as const,
+    id: `${tabId}::${leafId}`,
+    parentTabId: tabId,
+    leafId,
+    title: '',
+    terminal: ptyId,
+    status: 'ready' as const,
+    isActive
+  }
+}
+
+export type InitialTerminalCensusMetrics = {
+  size: number
+  ownershipVisits: number
+  bindingVisits: number
+  duplicateBindingVisits: number
+  persistence: number
+  elapsedMs: number
+  duplicateVisits: number
+}

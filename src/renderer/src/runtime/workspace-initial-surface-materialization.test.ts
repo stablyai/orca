@@ -30,7 +30,11 @@ import {
   clearNativeChatDraftCacheForTests
 } from '../components/native-chat/native-chat-draft-cache'
 import { structuredAgentSessionDraftScopeKey } from '../components/native-chat/native-chat-composer-draft-store'
-import { instrumentUnrelatedTerminalBindings } from './workspace-initial-terminal-census.test-fixture'
+import {
+  instrumentUnrelatedTerminalBindings,
+  type InitialTerminalCensusMetrics,
+  makeInitialTerminalCensusRow
+} from './workspace-initial-terminal-census.test-fixture'
 import { useAppStore } from '../store'
 import { createStoreSessionMockApi } from '../store/slices/store-session-test-harness'
 import { resetLocalStructuredSessionVersionForTests } from './local-structured-session-tabs-sync/inventory-generation-fence'
@@ -610,15 +614,7 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
   const { createBumpWorktreeActivity } =
     await import('../store/slices/worktrees/session/worktree-activity-bump')
   const rpcModule = await import('./runtime-rpc-client')
-  const metrics: {
-    size: number
-    ownershipVisits: number
-    bindingVisits: number
-    duplicateBindingVisits: number
-    persistence: number
-    elapsedMs: number
-    duplicateVisits: number
-  }[] = []
+  const metrics: InitialTerminalCensusMetrics[] = []
   for (const size of [10, 100]) {
     resetLocalStructuredSessionVersionForTests()
     useAppStore.setState(useAppStore.getInitialState(), true)
@@ -653,16 +649,9 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
     })
     Object.assign(window, { dispatchEvent: vi.fn() })
     registerTerminalPresentationIpcBridge([])
-    const rows = Array.from({ length: size }, (_, i) => ({
-      type: 'terminal' as const,
-      id: `default-${i}::${LEAF}`,
-      parentTabId: `default-${i}`,
-      leafId: LEAF,
-      title: '',
-      terminal: `default-pty-${i}`,
-      status: 'ready' as const,
-      isActive: i === 0
-    }))
+    const rows = Array.from({ length: size }, (_, i) =>
+      makeInitialTerminalCensusRow(`default-${i}`, `default-pty-${i}`, LEAF, i === 0)
+    )
     let snapshot: RuntimeMobileSessionTabsResult = {
       ...topology('terminal'),
       tabs: [],
@@ -713,15 +702,9 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
       expect(reply.mock.calls.filter(([result]) => result.error)).toEqual([])
       expect(useAppStore.getState().tabsByWorktree[WORKTREE]).toHaveLength(size)
       expect(useAppStore.getState().activeTabId).toBe('unrelated-0')
-      // Each real reveal retains its ordinary activity effect; complete-census replay adds none.
-      expect(persistence).toBe(size)
-      expect(api.worktrees.updateMeta).toHaveBeenCalledTimes(size)
-      expect(
-        api.worktrees.updateMeta.mock.calls.every(
-          ([args]) =>
-            args.worktreeId === WORKTREE && typeof args.updates.lastActivityAt === 'number'
-        )
-      ).toBe(true)
+      // Host creation stamps activity; revealing or replaying an already-bound PTY is not new work.
+      expect(persistence).toBe(0)
+      expect(api.worktrees.updateMeta).not.toHaveBeenCalled()
       expect(duplicateVisits).toBeLessThanOrEqual(2 * size * 10)
       expect(visits.bindingVisits - beforeDuplicateBindings).toBeLessThanOrEqual(2 * size * 10)
       expect(incrementalBindingVisits).toBeLessThanOrEqual((size + 1) * size * 10)
@@ -755,8 +738,32 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
       expect(
         useAppStore.getState().terminalLayoutsByTabId['default-1']?.ptyIdsByLeafId?.[LEAF]
       ).toBe('default-pty-1')
-      // Row zero returns to its original PTY; only that real change may stamp activity.
+      expect(
+        useAppStore.getState().terminalLayoutsByTabId['default-0']?.ptyIdsByLeafId?.[LEAF]
+      ).toBe('default-pty-0')
+      expect(useAppStore.getState().ptyIdsByTabId['default-0']).toEqual([
+        'default-pty-0',
+        'rotated-pty'
+      ])
+      // The original PTY is still tab-bound, so returning its leaf adds no activity.
+      expect(api.worktrees.updateMeta.mock.calls.length - beforeCollision).toBe(0)
+      snapshot = {
+        ...snapshot,
+        snapshotVersion: size + 5,
+        tabs: snapshot.tabs.map((row, i) =>
+          i === 0 && row.type === 'terminal' ? { ...row, terminal: 'second-rotated-pty' } : row
+        )
+      }
+      await materializeHostCreatedWorktree({ kind: 'local' }, WORKTREE)
+      expect(
+        useAppStore.getState().terminalLayoutsByTabId['default-0']?.ptyIdsByLeafId?.[LEAF]
+      ).toBe('second-rotated-pty')
       expect(api.worktrees.updateMeta.mock.calls.length - beforeCollision).toBe(1)
+      expect(
+        useAppStore.getState().terminalLayoutsByTabId['default-1']?.ptyIdsByLeafId?.[LEAF]
+      ).toBe('default-pty-1')
+      expect(useAppStore.getState().ptyIdsByTabId['default-1']).toEqual(['default-pty-1'])
+      expect(useAppStore.getState().ptyIdsByTabId['unrelated-0']).toEqual(['collision-pty'])
       recordWebSessionCloseIntent(
         { environmentId: LOCAL_STRUCTURED_SESSION_OWNER },
         WORKTREE,
@@ -765,7 +772,7 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
       )
       useAppStore.getState().closeTab('default-2', { reason: 'user' })
       const beforeClose = api.worktrees.updateMeta.mock.calls.length
-      snapshot = { ...snapshot, snapshotVersion: size + 5 }
+      snapshot = { ...snapshot, snapshotVersion: size + 6 }
       await materializeHostCreatedWorktree({ kind: 'local' }, WORKTREE)
       expect(
         useAppStore.getState().tabsByWorktree[WORKTREE]?.some((tab) => tab.id === 'default-2')
@@ -784,19 +791,11 @@ it('bounds real ancillary reveal and final completion binding work with unrelate
           ]
         }
       }))
-      const extra = (tabId: string, ptyId: string) => ({
-        type: 'terminal' as const,
-        id: `${tabId}::${LEAF}`,
-        parentTabId: tabId,
-        leafId: LEAF,
-        terminal: ptyId,
-        title: '',
-        status: 'ready' as const,
-        isActive: false
-      })
+      const extra = (tabId: string, ptyId: string) =>
+        makeInitialTerminalCensusRow(tabId, ptyId, LEAF)
       snapshot = {
         ...snapshot,
-        snapshotVersion: size + 6,
+        snapshotVersion: size + 7,
         tabs: [
           ...snapshot.tabs.map((row) =>
             row.type === 'terminal' && row.status === 'ready' && row.parentTabId === 'default-3'
