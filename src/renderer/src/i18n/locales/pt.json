@@ -19431,7 +19431,8 @@
         "42e466b9f1": "Regex",
         "90c61387d9": "Diferenciar maiúsculas/minúsculas",
         "e07012f26e": "Buscar...",
-        "10e039b591": "Nenhum resultado"
+        "10e039b591": "Nenhum resultado",
+        "wholeWord": "Corresponder Palavra Inteira"
       },
       "confirmation": {
         "dialog": {
