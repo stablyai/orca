@@ -237,7 +237,7 @@ it.each(['row', 'all', 'menu-before-close', 'menu-after-close', 'keyboard'] as c
     if (entrance === 'keyboard') {
       await user.click(test.more)
       selectConfiguredNextPane(test.controller, test.manager)
-      expect(screen.getByRole('menu')).toContainElement(document.activeElement)
+      expect(screen.getByRole('menu').contains(document.activeElement)).toBe(true)
     } else {
       fireEvent.pointerDown(test.second.container)
     }
