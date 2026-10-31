@@ -295,3 +295,22 @@ it.each([
     expect(mocks.abandonFocus).toHaveBeenCalledTimes(withdrawn ? 1 : 0)
   }
 )
+
+it.each([
+  ['terminal', 'Codex could not switch to a terminal. Try again.'],
+  ['chat', 'Codex could not switch to chat. Try again.']
+] as const)(
+  'runs nothing when the host could not be asked whether it switches (to %s)',
+  async (direction, text) => {
+    // A dropped connection while the capability is re-read: not an older host.
+    mocks.support.mockRejectedValue(new Error('Remote Orca runtime is not connected.'))
+    const args =
+      direction === 'chat'
+        ? { direction, ...fromPane, source: fromPane }
+        : { ...subject, direction }
+    await expect(runConversationSwitch(args)).resolves.toBe(false)
+    expect(mocks.call).not.toHaveBeenCalled()
+    expect(mocks.legacy).not.toHaveBeenCalled()
+    expect(mocks.error).toHaveBeenCalledExactlyOnceWith(text)
+  }
+)

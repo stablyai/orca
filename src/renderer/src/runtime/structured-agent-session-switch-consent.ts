@@ -1,8 +1,9 @@
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { SWITCH_CONSENT_RUNTIME_CAPABILITY } from '../../../shared/structured-agent-cli-conversation-adoption'
-import { structuredAgentSessionHostSupports } from './structured-agent-session-client'
+import { readStructuredAgentSessionHostSupport } from './structured-agent-session-host-capability'
 
-/** Whether the host decides a switch's consent (refuses a replying agent unless consented). */
+/** Whether the host decides a switch's consent (refuses a replying agent unless consented);
+ *  rejects when the host couldn't be asked. */
 export function supportsSwitchConsent(target: RuntimeClientTarget): Promise<boolean> {
-  return structuredAgentSessionHostSupports(target, SWITCH_CONSENT_RUNTIME_CAPABILITY)
+  return readStructuredAgentSessionHostSupport(target, SWITCH_CONSENT_RUNTIME_CAPABILITY)
 }

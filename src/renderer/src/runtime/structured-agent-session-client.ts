@@ -35,10 +35,7 @@ import {
 } from '../../../shared/structured-agent-cli-conversation-adoption'
 import { callRuntimeRpc, runtimeEnvironmentSupportsCapability } from './runtime-rpc-client'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
-import {
-  ensureLocalRuntimeCapabilities,
-  readLocalRuntimeCapabilitiesOrUnknown
-} from './local-runtime-capabilities'
+import { readStructuredAgentSessionHostSupport } from './structured-agent-session-host-capability'
 import { subscribeRuntimeRpc } from './runtime-rpc-subscribe'
 /** Read a capability through the runtime's existing status cache. A failed/unknown
  *  probe is treated as legacy so a newer call is never made before the host has
@@ -48,12 +45,7 @@ export async function structuredAgentSessionHostSupports(
   capability: RuntimeCapability
 ): Promise<boolean> {
   try {
-    if (target.kind === 'local') {
-      const known = readLocalRuntimeCapabilitiesOrUnknown()
-      const capabilities = known ?? (await ensureLocalRuntimeCapabilities())
-      return capabilities?.includes(capability) === true
-    }
-    return await runtimeEnvironmentSupportsCapability(target.environmentId, capability)
+    return await readStructuredAgentSessionHostSupport(target, capability)
   } catch {
     return false
   }
@@ -104,12 +96,13 @@ export function supportsInPlaceSwitch(
   agent: string,
   execution = false
 ): Promise<boolean> {
-  return inPlaceSwitchEnabled(agent)
-    ? structuredAgentSessionHostSupports(
-        target,
-        execution ? inPlaceSwitchExecutionCapability(agent) : inPlaceSwitchCapability(agent)
-      )
-    : Promise.resolve(false)
+  // The switch itself rejects on a probe it couldn't read, so it never mistakes a dropped
+  // connection for a host without the switch; surfaces only choose what to offer.
+  return !inPlaceSwitchEnabled(agent)
+    ? Promise.resolve(false)
+    : execution
+      ? readStructuredAgentSessionHostSupport(target, inPlaceSwitchExecutionCapability(agent))
+      : structuredAgentSessionHostSupports(target, inPlaceSwitchCapability(agent))
 }
 
 /** Whether the host writes no row for a Stop that stopped nothing, so a repeated Stop is quiet. */
