@@ -17,7 +17,7 @@ import type { AgentJournalMessageItem } from '../../../shared/agent-session-jour
 import type {
   AgentSessionThreadGoalChange,
   AgentSessionThreadGoalResult
-} from '../../../shared/agent-session-thread-goal-wire'
+} from '../../../shared/agent-session/agent-session-thread-goal-wire'
 import type { AgentSessionPromptRequest } from './structured-agent-session-turns-prompt'
 import { refuseThreadGoalUnsupported, threadGoalPlan } from './structured-agent-session-thread-goal'
 import {

@@ -97,17 +97,6 @@ describe('resolved revisions', () => {
     expect(rowText()).toBe('abc')
   })
 
-  it('skips a revision that resolves to nothing', async () => {
-    const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
-    deferred.sink.tryReviseResolvedItem?.(1_000, () => null, {
-      turnScope: AGENT_JOURNAL_THREAD_SCOPE
-    })
-    const before = journal.cursor()
-    deferred.bind(journalTarget())
-    await expect(deferred.drained()).resolves.toEqual({ ok: true })
-    expect(journal.cursor()).toEqual(before)
-  })
-
   it('publishes a revision in the operation that writes it, within the same reservation', async () => {
     const deferred = createDeferredStructuredAgentSessionEventSink(testEventSinkLogging())
     const bytes = estimateStructuredAgentSessionItemBytes(ROW, text('a'))

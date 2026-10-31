@@ -18596,6 +18596,8 @@
       },
       "composer": {
         "send": "送信",
+        "alternateSteerHint": "{{shortcut}} で今すぐ送信",
+        "alternateQueueHint": "{{shortcut}} でキューに入れる",
         "noPty": "ライブターミナルがありません - 再接続するには元に切り替えてください。",
         "locked": "入力は別のデバイスによって保持されます。",
         "placeholder": "何でも聞いてください。@ でファイルを参照、/ でコマンドを実行",
