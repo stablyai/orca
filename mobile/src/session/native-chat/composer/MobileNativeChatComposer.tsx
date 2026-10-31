@@ -45,6 +45,7 @@ import {
   MobileNativeChatComposerMic,
   type MobileNativeChatMicProps
 } from './MobileNativeChatComposerMic'
+import { MobileNativeChatWidthToggle } from './MobileNativeChatWidthToggle'
 
 const NO_FILE_PATHS: string[] = []
 const NO_ATTACHMENTS: PendingNativeChatImage[] = []
@@ -98,6 +99,8 @@ type Props = MobileNativeChatMicProps & {
   stop?: { onStop?: () => void; held: boolean } | null
   /** At the screen's bottom edge: even margins and bottom corners that follow the screen's. */
   fitScreenCorners?: boolean
+  /** On the iPhone Duo: whether the chat runs across the status column, and the switch for it. */
+  widthToggle?: { expanded: boolean; onToggle: () => void } | null
 }
 
 /** What a chat's composer sends through, which the chat view hands down from its route. */
@@ -138,7 +141,8 @@ export function MobileNativeChatComposer({
   onNeedSkills,
   stop = null,
   sendFollowUp = null,
-  fitScreenCorners = false
+  fitScreenCorners = false,
+  widthToggle = null
 }: Props): React.JSX.Element {
   useMobileColorScheme()
   const t = useMobileTranslation()
@@ -281,15 +285,11 @@ export function MobileNativeChatComposer({
         />
       ) : null}
       <View
-        style={
-          fitScreenCorners
-            ? [styles.composerInset, styles.composerInsetCornerFit]
-            : styles.composerInset
-        }
+        style={fitScreenCorners ? styles.composerInsetCornerFit : styles.composerInset}
         testID="native-chat-composer-inset"
       >
         <View
-          style={fitScreenCorners ? [styles.bar, styles.barCornerFit] : styles.bar}
+          style={fitScreenCorners ? styles.barCornerFit : styles.bar}
           testID="native-chat-composer"
         >
           <MobileNativeChatComposerAttachments
@@ -362,6 +362,7 @@ export function MobileNativeChatComposer({
               />
             ) : null}
             <View style={inputStyles.actionSpacer} />
+            {widthToggle ? <MobileNativeChatWidthToggle {...widthToggle} /> : null}
             {onMicPress ? (
               <MobileNativeChatComposerMic
                 onMicPress={onMicPress}

@@ -2639,6 +2639,8 @@
       "attachImage": "Attach image",
       "placeholder": "Ask anything, @ to mention files, / for commands",
       "cancelEditing": "Cancel editing",
+      "keepChatClear": "Keep chat clear of the side column",
+      "expandChat": "Expand chat into the side column",
       "saveEditedMessage": "Save edited message",
       "sendMessage": "Send message",
       "sendQueue": "Queue",
