@@ -1,7 +1,7 @@
 import { vi } from 'vitest'
 import type { PendingWorktreeCreation } from '@/lib/pending-worktree-creation'
 
-export const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
+const { prepareEphemeralVmWorkspaceTargetMock } = vi.hoisted(() => ({
   prepareEphemeralVmWorkspaceTargetMock: vi.fn()
 }))
 
@@ -83,3 +83,5 @@ vi.mock('sonner', () => ({
 vi.mock('@/lib/ephemeral-vm-workspace-target', () => ({
   prepareEphemeralVmWorkspaceTarget: prepareEphemeralVmWorkspaceTargetMock
 }))
+
+export { prepareEphemeralVmWorkspaceTargetMock }
