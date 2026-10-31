@@ -134,7 +134,16 @@ export class CodexAccountService {
       resolveSystemDefault: () => this.resolveSystemDefaultIdentity(),
       readIdentityFromHome: (path, accountId) => this.readIdentityFromHome(path, accountId),
       removeManagedHome: (path, accountId) => this.safeRemoveManagedHome(path, accountId),
-      discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId)
+      discardResetAttempts: (accountId) => this.resetCredits.discardForRemovedAccount(accountId),
+      isOwnedHostManagedHome: (candidatePath, expectedAccountId) => {
+        // Why: a read-only probe; any unproven home (untrusted or unreadable) fails safe to a refresh.
+        try {
+          this.managedHomePaths.assertHostOwnership(candidatePath, expectedAccountId)
+          return true
+        } catch {
+          return false
+        }
+      }
     })
     this.registration = new CodexAccountRegistration({
       store,
