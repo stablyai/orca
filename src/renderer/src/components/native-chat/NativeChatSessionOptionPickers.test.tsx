@@ -94,57 +94,7 @@ const surface = {
   subscribe: vi.fn(() => vi.fn())
 }
 
-function model(overrides: Partial<SessionOptionDescriptor> = {}): SessionOptionDescriptor {
-  return {
-    id: 'model',
-    label: 'Model',
-    category: 'model',
-    kind: {
-      type: 'select',
-      currentValue: 'opus',
-      choices: [
-        { value: 'opus', label: 'Opus 4.8' },
-        { value: 'sonnet', label: 'Sonnet 5' }
-      ]
-    },
-    valueSource: 'applied',
-    transport: 'catalog',
-    settable: true,
-    ...overrides
-  }
-}
-
-const EFFORT_CHOICES = [
-  { value: 'low', label: 'Low' },
-  { value: 'high', label: 'High' }
-]
-
-const effort: SessionOptionDescriptor = {
-  id: 'effort',
-  label: 'Effort',
-  category: 'thought_level',
-  kind: { type: 'select', currentValue: 'high', choices: EFFORT_CHOICES },
-  valueSource: 'applied',
-  transport: 'catalog',
-  settable: true
-}
-
-/** Only selects can truthfully have no current value; booleans require a baseline. */
-const unknownEffort: SessionOptionDescriptor = {
-  ...effort,
-  kind: { type: 'select', choices: EFFORT_CHOICES },
-  valueSource: 'unknown'
-}
-
-const fast: SessionOptionDescriptor = {
-  id: 'fastMode',
-  label: 'Fast mode',
-  category: 'mode',
-  kind: { type: 'boolean', currentValue: true },
-  valueSource: 'applied',
-  transport: 'catalog',
-  settable: true
-}
+import { effort, fast, model, unknownEffort } from './native-chat-option-picker.test-fixture'
 
 const settle = (): Promise<void> => act(async () => {})
 
@@ -159,6 +109,58 @@ const effortLevels = (): HTMLElement[] =>
 afterEach(() => cleanup())
 
 describe('NativeChatSessionOptionPickers', () => {
+  it('shows the proven Default model and its description while retaining the current explicit model', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        isWorking={false}
+        surface={{ ...surface, resetOption: vi.fn() }}
+        snapshot={[
+          model({
+            transport: 'agent-session',
+            defaultChoice: {
+              selected: false,
+              model: { value: 'opus', label: 'Opus 5.5', description: 'Most capable model' }
+            }
+          })
+        ]}
+      />
+    )
+    const row = screen.getByRole('option', { name: /Default/ })
+    expect(within(row).getByText('Opus 5.5')).toBeDefined()
+    expect(within(row).getByText('Most capable model')).toBeDefined()
+    expect(row.getAttribute('aria-current')).not.toBe('true')
+  })
+
+  it('states when the host has not reported its Default model', () => {
+    render(
+      <NativeChatSessionOptionPickers
+        isWorking={false}
+        surface={{ ...surface, resetOption: vi.fn() }}
+        snapshot={[model({ transport: 'agent-session', defaultChoice: { selected: false } })]}
+      />
+    )
+    expect(
+      within(screen.getByRole('option', { name: /Default/ })).getByText(
+        'Default model not reported'
+      )
+    ).toBeDefined()
+  })
+
+  it('offers Default as a reset action without sending a synthetic model id', async () => {
+    const resetOption = vi.fn(async () => ({ snapshot: [] }))
+    render(
+      <NativeChatSessionOptionPickers
+        surface={{ ...surface, resetOption }}
+        snapshot={[model({ transport: 'agent-session', defaultChoice: { selected: false } })]}
+        isWorking={false}
+      />
+    )
+    fireEvent.click(screen.getByRole('option', { name: /Default/ }))
+    await settle()
+    expect(resetOption).toHaveBeenCalledExactlyOnceWith('model')
+    expect(surface.setOption).not.toHaveBeenCalledWith('model', 'default')
+  })
+
   it.each(['model', 'effort'])(
     'opens the one picker when a slash command asks for the %s',
     async (id) => {

@@ -142,6 +142,7 @@ type ProbeProps = {
   fence: number | null
   mutate: StructuredAgentSessionMutate
   optionStamp?: string
+  supportsDefault?: boolean
   turnId?: string | null
   sendSelection?: boolean
   coherentCatalog?: boolean
@@ -161,6 +162,7 @@ function Probe(props: ProbeProps): null {
     ...(props.optionStamp ? { optionStamp: props.optionStamp } : {}),
     hostSupport: {
       permissionModes: true,
+      defaultModel: props.supportsDefault,
       permissionOwn: props.permissionOwn,
       sendOptions: false,
       statusFeed: false,
@@ -238,4 +240,13 @@ export {
   descriptorFor,
   currentValueOf,
   BASE
+}
+
+export const SEND_MODEL_OPTIONS: AgentSessionOptionsResult = {
+  conversationCommands: ['compact'],
+  models: [
+    { id: 'opus', label: 'Opus', isDefault: true, efforts: [] },
+    { id: 'sonnet', label: 'Sonnet', isDefault: false, efforts: [] }
+  ],
+  current: { model: 'opus' }
 }

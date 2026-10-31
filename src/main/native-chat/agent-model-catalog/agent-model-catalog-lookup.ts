@@ -215,8 +215,15 @@ export function createAgentModelCatalogLookup(
         probeHome,
         workspacePath: cwd ?? folder
       })
-      if (probe && probeHome && deps.store.probeDue(fingerprint)) {
-        void deps.store.refresh(fingerprint, params.agent, list, current, signal)
+      if (
+        probe &&
+        probeHome &&
+        (params.requireConfiguredDefault || deps.store.probeDue(fingerprint))
+      ) {
+        const listing = deps.store.refresh(fingerprint, params.agent, list, current, signal)
+        if (params.requireConfiguredDefault) {
+          await listing
+        }
       }
       // Demand owns ingestion until settlement, even when its caller only needs the snapshot.
       ready.resolve()

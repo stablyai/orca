@@ -109,6 +109,7 @@ function readOptions(journal: AgentSessionJournal, agents: StructuredAgentRegist
       agents,
       store: {
         requireWritableRecord: () => record,
+        getRecord: () => record,
         getConversation: () => agentSessionConversationView(record)
       }
     },

@@ -62,6 +62,44 @@ const GROK_HOME = (path: string): { variable: 'GROK_HOME'; path: string } => ({
 })
 
 describe('agent model catalog service', () => {
+  it('omits stale original-default proof on passive verified reads without starting a probe', async () => {
+    let now = 1_000
+    const store = new AgentModelCatalogStore({ now: () => now })
+    const pinned = record('/homes/session')
+    store.recordSuccess(
+      agentModelCatalogFingerprintForRecord(pinned),
+      'grok',
+      listing('original-default'),
+      'discovery'
+    )
+    const probe = vi.fn(async () => listing('refreshed-default'))
+    const service = createAgentModelCatalogService({
+      store,
+      getConversation: () => agentSessionConversationView(pinned),
+      getRecord: () => pinned,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => GROK_HOME('/homes/selected'),
+      listingNamesConfiguredModel: new Set(['grok']),
+      agentReadsProjectModelConfig: () => false,
+      recordWorkspacePath: async () => '/workspace/project',
+      workspaceMayOverrideDefaultModel: async () => false,
+      probes: { grok: probe }
+    })
+    const read = () =>
+      service.read({
+        agent: 'grok',
+        sessionId: pinned.sessionId,
+        inSessionWorkspace: true,
+        savedOnly: true,
+        verifiedOnly: true,
+        requireConfiguredDefault: true
+      })
+    expect(await read()).toMatchObject({ origin: 'probe', listingNamesConfiguredModel: true })
+    now += AGENT_MODEL_CATALOG_FRESH_MS
+    expect(await read()).toEqual({ origin: 'unknown' })
+    expect(probe).not.toHaveBeenCalled()
+  })
+
   it('answers unknown and kicks one probe for a session whose key has never listed', async () => {
     const store = new AgentModelCatalogStore()
     const probe = vi.fn(async (_home: AgentSessionAccountHome) => listing('gpt-a'))
@@ -205,6 +243,66 @@ describe('agent model catalog service', () => {
       waitForListing: true
     })
     expect(result.origin === 'unknown' ? null : result.models[0]!.id).toBe('gpt-session')
+  })
+
+  it('does not reuse a cached default when an explicit reset cannot refresh original configuration', async () => {
+    const store = new AgentModelCatalogStore()
+    const pinned = record('/homes/session')
+    store.recordSuccess(
+      agentModelCatalogFingerprintForRecord(pinned),
+      'grok',
+      listing('stale-default'),
+      'discovery'
+    )
+    const probe = vi.fn(async (): Promise<AgentModelCatalogSuccess> => {
+      throw new Error('original CLI unavailable')
+    })
+    const service = createAgentModelCatalogService({
+      store,
+      getConversation: () => agentSessionConversationView(pinned),
+      getRecord: () => pinned,
+      drivesRecord: () => true,
+      resolveAccountHome: async () => GROK_HOME('/homes/selected'),
+      listingNamesConfiguredModel: new Set(['grok']),
+      probes: { grok: probe }
+    })
+    expect(
+      await service.read({
+        agent: 'grok',
+        sessionId: pinned.sessionId,
+        requireConfiguredDefault: true
+      })
+    ).toEqual({ origin: 'unknown' })
+    expect(probe).toHaveBeenCalledExactlyOnceWith(GROK_HOME('/homes/session'), {
+      signal: expect.any(AbortSignal),
+      workspacePath: undefined,
+      operation: expect.objectContaining({
+        signal: expect.any(AbortSignal),
+        deadline: expect.any(Number),
+        current: expect.any(Function)
+      })
+    })
+  })
+
+  it('does not substitute the selected account when a reset cannot use the original record', async () => {
+    const probe = vi.fn(async () => listing('different-account-default'))
+    const service = createAgentModelCatalogService({
+      store: new AgentModelCatalogStore(),
+      getConversation: () => agentSessionConversationView(record('/homes/original')),
+      getRecord: () => record('/homes/original'),
+      drivesRecord: () => false,
+      resolveAccountHome: async () => GROK_HOME('/homes/selected'),
+      probes: { grok: probe }
+    })
+    expect(
+      await service.read({
+        agent: 'grok',
+        sessionId: 'session-1',
+        requireConfiguredDefault: true,
+        waitForListing: true
+      })
+    ).toEqual({ origin: 'unknown' })
+    expect(probe).not.toHaveBeenCalled()
   })
 
   it('a probe failure is a TTL-bounded fact, never an answer', async () => {

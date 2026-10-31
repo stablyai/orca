@@ -1,3 +1,4 @@
+import { setLocalRuntimeCapabilitiesForTests } from '@/runtime/local-runtime-capabilities'
 // @vitest-environment happy-dom
 import {
   mocks,
@@ -24,7 +25,7 @@ import {
 } from './use-structured-agent-session-options.test-fixture'
 import type { AgentSessionOptionsResult } from '../../../../shared/agent-session-wire'
 import { act, waitFor } from '@testing-library/react'
-import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 import {
   structuredAgentSessionSendSelection,
@@ -37,7 +38,9 @@ import {
 import { replaceRuntimeEnvironmentRevisions } from '@/runtime/runtime-environment-revision'
 import { resetHostModelCatalogSnapshotsForTests } from '@/runtime/host-model-catalog-snapshots'
 describe('useStructuredAgentSessionOptions', () => {
+  afterEach(() => setLocalRuntimeCapabilitiesForTests(null))
   beforeEach(() => {
+    mocks.supportsRemote.mockReset().mockResolvedValue(false)
     mocks.sendSelection = false
     forgetStructuredSessionSelection('session-1')
     mocks.call.mockReset()
@@ -823,7 +826,13 @@ describe('Pi catalog refresh completion', () => {
       })
       return {
         snapshot: () => harness.result.current.optionSnapshot,
-        capture: () => harness.result.current.capture().selection,
+        capture: () => {
+          const captured = harness.result.current.capture()
+          if (!captured) {
+            throw new Error('Expected a settled selection before sending')
+          }
+          return captured.selection
+        },
         demand: () => harness.result.current.optionSurface.demandModelCatalog?.(),
         pick: (value) => harness.result.current.setStructuredOption('effort', value),
         replace: async (fence, otherHost) => {

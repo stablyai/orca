@@ -26,6 +26,33 @@ import type { useMobileNativeChatSession } from './use-mobile-native-chat-sessio
 import type { MobileNativeChatSessionOptionPickersProps } from './native-chat/input/MobileNativeChatSessionOptionPickers'
 import type { MobileNativeChatVisualSource } from './native-chat/visual/mobile-native-chat-visual-read'
 import type { useMobileStructuredSessionCommands } from './use-mobile-structured-session-commands'
+import type { RpcClient } from '../transport/rpc-client'
+import type { ConnectionState } from '../transport/types'
+import type { MobileNativeChatTab } from './native-chat/mobile-native-chat-eligibility'
+import type { StructuredAgentSessionHostSupport } from './mobile-structured-agent-session-host-support'
+import type { useMobileNativeChatSessionLane } from './use-mobile-native-chat-session-lane'
+
+export type MobileNativeChatControllerArgs = {
+  onQueuedEditNotice?: (message: string) => void
+  client: RpcClient | null
+  hostId: string
+  worktreeId: string
+  activeSessionTab: MobileNativeChatTab | null
+  activeSessionTabId: string | null
+  activeHandleRef: MutableRefObject<string | null>
+  deviceTokenRef: MutableRefObject<string | null>
+  nativeChatTranscriptIsLocalReadable: boolean
+  nativeChatInputLeaseReady: boolean
+  /** Live socket state; the lease collapses on disconnect but one render later. */
+  connState: ConnectionState
+  /** Host capability fact from the shared runtime status probe. */
+  agentSessionHostSupport?: StructuredAgentSessionHostSupport | null
+  /** Forwarded to the session lane, a refusal's cause with it. */
+  onSendError: Parameters<typeof useMobileNativeChatSessionLane>[0]['onSendError']
+  /** Retires a held failure banner. Any accepted chat write clears it — a delivered
+   *  answer or permission reply must not sit under a stale "not sent". */
+  onSendResolved: () => void
+}
 
 export type MobileNativeChatController = {
   sessionViewReady: boolean

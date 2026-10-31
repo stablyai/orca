@@ -28,9 +28,11 @@ import {
   AGENT_SESSION_PHONE_ATTACHMENTS_RUNTIME_CAPABILITY,
   AGENT_SESSION_QUEUED_MESSAGE_SKILLS_EDIT_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session-runtime-capabilities'
+import { AGENT_SESSION_DEFAULT_MODEL_CAPABILITY } from '../../../src/shared/agent-session-default-model'
 import { SKILL_DISCOVER_WORKSPACE_CAPABILITY } from '../../../src/shared/skill-install-capability'
 
 export type StructuredAgentSessionHostSupport = {
+  defaultModel?: boolean
   commandsOnRequest?: boolean
   coherentModelCatalog?: boolean
   promptCancel: boolean
@@ -68,6 +70,7 @@ export function structuredAgentSessionHostSupport(
   capabilities: readonly string[]
 ): StructuredAgentSessionHostSupport {
   return {
+    defaultModel: capabilities.includes(AGENT_SESSION_DEFAULT_MODEL_CAPABILITY),
     commandsOnRequest: capabilities.includes(AGENT_SESSION_COMMANDS_ON_REQUEST_CAPABILITY),
     coherentModelCatalog: capabilities.includes(AGENT_SESSION_COHERENT_MODEL_CATALOG_CAPABILITY),
     promptCancel: capabilities.includes(AGENT_SESSION_PROMPT_CANCEL_RUNTIME_CAPABILITY),

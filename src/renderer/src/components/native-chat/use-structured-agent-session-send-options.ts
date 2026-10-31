@@ -1,3 +1,4 @@
+import { structuredOptionPickIsPending } from '../../../../shared/structured-agent-session-option-pick-book'
 import { useCallback } from 'react'
 import type { StructuredAgentSessionSendControl } from '../../../../shared/structured-agent-session-send-mutation'
 import {
@@ -15,10 +16,20 @@ export function useStructuredAgentSessionSendOptions(
   source: Pick<
     ReturnType<typeof useStructuredAgentSessionOptionState>,
     'optionStateRef' | 'optionView' | 'takesSendOptions' | 'takesSelection'
-  >
-): () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> {
-  const { optionStateRef, optionView, takesSendOptions, takesSelection } = source
+  > &
+    Partial<
+      Pick<ReturnType<typeof useStructuredAgentSessionOptionState>, 'optionPicks' | 'controller'>
+    >
+): () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> | undefined {
+  const { optionStateRef, optionPicks, optionView, controller, takesSendOptions, takesSelection } =
+    source
   return useCallback(() => {
+    if (
+      (optionPicks && structuredOptionPickIsPending(optionPicks.current, 'model')) ||
+      (!takesSelection && controller?.isPending('model'))
+    ) {
+      return undefined
+    }
     if (!takesSendOptions && !takesSelection) {
       return {}
     }
@@ -33,5 +44,14 @@ export function useStructuredAgentSessionSendOptions(
     return takesSelection
       ? { selection: structuredAgentSessionMessageSelection(view) }
       : { options: structuredAgentSessionSendSelection(view) }
-  }, [launch, optionStateRef, optionView, sessionId, takesSendOptions, takesSelection])
+  }, [
+    controller,
+    launch,
+    optionPicks,
+    optionStateRef,
+    optionView,
+    sessionId,
+    takesSendOptions,
+    takesSelection
+  ])
 }

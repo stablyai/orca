@@ -79,6 +79,8 @@ export type AgentModelCatalogReadParams = {
   workspacePath?: string | null
   /** Answer for the folder the named session runs in, as its new-chat read did. */
   inSessionWorkspace?: true
+  /** Explicit default reset re-reads configured choices within the operation budget. */
+  requireConfiguredDefault?: true
   /** With no entry yet, answer from the listing this read starts or joins instead of `unknown`;
    *  with a held reason past its TTL, from the probe re-checking it. */
   waitForListing?: boolean

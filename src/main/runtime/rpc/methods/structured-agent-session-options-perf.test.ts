@@ -76,7 +76,7 @@ it.each([100, 1_000])(
     const elapsedMs = performance.now() - started
     expect(copies).toBe(models) // Getter observes actual spread copies in the production fallback map.
     expect(fallbackModels).toHaveBeenCalledTimes(1)
-    expect(catalogRead).toHaveBeenCalledTimes(2) // Scoped inventory and proof; atRest is reused.
+    expect(catalogRead).toHaveBeenCalledTimes(3) // Scoped inventory, proof and configured default; atRest is reused.
     expect(answer.models).toHaveLength(models)
     expect(answer.models.every((row) => !row.isDefault)).toBe(true)
     expect(answer.current.model).toBeUndefined()

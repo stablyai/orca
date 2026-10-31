@@ -13,7 +13,10 @@ import type {
   AgentSessionQueuePause
 } from './agent-session-queued-message-wire'
 
-export type { AgentSessionOptionsResult } from './agent-session-options-result'
+export type {
+  AgentSessionOptionsResult,
+  AgentSessionOptionResult
+} from './agent-session-options-result'
 export * from './agent-session-wire-refusals'
 export * from './agent-session-queued-message-wire'
 export * from './agent-session-turn-completion-wire'
@@ -221,6 +224,7 @@ export type AgentSessionStatusSummary = {
   latestPrompt: string
   /** Provider model in force for the next turn; absent until the host has read the options. */
   model?: string
+  modelDefault?: boolean
   /** The chat's saved permission mode; a client re-reads options when it or `model` moves. */
   permissionMode?: string
   runtimePermission?: { fence: number; mode: string | null } | null
@@ -352,13 +356,6 @@ export type AgentSessionPromptResult = {
   resolution: AgentJournalResolution
 }
 
-export type AgentSessionOptionResult = {
-  key: string
-  value: string
-  /** Full effective next-turn values when the provider reconciled related options. */
-  options?: Record<string, string>
-}
-
 export type AgentSessionOptionChoice = {
   value: string
   label: string
@@ -412,6 +409,8 @@ export type AgentSessionModelCatalogResult = {
       /** The listed default is the model a new chat here launches with: the agent's listing names
        *  its configured model and no workspace config can replace it. Absent from an older host. */
       listingNamesConfiguredModel?: boolean
+      /** Original executable/configuration evidence, including an unlisted configured model. */
+      defaultModelOptions?: { model: string; effort?: string }
       /** The named default holds in every workspace: the agent reads no project config for its
        *  model, so an answer naming no workspace serves any new chat. Absent from an older host. */
       defaultHoldsInEveryWorkspace?: true

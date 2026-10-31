@@ -8,6 +8,7 @@ import {
 export type { StructuredAgentSessionStartReadiness } from './structured-agent-session-start-readiness'
 import type { AgentSessionJournalIdentity } from '../../../shared/agent-session-journal-types'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
+import { effectiveAgentSessionOptions } from '../../../shared/agent-session-default-model'
 import type { StructuredAgentSessionEventSink } from './structured-agent-session-event-sink'
 import type { AgentChatPermissionChoice } from '../../../shared/agent-chat-permission-mode'
 import type { StructuredAgentSessionProviderChildIdentity } from './structured-agent-session-host-types'
@@ -30,7 +31,7 @@ export function mintStructuredAgentSessionStartupAttempt(input: {
   attemptId?: string
 }): StructuredAgentSessionStartupAttempt {
   const { record } = input
-  const selected = input.startupOptions ?? record.options
+  const selected = input.startupOptions ?? effectiveAgentSessionOptions(record)
   const options = record.provider === 'claude' ? { fastMode: 'false', ...selected } : selected
   return {
     attemptId: input.attemptId ?? randomUUID(),

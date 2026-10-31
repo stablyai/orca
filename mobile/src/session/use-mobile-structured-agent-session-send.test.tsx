@@ -1,20 +1,22 @@
+import { defineMobilePendingModelSendCases } from './mobile-pending-model-send.test-fixture'
 import {
+  mobileNativeChatDraftDestination,
   updateMobileNativeChatDraftInputs,
   resetMobileNativeChatDraftInputsForTests
 } from './native-chat/composer/mobile-native-chat-draft-inputs'
+import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { createElement, useState } from 'react'
 import { act, create, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import type { AgentJournalDispatchState } from '../../../src/shared/agent-session-journal-types'
 import { DISPATCH_REJECTED_CANCELLED } from '../../../src/shared/structured-agent-session-dispatch-rejection'
 import type { RpcClient } from '../transport/rpc-client'
 import {
   fieldsOf,
+  mutationOk,
   ok,
   snapshotEvent
 } from './use-mobile-structured-agent-session-queued.test-fixture'
 import { markRpcDeliveryUnknown } from '../transport/rpc-delivery-ambiguity'
-import { structuredSendResultFixture } from './structured-agent-send-result.test-fixture'
 import { useMobileStructuredAgentSession } from './use-mobile-structured-agent-session'
 import { useMobileStructuredNativeChatSendBridge } from './use-mobile-structured-native-chat-send-bridge'
 import { useMobileNativeChatDrafts } from './native-chat/composer/use-mobile-native-chat-drafts'
@@ -23,6 +25,9 @@ import {
   AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY,
   AGENT_SESSION_SEND_SKILLS_RUNTIME_CAPABILITY
 } from '../../../src/shared/agent-session-create-capabilities'
+import { deferred, MODEL_OPTIONS, sendResult } from './structured-session-send-options.test-fixture'
+import type { RpcResponse } from '../transport/types'
+import type { MobileNativeChatSendOrigin } from './native-chat/mobile-native-chat-pending-echo'
 import {
   structuredAgentSessionHostSupport,
   type StructuredAgentSessionHostSupport
@@ -49,16 +54,6 @@ const asyncStorage = vi.hoisted(() => ({
 
 vi.mock('@react-native-async-storage/async-storage', () => ({ default: asyncStorage }))
 
-function sendResult(dispatchState: AgentJournalDispatchState, reason: string | null = null) {
-  return ok({
-    ok: true,
-    replayed: false,
-    fence: 3,
-    cursor: { epoch: 'epoch-1', sequence: 1 },
-    value: structuredSendResultFixture(dispatchState, reason)
-  })
-}
-
 describe('mobile structured send actions', () => {
   let renderer: ReactTestRenderer | null = null
   let hook: ReturnType<typeof useMobileStructuredAgentSession> | null = null
@@ -70,7 +65,20 @@ describe('mobile structured send actions', () => {
   let agent = 'codex'
   let sessionCommands: readonly AgentSessionSlashCommand[] | undefined
   let sendOrdinary: ReturnType<typeof useMobileStructuredNativeChatSendBridge>['sendWithOutcome']
+  let sessionId = 'session-1'
   let hostSupport: StructuredAgentSessionHostSupport | null = null
+  let bridge: ReturnType<typeof useMobileStructuredNativeChatSendBridge>
+  const clearDraftForSend = vi.fn()
+  const restoreRejectedDraft = vi.fn()
+  const captureSendOrigin = vi.fn((text: string): MobileNativeChatSendOrigin => ({
+    draftKey: 'draft',
+    draftDestination: mobileNativeChatDraftDestination('draft'),
+    draftEditGeneration: 0,
+    pendingKey: 'pending',
+    normalizedText: text,
+    boundary: { afterEmptyTranscriptSessionId: sessionId },
+    sentAt: 0
+  }))
   const onSendError = vi.fn()
   const sendRequest = vi.fn<RpcClient['sendRequest']>()
   const subscribe = vi.fn<RpcClient['subscribe']>((_method, _params, onData) => {
@@ -113,7 +121,7 @@ describe('mobile structured send actions', () => {
     banner.bannerMountedRef.current = true
     hook = useMobileStructuredAgentSession({
       client,
-      sessionId: 'session-1',
+      sessionId,
       sourceIdentity: 'host-a\0workspace-a',
       composerScopeKey: 'ordinary-draft',
       enabled: true,
@@ -121,6 +129,15 @@ describe('mobile structured send actions', () => {
       agent,
       sessionCommands,
       hostSupport,
+      onSendError
+    })
+    bridge = useMobileStructuredNativeChatSendBridge({
+      agent: 'claude',
+      sendStructured: hook.sendWithOutcome,
+      isModelWritePending: hook.isModelWritePending,
+      captureSendOrigin,
+      clearDraftForSend,
+      restoreRejectedDraft,
       onSendError
     })
     return createElement('span', null, banner.message)
@@ -192,6 +209,7 @@ describe('mobile structured send actions', () => {
     listener = null
     agent = 'codex'
     sessionCommands = undefined
+    sessionId = 'session-1'
     hostSupport = null
     resetMobileNativeChatDraftInputsForTests()
   })
@@ -337,6 +355,98 @@ describe('mobile structured send actions', () => {
       expect(await hook!.sendWithOutcome('hello')).toBe('accepted')
     })
     expect(fieldsOf(calls()[0]![1]).options).toEqual({ model: 'opus[1m]', effort: 'max' })
+  })
+
+  defineMobilePendingModelSendCases({
+    setAgent: (value) => {
+      agent = value
+    },
+    setHostSupport: (value) => {
+      hostSupport = value
+    },
+    getHook: () => hook!,
+    getBridge: () => bridge,
+    sendRequest,
+    mountSession,
+    calls,
+    captureSendOrigin,
+    clearDraftForSend,
+    restoreRejectedDraft
+  })
+
+  it.each([false, true])(
+    'allows an options-capable host to send without a known original model (Default %s)',
+    async (modelDefault) => {
+      agent = 'claude'
+      hostSupport = structuredAgentSessionHostSupport([
+        AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY
+      ])
+      sendRequest.mockImplementation(async (method) =>
+        method === 'agentSession.send'
+          ? sendResult('accepted')
+          : method === 'agentSession.options'
+            ? ok({ models: [], current: { modelDefault } })
+            : ok({})
+      )
+      await mountSession()
+      await act(async () => {
+        expect(await bridge.sendWithOutcome('provider chooses')).toBe('accepted')
+      })
+      expect(calls()).toHaveLength(1)
+      expect(fieldsOf(calls()[0]![1])).not.toHaveProperty('options')
+      expect(clearDraftForSend).toHaveBeenCalledTimes(1)
+    }
+  )
+
+  it('keeps the new session write guarded when the old session write settles', async () => {
+    agent = 'claude'
+    hostSupport = structuredAgentSessionHostSupport([AGENT_SESSION_SEND_OPTIONS_RUNTIME_CAPABILITY])
+    const oldWrite = deferred<RpcResponse>()
+    const newWrite = deferred<RpcResponse>()
+    sendRequest.mockImplementation(async (method, params) => {
+      if (method === 'agentSession.setOption') {
+        return fieldsOf(fieldsOf(params).envelope).sessionId === 'session-1'
+          ? oldWrite.promise
+          : newWrite.promise
+      }
+      return method === 'agentSession.send'
+        ? sendResult('accepted')
+        : method === 'agentSession.options'
+          ? ok(MODEL_OPTIONS)
+          : ok({})
+    })
+    await mountSession()
+    await act(async () => {})
+    let oldMutation: Promise<boolean> | undefined
+    act(() => {
+      oldMutation = hook!.setStructuredOption('model', 'sonnet')
+    })
+    sessionId = 'session-2'
+    await act(async () => {
+      renderer!.update(createElement(Harness))
+    })
+    const event = snapshotEvent()
+    await act(async () => listener?.({ ...event, sessionId, page: { ...event.page, sessionId } }))
+    expect(hook!.isModelWritePending()).toBe(false)
+    let newMutation: Promise<boolean> | undefined
+    act(() => {
+      newMutation = hook!.setStructuredOption('model', 'sonnet')
+    })
+    await act(async () => {
+      oldWrite.resolve(mutationOk({ key: 'model', value: 'sonnet', options: { model: 'sonnet' } }))
+      await oldMutation
+      expect(await hook!.sendWithOutcome('new session still pending')).toBe('rejected')
+    })
+    expect(calls()).toHaveLength(0)
+    expect(hook!.pendingOptionId).toBe('model')
+    await act(async () => {
+      newWrite.resolve(mutationOk({ key: 'model', value: 'sonnet', options: { model: 'sonnet' } }))
+      await newMutation
+      expect(await hook!.sendWithOutcome('new session ready')).toBe('accepted')
+    })
+    expect(calls()[0]![1]).toMatchObject({
+      envelope: { sessionId: 'session-2', expectedRuntimeFence: 3 }
+    })
   })
 
   it("sends a command the chat's own agent runs as a message, though Codex's host claims it", async () => {

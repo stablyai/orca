@@ -367,7 +367,9 @@
       "toggleOption": "Переключить {{value0}}",
       "ultra": "Предельный",
       "xhigh": "Очень высокий",
-      "xhighShort": "Очень выс."
+      "xhighShort": "Очень выс.",
+      "defaultModel": "По умолчанию",
+      "futureOptionsRequireUpdate": "Обновите Orca на этом компьютере, чтобы выбирать параметры следующих сообщений."
     },
     "sessionOptionPickers": {
       "agentWorking": "Агент работает",

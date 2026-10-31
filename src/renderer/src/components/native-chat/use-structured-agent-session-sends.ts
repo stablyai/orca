@@ -46,7 +46,7 @@ export function useStructuredAgentSessionSends(args: {
   /** The chat reads Stopping: a send made now is drawn after the turn being stopped. */
   stopping?: boolean
   /** The composer's model and effort each send carries; undefined to a host that takes none. */
-  sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'>
+  sendSelection?: () => Pick<StructuredAgentSessionSendControl, 'options' | 'selection'> | undefined
   sendOptions?: () => Readonly<Record<string, string>> | undefined
 }) {
   const {
@@ -116,7 +116,10 @@ export function useStructuredAgentSessionSends(args: {
         return false
       }
       const delivery = structuredAgentSessionQueueRequest(queue, request?.alternate)
-      const captured = sendSelection?.() ?? { options: sendOptions?.() }
+      const captured = sendSelection ? sendSelection() : { options: sendOptions?.() }
+      if (captured === undefined) {
+        return false
+      }
       const sent = sendStructuredAgentSessionMessage({
         sessionId,
         target,

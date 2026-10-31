@@ -124,11 +124,19 @@ type DescriptorRowsProps = {
   onInvokeAction: () => void
   /** A leading mark per choice, as each permission mode has its icon. */
   choiceLeading?: (value: string) => ReactNode
+  onReset?: () => void
 }
 
 /** One descriptor's rows as an array, so a ListGroup can draw the separators between them. */
 export function descriptorRowElements(
-  { descriptor, disabled, onSetOption, onInvokeAction, choiceLeading }: DescriptorRowsProps,
+  {
+    descriptor,
+    disabled,
+    onSetOption,
+    onInvokeAction,
+    choiceLeading,
+    onReset
+  }: DescriptorRowsProps,
   t: Translate
 ): ReactElement[] {
   const locked = disabled || !descriptor.settable
@@ -170,17 +178,35 @@ export function descriptorRowElements(
     ]
   }
   const { currentValue, choices } = descriptor.kind
-  return choices.map((choice) => (
+  const rows = choices.map((choice) => (
     <ListRow
       key={choice.value}
       title={nativeChatSessionChoiceLabel(choice, say, descriptor.id)}
       subtitle={choice.description}
       leading={choiceLeading ? (choiceLeading(choice.value) ?? null) : undefined}
-      selected={choice.value === currentValue}
+      selected={!descriptor.defaultChoice?.selected && choice.value === currentValue}
       disabled={locked}
       onPress={() => onSetOption(choice.value)}
     />
   ))
+  return descriptor.defaultChoice && onReset
+    ? [
+        <ListRow
+          key="model-default"
+          title={t('chat.sessionOptionRows.defaultMarker', 'Default')}
+          subtitle={[
+            descriptor.defaultChoice.model?.label ?? 'Default model not reported',
+            descriptor.defaultChoice.model?.description
+          ]
+            .filter(Boolean)
+            .join('\n')}
+          selected={descriptor.defaultChoice.selected}
+          disabled={locked}
+          onPress={onReset}
+        />,
+        ...rows
+      ]
+    : rows
 }
 
 export function DescriptorRows(props: DescriptorRowsProps): React.JSX.Element {

@@ -19994,7 +19994,10 @@
           "medium": "Сред.",
           "xhigh": "Очень выс."
         },
-        "imageUnavailable": "Предпросмотр недоступен"
+        "imageUnavailable": "Предпросмотр недоступен",
+        "defaultModel": "По умолчанию",
+        "defaultModelNotReported": "Модель по умолчанию не сообщена",
+        "futureOptionsRequireUpdate": "Обновите Orca на этом сервере, чтобы менять параметры следующих ответов во время работы агента."
       },
       "tool": {
         "exitCode": "код {{value0}}",

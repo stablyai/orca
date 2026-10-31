@@ -101,7 +101,9 @@ function modelOptionView(
   held: Readonly<Record<string, string>>
 ): StructuredAgentSessionOptionState {
   const unconfirmedSeed =
-    seed !== undefined && structuredAgentSessionModelId(state.record, 'own') === null
+    !state.modelDefault &&
+    seed !== undefined &&
+    structuredAgentSessionModelId(state.record, 'own') === null
   const hasHeld = Object.keys(held).length > 0
   if (!state.catalog || (!unconfirmedSeed && !hasHeld)) {
     return state
@@ -120,7 +122,7 @@ function modelOptionView(
 export function structuredAgentSessionSendSelection(
   view: StructuredAgentSessionOptionState
 ): Record<string, string> | undefined {
-  if (view.record.agent !== 'claude') {
+  if (view.record.agent !== 'claude' || view.modelDefault) {
     return undefined
   }
   const snapshot =

@@ -38,6 +38,7 @@ import {
   setOptionPlan,
   type MutationPlan
 } from './structured-agent-session-mutation-plans'
+import { resetStructuredAgentSessionModel } from './structured-agent-session-model-default'
 import { agentSessionMutationAdmitsNow } from './structured-agent-session-mutation-admits-now'
 import { runQueueableStructuredAgentSessionSend } from './structured-agent-session-queued-send'
 import { cancelStructuredAgentSessionPrompt } from './structured-agent-session-prompt-cancel'
@@ -218,7 +219,7 @@ export function respondToStructuredAgentSessionPrompt(
 export async function setStructuredAgentSessionOption(
   context: StructuredAgentSessionMutationContext,
   caller: StructuredAgentSessionCaller,
-  params: { envelope: AgentSessionMutationEnvelope; key: string; value: string }
+  params: { envelope: AgentSessionMutationEnvelope; key: string; value: string | null }
 ): Promise<AgentSessionMutationResult<AgentSessionOptionResult>> {
   const plan = setOptionPlan(params)
   const noChoice =
@@ -231,11 +232,20 @@ export async function setStructuredAgentSessionOption(
       ...plan,
       conversationWrite: true,
       run: async (ctx) => {
-        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, params, {
+        if (params.value === null) {
+          return resetStructuredAgentSessionModel(
+            context.deps,
+            ctx,
+            Boolean((await context.conversation(ctx.sessionId)).child),
+            params.key
+          )
+        }
+        const input = { key: params.key, value: params.value }
+        const picked = await recordStructuredAgentSessionOptionIntent(context.deps, ctx, input, {
           readsWithoutModel: caller.readsOptionsWithoutModel !== false
         })
         if (picked.ok) {
-          confirmIdleStructuredAgentSessionOption(context, ctx, params)
+          confirmIdleStructuredAgentSessionOption(context, ctx, input)
         }
         return picked
       },

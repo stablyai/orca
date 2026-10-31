@@ -70,7 +70,8 @@ export function agentModelCatalogRequestKey(
     workspacePath: params.workspacePath,
     inSessionWorkspace:
       inWorkspace && record ? [record.location.workspaceId, record.launchDirectory] : undefined,
-    legacy: params.legacy
+    legacy: params.legacy,
+    requireConfiguredDefault: params.requireConfiguredDefault
   })
 }
 
@@ -181,8 +182,11 @@ export function projectAgentModelCatalogSnapshot(
   const listed = deps.store.observation(bound.fingerprint)
   const independent = independentAgentModelCatalog(params.agent)
   if (
-    params.verifiedOnly &&
-    (!listed || (independent && (!bound.exact || !deps.store.verified(listed))))
+    (params.verifiedOnly || params.requireConfiguredDefault) &&
+    (!listed ||
+      (independent && !bound.exact) ||
+      ((independent || params.requireConfiguredDefault) &&
+        !deps.store.verified(listed, params.requireConfiguredDefault)))
   ) {
     return { origin: 'unknown' }
   }
@@ -300,4 +304,13 @@ export function agentModelCatalogSessionPeek(
     const entry = bound ? deps.store.observation(bound.fingerprint) : null
     return entry && (!verifiedOnly || deps.store.verified(entry)) ? entry : null
   }
+}
+
+export type AgentModelCatalogClaim = Pick<
+  AgentModelCatalogBinding,
+  'identity' | 'params' | 'current'
+> & {
+  controller: AbortController
+  promise: Promise<void>
+  ready: Promise<void>
 }

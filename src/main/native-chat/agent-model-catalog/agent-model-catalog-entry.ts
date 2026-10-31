@@ -65,14 +65,9 @@ export function unpickedSessionConfiguredChoice(session: {
   models: readonly { id: string }[]
   current: { model?: string; effort?: string }
 }): AgentModelCatalogConfiguredChoice | null | undefined {
-  const { models, current } = session
+  const { models, current, resolvesConfig, picked } = session
   // Empty/signed-out listings cannot establish catalog membership.
-  if (
-    !session.resolvesConfig ||
-    session.picked?.has('model') ||
-    !current.model ||
-    models.length === 0
-  ) {
+  if (!resolvesConfig || picked?.has('model') || !current.model || models.length === 0) {
     return undefined
   }
   if (!models.some((model) => model.id === current.model)) {
@@ -127,7 +122,15 @@ export function agentModelCatalogResultFromEntry(
     models: models.map((model) => (namesDefault ? { ...model } : { ...model, isDefault: false })),
     ...(entry.fastModeSupport ? { fastModeSupport: entry.fastModeSupport } : {}),
     fetchedAt: entry.fetchedAt,
-    listingNamesConfiguredModel: namesDefault && namesConfigured
+    listingNamesConfiguredModel: namesDefault && namesConfigured,
+    ...(namesDefault && useConfigured && entry.configured
+      ? {
+          defaultModelOptions: {
+            model: entry.configured.modelId,
+            ...(entry.configured.effort ? { effort: entry.configured.effort } : {})
+          }
+        }
+      : {})
   }
 }
 

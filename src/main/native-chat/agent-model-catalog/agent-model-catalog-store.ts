@@ -287,11 +287,14 @@ export class AgentModelCatalogStore {
     this.partialAttempts.clear()
   }
 
-  verified(entry: AgentModelCatalogEntry): boolean {
+  verified(entry: AgentModelCatalogEntry, requireConfiguredDefault = false): boolean {
     return (
       !this.isStale(entry) &&
       !this.hasActiveFailure(entry.fingerprint) &&
-      !this.failure(entry.fingerprint)?.unavailable
+      !this.failure(entry.fingerprint)?.unavailable &&
+      (!requireConfiguredDefault ||
+        !independentAgentModelCatalog(entry.agent) ||
+        (entry.discovered?.complete === true && !this.partialAttempts.has(entry.fingerprint)))
     )
   }
 

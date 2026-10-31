@@ -1,5 +1,8 @@
 import type { AgentModelCatalogStore } from './agent-model-catalog-store'
-import type { AgentModelCatalogReadParams } from './agent-model-catalog-service-contract'
+import type {
+  AgentModelCatalogReadParams,
+  AgentModelCatalogService
+} from './agent-model-catalog-service-contract'
 import type { AgentModelCatalogBinding } from './agent-model-catalog-snapshot'
 import { independentAgentModelCatalog } from './agent-model-catalog-discovery'
 import { withTimeout } from '../../../shared/promise-timeout-fallback'
@@ -120,4 +123,20 @@ export function runAgentModelCatalogOperation(
     }
     finished()
   })
+}
+
+export async function readAgentModelCatalogWithListing(
+  input: Omit<Parameters<typeof waitForAgentModelCatalogRead>[0], 'params'> & {
+    params: AgentModelCatalogReadParams
+    snapshot: AgentModelCatalogService['snapshot']
+  }
+) {
+  const { params } = input
+  if (params.requireConfiguredDefault && !params.savedOnly) {
+    await input.resolve(params)
+  } else if (!params.savedOnly && params.waitForListing) {
+    const deadline = params.deadline ?? Date.now() + AGENT_MODEL_CATALOG_PICKER_WAIT_MS
+    await waitForAgentModelCatalogRead({ ...input, params: { ...params, deadline } })
+  }
+  return input.snapshot(params)
 }

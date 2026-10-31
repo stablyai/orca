@@ -10,6 +10,7 @@ import {
   applyStructuredAgentSessionOptions,
   canSetStructuredAgentSessionOption,
   commitStructuredAgentSessionOption,
+  commitStructuredAgentSessionModelDefault,
   createStructuredAgentSessionOptionState,
   structuredAgentSessionOptionSnapshot,
   type StructuredAgentSessionOptionState
@@ -63,6 +64,16 @@ const carried = (
   seed?: Readonly<Record<string, string>>,
   picks: Readonly<Record<string, string>> = {}
 ) => structuredAgentSessionSendSelection(structuredAgentSessionOptionView(state, seed, picks))
+
+it('Default clears a stale seed and defers message choices to the host until an explicit model is picked', () => {
+  const state = withHostList(stopped('opus[1m]'))
+  const reset = commitStructuredAgentSessionModelDefault(state, {})
+  expect(shown(reset, remembered, {}).model).toBeUndefined()
+  expect(carried(reset, remembered)).toBeUndefined()
+  const selected = commitStructuredAgentSessionOption(reset, 'model', 'opus[1m]')
+  expect(selected.modelDefault).toBe(false)
+  expect(carried(selected)).toEqual({ model: 'opus[1m]' })
+})
 
 describe('a Claude model its CLI no longer lists', () => {
   it('stays the chat model through a refresh and every send, its effort read-only', () => {

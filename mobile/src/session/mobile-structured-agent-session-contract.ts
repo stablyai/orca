@@ -79,3 +79,26 @@ export type MobileStructuredAgentSessionArgs = {
   // Accepted queued actions retire the route’s failure banner.
   onActionResolved?: () => void
 }
+
+import type { StructuredAgentSessionMutate } from './mobile-structured-agent-session-rpc'
+
+export type MobileStructuredAgentOptionsArgs = {
+  agent: string | null
+  client: RpcClient | null
+  sessionId: string | null
+  enabled: boolean
+  fence: number | null
+  mutate: StructuredAgentSessionMutate
+  optionStamp?: string
+  turnId: string | null
+  hostSupport: Pick<
+    StructuredAgentSessionHostSupport,
+    | 'permissionModes'
+    | 'permissionOwn'
+    | 'coherentModelCatalog'
+    | 'statusFeed'
+    | 'defaultModel'
+    | 'sendSelection'
+    | 'sendOptions'
+  > | null
+}

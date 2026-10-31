@@ -1,3 +1,4 @@
+import { effectiveAgentSessionOptions } from '../../shared/agent-session-default-model'
 import { agentSessionRefusalError } from '../../shared/agent-session-wire-refusals'
 import type {
   AgentSessionOptionsReplacement,
@@ -16,7 +17,14 @@ export function replaceAgentSessionRecordOptions(
     throw agentSessionRefusalError('agent_session_ownership_unknown', { reason: 'leaseMoved' })
   }
   return 'options' in replacement
-    ? { ...record, options: { ...replacement.options }, updatedAt: replacement.now }
+    ? {
+        ...record,
+        options: { ...replacement.options },
+        ...('defaultModelOptions' in replacement
+          ? { defaultModelOptions: replacement.defaultModelOptions ?? undefined }
+          : {}),
+        updatedAt: replacement.now
+      }
     : { ...record, permissionMode: replacement.permissionMode, updatedAt: replacement.now }
 }
 
@@ -36,9 +44,14 @@ export function pickAgentSessionOption(
   record: AgentSessionRecord,
   { key, value, models: _models, ...at }: AgentSessionOptionPick
 ): AgentSessionRecord {
+  const options = {
+    ...(key === 'model' ? effectiveAgentSessionOptions(record) : record.options),
+    [key]: value
+  }
   return replaceAgentSessionRecordOptions(record, {
     ...at,
-    options: { ...record.options, [key]: value }
+    options,
+    ...(key === 'model' ? { defaultModelOptions: null } : {})
   })
 }
 
@@ -56,8 +69,12 @@ export function recordAgentSessionRanOptions(
   record: AgentSessionRecord,
   { model, options, models: _models, ...at }: AgentSessionRanOptions
 ): AgentSessionRecord {
-  const saved = record.options ?? {}
-  // These run options cannot follow a concurrent model change.
+  const defaultSelected = record.defaultModelOptions !== undefined
+  if (record.defaultModelOptions?.model !== undefined) {
+    return record
+  }
+  const saved = (defaultSelected ? record.defaultModelOptions : record.options) ?? {}
+  // Another model won meanwhile: none of this run's options belong to it.
   if (saved.model !== undefined && saved.model !== model) {
     return record
   }
@@ -66,6 +83,11 @@ export function recordAgentSessionRanOptions(
     ? record
     : replaceAgentSessionRecordOptions(record, {
         ...at,
-        options: { ...Object.fromEntries(added), ...saved }
+        options: defaultSelected
+          ? (record.options ?? {})
+          : { ...Object.fromEntries(added), ...saved },
+        ...(defaultSelected
+          ? { defaultModelOptions: { ...Object.fromEntries(added), ...saved } }
+          : {})
       })
 }
