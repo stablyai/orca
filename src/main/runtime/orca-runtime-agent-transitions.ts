@@ -84,6 +84,7 @@ export abstract class OrcaRuntimeWithAgentTransitions extends OrcaRuntimeWithHea
     this.agentTransitions.subscribe((change) => this.terminalAgentPhonePush.observe(change))
     this.agentTransitions.subscribe((change) => this.terminalWorkerTurnStops.observe(change))
     this.agentTransitions.subscribe((change) => this.workerAutoReleaseActivity.observePane(change))
+    this.agentTransitions.subscribe((change) => this.noteHeadlessAgentChange(change))
     const saveMovedWorkerSessions = watchMovedWorkerResumeSessions(
       this,
       () => this._orchestrationDb

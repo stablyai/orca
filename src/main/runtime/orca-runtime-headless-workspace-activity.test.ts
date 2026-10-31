@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contracts'
 import type { WorktreeMeta } from '../../shared/worktree/meta-types'
 import type { HostWorktreeTarget } from '../../shared/worktree/host-qualified-identity'
+import { AgentHookServer } from '../agent-hooks/server'
 import { OrcaRuntimeService } from './orca-runtime'
 import { partialRuntimeStore, storeRepo, storeWorktreeMeta } from './runtime-store-partial-fixture'
 
@@ -76,6 +77,40 @@ describe('workspace activity without a desktop window', () => {
 
     await runtime.createTerminal(`id:${WT}`, {})
     await runtime.onPtyExit(PTY, 0)
+    expect(meta[WT].lastActivityAt).toBe(1)
+  })
+
+  function agentPane(runtime: OrcaRuntimeService) {
+    const server = new AgentHookServer()
+    runtime.attachAgentStatusStore(server)
+    return (state: 'working' | 'done') =>
+      server.ingestTerminalStatus({
+        paneKey: 'tab-1:11111111-1111-4111-8111-111111111111',
+        tabId: 'tab-1',
+        worktreeId: WT,
+        payload: { state, prompt: 'task', agentType: 'claude' }
+      })
+  }
+
+  it('stamps lastActivityAt on agent turns, at most once per throttle window', () => {
+    const { runtime, meta } = createRuntime('headless')
+    const report = agentPane(runtime)
+
+    report('working')
+    expect(meta[WT].lastActivityAt).toBe(50_000)
+
+    vi.setSystemTime(55_000)
+    report('done')
+    expect(meta[WT].lastActivityAt).toBe(50_000)
+
+    vi.setSystemTime(70_000)
+    report('working')
+    expect(meta[WT].lastActivityAt).toBe(70_000)
+  })
+
+  it('leaves agent turns to the window store when a desktop window is attached', () => {
+    const { runtime, meta } = createRuntime('desktop')
+    agentPane(runtime)('working')
     expect(meta[WT].lastActivityAt).toBe(1)
   })
 })

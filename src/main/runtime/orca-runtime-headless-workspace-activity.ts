@@ -4,7 +4,13 @@ import { HEADLESS_RUNTIME_WINDOW_ID } from '../../shared/runtime-session-contrac
 import { isRemoteRuntimePtyId } from '../../shared/remote-runtime/remote-runtime-pty-id'
 import { parseWorkspaceKey } from '../../shared/workspace-scope'
 import { getRepoIdFromWorktreeId } from '../../shared/worktree/id'
-import { agentPaneWorkspace } from '../agent-hooks/agent-transition-detector'
+import { agentPhaseTransition } from '../../shared/agent-transitions'
+import { RECENT_STAMP_THROTTLE_MS } from '../../shared/sidebar-list/sort-stamps'
+import {
+  agentPaneWorkspace,
+  type AgentPaneChange,
+  type AgentPaneWorkspace
+} from '../agent-hooks/agent-transition-detector'
 import { readWorkspaceRecord, writeWorkspaceRecord } from './sidebar-inputs/sort-stamp-records'
 import {
   isWslMoveProjectBlocked,
@@ -13,7 +19,7 @@ import {
 
 type Runtime = OrcaRuntimeWithMigrationCatalog
 
-/** Without a window, the host stamps Recent on the terminal starts and exits the window's store would have. */
+/** Without a window, the host stamps Recent on terminal starts and exits, as the window's store would, and on agent turns. */
 export abstract class OrcaRuntimeWithHeadlessWorkspaceActivity extends OrcaRuntimeWithMigrationCatalog {
   override async createTerminal(
     ...args: Parameters<Runtime['createTerminal']>
@@ -66,6 +72,17 @@ export abstract class OrcaRuntimeWithHeadlessWorkspaceActivity extends OrcaRunti
     return !ORCA_SIDEBAR_INPUTS_IS_MAIN && this.authoritativeWindowId === HEADLESS_RUNTIME_WINDOW_ID
   }
 
+  /** Agents work for hours in one terminal: their prompts, finishes and input requests are its activity too. */
+  protected noteHeadlessAgentChange(change: AgentPaneChange): void {
+    // The same turn edges main's sort stamps count for Recent.
+    if (change.kind !== 'moved' || agentPhaseTransition(change.from, change.to) === null) {
+      return
+    }
+    if (this.isHeadlessActivityOwner()) {
+      this.stampHeadlessWorkspaceActivity(change.workspace, { throttled: true })
+    }
+  }
+
   private recordHeadlessTerminalActivity(ptyId: string, record = this.ptysById.get(ptyId)): void {
     if (!this.isHeadlessActivityOwner()) {
       return
@@ -74,7 +91,13 @@ export abstract class OrcaRuntimeWithHeadlessWorkspaceActivity extends OrcaRunti
     if (!record?.worktreeId || isRemoteRuntimePtyId(ptyId)) {
       return
     }
-    const workspace = agentPaneWorkspace(record.worktreeId, record.connectionId)
+    this.stampHeadlessWorkspaceActivity(agentPaneWorkspace(record.worktreeId, record.connectionId))
+  }
+
+  private stampHeadlessWorkspaceActivity(
+    workspace: AgentPaneWorkspace,
+    { throttled = false } = {}
+  ): void {
     if (
       !workspace.sshHostId &&
       isWslMoveProjectBlocked(
@@ -85,10 +108,16 @@ export abstract class OrcaRuntimeWithHeadlessWorkspaceActivity extends OrcaRunti
       return
     }
     // Only a workspace with a record is stamped; writing would create one for a stale id.
-    if (!readWorkspaceRecord<unknown>(this.store, workspace)) {
+    const stored = readWorkspaceRecord<{ lastActivityAt?: number }>(this.store, workspace)
+    if (!stored) {
       return
     }
-    writeWorkspaceRecord(this.store, workspace, { lastActivityAt: Date.now() })
+    const now = Date.now()
+    // A busy agent re-lists the row at most this often, as main's stamps do.
+    if (throttled && now - (stored.lastActivityAt ?? 0) < RECENT_STAMP_THROTTLE_MS) {
+      return
+    }
+    writeWorkspaceRecord(this.store, workspace, { lastActivityAt: now })
     this.notifySortStampsChanged(workspace.worktreeId)
   }
 }
