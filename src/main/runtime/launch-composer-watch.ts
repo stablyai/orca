@@ -73,7 +73,8 @@ export function watchLaunchComposer(
   ptyId: string,
   agent: TuiAgent | null
 ): void {
-  if (!agent || !SUBMIT_WAITS_FOR_LAUNCH_COMPOSER.has(agent) || watches.has(ptyId)) {
+  // A new launch on a reused PTY id replaces its predecessor's watch.
+  if (!agent || !SUBMIT_WAITS_FOR_LAUNCH_COMPOSER.has(agent)) {
     return
   }
   const stop = new AbortController()
