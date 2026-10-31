@@ -217,6 +217,9 @@ for (const mode of ['default', 'external'] as const) {
         expect(rows).toHaveLength(1)
         expect(JSON.stringify(rows[0].body)).toContain(content)
       }
+      expect(
+        snapshot.items.flatMap(({ body }) => (body.kind === 'tool-call' ? [body.callId] : []))
+      ).toEqual(received.map(({ toolId }) => toolId))
       expect(new Set(snapshot.items.map((item) => item.itemId)).size).toBe(snapshot.items.length)
       await stopStructuredAgentSessionRuntime()
       const reopened = await ensureStructuredAgentSessionHost(deps)
