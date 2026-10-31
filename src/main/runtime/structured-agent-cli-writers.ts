@@ -16,19 +16,12 @@ export async function assertCliConversationWritersExited(
   providerSessionId: string
 ): Promise<void> {
   for (const row of host.rows()) {
-    if (
-      row.structuredHost ||
-      row.agentPresence?.ended ||
-      !namesCliConversation(row, agent, providerSessionId)
-    ) {
+    if (row.structuredHost || !namesCliConversation(row, agent, providerSessionId)) {
       continue
     }
     const observation = host.observation(row)
-    const presence = await observation?.presence()
-    if (
-      observation?.current() &&
-      (presence === 'live' || (presence === null && !row.providerSessionOnly))
-    ) {
+    // Only a process proven running refuses; no recorded process, exited and unverifiable admit.
+    if ((await observation?.presence()) === 'live' && observation?.current()) {
       throw agentSessionRefusalError('agent_session_conflict', {
         reason: 'conversationHeldElsewhere'
       })

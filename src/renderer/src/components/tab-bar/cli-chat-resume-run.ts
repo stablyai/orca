@@ -147,8 +147,11 @@ export async function runCliChatResume(
       ),
       controller.signal
     )
-    if (closeSupported) {
-      const state = useAppStore.getState()
+    const state = useAppStore.getState()
+    // An agent that already quit leaves nothing to stop, so its terminal stays and main's create runs.
+    const agentLiveInPane =
+      state.agentStatusByPaneKey[source.paneKey]?.providerSession?.id === source.providerSessionId
+    if (closeSupported && agentLiveInPane) {
       // Chats and terminals that name this conversation on its host; the source tab's panes all close.
       const holders = Object.values(state.agentStatusByPaneKey).filter((row) => {
         const tabId = row.tabId ?? parsePaneKey(row.paneKey)?.tabId

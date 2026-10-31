@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import type { AgentStatusIpcPayload } from '../../shared/agent-status-types'
 import type { AgentProcessVerdict } from '../../shared/agent-process-presence'
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../shared/structured-agent-cli-conversation-adoption'
+import type { StructuredAgentId } from '../../shared/agent-session-provider-handle'
 import { assertCliConversationWritersExited } from './structured-agent-cli-writers'
 
 const row: AgentStatusIpcPayload = {
@@ -18,7 +19,12 @@ const row: AgentStatusIpcPayload = {
 const conflict = {
   refusal: { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
 }
-function check(rows: AgentStatusIpcPayload[], verdict: AgentProcessVerdict | null, current = true) {
+function check(
+  rows: AgentStatusIpcPayload[],
+  verdict: AgentProcessVerdict | null,
+  current = true,
+  agent: StructuredAgentId = 'claude'
+) {
   return assertCliConversationWritersExited(
     {
       rows: () => rows,
@@ -28,7 +34,7 @@ function check(rows: AgentStatusIpcPayload[], verdict: AgentProcessVerdict | nul
         topology: 'shared'
       })
     },
-    'claude',
+    agent,
     'conversation'
   )
 }
@@ -61,38 +67,26 @@ describe('canonical status store conversation admission', () => {
     }
   )
 
-  it.each(['exited', 'unverifiable'] as const)(
-    'admits %s without consulting physical jobs or saved notes',
+  it.each(['exited', 'unverifiable', null] as const)(
+    'admits a %s verdict, including a current Codex hook with no recorded process',
     async (verdict) => {
       await expect(check([row], verdict)).resolves.toBeUndefined()
+      await expect(
+        check(
+          [{ ...row, paneKey: 'other:leaf', agentType: 'codex', state: 'working' }],
+          verdict,
+          true,
+          'codex'
+        )
+      ).resolves.toBeUndefined()
     }
   )
 
-  it('a current Codex hook without captured process identity is a live holder, while identity-only rows are not', async () => {
-    const codex = { ...row, paneKey: 'other:leaf', agentType: 'codex', state: 'working' as const }
-    const run = (providerSessionOnly = false) =>
-      assertCliConversationWritersExited(
-        {
-          rows: () => [{ ...codex, providerSessionOnly }],
-          observation: () => ({
-            current: () => true,
-            presence: async () => null,
-            topology: 'pane-owned'
-          })
-        },
-        'codex',
-        'conversation'
-      )
-    await expect(run()).rejects.toMatchObject(conflict)
-    await expect(run(true)).resolves.toBeUndefined()
-  })
-
-  it('admits absent, ended, structured, foreign-host and other-conversation rows', async () => {
+  it('admits absent, structured, foreign-host and other-conversation rows', async () => {
     await expect(check([], 'live')).resolves.toBeUndefined()
     await expect(
       check(
         [
-          { ...row, agentPresence: { agent: 'claude', ended: true } },
           { ...row, structuredHost: 'owned' },
           { ...row, connectionId: 'ssh' },
           { ...row, providerSession: { key: 'session_id', id: 'another' } }
