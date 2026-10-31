@@ -11,7 +11,7 @@ vi.mock(
   async () => await import('../platform/text-input-font-size.web')
 )
 
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../theme/mobile-theme'
 import { mobileBrowserPaneStyles } from './mobile-browser-pane-styles'
 
 /** Below this an iOS browser zooms the page when an input takes focus, and does not zoom back. */

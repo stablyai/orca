@@ -1,10 +1,11 @@
 // One input below 16px focus-zooms whole iOS page; keyboard-occlusion intentionally rejects zoomed geometry, disabling commit/note lift everywhere.
 // Census all closure inputs: raising only seam-served fields once left eight other 14px inputs capable of breaking page.
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs'
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
+import ts from 'typescript-api'
 import { mobileWebAppRouteClosure } from '../build-mobile-web-app-bundle.mjs'
 import { mobileWebAppDependenciesPresent } from './mobile-web-app-bundle-dependencies.mjs'
 import {
@@ -22,7 +23,7 @@ const REVIEW = 'app/h/[hostId]/review/[worktreeId].tsx'
 const COMPOSER_INPUT_STYLES = 'src/components/composer-input/composer-input-styles.ts'
 
 const SEAM_SOURCE = {
-  'src/platform/text-input-font-size.ts': 'export const TEXT_INPUT_FONT_SIZE = 14'
+  'src/theme/mobile-theme.ts': 'export const TEXT_INPUT_FONT_SIZE = 16'
 }
 
 // Seed seam web module: census reads its floor and refuses trees without it; refusal control overwrites seed.
@@ -32,7 +33,7 @@ const FLOOR_SOURCE = {
     'export const TEXT_INPUT_FONT_SIZE = 16'
   ].join('\n')
 }
-const SEAM_IMPORT = "import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'"
+const SEAM_IMPORT = "import { TEXT_INPUT_FONT_SIZE } from '../theme/mobile-theme'"
 
 // Isolate planted offenders from other censuses’ source trees.
 function plant(files) {
@@ -43,6 +44,37 @@ function plant(files) {
   }
   return root
 }
+
+describe('the production input role', () => {
+  it('derives native/web sizes from the actual theme body and live exported web floor', async () => {
+    const theme = readFileSync(join(mobileDir, 'src/theme/mobile-theme.ts'), 'utf8')
+    const moduleUrl = (source) =>
+      `data:text/javascript;base64,${Buffer.from(
+        ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
+      ).toString('base64')}`
+    for (const [body, floor, expected] of [
+      [14, 16, [14, 16]],
+      [20, 16, [20, 20]],
+      [14, 20, [14, 20]]
+    ]) {
+      const sizes = []
+      for (const suffix of ['.ts', '.web.ts']) {
+        const leaf = readFileSync(
+          join(mobileDir, `src/platform/text-input-font-size${suffix}`),
+          'utf8'
+        ).replace('TEXT_INPUT_FONT_SIZE_FLOOR = 16', `TEXT_INPUT_FONT_SIZE_FLOOR = ${floor}`)
+        const actualTheme = theme
+          .replace('bodySize: 14', `bodySize: ${body}`)
+          .replace('../platform/text-input-font-size', moduleUrl(leaf))
+        const loaded = await import(/* @vite-ignore */ moduleUrl(actualTheme))
+        expect(loaded.typography.bodySize).toBe(body)
+        expect(loaded.typography.metaSize).toBe(12)
+        sizes.push(loaded.TEXT_INPUT_FONT_SIZE)
+      }
+      expect(sizes).toEqual(expected)
+    }
+  })
+})
 
 describe('the size a text input declares, as the census reads it', () => {
   it('names the line the size is set on, which may not be the file the input is in', () => {
@@ -247,7 +279,10 @@ describe('the size a text input declares, as the census reads it', () => {
   // Seed floor 20 and size 18 to distinguish source-derived floor from hardcoded 16.
   it('judges against the floor the seam declares, not against a number of its own', () => {
     const root = plant({
-      'src/ui/Sized.tsx': 'export const Sized = () => <TextInput style={{ fontSize: 18 }} />',
+      'src/ui/Sized.tsx': [
+        'export const Sized = () => <TextInput style={{ fontSize: 18 }} />',
+        'export const AtFloor = () => <TextInput style={{ fontSize: 20 }} />'
+      ].join('\n'),
       'src/platform/text-input-font-size.web.ts': [
         'export const TEXT_INPUT_FONT_SIZE_FLOOR = 20',
         'export const TEXT_INPUT_FONT_SIZE = 20'
@@ -266,13 +301,37 @@ describe('the size a text input declares, as the census reads it', () => {
   it('refuses to judge a tree whose seam declares no floor, rather than assuming one', () => {
     const root = plant({
       'src/ui/Sized.tsx': 'export const Sized = () => <TextInput style={{ fontSize: 22 }} />',
-      'src/platform/text-input-font-size.ts': 'export const TEXT_INPUT_FONT_SIZE = 14',
+      'src/theme/mobile-theme.ts': 'export const TEXT_INPUT_FONT_SIZE = 16',
       'src/platform/text-input-font-size.web.ts': 'export const TEXT_INPUT_FONT_SIZE = 16'
     })
     try {
       expect(() => textInputFontSizeOffenders(root, { local: ['src/ui/Sized.tsx'] })).toThrow(
         /declares no numeric/
       )
+    } finally {
+      rmSync(root, { recursive: true, force: true })
+    }
+  })
+
+  it.each([
+    ['nonexported', 'const TEXT_INPUT_FONT_SIZE_FLOOR = 16'],
+    ['nested', 'function local() { const TEXT_INPUT_FONT_SIZE_FLOOR = 16 }'],
+    ['nonnumeric', "export const TEXT_INPUT_FONT_SIZE_FLOOR = '16'"],
+    ['mutable', 'export let TEXT_INPUT_FONT_SIZE_FLOOR = 16'],
+    [
+      'duplicate',
+      'export const TEXT_INPUT_FONT_SIZE_FLOOR = 16; export let TEXT_INPUT_FONT_SIZE_FLOOR = 20'
+    ]
+  ])('refuses a %s floor authority', (_label, source) => {
+    const root = plant({ 'src/platform/text-input-font-size.web.ts': source })
+    try {
+      expect(() => textInputFontSizeFloor(root)).toThrow(/declares no numeric/)
+      writeFileSync(
+        join(root, 'src/platform/text-input-font-size.web.ts'),
+        'function local() { const TEXT_INPUT_FONT_SIZE_FLOOR = 99 }\n' +
+          'const unrelated = 99\nexport const TEXT_INPUT_FONT_SIZE_FLOOR = 16'
+      )
+      expect(textInputFontSizeFloor(root)).toBe(16)
     } finally {
       rmSync(root, { recursive: true, force: true })
     }
@@ -324,7 +383,15 @@ describe('the size a text input declares, as the census reads it', () => {
 
   it.each([
     ['a local constant wearing the name', 'const TEXT_INPUT_FONT_SIZE = 14'],
-    ['an import of the name from elsewhere', "import { TEXT_INPUT_FONT_SIZE } from './elsewhere'"]
+    ['an import of the name from elsewhere', "import { TEXT_INPUT_FONT_SIZE } from './elsewhere'"],
+    [
+      'the former platform owner',
+      "import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'"
+    ],
+    [
+      'a foreign theme with the same basename',
+      "import { TEXT_INPUT_FONT_SIZE } from './mobile-theme'"
+    ]
   ])('reads the seam as a binding, not a spelling: %s', (_label, preamble) => {
     const root = plant({
       'src/ui/Shadow.tsx': [
@@ -336,6 +403,8 @@ describe('the size a text input declares, as the census reads it', () => {
         'export const styles = { input: { fontSize: TEXT_INPUT_FONT_SIZE } }'
       ].join('\n'),
       'src/ui/elsewhere.ts': 'export const TEXT_INPUT_FONT_SIZE = 14',
+      'src/ui/mobile-theme.ts': 'export const TEXT_INPUT_FONT_SIZE = 16',
+      'src/platform/text-input-font-size.ts': 'export const TEXT_INPUT_FONT_SIZE = 16',
       ...SEAM_SOURCE
     })
     try {
@@ -367,7 +436,7 @@ describe('a style module with a platform sibling', () => {
       'src/ui/Field.tsx': FIELD,
       'src/ui/field-styles.ts': 'export const styles = { input: { fontSize: 12 } }',
       'src/ui/field-styles.web.ts': [
-        SEAM_IMPORT.replace('../platform', '../platform'),
+        SEAM_IMPORT,
         'export const styles = { input: { fontSize: TEXT_INPUT_FONT_SIZE } }'
       ].join('\n'),
       ...SEAM_SOURCE
@@ -402,16 +471,15 @@ describe('a style module with a platform sibling', () => {
     }
   })
 
-  // Seam itself has web sibling raising native body size; resolving it must preserve recognized seam binding.
-  it('still counts the seam as the seam when the seam itself is the split one', () => {
+  // Only the canonical .web binding exists: native-only resolution must not certify this control.
+  it('resolves the canonical binding through its actual web-only sibling', () => {
     const root = plant({
       'src/ui/Field.tsx': FIELD,
       'src/ui/field-styles.ts': [
         SEAM_IMPORT,
         'export const styles = { input: { fontSize: TEXT_INPUT_FONT_SIZE } }'
       ].join('\n'),
-      ...SEAM_SOURCE,
-      'src/platform/text-input-font-size.web.ts': 'export const TEXT_INPUT_FONT_SIZE = 16'
+      'src/theme/mobile-theme.web.ts': 'export const TEXT_INPUT_FONT_SIZE = 16'
     })
     try {
       const closure = { local: ['src/ui/Field.tsx', 'src/ui/field-styles.ts'] }

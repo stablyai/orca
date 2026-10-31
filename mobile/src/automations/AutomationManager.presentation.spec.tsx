@@ -26,7 +26,7 @@ import {
 } from './AutomationControls'
 import { ConfirmModal } from '../components/ConfirmModal'
 import type { RpcClient } from '../transport/rpc-client'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../theme/mobile-theme'
 import {
   automationClient,
   automationRepo,

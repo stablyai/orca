@@ -12,7 +12,7 @@ import {
   View,
   type PointerEvent
 } from 'react-native'
-import { TEXT_INPUT_FONT_SIZE } from '../platform/text-input-font-size'
+import { TEXT_INPUT_FONT_SIZE } from '../theme/mobile-theme'
 import { useKeyboardOcclusion } from '../platform/keyboard-occlusion'
 import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { useWorkspaceRouteHandoff } from '../navigation/workspace-route-handoff'
