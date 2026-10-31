@@ -1,5 +1,4 @@
 import { beforeEach, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import type * as RuntimeRpcClientModule from '@/runtime/runtime-rpc-client'
 
 // The real store: a replace must close the chat as layout only, never as a user's close of its conversation.
@@ -82,7 +81,7 @@ function seed(pinnedChat: boolean): void {
     activeGroupIdByWorktree: { [WT]: GROUP },
     openFiles: [],
     browserTabsByWorktree: {}
-  } as Partial<AppState>)
+  })
 }
 
 beforeEach(() => {

@@ -43,6 +43,7 @@ import {
 } from './native-chat-composer-draft-store'
 
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { ConfirmationDialogProvider } from '@/components/confirmation-dialog'
 import { promptEditor } from './native-chat-prompt-editor.test-support'
 import { promptTextContent } from './native-chat-prompt-document-text'
 import {
@@ -87,17 +88,20 @@ it('shows and copies the ordinary source of an unsupported installed launch', as
     { text, document: promptTextContent(text) },
     'immediate'
   )
+  // The app renders chats inside the confirmation provider; the header's switch asks through it.
   render(
-    <TooltipProvider>
-      <NativeChatStructuredSession
-        isVisible
-        isFocusedGroup
-        tabId="structured-tab-1"
-        sessionId="session-1"
-        target={{ kind: 'local' }}
-        agent="codex"
-      />
-    </TooltipProvider>
+    <ConfirmationDialogProvider>
+      <TooltipProvider>
+        <NativeChatStructuredSession
+          isVisible
+          isFocusedGroup
+          tabId="structured-tab-1"
+          sessionId="session-1"
+          target={{ kind: 'local' }}
+          agent="codex"
+        />
+      </TooltipProvider>
+    </ConfirmationDialogProvider>
   )
   const field = await screen.findByRole('textbox')
   expect(field.getAttribute('contenteditable')).toBe('true')

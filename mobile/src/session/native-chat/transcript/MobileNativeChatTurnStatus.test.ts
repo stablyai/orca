@@ -179,12 +179,18 @@ describe('MobileNativeChatTurnStatus', () => {
       expect(labels(mounted.root)).toEqual(['Interrumpido'])
       expect(vi.getTimerCount()).toBe(0)
       const clockReads = vi.spyOn(Date, 'now')
-      act(() => vi.advanceTimersByTime(12_000))
+      act(() => {
+        vi.advanceTimersByTime(12_000)
+      })
       changeAppState('background')
-      act(() => vi.advanceTimersByTime(60_000))
+      act(() => {
+        vi.advanceTimersByTime(60_000)
+      })
       expect(vi.getTimerCount()).toBe(0)
       changeAppState('active')
-      act(() => vi.advanceTimersByTime(12_000))
+      act(() => {
+        vi.advanceTimersByTime(12_000)
+      })
       expect(labels(mounted.root)).toEqual(['Interrumpido'])
       expect(vi.getTimerCount()).toBe(0)
       expect(clockReads).not.toHaveBeenCalled()

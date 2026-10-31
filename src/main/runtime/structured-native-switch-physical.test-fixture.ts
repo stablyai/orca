@@ -17,7 +17,7 @@ export async function nativeSwitchPhysicalFixture(
 ) {
   const record = host.deps.store.getRecord(sessionId)!
   const head = agentSessionProviderHandleChainHead(record.providerHandleChain)!
-  const { runtime, bindPty, handleOf } = setupMainOwnedWorkspace()
+  const { runtime, handleOf } = setupMainOwnedWorkspace()
   Object.assign(runtime, {
     resolveTerminalWorkspaceLaunchScope: async () => ({
       id: record.location.workspaceId,
@@ -64,21 +64,13 @@ export async function nativeSwitchPhysicalFixture(
   const spawn = vi
     .spyOn(runtime, 'createTerminal')
     .mockImplementation(async (_selector, opts = {}) => {
+      // The switch prepares its terminal at rest: a pane identity, no tab until the one replace.
       if (!opts.tabId || !opts.leafId) {
-        throw new Error('missing ordinary published pane')
+        throw new Error('missing prepared pane identity')
       }
-      opts.beforePtySpawn?.()
       opts.onPtySpawnDispatched?.({
-        tabId: opts.tabId,
-        leafId: opts.leafId,
         launchAgent: agent,
         ...(opts.launchConfig ? { launchConfig: opts.launchConfig } : {})
-      })
-      bindPty({
-        worktreeId: record.location.workspaceId,
-        tabId: opts.tabId,
-        leafId: opts.leafId,
-        ptyId: 'physical-switch-destination'
       })
       runtime.registerPty('physical-switch-destination', record.location.workspaceId, null, {
         tabId: opts.tabId,

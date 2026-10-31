@@ -1,5 +1,6 @@
 import { beforeEach, expect, it, vi } from 'vitest'
 import type { RuntimeMobileSessionTabsResult } from '../../../../shared/runtime-types'
+import type { ReplacedTab } from '../../../../shared/workspace-layout/workspace-layout-command-types'
 import { applyWebSessionTabsSnapshot } from './snapshot-api'
 import type { WebSessionTabsSyncState } from './state'
 import {
@@ -16,18 +17,17 @@ vi.mock('../../store', () => ({ useAppStore: { setState: vi.fn() } }))
 
 type Row = RuntimeMobileSessionTabsResult['tabs'][number]
 
-const terminal = (hostTabId: string, extra: Partial<Row> = {}): Row =>
-  ({
-    type: 'terminal',
-    id: `${hostTabId}::${LEAF_ID}`,
-    parentTabId: hostTabId,
-    leafId: LEAF_ID,
-    title: hostTabId,
-    isActive: false,
-    status: 'ready',
-    terminal: `handle-${hostTabId}`,
-    ...extra
-  }) as Row
+const terminal = (hostTabId: string, extra: { replaces?: ReplacedTab } = {}): Row => ({
+  type: 'terminal',
+  id: `${hostTabId}::${LEAF_ID}`,
+  parentTabId: hostTabId,
+  leafId: LEAF_ID,
+  title: hostTabId,
+  isActive: false,
+  status: 'ready',
+  terminal: `handle-${hostTabId}`,
+  ...extra
+})
 
 const chat: Row = {
   type: 'agent-session',

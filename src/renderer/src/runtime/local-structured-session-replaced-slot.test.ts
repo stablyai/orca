@@ -1,7 +1,6 @@
 // @vitest-environment happy-dom
 
 import { afterEach, expect, it, vi } from 'vitest'
-import type { AppState } from '@/store/types'
 import type { RuntimeMobileSessionTabsResult } from '../../../shared/runtime-types'
 
 // The window's half of a terminal→chat switch, through the real store: the host's frame carries the
@@ -71,9 +70,9 @@ it('puts the chat in the replaced terminal’s pinned slot and closes it without
     activeGroupIdByWorktree: { [WORKTREE]: GROUP },
     openFiles: [],
     browserTabsByWorktree: {}
-  } as Partial<AppState>)
+  })
   const reopenStack = store.getState().recentlyClosedTerminalTabsByWorktree
-  const frame = {
+  const frame: RuntimeMobileSessionTabsResult = {
     worktree: WORKTREE,
     publicationEpoch: 'renderer:switch',
     snapshotVersion: 1,
@@ -92,7 +91,7 @@ it('puts the chat in the replaced terminal’s pinned slot and closes it without
       }
     ],
     tabGroups: [{ id: GROUP, activeTabId: null, tabOrder: ['agent-session:session-1'] }]
-  } as unknown as RuntimeMobileSessionTabsResult
+  }
 
   applyStructuredSessionTabSnapshots([frame])
 

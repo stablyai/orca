@@ -24,6 +24,8 @@ import {
   LEAF_B
 } from '../../main-owned-workspace-runtime-fixture'
 import { executeStructuredSessionSwitch } from './structured-agent-session-switch-execution'
+import type { AiVaultPrepareSessionResumeResult } from '../../../../shared/ai-vault-resume-preparation'
+import { refusedMobileSessionTabClose } from '../../mobile-session-tab-close-outcome'
 import { AGENT_SESSION_SWITCH_HOST_MS } from '../../../../shared/agent-session-switch-execution'
 import { DaemonRequestTimeoutError } from '../../../daemon/daemon-errors'
 import { chatTabId } from '../../agent-session/agent-session-tab-layout'
@@ -97,7 +99,7 @@ async function savedTranscript(sessionId = id) {
     requireCurrent: vi.fn(),
     metadata: structuredAgentRuntimeMetadata('codex')!
   })
-  vi.spyOn(cliTranscript, 'prepareStructuredChatCliTranscript').mockResolvedValue({
+  const readable: AiVaultPrepareSessionResumeResult = {
     useRealCodexHome: false,
     cliForkSource: {
       agent: 'codex',
@@ -108,7 +110,9 @@ async function savedTranscript(sessionId = id) {
       codexHome,
       executionHostPlatform: process.platform
     }
-  })
+  }
+  vi.spyOn(cliTranscript, 'prepareStructuredChatCliTranscript').mockResolvedValue(readable)
+  return readable
 }
 
 it.each(['single', 'split', 'other-workspace'] as const)(
@@ -478,7 +482,10 @@ it('re-issuing a switch whose first answer was lost adopts the terminal it start
     getForegroundProcess: async () => null
   })
   const { cliForkSource: source } = await cliTranscript.prepareStructuredChatCliTranscript(
-    await cliTranscript.resolveStructuredChatCliSource({ sessionId: id, workspaceId: WORKTREE_ID }),
+    await cliTranscript.resolveStructuredChatCliSource(
+      { sessionId: id, workspaceId: WORKTREE_ID },
+      false
+    ),
     async () => {
       throw new Error('unused')
     },
@@ -583,17 +590,10 @@ function startSwitchFromKeptTerminal(options: KeptTerminalSwitchOptions = {}) {
 }
 
 it('settles a kept source once when the switch fails after stopping it', async () => {
-  await savedTranscript()
+  const readable = await savedTranscript()
   const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
-  const readable = await prepare.getMockImplementation()!(
-    undefined as never,
-    undefined as never,
-    false
-  )
   prepare.mockReset()
-  prepare
-    .mockResolvedValueOnce(readable)
-    .mockResolvedValue({ useRealCodexHome: false, cliForkSource: undefined } as never)
+  prepare.mockResolvedValueOnce(readable).mockResolvedValue({ useRealCodexHome: false })
   const { result, settled, stoppedSource } = await switchFromKeptTerminal()
   expect(result).toMatchObject({
     status: 'refused',
@@ -638,13 +638,8 @@ function holdUntilReleased() {
 }
 
 it('settles a kept source once at the deadline while work after the stop is still running', async () => {
-  await savedTranscript()
+  const readable = await savedTranscript()
   const prepare = vi.mocked(cliTranscript.prepareStructuredChatCliTranscript)
-  const readable = await prepare.getMockImplementation()!(
-    undefined as never,
-    undefined as never,
-    false
-  )
   const work = holdUntilReleased()
   prepare.mockReset()
   prepare.mockResolvedValueOnce(readable).mockImplementation(async () => {
@@ -690,7 +685,9 @@ it('settles a kept source at once when its stop is proven only after the deadlin
 
 it('settles a kept source once when an addressed close stops it but cannot retire its tab', async () => {
   const { runtime, source, incarnationId, settled, stoppedSource } = keptSourceTerminal()
-  vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue({ refused: true } as never)
+  vi.spyOn(runtime, 'closeMobileSessionTab').mockResolvedValue(
+    refusedMobileSessionTabClose('retirement-owner')
+  )
   await expect(
     runtime.closeTerminal(source.handle, incarnationId, source.presentation)
   ).rejects.toThrow('terminal_pane_close_failed')

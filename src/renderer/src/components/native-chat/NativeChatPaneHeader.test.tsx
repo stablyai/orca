@@ -54,9 +54,13 @@ beforeEach(() => {
   })
 })
 
-function renderHeader(handOff?: NativeChatHeaderHandOff, focused = true) {
+function renderHeader(
+  handOff?: NativeChatHeaderHandOff,
+  focused = true,
+  agent: 'codex' | 'omp' = 'codex'
+) {
   const source = useAppStore.getState().createUnifiedTab('folder:workspace', 'agent-session', {
-    agentSessionAgent: 'codex',
+    agentSessionAgent: agent,
     executionHostId: 'runtime:remote-host'
   })
   render(
@@ -65,7 +69,7 @@ function renderHeader(handOff?: NativeChatHeaderHandOff, focused = true) {
         tabId={source.id}
         worktreeId={source.worktreeId}
         groupId={source.groupId}
-        nativeChat={{ sessionId: source.entityId, agent: 'codex' }}
+        nativeChat={{ sessionId: source.entityId, agent }}
         focused={focused}
         colorScheme="dark"
         handOff={handOff}
@@ -166,7 +170,8 @@ it('keeps the switch hit target stable while its inactive pane gains focus durin
 })
 
 it('offers the terminal header action order and targets Resume and Close at the displayed chat', async () => {
-  const source = renderHeader()
+  // The copy button is for an agent the top-right control can't switch in place.
+  const source = renderHeader(undefined, true, 'omp')
   expect(screen.getAllByRole('button').map((button) => button.getAttribute('aria-label'))).toEqual([
     'Continue with Terminal Agent',
     'Split Chat Right',
@@ -187,9 +192,9 @@ it('offers the terminal header action order and targets Resume and Close at the 
           request: { scopePaths: ['/repo'], executionHostScope: 'local', sessionLimit: 250 }
         }),
         tab: { id: source.id, worktreeId: source.worktreeId },
-        agent: 'codex',
+        agent: 'omp',
         queuedMessage:
-          'A copy of this Codex conversation opens in a new terminal. The original chat stays open.'
+          'A copy of this OMP conversation opens in a new terminal. The original chat stays open.'
       })
     )
   )

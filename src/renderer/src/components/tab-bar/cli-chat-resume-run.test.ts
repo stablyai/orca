@@ -652,7 +652,6 @@ it.each(['preparation', 'refusal'])(
       mocks.call.mockResolvedValue({ ok: false, refusal: refuse('transcriptUnreadable') })
     }
     await runCliChatResume(SOURCE, true, {
-      current: () => true,
       sourceCurrent: () => true,
       afterTabId: SOURCE.tabId,
       reportFailure: (error) => {

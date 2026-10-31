@@ -52,7 +52,7 @@ function launchTab() {
 }
 
 function apply(verdict: AgentLaunchPaneVerdict, leafId = LEAF): void {
-  applyAgentLaunchPaneVerdict({ worktreeId: WT, tabId, leafId, operationId: 'op-1', verdict })
+  applyAgentLaunchPaneVerdict({ worktreeId: WT, tabId, leafId, verdict })
 }
 
 beforeEach(() => {
