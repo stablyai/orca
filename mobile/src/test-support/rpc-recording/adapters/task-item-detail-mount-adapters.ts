@@ -1,3 +1,4 @@
+import { useTaskDetailMountOwners } from '../task-action-mount-owners'
 import { hookMount, performHookAction } from '../hook-mount'
 import { observableModel, projectObservable } from '../observable-model'
 import type { MountAdapter, MountContext, MountedOperation } from '../recording-scenario'
@@ -6,10 +7,13 @@ import type { operationModuleLoader } from '../operation-module-loader'
 const REPO_ID = 'repo-1'
 
 const GITHUB_PR_ITEM = {
+  key: 'github:repo-1:pr:12',
   provider: 'github',
   title: 'A pull request',
   source: {
     id: 'github:pr:12',
+    url: 'https://github.com/owner/repo/pull/12',
+    prRepo: { owner: 'owner', repo: 'repo', host: 'github.com' },
     repoId: REPO_ID,
     number: 12,
     type: 'pr',
@@ -22,10 +26,12 @@ const GITHUB_PR_ITEM = {
 } as const
 
 const GITLAB_ISSUE_ITEM = {
+  key: 'gitlab:repo-1:issue:4',
   provider: 'gitlab',
   title: 'A GitLab issue',
   source: {
     id: 'gitlab:issue:4',
+    url: 'https://gitlab.com/group/project/-/issues/4',
     repoId: REPO_ID,
     number: 4,
     type: 'issue',
@@ -36,6 +42,7 @@ const GITLAB_ISSUE_ITEM = {
 } as const
 
 const LINEAR_ITEM = {
+  key: 'linear:linear-workspace:issue-1',
   provider: 'linear',
   title: 'A Linear issue',
   source: {
@@ -69,12 +76,14 @@ type ModelHookSpec<Actions> = {
 }
 
 function mountModelHook<Actions>(
+  modules: ReturnType<typeof operationModuleLoader>,
   context: MountContext,
   spec: ModelHookSpec<Actions>
 ): MountedOperation {
   const model = observableModel(context, { client: context.client, ...spec.fixture })
   let actions!: Actions
   const hook = hookMount(() => {
+    useTaskDetailMountOwners(modules, context, model, spec.fixture)
     // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the recorder supplies every member the hook reads.
     actions = spec.useHook(model as unknown as never)
   })
@@ -110,7 +119,7 @@ export function taskItemDetailMountAdapters(
   function itemDetail(item: Record<string, unknown>) {
     // Load on mount so this and task-mount-adapters cannot both apply a mutant to the same module.
     return (context: Parameters<MountAdapter>[0]) =>
-      mountModelHook(context, {
+      mountModelHook(modules, context, {
         useHook: (model) =>
           load<typeof import('../../../tasks/use-mobile-tasks-item-detail-loading')>(
             'use-mobile-tasks-item-detail-loading.tsx'
@@ -124,7 +133,24 @@ export function taskItemDetailMountAdapters(
           detailPayload: null,
           items: [item]
         },
-        actions: () => ({}),
+        actions: ({ model, update }) => ({
+          'replace-client': ({ client }) => {
+            model.client = client
+            return update()
+          },
+          select: ({ selected }) => {
+            if (typeof model.setActionItem !== 'function') {
+              throw new Error('Missing actual selection owner')
+            }
+            model.setActionItem(selected === undefined ? item : selected)
+          },
+          refresh: () => {
+            if (typeof model.setDetailRefreshSeq !== 'function') {
+              throw new Error('Missing actual detail refresh owner')
+            }
+            model.setDetailRefreshSeq((sequence: number) => sequence + 1)
+          }
+        }),
         state: (model) => ({
           loading: model.detailLoading,
           error: model.detailError,

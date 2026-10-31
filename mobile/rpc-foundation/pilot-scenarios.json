@@ -1058,7 +1058,7 @@
                   "displayName": "Emoji",
                   "repoIcon": {
                     "type": "emoji",
-                    "emoji": "🐳"
+                    "emoji": "\ud83d\udc33"
                   },
                   "connectionId": "ssh-1"
                 },
@@ -6129,7 +6129,42 @@
                 "workspaceId": "linear-workspace"
               }
             ]
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "linear.listIssues#1.native-1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-3",
+                "identifier": "ENG-3",
+                "title": "An assigned issue",
+                "url": "",
+                "state": {
+                  "name": "In Progress",
+                  "type": "started",
+                  "color": "#111"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 2,
+                "updatedAt": "2020-01-02T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          },
+          "site": "linear.listIssues#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "linear-assigned-listed"
@@ -6184,7 +6219,42 @@
                 "workspaceId": "linear-workspace"
               }
             ]
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "linear.listIssues#1.native-1",
+          "params": {
+            "filter": "assigned",
+            "limit": 50
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "id": "issue-2",
+                "identifier": "ENG-2",
+                "title": "An assigned issue",
+                "url": "",
+                "state": {
+                  "name": "Todo",
+                  "type": "unstarted",
+                  "color": "#000"
+                },
+                "team": {
+                  "id": "team-1",
+                  "key": "ENG",
+                  "name": "Engineering"
+                },
+                "labels": [],
+                "priority": 0,
+                "updatedAt": "2020-01-01T00:00:00.000Z",
+                "workspaceId": "linear-workspace"
+              }
+            ]
+          },
+          "site": "linear.listIssues#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "linear-assigned"
@@ -8084,25 +8154,101 @@
         },
         {
           "action": "assignable",
-          "id": "assignable"
+          "id": "assignable",
+          "args": {
+            "fork": true
+          }
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded",
+              "hostDescriptor": {
+                "installationId": "recorded"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
+          }
         },
         {
           "complete": "github.listAssignableUsers#1",
           "params": {
-            "repo": "id:repo-9"
+            "repo": "id:repo-9",
+            "ownerRepo": {
+              "owner": "fork-owner",
+              "repo": "fork-repo",
+              "host": "github.enterprise.test"
+            }
           },
           "reply": {
             "ok": true,
             "result": [
               {
                 "login": "octocat",
-                "name": "Octo Cat"
+                "name": "Octo Cat",
+                "avatarUrl": null
               }
             ]
+          },
+          "transport": "native",
+          "site": "github.listAssignableUsers#1"
+        },
+        {
+          "transport": "bridge",
+          "complete": "github.listAssignableUsers#1.native-1",
+          "site": "github.listAssignableUsers#1.native-1",
+          "bridgeSite": true,
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "shell-runtime",
+              "hostDescriptor": {
+                "installationId": "shell-desktop"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
           }
         },
         {
+          "complete": "github.listAssignableUsers#1.native-2",
+          "params": {
+            "repo": "id:repo-9",
+            "ownerRepo": {
+              "owner": "fork-owner",
+              "repo": "fork-repo",
+              "host": "github.enterprise.test"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": [
+              {
+                "login": "octocat",
+                "name": "Octo Cat",
+                "avatarUrl": null
+              }
+            ]
+          },
+          "transport": "bridge",
+          "site": "github.listAssignableUsers#1"
+        },
+        {
           "checkpoint": "assignable"
+        }
+      ],
+      "bridgeOperations": [
+        {
+          "request": "github.listAssignableUsers#1",
+          "probeSite": "github.listAssignableUsers#1.native-1",
+          "methods": ["status.get", "github.listAssignableUsers"]
         }
       ]
     },
@@ -11169,11 +11315,32 @@
           "id": "mount"
         },
         {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "detail-runtime",
+              "hostDescriptor": {
+                "installationId": "detail-host"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
+          }
+        },
+        {
           "complete": "github.workItemDetails#1",
           "params": {
             "number": 12,
             "repo": "id:repo-1",
-            "type": "pr"
+            "type": "pr",
+            "ownerRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -11181,6 +11348,19 @@
               "body": "body",
               "comments": [],
               "item": {
+                "id": "pr:12",
+                "type": "pr",
+                "number": 12,
+                "title": "A pull request",
+                "url": "https://github.com/owner/repo/pull/12",
+                "state": "open",
+                "updatedAt": "2026-10-30T00:00:00Z",
+                "author": null,
+                "prRepo": {
+                  "owner": "owner",
+                  "repo": "repo",
+                  "host": "github.com"
+                },
                 "labels": ["bug"],
                 "reviewDecision": "APPROVED",
                 "reviewRequests": [],
@@ -11193,10 +11373,101 @@
               "checks": [],
               "files": []
             }
+          },
+          "transport": "native",
+          "site": "github.workItemDetails#1"
+        },
+        {
+          "transport": "bridge",
+          "complete": "github.workItemDetails#1.native-1",
+          "site": "github.workItemDetails#1.native-1",
+          "bridgeSite": true,
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "shell-runtime",
+              "hostDescriptor": {
+                "installationId": "shell-desktop"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
           }
         },
         {
+          "complete": "github.workItemDetails#1.native-2",
+          "params": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr",
+            "ownerRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "body": "body",
+              "comments": [],
+              "item": {
+                "id": "pr:12",
+                "type": "pr",
+                "number": 12,
+                "title": "A pull request",
+                "url": "https://github.com/owner/repo/pull/12",
+                "state": "open",
+                "updatedAt": "2026-10-30T00:00:00Z",
+                "author": null,
+                "prRepo": {
+                  "owner": "owner",
+                  "repo": "repo",
+                  "host": "github.com"
+                },
+                "labels": ["bug"],
+                "reviewDecision": "APPROVED",
+                "reviewRequests": [],
+                "latestReviews": []
+              },
+              "assignees": ["octocat"],
+              "headSha": "head-sha",
+              "baseSha": "base-sha",
+              "pullRequestId": "PR_kwDO",
+              "checks": [],
+              "files": []
+            }
+          },
+          "transport": "bridge",
+          "site": "github.workItemDetails#1"
+        },
+        {
           "checkpoint": "mounted"
+        }
+      ],
+      "bridgeOperations": [
+        {
+          "request": "github.workItemDetails#1",
+          "probeSite": "github.workItemDetails#1.native-1",
+          "methods": ["status.get", "github.workItemDetails"]
+        }
+      ],
+      "replyBranches": [
+        {
+          "site": "status.get#1",
+          "partitions": [
+            "inner-ok-missing",
+            "inner-false-string-error",
+            "inner-false-object-error"
+          ],
+          "request": "github.workItemDetails#1",
+          "params": {
+            "number": 12,
+            "repo": "id:repo-1",
+            "type": "pr"
+          }
         }
       ]
     },
@@ -11210,6 +11481,21 @@
         {
           "action": "mount",
           "id": "mount"
+        },
+        {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "detail-runtime",
+              "hostDescriptor": {
+                "installationId": "detail-host"
+              }
+            }
+          }
         },
         {
           "complete": "github.workItemDetails#1",
@@ -11243,6 +11529,19 @@
                 }
               ],
               "item": {
+                "id": "pr:12",
+                "type": "pr",
+                "number": 12,
+                "title": "A pull request",
+                "url": "https://github.com/owner/repo/pull/12",
+                "state": "open",
+                "updatedAt": "2026-10-30T00:00:00Z",
+                "author": null,
+                "prRepo": {
+                  "owner": "owner",
+                  "repo": "repo",
+                  "host": "github.com"
+                },
                 "labels": ["bug"],
                 "reviewDecision": "APPROVED",
                 "reviewRequests": [],
@@ -11275,6 +11574,36 @@
         },
         {
           "complete": "gitlab.workItemDetails#1",
+          "params": {
+            "iid": 4,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "type": "issue"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "body": "body",
+              "comments": [],
+              "item": {
+                "labels": ["bug"],
+                "mergeable": "MERGEABLE"
+              },
+              "assignees": [],
+              "pipelineJobs": [],
+              "reviewers": [],
+              "approvalState": {
+                "approvalsRequired": 1,
+                "approvalsLeft": 0
+              }
+            }
+          }
+        },
+        {
+          "complete": "gitlab.workItemDetails#2",
           "params": {
             "iid": 4,
             "projectRef": {
@@ -11365,6 +11694,51 @@
           }
         },
         {
+          "complete": "gitlab.workItemDetails#2",
+          "params": {
+            "iid": 4,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "type": "issue"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "body": "body",
+              "comments": [
+                {
+                  "id": 901,
+                  "author": "octocat",
+                  "authorAvatarUrl": "",
+                  "body": "a discussion note",
+                  "createdAt": "2020-01-01T00:00:00.000Z",
+                  "url": "https://gitlab.example.com/group/project/-/issues/4#note_901",
+                  "reactions": [
+                    {
+                      "name": "thumbsup",
+                      "count": 2
+                    }
+                  ]
+                }
+              ],
+              "item": {
+                "labels": ["bug"],
+                "mergeable": "MERGEABLE"
+              },
+              "assignees": [],
+              "pipelineJobs": [],
+              "reviewers": [],
+              "approvalState": {
+                "approvalsRequired": 1,
+                "approvalsLeft": 0
+              }
+            }
+          }
+        },
+        {
           "checkpoint": "mounted"
         }
       ]
@@ -11389,9 +11763,9 @@
           "reply": {
             "ok": true,
             "result": {
-              "id": "issue-2",
-              "identifier": "ENG-2",
-              "title": "A sub-issue",
+              "id": "issue-1",
+              "identifier": "ENG-1",
+              "title": "A Linear issue",
               "url": "",
               "description": "a description",
               "state": {
@@ -11447,32 +11821,6 @@
         {
           "action": "mount",
           "id": "mount"
-        },
-        {
-          "complete": "github.listLabels#1",
-          "params": {
-            "repo": "id:repo-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": ["bug", "chore"]
-          }
-        },
-        {
-          "complete": "github.listAssignableUsers#1",
-          "params": {
-            "repo": "id:repo-1"
-          },
-          "reply": {
-            "ok": true,
-            "result": [
-              {
-                "login": "octocat",
-                "name": "Octo",
-                "avatarUrl": null
-              }
-            ]
-          }
         },
         {
           "checkpoint": "mounted"
@@ -11758,7 +12106,37 @@
                 }
               ]
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "gitlab.listWorkItems#1.native-1",
+          "params": {
+            "page": 1,
+            "perPage": 50,
+            "repo": "id:repo-1",
+            "state": "opened"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "items": [
+                {
+                  "id": "issue:4",
+                  "type": "issue",
+                  "number": 4,
+                  "title": "A GitLab issue",
+                  "state": "opened",
+                  "url": "",
+                  "labels": [],
+                  "updatedAt": "2020-01-01T00:00:00.000Z",
+                  "author": null
+                }
+              ]
+            }
+          },
+          "site": "gitlab.listWorkItems#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "load-settled"
@@ -12058,7 +12436,12 @@
             "body": "a comment",
             "number": 9,
             "repo": "id:repo-1",
-            "type": "issue"
+            "type": "issue",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12098,7 +12481,12 @@
           "params": {
             "prNumber": 12,
             "repo": "id:repo-1",
-            "reviewers": ["octocat"]
+            "reviewers": ["octocat"],
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12120,7 +12508,12 @@
             "headSha": "head-sha",
             "noCache": true,
             "prNumber": 12,
-            "repo": "id:repo-1"
+            "repo": "id:repo-1",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12248,7 +12641,12 @@
             "failedOnly": true,
             "headSha": "head-sha",
             "prNumber": 12,
-            "repo": "id:repo-1"
+            "repo": "id:repo-1",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12270,7 +12668,12 @@
             "path": "src/index.ts",
             "pullRequestId": "PR_kwDO",
             "repo": "id:repo-1",
-            "viewed": true
+            "viewed": true,
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12289,7 +12692,12 @@
           "params": {
             "repo": "id:repo-1",
             "resolve": true,
-            "threadId": "thread-1"
+            "threadId": "thread-1",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12314,7 +12722,12 @@
             "path": "src/index.ts",
             "prNumber": 12,
             "repo": "id:repo-1",
-            "status": "modified"
+            "status": "modified",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12324,7 +12737,35 @@
               "originalIsBinary": false,
               "modifiedIsBinary": false
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "github.prFileContents#1.native-1",
+          "params": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "path": "src/index.ts",
+            "prNumber": 12,
+            "repo": "id:repo-1",
+            "status": "modified",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
+            }
+          },
+          "site": "github.prFileContents#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "expand-settled"
@@ -12341,7 +12782,12 @@
             "line": 12,
             "path": "src/index.ts",
             "prNumber": 12,
-            "repo": "id:repo-1"
+            "repo": "id:repo-1",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12387,7 +12833,12 @@
             "path": "src/index.ts",
             "prNumber": 12,
             "repo": "id:repo-1",
-            "threadId": "thread-1"
+            "threadId": "thread-1",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12418,7 +12869,12 @@
             "body": "@octocat a reply",
             "number": 12,
             "repo": "id:repo-1",
-            "type": "pr"
+            "type": "pr",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12445,7 +12901,12 @@
           "params": {
             "method": "squash",
             "prNumber": 12,
-            "repo": "id:repo-1"
+            "repo": "id:repo-1",
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
           },
           "reply": {
             "ok": true,
@@ -12563,6 +13024,22 @@
           "id": "github-metadata-1"
         },
         {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded",
+              "hostDescriptor": {
+                "installationId": "recorded"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
+          }
+        },
+        {
           "complete": "github.updateIssue#1",
           "params": {
             "number": 9,
@@ -12571,6 +13048,11 @@
               "addLabels": ["triage"],
               "removeLabels": ["bug"],
               "title": "Renamed"
+            },
+            "ownerRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
             }
           },
           "reply": {
@@ -12578,10 +13060,63 @@
             "result": {
               "ok": true
             }
+          },
+          "transport": "native",
+          "site": "github.updateIssue#1"
+        },
+        {
+          "transport": "bridge",
+          "complete": "github.updateIssue#1.native-1",
+          "site": "github.updateIssue#1.native-1",
+          "bridgeSite": true,
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "shell-runtime",
+              "hostDescriptor": {
+                "installationId": "shell-desktop"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
           }
         },
         {
+          "complete": "github.updateIssue#1.native-2",
+          "params": {
+            "number": 9,
+            "repo": "id:repo-1",
+            "updates": {
+              "addLabels": ["triage"],
+              "removeLabels": ["bug"],
+              "title": "Renamed"
+            },
+            "ownerRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          },
+          "transport": "bridge",
+          "site": "github.updateIssue#1"
+        },
+        {
           "checkpoint": "github-metadata-settled"
+        }
+      ],
+      "bridgeOperations": [
+        {
+          "request": "github.updateIssue#1",
+          "probeSite": "github.updateIssue#1.native-1",
+          "methods": ["status.get", "github.updateIssue"]
         }
       ]
     },
@@ -12646,6 +13181,11 @@
             "updates": {
               "body": "new body",
               "title": "Renamed"
+            },
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
             }
           },
           "reply": {
@@ -12741,7 +13281,31 @@
             "result": {
               "ok": true
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "gitlab.updateMR#1.native-1",
+          "params": {
+            "iid": 7,
+            "projectRef": {
+              "host": "gitlab.com",
+              "path": "group/project"
+            },
+            "repo": "id:repo-1",
+            "updates": {
+              "addLabels": ["triage"],
+              "title": "Renamed"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          },
+          "site": "gitlab.updateMR#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "update-gitlab-settled"
@@ -13067,6 +13631,14 @@
                 "body": "body",
                 "comments": [],
                 "item": {
+                  "id": "issue:1",
+                  "type": "issue",
+                  "number": 1,
+                  "title": "Project issue",
+                  "url": "https://github.enterprise.test/owner/repo/issues/1",
+                  "state": "open",
+                  "updatedAt": "2026-10-30T00:00:00Z",
+                  "author": null,
                   "labels": []
                 },
                 "assignees": [],
@@ -13663,7 +14235,35 @@
               "originalIsBinary": false,
               "modifiedIsBinary": false
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "github.prFileContents#1.native-1",
+          "params": {
+            "baseSha": "base-sha",
+            "headSha": "head-sha",
+            "path": "src/index.ts",
+            "prNumber": 2,
+            "prRepo": {
+              "host": "github.enterprise.test",
+              "owner": "owner",
+              "repo": "repo"
+            },
+            "repo": "id:repo-1",
+            "status": "modified"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "original": "a",
+              "modified": "b",
+              "originalIsBinary": false,
+              "modifiedIsBinary": false
+            }
+          },
+          "site": "github.prFileContents#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "expand-settled"
@@ -13736,12 +14336,33 @@
           "id": "issue-state-3"
         },
         {
+          "complete": "status.get#1",
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "recorded",
+              "hostDescriptor": {
+                "installationId": "recorded"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
+          }
+        },
+        {
           "complete": "github.updateIssue#1",
           "params": {
             "number": 9,
             "repo": "id:repo-1",
             "updates": {
               "state": "closed"
+            },
+            "ownerRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
             }
           },
           "reply": {
@@ -13749,7 +14370,51 @@
             "result": {
               "ok": true
             }
+          },
+          "transport": "native",
+          "site": "github.updateIssue#1"
+        },
+        {
+          "transport": "bridge",
+          "complete": "github.updateIssue#1.native-1",
+          "site": "github.updateIssue#1.native-1",
+          "bridgeSite": true,
+          "params": {
+            "$undefined": true
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "runtimeId": "shell-runtime",
+              "hostDescriptor": {
+                "installationId": "shell-desktop"
+              },
+              "capabilities": ["github.exact-work-item-target.v1"]
+            }
           }
+        },
+        {
+          "complete": "github.updateIssue#1.native-2",
+          "params": {
+            "number": 9,
+            "repo": "id:repo-1",
+            "updates": {
+              "state": "closed"
+            },
+            "ownerRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
+            }
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "ok": true
+            }
+          },
+          "transport": "bridge",
+          "site": "github.updateIssue#1"
         },
         {
           "checkpoint": "issue-state-settled"
@@ -13765,6 +14430,11 @@
             "repo": "id:repo-1",
             "updates": {
               "state": "closed"
+            },
+            "prRepo": {
+              "owner": "owner",
+              "repo": "repo",
+              "host": "github.com"
             }
           },
           "reply": {
@@ -13776,6 +14446,13 @@
         },
         {
           "checkpoint": "pr-state-settled"
+        }
+      ],
+      "bridgeOperations": [
+        {
+          "request": "github.updateIssue#1",
+          "probeSite": "github.updateIssue#1.native-1",
+          "methods": ["status.get", "github.updateIssue"]
         }
       ]
     },
@@ -17946,7 +18623,59 @@
             "result": {
               "updated": true
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "worktree.set#1.native-1",
+          "params": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastSeenDiffIdentity": "identity-1",
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "updated": true
+            }
+          },
+          "site": "worktree.set#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "persisted"
@@ -18024,7 +18753,60 @@
               "code": "worktree_locked",
               "message": "Workspace is locked"
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "worktree.set#1.native-1",
+          "params": {
+            "diffComments": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "diffCommentsBase": [
+              {
+                "body": "needs a test",
+                "createdAt": 0,
+                "filePath": "src/app.ts",
+                "id": "note-1",
+                "lineNumber": 4,
+                "worktreeId": "workspace-1",
+                "side": "modified"
+              }
+            ],
+            "mobileDiffReview": {
+              "completedAt": 1767225600000,
+              "files": {
+                "unstaged:src/app.ts": {
+                  "filePath": "src/app.ts",
+                  "key": "unstaged:src/app.ts",
+                  "lastSeenDiffIdentity": "identity-1",
+                  "reviewDiffIdentity": "identity-1",
+                  "reviewedAt": 1767225600000,
+                  "scope": "unstaged"
+                }
+              },
+              "updatedAt": 1767225600000,
+              "version": 1
+            },
+            "worktree": "id:workspace-1"
+          },
+          "reply": {
+            "ok": false,
+            "error": {
+              "code": "worktree_locked",
+              "message": "Workspace is locked"
+            }
+          },
+          "site": "worktree.set#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "rolled-back"
@@ -20859,7 +21641,10 @@
           "reply": {
             "ok": true,
             "result": {
-              "clear": { "handle": "terminal-1", "cleared": true }
+              "clear": {
+                "handle": "terminal-1",
+                "cleared": true
+              }
             }
           }
         },
@@ -21342,7 +22127,32 @@
                 "isActive": true
               }
             }
-          }
+          },
+          "transport": "native"
+        },
+        {
+          "complete": "session.tabs.createTerminal#1.native-1",
+          "params": {
+            "worktree": "id:wt-1",
+            "clientMutationId": "mobile-create:mjuohs00-8ig2hens",
+            "activate": false,
+            "select": true,
+            "navigation": "caller"
+          },
+          "reply": {
+            "ok": true,
+            "result": {
+              "tab": {
+                "type": "terminal",
+                "id": "tab-1",
+                "title": "zsh",
+                "terminal": "terminal-1",
+                "isActive": true
+              }
+            }
+          },
+          "site": "session.tabs.createTerminal#1",
+          "transport": "bridge"
         },
         {
           "checkpoint": "created"

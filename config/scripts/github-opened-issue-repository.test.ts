@@ -80,7 +80,7 @@ import { workItemsCacheKey } from '../../src/renderer/src/store/github/cache-ide
 import { createTestStore } from '../../src/renderer/src/store/slices/github-slice-test-harness'
 import { getTaskSourceCacheScope } from '../../src/shared/task-source-context'
 import { listLabels, listAssignableUsers } from '../../src/main/github/issue-field-options'
-import { useRepoLabels, useRepoAssignees } from '../../src/renderer/src/hooks/useIssueMetadata'
+import { useRepoLabels, useRepoAssignees } from '../../src/renderer/src/hooks/useGitHubRepoMetadata'
 import { updateIssue } from '../../src/main/github/issue-update'
 import { materializeTaskPageItemList } from '../../src/renderer/src/components/task-page/github/task-page-github-work-item-mutation-pages'
 import {

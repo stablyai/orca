@@ -43,7 +43,8 @@ export class RuntimeGitHubIssueCommentCommands {
   async updateRepoIssue(
     repoSelector: string,
     number: number,
-    updates: GitHubIssueUpdate
+    updates: GitHubIssueUpdate,
+    ownerRepo?: GitHubOwnerRepo
   ): Promise<Awaited<ReturnType<typeof updateIssue>>> {
     const repo = await this.deps.resolveRepo(repoSelector)
     return updateIssue(
@@ -52,7 +53,8 @@ export class RuntimeGitHubIssueCommentCommands {
       updates,
       getRepoRoutingConnectionId(repo),
       this.deps.getLocalGitArgs(repo)[0],
-      repo.issueSourcePreference
+      repo.issueSourcePreference,
+      ...(ownerRepo ? ([ownerRepo] as const) : ([] as const))
     )
   }
 

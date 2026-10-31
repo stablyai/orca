@@ -71,7 +71,15 @@ export function withRelayedLaunchChatDefault(
 /** Renumber host stream ids: each host starts at 1, but the phone routes all binary frames on one socket. */
 export class RelayedPhoneReplies {
   // Relay-owned requests have no phone awaiting their replies.
-  private readonly openRequests = new Map<string, { hostStreamIds: number[]; swallow: boolean }>()
+  private readonly openRequests = new Map<
+    string,
+    {
+      hostStreamIds: number[]
+      swallow: boolean
+      settle?: (reply: unknown) => void
+      cancel?: () => void
+    }
+  >()
   private readonly desktopStreamIds = new Map<number, number>()
 
   constructor(private readonly allocateStreamId: () => number) {}
@@ -83,8 +91,42 @@ export class RelayedPhoneReplies {
     })
   }
 
+  request(id: string, send: () => boolean, timeoutMs: number): Promise<unknown> {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        this.openRequests.delete(id)
+        reject(new Error('Timed out confirming the executing Orca server.'))
+      }, timeoutMs)
+      this.openRequests.set(id, {
+        hostStreamIds: [],
+        swallow: true,
+        settle: (reply) => {
+          clearTimeout(timer)
+          resolve(reply)
+        },
+        cancel: () => {
+          clearTimeout(timer)
+          reject(new Error('The executing Orca server connection changed.'))
+        }
+      })
+      try {
+        if (!send()) {
+          this.openRequests.get(id)?.cancel?.()
+          this.openRequests.delete(id)
+        }
+      } catch (error) {
+        clearTimeout(timer)
+        this.openRequests.delete(id)
+        reject(error)
+      }
+    })
+  }
+
   takeOpenRequestIds(): string[] {
     const ids = [...this.openRequests].filter(([, open]) => !open.swallow).map(([id]) => id)
+    for (const open of this.openRequests.values()) {
+      open.cancel?.()
+    }
     this.openRequests.clear()
     this.desktopStreamIds.clear()
     return ids
@@ -102,6 +144,7 @@ export class RelayedPhoneReplies {
       return plaintext
     }
     const open = this.openRequests.get(parsed.id)
+    open?.settle?.(parsed)
     const result = parsed.result
     let renumbered = false
     if (open && isRecord(result) && typeof result.streamId === 'number') {

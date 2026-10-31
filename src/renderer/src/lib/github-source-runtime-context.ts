@@ -1,5 +1,11 @@
+import {
+  getRepoExecutionHostId,
+  toRuntimeExecutionHostId,
+  parseExecutionHostId
+} from '../../../shared/execution-host'
+import type { Repo } from '../../../shared/repo-types'
+import { findRepoForHost } from '@/store/slices/repo-host-identity'
 import type { ExecutionHostId, ParsedExecutionHost } from '../../../shared/execution-host'
-import { parseExecutionHostId } from '../../../shared/execution-host'
 import type { TaskSourceContext } from '../../../shared/task-source-context'
 import { runtimeTargetForOwnerEnvironment } from '@/runtime/runtime-client-target'
 import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
@@ -68,4 +74,63 @@ export function getGitHubRuntimeRepoId(
 ): string | undefined {
   const fallback = fallbackRepoId ?? undefined
   return sourceContext?.provider === 'github' ? (sourceContext.repoId ?? fallback) : fallback
+}
+
+export function resolveGitHubRepoOperationOwner(
+  state: RepoRuntimeOwnerState & { repos?: readonly Repo[] },
+  args: {
+    repoId?: string | null
+    repoPath?: string | null
+    sourceContext?: TaskSourceContext | null
+    target?: RuntimeClientTarget | null
+  }
+) {
+  const repoId = getGitHubRuntimeRepoId(args.sourceContext, args.repoId)
+  const candidates = state.repos ?? []
+  const sourceHost = getGitHubSourceRuntimeHost(args.sourceContext)
+  const target = sourceHost
+    ? runtimeTargetForOwnerEnvironment(sourceHost.environmentId)
+    : (args.target ?? getGitHubRepoRoutingTarget(state, repoId, args.sourceContext))
+  const hostId =
+    target.kind === 'environment' ? toRuntimeExecutionHostId(target.environmentId) : null
+  let repo: Repo | null = null
+  if (repoId) {
+    if (hostId) {
+      repo = findRepoForHost(candidates, repoId, { hostId, settings: state.settings })
+    } else if (args.sourceContext?.provider === 'github') {
+      const matches = candidates.filter((row) => row.id === repoId)
+      repo = matches.length === 1 ? matches[0] : null
+    } else {
+      repo = findRepoForHost(
+        args.target?.kind === 'local'
+          ? candidates.filter(
+              (row) => parseExecutionHostId(getRepoExecutionHostId(row))?.kind !== 'runtime'
+            )
+          : candidates,
+        repoId,
+        { settings: state.settings }
+      )
+    }
+  } else if (args.repoPath) {
+    const matches = candidates.filter((row) => row.path === args.repoPath)
+    const selected = hostId
+      ? matches.filter((row) => getRepoExecutionHostId(row) === hostId)
+      : matches
+    if (selected.length === 1) {
+      repo = selected[0]
+    }
+  }
+  // Path-only callers use the same registration policy as ID callers once the row is known.
+  return {
+    repo,
+    target:
+      args.target || sourceHost || repoId
+        ? target
+        : getGitHubRepoRoutingTarget(
+            state,
+            repo?.id,
+            args.sourceContext,
+            repo ? getRepoExecutionHostId(repo) : null
+          )
+  }
 }

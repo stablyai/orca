@@ -1,4 +1,6 @@
 export const GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY = 'github.markPRReadyForReview' as const
+export const GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY =
+  'github.exact-work-item-target.v1' as const
 // Hosts with this capability let mobile call github.markPRReadyForReview.
 export const MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY =
   'mobile.github.markPRReadyForReview.v1' as const
@@ -13,6 +15,7 @@ export const ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY =
   'git.antigravity-configured-model.v1' as const
 
 export const SOURCE_CONTROL_RUNTIME_CAPABILITIES = [
+  GITHUB_EXACT_WORK_ITEM_TARGET_RUNTIME_CAPABILITY,
   ANTIGRAVITY_CONFIGURED_MODEL_RUNTIME_CAPABILITY,
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
   MOBILE_GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,

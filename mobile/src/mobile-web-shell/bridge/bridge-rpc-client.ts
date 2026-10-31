@@ -227,6 +227,7 @@ export function createBridgeRpcClient(options: BridgeRpcClientOptions): BridgeRp
     }
     const [method, params, requestOptions] = args
     return new Promise<RpcResponse>((resolve, reject) => {
+      requestOptions?.beforeSend?.()
       const frameOptions = readBridgeRequestFrameOptions(requestOptions, hasGrant)
       const id = nextId()
       requests.open(id, { resolve, reject })

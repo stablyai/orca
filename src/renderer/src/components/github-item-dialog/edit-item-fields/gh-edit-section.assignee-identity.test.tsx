@@ -33,12 +33,12 @@ vi.mock('@/store', () => {
 
 vi.mock('@/hooks/useIssueMetadata', async () => {
   const { useImmediateMutation } = await import('@/hooks/useImmediateMutation')
-  return {
-    useImmediateMutation,
-    useRepoLabels: () => ({ data: [] }),
-    useRepoAssignees: () => ({ data: [] })
-  }
+  return { useImmediateMutation }
 })
+vi.mock('@/hooks/useGitHubRepoMetadata', () => ({
+  useRepoLabels: () => ({ data: [] }),
+  useRepoAssignees: () => ({ data: [] })
+}))
 vi.mock('@/hooks/useGitHubSlugMetadata', () => ({
   useRepoLabelsBySlug: () => ({ data: [] }),
   useRepoAssigneesBySlug: () => ({ data: [] })

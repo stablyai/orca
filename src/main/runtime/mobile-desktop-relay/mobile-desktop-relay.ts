@@ -1,3 +1,5 @@
+import { verifyRelayedGitHubAuthority } from './relay-github-authority'
+import { GITHUB_EXACT_OPERATION_UNSUPPORTED } from '../../../shared/github/work-item-target'
 import { pairedRuntimeConnectionFromOffer } from '../../../shared/paired-runtime-connection'
 import { randomUUID } from 'node:crypto'
 import type { RpcRequest } from '../rpc/core'
@@ -106,7 +108,7 @@ export class MobileDesktopRelay {
     const link = this.linkFor(phone, environmentId)
     link.replies.noteForwarded(request.id)
     link.opened.then(
-      ({ socket, hostToken }) => {
+      async ({ socket, hostToken }) => {
         // An opening link may already have ended and answered; never send its request late.
         if (!this.isCurrent(link)) {
           return
@@ -116,6 +118,40 @@ export class MobileDesktopRelay {
           request.method,
           this.options.nativeChatDefault
         )
+        try {
+          const verification = verifyRelayedGitHubAuthority({
+            method: request.method,
+            frame: outgoing,
+            socket,
+            replies: link.replies,
+            isCurrent: () => this.isCurrent(link),
+            timeoutMs: RELAY_CONNECT_TIMEOUT_MS
+          })
+          if (verification) {
+            await verification
+          }
+          if (!this.isCurrent(link)) {
+            return
+          }
+        } catch (error) {
+          if (this.isCurrent(link)) {
+            const reply = link.replies.text(
+              failure(
+                request.id,
+                error instanceof Error && error.message === GITHUB_EXACT_OPERATION_UNSUPPORTED
+                  ? 'remote_runtime_unavailable'
+                  : 'runtime_source_mismatch',
+                error instanceof Error
+                  ? error.message
+                  : 'Unable to confirm the executing Orca server.'
+              )
+            )
+            if (reply) {
+              phone.reply(reply)
+            }
+          }
+          return
+        }
         if (!socket.send(outgoing)) {
           this.endLink(link, unavailable('The server connection could not take the request.'))
         }
@@ -185,8 +221,7 @@ export class MobileDesktopRelay {
   }
 
   private linkFor(phone: RelayedPhone, environmentId: string): RelayLink {
-    const key = linkKey(phone.connectionId, environmentId)
-    const existing = this.links.get(key)
+    const existing = this.links.get(linkKey(phone.connectionId, environmentId))
     if (existing) {
       return existing
     }
@@ -199,7 +234,7 @@ export class MobileDesktopRelay {
         error instanceof RemoteRuntimeClientError ? error : unavailable(String(error))
       )
     })
-    this.links.set(key, link)
+    this.links.set(linkKey(phone.connectionId, environmentId), link)
     return link
   }
 
@@ -246,6 +281,10 @@ export class MobileDesktopRelay {
         },
         { timeoutMs: RELAY_CONNECT_TIMEOUT_MS }
       )
+      if (!this.isCurrent(link)) {
+        socket.close()
+        throw unavailable('The relayed request was cancelled.')
+      }
       return { socket, hostToken: grant.token }
     } catch (error) {
       if (error instanceof RemoteRuntimeClientError && error.code === 'unauthorized') {

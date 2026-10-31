@@ -1,3 +1,6 @@
+import { callGitHubTargetOperation } from '@/lib/github-work-item-target-request'
+import { requireActiveEnvironment } from './web-runtime-session'
+import { requireGitHubWorkItemTargetDetails } from '../../../../shared/github/work-item-target'
 import type { PreloadApi } from '../../../../preload/api-types'
 import {
   GITHUB_MARK_PR_READY_RUNTIME_CAPABILITY,
@@ -54,8 +57,23 @@ export function createGitHubApi(): WebGitHubApi {
         ...args,
         ownerRepo
       }),
-    workItemDetails: (args) =>
-      route<WebGitHubResult<'workItemDetails'>>(GITHUB_WEB_RPC_METHODS.workItemDetails, args),
+    workItemDetails: async ({ ownerRepo, ...args }) => {
+      const details = await callGitHubTargetOperation<WebGitHubResult<'workItemDetails'>>({
+        target: { kind: 'environment', environmentId: requireActiveEnvironment().id },
+        ownerRepo,
+        read: true,
+        method: GITHUB_WEB_RPC_METHODS.workItemDetails,
+        params: { ...args, repo: args.repoId ? `id:${args.repoId}` : args.repoPath },
+        local: (exact) => route(GITHUB_WEB_RPC_METHODS.workItemDetails, { ...args, ...exact })
+      })
+      return ownerRepo && args.type
+        ? requireGitHubWorkItemTargetDetails(details, {
+            repository: ownerRepo,
+            type: args.type,
+            number: args.number
+          })
+        : details
+    },
     notifyWorkItemMutated: () => Promise.resolve(false),
     prFileContents: (args) =>
       route<WebGitHubResult<'prFileContents'>>(GITHUB_WEB_RPC_METHODS.prFileContents, args),
@@ -109,8 +127,14 @@ export function createGitHubApi(): WebGitHubApi {
       route<WebGitHubResult<'requestPRReviewers'>>(GITHUB_WEB_RPC_METHODS.requestPRReviewers, args),
     removePRReviewers: (args) =>
       route<WebGitHubResult<'removePRReviewers'>>(GITHUB_WEB_RPC_METHODS.removePRReviewers, args),
-    updateIssue: (args) =>
-      route<WebGitHubResult<'updateIssue'>>(GITHUB_WEB_RPC_METHODS.updateIssue, args),
+    updateIssue: ({ ownerRepo, ...args }) =>
+      callGitHubTargetOperation<WebGitHubResult<'updateIssue'>>({
+        target: { kind: 'environment', environmentId: requireActiveEnvironment().id },
+        ownerRepo,
+        method: GITHUB_WEB_RPC_METHODS.updateIssue,
+        params: { ...args, repo: args.repoId ? `id:${args.repoId}` : args.repoPath },
+        local: (exact) => route(GITHUB_WEB_RPC_METHODS.updateIssue, { ...args, ...exact })
+      }),
     addIssueComment: (args) =>
       route<WebGitHubResult<'addIssueComment'>>(GITHUB_WEB_RPC_METHODS.addIssueComment, args),
     addPRReviewCommentReply: (args) =>
@@ -120,13 +144,22 @@ export function createGitHubApi(): WebGitHubApi {
       ),
     addPRReviewComment: (args) =>
       route<WebGitHubResult<'addPRReviewComment'>>(GITHUB_WEB_RPC_METHODS.addPRReviewComment, args),
-    listLabels: (args) =>
-      route<WebGitHubResult<'listLabels'>>(GITHUB_WEB_RPC_METHODS.listLabels, args),
-    listAssignableUsers: (args) =>
-      route<WebGitHubResult<'listAssignableUsers'>>(
-        GITHUB_WEB_RPC_METHODS.listAssignableUsers,
-        args
-      ),
+    listLabels: ({ ownerRepo, ...args }) =>
+      callGitHubTargetOperation<WebGitHubResult<'listLabels'>>({
+        target: { kind: 'environment', environmentId: requireActiveEnvironment().id },
+        ownerRepo,
+        method: GITHUB_WEB_RPC_METHODS.listLabels,
+        params: { ...args, repo: args.repoId ? `id:${args.repoId}` : args.repoPath },
+        local: (exact) => route(GITHUB_WEB_RPC_METHODS.listLabels, { ...args, ...exact })
+      }),
+    listAssignableUsers: ({ ownerRepo, ...args }) =>
+      callGitHubTargetOperation<WebGitHubResult<'listAssignableUsers'>>({
+        target: { kind: 'environment', environmentId: requireActiveEnvironment().id },
+        ownerRepo,
+        method: GITHUB_WEB_RPC_METHODS.listAssignableUsers,
+        params: { ...args, repo: args.repoId ? `id:${args.repoId}` : args.repoPath },
+        local: (exact) => route(GITHUB_WEB_RPC_METHODS.listAssignableUsers, { ...args, ...exact })
+      }),
     onWorkItemMutated: () => noopUnsubscribe,
     checkOrcaStarred: () => Promise.resolve(null),
     starOrca: () => Promise.resolve(false),

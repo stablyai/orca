@@ -3,13 +3,8 @@
 import { act } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import {
-  clearLinearMetadataCache,
-  useRepoLabels,
-  useRepoAssignees,
-  useTeamStates,
-  useTeamsStates
-} from './useIssueMetadata'
+import { clearLinearMetadataCache, useTeamStates, useTeamsStates } from './useIssueMetadata'
+import { useRepoLabels, useRepoAssignees } from './useGitHubRepoMetadata'
 
 const linearMocks = vi.hoisted(() => ({
   linearTeamStates: vi.fn(),

@@ -9,6 +9,7 @@ import {
   fetchWorkItemDetails
 } from './github-pr-rpc'
 import {
+  prSidebarResourceKey,
   loadPrSidebarData,
   loadPrSidebarDetails,
   prSidebarDetailsNeedFetch,
@@ -49,21 +50,40 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
   const [isGithubRepo, setIsGithubRepo] = useState(false)
   // Wait for the probe before calling this repo unsupported.
   const [repoProbeLoaded, setRepoProbeLoaded] = useState(false)
-  const [state, setState] = useState<PrSidebarState>({ kind: 'hidden' })
+  const [state, setRenderedState] = useState<PrSidebarState>({ kind: 'hidden' })
   const [showPRSidebar, setShowPRSidebar] = useState(false)
   const loadSeqRef = useRef(0)
   // Give details their own sequence so chip refreshes and details fetches cannot cancel each other.
   const detailsSeqRef = useRef(0)
   // Claim in-flight details by sequence and PR to dedupe cold segment opens.
-  const detailsInFlightRef = useRef<{ seq: number; prNumber: number } | null>(null)
+  const detailsInFlightRef = useRef<{ seq: number; resourceKey: string } | null>(null)
   const stateIdentityRef = useRef<string | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
+  const setState = useCallback((next: PrSidebarState) => {
+    stateRef.current = next
+    setRenderedState(next)
+  }, [])
   const headShaRef = useRef(headSha)
 
   // Detached HEAD still needs repo eligibility; branching the probe would strand its spinner.
   const probeReady = client !== null && connState === 'connected'
+  const connectionGeneration = client?.getGeneration?.()
   const identity = buildMobilePrSidebarIdentity({ worktreeId, branch })
+  useEffect(() => {
+    loadSeqRef.current += 1
+    detailsSeqRef.current += 1
+    detailsInFlightRef.current = null
+    stateIdentityRef.current = null
+    const hidden: PrSidebarState = { kind: 'hidden' }
+    stateRef.current = hidden
+    setRenderedState(hidden)
+    return () => {
+      loadSeqRef.current += 1
+      detailsSeqRef.current += 1
+      detailsInFlightRef.current = null
+    }
+  }, [client, connectionGeneration, setState])
 
   const buildDeps = useCallback((): PrSidebarLoadDeps | null => {
     if (!client) {
@@ -115,7 +135,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       loadSeqRef.current += 1
       detailsSeqRef.current += 1
       stateIdentityRef.current = null
-      setState({ kind: 'hidden' })
+      const hidden: PrSidebarState = { kind: 'hidden' }
+      stateRef.current = hidden
+      setRenderedState(hidden)
       return
     }
     if (stateIdentityRef.current !== null && stateIdentityRef.current !== identity) {
@@ -123,7 +145,9 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       loadSeqRef.current += 1
       detailsSeqRef.current += 1
       stateIdentityRef.current = null
-      setState({ kind: 'hidden' })
+      const hidden: PrSidebarState = { kind: 'hidden' }
+      stateRef.current = hidden
+      setRenderedState(hidden)
     }
   }, [identity])
 
@@ -163,7 +187,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         next.kind === 'ready' &&
         stateRef.current.kind === 'ready' &&
         stateRef.current.data.details != null &&
-        stateRef.current.data.pr.number === next.data.pr.number
+        prSidebarResourceKey(stateRef.current.data.pr) === prSidebarResourceKey(next.data.pr)
           ? stateRef.current.data.details
           : null
 
@@ -181,8 +205,11 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
 
       const detailsSeq = detailsSeqRef.current + 1
       detailsSeqRef.current = detailsSeq
-      detailsInFlightRef.current = { seq: detailsSeq, prNumber: next.data.pr.number }
-      const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, next.data.pr.number)
+      detailsInFlightRef.current = {
+        seq: detailsSeq,
+        resourceKey: prSidebarResourceKey(next.data.pr)
+      }
+      const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, next.data.pr)
       // Release only this details claim; a newer load may already own it.
       if (detailsInFlightRef.current?.seq === detailsSeq) {
         detailsInFlightRef.current = null
@@ -192,7 +219,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
         detailsSeq !== detailsSeqRef.current ||
         stateIdentityRef.current !== loadIdentity ||
         stateRef.current.kind !== 'ready' ||
-        stateRef.current.data.pr.number !== next.data.pr.number
+        prSidebarResourceKey(stateRef.current.data.pr) !== prSidebarResourceKey(next.data.pr)
       ) {
         return
       }
@@ -217,15 +244,19 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
     if (!deps || !loadIdentity || stateIdentityRef.current !== loadIdentity) {
       return
     }
-    const prNumber = current.data.pr.number
+    const resourceKey = prSidebarResourceKey(current.data.pr)
     const inFlight = detailsInFlightRef.current
-    if (inFlight && inFlight.prNumber === prNumber && inFlight.seq === detailsSeqRef.current) {
+    if (
+      inFlight &&
+      inFlight.resourceKey === resourceKey &&
+      inFlight.seq === detailsSeqRef.current
+    ) {
       return
     }
     const detailsSeq = detailsSeqRef.current + 1
     detailsSeqRef.current = detailsSeq
-    detailsInFlightRef.current = { seq: detailsSeq, prNumber }
-    const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, prNumber)
+    detailsInFlightRef.current = { seq: detailsSeq, resourceKey }
+    const fetchedDetails = await loadPrSidebarDetails(deps, worktreeId, current.data.pr)
     if (detailsInFlightRef.current?.seq === detailsSeq) {
       detailsInFlightRef.current = null
     }
@@ -233,7 +264,7 @@ export function useMobilePrSidebarController(input: PrSidebarControllerInput) {
       detailsSeq !== detailsSeqRef.current ||
       stateIdentityRef.current !== loadIdentity ||
       stateRef.current.kind !== 'ready' ||
-      stateRef.current.data.pr.number !== prNumber
+      prSidebarResourceKey(stateRef.current.data.pr) !== resourceKey
     ) {
       return
     }
