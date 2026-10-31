@@ -491,8 +491,9 @@
 .xterm-container {
   box-sizing: border-box;
   position: relative;
-  width: calc(100% - var(--pane-padding-x, 4px));
-  height: calc(100% - var(--pane-padding-y, 4px));
+  /* Why (#36760): subtract padding twice so it applies to both sides, not only left/top. */
+  width: calc(100% - 2 * var(--pane-padding-x, 4px));
+  height: calc(100% - 2 * var(--pane-padding-y, 4px));
   margin-top: var(--pane-padding-y, 4px);
   margin-left: var(--pane-padding-x, 4px);
   /* Why (#10481): a blinking cursor otherwise invalidates paint all the way up
@@ -522,7 +523,7 @@
 
 .pane:has(> .pane-top-banner) .xterm-container {
   margin-top: calc(var(--pane-padding-y, 4px) + var(--orca-pane-top-banner-height, 0px));
-  height: calc(100% - var(--pane-padding-y, 4px) - var(--orca-pane-top-banner-height, 0px));
+  height: calc(100% - 2 * var(--pane-padding-y, 4px) - var(--orca-pane-top-banner-height, 0px));
 }
 
 .pane[data-has-title]:has(> .pane-top-banner) .xterm-container {
