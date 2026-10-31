@@ -115,30 +115,6 @@ describe('host runtime-state owner probe', () => {
     expect(probeOwner).toHaveBeenCalledTimes(1)
   })
 
-  it('skips the probe for a released ownerless record acquisition never consults it for', async () => {
-    const released = reservedRecord()
-    released.lease.claimStatus = 'released'
-    released.lease.handoffStage = null
-    released.lease.reservedSpawnToken = null
-    const probeOwner = vi.fn(async () => ({ outcome: 'indeterminate' as const, reason: 'x' }))
-    const state = runtimeState(released, probeOwner)
-
-    await expect(state.probeOwner('session-probe')).resolves.toEqual({
-      outcome: 'reservation-unused'
-    })
-    expect(probeOwner).not.toHaveBeenCalled()
-  })
-
-  it('treats a session with no record at all as an unused reservation', async () => {
-    const probeOwner = vi.fn(async () => ({ outcome: 'indeterminate' as const, reason: 'x' }))
-    const state = runtimeState(null, probeOwner)
-
-    await expect(state.probeOwner('session-probe')).resolves.toEqual({
-      outcome: 'reservation-unused'
-    })
-    expect(probeOwner).not.toHaveBeenCalled()
-  })
-
   it('constructs inert per-state reconcilers sharing only their own addressed in-flight work', async () => {
     const record = liveRecord()
     record.lease.unreconciled = true

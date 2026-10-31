@@ -9200,7 +9200,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Couleur ANSI magenta",
-          "03c855d15f": "Réinitialiser toutes les surcharges de couleurs",
           "63f8d9336e": "Surcharges de couleurs",
           "e86e09b5c7": "Remplacer individuellement les couleurs du terminal.",
           "1d1920dc8a": "Masquer le curseur de la souris pendant la saisie dans le terminal.",
@@ -9267,7 +9266,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Redémarrer maintenant",
           "907131d741": "Redémarrage…",
-          "605a35d600": "Non encore appliqué par le moteur de rendu du terminal — xterm.js n'a pas d'emplacement dédié aux couleurs en gras. Une valeur enregistrée est conservée."
+          "605a35d600": "Non encore appliqué par le moteur de rendu du terminal — xterm.js n'a pas d'emplacement dédié aux couleurs en gras. Une valeur enregistrée est conservée.",
+          "color_overrides_dark_description": "Remplacer individuellement les couleurs du thème de terminal sombre.",
+          "color_overrides_light_description": "Remplacer individuellement les couleurs du thème de terminal clair.",
+          "reset_dark_color_overrides": "Réinitialiser les surcharges de couleurs du thème sombre",
+          "reset_light_color_overrides": "Réinitialiser les surcharges de couleurs du thème clair"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Réinitialiser"

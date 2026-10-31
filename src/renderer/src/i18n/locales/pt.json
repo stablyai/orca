@@ -5177,7 +5177,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Cor magenta ANSI",
-          "03c855d15f": "Redefinir todas as substituições de cor",
           "63f8d9336e": "Substituições de Cor",
           "e86e09b5c7": "Substitui cores individuais do terminal.",
           "1d1920dc8a": "Oculta o cursor do mouse ao digitar no terminal.",
@@ -5244,7 +5243,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar agora",
           "907131d741": "Reiniciando…",
-          "605a35d600": "Ainda não aplicado pelo renderizador do terminal — o xterm.js não tem um slot de cor para negrito. Um valor salvo é preservado."
+          "605a35d600": "Ainda não aplicado pelo renderizador do terminal — o xterm.js não tem um slot de cor para negrito. Um valor salvo é preservado.",
+          "color_overrides_dark_description": "Substitui cores individuais do tema escuro do terminal.",
+          "color_overrides_light_description": "Substitui cores individuais do tema claro do terminal.",
+          "reset_dark_color_overrides": "Redefinir as substituições de cor do tema escuro",
+          "reset_light_color_overrides": "Redefinir as substituições de cor do tema claro"
         },
         "agents": {
           "search": {

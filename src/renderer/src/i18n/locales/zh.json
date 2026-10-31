@@ -8635,7 +8635,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "ANSI 洋红色",
-          "03c855d15f": "重置所有颜色覆盖",
           "63f8d9336e": "颜色覆盖",
           "e86e09b5c7": "覆盖各个终端颜色。",
           "1d1920dc8a": "在终端中输入时隐藏鼠标光标。",
@@ -8702,7 +8701,11 @@
           "cf37ff69f6": "根据",
           "8abdab9f7c": "立即重启",
           "907131d741": "正在重新启动...",
-          "605a35d600": "终端渲染器尚未应用此项 — xterm.js 没有粗体颜色槽位。已保存的值会被保留。"
+          "605a35d600": "终端渲染器尚未应用此项 — xterm.js 没有粗体颜色槽位。已保存的值会被保留。",
+          "color_overrides_dark_description": "覆盖深色终端主题的各个颜色。",
+          "color_overrides_light_description": "覆盖浅色终端主题的各个颜色。",
+          "reset_dark_color_overrides": "重置深色主题颜色覆盖",
+          "reset_light_color_overrides": "重置浅色主题颜色覆盖"
         },
         "UIZoomControl": {
           "c2c64b24d0": "重置"
