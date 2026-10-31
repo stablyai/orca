@@ -82,6 +82,7 @@ describe('undefined provider window safety (crash d2c1da69 / bb74236c)', () => {
   // old `s.window !== null` filter let the undefined-window section through, so
   // getTightestUsageSection's reduce read `.usedPercent` of undefined and crashed
   // the status-bar overlay (TypeError in ProviderSegment).
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: Deliberately omit session to reproduce malformed persisted provider data.
   const partialProvider = {
     provider: 'codex',
     weekly: windowOf(42, 10080),
