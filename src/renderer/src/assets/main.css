@@ -919,6 +919,14 @@ html.native-shell .app-layout {
   height: 100%;
 }
 
+/* Why: the Linux window is transparent with Window Blur on; the compositor paints what shows through (#8797). */
+html.native-shell.window-transparent,
+html.native-shell.window-transparent body,
+html.native-shell.window-transparent #root,
+html.native-shell.window-transparent .app-layout {
+  background: transparent;
+}
+
 /* Tab-group split resize handle — wide hit area, visible center line. */
 .tab-group-split-resize-handle {
   flex-shrink: 0;

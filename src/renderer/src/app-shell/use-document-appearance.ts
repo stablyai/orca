@@ -14,6 +14,8 @@ import { usePluginIconThemeActivation } from '../store/plugin-icon-themes'
 import { scheduleRuntimeGraphSync } from '../runtime/sync-runtime-graph'
 import { useAppStore } from '../store'
 import { useDocumentDarkTheme } from '@/hooks/use-document-dark-theme'
+import { isPairedWebClientWindow } from '@/lib/desktop-window-chrome'
+import { shortcutPlatform } from './app-window-chrome'
 
 export function useDocumentAppearance(): void {
   const theme = useAppStore((s) => s.settings?.theme)
@@ -30,6 +32,7 @@ export function useDocumentAppearance(): void {
   usePluginTerminalPaletteRefresh()
   usePluginAppThemeSync()
   const appFontFamily = useAppStore((s) => s.settings?.appFontFamily)
+  const windowBlur = useAppStore((s) => s.settings?.windowBackgroundBlur ?? false)
   usePluginIconThemeActivation(useAppStore((s) => s.settings?.pluginIconTheme))
 
   // Why `dark` too: a system theme repaints when the OS flips, before the slot paint below.
@@ -69,4 +72,12 @@ export function useDocumentAppearance(): void {
       buildAppFontFamily(appFontFamily)
     )
   }, [appFontFamily])
+
+  // Why Linux only: its window is created transparent, so an opaque root would hide the desktop (#8797).
+  useEffect(() => {
+    document.documentElement.classList.toggle(
+      'window-transparent',
+      windowBlur && shortcutPlatform === 'linux' && !isPairedWebClientWindow()
+    )
+  }, [windowBlur])
 }

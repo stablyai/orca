@@ -102,6 +102,8 @@ export function createMainWindow(
   // Only Windows acrylic is visible; macOS transparency adds WindowServer compositing behind opaque content (#8482). Creation-time only.
   const platformBlurOptions =
     blur && process.platform === 'win32' ? { backgroundMaterial: 'acrylic' as const } : {}
+  // Linux compositors (KWin, Hyprland, picom) own blur, so they just need a see-through window (#8797).
+  const linuxTransparent = blur && process.platform === 'linux'
 
   const pumpHiddenFrames = shouldPumpHiddenWindowFrames(process.env, process.platform)
   const mainWindow = new BrowserWindow({
@@ -116,7 +118,12 @@ export function createMainWindow(
     acceptFirstMouse: true,
     // Save menu-bar space on Windows/Linux; Alt reveals it and macOS uses the system menu.
     autoHideMenuBar: true,
-    backgroundColor: nativeTheme.shouldUseDarkColors ? '#0a0a0a' : '#ffffff',
+    backgroundColor: linuxTransparent
+      ? '#00000000'
+      : nativeTheme.shouldUseDarkColors
+        ? '#0a0a0a'
+        : '#ffffff',
+    ...(linuxTransparent ? { transparent: true } : {}),
     // Keep macOS traffic lights inset; hide Windows native chrome to avoid duplicate titlebars.
     titleBarStyle:
       process.platform === 'darwin'

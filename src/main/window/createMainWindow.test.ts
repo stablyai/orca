@@ -391,12 +391,19 @@ describe('createMainWindow', () => {
     }
   })
 
-  it('never requests macOS vibrancy or transparency when window blur is enabled (#8482)', () => {
+  it('requests transparency only on Linux when window blur is enabled (#8482, #8797)', () => {
     for (const [platform, expected] of [
-      ['darwin', { backgroundMaterial: undefined }],
-      ['win32', { backgroundMaterial: 'acrylic' }],
-      ['linux', { backgroundMaterial: undefined }]
-    ] satisfies [NodeJS.Platform, { backgroundMaterial: string | undefined }][]) {
+      ['darwin', { backgroundMaterial: undefined, transparent: undefined, background: '#ffffff' }],
+      ['win32', { backgroundMaterial: 'acrylic', transparent: undefined, background: '#ffffff' }],
+      ['linux', { backgroundMaterial: undefined, transparent: true, background: '#00000000' }]
+    ] satisfies [
+      NodeJS.Platform,
+      {
+        backgroundMaterial: string | undefined
+        transparent: boolean | undefined
+        background: string
+      }
+    ][]) {
       browserWindowMock.mockReset()
       const webContents = {
         on: vi.fn(),
@@ -439,9 +446,9 @@ describe('createMainWindow', () => {
 
       const browserWindowOptions = browserWindowMock.mock.calls[0]?.[0]
       expect(browserWindowOptions.vibrancy).toBeUndefined()
-      expect(browserWindowOptions.transparent).toBeUndefined()
+      expect(browserWindowOptions.transparent).toBe(expected.transparent)
       expect(browserWindowOptions.backgroundMaterial).toBe(expected.backgroundMaterial)
-      expect(browserWindowOptions.backgroundColor).toBe('#ffffff')
+      expect(browserWindowOptions.backgroundColor).toBe(expected.background)
     }
   })
 

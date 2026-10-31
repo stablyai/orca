@@ -37,6 +37,12 @@
   background-color: transparent;
 }
 
+/* The split root already paints the translucent theme background; xterm repeating it compounds alpha (0.82³ ≈ 0.99). */
+.pane .xterm.allow-transparency,
+.pane .xterm.allow-transparency .xterm-scrollable-element {
+  background-color: transparent !important;
+}
+
 /* Round DOM scrollbar thumbs; xterm’s square default has no configuration option. */
 .xterm .xterm-scrollable-element > .xterm-scrollbar > .xterm-slider {
   border-radius: 4px;
