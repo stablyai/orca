@@ -1,5 +1,6 @@
 import type { CommandHandler } from '../../dispatch'
 import { printResult } from '../../format'
+import { escapeTerminalControlCharacters } from '../../../shared/terminal-control-character-escape'
 import { printOrchestrationResult } from './agent-view'
 import { getRequiredStringFlag } from '../../flags'
 import { RuntimeClientError } from '../../runtime-client'
@@ -24,7 +25,7 @@ export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> 
         result,
         json,
         (value) =>
-          `${value.requestId} [${value.state}]${value.method ? ` ${value.method}` : ''}\n${value.interpretation}${value.receipt === undefined ? '' : `\n${JSON.stringify(value.receipt, null, 2)}`}`
+          `${value.requestId} [${value.state}]${value.method ? ` ${value.method}` : ''}\n${value.interpretation}${value.receipt === undefined ? '' : `\n${escapeTerminalControlCharacters(JSON.stringify(value.receipt, null, 2))}`}`
       )
       return
     }
@@ -41,9 +42,9 @@ export const ORCHESTRATION_REQUEST_SHOW_HANDLER: Record<string, CommandHandler> 
   }
 }
 
-const ID_KEY = /^(id|state|\w+Id)$/
+const ID_KEY = /^(id|state|action|\w+Id)$/
 
-// Keep every id and outcome state where the receipt nests it (messageId, accepted.dispatchId, run.id), and drop all text.
+// Keep every id and outcome (state, lifecycle action) where the receipt nests it (messageId, accepted.dispatchId, run.id), and drop all text.
 function receiptIds(value: unknown, depth = 8): unknown {
   if (depth === 0 || typeof value !== 'object' || value === null) {
     return undefined

@@ -526,6 +526,7 @@ describe('orchestration agent views', () => {
         receipt: {
           messageId: 'msg_ask',
           state: 'outcome_unknown',
+          lifecycle: { action: 'rejected', reason: huge },
           accepted: { dispatchId: 'ctx_1', taskId: 'task_1', note: huge },
           run: { id: 'run_1', objective: huge },
           gate: { id: 'gate_1', question: huge },
@@ -542,6 +543,7 @@ describe('orchestration agent views', () => {
       receipt: {
         messageId: 'msg_ask',
         state: 'outcome_unknown',
+        lifecycle: { action: 'rejected' },
         accepted: { dispatchId: 'ctx_1', taskId: 'task_1' },
         run: { id: 'run_1' },
         gate: { id: 'gate_1' },
@@ -559,10 +561,11 @@ describe('orchestration agent views', () => {
       {
         requestId: 'req_1',
         state: 'completed',
-        receipt: { task: { id: 'task_1' } },
+        receipt: { task: { id: 'task_1', note: 'a\x9bb' } },
         interpretation: 'Done.'
       }
     )
     expect(full.stdout).toContain('"id": "task_1"')
+    expect(full.stdout).not.toContain('\x9b')
   })
 })
