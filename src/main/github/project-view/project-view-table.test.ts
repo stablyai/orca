@@ -19,12 +19,12 @@ const args = {
   projectNumber: 1,
   host: 'github.acme.test'
 } as const
-const view = (id: string, layout: string): RawProjectView => ({
+const view = (id: string, layout: string, filter = 'status:open'): RawProjectView => ({
   id,
   number: 1,
   name: id,
   layout,
-  filter: 'status:open',
+  filter,
   fields: { nodes: [] },
   groupByFields: { nodes: [] },
   sortByFields: { nodes: [] }
@@ -116,5 +116,41 @@ describe('project view layout selection', () => {
     })
     expect(fetchAllItems).not.toHaveBeenCalled()
     expect(fetchItemsCountOnly).toHaveBeenCalledWith({ ...args, query: '' })
+  })
+
+  it('falls back to an omitted query for unfiltered views when the index returns 0 items (#12648)', async () => {
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('table', 'TABLE_LAYOUT', '')]))
+    const rows = [{ id: 'issue-1' }] as any
+    vi.mocked(fetchAllItems)
+      .mockResolvedValueOnce({ ok: true, rows: [], totalCount: 0, parentFieldDropped: false })
+      .mockResolvedValueOnce({ ok: true, rows, totalCount: 1, parentFieldDropped: false })
+    const result = await getProjectViewTable({ ...args, viewId: 'table' })
+    expect(result).toMatchObject({ ok: true, data: { rows, totalCount: 1 } })
+    expect(fetchAllItems).toHaveBeenCalledTimes(2)
+    expect(fetchAllItems).toHaveBeenNthCalledWith(1, { ...args, query: '' })
+    expect(fetchAllItems).toHaveBeenNthCalledWith(2, { ...args, query: null })
+  })
+
+  it('does not fall back for filtered views with zero matches', async () => {
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue(
+      page([view('table', 'TABLE_LAYOUT', 'status:open')])
+    )
+    const result = await getProjectViewTable({ ...args, viewId: 'table' })
+    expect(result).toMatchObject({ ok: true, data: { rows: [], totalCount: 0 } })
+    expect(fetchAllItems).toHaveBeenCalledTimes(1)
+    expect(fetchAllItems).toHaveBeenCalledWith({ ...args, query: 'status:open' })
+  })
+
+  it('surfaces fallback errors instead of a false empty state', async () => {
+    vi.mocked(fetchProjectViewsPage).mockResolvedValue(page([view('table', 'TABLE_LAYOUT', '')]))
+    vi.mocked(fetchAllItems)
+      .mockResolvedValueOnce({ ok: true, rows: [], totalCount: 0, parentFieldDropped: false })
+      .mockResolvedValueOnce({
+        ok: false,
+        error: { type: 'too_large', message: 'View has 501 items.' },
+        totalCount: 501
+      })
+    const result = await getProjectViewTable({ ...args, viewId: 'table' })
+    expect(result).toMatchObject({ ok: false, error: { type: 'too_large' }, totalCount: 501 })
   })
 })

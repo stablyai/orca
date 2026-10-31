@@ -21,7 +21,7 @@ export async function fetchAllItems(args: {
   owner: string
   ownerType: GitHubProjectOwnerType
   projectNumber: number
-  query: string
+  query?: string | null
   host?: string
 }): Promise<
   | { ok: true; rows: GitHubProjectRow[]; totalCount: number; parentFieldDropped: boolean }
