@@ -416,3 +416,20 @@ it('keeps the restored file anchor when a virtualized predecessor publishes afte
   expect(f.viewport.scrollTop).toBe(200)
   f.dispose()
 })
+
+it('does not commit a native anchor if its editor is disposed during extent publication', async () => {
+  const f = fixture()
+  f.viewport.scrollTop = 3700
+  f.publishExtent.mockImplementation(() => {
+    f.dispose()
+  })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: only this fixture model identity is read by the native anchor notification.
+  f.modified.reveal.fire({
+    kind: 'anchor',
+    model: f.model as unknown as editor.ITextModel,
+    delta: 400
+  })
+  await Promise.resolve()
+  expect(f.viewport.scrollTop).toBe(3700)
+  expect(f.writes()).toBe(1)
+})

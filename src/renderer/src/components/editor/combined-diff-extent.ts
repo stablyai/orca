@@ -113,7 +113,7 @@ export class CombinedDiffExtent {
     return this.apply(target)
   }
 
-  transact(index: number, delta: number, update: () => void): boolean {
+  transact(index: number, delta: number, update: () => boolean | void): boolean {
     const anchor = this.capture(
       index,
       this.view.position() - (this.item(index)?.start ?? 0) + delta
@@ -124,12 +124,13 @@ export class CombinedDiffExtent {
     // The native line delta is a new item offset, not a new screen gap.
     anchor.gap = 0
     this.depth += 1
+    let valid: boolean
     try {
-      update()
+      valid = update() !== false
     } finally {
       this.depth -= 1
     }
-    return this.restore(anchor)
+    return valid && this.restore(anchor)
   }
 
   navigate(target: number): boolean {

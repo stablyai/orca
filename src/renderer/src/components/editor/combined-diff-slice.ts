@@ -139,9 +139,10 @@ export function installCombinedDiffSlice(
       if (request && requestedPane && currentModel === request.model) {
         if (request.kind === 'anchor') {
           acknowledge(() =>
-            owner.transact(index(), request.delta, () =>
+            owner.transact(index(), request.delta, () => {
               publishExtent(Math.max(...panes.map((pane) => pane.getContentHeight())))
-            )
+              return !disposed && requestedPane.getModel() === request.model
+            })
           )
           forward()
         } else if (request.kind === 'restore') {
