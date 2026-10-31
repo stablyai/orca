@@ -1,7 +1,5 @@
 # Test anti-patterns
 
-Delete low-value cases or entire suites; don’t add replacements just to preserve test counts.
-
 Tests that:
 
 - Reimplement production logic instead of exercising it.
