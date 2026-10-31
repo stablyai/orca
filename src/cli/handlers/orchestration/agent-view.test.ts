@@ -99,6 +99,19 @@ describe('orchestration agent views', () => {
     expect(process.exitCode).toBe(1)
   })
 
+  it('escapes terminal control bytes in worker-written fields', async () => {
+    const { stdout } = await run('worker-start', [['task', 'task_1']], {
+      ...OLDER_RUNTIME_START,
+      state: 'failed',
+      failedStage: 'agent\x1b]0;x\x07',
+      lastError: 'bad \x9b31m output'
+    })
+    for (const raw of ['\x1b', '\x07', '\x9b']) {
+      expect(stdout).not.toContain(raw)
+    }
+    expect(stdout).toContain('failedStage=agent\\x1b]0;x\\x07')
+  })
+
   it('prints a question with its payload kept apart and a reply command for this executable', async () => {
     const question = {
       id: 'msg_q',
