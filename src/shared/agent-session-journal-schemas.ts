@@ -302,8 +302,13 @@ export function isAdmissibleAgentJournalItemBody(value: unknown): value is Agent
   return AgentJournalItemBodySchema.safeParse(value).success
 }
 
-/** Stored outcomes compare a queued card body with what this schema keeps of it. */
-export const AgentJournalMessageBodySchema = MessageBody
+/** The wire's known arms, in order; saved-outcome storage declares them in full
+ *  (journal-storage-schema.ts). */
+export const AgentJournalKnownSchemas = {
+  blocks: Block.options[0].options,
+  bodies: KnownItemBody.options,
+  resolution: Resolution
+}
 
 /** Submission rows may only carry a user-authored message body. */
 export function isAdmissibleAgentJournalMessageBody(

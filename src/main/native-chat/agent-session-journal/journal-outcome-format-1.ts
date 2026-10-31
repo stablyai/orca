@@ -1,18 +1,28 @@
 import { z } from 'zod'
-import {
-  AgentJournalMessageBodySchema,
-  AgentJournalRenderItemSchema,
-  AgentJournalTurnScopeSchema
-} from '../../../shared/agent-session-journal-schemas'
-import { AgentJournalSubmissionSchema } from '../../../shared/agent-session-journal-submission-schema'
+import { AgentJournalTurnScopeSchema } from '../../../shared/agent-session-journal-schemas'
 import { AgentSessionExecutionOptionsSchema } from '../../../shared/agent-session-execution-options'
-import { AgentSessionFailureFactSchema } from '../../../shared/agent-session-failure-fact-schema'
 import type { AgentJournalRenderItem } from '../../../shared/agent-session-journal-types'
 import type { JournalReducerState } from './journal-reducer'
+import type { JournalHistoryOrigin } from './journal-history-origin'
+import type { JournalStopEvent } from './journal-row-schema'
+import {
+  storedFailureFact,
+  storedItem,
+  storedMessageBody,
+  storedProviderHandle,
+  storedSubmission
+} from './journal-storage-schema'
+import {
+  storageVerdict,
+  strictStorage,
+  type StorageDeclaresAll,
+  type UndeclaredStorageKeys
+} from './journal-storage-strict'
 
-// Outcome format 1 is frozen: a stored record keeps this meaning whatever the reducer or the cache
-// codec become. Changing a field, a schema or the decoder is a new format with its own records; the
-// schema fingerprint and golden fixture tests fail until that is done.
+// Outcome format 1. A record keeps this meaning whatever the reducer or the cache codec become,
+// and a build refuses a record holding a key it does not declare. So an added optional key needs
+// no new format; a changed meaning, a removed or renamed key, a loosened type or a changed record
+// key does, with its own records and decoder beside these. The golden fixture must keep decoding.
 export const JOURNAL_OUTCOME_FORMAT_1 = 1
 
 const number = z.number().finite()
@@ -22,11 +32,6 @@ const place = z.object({
   observedAt: number,
   turnScope: AgentJournalTurnScopeSchema.optional()
 })
-const handle = z.discriminatedUnion('kind', [
-  z.object({ kind: z.literal('codex'), threadId: z.string() }),
-  z.object({ kind: z.literal('claude'), sessionId: z.string(), leafUuid: z.string().nullable() }),
-  z.object({ kind: z.literal('opaque'), agent: z.string(), value: z.string() })
-])
 const pauseMarks = z.object({
   cleared: z
     .object({
@@ -53,19 +58,15 @@ const pauseMarks = z.object({
 const card = z.object({
   messageId: z.string(),
   position: number,
-  body: AgentJournalMessageBodySchema,
+  body: storedMessageBody,
   fingerprint: z.string(),
   state: z.enum(['waiting', 'dispatched', 'returned', 'withdrawn']),
   holdReason: z.string().nullable(),
   returnedReason: z.string().nullable(),
-  returnedRejection: AgentSessionFailureFactSchema.nullable(),
+  returnedRejection: storedFailureFact.nullable(),
   consumedAs: z.string().nullable(),
   queuedAt: cursor.nullable(),
   options: AgentSessionExecutionOptionsSchema.optional()
-})
-const submission = AgentJournalSubmissionSchema.extend({
-  acceptedSequence: number.optional(),
-  origin: z.enum(['client', 'host']).optional()
 })
 const receipt = z.object({
   clientMessageId: z.string(),
@@ -78,15 +79,15 @@ const entry = <V extends z.ZodType>(value: V) => z.tuple([z.string(), value])
 const member = (value: z.ZodString) =>
   z.tuple([value, value]).refine(([key, stored]) => key === stored)
 
-/** What format 1 stores: each schema keeps exactly the fields this format defines. */
+/** What format 1 stores, as declared; reads admit values only through their strict forms. */
 export const outcomeFormat1Stored = {
-  items: AgentJournalRenderItemSchema,
+  items: storedItem,
   itemFences: entry(number),
   itemExecutionOwners: entry(number),
   providerActivityAt: z.tuple([number, number]),
   tombstones: entry(number),
   removedTurnIds: member(z.string()),
-  submissions: entry(submission),
+  submissions: entry(storedSubmission),
   receipts: entry(receipt),
   aliases: entry(z.string()),
   itemEchoes: z.union([z.tuple([z.string()]), z.tuple([z.string(), z.unknown()])]),
@@ -106,7 +107,7 @@ export const outcomeFormat1StoredScalars = z.object({
   derivedTurnScope: z.string().nullable(),
   latestAcceptedTurnSequence: number,
   queuePauseMarks: pauseMarks,
-  historyOrigin: z.object({ providerHandle: handle, raw: z.unknown() }).nullable(),
+  historyOrigin: z.object({ providerHandle: storedProviderHandle, raw: z.unknown() }).nullable(),
   queue: z.object({ revision: number })
 })
 
@@ -130,8 +131,10 @@ export const OUTCOME_FORMAT_1_COLLECTIONS = [
 ] as const satisfies readonly (keyof typeof outcomeFormat1Stored)[]
 
 function checked<T>(schema: z.ZodType): z.ZodType<T> {
-  // SAFETY: each schema checks the stored shape; decoding keeps the stored value as it is.
-  return z.custom<T>((value) => schema.safeParse(value).success)
+  // SAFETY: the strict schema admits only keys the type declares (checked at the end of this file);
+  // decoding keeps the stored value as it is.
+  const strict = strictStorage(schema)
+  return z.custom<T>((value) => strict.safeParse(value).success)
 }
 
 type State = JournalReducerState
@@ -183,12 +186,16 @@ export const outcomeFormat1Scalars = outcomeFormat1StoredScalars.extend({
   historyOrigin: outcomeFormat1Fields.historyOrigin
 })
 
-const collections = new Map<string, z.ZodType>(Object.entries(outcomeFormat1Stored))
-const scalars = new Map<string, z.ZodType>(Object.entries(outcomeFormat1StoredScalars.shape))
+/** The scalars as a whole, strict, for a cache that stores them together. */
+export const outcomeFormat1StrictScalars = strictStorage(outcomeFormat1StoredScalars)
+const strictly = (schemas: Record<string, z.ZodType>) =>
+  new Map(Object.entries(schemas).map(([field, schema]) => [field, strictStorage(schema)]))
+const collections = strictly(outcomeFormat1Stored)
+const scalars = strictly(outcomeFormat1StoredScalars.shape)
 
-/** Admission: a record of a field or scalar format 1 does not define is a newer writer's ('unknown');
- * content failing a defined schema is damage and throws. An admitted value is decoded as stored, never
- * re-encoded through the schema. */
+/** Admission: a field, scalar, key or union tag format 1 does not declare, at any depth, is a newer
+ * writer's ('unknown'); content failing a declared type is damage and throws. An admitted value is
+ * decoded as stored, never re-encoded through the schema. */
 export function admitOutcomeFormat1(value: {
   field: string
   key: string
@@ -211,7 +218,14 @@ export function admitOutcomeFormat1(value: {
   if (value.deleted) {
     return value.json === 'null' ? undefined : 'unknown'
   }
-  const kept = schema.parse(JSON.parse(value.json))
+  const kept: unknown = JSON.parse(value.json)
+  const verdict = storageVerdict(schema, kept)
+  if (verdict !== 'stored') {
+    if (verdict === 'newer') {
+      return 'unknown'
+    }
+    throw new Error('invalid journal outcome value')
+  }
   const storedKey = value.field === '$' ? key : value.field === 'items' ? itemId(kept) : first(kept)
   if (storedKey !== key) {
     throw new Error('mismatched journal outcome key')
@@ -226,3 +240,28 @@ function itemId(value: unknown): unknown {
 function first(value: unknown): unknown {
   return Array.isArray(value) ? value[0] : undefined
 }
+
+type Collection = (typeof OUTCOME_FORMAT_1_COLLECTIONS)[number]
+type StoredIn<F> = F extends 'items'
+  ? AgentJournalRenderItem
+  : F extends 'queue.cards'
+    ? Stored<Cards>
+    : F extends keyof State
+      ? Stored<State[F]>
+      : never
+type Marks = State['queuePauseMarks']
+// Live Stop settlement is never stored (durableQueuePauseMarks).
+type StoredMarks = Omit<Marks, 'latestStop'> & {
+  latestStop: { sequence: number; event: JournalStopEvent } | null
+}
+type Scalars = z.output<typeof outcomeFormat1StoredScalars>
+export type OutcomeFormat1DeclaresEveryKey = StorageDeclaresAll<
+  | {
+      [F in Collection]: UndeclaredStorageKeys<
+        StoredIn<F>,
+        z.output<(typeof outcomeFormat1Stored)[F]>
+      >
+    }[Collection]
+  | UndeclaredStorageKeys<StoredMarks, Scalars['queuePauseMarks']>
+  | UndeclaredStorageKeys<JournalHistoryOrigin, Scalars['historyOrigin']>
+>

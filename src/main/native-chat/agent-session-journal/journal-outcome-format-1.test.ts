@@ -1,4 +1,3 @@
-import { createHash } from 'node:crypto'
 import { readFileSync } from 'node:fs'
 import { mkdtemp, rm } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
@@ -15,10 +14,11 @@ import type { JournalHostDatabase } from './journal-host-database'
 import { restoreJournal } from './journal-open'
 import type { JournalReducerState } from './journal-reducer'
 import {
+  admitOutcomeFormat1,
   OUTCOME_FORMAT_1_COLLECTIONS,
-  outcomeFormat1Scalars,
-  outcomeFormat1Stored,
-  outcomeFormat1StoredScalars
+  outcomeFormat1EntryParsers,
+  outcomeFormat1Fields,
+  outcomeFormat1Scalars
 } from './journal-outcome-format-1'
 import { JournalProjectionCatchUp } from './journal-projection-catch-up'
 import { finishCatchUp } from './journal-projection-test-support'
@@ -100,7 +100,7 @@ function restored(): JournalReducerState {
 }
 
 it('reads the checked-in format-1 outcomes into the same chat, every field and scalar included', () => {
-  // A new field or scalar is a new format: add its own fixture rather than editing this one.
+  // Every field and scalar has records here; a field or scalar added later adds its own records.
   expect(OUTCOME_FORMAT_1_COLLECTIONS).toEqual([
     'items',
     'itemFences',
@@ -195,17 +195,32 @@ it('refuses a record of a newer format even when the epoch summary was not raise
   expect(restoreJournal(database.db, sessionId)).toMatchObject(newer)
 })
 
-it('keeps the stored format 1 schemas exactly as they shipped', () => {
-  // These schemas define what format 1 records mean. Any change here, including in a shared schema
-  // they use, is a new format with its own records and decoder: never edit format 1 in place.
-  const fingerprint = createHash('sha256')
-    .update(
-      JSON.stringify(
-        Object.entries({ ...outcomeFormat1Stored, $: outcomeFormat1StoredScalars }).map(
-          ([field, schema]) => [field, z.toJSONSchema(schema, { unrepresentable: 'any' })]
-        )
+// Every key format 1 declares, at every depth, checked in as data: each must keep admitting and
+// decoding as stored. Adding an optional key adds to this corpus; nothing here is edited in place.
+const values = z
+  .array(z.tuple([z.enum(['items', 'submissions', 'queue.cards']), z.string(), z.unknown()]))
+  .parse(
+    JSON.parse(
+      readFileSync(
+        new URL('./__fixtures__/journal-outcome-format-1-values.json', import.meta.url),
+        'utf8'
       )
     )
-    .digest('hex')
-  expect(fingerprint).toBe('21fac800b984d60917e6df11b047782abe8050174f050ef13bee28e0d96c6fe7')
+  )
+
+it('admits and decodes every declared shape as stored, and refuses one key more as newer', () => {
+  for (const [field, key, value] of values) {
+    const json = JSON.stringify(value)
+    expect(admitOutcomeFormat1({ field, key, json, deleted: false })).toBeUndefined()
+    const decoded =
+      field === 'items'
+        ? outcomeFormat1Fields.items.element.parse(value)
+        : outcomeFormat1EntryParsers[field].parse(value)
+    expect(decoded).toEqual(value)
+  }
+  const [, key, item] = values[0] ?? []
+  const newer = JSON.stringify(item).replace('"orcaStop":{', '"orcaStop":{"later":1,')
+  expect(admitOutcomeFormat1({ field: 'items', key: key ?? '', json: newer, deleted: false })).toBe(
+    'unknown'
+  )
 })

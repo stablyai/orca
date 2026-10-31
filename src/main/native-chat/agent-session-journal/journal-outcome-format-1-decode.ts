@@ -4,7 +4,8 @@ import { JournalDerivedTurnScope } from './journal-derived-turn-scope'
 import {
   outcomeFormat1EntryParsers,
   outcomeFormat1Fields,
-  outcomeFormat1Scalars
+  outcomeFormat1Scalars,
+  outcomeFormat1StrictScalars
 } from './journal-outcome-format-1'
 
 // Part of frozen outcome format 1: builds reducer state from its stored scalars and keyed entries.
@@ -23,6 +24,7 @@ type Target = {
 
 /** Decodes format 1's scalars, then its keyed entries in their stored order. */
 export function startOutcomeFormat1Decode(scalars: unknown): JournalStateDecode {
+  outcomeFormat1StrictScalars.parse(scalars)
   const stored = outcomeFormat1Scalars.parse(scalars)
   return decodeOutcomeFormat1Onto(
     Object.entries(stored).map(([key, value]): [string, string] => [key, JSON.stringify(value)])
@@ -40,7 +42,7 @@ export function decodeOutcomeFormat1Onto(
 } {
   const state = baseline ?? createJournalReducerState('', '')
   if (!baseline) {
-    outcomeFormat1Scalars.parse(
+    outcomeFormat1StrictScalars.parse(
       Object.fromEntries(scalarJson.map(([key, json]) => [key, JSON.parse(json)]))
     )
   }
@@ -64,7 +66,8 @@ export function decodeOutcomeFormat1Onto(
   }
 }
 
-// Live Stop settlement belongs to its process; only the row-derived pause facts survive restart.
+// Live Stop settlement belongs to its process; only the row-derived pause facts are stored, so a
+// stored value decodes as it is.
 export function durableQueuePauseMarks(
   marks: JournalReducerState['queuePauseMarks']
 ): JournalReducerState['queuePauseMarks'] {
@@ -100,7 +103,7 @@ function applyScalar(state: JournalReducerState, key: string, value: unknown): v
       state.latestAcceptedTurnSequence = f.latestAcceptedTurnSequence.parse(value)
       return
     case 'queuePauseMarks':
-      state.queuePauseMarks = durableQueuePauseMarks(f.queuePauseMarks.parse(value))
+      state.queuePauseMarks = f.queuePauseMarks.parse(value)
       return
     case 'queue':
       state.queue.revision = f.queue.parse(value).revision
