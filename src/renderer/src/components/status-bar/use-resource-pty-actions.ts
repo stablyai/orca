@@ -86,14 +86,13 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
         setErrors(new Map(errorsRef.current))
       }
     }
-    invalidate()
     for (const completion of completed) {
       completion.batch.unpublished -= 1
       if (completion.batch.unpublished === 0) {
         completion.batch.resolve()
       }
     }
-  }, [invalidate, mounted, removeSessions])
+  }, [mounted, removeSessions])
   useEffect(() => () => flushCompletions(), [flushCompletions])
 
   const terminate = useCallback(
@@ -146,9 +145,10 @@ export function useResourcePtyActions(inventory: ReturnType<typeof useResourceSe
       }
       if (pending.active === 0) {
         flushCompletions()
+        invalidate()
       }
     },
-    [flushCompletions, terminate]
+    [flushCompletions, invalidate, terminate]
   )
   const endMany = useCallback(
     async (rows: readonly ResourcePtyRow[]): Promise<void> => {
