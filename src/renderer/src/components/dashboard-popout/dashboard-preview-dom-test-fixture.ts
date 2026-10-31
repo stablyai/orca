@@ -1,8 +1,11 @@
 import type { PreviewTerminalLinkHandler } from './preview-terminal-links'
-import { vi } from 'vitest'
+import { vi, type Mock } from 'vitest'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { TerminalKittyKeyboardModeTracker } from '../../../../shared/terminal-kitty-keyboard-mode-tracker'
-import { openStandaloneTerminal } from '../standalone-terminal/open-standalone-terminal'
+import {
+  openStandaloneTerminal,
+  type StandaloneTerminal
+} from '../standalone-terminal/open-standalone-terminal'
 import { installDashboardPreviewLinkInteraction } from './dashboard-preview-link-interaction'
 import type { DashboardPreviewLinkSource } from './dashboard-preview-http-actions'
 
@@ -136,7 +139,15 @@ export function mountPreviewLinkInteraction(
   readSettings: () => GlobalSettings | null,
   trackInstance: (instance: ReturnType<typeof openStandaloneTerminal>) => void,
   withInteraction = true
-) {
+): {
+  instance: StandaloneTerminal
+  install: () => ReturnType<typeof installDashboardPreviewLinkInteraction>
+  sink: Mock<(data: string) => boolean | Promise<boolean>>
+  getSource: Mock<() => DashboardPreviewLinkSource | undefined>
+  getSettings: Mock<() => GlobalSettings | null>
+  request: Mock<Parameters<typeof installDashboardPreviewLinkInteraction>[1]['request']>
+  container: HTMLDivElement
+} {
   const container = document.createElement('div')
   document.body.appendChild(container)
   let interaction: ReturnType<typeof installDashboardPreviewLinkInteraction> | undefined
@@ -168,7 +179,7 @@ export function mountPreviewLinkInteraction(
   if (!instance) {
     throw new Error('Actual standalone constructor failed')
   }
-  const request = vi.fn()
+  const request = vi.fn<Parameters<typeof installDashboardPreviewLinkInteraction>[1]['request']>()
   const getSource = vi.fn<() => DashboardPreviewLinkSource | undefined>(() => source)
   const getSettings = vi.fn(readSettings)
   const install = () => {

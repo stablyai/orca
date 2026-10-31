@@ -78,12 +78,16 @@ function AgentTerminalFrame({
         <AgentTerminalPreview
           ptyId={card.ptyId}
           terminalInput={card.terminalInput ?? null}
-          linkSource={{
-            worktreeId: card.worktreeId,
-            executionHostId: card.executionHostId,
-            tabId: card.tabId,
-            ptyId: card.ptyId
-          }}
+          linkSource={
+            onBrowserForeground
+              ? {
+                  worktreeId: card.worktreeId,
+                  executionHostId: card.executionHostId,
+                  tabId: card.tabId,
+                  ptyId: card.ptyId
+                }
+              : undefined
+          }
           onBrowserForeground={
             onBrowserForeground
               ? () => {

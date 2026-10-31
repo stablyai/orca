@@ -16,6 +16,7 @@ import {
   mountPreviewLinkInteraction
 } from './dashboard-preview-dom-test-fixture'
 import { verifyPreviewLinkPopulation } from './dashboard-preview-link-population-test-fixture'
+import { verifyPopoutDefaultLinkPath } from './dashboard-preview-popout-default-test-fixture'
 import { Terminal } from '@xterm/xterm'
 import { toast } from 'sonner'
 import { runtimeStatuses } from '@/store/slices/browser-slice-test-harness'
@@ -570,53 +571,48 @@ it('retains actual boolean/Promise forwarding results and flushes unclaimed repo
   expect(preview.sink.mock.calls.slice(2).map(([data]) => data)).toEqual(reports)
 })
 
+function cards(count: number): DashboardCard[] {
+  return Array.from({ length: count }, (_, i) => ({
+    paneKey: `pane-${i}`,
+    ptyId: `pty-${i}`,
+    agentType: 'claude',
+    bucket: 'working',
+    dotState: 'working',
+    task: 'task',
+    repoId: 'repo1',
+    worktreeId: WORKSPACE,
+    tabId: `tab-${i}`,
+    leafId: `leaf-${i}`,
+    repoName: 'Repo',
+    worktreeName: `Workspace ${i}`,
+    startedAt: 0,
+    finishedAt: null,
+    stateChangedAt: 0,
+    unseen: false
+  }))
+}
+
 it('adds no provider or preview connection when the real board grows from 10 to 100 cards without an open preview', async () => {
   const provider = vi.spyOn(Terminal.prototype, 'registerLinkProvider')
-  const cards = (count: number): DashboardCard[] =>
-    Array.from({ length: count }, (_, i) => ({
-      paneKey: `pane-${i}`,
-      ptyId: `pty-${i}`,
-      agentType: 'claude',
-      bucket: 'working',
-      dotState: 'working',
-      task: 'task',
-      repoId: 'repo1',
-      worktreeId: WORKSPACE,
-      tabId: `tab-${i}`,
-      leafId: `leaf-${i}`,
-      repoName: 'Repo',
-      worktreeName: `Workspace ${i}`,
-      startedAt: 0,
-      finishedAt: null,
-      stateChangedAt: 0,
-      unseen: false
-    }))
   const view = render(<AgentKanbanBoard snapshot={{ generatedAt: 1, cards: cards(10) }} />)
   view.rerender(<AgentKanbanBoard snapshot={{ generatedAt: 2, cards: cards(100) }} />)
   expect(provider).not.toHaveBeenCalled()
   expect(window.api.terminalPreview.connect).not.toHaveBeenCalled()
   view.unmount()
-  // This is the production popout-capability ancestor, with no App/test Tooltip wrapper.
-  const popout = renderWithoutApp(
-    <AgentKanbanBoard snapshot={{ generatedAt: 3, cards: [{ ...cards(1)[0]!, ...source }] }} />
-  )
-  fireEvent.click(popout.getByRole('button', { name: /Workspace 0/ }))
-  expect(window.api.dashboard.ackAgent).toHaveBeenCalledExactlyOnceWith('pane-0', 'explicit')
-  await waitFor(() => screenFor(document.body))
-  await output(osc)
-  const screen = screenFor(document.body)
-  pointer(screen, 'mousedown')
-  pointer(screen, 'mouseup')
-  const copy = await popout.findByRole('button', { name: 'Copy link' })
-  expect(popout.queryByRole('button', { name: 'Terminal link settings' })).toBeNull()
-  expect(popout.queryByRole('button', { name: /Orca Browser/ })).toBeNull()
-  fireEvent.click(copy)
-  await waitFor(() => expect(window.api.ui.writeClipboardText).toHaveBeenCalledWith(URL_TO_OPEN))
-  fireEvent.click(popout.getByRole('button', { name: /System Browser/ }))
-  await waitFor(() => expect(openUrl).toHaveBeenCalledExactlyOnceWith(URL_TO_OPEN))
-  popout.unmount()
-  expect(document.querySelector('[data-link-action-popover]')).toBeNull()
-  expect(window.api.terminalPreview.unsubscribe).toHaveBeenCalledExactlyOnceWith('pty-1')
+  await verifyPopoutDefaultLinkPath({
+    source,
+    card: { ...cards(1)[0]!, ...source },
+    provider,
+    osc,
+    readSettings: () => store.getState().settings,
+    trackInstance: (instance) => instances.push(instance),
+    pointer,
+    screenFor,
+    output,
+    input,
+    openUrl,
+    subscribeToRouter: mocks.subscribe
+  })
 })
 
 it('honors primary/alternate and Open on real literal URLs, keeps background context, and refuses unqualified/mismatched hosts before feedback', async () => {
@@ -678,7 +674,7 @@ it('honors primary/alternate and Open on real literal URLs, keeps background con
   expect(view.queryByRole('button', { name: /Orca Browser/ })).toBeNull()
 })
 
-it('refuses real selected/drag/nonlink requests and forwards their mouse reports; the popout offers only system and no Settings', async () => {
+it('refuses real selected/drag/nonlink reports and retains the real in-window Board chooser and Settings handoff', async () => {
   const preview = mountedInteraction()
   const interaction = preview.install()
   await new Promise<void>((resolve) =>
@@ -711,35 +707,37 @@ it('refuses real selected/drag/nonlink requests and forwards their mouse reports
   preview.instance.dispose()
   preview.container.remove()
 
-  const view = render(<AgentTerminalPreview ptyId="pty-1" linkSource={source} />)
-  await waitFor(() => screenFor(view.container))
+  const foreground = vi.fn()
+  const view = renderWithoutApp(
+    <AgentKanbanBoard
+      snapshot={{ generatedAt: 1, cards: [{ ...cards(1)[0]!, ...source }] }}
+      onBrowserForeground={foreground}
+    />
+  )
+  fireEvent.click(view.getByRole('button', { name: /Workspace 0/ }))
+  await waitFor(() => screenFor(document.body))
   await output(osc)
-  const realScreen = screenFor(view.container)
+  const realScreen = screenFor(document.body)
   pointer(realScreen, 'mousedown')
   pointer(realScreen, 'mouseup')
-  await waitFor(() => expect(view.getByRole('button', { name: /System Browser/ })).toBeTruthy())
-  expect(view.queryByRole('button', { name: /Orca Browser/ })).toBeNull()
-  expect(view.queryByRole('button', { name: 'Terminal link settings' })).toBeNull()
+  const settings = await view.findByRole('button', { name: 'Terminal link settings' })
+  expect(document.querySelector('[data-terminal-link-destination]')?.textContent).toBe(URL_TO_OPEN)
+  expect(view.getByRole('button', { name: /System Browser/ })).toBeTruthy()
+  fireEvent.click(settings)
+  expect(foreground).toHaveBeenCalledOnce()
+  expect(store.getState().activeView).toBe('settings')
+  await waitFor(() => expect(document.querySelector('.xterm')).toBeNull())
 })
 
 it('hands Settings through the actual in-window frame and shared popover without leaving the covering panel open', async () => {
   const close = vi.fn()
   const handoff = vi.fn()
-  const card: DashboardCard = {
+  const card = {
+    ...cards(1)[0]!,
     ...source,
     paneKey: 'pane-1',
-    agentType: 'claude',
-    bucket: 'working',
-    dotState: 'working',
-    task: 'task',
-    repoId: 'repo1',
     leafId: 'leaf-1',
-    repoName: 'Repo',
-    worktreeName: 'Workspace',
-    startedAt: 0,
-    finishedAt: null,
-    stateChangedAt: 0,
-    unseen: false
+    worktreeName: 'Workspace'
   }
   const view = render(
     <AgentTerminalPanel
