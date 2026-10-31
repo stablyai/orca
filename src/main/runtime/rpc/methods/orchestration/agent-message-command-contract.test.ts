@@ -10,6 +10,8 @@ import { OrchestrationMutationExecutor } from '../../orchestration-mutation-exec
 import { CLIENT_HISTORY_READER } from '../../../../native-chat/agent-session-wire/agent-session-item-wire-form'
 import { afterEach, expect, it, vi } from 'vitest'
 import { createOrchestrationRpcHarness } from './rpc-test-harness'
+import { STATUS_METHODS } from '../status'
+import { eraseRpcMethods } from '../../core'
 import { partialRuntimeStore } from '../../../runtime-store-partial-fixture'
 import { resolveOrchestrationSessionCaller } from '../../orchestration-session-caller'
 import { setStructuredAgentSessionHost } from '../../../../native-chat/agent-session-wire/structured-agent-session-registry'
@@ -38,7 +40,8 @@ import * as placement from './worker/worker-start-agent-placement'
 import * as topology from './worker/worker-topology'
 import {
   ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+  ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+  ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
 } from '../../../../../shared/protocol-version'
 import { projectStructuredAgentStartItem } from '../../../../../shared/structured-agent-start-projection'
 import { projectStructuredItemToNativeChat } from '../../../../../shared/structured-agent-session-projection'
@@ -72,10 +75,17 @@ afterEach(async () => {
   process.exitCode = 0
 })
 
-it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-federated'] as const)(
+it.each([
+  'worker-start',
+  'saved-task',
+  'dispatch',
+  'federated',
+  'configured-federated',
+  'malformed-federated'
+] as const)(
   'real %s argv constructs, persists and delivers canonical input with a derived task display',
   async (command) => {
-    const federated = command === 'federated' || command === 'configured-federated'
+    const federated = command.endsWith('federated')
     rig = await createQueuedMessageTestRig({ sessionId: WORKER })
     const current = rig
     setStructuredAgentSessionHost(current.host)
@@ -92,9 +102,10 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
       }
     })
     expect(await current.host.attach(QUEUED_RIG_CALLER, attach)).toMatchObject({ ok: true })
-    const { db, runtime } = h.setup(
+    let { db, runtime } = h.setup(
       false,
-      partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
+      partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) }),
+      join(current.root, 'home-orchestration.db')
     )
     if (federated) {
       vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
@@ -103,14 +114,24 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
         peerFingerprint: 'peer',
         pairingRevision: 1
       })
-      vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation(() => {})
+      vi.spyOn(runtime, 'ensureOrchestrationFederationRelay').mockImplementation((runId) => {
+        if (command === 'configured-federated') {
+          const currentDb = runtime.getOrchestrationDb()
+          const [dispatch] = currentDb.listActiveFederatedDispatches(runId)
+          expect(
+            JSON.parse(currentDb.getWorkerDispatch(dispatch.dispatch_id)!.start_options).launch
+              .effective.agent
+          ).toBe('codex')
+        }
+      })
       vi.spyOn(runtime, 'callOrchestrationWorkerServer').mockImplementation(
         async (_host, method, params) => {
           if (method === 'status.get') {
             return {
               capabilities: [
                 ORCHESTRATION_CONTRACT_RUNTIME_CAPABILITY,
-                ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY
+                ORCHESTRATION_FEDERATION_RUNTIME_CAPABILITY,
+                ORCHESTRATION_WORKER_LAUNCH_PREFERENCES_RUNTIME_CAPABILITY
               ]
             }
           }
@@ -127,20 +148,29 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
             expect(params).toMatchObject({
               agent: command === 'configured-federated' ? 'codex-fugu' : 'codex'
             })
+            if (command === 'configured-federated') {
+              expect(params).toMatchObject({
+                agent: 'codex-fugu',
+                model: 'home-model',
+                effort: 'high'
+              })
+            }
             return {
               dispatchId,
               state: 'ready',
               runtimeEpoch: 'remote-epoch',
               worktreeId: 'remote-workspace',
               terminalHandle: 'term_remote',
-              ...(command === 'configured-federated'
-                ? {
-                    launch: {
-                      requested: { agent: 'codex', model: null, effort: null },
-                      effective: { agent: 'codex', model: null, effort: null }
+              ...(command === 'malformed-federated'
+                ? { launch: {} }
+                : command === 'configured-federated'
+                  ? {
+                      launch: {
+                        requested: { agent: 'codex', model: 'peer-request', effort: 'low' },
+                        effective: { agent: 'codex', model: 'effective-model', effort: 'medium' }
+                      }
                     }
-                  }
-                : {})
+                  : {})
             }
           }
           if (method === 'orchestration.federationShow') {
@@ -267,7 +297,7 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
       id: z.string(),
       authToken: z.string(),
       method: z.string(),
-      params: z.unknown(),
+      params: z.unknown().optional(),
       orchestrationRequestId: z.string().optional()
     })
     transport.onMessage((wire, reply) => {
@@ -294,7 +324,10 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
           undefined
         )
         requests.push(request.method)
-        const rpc = h.findMethod(request.method)
+        const rpc =
+          request.method === 'status.get'
+            ? eraseRpcMethods(STATUS_METHODS)[0]
+            : h.findMethod(request.method)
         const parsed = rpc.params?.parse(admitted.request.params)
         const result = await executor.run(
           admitted.request,
@@ -399,6 +432,9 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
         '--agent',
         command === 'configured-federated' ? 'codex-fugu' : 'codex',
         ...(federated ? ['--on', 'remote', '--worktree', 'id:remote-workspace'] : []),
+        ...(command === 'configured-federated'
+          ? ['--model', 'home-model', '--effort', 'high']
+          : []),
         '--timeout-ms',
         '1000',
         '--retry-request',
@@ -499,7 +535,18 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
       const dispatch = db.getDispatchContextById(
         z.string().parse(output.mock.lastCall?.[0].result.dispatchId)
       )!
-      if (command === 'federated') {
+      {
+        // New mail after reopening the actual home domain DB must retain the acquired alias kind.
+        db = h.reopenDatabase()
+        if (command === 'configured-federated') {
+          expect(JSON.parse(db.getWorkerDispatch(dispatch.id)!.start_options)).toMatchObject({
+            agent: 'codex-fugu',
+            launch: {
+              requested: { agent: 'codex', model: 'home-model', effort: 'high' },
+              effective: { agent: 'codex', model: 'effective-model', effort: 'medium' }
+            }
+          })
+        }
         await main(['orchestration', 'worker-show', '--dispatch', dispatch.id, '--json', '--full'])
         expect(requests).toContain('orchestration.workerShow')
         await eventually(async () => {
@@ -516,6 +563,11 @@ it.each(['worker-start', 'saved-task', 'dispatch', 'federated', 'configured-fede
           expect(messages.map((message) => message.messageId)).toEqual(
             expect.arrayContaining(['remote-status', 'remote-worker_done'])
           )
+          expect(
+            mail
+              .filter((sender) => sender.party.address === `dispatch:${dispatch.id}`)
+              .every((sender) => sender.agent === 'codex')
+          ).toBe(true)
           expect(mail).toContainEqual(
             expect.objectContaining({
               party: expect.objectContaining({ address: `dispatch:${dispatch.id}` }),

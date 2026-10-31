@@ -144,9 +144,14 @@ it.each([10, 100])(
     )
     let dispatchVisits = 0
     let taskVisits = 0
+    let workerVisits = 0
     installSqlVisitCounters({
       start_dispatch_visit: () => {
         dispatchVisits++
+        return 1
+      },
+      start_worker_visit: () => {
+        workerVisits++
         return 1
       },
       start_task_visit: () => {
@@ -163,6 +168,10 @@ it.each([10, 100])(
             .replace(
               'WHERE assignee_handle = ?',
               'WHERE assignee_handle = ? AND start_dispatch_visit(rowid)'
+            )
+            .replace(
+              'FROM worker_dispatches WHERE dispatch_id = ?',
+              'FROM worker_dispatches WHERE dispatch_id = ? AND start_worker_visit(rowid)'
             )
             .replace(
               'FROM tasks WHERE id = ?',
@@ -231,9 +240,10 @@ it.each([10, 100])(
     expect(epochReads).toHaveBeenCalledTimes(4)
     expect(serialized).toHaveBeenCalledTimes(1)
     expect(inserts).toHaveBeenCalledTimes(1)
-    expect(sourceQueries).toHaveBeenCalledTimes(2)
+    expect(sourceQueries).toHaveBeenCalledTimes(3)
     expect(dispatchVisits).toBe(1)
     expect(taskVisits).toBe(1)
+    expect(workerVisits).toBe(1)
     expect(tabVisits).toBe(9 * count + 1)
     expect(journal.snapshot()).toEqual(before)
     expect(
@@ -260,7 +270,7 @@ it.each([10, 100])(
       counter.mockClear()
     }
     snapshotSources.length = 0
-    tabVisits = dispatchVisits = taskVisits = 0
+    tabVisits = dispatchVisits = taskVisits = workerVisits = 0
     const publishers = facts.map(() => prepareWorkerStartCard(runtime, admitted.caller))
     expect(epochReads).toHaveBeenCalledTimes(count)
     facts.forEach((fact, index) => publishers[index](fact))
@@ -281,9 +291,10 @@ it.each([10, 100])(
     expect(names).toHaveBeenCalledTimes(2 * count)
     expect(activeSource).toHaveBeenCalledTimes(2 * count)
     expect(recordedSource).not.toHaveBeenCalled()
-    expect(sourceQueries).toHaveBeenCalledTimes(4 * count)
+    expect(sourceQueries).toHaveBeenCalledTimes(6 * count)
     expect(dispatchVisits).toBe(2 * count)
     expect(taskVisits).toBe(2 * count)
+    expect(workerVisits).toBe(2 * count)
     const visitsPerPass = facts.reduce((sum, _fact, index) => sum + 9 * count + index + 1, 0)
     expect(tabVisits).toBe(2 * visitsPerPass)
     expect(tabVisits).toBeLessThanOrEqual(2 * count * tabs.length)
@@ -308,6 +319,7 @@ it.each([10, 100])(
       inserts: inserts.mock.calls.length,
       dispatchVisits,
       taskVisits,
+      workerVisits,
       tabVisits
     })
   }

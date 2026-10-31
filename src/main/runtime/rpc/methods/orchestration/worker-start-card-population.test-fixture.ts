@@ -41,12 +41,12 @@ export function expectWorkerStartSourcePlans(
     ReturnType<typeof createOrchestrationRpcHarness>['setup']
   >['db']['db']['prepare']
 ): void {
-  for (const [query] of queries.slice(0, 2)) {
+  for (const [query] of queries.slice(0, 3)) {
     const plan = prepareSource(`EXPLAIN QUERY PLAN ${query}`)
       .all('unused')
       .map((row) => row.detail)
       .join(' | ')
-    expect(plan).toMatch(/SEARCH (?:dispatch_contexts|tasks)/)
+    expect(plan).toMatch(/SEARCH (?:dispatch_contexts|tasks|worker_dispatches)/)
     expect(plan).not.toMatch(/SCAN/)
   }
 }

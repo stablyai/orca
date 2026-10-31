@@ -12,6 +12,7 @@ import type { Tab } from '../../shared/tab-types'
 import type { TerminalLayoutSnapshot, TerminalTab } from '../../shared/terminal-tab-types'
 import type { OrchestrationDb } from './orchestration/db'
 import {
+  observeOrchestrationSender,
   orchestrationSenderAgent,
   orchestrationSenderName,
   structuredChatNaming,
@@ -94,12 +95,13 @@ export class RuntimeOrchestrationSenderNames {
     return orchestrationSenderName(party, this.namingSources(), reportedDispatchId)
   }
 
-  /** Name and agent from one read of the sender's terminal. */
+  /** Name and agent share one current chat or terminal observation. */
   snapshotOf(party: AgentMessageSender['party'], reportedDispatchId?: string): SenderSnapshot {
     const sources = this.namingSources()
+    const observation = observeOrchestrationSender(party, sources, reportedDispatchId)
     return {
-      name: orchestrationSenderName(party, sources, reportedDispatchId),
-      agent: orchestrationSenderAgent(party, sources)
+      name: orchestrationSenderName(party, sources, reportedDispatchId, observation),
+      agent: orchestrationSenderAgent(sources, observation)
     }
   }
 

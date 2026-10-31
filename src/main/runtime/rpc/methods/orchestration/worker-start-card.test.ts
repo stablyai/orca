@@ -37,7 +37,17 @@ it.each([
   'context-only',
   'cleared-context',
   'federated',
-  'federated-unknown'
+  'federated-unknown',
+  'federated-failed',
+  'federated-empty',
+  'federated-nested',
+  'federated-future',
+  'federated-requested',
+  'federated-foreign',
+  'federated-metadata-fails',
+  'federated-no-card',
+  'federated-pending-card',
+  'federated-failed-card'
 ] as const)(
   'real worker-start records creation independently of launch: %s',
   async (scenario) => {
@@ -46,7 +56,11 @@ it.each([
     if (scenario === 'readiness-failure') {
       current.dispatch.mockRejectedValueOnce(new Error('provider dispatch failed'))
     }
-    const federated = scenario === 'federated' || scenario === 'federated-unknown'
+    const federated = scenario.startsWith('federated')
+    const remoteReady =
+      federated &&
+      !['federated-unknown', 'federated-failed', 'federated-foreign'].includes(scenario)
+    const expectedAgent = scenario === 'federated-future' ? 'future-agent' : 'codex'
     setStructuredAgentSessionHost(current.host)
     expect(
       await current.host.attach(
@@ -65,6 +79,14 @@ it.each([
       false,
       partialRuntimeStore({ getSettings: () => ({ agentDefaultSurface: 'terminal' }) })
     )
+    if (scenario === 'federated-metadata-fails') {
+      db.db.exec(
+        "CREATE TRIGGER launch_metadata_write_failure BEFORE UPDATE OF start_options ON worker_dispatches BEGIN SELECT RAISE(ABORT, 'metadata write unavailable'); END"
+      )
+    }
+    if (scenario === 'federated-no-card') {
+      vi.spyOn(current.host, 'captureAgentStartDestination').mockReturnValue(null)
+    }
     if (federated) {
       vi.spyOn(runtime, 'resolveOrchestrationWorkerServer').mockReturnValue({
         environmentId: 'remote',
@@ -87,8 +109,36 @@ it.each([
             throw new Error('missing remote dispatch')
           }
           return {
-            dispatchId: params.dispatchId,
-            state: scenario === 'federated' ? 'ready' : 'outcome_unknown',
+            dispatchId: scenario === 'federated-foreign' ? 'foreign-dispatch' : params.dispatchId,
+            state:
+              scenario === 'federated-unknown'
+                ? 'outcome_unknown'
+                : scenario === 'federated-failed'
+                  ? 'failed'
+                  : 'ready',
+            ...(scenario === 'federated'
+              ? {}
+              : {
+                  launch:
+                    scenario === 'federated-empty'
+                      ? {}
+                      : scenario === 'federated-nested'
+                        ? {
+                            requested: { agent: 42 },
+                            effective: { agent: 'x'.repeat(201), model: [] }
+                          }
+                        : {
+                            requested: { agent: 'codex', model: 'remote-request', effort: 'low' },
+                            effective:
+                              scenario === 'federated-requested'
+                                ? null
+                                : {
+                                    agent: expectedAgent,
+                                    model: 'remote-effective',
+                                    effort: 'high'
+                                  }
+                          }
+                }),
             runtimeEpoch: 'remote-epoch',
             worktreeId: 'remote-workspace',
             terminalHandle: 'term_remote'
@@ -153,9 +203,13 @@ it.each([
     })
     const append = vi.spyOn(current.host, 'appendAgentStart')
     const pending = Promise.withResolvers<void>()
-    if (scenario === 'append-throws' || scenario === 'logging-throws') {
+    if (
+      scenario === 'append-throws' ||
+      scenario === 'logging-throws' ||
+      scenario === 'federated-failed-card'
+    ) {
       append.mockRejectedValueOnce(new Error('journal unavailable'))
-    } else if (scenario === 'append-pending') {
+    } else if (scenario === 'append-pending' || scenario === 'federated-pending-card') {
       append.mockReturnValueOnce(pending.promise)
     }
     const warn = vi.spyOn(console, 'warn').mockImplementation((message) => {
@@ -256,17 +310,23 @@ it.each([
         state:
           scenario === 'failure'
             ? 'failed'
-            : scenario === 'federated-unknown'
+            : scenario === 'federated-unknown' || scenario === 'federated-foreign'
               ? 'outcome_unknown'
-              : 'ready'
+              : scenario === 'federated-failed'
+                ? 'failed'
+                : 'ready'
       })
     }
     // A pending display append must not hold the successful RPC; release it only after the reply.
-    if (scenario === 'append-pending') {
+    if (scenario === 'append-pending' || scenario === 'federated-pending-card') {
       expect(append).toHaveBeenCalledTimes(1)
       pending.resolve()
     }
-    if (scenario === 'append-throws' || scenario === 'logging-throws') {
+    if (
+      scenario === 'append-throws' ||
+      scenario === 'logging-throws' ||
+      scenario === 'federated-failed-card'
+    ) {
       await eventually(() =>
         expect(warn).toHaveBeenCalledWith(
           '[orchestration] recording a started worker in its caller chat failed',
@@ -274,7 +334,13 @@ it.each([
         )
       )
     }
-    if (scenario === 'success' || scenario === 'federated') {
+    if (
+      scenario === 'success' ||
+      (remoteReady &&
+        !['federated-no-card', 'federated-pending-card', 'federated-failed-card'].includes(
+          scenario
+        ))
+    ) {
       await eventually(async () =>
         expect(
           (await current.host.journalSnapshot(COORD)).items.some(
@@ -283,7 +349,63 @@ it.each([
         ).toBe(true)
       )
     }
-    await verifyWorkerStartCardScenario({ current, scenario, before, task, federated, db, append })
+    if (federated) {
+      const [worker] = db.db.prepare('SELECT dispatch_id FROM worker_dispatches').all()
+      const dispatchId = String(worker.dispatch_id)
+      const saved = db.getWorkerDispatch(dispatchId)!
+      const sender = runtime.orchestrationSenderNames.sender(`dispatch:${dispatchId}`)
+      expect(sender.agent).toBe(expectedAgent)
+      if (scenario === 'federated-foreign') {
+        expect(JSON.parse(saved.start_options).launch.effective).toBeNull()
+      } else if (scenario === 'federated-metadata-fails') {
+        expect(saved.state).toBe('ready')
+        expect(JSON.parse(saved.start_options).launch.effective).toBeNull()
+        expect(warn).toHaveBeenCalledWith(
+          '[orchestration] worker launch observation failed',
+          expect.any(Error)
+        )
+      }
+      if (
+        ![
+          'federated',
+          'federated-empty',
+          'federated-nested',
+          'federated-foreign',
+          'federated-metadata-fails'
+        ].includes(scenario)
+      ) {
+        expect(JSON.parse(saved.start_options).launch).toMatchObject({
+          requested: { agent: 'codex' },
+          effective:
+            scenario === 'federated-requested'
+              ? null
+              : { agent: expectedAgent, model: 'remote-effective', effort: 'high' }
+        })
+      }
+      if (
+        remoteReady &&
+        !['federated-no-card', 'federated-pending-card', 'federated-failed-card'].includes(scenario)
+      ) {
+        const start = (await current.host.journalSnapshot(COORD)).items.find(
+          ({ body }) => body.kind === 'agent-start'
+        )
+        expect(start?.body).toMatchObject({ worker: { agent: expectedAgent } })
+      }
+    }
+    const verifyScenario =
+      remoteReady &&
+      !['federated-no-card', 'federated-pending-card', 'federated-failed-card'].includes(scenario)
+        ? 'federated'
+        : scenario
+    await verifyWorkerStartCardScenario({
+      current,
+      scenario: verifyScenario,
+      before,
+      task,
+      federated,
+      db,
+      append
+    })
   },
   20_000
 )
