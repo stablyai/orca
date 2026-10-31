@@ -48,6 +48,7 @@ export type AgentCapabilitySetupStatus = {
 
 export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
   const activeSkillRuntime = useActiveProjectSkillRuntime()
+  const discoveryUnsupported = activeSkillRuntime.discoveryRuntimeTarget?.kind === 'unsupported'
   const browserUseSkill = useInstalledAgentSkill(ORCA_CLI_SKILL_NAME, {
     discoveryTarget: activeSkillRuntime.discoveryTarget,
     runtimeTarget: activeSkillRuntime.discoveryRuntimeTarget,
@@ -89,16 +90,24 @@ export function useAgentCapabilitySetupStatus(): AgentCapabilitySetupStatus {
     ]
   )
 
-  const installStatus = useMemo(
-    () => ({
-      browserUse: getSkillInstallStatus(browserUseSkill),
-      computerUse: getComputerUseInstallStatus(computerUseSkill, computerUsePermissionStatus),
-      orchestration: getSkillInstallStatus(orchestrationSkill),
-      // Retain the selection field without offering Linear installation in the generic feature wall.
-      linearTickets: getFeatureWallExcludedLinearTicketsStatus()
-    }),
-    [browserUseSkill, computerUsePermissionStatus, computerUseSkill, orchestrationSkill]
-  )
+  const unavailableStatus: AgentCapabilityInstallStatus | null = discoveryUnsupported
+    ? {
+        label: translate(
+          'auto.components.feature.wall.agent.capability.setup.status.requiresOrcaServer',
+          'Requires an Orca server'
+        ),
+        tone: 'unavailable'
+      }
+    : null
+  const installStatus = {
+    browserUse: unavailableStatus ?? getSkillInstallStatus(browserUseSkill),
+    computerUse:
+      unavailableStatus ??
+      getComputerUseInstallStatus(computerUseSkill, computerUsePermissionStatus),
+    orchestration: unavailableStatus ?? getSkillInstallStatus(orchestrationSkill),
+    // Retain the selection field without offering Linear installation in the generic feature wall.
+    linearTickets: getFeatureWallExcludedLinearTicketsStatus()
+  }
 
   return { readiness, installStatus }
 }

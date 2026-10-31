@@ -110,13 +110,15 @@ function normalizeSkillDiscoveryTarget(
 
 function appendSkillDiscoveryFiltersToKey(
   runtimeKey: string,
-  target: SkillDiscoveryTarget | undefined
+  target: SkillDiscoveryTarget | undefined,
+  runtimeIdentity?: string
 ): string {
-  return target?.names?.length || target?.sourceKinds?.length
+  return runtimeIdentity || target?.names?.length || target?.sourceKinds?.length
     ? JSON.stringify([
         runtimeKey,
-        target.names ? [...target.names].sort() : null,
-        target.sourceKinds ? [...target.sourceKinds].sort() : null
+        target?.names ? [...target.names].sort() : null,
+        target?.sourceKinds ? [...target.sourceKinds].sort() : null,
+        ...(runtimeIdentity ? [runtimeIdentity] : [])
       ])
     : runtimeKey
 }
@@ -147,14 +149,15 @@ export function getRuntimeScopedSkillDiscoveryKey(
   runtimeTarget: RuntimeClientTarget,
   target: SkillDiscoveryTarget | undefined,
   names?: readonly string[],
-  sourceKinds?: readonly SkillSourceKind[]
+  sourceKinds?: readonly SkillSourceKind[],
+  runtimeIdentity?: string
 ): string {
   const normalizedTarget = normalizeSkillDiscoveryTarget(target, names, sourceKinds)
   const runtimeKey =
     runtimeTarget.kind === 'environment'
       ? `runtime:${runtimeTarget.environmentId}`
       : getNormalizedSkillDiscoveryRuntimeKey(normalizedTarget)
-  return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget)
+  return appendSkillDiscoveryFiltersToKey(runtimeKey, normalizedTarget, runtimeIdentity)
 }
 
 function startInstalledAgentSkillDiscovery(
@@ -193,9 +196,16 @@ export async function discoverInstalledAgentSkills(
   target?: SkillDiscoveryTarget,
   runtimeTarget: RuntimeClientTarget = LOCAL_RUNTIME_TARGET,
   names?: readonly string[],
-  sourceKinds?: readonly SkillSourceKind[]
+  sourceKinds?: readonly SkillSourceKind[],
+  runtimeIdentity?: string
 ): Promise<SkillDiscoveryResult> {
-  const key = getRuntimeScopedSkillDiscoveryKey(runtimeTarget, target, names, sourceKinds)
+  const key = getRuntimeScopedSkillDiscoveryKey(
+    runtimeTarget,
+    target,
+    names,
+    sourceKinds,
+    runtimeIdentity
+  )
   if (!force) {
     // Promote only cache-serving reads; forced refresh discards the entry instead.
     const cachedDiscovery = readInstalledAgentSkillDiscoveryCache(key)

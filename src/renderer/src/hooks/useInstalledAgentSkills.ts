@@ -1,4 +1,3 @@
-import type { RuntimeClientTarget } from '../../../shared/runtime-client-target'
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   DiscoveredSkill,
@@ -22,7 +21,11 @@ import {
   INSTALLED_AGENT_SKILLS_CHANGED_EVENT,
   INSTALLED_AGENT_SKILLS_REFRESHED_EVENT
 } from './installed-agent-skills-change-event'
-import { useActiveSkillDiscoveryRuntimeTarget } from './use-active-skill-discovery-runtime-target'
+import {
+  useActiveSkillDiscoveryRuntimeTarget,
+  useSkillDiscoveryRuntimeIdentity,
+  type SkillDiscoveryRuntimeTarget
+} from './use-active-skill-discovery-runtime-target'
 import { useMountedRef } from './useMountedRef'
 
 /** Placeholder key while the owning runtime is unknown; nothing is cached under it. */
@@ -35,7 +38,7 @@ export const GLOBAL_AGENT_SKILL_SOURCE_KINDS = [
 ] as const satisfies readonly SkillSourceKind[]
 
 type InstalledAgentSkillOptions = {
-  runtimeTarget?: RuntimeClientTarget | null
+  runtimeTarget?: SkillDiscoveryRuntimeTarget
   enabled?: boolean
   discoveryTarget?: SkillDiscoveryTarget
   sourceKinds?: readonly SkillSourceKind[]
@@ -115,18 +118,23 @@ export function useInstalledAgentSkillNames(
   skillNames: readonly string[],
   options: InstalledAgentSkillOptions = {}
 ): InstalledAgentSkillState {
-  const { enabled = true, discoveryTarget, sourceKinds } = options
+  const { discoveryTarget, sourceKinds } = options
   const skillNamesKey = skillNames.map(normalizeSkillName).join('\n')
   const candidateSkillNames = useMemo(() => skillNamesKey.split('\n'), [skillNamesKey])
   const activeRuntimeTarget = useActiveSkillDiscoveryRuntimeTarget()
-  const runtimeTarget =
+  const requestedRuntimeTarget =
     options.runtimeTarget === undefined ? activeRuntimeTarget : options.runtimeTarget
+  const enabled = options.enabled !== false && requestedRuntimeTarget?.kind !== 'unsupported'
+  const runtimeTarget =
+    requestedRuntimeTarget?.kind === 'unsupported' ? null : requestedRuntimeTarget
+  const runtimeIdentity = useSkillDiscoveryRuntimeIdentity(runtimeTarget)
   const discoveryTargetKey = runtimeTarget
     ? getRuntimeScopedSkillDiscoveryKey(
         runtimeTarget,
         discoveryTarget,
         candidateSkillNames,
-        sourceKinds
+        sourceKinds,
+        runtimeIdentity
       )
     : UNRESOLVED_RUNTIME_DISCOVERY_KEY
   // Hold equivalent target keys in React state to stabilize refresh/effects; memo discard and render-phase ref writes must not leak across uncommitted renders.
@@ -211,7 +219,8 @@ export function useInstalledAgentSkillNames(
           stableDiscoveryTarget,
           runtimeTarget,
           candidateSkillNames,
-          sourceKinds
+          sourceKinds,
+          runtimeIdentity
         )
         installedAfterRefresh = hasInstalledAgentSkillNamed(next.skills, candidateSkillNames, {
           sourceKinds
@@ -242,6 +251,7 @@ export function useInstalledAgentSkillNames(
       enabled,
       mountedRef,
       runtimeTarget,
+      runtimeIdentity,
       sourceKinds,
       stableDiscoveryTarget
     ]

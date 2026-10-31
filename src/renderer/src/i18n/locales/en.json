@@ -15734,7 +15734,8 @@
                   "6d2b0a84e1": "Unavailable in this build",
                   "notInstalled": "Not installed",
                   "needsMacAccess": "Needs macOS access",
-                  "requiresOrcaDesktop": "Requires Orca Desktop"
+                  "requiresOrcaDesktop": "Requires Orca Desktop",
+                  "requiresOrcaServer": "Requires an Orca server"
                 }
               }
             }
