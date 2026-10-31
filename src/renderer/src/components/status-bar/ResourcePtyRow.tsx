@@ -69,7 +69,7 @@ export const ResourcePtyRow = memo(function ResourcePtyRow({
             <Button
               variant="ghost"
               size="sm"
-              className="group min-w-0 flex-1 justify-start has-[>svg]:pl-1"
+              className="group min-w-0 flex-1 justify-start"
               aria-label={translate(
                 'resourceManager.pty.detailsNamed',
                 'Details for {{terminal}}',
