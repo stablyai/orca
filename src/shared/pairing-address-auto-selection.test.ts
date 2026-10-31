@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  isThunderboltBridgeInterface,
   isVirtualBridgeInterface,
   selectAutoAdvertisedPairingAddress,
   type PairingNetworkInterface
@@ -53,6 +54,37 @@ describe('selectAutoAdvertisedPairingAddress', () => {
     expect(selectAutoAdvertisedPairingAddress([AMBIGUOUS_SWITCH])).toBeUndefined()
   })
 
+  it('keeps Thunderbolt Bridge explicit-only outside Share this host', () => {
+    expect(isThunderboltBridgeInterface('bridge0', 'darwin')).toBe(true)
+    expect(isThunderboltBridgeInterface('Bridge12', 'darwin')).toBe(true)
+    expect(isVirtualBridgeInterface('bridge0')).toBe(true)
+    expect(isVirtualBridgeInterface('bridge1')).toBe(true)
+    expect(isVirtualBridgeInterface('bridge')).toBe(true)
+    expect(isVirtualBridgeInterface('br-lan')).toBe(true)
+    expect(isVirtualBridgeInterface('docker0')).toBe(true)
+    expect(
+      selectAutoAdvertisedPairingAddress([{ name: 'bridge0', address: '10.99.88.1' }])
+    ).toBeUndefined()
+  })
+
+  it('keeps a Linux bridge0 out of the direct pairing address', () => {
+    const linuxBridge = { name: 'bridge0', address: '10.0.0.1' }
+    const lan = { name: 'eth0', address: '192.168.4.191' }
+    expect(isThunderboltBridgeInterface('bridge0', 'linux')).toBe(false)
+    expect(isVirtualBridgeInterface('bridge0')).toBe(true)
+    expect(selectAutoAdvertisedPairingAddress([linuxBridge])).toBeUndefined()
+    expect(selectAutoAdvertisedPairingAddress([linuxBridge, lan])).toBe(lan.address)
+  })
+
+  it('prefers LAN and tailnet while keeping Thunderbolt out of automatic pairing addresses', () => {
+    const thunderbolt = { name: 'bridge0', address: '10.99.88.1' }
+    const lan = { name: 'en0', address: '192.168.4.191' }
+    const tailnet = { name: 'tailscale0', address: '100.64.1.20' }
+    expect(selectAutoAdvertisedPairingAddress([thunderbolt, lan])).toBe(lan.address)
+    expect(selectAutoAdvertisedPairingAddress([thunderbolt, tailnet])).toBe(tailnet.address)
+    expect(selectAutoAdvertisedPairingAddress([HOST_LOCAL_BRIDGE, thunderbolt])).toBeUndefined()
+  })
+
   it.each([
     'vEthernet (Default Switch)',
     'vEthernet (default switch)',
@@ -69,5 +101,16 @@ describe('selectAutoAdvertisedPairingAddress', () => {
     'vEthernet (WSL External)'
   ])('does not treat the route-backed near-match %s as a known host-local label', (name) => {
     expect(isVirtualBridgeInterface(name, true)).toBe(false)
+  })
+
+  it.each([
+    ['external', EXTERNAL_SWITCH, false],
+    ['Default Switch', DEFAULT_SWITCH, true],
+    ['WSL', WSL_SWITCH, true],
+    ['physical', PHYSICAL_LAN, false],
+    ['host-local', HOST_LOCAL_BRIDGE, true],
+    ['ambiguous', AMBIGUOUS_SWITCH, true]
+  ] as const)('classifies the %s fixture', (_label, fixture, expected) => {
+    expect(isVirtualBridgeInterface(fixture.name, fixture.hasDefaultRoute)).toBe(expected)
   })
 })

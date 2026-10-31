@@ -438,6 +438,10 @@ export type GlobalSettings = GlobalSettingsBase & {
   mobilePairingCustomAddress?: string | null
   /** Saved custom addresses available in both mobile pairing pickers. */
   mobilePairingCustomAddresses?: string[]
+  /** Share this host: interface the user picked for "Another device". Restored across restarts. */
+  runtimePairingAdvertisedInterfaceName?: string | null
+  /** Last address of that interface. Kept while the link is briefly absent from discovery. */
+  runtimePairingAdvertisedAddress?: string | null
   /** Name this runtime reports to paired clients; empty uses the host's detected name. */
   machineName: string
   /** Opt-in animated pet overlay; off unmounts it and renderer toggles apply immediately. */
