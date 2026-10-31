@@ -14,62 +14,50 @@ export async function reportCliChatResumeFailure(
   error: unknown,
   openOwner: boolean,
   target: RuntimeClientTarget,
-  stopped = false,
-  stopRequested = false
+  closed = false,
+  closing = false
 ): Promise<void> {
   const refusal = structuredLaunchFailure(error)
   const values = { agent: agentLabel(source.agent) }
-  const stopReason = refusal?.details?.reason
-  const stopMessages: Record<string, string> = {
-    conversationHeldInOtherTerminal:
-      '{{agent}} is also running this conversation in another terminal. Quit it there, then try again.',
-    agentPaused:
-      '{{agent}} is paused in this terminal. Resume it there with fg or quit it, then try again.',
-    conversationMoved: '{{agent}} moved to a different conversation in this terminal. Try again.',
-    agentAmbiguous:
-      'Another agent is also running in this terminal with {{agent}}. Quit it, then try again.',
-    shellReplaced:
-      "{{agent}} replaced this terminal's shell, so stopping it would close the terminal. Quit {{agent}} there, then try again.",
-    writerTopologyUnproven:
-      "Orca can't confirm {{agent}} is owned by this terminal. Quit {{agent}} and any shared server it uses, then try again.",
-    ownerUnproven:
-      "Orca couldn't confirm {{agent}} stopped in this terminal. Check the terminal, then try again."
-  }
-  if (stopReason && stopMessages[stopReason]) {
+  if (closed) {
+    const reason = refusal?.details?.reason
+    const plainReason =
+      reason === 'transcriptNotFound' || reason === 'transcriptUnreadable'
+        ? translate(
+            'components.native-chat.resumeInNewChat.historyUnavailable',
+            "Orca couldn't read the conversation"
+          )
+        : refusal?.code === 'agent_session_conflict' ||
+            refusal?.code === 'agent_session_ownership_unknown'
+          ? translate(
+              'components.native-chat.resumeInNewChat.chatHeld',
+              'another chat or terminal is using it'
+            )
+          : translate(
+              'components.native-chat.resumeInNewChat.checkInstallation',
+              "check the agent's installation and sign-in"
+            )
     toast.error(
       translate(
-        `components.native-chat.resumeInNewChat.${stopReason}`,
-        stopMessages[stopReason],
-        values
+        'components.native-chat.resumeInNewChat.startFailedAfterClose',
+        "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
+        { ...values, reason: plainReason }
       )
     )
     return
   }
-  if (stopped) {
+  if (closing) {
     toast.error(
       translate(
-        'components.native-chat.resumeInNewChat.startFailedAfterStop',
-        "{{agent}} was stopped, but the chat couldn't start. Check the agent's installation and sign-in, then try Continue in Chat UI again.",
-        values
-      )
-    )
-    return
-  }
-  if (stopRequested && !refusal) {
-    toast.error(
-      translate(
-        'components.native-chat.resumeInNewChat.stopContactUnconfirmed',
-        "Orca couldn't confirm that {{agent}} stopped. Check this terminal and the host connection, then try again.",
+        'components.native-chat.resumeInNewChat.terminalExitUnproven',
+        "Orca couldn't confirm {{agent}}'s terminal closed. Check the terminal and host connection before trying again.",
         values
       )
     )
     return
   }
   const row = useAppStore.getState().agentStatusByPaneKey[source.paneKey]
-  const agentExited =
-    row?.providerSession?.id === source.providerSessionId && !!row.agentPresence?.ended
-  const inThisTerminal =
-    !!row && !row.agentPresence?.ended && row.providerSession?.id === source.providerSessionId
+  const inThisTerminal = !!row && row.providerSession?.id === source.providerSessionId
   if (
     refusal?.code === 'agent_session_conflict' ||
     refusal?.code === 'agent_session_ownership_unknown'
@@ -83,7 +71,7 @@ export async function reportCliChatResumeFailure(
       refusal.code === 'agent_session_conflict' &&
         refusal.details?.reason === 'conversationHeldElsewhere' &&
         !owner
-        ? cliConversationExitGuidance(source.agent, inThisTerminal, agentExited)
+        ? cliConversationExitGuidance(source.agent, inThisTerminal)
         : translate(
             'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
             'Another chat is already holding this conversation.'
@@ -96,7 +84,7 @@ export async function reportCliChatResumeFailure(
     refusal?.code === 'agent_session_operation_invalid' &&
     refusal.details?.reason === 'conversationOpenInTerminal'
   ) {
-    toast.error(cliConversationExitGuidance(source.agent, inThisTerminal, agentExited))
+    toast.error(cliConversationExitGuidance(source.agent, inThisTerminal))
     return
   }
   if (refusal?.code === 'agent_session_identity_required') {

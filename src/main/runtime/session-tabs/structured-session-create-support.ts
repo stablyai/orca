@@ -27,7 +27,6 @@ import { getProfileUserDataPath } from '../../orca-profiles/profile-storage-path
 import { isFloatingWorkspaceSelector } from '../../../shared/floating-workspace-worktree'
 import type { AgentSessionAccountHome } from '../../../shared/agent-session-account-home'
 import type { StructuredAgentId } from '../../../shared/agent-session-provider-handle'
-import type { CliWriterPrediction } from './structured-session-cli-writer-host'
 
 export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport extends StructuredSessionWorkspaceScope {
   protected abstract restoreStructuredAgentSessionTabsOnce(
@@ -79,8 +78,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
   }
 
   async resolveStructuredAgentSessionCreateIntent(
-    input: StructuredAgentSessionCreateIntentInput,
-    prediction?: CliWriterPrediction
+    input: StructuredAgentSessionCreateIntentInput
   ): Promise<AgentSessionAttachParams & { hostLaunchDirectory?: string }> {
     if (input.resumeFrom) {
       const { providerSessionId, cliSource } = input.resumeFrom
@@ -96,8 +94,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         await this.assertStructuredAdoptionTerminalWritersExited(
           input.agent,
           providerSessionId,
-          cliSource,
-          prediction
+          cliSource
         )
         throw ownerConflict
       }
@@ -127,8 +124,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
     }
     const resolved = await this.resolveStructuredAgentSessionIntent(
       { ...input, structuredAgentCliSourceEvidence },
-      resolveAccountHome,
-      prediction
+      resolveAccountHome
     )
     return hostLaunchDirectory ? { ...resolved, hostLaunchDirectory } : resolved
   }
@@ -159,8 +155,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
         workspaceId: string
         workspaceKind: 'folder' | 'git-worktree'
       }
-    }) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>,
-    prediction?: CliWriterPrediction
+    }) => AgentSessionAccountHome | Promise<AgentSessionAccountHome>
   ): Promise<AgentSessionAttachParams> {
     const support = await this.getStructuredAgentSessionCreateSupport(input.worktree, input.agent)
     // Adopting a conversation reads the agent's own transcript, so only an agent registered with an
@@ -198,8 +193,7 @@ export abstract class OrcaRuntimeWithGetStructuredAgentSessionCreateSupport exte
       await this.assertStructuredAdoptionTerminalWritersExited(
         input.agent,
         resumeFrom.providerSessionId,
-        resumeFrom.cliSource,
-        prediction
+        resumeFrom.cliSource
       )
     }
     const workspaceCwd = resumeFrom

@@ -1,5 +1,4 @@
 import { clientRequestsCommands } from './structured-agent-session-policy'
-import { STRUCTURED_AGENT_SESSION_STOP_TERMINAL_AGENT_METHODS } from './structured-agent-session-stop-terminal-agent'
 import {
   clientReadsCurrentRequests,
   STRUCTURED_AGENT_SESSION_CURRENT_REQUESTS_METHODS
@@ -31,7 +30,7 @@ import {
 } from './structured-agent-session-gate'
 import {
   handleStructuredAgentSessionCreate,
-  STRUCTURED_AGENT_SESSION_ENSURE_METHODS
+  attachClientSuppliedLocation
 } from './structured-agent-session-create-handler'
 import { STRUCTURED_AGENT_SESSION_HOLD_METHODS } from './structured-agent-session-hold'
 import { STRUCTURED_AGENT_SESSION_PROMPT_RESPONSE_METHODS } from './structured-agent-session-prompt-response'
@@ -54,6 +53,7 @@ import { STRUCTURED_AGENT_SESSION_CONVERSATION_OUTLINE_METHODS } from './structu
 import { STRUCTURED_AGENT_SESSION_ITEM_METHODS } from './structured-agent-session-item'
 import { STRUCTURED_AGENT_SESSION_OPTIONS_READ_METHODS } from './structured-agent-session-options-read'
 import {
+  AttachParams,
   CancelParams,
   ConversationCommandParams,
   CreateParams,
@@ -76,7 +76,6 @@ import {
 } from './structured-agent-session-close-before-create'
 
 export const STRUCTURED_AGENT_SESSION_METHODS = [
-  ...STRUCTURED_AGENT_SESSION_STOP_TERMINAL_AGENT_METHODS,
   defineMethod({
     name: 'agentSession.rewind',
     permission: 'workspace',
@@ -125,7 +124,12 @@ export const STRUCTURED_AGENT_SESSION_METHODS = [
       ? refusingStructuredAgentSessionCreatesClosedFirst(handleStructuredAgentSessionCreate)
       : handleStructuredAgentSessionCreate
   }),
-  ...STRUCTURED_AGENT_SESSION_ENSURE_METHODS,
+  defineMethod({
+    name: 'agentSession.ensure',
+    permission: 'workspace',
+    params: AttachParams,
+    handler: async (params, ctx) => attachClientSuppliedLocation(params, ctx)
+  }),
   defineMethod({
     name: 'agentSession.send',
     permission: 'workspace',

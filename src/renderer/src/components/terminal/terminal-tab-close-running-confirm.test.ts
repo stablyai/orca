@@ -149,6 +149,18 @@ describe('closeTerminalTab running-process confirmation', () => {
     expect(closeTab).not.toHaveBeenCalled()
   })
 
+  it('starts exit observation only after ordinary close consent and can veto a stale close', async () => {
+    const beforeClose = vi.fn(() => false)
+    const onCancel = vi.fn()
+    closeTerminalTab('tab-busy', { beforeClose, onCancel })
+    await settleProbe()
+    expect(beforeClose).not.toHaveBeenCalled()
+    useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
+    expect(beforeClose).toHaveBeenCalledOnce()
+    expect(onCancel).toHaveBeenCalledOnce()
+    expect(closeTab).not.toHaveBeenCalled()
+  })
+
   it('still reports the close through onClosed after the confirmation', async () => {
     const onClosed = vi.fn()
 

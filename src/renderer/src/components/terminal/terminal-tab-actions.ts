@@ -47,6 +47,7 @@ export function closeTerminalTab(
     localPtyTeardownOwnedExternally?: boolean
     precomputedRetirementPlan?: TerminalTabRetirementPlan
     precomputedCloseState?: PrecomputedTerminalCloseState
+    beforeClose?: () => boolean
     onClosed?: () => void
     onCancel?: () => void
   }
@@ -114,6 +115,11 @@ export function closeTerminalTab(
       onClose: () => closeTerminalTab(tabId, { ...options, skipRunningProcessConfirm: true }),
       ...(options?.onCancel ? { onCancel: options.onCancel } : {})
     })
+    return
+  }
+
+  if (options?.beforeClose && !options.beforeClose()) {
+    options.onCancel?.()
     return
   }
 

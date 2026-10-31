@@ -10,7 +10,8 @@ const mocks = vi.hoisted(() => {
   return {
     ...state,
     sourceCapability: vi.fn(),
-    stopCapability: vi.fn(),
+    closeCapability: vi.fn(),
+    closeTerminal: vi.fn(),
     createCapability: vi.fn(),
     call: vi.fn(),
     toast: vi.fn(),
@@ -18,10 +19,13 @@ const mocks = vi.hoisted(() => {
     frameDrawn: false
   }
 })
+vi.mock('./cli-chat-resume-close-terminal', () => ({
+  closeCliChatResumeTerminal: mocks.closeTerminal
+}))
 vi.mock('./cli-chat-resume-source', () => ({ resolveCliChatResumeSource: () => mocks.source }))
 vi.mock('@/runtime/structured-agent-session-client', () => ({
+  structuredAgentSessionHostSupports: mocks.closeCapability,
   supportsStructuredAgentSessionCliSource: mocks.sourceCapability,
-  supportsStopTerminalAgentForChat: mocks.stopCapability,
   supportsStructuredAgentSessionCreateMessage: mocks.createCapability,
   callStructuredAgentSession: (...args: unknown[]) =>
     args[1] === 'agentSession.createSupport'
@@ -156,8 +160,12 @@ beforeEach(async () => {
   useAppStore.setState({ activeWorktreeId: 'wt-1' })
   mocks.source = SOURCE
   mocks.frameDrawn = false
+  mocks.closeCapability.mockResolvedValue(false)
+  mocks.closeTerminal.mockImplementation(async (_source, _current, closing) => {
+    closing()
+    return true
+  })
   mocks.sourceCapability.mockResolvedValue(true)
-  mocks.stopCapability.mockResolvedValue(false)
   mocks.createCapability.mockResolvedValue(true)
   mocks.call.mockImplementation(
     async (_target, method, params: StructuredAgentSessionCreateParams) => {
@@ -208,40 +216,6 @@ async function seedTabs() {
 const HOST_LEAF = '11111111-1111-4111-8111-111111111111'
 
 describe('CLI identity resume through the existing launch owner', () => {
-  it('stops on the host before create without asking for confirmation', async () => {
-    mocks.stopCapability.mockResolvedValue(true)
-    mocks.call.mockImplementation(async (_target, method, params) =>
-      method === 'agentSession.stopTerminalAgentForChat'
-        ? { ok: true }
-        : { ok: true, value: { sessionId: params.envelope.sessionId, fence: 1 } }
-    )
-    await runCliChatResume(SOURCE)
-    expect(mocks.call.mock.calls.map((call) => call[1])).toEqual([
-      'agentSession.stopTerminalAgentForChat',
-      'agentSession.create'
-    ])
-    expect(mocks.call.mock.calls[0][2]).toEqual({
-      worktree: 'id:wt-1',
-      agent: 'claude',
-      providerSessionId: 'provider-1',
-      cliSource: { workspaceId: 'wt-1', paneKey: SOURCE.paneKey }
-    })
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('never creates after stop loses contact', async () => {
-    mocks.stopCapability.mockResolvedValue(true)
-    mocks.call.mockRejectedValue(new Error('private transport details'))
-    await runCliChatResume(SOURCE)
-    expect(mocks.call).toHaveBeenCalledOnce()
-    expect(mocks.call.mock.calls[0][1]).toBe('agentSession.stopTerminalAgentForChat')
-    expect(tabs()).toEqual([])
-    expect(mocks.toast).toHaveBeenCalledOnce()
-    expect(mocks.toast.mock.calls[0][0]).toBe(
-      "Orca couldn't confirm that Claude stopped. Check this terminal and the host connection, then try again."
-    )
-  })
-
   it.each([true, false])(
     'resumes on the owning server with optional CLI-source capability: %s',
     async (supported) => {
@@ -389,7 +363,7 @@ describe('CLI identity resume through the existing launch owner', () => {
     }
   })
 
-  it('keeps the terminal and gives retry guidance for a refused terminal writer', async () => {
+  it('keeps the terminal and directs a refused terminal writer to Session History', async () => {
     mocks.call.mockResolvedValue({
       ok: false,
       refusal: {
@@ -482,6 +456,11 @@ describe('CLI identity resume through the existing launch owner', () => {
           resumeFrom: { providerSessionId: 'provider-1' }
         })
       })
+      await vi.waitFor(() =>
+        expect(
+          [...structuredLaunchStates()][0]?.intent.params.resumeFrom?.cliSource
+        ).toBeUndefined()
+      )
       mocks.source = null
       useAppStore.setState({})
       capability.resolve(true)
@@ -678,41 +657,82 @@ describe('CLI identity resume through the existing launch owner', () => {
   })
 })
 
-it('reports one actionable failure when chat creation fails after a proven stop', async () => {
-  mocks.stopCapability.mockResolvedValue(true)
-  mocks.call.mockImplementation(async (_target, method) =>
-    method === 'agentSession.stopTerminalAgentForChat'
-      ? { ok: true }
-      : {
-          ok: false,
-          refusal: { ...refuse('transcriptNotFound'), createAttemptRefusedBeforeCommit: true }
-        }
-  )
-  await runCliChatResume(SOURCE)
-  expect(mocks.call.mock.calls.map((call) => call[1])).toEqual([
-    'agentSession.stopTerminalAgentForChat',
-    'agentSession.create'
-  ])
-  expect(mocks.toast).toHaveBeenCalledOnce()
-  expect(mocks.toast.mock.calls[0][0]).toBe(
-    "Claude was stopped, but the chat couldn't start. Check the agent's installation and sign-in, then try Continue in Chat UI again."
-  )
-  expect(tabs()).toEqual([])
-})
+describe('close terminal then continue on capable hosts', () => {
+  beforeEach(() => mocks.closeCapability.mockResolvedValue(true))
 
-it('identifies an additional terminal holder without stopping the source', async () => {
-  mocks.stopCapability.mockResolvedValue(true)
-  mocks.call.mockResolvedValue({
-    ok: false,
-    refusal: {
-      code: 'agent_session_operation_invalid',
-      details: { reason: 'conversationHeldInOtherTerminal' }
-    }
+  it('opens the same conversation in a new chat after the source closes, without sending a dead pane as CLI evidence', async () => {
+    await seedTabs()
+    mocks.closeTerminal.mockImplementation(async (_source, _current, closing) => {
+      closing()
+      mocks.source = null
+      useAppStore.setState({ activeWorktreeId: null })
+      return true
+    })
+    await runCliChatResume(SOURCE)
+    expect(mocks.closeTerminal).toHaveBeenCalledOnce()
+    expect(mocks.call).toHaveBeenCalledOnce()
+    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({
+      providerSessionId: SOURCE.providerSessionId
+    })
+    expect(tabs().filter((tab) => tab.contentType === 'agent-session')).toHaveLength(1)
+    expect(mocks.toast).not.toHaveBeenCalled()
   })
-  await runCliChatResume(SOURCE)
-  expect(mocks.call).toHaveBeenCalledOnce()
-  expect(mocks.toast).toHaveBeenCalledExactlyOnceWith(
-    'Claude is also running this conversation in another terminal. Quit it there, then try again.'
-  )
-  expect(tabs()).toEqual([])
+
+  it('does not create a chat after Cancel', async () => {
+    mocks.closeTerminal.mockResolvedValue(false)
+    await runCliChatResume(SOURCE)
+    expect(mocks.call).not.toHaveBeenCalled()
+    expect(mocks.toast).not.toHaveBeenCalled()
+  })
+
+  it('reports an unverified stop once and opens no chat', async () => {
+    mocks.closeTerminal.mockImplementation(async (_source, _current, closing) => {
+      closing()
+      throw new Error('private negative stop sentinel')
+    })
+    await runCliChatResume(SOURCE)
+    expect(mocks.call).not.toHaveBeenCalled()
+    expect(tabs()).toEqual([])
+    expect(mocks.toast.mock.calls).toEqual([
+      [
+        "Orca couldn't confirm Claude's terminal closed. Check the terminal and host connection before trying again."
+      ]
+    ])
+  })
+
+  it('reports a post-close create refusal once with saved-conversation recovery', async () => {
+    mocks.call.mockResolvedValue({ ok: false, refusal: refuse('transcriptUnreadable') })
+    await runCliChatResume(SOURCE)
+    expect(mocks.closeTerminal).toHaveBeenCalledOnce()
+    expect(mocks.toast.mock.calls).toEqual([
+      [
+        "Claude's terminal was closed, but the chat couldn't open: Orca couldn't read the conversation. Your conversation is saved. Open it from Session History."
+      ]
+    ])
+    expect(tabs()).toEqual([])
+  })
+
+  it('refuses before close when a mirrored live pane holds the same conversation', async () => {
+    const codexSource = { ...SOURCE, agent: 'codex' as const }
+    mocks.source = codexSource
+    useAppStore.setState({
+      agentStatusByPaneKey: {
+        'other:leaf': {
+          agentType: 'codex',
+          paneKey: 'other:leaf',
+          worktreeId: 'wt-1',
+          providerSession: { key: 'session_id', id: SOURCE.providerSessionId },
+          state: 'done',
+          prompt: '',
+          updatedAt: Date.now(),
+          stateStartedAt: Date.now(),
+          stateHistory: []
+        }
+      }
+    })
+    await runCliChatResume(codexSource)
+    expect(mocks.closeTerminal).not.toHaveBeenCalled()
+    expect(mocks.call).not.toHaveBeenCalled()
+    expect(mocks.toast).toHaveBeenCalledOnce()
+  })
 })

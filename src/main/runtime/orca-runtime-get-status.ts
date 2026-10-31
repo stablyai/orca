@@ -1,6 +1,4 @@
 import { BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY } from '../../shared/browser-runtime-capabilities'
-import { STRUCTURED_AGENT_SESSION_STOP_TERMINAL_AGENT_RUNTIME_CAPABILITY } from '../../shared/structured-agent-session-surface-capabilities'
-import { windowsPaneAgentStopAvailable } from '../pty/windows-pane-agent-stop'
 import { OrcaRuntimeWithPtyController } from './orca-runtime-pty-controller'
 import type { RuntimeDegradation, RuntimeStatus } from '../../shared/runtime-types'
 import {
@@ -84,9 +82,6 @@ export abstract class OrcaRuntimeWithGetStatus extends OrcaRuntimeWithPtyControl
       process.platform === 'win32' && isWindowsProcessStartTimeAvailable()
     const capabilities: NonNullable<RuntimeStatus['capabilities']> = RUNTIME_CAPABILITIES.filter(
       (capability) =>
-        (capability !== STRUCTURED_AGENT_SESSION_STOP_TERMINAL_AGENT_RUNTIME_CAPABILITY ||
-          process.platform !== 'win32' ||
-          windowsPaneAgentStopAvailable()) &&
         (capability !== BROWSER_GOOGLE_COOKIE_CLEAR_CAPABILITY ||
           runtimeBrowserCommandsFactorySupportsGoogleCookieClear()) &&
         (capability !== 'browser.screencast.v1' || canBrowse) &&
