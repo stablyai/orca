@@ -15,7 +15,7 @@ import { classifyGlabError } from '../requests/glab-error-classification'
 import type { MRInfo } from '../../../shared/gitlab-types'
 import { derivePipelineStatus, mapMRInfo } from '../requests/gitlab-response-mapping'
 import { acquire, release } from '../requests/glab-request-admission'
-import { getGlabKnownHosts, type LocalGitExecOptions } from '../projects/gitlab-known-host-probe'
+import { getGlabKnownHosts } from '../projects/gitlab-known-host-probe'
 import {
   getProjectRef,
   glabHostnameArgs,
@@ -24,7 +24,6 @@ import {
 import { glabExecFileAsync } from '../../git/command-runner/hosted-cli/glab-exec-file'
 import type { ProjectRef } from '../projects/project-ref-parser'
 import { encodedProject } from '../projects/project-path-encoding'
-import { fetchMRApproval } from './mr-reviewers-and-approvals'
 import {
   hasHostedReviewLocalGitOptions,
   getHostedReviewLocalGitOptions,
@@ -96,27 +95,6 @@ export async function getMergeRequest(
   }
 }
 
-// ponytail: one extra /approvals call per open-MR lookup (shared branch cache includes the worktree list); gate on `active` if the API budget bites.
-async function withApproval(
-  info: MRInfo,
-  repoPath: string,
-  projectRef: ProjectRef,
-  connectionId: string | null | undefined,
-  localGitOptions: LocalGitExecOptions
-): Promise<MRInfo> {
-  if (info.state !== 'opened') {
-    return info
-  }
-  const approval = await fetchMRApproval(
-    repoPath,
-    projectRef,
-    info.number,
-    connectionId,
-    localGitOptions
-  )
-  return approval ? { ...info, approval } : info
-}
-
 export async function getMergeRequestForBranch(
   repoPath: string,
   branch: string,
@@ -162,14 +140,7 @@ export async function getMergeRequestForBranch(
       }
     }
     if (typeof linkedMRIid === 'number') {
-      // Why: await keeps the /approvals call inside this acquire(); a bare return releases the gate early.
-      return await withApproval(
-        (await fetchByIid(linkedMRIid)).info,
-        repoPath,
-        projectRef,
-        connectionId,
-        localGitOptions
-      )
+      return (await fetchByIid(linkedMRIid)).info
     }
     const source = await getReviewBranchSource(
       repoPath,
@@ -280,7 +251,7 @@ export async function getMergeRequestForBranch(
             localGitOptions
           }))
         ) {
-          return await withApproval(info, repoPath, projectRef, connectionId, localGitOptions)
+          return info
         }
         return null
       } catch (error) {

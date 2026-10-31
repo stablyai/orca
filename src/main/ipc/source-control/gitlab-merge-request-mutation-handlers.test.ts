@@ -20,6 +20,7 @@ vi.mock('../../gitlab/merge-request-update', () => ({ updateMR: updateMRMock }))
 vi.mock('../../source-control/hosted-review-branch-cache', () => ({
   invalidateHostedReviewBranchCache: invalidateMock
 }))
+vi.mock('../../gitlab/mr-approval-batch', () => ({ refreshGitLabApprovals: vi.fn() }))
 vi.mock('./gitlab-repo-access', async (importActual) => ({
   ...(await importActual<typeof RepoAccess>()),
   localGitOptionArgs: () => []
