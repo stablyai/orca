@@ -60,6 +60,7 @@ function lockEntrySource(
 
 const withImages = (images: PluginHostImages | undefined) => (images ? { images } : {})
 
+/** Clients need contribution metadata even when consent or lifecycle state prevents a worker from running. */
 export async function buildPluginList(
   service: PluginService,
   lock: PluginLockfile,

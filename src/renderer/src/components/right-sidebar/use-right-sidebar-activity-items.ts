@@ -31,6 +31,7 @@ export type RightSidebarActivityItems = {
   installedPluginTabKeys: Set<string>
 }
 
+/** Keep installed panel identities for persisted tabs while exposing only eligible sidebar contributions. */
 export function useRightSidebarActivityItems({
   rightSidebarOpen
 }: {

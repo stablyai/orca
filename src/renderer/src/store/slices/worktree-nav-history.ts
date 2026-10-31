@@ -109,6 +109,7 @@ function isTaskStackEntry(entry: WorktreeNavHistoryEntry): boolean {
   return entry === 'tasks' || (typeof entry === 'object' && entry.kind === 'task-detail')
 }
 
+/** History deduplication must distinguish page routes, workspaces, and provider-scoped task identities. */
 function getHistoryEntryKey(entry: WorktreeNavHistoryEntry): string {
   if (typeof entry === 'string') {
     return isViewEntry(entry) ? `view:${entry}` : `worktree:${entry}`
