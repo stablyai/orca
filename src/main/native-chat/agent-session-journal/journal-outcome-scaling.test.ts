@@ -567,8 +567,15 @@ it("opens a new chat reading each key's newest record once, the same with N and 
     journal_outcome_epochs: 1,
     journal_outcomes: small.keys,
     journal_rows: 1,
-    journal_sessions: 2
+    journal_sessions: 2,
+    other: 0
   })
+  // Empty legacy ownership still costs one session-scoped, position-ordered lookup per restore.
+  for (const { work } of [small, large]) {
+    expect(work.statements.filter((sql) => !/\bFROM\s+journal_\w+/.test(sql))).toStrictEqual([
+      'SELECT message_id, position, body_json, fingerprint, state, hold_reason, returned_reason, returned_rejection, consumed_as, queued_epoch, queued_sequence, options_json FROM queued_messages WHERE session_id = ? ORDER BY position ASC'
+    ])
+  }
   // Each read is one seek down the key index from the last key: no scan, no sort, no revision walk.
   const plan = small.database.db
     .prepare(`EXPLAIN QUERY PLAN ${JOURNAL_NEWEST_OUTCOME_SQL}`)
