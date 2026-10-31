@@ -1,10 +1,13 @@
-import { agentReferenceToken } from '../../../../shared/orchestration-agent-reference'
 import { NativeChatFileReferencePill } from './NativeChatFileReferencePill'
 import { NativeChatSkillPill, skillLabel } from './NativeChatSkillPill'
 import { NativeChatImageReferencePill } from './NativeChatImageReferencePill'
 import { formatNativeChatFileReference } from '../../../../shared/agent-image-paste'
 import { imageReferenceToken } from '../../../../shared/native-chat/native-chat-image-reference'
-import { FILE_REFERENCE_NODE, IMAGE_REFERENCE_NODE } from './native-chat-prompt-document-text'
+import {
+  FILE_REFERENCE_NODE,
+  IMAGE_REFERENCE_NODE,
+  promptLeafString
+} from './native-chat-prompt-document-text'
 import { ReactNodeViewRenderer, Node, type JSONContent } from '@tiptap/react'
 import type { Node as ProseMirrorNode } from '@tiptap/pm/model'
 import type { AgentJournalSkillRef } from '../../../../shared/agent-session-journal-types'
@@ -87,17 +90,7 @@ export function fileReferenceContent(path: string): JSONContent {
 
 /** A pill reads as its token and a hard break as a newline, so the text is what the agent receives. */
 export function promptLeafText(node: ProseMirrorNode): string {
-  if (node.type.name === 'nativeChatAgentReference') {
-    return agentReferenceToken({
-      label: String(node.attrs.label),
-      address: String(node.attrs.address),
-      hostKey: String(node.attrs.hostKey)
-    })
-  }
-  if (node.type.name === IMAGE_REFERENCE_NODE) {
-    return imageReferenceToken(String(node.attrs.attachmentId))
-  }
-  return node.type.name === 'hardBreak' ? '\n' : String(node.attrs.token ?? '')
+  return promptLeafString(node.type.name, node.attrs, node.text)
 }
 
 export function promptText(doc: ProseMirrorNode, from = 0, to = doc.content.size): string {
