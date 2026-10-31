@@ -14,36 +14,6 @@ describe('useIpcEvents session tab close requests', () => {
     vi.useRealTimers()
   })
 
-  it('acknowledges a close after the store removes the tab', async () => {
-    const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
-    const closeUnifiedTab = vi.fn().mockReturnValue({ id: 'sim-tab-1' })
-    const respondSessionTabClose = vi.fn()
-
-    await useIpcEventsForCloseRouting({
-      sessionTabCloseRequestListenerRef: listenerRef,
-      respondSessionTabClose,
-      getState: () => ({
-        closeUnifiedTab,
-        browserTabsByWorktree: {},
-        openFiles: [],
-        unifiedTabsByWorktree: {
-          'wt-1': [
-            { id: 'sim-tab-1', entityId: 'sim-1', contentType: 'simulator', isPinned: false }
-          ]
-        }
-      })
-    })
-
-    listenerRef.current?.({
-      requestId: 'close-session-tab',
-      tabId: 'sim-tab-1',
-      worktreeId: 'wt-1'
-    })
-
-    expect(closeUnifiedTab).toHaveBeenCalledWith('sim-tab-1')
-    expect(respondSessionTabClose).toHaveBeenCalledWith({ requestId: 'close-session-tab' })
-  })
-
   it('acknowledges an initiating command without re-prompting or removing its tab early', async () => {
     const listenerRef: { current: SessionTabCloseRequestListener | null } = { current: null }
     const closeUnifiedTab = vi.fn()

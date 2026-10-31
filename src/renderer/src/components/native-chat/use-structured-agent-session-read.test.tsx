@@ -31,7 +31,7 @@ import {
 
 import { STRUCTURED_AGENT_SESSION_SUBMISSION_MISSING } from '../../../../shared/structured-agent-session-send-evidence'
 
-import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../../shared/structured-agent-session-coalescer'
+import { STRUCTURED_AGENT_SESSION_CLIENT_COALESCE_MS } from '../../../../shared/agent-session/structured-agent-session-coalescer'
 import type { StructuredAgentSessionAdmission } from './structured-agent-session-read-owner-contract'
 
 const LOCAL_TARGET = { kind: 'local' } as const

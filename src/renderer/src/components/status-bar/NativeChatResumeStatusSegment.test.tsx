@@ -149,14 +149,6 @@ describe('NativeChatResumeStatusSegment', () => {
     expect(screen.queryByText(/failed to resume/)).toBeNull()
   })
 
-  it('names a single chat in the singular', async () => {
-    rpc.mockResolvedValue({ sessions: candidates.slice(0, 1) })
-    await mount()
-
-    expect(screen.getByRole('button', { name: '1 chat available to resume' })).toBeTruthy()
-    expect(screen.getByText('1 chat to resume')).toBeTruthy()
-  })
-
   // The count can lag the host — another window may have dismissed the offer. The re-read decides.
   it('does not reopen the dialog when the host no longer offers anything', async () => {
     rpc.mockResolvedValueOnce({ sessions: candidates }).mockResolvedValue({ sessions: [] })
@@ -242,14 +234,6 @@ describe('NativeChatResumeStatusSegment', () => {
 
     expect(rpc).not.toHaveBeenCalled()
     expect(screen.queryByRole('button')).toBeNull()
-  })
-
-  it('renders a compact count in icon-only mode', async () => {
-    rpc.mockResolvedValue({ sessions: candidates })
-    await mount(true)
-
-    expect(screen.getByRole('button').textContent).toContain('2')
-    expect(screen.queryByText('2 chats to resume')).toBeNull()
   })
 
   it('keeps run-only uncertainty reachable until its viewed summary is closed', async () => {

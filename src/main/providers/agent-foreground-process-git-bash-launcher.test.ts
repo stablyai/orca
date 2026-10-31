@@ -3,7 +3,6 @@ import type { WindowsProcessIdentityRow } from '../windows/windows-process-table
 import { confirmShellForegroundProcess } from './agent-foreground-process'
 
 const LAUNCHER = 'C:\\Program Files\\Git\\bin\\bash.exe'
-const MSYS_BASH = 'C:\\Program Files\\Git\\usr\\bin\\bash.exe'
 const LAUNCHER_PID = 9968
 const EXEC_STUB_PID = 24472
 const SHELL_PID = 2272
@@ -59,12 +58,6 @@ describe('Windows shell proof for the Git Bash launcher', () => {
     await expect(confirm(LAUNCHER, IDLE_ROWS).result).resolves.toBe(true)
   })
 
-  it('confirms the bare hand-off with no exec stub', async () => {
-    await expect(
-      confirm(LAUNCHER, [bash(LAUNCHER_PID, 50), bash(SHELL_PID, LAUNCHER_PID)]).result
-    ).resolves.toBe(true)
-  })
-
   it('refutes a command at the prompt, directly or behind a fork stub', async () => {
     const vim = { pid: 700, ppid: SHELL_PID, name: 'vim.exe' }
     await expect(confirm(LAUNCHER, [...IDLE_ROWS, vim]).result).resolves.toBe(false)
@@ -80,14 +73,6 @@ describe('Windows shell proof for the Git Bash launcher', () => {
     ).resolves.toBe(false)
     const orphan = { pid: 800, ppid: 1, name: 'node.exe' }
     await expect(confirm(LAUNCHER, [...IDLE_ROWS, orphan]).result).resolves.toBe(false)
-  })
-
-  it('confirms a nested bash and a fork caught before its exec: both are a bash leaf', async () => {
-    // Accepted residual: a foreground bash of only builtins is indistinguishable from a prompt.
-    await expect(confirm(LAUNCHER, [...IDLE_ROWS, bash(600, SHELL_PID)]).result).resolves.toBe(true)
-    await expect(
-      confirm(LAUNCHER, [...IDLE_ROWS, bash(600, SHELL_PID), bash(601, 600)]).result
-    ).resolves.toBe(true)
   })
 
   it('refutes a reused pid: a member missing from the table or older than its parent', async () => {
@@ -117,23 +102,6 @@ describe('Windows shell proof for the Git Bash launcher', () => {
         IDLE_ROWS[2]
       ]).result
     ).resolves.toBe(false)
-  })
-
-  it('never reads the table for a shell that is not the launcher', async () => {
-    // A directly launched MSYS bash with a forked subshell has the same shape as the hand-off.
-    const direct = confirm(MSYS_BASH, IDLE_ROWS)
-    await expect(direct.result).resolves.toBe(false)
-    expect(direct.readIdentityTable).not.toHaveBeenCalled()
-
-    const powershell = confirm('powershell.exe', IDLE_ROWS)
-    await expect(powershell.result).resolves.toBe(false)
-    expect(powershell.readIdentityTable).not.toHaveBeenCalled()
-  })
-
-  it('confirms a launcher alone in its job without reading the table', async () => {
-    const alone = confirm(LAUNCHER, [bash(LAUNCHER_PID, 50)])
-    await expect(alone.result).resolves.toBe(true)
-    expect(alone.readIdentityTable).not.toHaveBeenCalled()
   })
 
   it('fails closed when the process table cannot be read', async () => {

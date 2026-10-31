@@ -1,3 +1,4 @@
+import { onLiveAccount } from './agent-model-catalog-running-account'
 import type { AgentSessionRecord } from '../../../shared/agent-session-record'
 import type { AgentModelCatalogLiveListing } from './agent-model-catalog-store'
 import type {
@@ -123,12 +124,13 @@ export function createAgentModelCatalogLiveListings(
     captureSource,
     retireContext,
     providerStarted(record: AgentSessionRecord, source?: () => boolean) {
+      const liveRecord = onLiveAccount(deps, record)
       const receipt = leaseWorkspace(record.location.workspaceId)
       const current = () =>
         receipt.current() &&
         source?.() !== false &&
         deps.getRecord(record.sessionId)?.lease.runtimeFence === record.lease.runtimeFence
-      void sessionCatalogKey(record)
+      void sessionCatalogKey(liveRecord)
         .then((fingerprint) => {
           if (current()) {
             deps.store.expireFailure(fingerprint)
@@ -151,6 +153,7 @@ export function createAgentModelCatalogLiveListings(
       ) {
         return
       }
+      const liveRecord = onLiveAccount(deps, record)
       const receipt = leaseWorkspace(record.location.workspaceId)
       const current = () =>
         receipt.current() &&
@@ -162,9 +165,9 @@ export function createAgentModelCatalogLiveListings(
       }
       if (!deps.listsInChatFolder?.has(record.provider)) {
         void saveLiveListing(
-          record,
+          liveRecord,
           listing,
-          agentModelCatalogFingerprintForRecord(record),
+          agentModelCatalogFingerprintForRecord(liveRecord),
           current
         ).finally(receipt.release)
         return
@@ -172,7 +175,7 @@ export function createAgentModelCatalogLiveListings(
       // In report order: a folder lookup that resolves late must not let an older listing land last.
       const writing = (liveWrites.get(sessionId) ?? Promise.resolve())
         .then(async () =>
-          saveLiveListing(record, listing, await sessionCatalogKey(record), current)
+          saveLiveListing(liveRecord, listing, await sessionCatalogKey(liveRecord), current)
         )
         .catch((error: unknown) => {
           console.warn('[agent-model-catalog] could not save a chat model list:', error)

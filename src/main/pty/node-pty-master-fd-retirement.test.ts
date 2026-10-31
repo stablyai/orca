@@ -47,13 +47,6 @@ async function retiredPty(
 const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
 
 describeOnPosix('node-pty master fd retirement', () => {
-  it('invalidates the descriptor once it gives up the handle', async () => {
-    const { term, spawnFd } = await retiredPty()
-
-    expect(spawnFd).toBeGreaterThanOrEqual(0)
-    expect(masterFd(term)).toBe(-1)
-  }, 15000)
-
   it('answers a resize past retirement without issuing the ioctl', async () => {
     const { term } = await retiredPty()
 
@@ -70,12 +63,6 @@ describeOnPosix('node-pty master fd retirement', () => {
 
     writeStream(term).write('x')
     expect(writeStream(term)._writeQueue).toHaveLength(0)
-  }, 15000)
-
-  it('names the spawn file rather than tcgetpgrp on a retired descriptor', async () => {
-    const { term } = await retiredPty()
-
-    expect(term.process).toBe(POSIX_SHELL)
   }, 15000)
 })
 

@@ -6,7 +6,7 @@ import {
   type AgentSessionRefusalReason
 } from './agent-session-refusal-details'
 import type { AgentSessionRewindReason } from './agent-session-rewind'
-import type { AgentSessionArgumentProblem } from './agent-session-argument-problem'
+import type { AgentSessionArgumentProblem } from './agent-session/agent-session-argument-problem'
 import type { TuiAgent } from './tui-agent'
 import type { CodexInstallationProblem } from './codex-cli-installation'
 import type { AgentCliInstallationProblem } from './agent-cli-installation-problem'

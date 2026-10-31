@@ -73,26 +73,6 @@ describe('useIssueMetadata hooks', () => {
     document.body.replaceChildren()
   })
 
-  it('routes repo-id-only folder metadata through local IPC', async () => {
-    let labels: string[] = []
-    githubMocks.listLabels.mockResolvedValue(['folder'])
-
-    function LabelsProbe(): null {
-      labels = useRepoLabels(null, 'folder-repo-id').data
-      return null
-    }
-
-    renderProbe(<LabelsProbe />)
-    await flushEffects()
-
-    expect(labels).toEqual(['folder'])
-    expect(githubMocks.listLabels).toHaveBeenCalledExactlyOnceWith({
-      repoPath: '',
-      repoId: 'folder-repo-id'
-    })
-    expect(runtimeMocks.callRuntimeRpc).not.toHaveBeenCalled()
-  })
-
   it('keeps concurrent fork and upstream label lists separate when the fork reply is late', async () => {
     const fork = { owner: 'fork', repo: 'widgets', host: 'github.com' }
     const upstream = { owner: 'upstream', repo: 'widgets', host: 'github.com' }

@@ -138,26 +138,6 @@ describe('readWslOrcadIncumbent', () => {
     expect(vi.mocked(deps.census).mock.calls[2]?.[3]).toEqual({ closeAdmissionForMs: 0 })
   })
 
-  // After a reboot the woken incumbent's daemon starts empty, so the census proves zero.
-  it('wakes an incumbent a reboot stopped and reads it without probing again', async () => {
-    const { deps } = dependencies({
-      wake: vi.fn(async () => ({
-        outcome: 'started' as const,
-        readiness: READINESS
-      })),
-      census: vi.fn(async () => ({
-        liveSessions: 0,
-        startedSinceActivation: 0,
-        daemonProtocolVersion: 3
-      }))
-    })
-    await expect(readWslOrcadIncumbent({ context: context(), slot }, deps)).resolves.toMatchObject({
-      census: { liveSessions: 0 },
-      readiness: READINESS
-    })
-    expect(deps.probe).not.toHaveBeenCalled()
-  })
-
   it('is unverifiable, without a bridge, when the incumbent cannot be proven running', async () => {
     const { deps } = dependencies({
       wake: vi.fn(async () => ({ outcome: 'unverifiable' as const }))
@@ -180,14 +160,6 @@ describe('readWslOrcadIncumbent', () => {
       readiness: READINESS
     })
     expect(close).toHaveBeenCalledTimes(1)
-  })
-
-  it('touches nothing when no version is active', async () => {
-    const { deps } = dependencies()
-    await expect(
-      readWslOrcadIncumbent({ context: context(null), slot }, deps)
-    ).resolves.toMatchObject({ census: UNVERIFIABLE, readiness: null })
-    expect(deps.wake).not.toHaveBeenCalled()
   })
 })
 

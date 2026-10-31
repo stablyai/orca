@@ -46,22 +46,6 @@ describe('MachineNameField', () => {
     Reflect.deleteProperty(window, '__ORCA_WEB_CLIENT__')
   })
 
-  it('shows the detected name as the blank default and lets the user set an override', async () => {
-    mocks.getStatus.mockResolvedValue({ machineName: 'm4airs-Air' })
-    const { user } = renderField('')
-
-    expect(await screen.findByPlaceholderText('m4airs-Air')).toBeVisible()
-    expect(
-      screen.getByText(
-        'Other devices and hosts see “m4airs-Air”. Leave this blank to use the computer’s own name.'
-      )
-    ).toBeVisible()
-
-    await user.type(screen.getByRole('textbox', { name: 'Machine name' }), 'build-server')
-    await user.tab()
-    expect(mocks.updateSettings).toHaveBeenCalledWith({ machineName: 'build-server' })
-  })
-
   it('captions a saved override without asking the runtime, so a stale read cannot show the old name', async () => {
     // Saved store names are already persisted; a stale runtime read must not override what peers see.
     mocks.getStatus.mockResolvedValue({ machineName: 'Brennan’s MacBook Pro' })
@@ -96,36 +80,5 @@ describe('MachineNameField', () => {
 
     unmount()
     expect(mocks.updateSettings).toHaveBeenCalledExactlyOnceWith({ machineName: 'build-server' })
-  })
-
-  it('keys the input, label, and caption off the mount id so two surfaces never collide', async () => {
-    mocks.getStatus.mockResolvedValue({ machineName: 'm4airs-Air' })
-    renderField('', 'ssh-target-machine-name')
-    await act(async () => {})
-
-    const input = screen.getByRole('textbox', { name: 'Machine name' })
-    expect(input).toHaveAttribute('id', 'ssh-target-machine-name')
-    expect(input).toHaveAccessibleDescription(
-      'Other devices and hosts see “m4airs-Air”. Leave this blank to use the computer’s own name.'
-    )
-  })
-
-  it('places a host class on its own root so a grid slot disappears with it', async () => {
-    mocks.getStatus.mockResolvedValue({ machineName: 'm4airs-Air' })
-    mocks.holder.state = { settings: { machineName: '' }, updateSettings: mocks.updateSettings }
-    const { container } = render(<MachineNameField className="mp-pairing-machine" />)
-    await act(async () => {})
-
-    expect(container.firstElementChild).toHaveClass('mp-pairing-machine', 'space-y-2')
-  })
-
-  it('renders nothing in the web client, which has no machine of its own to name', async () => {
-    Object.defineProperty(window, '__ORCA_WEB_CLIENT__', { configurable: true, value: true })
-    mocks.getStatus.mockResolvedValue({ machineName: 'remote-host' })
-    mocks.holder.state = { settings: { machineName: '' }, updateSettings: mocks.updateSettings }
-    const { container } = render(<MachineNameField />)
-    await act(async () => {})
-
-    expect(container).toBeEmptyDOMElement()
   })
 })

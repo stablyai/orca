@@ -8928,7 +8928,6 @@
         },
         "TerminalWindowSection": {
           "1705318506": "Color magenta ANSI",
-          "03c855d15f": "Restablecer todas las anulaciones de color",
           "63f8d9336e": "Anulaciones de color",
           "e86e09b5c7": "Anula colores individuales de la terminal.",
           "1d1920dc8a": "Oculta el cursor del mouse al escribir en la terminal.",
@@ -8995,7 +8994,11 @@
           "cf37ff69f6": "Base",
           "8abdab9f7c": "Reiniciar ahora",
           "907131d741": "Reiniciando…",
-          "605a35d600": "El renderizador de la terminal aún no aplica este valor: xterm.js no tiene un ajuste de color para el texto en negrita. Se conserva el valor guardado."
+          "605a35d600": "El renderizador de la terminal aún no aplica este valor: xterm.js no tiene un ajuste de color para el texto en negrita. Se conserva el valor guardado.",
+          "color_overrides_dark_description": "Anula colores individuales del tema oscuro de la terminal.",
+          "color_overrides_light_description": "Anula colores individuales del tema claro de la terminal.",
+          "reset_dark_color_overrides": "Restablecer las anulaciones de color del tema oscuro",
+          "reset_light_color_overrides": "Restablecer las anulaciones de color del tema claro"
         },
         "UIZoomControl": {
           "c2c64b24d0": "Restablecer"
@@ -19038,6 +19041,8 @@
       "composer": {
         "imageUnavailable": "Vista previa no disponible",
         "send": "Enviar",
+        "alternateSteerHint": "{{shortcut}} para enviar ahora",
+        "alternateQueueHint": "{{shortcut}} para poner en cola",
         "noPty": "No hay terminal activa: vuelva a alternar para volver a conectarse.",
         "locked": "La entrada está retenida por otro dispositivo.",
         "placeholder": "Pregunta lo que quieras, @ para referenciar archivos, / para comandos",
@@ -21007,7 +21012,7 @@
     },
     "claude": {
       "added": "Cuenta agregada. Selecciónala para usarla en el próximo Claude que inicies.",
-      "nextLaunch": "{{value0}} → {{value1}}. El próximo Claude que inicies la usará. Las sesiones en ejecución conservan su cuenta.",
+      "nextLaunch": "{{value0}} → {{value1}}. El próximo terminal de Claude que inicies usará esta cuenta. Los terminales de Claude en ejecución conservan su cuenta.",
       "profileSwitching": "El cambio se aplica al próximo Claude que inicies en cualquier pestaña. Las sesiones en ejecución conservan su cuenta.",
       "systemDefault": "Predeterminado del sistema",
       "unnamedAccount": "Cuenta de Claude",
@@ -21040,8 +21045,8 @@
         "session": "Sesión de Claude",
         "settingKeep": "Nunca reiniciar",
         "settingRestart": "Reiniciar siempre",
-        "settingTitle": "Cuando cambias de cuenta mientras Claude se está ejecutando",
-        "settingDescription": "El reinicio continúa con cada conversación en ejecución en la nueva cuenta.",
+        "settingTitle": "Cuando cambias de cuenta mientras Claude se está ejecutando en terminales",
+        "settingDescription": "Al reiniciar, cada conversación en un terminal continúa en la nueva cuenta.",
         "restartingOther": "Reiniciando {{count}} sesiones de Claude con {{account}}",
         "restartingOne": "Reiniciando 1 sesión de Claude con {{account}}",
         "groupOnAccount": "En ejecución con {{account}}",

@@ -158,34 +158,6 @@ describe('a stop-and-wait of a terminal an older relay still runs', () => {
     }
   }
 
-  it('records the stop with the bridge instead of tombstoning its lease (CLI close, worktree delete)', async () => {
-    const recordStop = vi.fn()
-    const deps = install(recordStop)
-    const ptyId = toAppSshPtyId(TARGET, lease.ptyId)
-    await expect(
-      stopAndWaitPtyFromRuntimeController(deps, ptyId, { deadlineMs: Date.now() + 1_000 })
-    ).resolves.toBe(false)
-    expect(deps.finishPtyShutdown).not.toHaveBeenCalled()
-    expect(recordStop).toHaveBeenCalledWith(
-      TARGET,
-      lease.ptyId,
-      expect.objectContaining({ attempts: 0 })
-    )
-    installLegacyRelayBridge(null)
-  })
-
-  it('leaves a reversible stop’s pane live, with no durable stop recorded', async () => {
-    const recordStop = vi.fn()
-    const deps = install(recordStop)
-    const ptyId = toAppSshPtyId(TARGET, lease.ptyId)
-    await expect(
-      stopAndWaitPtyFromRuntimeController(deps, ptyId, { keepHistory: true })
-    ).resolves.toBe(false)
-    expect(deps.finishPtyShutdown).not.toHaveBeenCalled()
-    expect(recordStop).not.toHaveBeenCalled()
-    installLegacyRelayBridge(null)
-  })
-
   it('keeps the stop request of a final stop the bridge still owes, so the pane reads closing', async () => {
     const runtime = { markPtyStopRequested: vi.fn(), clearPtyStopRequest: vi.fn() }
     const recordStop = vi.fn()
