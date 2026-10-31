@@ -1,4 +1,8 @@
-import { afterEach, describe, expect, it, vi } from 'vitest'
+import { spawnSync } from 'node:child_process'
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs'
+import { tmpdir } from 'node:os'
+import { join } from 'node:path'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { WslHostServerStop } from '../../shared/wsl-host-types'
 
 const { execCommand, decommission, dispose } = vi.hoisted(() => ({
@@ -16,6 +20,8 @@ vi.mock('./wsl-host-server-stop', async (importOriginal) => ({
 }))
 
 import {
+  buildCensusCommand,
+  buildCloseTerminalsCommand,
   stopWslHostServerFromGuest,
   stopWslHostServersForUninstall,
   type WslHostUninstallStopDependencies
@@ -68,22 +74,41 @@ describe('stopWslHostServerFromGuest', () => {
     dispose.mockReset()
   })
 
-  it("closes every terminal through the server's CLI, then decommissions the proven instance", async () => {
-    const open = new Set(['term_a', 'term_b'])
+  function terminals(count: number, worktrees: number) {
+    return Array.from({ length: count }, (_, i) => ({
+      handle: `term_${i}`,
+      worktreeId: `repo::/home/u/w${i % worktrees}`
+    }))
+  }
+
+  function guest(options: {
+    live: ReturnType<typeof terminals>
+    closeExit?: (i: number) => number
+    census?: string
+  }) {
     execCommand.mockImplementation(async (_conn, command) => {
-      if (command.includes('terminal list')) {
-        const terminals = [...open].map((handle) => ({ handle, worktreeId: 'w' }))
-        return `login banner\n${JSON.stringify({ result: { terminals } })}`
+      if (command.includes('UNINSTALL_CLOSE')) {
+        const count = new Set(options.live.map((t) => t.worktreeId)).size
+        return Array.from(
+          { length: count },
+          (_, i) => `UNINSTALL_CLOSE ${i} ${options.closeExit?.(i) ?? 0}`
+        ).join('\n')
       }
-      if (command.includes('terminal close')) {
-        open.delete(/--terminal '([^']+)'/.exec(command)?.[1] ?? '')
-        return JSON.stringify({ result: {} })
+      if (command.includes('UNINSTALL_CENSUS')) {
+        return `banner\nUNINSTALL_CENSUS ${options.census ?? '0'}\n`
+      }
+      if (command.includes('terminal list')) {
+        return `login banner\n${JSON.stringify({ result: { terminals: options.live } })}`
       }
       if (command.includes(' status ')) {
         return JSON.stringify({ result: { runtime: { runtimeId: 'rt-1' } } })
       }
       throw new Error(`unexpected ${command}`)
     })
+  }
+
+  it('stops 20 terminals in a fixed four wsl.exe calls, closing every worktree in parallel', async () => {
+    guest({ live: terminals(20, 3) })
     decommission.mockResolvedValue({
       outcome: 'decommissioned',
       version: '1',
@@ -93,39 +118,104 @@ describe('stopWslHostServerFromGuest', () => {
     const result = await stopWslHostServerFromGuest('Ubuntu', new AbortController().signal)
 
     expect(result).toEqual({ stopped: true })
-    expect(open.size).toBe(0)
+    expect(execCommand).toHaveBeenCalledTimes(4)
+    const close = execCommand.mock.calls
+      .map(([, c]) => c)
+      .find((c) => c.includes('UNINSTALL_CLOSE'))
+    expect(close?.match(/terminal close --worktree 'id:repo::\/home\/u\/w\d' --all/g)).toHaveLength(
+      3
+    )
+    expect(close).toMatch(/& wait$/)
     expect(decommission).toHaveBeenCalledWith(
       { liveSessions: 0, startedSinceActivation: null, daemonProtocolVersion: null },
       'rt-1'
     )
-    expect(
-      execCommand.mock.calls.every(([, c]) => c.startsWith('"$HOME/.orca/cli/bin/orca" '))
-    ).toBe(true)
-    // Remove host lists up to 1000; the CLI's default of 200 would leave terminals open.
-    const lists = execCommand.mock.calls
-      .map(([, c]) => c)
-      .filter((c) => c.includes('terminal list'))
-    expect(lists.length).toBeGreaterThan(0)
-    expect(lists.every((c) => c.includes('terminal list --limit 1000 --json'))).toBe(true)
     expect(dispose).toHaveBeenCalled()
   })
 
-  it('reports the server it could not prove stopped', async () => {
-    execCommand.mockImplementation(async (_conn, command) =>
-      command.includes('status')
-        ? JSON.stringify({ result: { runtime: { runtimeId: 'rt-1' } } })
-        : JSON.stringify({ result: { terminals: [] } })
-    )
+  it('names the terminals of a worktree whose close failed and does not claim a stop', async () => {
+    const live = terminals(4, 2)
+    guest({ live, closeExit: (i) => (i === 1 ? 1 : 0), census: '2' })
     decommission.mockResolvedValue({
       outcome: 'refused',
-      verdict: 'unverifiable',
-      code: 'x',
-      reason: 'not the active instance'
+      verdict: 'live',
+      code: 'orcad_decommission_terminals_running',
+      reason: '2 terminals are still running'
     })
 
     const result = await stopWslHostServerFromGuest('Ubuntu', new AbortController().signal)
 
+    expect(result).toMatchObject({ stopped: false, verdict: 'live' })
+    expect(result.stopped === false && result.reason).toContain(
+      'term_1 (repo::/home/u/w1): the close exited 1'
+    )
+    expect(result.stopped === false && result.reason).toContain('term_3 (repo::/home/u/w1)')
+    // The in-guest census already waited; no host-side retries.
+    expect(execCommand.mock.calls.filter(([, c]) => c.includes('UNINSTALL_CENSUS'))).toHaveLength(1)
+  })
+
+  it('treats a census the CLI could not answer as unknown, never as zero', async () => {
+    guest({ live: [], census: 'unknown' })
+    decommission.mockResolvedValue({
+      outcome: 'refused',
+      verdict: 'unverifiable',
+      code: 'orcad_decommission_census_unavailable',
+      reason: 'no session count'
+    })
+
+    const result = await stopWslHostServerFromGuest('Ubuntu', new AbortController().signal)
+
+    expect(decommission).toHaveBeenCalledWith(
+      expect.objectContaining({ liveSessions: null }),
+      'rt-1'
+    )
     expect(result).toMatchObject({ stopped: false, verdict: 'unverifiable' })
-    expect(dispose).toHaveBeenCalled()
+  })
+})
+
+describe('guest commands under a real POSIX shell', () => {
+  const describeOnPosix = process.platform === 'win32' ? describe.skip : describe
+  describeOnPosix('with a fake server CLI', () => {
+    let home: string
+    beforeEach(() => {
+      home = mkdtempSync(join(tmpdir(), 'orca-uninstall-guest-'))
+      mkdirSync(join(home, '.orca', 'cli', 'bin'), { recursive: true })
+    })
+    afterEach(() => rmSync(home, { recursive: true, force: true }))
+
+    function fakeCli(script: string): void {
+      const path = join(home, '.orca', 'cli', 'bin', 'orca')
+      writeFileSync(path, `#!/bin/sh\n${script}\n`)
+      chmodSync(path, 0o755)
+    }
+    const sh = (command: string) =>
+      spawnSync('/bin/sh', ['-c', command], {
+        env: { ...process.env, HOME: home },
+        encoding: 'utf8'
+      })
+
+    it('closes each worktree and reports every exit code', () => {
+      fakeCli('case "$4" in *w1) exit 3 ;; esac; echo "$@" >> "$HOME/closed"')
+
+      const out = sh(buildCloseTerminalsCommand(['repo::/w0', 'repo::/w1', "repo::/it's"]))
+
+      expect(out.stdout.split('\n').filter(Boolean).sort()).toEqual([
+        'UNINSTALL_CLOSE 0 0',
+        'UNINSTALL_CLOSE 1 3',
+        'UNINSTALL_CLOSE 2 0'
+      ])
+      expect(readFileSync(join(home, 'closed'), 'utf8')).toContain("id:repo::/it's")
+    })
+
+    it('counts live terminals, and reports a failing list as unknown', () => {
+      fakeCli('echo \'{"result":{"terminals":[{"handle":"a"},{"handle":"b"}]}}\'')
+      expect(sh(buildCensusCommand(0)).stdout.trim()).toBe('UNINSTALL_CENSUS 2')
+
+      fakeCli('echo \'{"result":{"terminals":[]}}\'')
+      expect(sh(buildCensusCommand(0)).stdout.trim()).toBe('UNINSTALL_CENSUS 0')
+
+      fakeCli('exit 1')
+      expect(sh(buildCensusCommand(0)).stdout.trim()).toBe('UNINSTALL_CENSUS unknown')
+    })
   })
 })
