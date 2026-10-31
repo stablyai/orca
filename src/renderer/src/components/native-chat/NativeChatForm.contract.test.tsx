@@ -44,7 +44,14 @@ const recorded = frames.find((frame) => frame.params.mode === 'form')!
 const schema = z
   .object({ properties: z.record(z.string(), z.record(z.string(), z.unknown())) })
   .parse(recorded.params.requestedSchema)
-const defaults = { color: 'blue', confirmed: false, count: 0, name: '  ', note: '' }
+type RecordedFormDefaults = Partial<Record<string, string | number | boolean>>
+const defaults: RecordedFormDefaults = {
+  color: 'blue',
+  confirmed: false,
+  count: 0,
+  name: '  ',
+  note: ''
+}
 let adapter: ReturnType<typeof adapterFor>
 beforeEach(() => {
   adapter = adapterFor(fakeCodex())
@@ -83,7 +90,7 @@ async function formSession(properties?: Record<string, Record<string, unknown>>)
           Object.fromEntries(
             Object.entries(schema.properties).map(([name, field]) => [
               name,
-              { ...field, default: Reflect.get(defaults, name) }
+              { ...field, default: defaults[name] }
             ])
           )
       }
@@ -181,7 +188,7 @@ it.each([0, 64])(
 it('submits untouched recorded form defaults from rendered controls through host commit to the exact provider', async () => {
   const h = await formSession()
   expect(h.codex.connections[0].replies).toEqual([])
-  expect(Reflect.get(screen.getByLabelText('Name'), 'value')).toBe('  ')
+  expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe('  ')
   fireEvent.click(screen.getByRole('button', { name: 'Submit' }))
   await waitFor(() =>
     expect(h.codex.connections[0].replies).toEqual([
@@ -277,7 +284,7 @@ it('re-derives pending errors, controls and saved Boolean labels on locale chang
     })
     expect(screen.getByRole('button', { name: 'Valider' })).toBeTruthy()
     expect(screen.getByRole('alert').textContent).toBe('Au moins 3 caractères.')
-    expect(Reflect.get(screen.getByLabelText('Name'), 'value')).toBe('x')
+    expect(screen.getByLabelText<HTMLInputElement>('Name').value).toBe('x')
     expect(screen.getByRole('radio', { name: 'Non' }).getAttribute('aria-checked')).toBe('true')
     expect(screen.getByRole('radio', { name: 'Yes' })).toBeTruthy()
     fireEvent.click(screen.getByRole('button', { name: 'Effacer Omitted' }))
