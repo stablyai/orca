@@ -4,7 +4,6 @@ import { Button } from '@/components/ui/button'
 import { translate } from '@/i18n/i18n'
 import { openAgentMessageSender } from '@/lib/open-agent-message-sender'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
-import { useAppStore } from '@/store'
 import { useNativeChatVisualOwner } from './native-chat-visual-owner'
 import {
   agentMessageSendersShown,
@@ -15,10 +14,7 @@ import {
   unnamedSenderLabel,
   useAgentMessageSenderLabel
 } from './native-chat-agent-message-sender-label'
-import {
-  agentMessageSenderOpens,
-  resolveAgentMessageSenderTarget
-} from './native-chat-agent-message-sender-target'
+import { useAgentMessageSenderOpens } from './native-chat-agent-message-sender-view'
 
 /** Link a sender only where its one resolution can open something; otherwise a plain name. */
 export function NativeChatAgentMessageSenders({
@@ -86,12 +82,7 @@ function SenderName({
   queued: boolean
 }): React.JSX.Element {
   const label = useAgentMessageSenderLabel(sender, chatWorktreeId, target, dispatchId)
-  const opens = useAppStore((state) =>
-    agentMessageSenderOpens(
-      resolveAgentMessageSenderTarget(state, sender, chatWorktreeId, target, dispatchId),
-      sender
-    )
-  )
+  const opens = useAgentMessageSenderOpens(sender, chatWorktreeId, target, dispatchId)
   if (!opens || !chatWorktreeId) {
     return (
       <span className={`max-w-48 truncate ${queued ? 'px-2' : 'px-2.5'}`} title={label}>

@@ -50,12 +50,12 @@ function knownDifferent(saved: string | undefined, row: string | undefined): boo
 /** The kind veto, read from the same sidebar row that draws the candidate's dot; chats are found
  *  by their own session and never vetoed as terminals. */
 function replacedAt(state: AppState, sender: AgentMessageSender, location: SenderLocation) {
-  return (
+  const saved = agentMessageSavedKind(sender)
+  // Without a saved kind nothing can veto, so the row isn't read.
+  return Boolean(
+    saved &&
     !sender.party.orcaSessionId &&
-    knownDifferent(
-      agentMessageSavedKind(sender),
-      readAgentMessageSenderRow(state, location)?.agentType
-    )
+    knownDifferent(saved, readAgentMessageSenderRow(state, location)?.agentType)
   )
 }
 

@@ -16,6 +16,9 @@ import {
 } from '../../../../shared/agent-session/agent-message-presentation'
 
 const EMPTY_VIEW: AgentMessageSenderView = Object.freeze({})
+let rowBuilds = 0
+/** Sidebar row sets the card sources built; a leased source reuses its rows across store writes. */
+export const agentMessageSenderRowBuildsForTest = () => rowBuilds
 export type SenderLocation = {
   host: string
   worktreeId: string
@@ -56,6 +59,7 @@ function createSource(worktreeId: string) {
           orchestration: selectRuntimeAgentOrchestrationForWorktree(state, worktreeId)
         })
         if (rows !== next) {
+          rowBuilds++
           rows = next
           const indexed = new Map<string, AgentMessageSenderView>()
           for (const row of next) {
@@ -133,6 +137,15 @@ export function useAgentMessageSenderSource(
       return previous
     }
   }, [locate, savedAgent])
+  return useLeasedSenderSelector(locate, selected)
+}
+
+/** A card selector that may read the located sender's sidebar row: it leases that row's source as
+ *  the avatar does, so a store write reuses the projection instead of rebuilding it per read. */
+export function useLeasedSenderSelector<T>(
+  locate: LocateSender,
+  select: (state: AppState) => T
+): T {
   const subscribe = useCallback(
     (notify: () => void) => {
       let lease: { key: string; source: Source } | undefined
@@ -157,7 +170,7 @@ export function useAgentMessageSenderSource(
             lease = { key, source }
           }
         }
-        return selected(state)
+        return select(state)
       }
       let value = update()
       const unsubscribe = useAppStore.subscribe(() => {
@@ -172,8 +185,8 @@ export function useAgentMessageSenderSource(
         release()
       }
     },
-    [locate, selected]
+    [locate, select]
   )
-  const getSnapshot = useCallback(() => selected(useAppStore.getState()), [selected])
+  const getSnapshot = useCallback(() => select(useAppStore.getState()), [select])
   return useSyncExternalStore(subscribe, getSnapshot, getSnapshot)
 }

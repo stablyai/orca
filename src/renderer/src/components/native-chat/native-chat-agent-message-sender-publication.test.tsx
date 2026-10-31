@@ -3,12 +3,12 @@ import { act, cleanup, renderHook } from '@testing-library/react'
 import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { makeTab } from '@/store/slices/store-test-helpers'
-import { useAgentMessageSenderView } from './native-chat-agent-message-sender-view'
-import { useAgentMessageSenderLabel } from './native-chat-agent-message-sender-label'
 import {
-  agentMessageSenderOpens,
-  resolveAgentMessageSenderTarget
-} from './native-chat-agent-message-sender-target'
+  useAgentMessageSenderOpens,
+  useAgentMessageSenderView
+} from './native-chat-agent-message-sender-view'
+import { agentMessageSenderRowBuildsForTest } from './native-chat-agent-message-sender-source'
+import { useAgentMessageSenderLabel } from './native-chat-agent-message-sender-label'
 import {
   initialStore,
   resetSenderStore,
@@ -418,7 +418,7 @@ it('keeps equal session ids on two hosts separate and rejects an unqualified pan
 })
 
 it.each([100, 1000])(
-  'renders no card name for an update that changes nothing it shows, and one for a real change, at %i senders',
+  'renders no card name and rebuilds no rows for an update that changes nothing it shows, at %i senders',
   (n) => {
     const LOCAL = { kind: 'local' } as const
     const rows = Array.from({ length: n }, (_, i) => association(i))
@@ -430,27 +430,27 @@ it.each([100, 1000])(
     })
     useAppStore.getState().setAgentSenderPublication('local', publication(rows))
     let renders = 0
-    // Each card's name: the label and link selectors NativeChatAgentMessageSenders subscribes with.
+    // Each card's name with no avatar beside it (queued mail, a card's later senders): the label
+    // and link hooks NativeChatAgentMessageSenders draws.
     const cards = Array.from({ length: 50 }, (_, i) => {
       const named = { ...sender(`term_${i}`), name: `Sender ${i}` }
       return renderHook(() => {
         renders++
         const label = useAgentMessageSenderLabel(named, 'workspace', LOCAL)
-        const opens = useAppStore((state) =>
-          agentMessageSenderOpens(
-            resolveAgentMessageSenderTarget(state, named, 'workspace', LOCAL, undefined),
-            named
-          )
-        )
+        const opens = useAgentMessageSenderOpens(named, 'workspace', LOCAL)
         return { label, opens }
       })
     })
+    expect(cards[0].result.current.opens).toBe(true)
     const rendersFor = (update: () => void) => {
       const before = renders
       act(update)
       return renders - before
     }
+    // The link's kind check reads the senders' sidebar rows; a write they don't read rebuilds none.
+    const builds = agentMessageSenderRowBuildsForTest()
     expect(rendersFor(() => useAppStore.setState({ sidebarBody: 'agents' }))).toBe(0)
+    expect(agentMessageSenderRowBuildsForTest()).toBe(builds)
     expect(
       rendersFor(() =>
         useAppStore.setState(
@@ -463,6 +463,7 @@ it.each([100, 1000])(
         )
       )
     ).toBe(0)
+    expect(agentMessageSenderRowBuildsForTest()).toBe(builds)
     expect(
       rendersFor(() =>
         useAppStore.getState().setAgentProgramStatus(status(0).paneKey, {
