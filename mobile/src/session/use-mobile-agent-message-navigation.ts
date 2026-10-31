@@ -4,9 +4,10 @@ import type { AgentMessageSource } from '../../../src/shared/agent-session/agent
 import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
 import {
   structuredSessionOpenFailure,
-  structuredSessionOpenMessage
+  type StructuredSessionOpenFailure
 } from '../../../src/shared/open-structured-agent-session'
 import type { RpcClient } from '../transport/rpc-client'
+import { mobileStructuredSessionOpenMessage } from './mobile-structured-session-open-message'
 import { openMobileStructuredSession } from './open-mobile-structured-session'
 import { openMobileAgentMessageTerminal } from './mobile-agent-message-terminal'
 import type { MobileSessionKeyboardStateModel } from './use-mobile-session-keyboard-state'
@@ -77,27 +78,30 @@ export function useMobileAgentMessageNavigation(
         client?.getGeneration?.() === generation &&
         selectedSessionTabIdRef.current === selected &&
         pendingSelectionRef.current === pending
-      const failure = (reason: Parameters<typeof structuredSessionOpenMessage>[0]) => {
+      const failure = (outcome: StructuredSessionOpenFailure) => {
         if (current()) {
-          showToast(structuredSessionOpenMessage(reason, sender.name ?? ''), 3000)
+          showToast(
+            mobileStructuredSessionOpenMessage(outcome.reason, sender.name ?? '', outcome.surface),
+            3000
+          )
         }
       }
       const deadline = Date.now() + 15_000
       void (async () => {
         if (!client || client.getState() !== 'connected') {
-          failure('unreachable')
+          failure({ reason: 'unreachable', beforeEffects: false })
           return
         }
         const known = sessionTabsRef.current.find(
           (tab) => tab.type === 'agent-session' && tab.sessionId === sender.party.orcaSessionId
         )
-        // TODO(#36315): pass known terminal fallback through the shared sender contract.
         const result = await openMobileStructuredSession({
           client,
           current,
           source: {
             kind: 'sender',
-            address: sender.party.address,
+            party: sender.party,
+            displayName: sender.name ?? undefined,
             messageIds,
             ...(known?.type === 'agent-session'
               ? {
@@ -107,6 +111,10 @@ export function useMobileAgentMessageNavigation(
           }
         })
         if (!current()) {
+          return
+        }
+        if (Date.now() >= deadline) {
+          failure({ reason: 'unreachable', beforeEffects: false })
           return
         }
         if (result.kind === 'opened') {
@@ -121,14 +129,16 @@ export function useMobileAgentMessageNavigation(
             current,
             deadline
           )
-          if (current()) {
+          if ('failure' in destination) {
+            failure(destination.failure)
+          } else if (current()) {
             navigate(destination.worktreeId, destination.paneKey)
           }
         } else if (result.kind === 'failed') {
-          failure(result.failure.reason)
+          failure(result.failure)
         }
       })()
-        .catch((error) => failure(structuredSessionOpenFailure(error).reason))
+        .catch((error) => failure(structuredSessionOpenFailure(error)))
         .finally(() => {
           if (visit.attempt === attempt) {
             visit.attempt = undefined

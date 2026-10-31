@@ -13,6 +13,8 @@ import { mountFixture } from '../test-support/rpc-recording/recorder-fixture-sha
 import { MobileTerminalDiagnostics } from './mobile-terminal-diagnostics'
 import { structuredAgentSessionPaneKey } from '../../../src/shared/structured-agent-session-projection'
 import type { BridgeInitRoute } from '../mobile-web-shell/bridge/bridge-envelope'
+import { parseOrcaSessionAddress } from '../../../src/shared/orca-session-address'
+import { activateMobileUiLocale, mobileI18n } from '../i18n/mobile-i18n'
 
 const focus = vi.hoisted(() => ({ active: true }))
 vi.mock('expo-router', async () => {
@@ -53,6 +55,11 @@ const from: AgentMessageSource = {
   ]
 }
 const reply = (result: unknown): RpcResponse => ({ id: 'reply', ok: true, result })
+const refused = (code: string): RpcResponse => ({
+  id: 'reply',
+  ok: false,
+  error: { code, message: 'private host diagnostic' }
+})
 const chat: MobileSessionTab = {
   type: 'agent-session',
   id: 'agent-session:live',
@@ -72,11 +79,13 @@ const terminal: MobileSessionTab = {
   isActive: false
 }
 const trees: ReactTestRenderer[] = []
-afterEach(() => {
+afterEach(async () => {
   act(() => trees.splice(0).forEach((tree) => tree.unmount()))
   vi.useRealTimers()
   focus.active = true
   bridge.route = null
+  mobileI18n.removeResourceBundle('fr', 'translation')
+  await activateMobileUiLocale('en')
 })
 
 function mount(
@@ -170,7 +179,7 @@ it.each(['claude', 'codex'] as const)(
   async (agent) => {
     let rows: MobileSessionTab[] = []
     const row = { ...chat, agent, id: 'agent-chat-tab-v1-actual' }
-    const send = vi.fn(async (method: string) =>
+    const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
       reply(
         method === 'orchestration.partyLocation'
           ? { location: { kind: 'chat', sessionId: chat.sessionId, worktreeId: 'stale' } }
@@ -239,7 +248,7 @@ it.each(['claude', 'codex'] as const)(
 )
 
 it('routes a resolved terminal through caller focus and its actual grouped leaf', async () => {
-  const send = vi.fn(async (method: string) =>
+  const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
     reply(
       method === 'orchestration.partyLocation'
         ? { location: { kind: 'terminal', handle: 'term_worker' } }
@@ -257,6 +266,81 @@ it('routes a resolved terminal through caller focus and its actual grouped leaf'
   ])
   expect(h.navigate).toHaveBeenCalledWith('destination', `parent:${leaf}`)
   expect(h.toast).not.toHaveBeenCalled()
+})
+
+it.each(['method_not_found', 'forbidden'])(
+  'uses shared old-host %s policy for direct terminals and exact native roots',
+  async (code) => {
+    const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) =>
+      method === 'orchestration.partyLocation'
+        ? refused(code)
+        : reply(
+            method === 'terminal.focus'
+              ? { focus: { worktreeId: 'destination' } }
+              : method === 'session.tabs.list'
+                ? { tabs: [terminal, chat] }
+                : {}
+          )
+    )
+    const h = mount(send)
+    await act(async () => h.open())
+    expect(h.navigate).toHaveBeenLastCalledWith('destination', `parent:${leaf}`)
+    send.mockClear()
+    h.sourceSelection.sessionTabsRef.current = [chat]
+    const root: AgentMessageSource = {
+      ...from,
+      senders: [
+        {
+          ...from.senders[0],
+          party: {
+            ...from.senders[0].party,
+            orcaSessionId: parseOrcaSessionAddress(`orca_session_id:${chat.sessionId}`)
+          }
+        }
+      ]
+    }
+    await act(async () => h.open(root))
+    expect(send.mock.calls.map(([method]) => method)).toEqual([
+      'orchestration.partyLocation',
+      'session.tabs.list',
+      'session.tabs.activate'
+    ])
+    expect(h.navigate).toHaveBeenLastCalledWith(
+      'source-workspace',
+      structuredAgentSessionPaneKey(chat.id, chat.sessionId)
+    )
+    expect(h.toast).not.toHaveBeenCalled()
+  }
+)
+
+it('never falls back after ambiguous lookup and carries its remaining budget into terminal output', async () => {
+  vi.useFakeTimers()
+  vi.setSystemTime(1000)
+  const send = vi.fn<Parameters<typeof mount>[0]>(async (method: string) => {
+    if (method === 'orchestration.partyLocation') {
+      vi.setSystemTime(15000)
+      return reply({ location: { kind: 'terminal', handle: 'term_worker' } })
+    }
+    vi.setSystemTime(16000)
+    return reply({ focus: { worktreeId: 'destination' } })
+  })
+  const h = mount(send)
+  await act(async () => h.open())
+  expect(send.mock.calls[1]).toEqual([
+    'terminal.focus',
+    expect.any(Object),
+    expect.objectContaining({ timeoutMs: 1000 })
+  ])
+  expect(send.mock.calls.map(([method]) => method)).toEqual([
+    'orchestration.partyLocation',
+    'terminal.focus'
+  ])
+  expect(h.navigate).not.toHaveBeenCalled()
+  expect(h.toast).toHaveBeenCalledTimes(1)
+  send.mockClear()
+  send.mockImplementation(async () => refused('timeout'))
+  await act(async () => h.open())
+  expect(send.mock.calls.map(([method]) => method)).toEqual(['orchestration.partyLocation'])
 })
 
 it('retains the displayed source, respects pending selection, and fences stale source/visit/generation/newer intent', async () => {
@@ -300,7 +384,9 @@ it('retains the displayed source, respects pending selection, and fences stale s
 })
 
 it('uses the shared named failure table and permits a fresh retry', async () => {
-  const send = vi.fn(async () => reply({ location: null, lost: 'chat' }))
+  const send = vi.fn<Parameters<typeof mount>[0]>(async () =>
+    reply({ location: null, lost: 'chat' })
+  )
   const h = mount(send)
   await act(async () => h.open())
   expect(h.toast).toHaveBeenCalledWith(
@@ -309,4 +395,42 @@ it('uses the shared named failure table and permits a fresh retry', async () => 
   )
   await act(async () => h.open())
   expect(send).toHaveBeenCalledTimes(2)
+})
+
+it.each([
+  'locate',
+  'terminal_exited',
+  'terminal_gone',
+  'terminal_handle_stale',
+  'terminal_not_found',
+  'timeout'
+])('translates one honest terminal outcome for %s at the actual arrow sink', async (code) => {
+  mobileI18n.addResourceBundle('fr', 'translation', {
+    'session.structuredOpen.paneUnavailable': 'Le panneau de l’agent n’est plus disponible.',
+    'session.structuredOpen.unreachable': 'Conversation de {{agent}} indisponible : réessayez.'
+  })
+  await activateMobileUiLocale('fr')
+  const send = vi.fn<Parameters<typeof mount>[0]>(async (method) =>
+    method === 'orchestration.partyLocation'
+      ? reply(
+          code === 'locate'
+            ? { location: null, lost: 'terminal' }
+            : { location: { kind: 'terminal', handle: 'term_worker' } }
+        )
+      : refused(code)
+  )
+  const h = mount(send)
+  await act(async () => h.open())
+  expect(h.navigate).not.toHaveBeenCalled()
+  expect(h.toast).toHaveBeenCalledExactlyOnceWith(
+    code === 'timeout'
+      ? 'Conversation de Worker indisponible : réessayez.'
+      : 'Le panneau de l’agent n’est plus disponible.',
+    3000
+  )
+  expect(send.mock.calls.map(([method]) => method)).toEqual(
+    code === 'locate'
+      ? ['orchestration.partyLocation']
+      : ['orchestration.partyLocation', 'terminal.focus']
+  )
 })

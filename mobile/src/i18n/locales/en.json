@@ -2553,7 +2553,8 @@
       "gone": "{{agent}}'s chat is no longer on this host, so it cannot be reopened here.",
       "unknown": "{{agent}}'s chat could not be found on this host. Reconnect to its computer and try again.",
       "unsupported": "{{agent}}'s chat can't be reopened until Orca is updated.",
-      "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment."
+      "unreachable": "{{agent}}'s chat is not available yet. Retry in a moment.",
+      "paneUnavailable": "Agent's pane is no longer available."
     }
   },
   "chat": {
