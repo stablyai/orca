@@ -1,5 +1,6 @@
 // Codes span situations with different next steps (cleared chat versus busy command). Name only a listed reason; otherwise omit it for the code fallback, as older hosts do.
 
+import type { AgentSessionReplyRefusalDetails } from './agent-session-reply-refusal-facts'
 import type { AgentSessionAccountKind } from './agent-session-availability'
 import type { AgentJournalResolution } from './agent-session-journal-types'
 import {
@@ -174,7 +175,7 @@ type NoFacts = Record<never, never>
 
 export type AgentSessionConversationOwner = { sessionId: string; workspaceId: string }
 
-type ConversationOwnerFacts = { owner?: AgentSessionConversationOwner; source?: true }
+type ConversationOwnerFacts = { owner?: AgentSessionConversationOwner }
 
 /** The facts a code carries beside its reason. */
 type AgentSessionRefusalFactsByCode = {
@@ -293,7 +294,7 @@ export function isAgentSessionRefusalReason<C extends AgentSessionWireRefusalCod
 export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusalCode>(
   code: C,
   value: unknown
-): AgentSessionRefusalDetails<C> | undefined {
+): AgentSessionReplyRefusalDetails<C> | undefined {
   if (!isRecord(value)) {
     return undefined
   }
@@ -348,7 +349,7 @@ export function readAgentSessionRefusalDetails<C extends AgentSessionWireRefusal
     ...(codexInstallation ? { codexInstallation } : {})
   }
   // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the reason was checked against `code`'s list and only the facts `code` lists (plus the verdict every code may carry) were kept.
-  return Object.keys(read).length > 0 ? (read as AgentSessionRefusalDetails<C>) : undefined
+  return Object.keys(read).length > 0 ? (read as AgentSessionReplyRefusalDetails<C>) : undefined
 }
 
 /** The loose fields released clients read, taken from details; the one place they are written. */

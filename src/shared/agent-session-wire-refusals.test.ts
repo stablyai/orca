@@ -203,3 +203,16 @@ describe('a stored refusal read back', () => {
     expect(readAgentSessionRefusalReference({ code: 'agent_session_future' })).toBeUndefined()
   })
 })
+
+it('tells the client a switch’s own source still writes, but never keeps that in saved history', () => {
+  const refusal = refuse(
+    'agent_session_conflict',
+    { reason: 'conversationHeldElsewhere', source: true },
+    'agent_session_conflict'
+  )
+  expect(refusal.details).toEqual({ reason: 'conversationHeldElsewhere', source: true })
+  expect(readAgentSessionRefusalDetails(refusal.code, refusal.details)).toEqual(refusal.details)
+  const saved = { code: 'agent_session_conflict', details: { reason: 'conversationHeldElsewhere' } }
+  expect(agentSessionRefusalReference(refusal)).toEqual(saved)
+  expect(readAgentSessionRefusalReference(refusal)).toEqual(saved)
+})
