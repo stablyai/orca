@@ -14,6 +14,8 @@ import type {
 import type { StartupCommandDelivery } from '../../shared/codex-startup-delivery'
 import type { TerminalInputKind } from '../../shared/terminal-input-kind'
 import type {
+  TerminalLeafIntoTabRequest,
+  TerminalLeafIntoTabResult,
   TerminalLeafMoveRequest,
   TerminalLeafMoveResult
 } from '../../shared/terminal-leaf-move'
@@ -194,6 +196,7 @@ export type PtyApi = {
   ) => Promise<{ id: string; authoritative: boolean | null }[]>
   hasPty: (id: string) => Promise<boolean | null>
   moveLeafToNewTab: (request: TerminalLeafMoveRequest) => Promise<TerminalLeafMoveResult>
+  moveLeafIntoTab: (request: TerminalLeafIntoTabRequest) => Promise<TerminalLeafIntoTabResult>
   getMainBufferSnapshot: (
     id: string,
     opts?: { scrollbackRows?: number }

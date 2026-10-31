@@ -123,6 +123,7 @@ export function registerPtyHandlers(
   // macOS window reactivation can re-register; remove old handlers first.
   ipcMain.removeHandler('pty:spawn')
   ipcMain.removeHandler('pty:moveLeafToNewTab')
+  ipcMain.removeHandler('pty:moveLeafIntoTab')
   ipcMain.removeHandler('pty:kill')
   ipcMain.removeHandler('pty:killFenced')
   ipcMain.removeHandler('pty:listSessions')

@@ -9,7 +9,9 @@ import type { TerminalTab } from '../../../../shared/terminal-tab-types'
 import { useAppStore } from '../../store'
 import { formatShortcutLabel, useOptionalShortcutLabel } from '@/hooks/useShortcutLabel'
 import { translate } from '@/i18n/i18n'
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../../shared/layout-owner-switch'
 import { TerminalTabSplitMenuSection } from './TerminalTabSplitMenuSection'
+import { TerminalTabMoveIntoTabMenuSection } from './TerminalTabMoveIntoTabMenuSection'
 import { TabSessionSurfaceSwitchMenuItems } from './TabSessionSurfaceSwitchMenuItems'
 import type { NativeChatTabSession } from './tab-session-history-switch'
 import { CopyTabIdMenuItem } from './CopyTabIdMenuItem'
@@ -164,6 +166,9 @@ export function SortableTabContextMenu({
         splitDownShortcut={splitDownShortcut}
         showTerminalSplit={canSplitTerminal}
       />
+      {!ORCA_LAYOUT_OWNER_IS_MAIN && !isChatView && canSplitTerminal ? (
+        <TerminalTabMoveIntoTabMenuSection tabId={tab.id} worktreeId={tab.worktreeId} />
+      ) : null}
       {showTerminalViewSwitch ? (
         <>
           <ContextMenuSeparator />
