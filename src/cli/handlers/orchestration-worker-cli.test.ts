@@ -826,6 +826,20 @@ describe('orchestration worker-start CLI contract', () => {
     expect(text).toContain('keepOpenState=already_released')
     expect(text).toContain('worker-read --dispatch ctx_1')
     expect(process.exitCode).toBe(1)
+
+    vi.mocked(console.log).mockClear()
+    await invokeWorkerStart(
+      new Map<string, string | boolean>([
+        ['task', 'task_1'],
+        ['agent', 'codex'],
+        ['keep-open', true],
+        ['full', true]
+      ]),
+      false
+    )
+    const full = printedText()
+    expect(full).toContain('Keep open: already_released')
+    expect(full).toContain('worker-read --dispatch ctx_1')
   })
 
   it('does not tell a coordinator that chat workers skip automatic release', () => {

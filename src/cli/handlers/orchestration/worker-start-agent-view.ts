@@ -104,7 +104,16 @@ export const WORKER_START_VIEW: OrchestrationAgentView<WorkerStartAgentReceipt, 
               : value.next && resolveOrcaCommandsInText(value.next)
       }
     },
-    fullText: (value) => withReceiptNext(formatWorkerStart(value), value),
+    fullText: (value) => {
+      const notKept = notKeptOpen(value)
+      const keepOpen = value.keepOpen
+        ? `\nKeep open: ${value.keepOpen.state}${value.keepOpen.lastError ? `: ${value.keepOpen.lastError}` : ''}`
+        : ''
+      return withReceiptNext(
+        `${formatWorkerStart(value)}${keepOpen}`,
+        notKept ? { next: keepOpenNext(notKept) } : value
+      )
+    },
     failure: (value) =>
       keepOpenFailure(value) ??
       (value.state === 'ready'
