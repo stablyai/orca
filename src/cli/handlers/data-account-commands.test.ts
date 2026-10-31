@@ -15,6 +15,9 @@ const context = {
   rawArgs: []
 }
 
+const OPENCODE_2_HELP = 'opencode auth login [url]\n  --standalone  run without the shared server'
+const readHelp = vi.fn(() => OPENCODE_2_HELP)
+
 afterEach(() => vi.restoreAllMocks())
 
 describe('managed data account enrollment', () => {
@@ -50,7 +53,9 @@ describe('managed data account enrollment', () => {
       _meta: { runtimeId: 'test' }
     })
     const login = vi.fn()
-    await expect(addDataAccount(context, 'opencode', login)).rejects.toThrow('Update or restart')
+    await expect(addDataAccount(context, 'opencode', login, readHelp)).rejects.toThrow(
+      'Update or restart'
+    )
     expect(login).not.toHaveBeenCalled()
   })
 
@@ -74,12 +79,32 @@ describe('managed data account enrollment', () => {
       expect(env.OPENCODE_DB).toBe('opencode.db')
       expect(existsSync(directory)).toBe(true)
     })
-    await expect(addDataAccount(context, 'opencode', login)).rejects.toThrow('capture failed')
+    await expect(addDataAccount(context, 'opencode', login, readHelp)).rejects.toThrow(
+      'capture failed'
+    )
     expect(call).toHaveBeenLastCalledWith('accounts.addDataFromHome', {
       provider: 'opencode',
       sourceDataHome: join(directory, 'data'),
       label: 'opencode'
     })
     expect(existsSync(directory)).toBe(false)
+  })
+
+  it('refuses OpenCode 1.x before starting login', async () => {
+    vi.spyOn(client, 'call').mockResolvedValue({
+      id: 'test',
+      ok: true,
+      result: { capabilities: [DATA_ACCOUNT_RUNTIME_CAPABILITY] },
+      _meta: { runtimeId: 'test' }
+    })
+    const login = vi.fn()
+    const opencode1Help = vi.fn(
+      () => 'opencode auth login [url]\n  --pure  run without external plugins'
+    )
+    await expect(addDataAccount(context, 'opencode', login, opencode1Help)).rejects.toThrow(
+      'Managed OpenCode accounts need OpenCode 2'
+    )
+    expect(opencode1Help).toHaveBeenCalledWith('opencode', ['auth', 'login', '--help'])
+    expect(login).not.toHaveBeenCalled()
   })
 })
