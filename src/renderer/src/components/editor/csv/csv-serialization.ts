@@ -13,7 +13,7 @@ export function serializeCsvRecord(
   return values
     .map((value, index) => {
       const token = originalTokens[index]
-      const quoteSingleField = values.length === 1 && (value === '' || /[,;\t]/.test(value))
+      const quoteSingleField = values.length === 1 && (value === '' || /[,;\t|]/.test(value))
       const validToken =
         token !== undefined &&
         (token.startsWith('"') ? /^"(?:[^"]|"")*"$/.test(token) : !/["\r\n]/.test(token))

@@ -147,15 +147,18 @@ describe('editable CSV table', () => {
     expect(screen.getByTestId('source').textContent).toBe('\ufeffname,value\r\nB,2\r\nA,updated')
   })
 
-  it('keeps the chosen table delimiter when an edit would change the Auto guess', () => {
-    setup('first;second\nvalue;two')
+  it.each([
+    ['Semicolon (;)', 'first;second\nvalue;two', 'tabs\there\ttoo'],
+    ['Pipe (|)', 'first|second\nvalue|two', 'a,b,c']
+  ])('keeps %s when an edit would change the Auto guess', (choice, source, value) => {
+    setup(source)
     fireEvent.doubleClick(screen.getByRole('columnheader', { name: 'first' }))
     const input = screen.getByRole('textbox', { name: /Edit row/ })
-    fireEvent.change(input, { target: { value: 'tabs\there\ttoo' } })
+    fireEvent.change(input, { target: { value } })
     fireEvent.keyDown(input, { key: 'Enter' })
     expect(screen.getByRole('grid').getAttribute('aria-colcount')).toBe('3')
-    expect(screen.getByRole('columnheader', { name: 'tabs\there\ttoo' })).toBeTruthy()
-    expect(screen.getByRole('combobox', { name: 'Delimiter' }).textContent).toBe('Semicolon (;)')
+    expect(screen.getByRole('columnheader', { name: value })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Delimiter' }).textContent).toBe(choice)
   })
 
   it('cancels only the new cell after an earlier save completes', () => {
