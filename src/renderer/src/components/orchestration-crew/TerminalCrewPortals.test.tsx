@@ -48,6 +48,10 @@ vi.mock('@/runtime/sync-runtime-graph', async (importOriginal) => ({
   observeTabGroupBodyGridSize: () => () => {}
 }))
 
+const sender = await vi.importActual<typeof OpenAgentMessageSender>(
+  '@/lib/open-agent-message-sender'
+)
+
 const worker: OrchestrationCrewRow = {
   partyKey: 'worker',
   role: 'worker',
@@ -293,9 +297,6 @@ it.each(['pointer', 'keyboard', 'open', 'floating'] as const)(
     } else if (choice === 'keyboard') {
       selectConfiguredNextPane(test.controller, test.manager)
     } else if (choice === 'open') {
-      const sender = await vi.importActual<typeof OpenAgentMessageSender>(
-        '@/lib/open-agent-message-sender'
-      )
       const frames: FrameRequestCallback[] = []
       vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) =>
         frames.push(callback)
