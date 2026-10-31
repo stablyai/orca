@@ -12,6 +12,8 @@ export type ConnectPanePtySession = {
   transport: PtyTransport
   hiddenOutputRestoreUnhideSeq: number | null
   idleCursorReset: TerminalIdleCursorReset
+  /** Escape a post-gap continuation is still finishing across chunks; empty when none. */
+  gapEscapeContinuation: string
   // oxlint-disable-next-line typescript/no-explicit-any -- session bag for mechanical extract
   [key: string]: any
 }
