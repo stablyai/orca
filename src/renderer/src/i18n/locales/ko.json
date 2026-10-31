@@ -18839,7 +18839,10 @@
         "orcaStopCrash": "이 응답이 진행되는 동안 {{machine}}의 Orca가 예기치 않게 중지되었습니다.",
         "orcaStopRemote": "이 응답이 진행되는 동안 {{machine}}의 Orca가 중지되었습니다.",
         "orcaStopCanContinue": "이 대화에서 계속할 수 있습니다.",
-        "orcaStopUnnamedServer": "원격 서버"
+        "orcaStopUnnamedServer": "원격 서버",
+        "permissionDenied": "{{agent}}이(가) 권한을 거부했습니다. 세부 정보 보기.",
+        "safetyReview": "{{agent}}이(가) 안전 검토 경고를 보고했습니다. 세부 정보 보기.",
+        "truncatedResponse": "공급자 응답이 잘렸습니다(원래 크기: {{bytes}}바이트)."
       },
       "providerFrame": {
         "byteCount_other": "{{count}}바이트"

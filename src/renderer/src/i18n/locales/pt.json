@@ -19846,7 +19846,10 @@
         "orcaStopCrash": "O Orca em {{machine}} parou inesperadamente enquanto esta resposta estava em andamento.",
         "orcaStopRemote": "O Orca em {{machine}} parou enquanto esta resposta estava em andamento.",
         "orcaStopCanContinue": "Você pode continuar nesta conversa.",
-        "orcaStopUnnamedServer": "o servidor remoto"
+        "orcaStopUnnamedServer": "o servidor remoto",
+        "permissionDenied": "{{agent}} negou a permissão. Ver detalhes.",
+        "safetyReview": "{{agent}} relatou um aviso de revisão de segurança. Ver detalhes.",
+        "truncatedResponse": "Resposta do provedor truncada (tamanho original: {{bytes}} bytes)."
       },
       "composer": {
         "send": "Enviar",

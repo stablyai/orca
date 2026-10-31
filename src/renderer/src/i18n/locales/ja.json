@@ -18839,7 +18839,10 @@
         "orcaStopCrash": "この応答の途中で、{{machine}} の Orca が予期せず停止しました。",
         "orcaStopRemote": "この応答の途中で、{{machine}} の Orca が停止しました。",
         "orcaStopCanContinue": "この会話で続行できます。",
-        "orcaStopUnnamedServer": "リモートサーバー"
+        "orcaStopUnnamedServer": "リモートサーバー",
+        "permissionDenied": "{{agent}} が権限を拒否しました。詳細を表示。",
+        "safetyReview": "{{agent}} が安全性レビューの警告を報告しました。詳細を表示。",
+        "truncatedResponse": "プロバイダーの応答は切り詰められています（元のサイズ：{{bytes}} バイト）。"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} バイト"

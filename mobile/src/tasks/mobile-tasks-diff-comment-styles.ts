@@ -154,7 +154,7 @@ export const mobileTasksDiffCommentStyles = themedStyleSheet(() => ({
     marginHorizontal: spacing.md
   },
   setupPromptBox: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,

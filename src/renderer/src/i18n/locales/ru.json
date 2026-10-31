@@ -19652,7 +19652,10 @@
         "orcaStopCrash": "Во время ответа Orca на {{machine}} неожиданно завершилась.",
         "orcaStopRemote": "Во время ответа Orca на {{machine}} остановилась.",
         "orcaStopCanContinue": "Вы можете продолжить этот разговор.",
-        "orcaStopUnnamedServer": "удалённом сервере"
+        "orcaStopUnnamedServer": "удалённом сервере",
+        "permissionDenied": "{{agent}} отказал в разрешении. Подробнее.",
+        "safetyReview": "{{agent}} сообщил о предупреждении проверки безопасности. Подробнее.",
+        "truncatedResponse": "Ответ поставщика обрезан (исходный размер: {{bytes}} байт)."
       },
       "composer": {
         "send": "Отправить",

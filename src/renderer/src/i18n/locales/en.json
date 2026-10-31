@@ -2844,6 +2844,7 @@
         "8c967b4d15": "Later"
       },
       "TaskPage": {
+        "gitlabLoadFailed": "Could not load GitLab work items. Refresh to try again.",
         "ff69a30681": "Cancel",
         "8ff6fdc368": "Creating…",
         "919a20dd5b": "Enter {{value0}}",
@@ -3731,6 +3732,17 @@
             "vmProvisioningTitle": "Provisioning VM",
             "cancelProvisioning": "Cancel",
             "vmProvisioningLogEmpty": "Waiting for recipe output…"
+          },
+          "PendingNativeChatCreation": {
+            "sendBlockedFailed": "Retry creating the worktree to send",
+            "sendBlockedHeld": "Sends when the worktree is ready"
+          },
+          "WorktreeSetupSteps": {
+            "prepare": "Prepare workspace",
+            "fetch": "Fetch base branch",
+            "create": "Create worktree",
+            "setup": "Set up workspace",
+            "startAgent": "Start {{agent}}"
           }
         }
       },
@@ -19373,7 +19385,10 @@
         "orcaStopCrash": "Orca on {{machine}} stopped unexpectedly while this response was in progress.",
         "orcaStopRemote": "Orca on {{machine}} stopped while this response was in progress.",
         "orcaStopCanContinue": "You can continue in this conversation.",
-        "orcaStopUnnamedServer": "the remote server"
+        "orcaStopUnnamedServer": "the remote server",
+        "permissionDenied": "{{agent}} denied permission. View details.",
+        "safetyReview": "{{agent}} reported a safety review warning. View details.",
+        "truncatedResponse": "Provider response truncated (original size: {{bytes}} bytes)."
       },
       "composer": {
         "send": "Send",

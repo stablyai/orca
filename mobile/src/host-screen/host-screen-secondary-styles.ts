@@ -1,4 +1,3 @@
-import { StyleSheet } from 'react-native'
 import { colors, radii, spacing, typography } from '../theme/mobile-theme'
 import { themedStyleSheet } from '../theme/themed-styles'
 
@@ -55,68 +54,16 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     gap: spacing.xs,
     marginBottom: spacing.sm
   },
-  // Settings-style group caption: sentence case, over the group's leading edge.
-  filterSectionLabel: {
-    fontSize: 13,
-    color: colors.textSecondary,
-    marginTop: spacing.sm,
-    marginBottom: spacing.sm,
-    paddingHorizontal: spacing.lg
-  },
   optionSectionGap: {
     height: spacing.xs
   },
-  filterGroup: {
-    backgroundColor: colors.bgPanel,
-    borderRadius: radii.surface,
-    overflow: 'hidden',
+  optionGroup: {
     marginBottom: spacing.md
   },
-  filterRow: {
-    minHeight: 50,
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: spacing.sm,
-    paddingHorizontal: spacing.lg,
-    gap: spacing.sm
-  },
-  filterRowText: {
-    flex: 1,
-    fontSize: 15,
-    color: colors.textPrimary
-  },
-  // Inset from the leading edge, like a settings list.
-  filterSeparator: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: colors.borderSubtle,
-    marginLeft: spacing.lg
-  },
-  optionRowLabel: {
-    flex: 1
-  },
-  optionRowDetail: {
-    fontSize: 11,
-    color: colors.textMuted,
-    marginTop: 2
-  },
-  optionRowIndented: {
-    paddingLeft: spacing.lg * 2
-  },
-  optionRowDisabled: {
-    opacity: 0.5
-  },
   optionSearch: {
-    padding: spacing.sm
+    marginBottom: spacing.sm
   },
-  optionRowValue: {
-    flexShrink: 1,
-    maxWidth: '45%',
-    fontSize: 15,
-    color: colors.textSecondary
-  },
-  // On the drawer's base color, so the track takes the panel color the option cards use.
   optionSegmented: {
-    backgroundColor: colors.bgPanel,
     marginBottom: spacing.md
   },
   // Over the sheet header's empty leading side, centred in its 52pt row.
@@ -155,7 +102,7 @@ export const hostScreenSecondaryStyles = themedStyleSheet(() => ({
     alignItems: 'center'
   },
   confirmBtnCancel: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   confirmBtnDestructive: {
     backgroundColor: colors.statusRed

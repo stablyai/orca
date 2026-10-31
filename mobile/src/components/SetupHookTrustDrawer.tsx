@@ -122,7 +122,7 @@ const styles = themedStyleSheet(() => ({
     marginBottom: spacing.md
   },
   trustScriptBox: {
-    backgroundColor: colors.bgRaised,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     borderWidth: 1,
     borderColor: colors.borderSubtle,
@@ -141,7 +141,7 @@ const styles = themedStyleSheet(() => ({
     color: colors.textPrimary
   },
   trustActionGroup: {
-    backgroundColor: colors.bgPanel,
+    backgroundColor: colors.sheetGroup,
     borderRadius: radii.surface,
     overflow: 'hidden'
   },

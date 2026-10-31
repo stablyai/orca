@@ -1,3 +1,6 @@
+import { readFileSync } from 'node:fs'
+import { createRequire } from 'node:module'
+import { runInNewContext } from 'node:vm'
 import { createElement, type ReactNode } from 'react'
 import { act, create, type ReactTestInstance, type ReactTestRenderer } from 'react-test-renderer'
 import { afterEach, describe, expect, it, vi } from 'vitest'
@@ -65,6 +68,55 @@ vi.mock('../visual/MobileNativeChatImageViewer', () => ({
 import { MobileNativeChatMessage } from './MobileNativeChatMessage'
 import { MobileNativeChatRowOverlaysHost } from './MobileNativeChatRowOverlaysHost'
 
+// Run the installed RN gesture state machine; only native bridges are stand-ins.
+function loadPressability() {
+  const requireNative = createRequire(
+    createRequire(import.meta.url).resolve('react-native/package.json')
+  )
+  const requirePreset = createRequire(requireNative.resolve('@react-native/babel-preset'))
+  const filename = requireNative.resolve('./Libraries/Pressability/Pressability.js')
+  const { code } = requireNative('@babel/core').transformSync(readFileSync(filename, 'utf8'), {
+    filename,
+    babelrc: false,
+    configFile: false,
+    plugins: [
+      requirePreset.resolve('babel-plugin-syntax-hermes-parser'),
+      requireNative.resolve('@babel/plugin-transform-flow-strip-types'),
+      requireNative.resolve('@babel/plugin-transform-modules-commonjs')
+    ]
+  })
+  return runInNewContext(`${code}\nexports.default`, {
+    exports: {},
+    require: (name: string) => {
+      switch (name) {
+        case '../../src/private/featureflags/ReactNativeFeatureFlags':
+          return { shouldPressibilityUseW3CPointerEventsForHover: () => false }
+        case '../Components/Sound/SoundManager':
+          return { playTouchSound: vi.fn() }
+        case '../ReactNative/UIManager':
+          return { measure: vi.fn() }
+        case '../StyleSheet/Rect':
+          return { normalizeRect: (rect: unknown) => rect }
+        case '../Utilities/Platform':
+          return { OS: 'android' }
+        case './HoverState':
+          return { isHoverEnabled: () => false }
+        case './PressabilityPerformanceEventEmitter.js':
+          return { emitEvent: vi.fn() }
+        case 'invariant':
+          return requireNative(name)
+        default:
+          throw new Error(`Unexpected Pressability dependency: ${name}`)
+      }
+    },
+    setTimeout,
+    clearTimeout,
+    Date,
+    __DEV__: false,
+    process: { env: { NODE_ENV: 'test' } }
+  })
+}
+
 const inChat = (...rows: NativeChatMessage[]) =>
   createElement(
     MobileNativeChatRowOverlaysHost,
@@ -86,6 +138,7 @@ describe('MobileNativeChatMessage on Android', () => {
   afterEach(() => {
     act(() => renderer?.unmount())
     renderer = null
+    vi.useRealTimers()
   })
 
   function byType(type: string): ReactTestInstance[] {
@@ -113,6 +166,64 @@ describe('MobileNativeChatMessage on Android', () => {
 
     act(() => sheet!.props.onClose())
     expect(byType('MessageActionsSheet')).toHaveLength(0)
+  })
+
+  it.each([
+    ['codex', 'notification:guardianWarning'],
+    ['claude', 'message:system:permission_denied']
+  ])('keeps %s notice long press for actions and short press for disclosure', (provider, kind) => {
+    vi.useFakeTimers()
+    const Pressability = loadPressability()
+    const notice: NativeChatMessage = {
+      ...message,
+      role: 'system',
+      blocks: [
+        {
+          type: 'text',
+          text: 'The command was denied outside the workspace.',
+          tone: 'error',
+          providerFrame: {
+            provider,
+            kind,
+            payload: { head: '{}', byteLength: 2, digest: 'synthetic', truncated: false }
+          }
+        }
+      ]
+    }
+    act(() => {
+      renderer = create(inChat(notice))
+    })
+    const summary = () =>
+      byType('Pressable').find((node) => node.props.accessibilityLabel?.includes('View details.'))!
+    const press = (duration: number) => {
+      const responder = new Pressability({
+        onPress: summary().props.onPress,
+        onLongPress: summary().props.onLongPress
+      })
+      const handlers = responder.getEventHandlers()
+      const event = {
+        currentTarget: 1,
+        nativeEvent: { pageX: 0, pageY: 0 },
+        persist: () => {}
+      }
+      expect(handlers.onStartShouldSetResponder()).toBe(true)
+      act(() => {
+        handlers.onResponderGrant(event)
+        vi.advanceTimersByTime(duration)
+        handlers.onResponderRelease(event)
+      })
+      responder.reset()
+    }
+    press(50)
+    expect(summary().props['aria-expanded']).toBe(true)
+    expect(byType('MessageActionsSheet')).toHaveLength(0)
+    press(50)
+    expect(summary().props['aria-expanded']).toBe(false)
+    press(600)
+    expect(summary().props['aria-expanded']).toBe(false)
+    expect(byType('MessageActionsSheet')).toHaveLength(1)
+    expect(byType('MessageActionsSheet')[0]!.props.message).toBe(notice)
+    expect(summary().props.onLongPress).toBe(byType('Pressable')[0]!.props.onLongPress)
   })
 
   it('opens the actions sheet from a long press on an attached picture, not the viewer', () => {

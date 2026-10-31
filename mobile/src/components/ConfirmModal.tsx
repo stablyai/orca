@@ -99,7 +99,7 @@ const styles = themedStyleSheet(() => ({
     alignItems: 'center'
   },
   cancelButton: {
-    backgroundColor: colors.bgPanel
+    backgroundColor: colors.sheetGroup
   },
   confirmButton: {
     backgroundColor: colors.textPrimary

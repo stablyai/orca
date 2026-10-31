@@ -251,7 +251,11 @@ function CompletionContent({ controller }: Props) {
       </Text>
       <View style={styles.drawerButtonRow}>
         <Pressable
-          style={({ pressed }) => [styles.secondaryButton, pressed && styles.buttonPressed]}
+          style={({ pressed }) => [
+            styles.secondaryButton,
+            styles.sheetSecondaryButton,
+            pressed && styles.buttonPressed
+          ]}
           disabled={controller.reviewedUnstagedCount === 0}
           onPress={() => void controller.stageReviewedFiles()}
           accessibilityRole="button"

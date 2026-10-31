@@ -19492,7 +19492,10 @@
         "orcaStopCrash": "Orca en {{machine}} se detuvo inesperadamente mientras esta respuesta estaba en curso.",
         "orcaStopRemote": "Orca en {{machine}} se detuvo mientras esta respuesta estaba en curso.",
         "orcaStopCanContinue": "Puedes continuar en esta conversación.",
-        "orcaStopUnnamedServer": "el servidor remoto"
+        "orcaStopUnnamedServer": "el servidor remoto",
+        "permissionDenied": "{{agent}} denegó el permiso. Ver detalles.",
+        "safetyReview": "{{agent}} notificó una advertencia de revisión de seguridad. Ver detalles.",
+        "truncatedResponse": "Respuesta del proveedor truncada (tamaño original: {{bytes}} bytes)."
       },
       "providerFrame": {
         "byteCount_one": "{{count}} byte",

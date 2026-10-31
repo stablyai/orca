@@ -19060,7 +19060,10 @@
         "orcaStopCrash": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca beklenmedik biçimde durdu.",
         "orcaStopRemote": "Bu yanıt hazırlanırken {{machine}} üzerindeki Orca durdu.",
         "orcaStopCanContinue": "Bu konuşmada devam edebilirsiniz.",
-        "orcaStopUnnamedServer": "uzak sunucu"
+        "orcaStopUnnamedServer": "uzak sunucu",
+        "permissionDenied": "{{agent}} izin vermedi. Ayrıntıları görüntüleyin.",
+        "safetyReview": "{{agent}} bir güvenlik incelemesi uyarısı bildirdi. Ayrıntıları görüntüleyin.",
+        "truncatedResponse": "Sağlayıcı yanıtı kısaltıldı (özgün boyut: {{bytes}} bayt)."
       },
       "composer": {
         "send": "Gönder",

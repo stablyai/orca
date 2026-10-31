@@ -18814,7 +18814,10 @@
         "orcaStopCrash": "此回覆進行期間，{{machine}} 上的 Orca 意外停止。",
         "orcaStopRemote": "此回覆進行期間，{{machine}} 上的 Orca 已停止。",
         "orcaStopCanContinue": "你可以在此對話中繼續。",
-        "orcaStopUnnamedServer": "遠端伺服器"
+        "orcaStopUnnamedServer": "遠端伺服器",
+        "permissionDenied": "{{agent}} 拒絕了權限。查看詳細資訊。",
+        "safetyReview": "{{agent}} 回報了安全審查警告。查看詳細資訊。",
+        "truncatedResponse": "供應商回應已截斷（原始大小：{{bytes}} 位元組）。"
       },
       "composer": {
         "send": "傳送",

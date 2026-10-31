@@ -19552,7 +19552,10 @@
         "orcaStopCrash": "Orca sur {{machine}} s'est arrêté de manière inattendue pendant que cette réponse était en cours.",
         "orcaStopRemote": "Orca sur {{machine}} s'est arrêté pendant que cette réponse était en cours.",
         "orcaStopCanContinue": "Vous pouvez continuer dans cette conversation.",
-        "orcaStopUnnamedServer": "le serveur distant"
+        "orcaStopUnnamedServer": "le serveur distant",
+        "permissionDenied": "{{agent}} a refusé la permission. Voir les détails.",
+        "safetyReview": "{{agent}} a signalé un avertissement de sécurité. Voir les détails.",
+        "truncatedResponse": "Réponse du fournisseur tronquée (taille d’origine : {{bytes}} octets)."
       },
       "providerFrame": {
         "byteCount_one": "{{count}} octet",

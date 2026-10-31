@@ -18809,7 +18809,10 @@
         "orcaStopCrash": "此回复进行期间，{{machine}} 上的 Orca 意外停止。",
         "orcaStopRemote": "此回复进行期间，{{machine}} 上的 Orca 已停止。",
         "orcaStopCanContinue": "你可以在此对话中继续。",
-        "orcaStopUnnamedServer": "远程服务器"
+        "orcaStopUnnamedServer": "远程服务器",
+        "permissionDenied": "{{agent}} 拒绝了权限。查看详情。",
+        "safetyReview": "{{agent}} 报告了安全审查警告。查看详情。",
+        "truncatedResponse": "提供方响应已截断（原始大小：{{bytes}} 字节）。"
       },
       "providerFrame": {
         "byteCount_other": "{{count}} 字节"
