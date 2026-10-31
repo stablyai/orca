@@ -96,7 +96,7 @@ function restoredFolderRuntimeHost(
 function getWorkspaceExecutionHosts(
   state: WorktreeRuntimeOwnerState,
   worktreeId: string | null | undefined
-) {
+): { hostId: ExecutionHostId; physicalHostId: ExecutionHostId } | null {
   if (!worktreeId) {
     return null
   }

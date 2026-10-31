@@ -182,7 +182,7 @@ it.each([null, 'hub'] as const)(
         repo1: state.worktreesByRepo.repo1!.map((worktree) => ({
           ...worktree,
           hostId: 'ssh:ssh-test' as const,
-          runtimeOwnerEnvironmentId: runtimeEnvironmentId
+          runtimeOwnerEnvironmentId: runtimeEnvironmentId ?? undefined
         }))
       },
       activeWorkspaceExecutionHostId: host,

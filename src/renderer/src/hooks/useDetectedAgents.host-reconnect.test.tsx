@@ -12,6 +12,7 @@ import {
 } from '../../../shared/protocol-version'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
+import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
 import { clearRuntimeCompatibilityCacheForTests } from '@/runtime/runtime-rpc-client'
 import { makeRepo, makeWorktree } from '../components/worktree-jump-palette-test-fixtures'
 import {
@@ -146,7 +147,10 @@ describe('useDetectedAgents when the runtime host reconnects', () => {
     useAppStore.setState({
       activeWorktreeId: workspace.id,
       activeWorkspaceExecutionHostId: 'runtime:hub',
-      settings: { ...useAppStore.getState().settings, activeRuntimeEnvironmentId: 'elsewhere' },
+      settings: createGlobalSettingsFixture({
+        ...useAppStore.getState().settings,
+        activeRuntimeEnvironmentId: 'elsewhere'
+      }),
       repos: [{ ...makeRepo(), id: 'repo', executionHostId: 'runtime:hub' }],
       worktreesByRepo: { repo: [workspace] }
     })

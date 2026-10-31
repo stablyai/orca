@@ -219,10 +219,10 @@ beforeEach(() => {
     tabsByWorktree: { wt: [{ ...makeTerminalTab('tab', 'wt', 'codex'), viewMode: 'chat' }] }
   })
   useAppStore.setState({
-    settings: {
+    settings: createGlobalSettingsFixture({
       ...useAppStore.getState().settings,
       nativeChatProviders: { claude: true, codex: true }
-    },
+    }),
     runtimePaneTitlesByTabId: { tab: { 1: 'codex', 2: 'codex' } }
   })
   mocks.state.setTabViewMode('tab', 'chat')
@@ -675,10 +675,10 @@ describe('terminal chat ownership lifecycle', () => {
     const hook = renderHook(() => useFixture(fixture, RIGHT))
     act(() =>
       useAppStore.setState({
-        settings: {
+        settings: createGlobalSettingsFixture({
           ...useAppStore.getState().settings,
           nativeChatProviders: { claude: false, codex: false }
-        }
+        })
       })
     )
     hook.rerender()
