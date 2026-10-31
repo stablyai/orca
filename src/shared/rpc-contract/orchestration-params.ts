@@ -71,8 +71,12 @@ export const ReplyParams = z.object({
 
 export const InboxParams = z.object({
   limit: OptionalFiniteNumber,
-  // Filter inbox by handle to agree with check --all.
-  terminal: OptionalString
+  // Why: filters the inbox to a handle so inbox and check --all give agreeing results (design doc §3.3).
+  terminal: OptionalString,
+  // Why: pane identity survives terminal-handle reminting while a Run stays bound to the same pane.
+  terminalPaneKey: OptionalString,
+  // Why: an explicit Run makes a zero result distinguishable from a terminal-address-only lookup.
+  run: OptionalString
 })
 
 export const TaskCreateParams = z.object({

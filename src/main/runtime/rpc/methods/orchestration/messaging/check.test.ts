@@ -853,7 +853,6 @@ describe('orchestration RPC methods', () => {
       expect(db.getUnreadMessages('b')).toHaveLength(1)
     })
   })
-
   describe('orchestration.inbox', () => {
     it('returns all messages', async () => {
       setup()

@@ -12,9 +12,17 @@ import {
 } from '../../../shared/orchestration-check-output'
 import { callOrchestrationMutation } from './mutation-request'
 import { resolveOrchestrationTerminalHandle } from './terminal-identity'
+import { RuntimeClientError } from '../../runtime-client'
 import { withReceiptNext } from './receipt-next-text'
 import { printOrchestrationResult } from './agent-view'
 import { formatMessageViewText, toMessageView, type MessageView } from './message-agent-views'
+
+type InboxResult = {
+  messages: MessageSummary[]
+  count: number
+  scope?: string
+  runBinding?: string | null
+}
 
 export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
   'orchestration reply': async ({ flags, client, cwd, json }) => {
@@ -42,15 +50,26 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
     printResult(result, json, (value) => withReceiptNext(`Replied ${value.message.id}`, value))
   },
 
-  'orchestration inbox': async ({ flags, client, json }) => {
+  'orchestration inbox': async ({ flags, client, cwd, json }) => {
     const full = flags.has('full')
-    const result = await client.call<{
-      messages: MessageSummary[]
-      count: number
-    }>('orchestration.inbox', {
+    const run = getOptionalStringFlag(flags, 'run')
+    const explicitTerminal = getPresentStringFlag(flags, 'terminal')
+    const terminal = run
+      ? await resolveOrchestrationTerminalHandle(flags, cwd, client, 'terminal')
+      : explicitTerminal
+    const result = await client.call<InboxResult>('orchestration.inbox', {
       limit: getOptionalPositiveIntegerFlag(flags, 'limit'),
-      terminal: getPresentStringFlag(flags, 'terminal')
+      terminal,
+      terminalPaneKey:
+        run && !explicitTerminal ? process.env.ORCA_PANE_KEY || undefined : undefined,
+      run
     })
+    if (run && result.result.scope !== `messages addressed to Run ${run}`) {
+      throw new RuntimeClientError(
+        'incompatible_runtime',
+        'The running Orca runtime does not support Run-scoped inbox reads. Update or restart Orca and try again.'
+      )
+    }
     if (!full) {
       printOrchestrationResult(result, json, {
         fields: (value): { messages: MessageView[] } => ({
@@ -65,6 +84,10 @@ export const ORCHESTRATION_INBOX_HANDLERS: Record<string, CommandHandler> = {
     }
     printResult(result, json, (value) => {
       if (value.count === 0) {
+        if (value.scope) {
+          const binding = value.runBinding ? ` Current Run binding: ${value.runBinding}.` : ''
+          return `No ${value.scope}.${binding}`
+        }
         return 'No messages.'
       }
       return value.messages
