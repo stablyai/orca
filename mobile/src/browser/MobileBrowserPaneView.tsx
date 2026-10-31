@@ -10,8 +10,9 @@ import {
   type StyleProp,
   type ViewStyle
 } from 'react-native'
-import { ArrowUp, ChevronLeft, ChevronRight, RefreshCw } from 'lucide-react-native'
+import { ArrowUp, ChevronLeft, ChevronRight, ExternalLink, RefreshCw } from 'lucide-react-native'
 import { useMobileTranslation } from '../i18n/use-mobile-translation'
+import { openExternalLink } from '../platform/external-link'
 import { colors } from '../theme/mobile-theme'
 import { useMobileColorScheme } from '../theme/use-mobile-color-scheme'
 import { MobileBrowserAddressField } from './MobileBrowserAddressField'
@@ -24,6 +25,7 @@ import {
 import { MobileBrowserToolbarIconButton } from './MobileBrowserToolbarIconButton'
 import { MobileBrowserViewModeSwitch } from './MobileBrowserViewModeSwitch'
 import { buttonColor } from './mobile-browser-frame-state'
+import { isExternallyOpenablePdfUrl } from './mobile-browser-pdf-link'
 import { mobileBrowserPaneStyles as styles } from './mobile-browser-pane-styles'
 import type { BrowserFrameLayerBinding } from './browser-frame-pacer'
 import type {
@@ -139,6 +141,17 @@ export function MobileBrowserPaneView(props: MobileBrowserPaneViewProps) {
         >
           <RefreshCw size={15} color={buttonColor(!controlsDisabled)} />
         </MobileBrowserToolbarIconButton>
+        {isExternallyOpenablePdfUrl(tab.url) ? (
+          <MobileBrowserToolbarIconButton
+            disabled={controlsDisabled}
+            label={t('browser.paneView.openPdfExternally', 'Open PDF externally')}
+            onPress={() => {
+              openExternalLink(tab.url)
+            }}
+          >
+            <ExternalLink size={15} color={buttonColor(!controlsDisabled)} />
+          </MobileBrowserToolbarIconButton>
+        ) : null}
         <MobileBrowserAddressField
           value={addressValue}
           onChangeText={setAddressValue}
