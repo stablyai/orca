@@ -714,6 +714,13 @@
       "demoCookie": "cookie"
     }
   },
+  "modifiedInstall": {
+    "title": "Reinstale o Orca",
+    "message": "Alguns arquivos do app Orca foram alterados depois da instalação.",
+    "detail": "Partes do Orca não carregam até que ele seja reinstalado, e reiniciar não resolve. Arquivos alterados ({{fileCount}}): {{files}}\n\nReinstale o Orca para restaurá-los. Seus espaços de trabalho e configurações são mantidos.",
+    "download": "Abrir página de download",
+    "close": "Fechar"
+  },
   "rendererRecovery": {
     "reload": "Recarregar",
     "copyCommands": "Copiar Comandos",

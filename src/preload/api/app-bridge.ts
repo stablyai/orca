@@ -34,6 +34,8 @@ export const appApi = {
     ),
   getFeatureWallAssetBaseUrl: (): Promise<string> =>
     ipcRenderer.invoke('app:getFeatureWallAssetBaseUrl'),
+  explainUnloadableRendererChunk: (): Promise<void> =>
+    ipcRenderer.invoke('app:explainUnloadableRendererChunk'),
   relaunch: (): Promise<void> =>
     prepareAndInvokeAppRestart(
       window,

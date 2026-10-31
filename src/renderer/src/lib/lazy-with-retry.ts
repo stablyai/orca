@@ -122,6 +122,17 @@ function recordReloadBreadcrumb(
   }
 }
 
+// A chunk that keeps failing on a packaged install may have been edited on disk; main checks and tells the user.
+function requestUnloadableChunkExplanation(): void {
+  try {
+    // Absent outside the desktop preload (tests, paired web client).
+    const api: Window['api'] | undefined = window.api
+    void api?.app.explainUnloadableRendererChunk?.().catch(() => undefined)
+  } catch {
+    // Best effort, like the breadcrumbs: diagnosis must never mask the original failure.
+  }
+}
+
 const wait = (ms: number): Promise<void> => new Promise((resolve) => setTimeout(resolve, ms))
 
 /** Recovery is spent, so name the failure in the one way the boundary can contain. */
@@ -178,6 +189,9 @@ export async function loadLazyWithRetry<T extends AnyComponent>(
 
   const reloadKey = options.reloadKey ?? 'unknown'
   const failureMessage = lastError instanceof Error ? lastError.message : String(lastError)
+  if (typeof window !== 'undefined' && isKnownDynamicImportFailure(lastError)) {
+    requestUnloadableChunkExplanation()
+  }
   const reloadGuardState = readChunkReloadGuardState()
 
   if (

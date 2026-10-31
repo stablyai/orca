@@ -37,6 +37,7 @@ import { registerMacKeyboardLayoutChangeNotifications } from './macos-keyboard-l
 import { isProfileStateSaveDelayed } from '../startup/profile-state-save-delay'
 import { readCommandStdout, readKeyboardInputSourceId } from './macos-keyboard-input-source'
 import { getWindowsAdministratorStatus } from '../windows/windows-administrator-status'
+import { explainUnloadableRendererChunk } from '../window/modified-install-notice'
 
 import type { ReconnectFactsFor } from '../persistence/window-save-view'
 
@@ -147,6 +148,11 @@ export function registerAppHandlers(store: Store, options: RegisterAppHandlersOp
   ipcMain.handle('app:getWindowsAdministratorStatus', getWindowsAdministratorStatus)
 
   ipcMain.handle('app:getFeatureWallAssetBaseUrl', (): string => getFeatureWallAssetBaseUrl())
+  ipcMain.handle('app:explainUnloadableRendererChunk', (event): void => {
+    void explainUnloadableRendererChunk(BrowserWindow.fromWebContents(event.sender)).catch(
+      (error: unknown) => console.warn('[app] failed to check installed renderer files:', error)
+    )
+  })
 
   ipcMain.handle('app:getIdentity', (): AppIdentity => {
     const identity = getDevInstanceIdentity(!app.isPackaged)

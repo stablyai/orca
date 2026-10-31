@@ -21272,6 +21272,13 @@
       "accept": "Ejecutar como host"
     }
   },
+  "modifiedInstall": {
+    "title": "Reinstala Orca",
+    "message": "Algunos archivos de la aplicación Orca cambiaron después de instalarla.",
+    "detail": "Algunas partes de Orca no se cargarán hasta que la reinstales, y reiniciar no lo soluciona. Archivos modificados ({{fileCount}}): {{files}}\n\nReinstala Orca para restaurarlos. Tus espacios de trabajo y ajustes se conservan.",
+    "download": "Abrir página de descarga",
+    "close": "Cerrar"
+  },
   "rendererRecovery": {
     "reload": "Recargar",
     "copyCommands": "Copiar comandos",

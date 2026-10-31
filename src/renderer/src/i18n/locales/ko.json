@@ -20698,6 +20698,13 @@
       "loadFailed": "하위 모듈 변경 사항을 불러오지 못했습니다"
     }
   },
+  "modifiedInstall": {
+    "title": "Orca 다시 설치",
+    "message": "설치 후 Orca 앱 파일 일부가 변경되었습니다.",
+    "detail": "다시 설치하기 전까지 Orca 일부를 불러올 수 없으며, 다시 시작해도 해결되지 않습니다. 변경된 파일({{fileCount}}개): {{files}}\n\nOrca를 다시 설치하면 복원됩니다. 워크스페이스와 설정은 유지됩니다.",
+    "download": "다운로드 페이지 열기",
+    "close": "닫기"
+  },
   "rendererRecovery": {
     "reload": "새로고침",
     "copyCommands": "복사 명령",

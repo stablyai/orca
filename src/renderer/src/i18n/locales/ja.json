@@ -20698,6 +20698,13 @@
       "loadFailed": "サブモジュールの変更を読み込めませんでした"
     }
   },
+  "modifiedInstall": {
+    "title": "Orca を再インストールしてください",
+    "message": "インストール後に Orca のアプリファイルの一部が変更されました。",
+    "detail": "再インストールするまで Orca の一部を読み込めません。再起動では解決しません。変更されたファイル（{{fileCount}}）: {{files}}\n\nOrca を再インストールすると元に戻ります。ワークスペースと設定はそのまま残ります。",
+    "download": "ダウンロードページを開く",
+    "close": "閉じる"
+  },
   "rendererRecovery": {
     "reload": "リロード",
     "copyCommands": "コピーコマンド",
