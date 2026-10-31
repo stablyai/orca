@@ -130,12 +130,17 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
   expect(values.get('a1')).toBe(true)
   await act(async () => a.replies[0]!(reply(false)))
   expect(values.get('a1')).toBe(true)
+  const beforeOff = new Map(renders)
   await act(async () => a.emit({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false }))
   expect(values.get('a1')).toBe(false)
+  expect(values.get('a2')).toBe(false)
+  expect(renders.get('a1')).toBe(beforeOff.get('a1')! + 1)
+  expect(renders.get('a2')).toBe(beforeOff.get('a2')! + 1)
   expect(renders.get('b')).toBe(before.get('b'))
   const oldEvent = a.callbacks[0]!
   await act(async () => a.change('disconnected'))
   await act(async () => a.change('connected'))
+  const beforeOn = new Map(renders)
   await act(async () =>
     a.emit({
       type: 'ready',
@@ -144,6 +149,10 @@ it('shares one live scalar per connection, fences late reads/events, and isolate
     })
   )
   expect(values.get('a1')).toBe(true)
+  expect(values.get('a2')).toBe(true)
+  expect(renders.get('a1')).toBe(beforeOn.get('a1')! + 1)
+  expect(renders.get('a2')).toBe(beforeOn.get('a2')! + 1)
+  expect(renders.get('b')).toBe(beforeOn.get('b'))
   await act(async () =>
     oldEvent({ type: 'nativeChatQueueFollowUpsChanged', queueFollowUps: false })
   )
