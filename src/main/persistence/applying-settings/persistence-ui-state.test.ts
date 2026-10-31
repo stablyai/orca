@@ -760,6 +760,26 @@ describe('Store', () => {
     expect(ui.lastUpdateCheckAt).toBe(1234)
   })
 
+  it('restores window geometry and fullscreen independently after reopening the profile', async () => {
+    const windowState = {
+      windowBounds: { x: 1440, y: 40, width: 1200, height: 800 },
+      windowMaximized: true,
+      windowFullscreen: true
+    }
+    const store = await createStore()
+    store.updateUI(windowState)
+    store.flush()
+
+    const reopened = await createStore()
+    expect(reopened.getUI()).toMatchObject(windowState)
+    reopened.updateUI({ windowFullscreen: false })
+    reopened.flush()
+    expect((await createStore()).getUI()).toMatchObject({
+      ...windowState,
+      windowFullscreen: false
+    })
+  })
+
   it('normalizes default browser zoom UI writes', async () => {
     const store = await createStore()
 

@@ -33,6 +33,7 @@ export const appMock: { isPackaged: boolean; on: MainWindowSpy; removeListener: 
   removeListener: vi.fn()
 }
 export const macosTahoeMock = { value: false }
+export const autoUpdaterMock = { on: vi.fn(), removeListener: vi.fn() }
 
 type IpcMainMock = {
   on: MainWindowSpy
@@ -50,6 +51,7 @@ const ipcMainMock: IpcMainMock = {
 
 export type ElectronModuleMock = {
   app: typeof appMock
+  autoUpdater: typeof autoUpdaterMock
   BrowserWindow: typeof browserWindowMock
   ipcMain: IpcMainMock
   Menu: { buildFromTemplate: typeof buildFromTemplateMock }
@@ -74,6 +76,7 @@ export type BrowserManagerModuleMock = {
 export function electronModuleMock(): ElectronModuleMock {
   return {
     app: appMock,
+    autoUpdater: autoUpdaterMock,
     BrowserWindow: browserWindowMock,
     ipcMain: ipcMainMock,
     Menu: { buildFromTemplate: buildFromTemplateMock },
@@ -127,6 +130,8 @@ export function resetMainWindowMocks(): void {
   routePartitionAllowedMock.mockReset()
   routePartitionAllowedMock.mockReturnValue(false)
   appMock.isPackaged = true
+  autoUpdaterMock.on.mockReset()
+  autoUpdaterMock.removeListener.mockReset()
   macosTahoeMock.value = false
   ipcMainMock.on.mockReset()
   ipcMainMock.removeListener.mockReset()
