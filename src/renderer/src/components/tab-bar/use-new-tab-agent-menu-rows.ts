@@ -17,7 +17,7 @@ import {
   buildAgentLaunchRouteInput,
   workspaceKindForWorktreeId
 } from '@/lib/agent-launch-route-input'
-import { useHostStructuredAgentsVersion } from '@/lib/chat-provider-agents'
+import { useHostStructuredAgentsSnapshot } from '@/lib/chat-provider-agents'
 import { structuredAgentSessionTargetForHost } from '@/runtime/structured-agent-session-owner'
 import {
   readHostStructuredAgents,
@@ -82,7 +82,6 @@ export function useAgentMenuObservation(
     detectedIds: unresolvedTarget ? [] : (acquired.detectedIds ?? storedIds),
     isLoading: !unresolvedTarget && acquired.isLoading
   }
-  useHostStructuredAgentsVersion()
   const localCapabilities = useSyncExternalStore(
     subscribeLocalRuntimeCapabilityObservation,
     readLocalRuntimeCapabilityObservation,
@@ -116,6 +115,8 @@ export function useAgentMenuObservation(
       }
     })
   )
+  useHostStructuredAgentsSnapshot(facts.executionHostId, facts.runtimeId)
+  useHostStructuredAgentsSnapshot(LOCAL_EXECUTION_HOST_ID, null)
   const state = useAppStore.getState()
   const input = buildAgentLaunchRouteInput(state, { agent: 'claude', workspace })
   const { settings, pending: preferencesPending } = useHostAgentMenuSettings(

@@ -228,6 +228,7 @@ export function createWebUiApi(): NonNullable<Partial<PreloadApi>['ui']> {
     onOpenQuickOpen: () => noopUnsubscribe,
     onToggleQuickCommandsMenu: () => noopUnsubscribe,
     onOpenTasks: () => noopUnsubscribe,
+    onQuickStartChat: () => noopUnsubscribe,
     onOpenNewWorkspace: () => noopUnsubscribe,
     onDeleteCurrentWorkspace: () => noopUnsubscribe,
     onOpenWorkspaceBoard: () => noopUnsubscribe,

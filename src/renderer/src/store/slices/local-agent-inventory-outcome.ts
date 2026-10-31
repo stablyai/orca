@@ -1,3 +1,4 @@
+import type { LocalAgentWorkspace } from '@/lib/local-preflight-context'
 import type { AppState } from '../types'
 import type { TuiAgent } from '../../../../shared/tui-agent'
 import { getLocalAgentPreflightContext } from '@/lib/local-preflight-context'
@@ -6,7 +7,7 @@ import { localAgentInventoryContextKey } from '@/lib/local-preflight-context-key
 /** A context's list and latest attempt outcome; a list kept through a failed refresh is failed. */
 export function readLocalAgentInventoryOutcome(
   state: AppState,
-  worktreeId: string | null | undefined,
+  worktreeId: LocalAgentWorkspace | undefined,
   failedContextKeys: ReadonlySet<string>,
   keptThroughFailure: WeakSet<TuiAgent[]>
 ): { ids: TuiAgent[] | null; state: 'pending' | 'successful' | 'failed' } {

@@ -181,6 +181,13 @@ export function useGlobalKeybindings(args: {
       }
 
       if (
+        matchShortcut('chat.quickStart') &&
+        createAppCommandHandlers(state, input, context).get('chat.quickStart')?.()
+      ) {
+        return
+      }
+
+      if (
         globalShortcutTargetYields(input, shortcutPlatform, keybindings, {
           context,
           terminalShortcutPolicy
@@ -210,9 +217,6 @@ export function useGlobalKeybindings(args: {
       }
 
       const handlers = createAppCommandHandlers(state, input, context)
-      if (matchShortcut('chat.quickStart') && handlers.get('chat.quickStart')?.()) {
-        return
-      }
       if (matchShortcut('workspace.delete') && handlers.get('workspace.delete')?.()) {
         return
       }

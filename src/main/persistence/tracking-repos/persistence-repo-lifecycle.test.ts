@@ -10,7 +10,7 @@ import {
 } from '../persistence-test-harness'
 import { makeTerminalTab } from '../persistence-session-fixtures'
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest'
-import { rmSync, mkdtempSync } from 'node:fs'
+import { rmSync, mkdtempSync, mkdirSync, writeFileSync, readFileSync } from 'node:fs'
 import { join } from 'node:path'
 import { tmpdir } from 'node:os'
 import type { PersistedState } from '../../../shared/persisted-state-types'
@@ -97,6 +97,33 @@ describe('Store', () => {
     expect(fetched!.displayName).toBe('test')
     // Hydration reads the persisted username; Git/gh resolution runs in background.
     expect(fetched!.gitUsername).toBe('')
+  })
+
+  it('persists an ordinary Chats folder with customization across reopening and removes only its record', async () => {
+    const store = createStore()
+    const folder = makeRepo({
+      id: 'chats',
+      path: join(testState.dir, 'chats'),
+      displayName: 'Renamed chats',
+      kind: 'folder'
+    })
+    mkdirSync(folder.path)
+    writeFileSync(join(folder.path, 'result.html'), 'kept')
+    store.addRepo(folder)
+    store.flush()
+    await closeTestStores()
+    const reopened = createStore()
+    expect(reopened.getRepo(folder.id)).toMatchObject({
+      id: folder.id,
+      path: folder.path,
+      displayName: folder.displayName,
+      kind: 'folder'
+    })
+    reopened.removeProjectForHost({ id: folder.id, executionHostId: 'local' })
+    reopened.flush()
+    await closeTestStores()
+    expect(createStore().getRepos()).not.toContainEqual(expect.objectContaining({ id: folder.id }))
+    expect(readFileSync(join(folder.path, 'result.html'), 'utf8')).toBe('kept')
   })
 
   it('invalidates local scans across add, remove, and same-id re-add', async () => {

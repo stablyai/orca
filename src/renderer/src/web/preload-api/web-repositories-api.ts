@@ -13,6 +13,9 @@ import { noopUnsubscribe } from './web-storage'
 
 export function createReposApi(): NonNullable<Partial<PreloadApi>['repos']> {
   return {
+    ensureQuickChatFolder: async () => {
+      throw new Error('Local quick chat is unavailable in paired web clients.')
+    },
     list: async () => {
       const owned = await callRuntimeResultWithOwner<{ repos: Repo[] }>('repo.list')
       return owned.result.repos.map((repo) => withRuntimeRepoOwner(repo, owned.hostId))

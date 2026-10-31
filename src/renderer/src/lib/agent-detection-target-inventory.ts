@@ -58,7 +58,7 @@ export function ensureDetectedAgentsForTarget(
   if (target.kind === 'runtime') {
     return state.ensureRuntimeDetectedAgents(target.environmentId, target.worktreeId)
   }
-  return state.ensureDetectedAgents(target.worktreeId)
+  return state.ensureDetectedAgents(target.resolvedTarget ?? target.worktreeId)
 }
 
 function detectionTargetForWorktree(
@@ -166,7 +166,7 @@ export async function loadProjectLaunchContext(
 /** IDs and the latest attempt outcome always describe the same target. */
 export function readAgentInventoryForTarget(state: AppState, target: AgentDetectionTarget) {
   if (target.kind === 'local') {
-    return state.readLocalAgentInventory(target.worktreeId)
+    return state.readLocalAgentInventory(target.resolvedTarget ?? target.worktreeId)
   }
   const ids = readDetectedAgentsForTarget(state, target)
   if (target.kind !== 'runtime') {

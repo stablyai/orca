@@ -1,3 +1,4 @@
+import type { LocalAgentWorkspace } from '@/lib/local-preflight-context'
 import type { AppState } from '../types'
 import type {
   PathSource,
@@ -9,7 +10,7 @@ import type { TuiAgent } from '../../../../shared/tui-agent'
 export type LocalAgentRefreshOptions = { wakeWslDistro?: boolean }
 
 export type LocalDetectedAgentState = {
-  readLocalAgentInventory: (worktreeId?: string | null) => {
+  readLocalAgentInventory: (worktreeId?: LocalAgentWorkspace) => {
     ids: TuiAgent[] | null
     state: 'pending' | 'successful' | 'failed'
   }
@@ -21,19 +22,19 @@ export type LocalDetectedAgentState = {
   isRefreshingLocalAgentsByContext: Record<string, boolean>
   pathSource: PathSource | null
   pathFailureReason: ShellHydrationFailureReason | null
-  ensureAllDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  ensureAllDetectedAgents: (worktreeId?: LocalAgentWorkspace) => Promise<TuiAgent[]>
   refreshAllDetectedAgents: (
-    worktreeId?: string | null,
+    worktreeId?: LocalAgentWorkspace,
     options?: LocalAgentRefreshOptions
   ) => Promise<TuiAgent[]>
   ensureNativeDetectedAgents: () => Promise<TuiAgent[]>
-  ensureDetectedAgents: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  ensureDetectedAgents: (worktreeId?: LocalAgentWorkspace) => Promise<TuiAgent[]>
   /** The focused (or given) workspace's last agent probe was refused because its WSL distro was not running. */
-  isLocalAgentInventoryRefused: (worktreeId?: string | null) => boolean
+  isLocalAgentInventoryRefused: (worktreeId?: LocalAgentWorkspace) => boolean
   /** Opening an agent-launch picker is a user act: a list a stopped WSL distro refused may wake it. */
-  ensureDetectedAgentsForPicker: (worktreeId?: string | null) => Promise<TuiAgent[]>
+  ensureDetectedAgentsForPicker: (worktreeId?: LocalAgentWorkspace) => Promise<TuiAgent[]>
   refreshDetectedAgents: (
-    worktreeId?: string | null,
+    worktreeId?: LocalAgentWorkspace,
     options?: LocalAgentRefreshOptions
   ) => Promise<TuiAgent[]>
   clearLocalDetectedAgentContextsForProjects: (projectIds: readonly string[]) => void

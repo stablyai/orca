@@ -6,46 +6,11 @@ import {
   matchKeybindingDigitIndex,
   type KeybindingActionId,
   type KeybindingMatchOptions,
-  type KeybindingOverrides,
-  type PhysicalModifierToken
+  type KeybindingOverrides
 } from './keybindings'
 
-export type WindowShortcutInput = {
-  type?: string
-  key?: string
-  code?: string
-  alt?: boolean
-  meta?: boolean
-  control?: boolean
-  shift?: boolean
-  altKey?: boolean
-  metaKey?: boolean
-  ctrlKey?: boolean
-  shiftKey?: boolean
-  // Carry detector-generated double taps through main’s allowlisted action resolver.
-  doubleTapModifier?: PhysicalModifierToken
-}
-
-export type WindowShortcutAction =
-  | { type: 'zoom'; direction: 'in' | 'out' | 'reset' }
-  | { type: 'openSettings' }
-  | { type: 'forceReload' }
-  | { type: 'toggleWorktreePalette' }
-  | { type: 'toggleFloatingTerminal' }
-  | { type: 'toggleLeftSidebar' }
-  | { type: 'toggleRightSidebar' }
-  | { type: 'openQuickOpen' }
-  | { type: 'toggleQuickCommandsMenu' }
-  | { type: 'openNewWorkspace' }
-  | { type: 'deleteCurrentWorkspace' }
-  | { type: 'openWorkspaceBoard' }
-  | { type: 'openTasks' }
-  | { type: 'toggleAgentDashboard' }
-  | { type: 'switchRecentTab' }
-  | { type: 'jumpToWorktreeIndex'; index: number }
-  | { type: 'jumpToTabIndex'; index: number }
-  | { type: 'worktreeHistoryNavigate'; direction: 'back' | 'forward' }
-  | { type: 'dictationKeyDown' }
+import type { WindowShortcutInput, WindowShortcutAction } from './window-shortcut-action'
+export type { WindowShortcutInput, WindowShortcutAction } from './window-shortcut-action'
 
 type WindowShortcutResolveOptions = KeybindingMatchOptions
 
@@ -223,6 +188,13 @@ export function resolveWindowShortcutAction(
     return { type: 'openQuickOpen' }
   }
 
+  if (
+    !input.isComposing &&
+    actionMatches('chat.quickStart', input, platform, keybindings, options)
+  ) {
+    return { type: 'quickStartChat' }
+  }
+
   // Route workspace-create through main so contentEditable/browser guests cannot bypass it. Keep Shift for the former Create-from chord.
   if (actionMatches('workspace.create', input, platform, keybindings, options)) {
     return { type: 'openNewWorkspace' }
@@ -307,6 +279,8 @@ export function getWindowShortcutActionId(action: WindowShortcutAction): Keybind
       return 'worktree.quickOpen'
     case 'toggleQuickCommandsMenu':
       return 'tab.openQuickCommandsMenu'
+    case 'quickStartChat':
+      return 'chat.quickStart'
     case 'openNewWorkspace':
       return 'workspace.create'
     case 'deleteCurrentWorkspace':

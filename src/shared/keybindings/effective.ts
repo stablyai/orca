@@ -183,6 +183,7 @@ const MAIN_PROCESS_INTERCEPTED_ACTIONS: Partial<
   'sidebar.left.toggle': 'afterBrowserChords',
   'sidebar.right.toggle': 'afterBrowserChords',
   'worktree.quickOpen': 'afterBrowserChords',
+  'chat.quickStart': 'afterBrowserChords',
   'workspace.create': 'afterBrowserChords',
   'workspace.delete': 'afterBrowserChords',
   'workspace.openBoard': 'afterBrowserChords',

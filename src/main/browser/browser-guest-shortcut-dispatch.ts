@@ -50,6 +50,7 @@ export function forwardGuestShortcutInput(
     if (
       (action?.type === 'dictationKeyDown' && shouldForwardDictationShortcut?.()) ||
       action?.type === 'deleteCurrentWorkspace' ||
+      action?.type === 'quickStartChat' ||
       // Why: Orca claims a held tab chord on every repeat but acts once, so repeats never reach the page.
       matchesGuestTabShortcut(
         input,
@@ -133,6 +134,8 @@ export function forwardGuestShortcutInput(
     renderer.send('ui:openQuickOpen')
   } else if (action?.type === 'toggleQuickCommandsMenu') {
     renderer.send('ui:toggleQuickCommandsMenu')
+  } else if (action?.type === 'quickStartChat') {
+    renderer.send('ui:quickStartChat')
   } else if (action?.type === 'openNewWorkspace') {
     renderer.send('ui:openNewWorkspace')
   } else if (action?.type === 'deleteCurrentWorkspace') {

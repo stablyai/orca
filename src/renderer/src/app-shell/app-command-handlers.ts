@@ -1,4 +1,4 @@
-import { requestQuickChatFromShortcut } from '../components/QuickChatButton'
+import { requestQuickChatFromShortcut } from '@/lib/quick-chat-events'
 import { canShowRightSidebarForView } from '@/lib/right-sidebar-visibility'
 import { isFloatingWorkspacePanelFocused } from '@/lib/floating-workspace-terminal-actions'
 import { hasVisibleOverlay } from '@/lib/visible-overlay'

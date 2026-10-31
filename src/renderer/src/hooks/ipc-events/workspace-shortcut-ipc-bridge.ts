@@ -1,3 +1,4 @@
+import { requestQuickChatFromShortcut } from '@/lib/quick-chat-events'
 import { TOGGLE_QUICK_COMMANDS_MENU_EVENT } from '@/lib/quick-commands-menu-events'
 import { TOGGLE_WORKSPACE_BOARD_EVENT } from '@/components/sidebar/useWorkspaceBoardPanel'
 import { activateTabNumberShortcut } from '@/lib/tab-number-shortcuts'
@@ -12,6 +13,9 @@ import { toggleAgentDashboardFromShortcut } from './agent-dashboard-command'
 import { openNewWorkspaceFromShortcut } from './new-workspace-command'
 
 export function registerWorkspaceShortcutIpcBridge(unsubs: (() => void)[]): void {
+  if (window.api.ui.onQuickStartChat) {
+    unsubs.push(window.api.ui.onQuickStartChat(requestQuickChatFromShortcut))
+  }
   unsubs.push(
     window.api.ui.onOpenQuickOpen(() => {
       const store = useAppStore.getState()

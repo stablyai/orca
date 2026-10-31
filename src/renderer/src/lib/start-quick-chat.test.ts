@@ -4,7 +4,7 @@ import { LOCAL_EXECUTION_HOST_ID } from '../../../shared/execution-host'
 
 const mocks = vi.hoisted(() => {
   const repos: Repo[] = []
-  const worktreesByRepo: Record<string, { id: string; hostId: string }[]> = {}
+  const worktreesByRepo: Record<string, { id: string; hostId: string; path: string }[]> = {}
   return {
     ensure: vi.fn(),
     add: vi.fn(),
@@ -17,6 +17,7 @@ const mocks = vi.hoisted(() => {
 })
 vi.mock('@/store', () => ({
   useAppStore: {
+    subscribe: () => () => {},
     getState: () => ({
       repos: mocks.repos,
       addRepoPath: mocks.add,
@@ -54,7 +55,9 @@ beforeEach(() => {
     return repo
   })
   mocks.fetch.mockImplementation(async () => {
-    mocks.worktreesByRepo[repo.id] = [{ id: 'folder-chats', hostId: LOCAL_EXECUTION_HOST_ID }]
+    mocks.worktreesByRepo[repo.id] = [
+      { id: 'folder-chats', hostId: LOCAL_EXECUTION_HOST_ID, path: repo.path }
+    ]
     return true
   })
   mocks.mark.mockResolvedValue(null)
@@ -62,8 +65,8 @@ beforeEach(() => {
 
 describe('startQuickChat', () => {
   it('adds once, then reuses the project without touching its name or settings', async () => {
-    expect(await startQuickChat()).toBe('folder-chats')
-    expect(await startQuickChat()).toBe('folder-chats')
+    expect(await startQuickChat()).toEqual({ repoId: 'chats', worktreeId: 'folder-chats' })
+    expect(await startQuickChat()).toEqual({ repoId: 'chats', worktreeId: 'folder-chats' })
     expect(mocks.add).toHaveBeenCalledExactlyOnceWith('/data/chats', 'folder', {
       runtimeEnvironmentId: null,
       displayName: 'Chats'
@@ -77,7 +80,10 @@ describe('startQuickChat', () => {
     const openChat = vi.fn()
     await Promise.all([startQuickChat().then(openChat), startQuickChat().then(openChat)])
     expect(mocks.repos).toHaveLength(1)
-    expect(openChat.mock.calls).toEqual([['folder-chats'], ['folder-chats']])
+    expect(openChat.mock.calls).toEqual([
+      [{ repoId: 'chats', worktreeId: 'folder-chats' }],
+      [{ repoId: 'chats', worktreeId: 'folder-chats' }]
+    ])
   })
   it('waits for the host-qualified worktree fetch, without waiting for onboarding', async () => {
     let release: (value: boolean) => void = () => {}
@@ -92,10 +98,12 @@ describe('startQuickChat', () => {
     const started = startQuickChat().then(launch)
     await vi.waitFor(() => expect(mocks.fetch).toHaveBeenCalled())
     expect(launch).not.toHaveBeenCalled()
-    mocks.worktreesByRepo[repo.id] = [{ id: 'folder-chats', hostId: LOCAL_EXECUTION_HOST_ID }]
+    mocks.worktreesByRepo[repo.id] = [
+      { id: 'folder-chats', hostId: LOCAL_EXECUTION_HOST_ID, path: repo.path }
+    ]
     release(true)
     await started
-    expect(launch).toHaveBeenCalledWith('folder-chats')
+    expect(launch).toHaveBeenCalledWith({ repoId: 'chats', worktreeId: 'folder-chats' })
   })
   it('shows one toast and never adds if folder validation fails', async () => {
     mocks.ensure.mockRejectedValue(new Error('EEXIST'))
@@ -113,4 +121,17 @@ describe('startQuickChat', () => {
     expect(await startQuickChat()).toBeNull()
     expect(mocks.error).toHaveBeenCalledTimes(1)
   })
+})
+
+it('selects the registered checkout path instead of the first local row for an existing linked Git project', async () => {
+  mocks.repos = [{ ...repo, kind: 'git' }]
+  mocks.fetch.mockImplementation(async () => {
+    mocks.worktreesByRepo[repo.id] = [
+      { id: 'main', path: '/elsewhere/main', hostId: 'local' },
+      { id: 'linked-chats', path: repo.path, hostId: 'local' }
+    ]
+    return true
+  })
+  await expect(startQuickChat()).resolves.toEqual({ repoId: repo.id, worktreeId: 'linked-chats' })
+  expect(mocks.add).not.toHaveBeenCalled()
 })

@@ -1,4 +1,5 @@
 import { randomUUID } from 'node:crypto'
+import { realpath } from 'node:fs/promises'
 import type { Store } from '../../persistence'
 import type { Repo } from '../../../shared/repo-types'
 import { isFolderRepo } from '../../../shared/repo-kind'
@@ -16,11 +17,71 @@ import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
 import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { describeWslUncAccessDenied } from '../../wsl/wsl-unc-access-denied'
 
+type RegistrationResult = { repo: Repo; alreadyExisted: boolean } | { error: string }
+type Registration = { promise: Promise<RegistrationResult>; repoId?: string }
+const registrations = new WeakMap<Store, Map<string, Registration>>()
+
 export async function addLocalRepoFromPath(
   store: Store,
   path: string,
   kind: 'git' | 'folder' = 'git',
   displayName?: string
+): Promise<RegistrationResult> {
+  const canonical = normalizeRuntimePathForComparison(await realpath(path).catch(() => path))
+  let pending = registrations.get(store)
+  if (!pending) {
+    pending = new Map()
+    registrations.set(store, pending)
+  }
+  let registration = pending.get(canonical)
+  if (
+    registration?.repoId &&
+    !store
+      .getRepos()
+      .some(
+        (repo) =>
+          repo.id === registration?.repoId &&
+          getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+      )
+  ) {
+    pending.delete(canonical)
+    registration = undefined
+  }
+  if (!registration) {
+    const entry: Registration = { promise: Promise.resolve({ error: 'Registration not started' }) }
+    entry.promise = registerLocalRepoFromPath(store, path, kind, displayName, (repoId) => {
+      entry.repoId = repoId
+    })
+    registration = entry
+    pending.set(canonical, entry)
+  }
+  try {
+    const result = await registration.promise
+    if ('repo' in result) {
+      const current = store
+        .getRepos()
+        .find(
+          (repo) =>
+            repo.id === result.repo.id && getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID
+        )
+      return current
+        ? { ...result, repo: current }
+        : { error: 'The project was removed while it was being added.' }
+    }
+    return result
+  } finally {
+    if (pending.get(canonical) === registration) {
+      pending.delete(canonical)
+    }
+  }
+}
+
+async function registerLocalRepoFromPath(
+  store: Store,
+  path: string,
+  kind: 'git' | 'folder' = 'git',
+  displayName?: string,
+  registered?: (repoId: string) => void
 ): Promise<{ repo: Repo; alreadyExisted: boolean } | { error: string }> {
   const repoKind = kind === 'folder' ? 'folder' : 'git'
   if (repoKind === 'git') {
@@ -37,7 +98,11 @@ export async function addLocalRepoFromPath(
   const pathKey = normalizeRuntimePathForComparison(path)
   const existing = store
     .getRepos()
-    .find((repo) => !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === pathKey)
+    .find(
+      (repo) =>
+        getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+        normalizeRuntimePathForComparison(repo.path) === pathKey
+    )
   if (existing) {
     return { repo: existing, alreadyExisted: true }
   }
@@ -48,7 +113,8 @@ export async function addLocalRepoFromPath(
       .getRepos()
       .find(
         (repo) =>
-          !repo.connectionId && normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
+          getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
+          normalizeRuntimePathForComparison(repo.path) === resolvedPathKey
       )
     if (existingAfterRootResolve) {
       return { repo: existingAfterRootResolve, alreadyExisted: true }
@@ -75,7 +141,7 @@ export async function addLocalRepoFromPath(
         .getRepos()
         .find(
           (repo) =>
-            !repo.connectionId &&
+            getRepoExecutionHostId(repo) === LOCAL_EXECUTION_HOST_ID &&
             !isFolderRepo(repo) &&
             normalizeRuntimePathForComparison(repo.path) === mainRepoKey
         )
@@ -92,7 +158,7 @@ export async function addLocalRepoFromPath(
   })
   // Another registration can finish while icon discovery is pending.
   const raceWinner = store.getRepos().find((repo) => {
-    if (repo.connectionId) {
+    if (getRepoExecutionHostId(repo) !== LOCAL_EXECUTION_HOST_ID) {
       return false
     }
     const repoPathKey = normalizeRuntimePathForComparison(repo.path)
@@ -123,6 +189,7 @@ export async function addLocalRepoFromPath(
   }
 
   store.addRepo(repo)
+  registered?.(repo.id)
   await prepareLocalWorktreeRootForRepo(store, repo)
   return { repo, alreadyExisted: false }
 }

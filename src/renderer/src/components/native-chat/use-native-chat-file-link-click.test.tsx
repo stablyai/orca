@@ -6,6 +6,8 @@ import type { LinkActionRequest } from '@/components/link-actions/link-action-re
 import type { NativeChatFileLinkContext } from './native-chat-file-link'
 import { useNativeChatFileLinkClick } from './use-native-chat-file-link-click'
 import { NativeChatToolLine } from './NativeChatToolLine'
+import { resolveNativeChatTabDirectory } from './native-chat-tab-directory'
+import { worktreeFixture } from './native-chat-workspace-test-fixtures'
 import { NativeChatDiffCard } from './NativeChatDiffCard'
 
 const mocks = vi.hoisted(() => {
@@ -465,4 +467,35 @@ describe('useNativeChatFileLinkClick', () => {
       expect(mocks.openDetectedFilePath).toHaveBeenCalledTimes(opens)
     })
   })
+})
+
+it('opens a relative chat-created file from the ordinary Chats repository folder directory', () => {
+  const path = '/data/chats'
+  const worktreeId = 'chats::/data/chats'
+  const directory = resolveNativeChatTabDirectory(
+    {
+      floatingWorkspacePath: '/different',
+      worktreesByRepo: {
+        chats: [worktreeFixture(worktreeId, path, { repoId: 'chats', hostId: 'local' })]
+      },
+      folderWorkspaces: []
+    },
+    'chat-tab',
+    worktreeId,
+    'local'
+  )
+  expect(directory).toBe(path)
+  render(
+    <Transcript
+      markdown="[result](./result.html)"
+      linkContext={{ worktreeId, worktreePath: directory, runtimeEnvironmentId: null }}
+    />
+  )
+  clickLink('result')
+  expect(mocks.openDetectedFilePath).toHaveBeenCalledWith(
+    '/data/chats/result.html',
+    null,
+    null,
+    expect.objectContaining({ worktreeId })
+  )
 })

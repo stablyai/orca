@@ -4,6 +4,8 @@ import { join } from 'node:path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { Repo } from '../../../shared/repo-types'
 import type { Store } from '../../persistence'
+import { detectRepoIconAndUpstream } from '../../repo-icon-autodetect'
+import { prepareLocalWorktreeRootForRepo } from '../../worktree-root-preparation'
 import { addLocalRepoFromPath } from './local-repo-registration'
 
 vi.mock('../../repo-icon-autodetect', () => ({
@@ -30,6 +32,7 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
   let root: string
 
   beforeEach(async () => {
+    vi.clearAllMocks()
     root = await mkdtemp(join(tmpdir(), 'orca-local-add-alias-'))
   })
 
@@ -75,5 +78,65 @@ describe('addLocalRepoFromPath through a symlink alias', () => {
     await addLocalRepoFromPath(store, join(root, 'b'), 'folder')
 
     expect(repos).toHaveLength(2)
+  })
+  it.each([10, 100])(
+    'shares one canonical discovery across %s cold window/alias callers, then retires removed identity',
+    async (q) => {
+      const path = join(root, 'chats')
+      const alias = join(root, 'alias')
+      await mkdir(path)
+      await symlink(path, alias, dirLinkType)
+      const repos: Repo[] = []
+      const store = createStore(repos)
+      const foreign: Repo = {
+        id: 'peer',
+        path,
+        displayName: 'Remote',
+        badgeColor: 'blue',
+        addedAt: 1,
+        kind: 'folder',
+        executionHostId: 'runtime:peer'
+      }
+      repos.push(foreign)
+      const results = await Promise.all(
+        Array.from({ length: q }, (_, i) =>
+          addLocalRepoFromPath(store, i % 2 ? path : alias, 'folder', 'Chats')
+        )
+      )
+      expect(detectRepoIconAndUpstream).toHaveBeenCalledOnce()
+      expect(repos).toHaveLength(2)
+      expect(
+        new Set(results.map((result) => ('repo' in result ? result.repo.id : result.error))).size
+      ).toBe(1)
+      const local = repos[1]
+      local.displayName = 'Customized'
+      expect(await addLocalRepoFromPath(store, path, 'folder')).toMatchObject({
+        repo: { id: local.id, displayName: 'Customized' }
+      })
+      repos.splice(1)
+      expect(await addLocalRepoFromPath(store, path, 'folder')).toMatchObject({
+        repo: { displayName: 'chats' }
+      })
+      expect(repos[1].id).not.toBe(local.id)
+    }
+  )
+  it('ends a removed registration and allows a fresh action after the in-flight failure', async () => {
+    const path = join(root, 'chats')
+    await mkdir(path)
+    const repos: Repo[] = []
+    const store = createStore(repos)
+    let release = () => {}
+    vi.mocked(prepareLocalWorktreeRootForRepo).mockReturnValueOnce(
+      new Promise((resolve) => {
+        release = () => resolve()
+      })
+    )
+    const old = addLocalRepoFromPath(store, path, 'folder')
+    await vi.waitFor(() => expect(repos).toHaveLength(1))
+    repos.splice(0)
+    await expect(addLocalRepoFromPath(store, path, 'folder')).resolves.toHaveProperty('repo')
+    release()
+    await expect(old).resolves.toHaveProperty('error')
+    await expect(addLocalRepoFromPath(store, path, 'folder')).resolves.toHaveProperty('repo')
   })
 })
