@@ -12,6 +12,7 @@ import {
   type LaunchStoreHolder
 } from '@/lib/launch-parity-renderer.test-fixture'
 import { getDefaultSettings } from '../../../../shared/constants'
+import { POST_REPLAY_MODE_RESET } from '../../../../shared/terminal-mode-reset-profiles'
 import { launchWorkspaceId } from '../../../../shared/launch-parity-window-request.test-fixture'
 import { mockPanePtyArgs } from './pty-connection-test-connect-mock-pane'
 import type {
@@ -515,6 +516,8 @@ it.each(['claude', 'codex'] as const)(
       // The older visible frame is cleared first; the lines saved above it stay scrollable.
       expect(painted.indexOf('\x1b[2J')).toBeLessThan(painted.indexOf('HELD-FRAME'))
       expect(painted).not.toContain('\x1b[3J')
+      // Then grounded: the dead TUI's mouse and paste modes don't come back armed.
+      expect(painted.indexOf(POST_REPLAY_MODE_RESET)).toBeGreaterThan(painted.indexOf('HELD-FRAME'))
       expect(kept.pane.terminal.resize).toHaveBeenCalledWith(100, 30)
       expect(window.api.pty.resize).not.toHaveBeenCalled()
       expect(kept.died).toHaveBeenCalledExactlyOnceWith(

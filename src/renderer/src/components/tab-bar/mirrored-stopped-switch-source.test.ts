@@ -13,6 +13,7 @@ import type { TerminalSurface } from '@/runtime/web-session-tabs-sync/state'
 import type { StoppedSwitchSourceFact } from '../../../../shared/stopped-switch-source'
 import { toWebTerminalSurfaceTabId } from '../../../../shared/terminal-surface-id'
 import * as protocol from '../../../../shared/protocol-version'
+import { POST_REPLAY_MODE_RESET } from '../../../../shared/terminal-mode-reset-profiles'
 
 // A paired client (B) viewing a terminal whose agent a switch stopped on the host: main's fact on
 // the frame's row gives B's pane its conversation, so the header offers the in-place retry, routed
@@ -211,6 +212,7 @@ describe.each(['claude', 'codex'] as const)('a paired %s pane a switch stopped',
       pane: { id: 1, leafId: LEAF, terminal: { cols: 80, rows: 24, resize } },
       handledExitPtyId: null,
       writeReplayData: write,
+      writeInputModeGround: write,
       isPaneOnAlternateScreen: () => false
     } as unknown as ConnectPanePtySession
     expect(remountStoppedSwitchSource(session, BOUND)).toBe(true)
@@ -220,6 +222,7 @@ describe.each(['claude', 'codex'] as const)('a paired %s pane a switch stopped',
     expect(painted.indexOf('before the agent')).toBeLessThan(painted.indexOf('HELD-FRAME'))
     // Screen-only: whatever this pane saved above it stays scrollable.
     expect(painted).not.toContain('\x1b[3J')
+    expect(order.at(-2)).toBe(POST_REPLAY_MODE_RESET)
     expect(order.at(-1)).toBe('overlay')
   })
 

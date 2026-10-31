@@ -6,6 +6,7 @@ import {
 import type { AiVaultAgent } from '../../../../../shared/ai-vault-types'
 import type { StoppedSwitchSourceScreen } from '../../../../../shared/stopped-switch-source'
 import {
+  POST_REPLAY_MODE_RESET,
   RELEASE_SYNCHRONIZED_OUTPUT,
   RESET_GRAPHIC_RENDITION
 } from '../../../../../shared/terminal-mode-reset-profiles'
@@ -42,6 +43,8 @@ function paintStoppedScreen(session: ConnectPanePtySession, screen: StoppedSwitc
   })) {
     session.writeReplayData(chunk)
   }
+  // The image re-arms the dead TUI's input modes (mouse, bracketed paste); nothing reads them now.
+  session.writeInputModeGround(POST_REPLAY_MODE_RESET)
 }
 
 /**
