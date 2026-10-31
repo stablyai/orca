@@ -131,6 +131,7 @@ it('executes snapshot addresses through CLI send and the dispatcher into the pro
         listRecords: () => [...h.records.values()].map(agentSessionConversationView)
       },
       liveHandle: (handle: string) => handle.startsWith('term_'),
+      livePaneForHandle: (handle: string) => h.runtime.getLiveTerminalPaneKey(handle),
       paneForHandle: (handle: string) => (handle === WORKER_HANDLE ? WORKER_PANE : null),
       handleForPane: () => null,
       name: () => 'Duplicate name'

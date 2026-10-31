@@ -10,6 +10,7 @@ import { fixture } from './crew-read-model.test-fixture'
 
 it('projects only executable peer addresses per viewer while retaining home routing and imported peer content', async () => {
   const { db, deps, handles } = fixture()
+  deps.records = { listRecords: () => [], getRecord: () => null }
   handles.set('term_worker', 'tab_worker:77777777-7777-4777-8777-777777777777')
   deps.processForHandle = () => 'worker_process'
   const runtime = new OrcaRuntimeService()
@@ -142,11 +143,39 @@ it('projects only executable peer addresses per viewer while retaining home rout
     db.settleRemoteAttachmentStop('ctx_recipient')
     expect(db.findActiveRemoteAttachmentForPane(handles.get('term_worker')!)).toBeUndefined()
     const ended = model.read('term_worker')
-    expect(ended.sections.managedBy).toEqual(attached.sections.managedBy)
+    const retainedParents = attached.sections.managedBy.map((row) => {
+      const relation = { ...row }
+      delete relation.sendAddress
+      return relation
+    })
+    expect(ended.sections.managedBy).toEqual(retainedParents)
+    expect(ended.sections.managedBy.every((row) => !Object.hasOwn(row, 'sendAddress'))).toBe(true)
+    const imported = ended.sections.talkingWith.find((row) => row.partyKey === peers[0].partyKey)
+    expect(imported).toEqual(peers[0])
+    expect(imported).not.toHaveProperty('sendAddress')
     expect(ended.sections.talkingWith.find((row) => row.partyKey === retained.partyKey)).toEqual(
       before
     )
+    const beforeDetachedHome = db.getInbox()
+    await expect(send('term_worker', 'run:run_home')).resolves.toMatchObject({
+      ok: false,
+      error: { code: 'run_home_unreachable' }
+    })
+    expect(db.getInbox()).toEqual(beforeDetachedHome)
+    expect(
+      db.listFederationRelay({
+        dispatchId: 'ctx_recipient',
+        direction: 'to_home',
+        afterSequence: 0
+      })
+    ).toHaveLength(1)
     await expect(send('term_worker', 'term_peer')).resolves.toMatchObject({ ok: true })
+    console.info('Crew detached relation and routing', {
+      parents: ended.sections.managedBy,
+      imported,
+      detachedHomeEffectsUnchanged: true,
+      ordinarySendAccepted: true
+    })
   } finally {
     stop()
     runtime.stopOrchestrationFederationRelay()

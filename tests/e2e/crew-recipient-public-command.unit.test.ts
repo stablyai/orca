@@ -86,13 +86,9 @@ function ordinaryCrewCommandFixture(actualIdentity = false, extraPanes: [string,
     vi.spyOn(h.runtime, 'getLiveTerminalPaneKey').mockImplementation(
       (handle) => panes.get(handle) ?? null
     )
-    vi.spyOn(
-      // SAFETY: The inherited implementation exists; this test view removes only protected visibility.
-      h.runtime as unknown as {
-        getPaneKeyForTerminalHandle(handle: string): string | null
-      },
-      'getPaneKeyForTerminalHandle'
-    ).mockImplementation((handle) => panes.get(handle) ?? null)
+    vi.spyOn(h.runtime, 'getPaneKeyForTerminalHandle').mockImplementation(
+      (handle) => panes.get(handle) ?? null
+    )
     vi.spyOn(h.runtime, 'getTerminalHandleForPaneKey').mockImplementation(
       (pane) => [...panes].find(([, value]) => value === pane)?.[0] ?? null
     )
