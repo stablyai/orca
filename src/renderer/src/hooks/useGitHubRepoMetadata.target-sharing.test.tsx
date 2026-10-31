@@ -23,7 +23,7 @@ import {
   clearRuntimeEnvironmentConnectionGenerationsForTests
 } from '@/store/slices/runtime-status'
 import { createGlobalSettingsFixture } from '../../../shared/global-settings-test-fixture'
-import type { GlobalSettings } from '../../../shared/global-settings-types'
+import type { AppState } from '@/store/types'
 import type { RuntimeStatusStoreState } from '@/store/slices/runtime-status-types'
 import type { PublicKnownRuntimeEnvironment } from '../../../shared/runtime-environments'
 import type { RuntimeStatus } from '../../../shared/runtime-types'
@@ -35,11 +35,12 @@ import type { TaskSourceContext } from '../../../shared/task-source-context'
 import type { resolveGitHubRepoExecution } from '../../../main/github/github-api-repository'
 
 const provider = vi.hoisted(() => ({ exec: vi.fn(), rpc: vi.fn(), evaluations: 0, rows: 0 }))
+const metadataSettings = createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'S' })
 const metadataStore = create<
   RuntimeStatusStoreState & {
     unrelated: number
     repos: Repo[]
-    settings: GlobalSettings
+    settings: AppState['settings']
     recordFeatureInteraction: () => void
     projects: []
     projectHostSetups: []
@@ -54,7 +55,7 @@ const metadataStore = create<
   projectHostSetups: [],
   folderWorkspacePathStatuses: {},
   repos: registeredRows(),
-  settings: createGlobalSettingsFixture({ activeRuntimeEnvironmentId: 'S' }),
+  settings: metadataSettings,
   recordFeatureInteraction: () => {}
 }))
 const repoActions = createRepoUpdateActions(
@@ -744,7 +745,7 @@ it.each([
       clearRuntimeEnvironmentConnectionGenerationsForTests()
       metadataStore.setState({
         repos: registeredRows(),
-        settings: { ...metadataStore.getState().settings, activeRuntimeEnvironmentId: focus },
+        settings: { ...metadataSettings, activeRuntimeEnvironmentId: focus },
         runtimeEnvironments: [],
         runtimeStatusByEnvironmentId: new Map()
       })
