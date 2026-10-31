@@ -12317,7 +12317,7 @@
       "src/shared/structural-value-equality.test.ts": 49,
       "src/shared/structured-agent-question-projection.test.ts": 154,
       "src/shared/structured-agent-session-agent-status.test.ts": 68,
-      "src/shared/structured-agent-session-child-work-legacy.test.ts": 25,
+      "src/shared/agent-session/structured-agent-session-child-work-legacy.test.ts": 25,
       "src/shared/agent-session/structured-agent-session-coalescer.test.ts": 79,
       "src/shared/structured-agent-session-composer.test.ts": 44,
       "src/shared/structured-agent-session-context-usage.test.ts": 101,
