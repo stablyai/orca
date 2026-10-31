@@ -8396,10 +8396,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 存放庫顏色",
           "useRepoIcon": "使用 {{value0}} 存放庫圖示",
-          "fde066a63b": "PNG 上傳必須為 256KB 或更小。",
+          "fde066a63b": "PNG、JPEG、SVG、WebP、GIF、BMP、ICO 或 AVIF。上限為 10MB 和 3200 萬像素。",
           "cc1286e263": "網站圖示",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "上傳 PNG",
+          "381b4844fd": "上傳圖片",
           "7da623abcc": "預設使用 — GitHub 始終提供一個，即使所有者尚未設定自訂影像。",
           "39da8a10bf": "使用 GitHub 頭像",
           "c490787d24": "表情符號",

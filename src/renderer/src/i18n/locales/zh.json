@@ -7888,10 +7888,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "使用 {{value0}} 仓库颜色",
           "useRepoIcon": "使用 {{value0}} 仓库图标",
-          "fde066a63b": "PNG 上传必须为 256KB 或更小。",
+          "fde066a63b": "PNG、JPEG、SVG、WebP、GIF、BMP、ICO 或 AVIF。最大 10MB、3200 万像素。",
           "cc1286e263": "网站图标",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "上传PNG",
+          "381b4844fd": "上传图片",
           "7da623abcc": "默认使用 — GitHub 始终提供一个，即使所有者尚未设置自定义图像。",
           "39da8a10bf": "使用 GitHub 头像",
           "c490787d24": "表情符号",
@@ -7909,7 +7909,8 @@
           "868c5c9b56": "无法导入仓库图标",
           "emojiTooLongForRepoIcon": "此表情符号无法用作仓库图标。",
           "currentEmojiSelection": "当前：{{value0}}",
-          "searchEmojiPlaceholder": "搜索表情符号"
+          "searchEmojiPlaceholder": "搜索表情符号",
+          "imageTooLarge": "图片超过 10MB 或 3200 万像素的限制。"
         },
         "RepositoryPane": {
           "15a99d9b9f": "相对路径从该项目根解析。",

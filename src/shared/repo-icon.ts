@@ -7,6 +7,7 @@ export type RepoIcon =
   | { type: 'emoji'; emoji: string }
   | { type: 'image'; src: string; source: RepoIconImageSource; label?: string }
 
+export const MAX_REPO_ICON_SOURCE_BYTES = 10 * 1024 * 1024
 export const MAX_REPO_ICON_UPLOAD_BYTES = 256 * 1024
 export const MAX_REPO_ICON_DATA_URL_LENGTH = 400 * 1024
 

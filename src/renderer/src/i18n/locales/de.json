@@ -8573,10 +8573,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Repository-Farbe {{value0}} verwenden",
           "useRepoIcon": "Repository-Symbol {{value0}} verwenden",
-          "fde066a63b": "PNG-Uploads dürfen höchstens 256 KB groß sein.",
+          "fde066a63b": "PNG, JPEG, SVG, WebP, GIF, BMP, ICO oder AVIF. Bis zu 10 MB und 32 Megapixel.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "PNG hochladen",
+          "381b4844fd": "Bild hochladen",
           "7da623abcc": "Wird standardmäßig verwendet – GitHub stellt immer eines bereit, auch wenn kein eigenes Bild vom Eigentümer festgelegt wurde.",
           "39da8a10bf": "GitHub-Avatar verwenden",
           "c490787d24": "Emoji",

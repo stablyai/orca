@@ -8183,10 +8183,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Usar {{value0}} como color del repositorio",
           "useRepoIcon": "Usar {{value0}} como icono del repositorio",
-          "fde066a63b": "Las cargas PNG deben tener un tamaño de 256 KB o menos.",
+          "fde066a63b": "PNG, JPEG, SVG, WebP, GIF, BMP, ICO o AVIF. Hasta 10 MB y 32 megapíxeles.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "Subir PNG",
+          "381b4844fd": "Subir imagen",
           "7da623abcc": "Se usa de forma predeterminada: GitHub siempre proporciona uno, incluso cuando el propietario no configuró una imagen personalizada.",
           "39da8a10bf": "Usar avatar de GitHub",
           "c490787d24": "Emoji",
@@ -8204,7 +8204,8 @@
           "868c5c9b56": "No se pudo importar el icono del repositorio",
           "emojiTooLongForRepoIcon": "Este emoji no se puede usar como icono del repositorio.",
           "currentEmojiSelection": "Actual: {{value0}}",
-          "searchEmojiPlaceholder": "Buscar emoji"
+          "searchEmojiPlaceholder": "Buscar emoji",
+          "imageTooLarge": "La imagen supera el límite de 10 MB o 32 megapíxeles."
         },
         "RepositoryPane": {
           "15a99d9b9f": "Las rutas relativas se resuelven desde la raíz de este proyecto.",

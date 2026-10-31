@@ -8559,10 +8559,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} reposunun rengini kullan",
           "useRepoIcon": "{{value0}} repo simgesini kullan",
-          "fde066a63b": "PNG yüklemeleri 256KB veya daha küçük olmalıdır.",
+          "fde066a63b": "PNG, JPEG, SVG, WebP, GIF, BMP, ICO veya AVIF. En fazla 10 MB ve 32 megapiksel.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "PNG Yükle",
+          "381b4844fd": "Görsel yükle",
           "7da623abcc": "Varsayılan olarak kullanılır - sahibi özel bir görsel ayarlamamış olsa bile GitHub her zaman bir tane sağlar.",
           "39da8a10bf": "GitHub Avatarını Kullan",
           "c490787d24": "Emoji",

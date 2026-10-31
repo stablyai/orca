@@ -7888,10 +7888,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "{{value0}} repo 색상 사용",
           "useRepoIcon": "{{value0}} repo 아이콘 사용",
-          "fde066a63b": "PNG 업로드는 256KB 이하여야 합니다.",
+          "fde066a63b": "PNG, JPEG, SVG, WebP, GIF, BMP, ICO 또는 AVIF. 최대 10MB 및 3,200만 화소.",
           "cc1286e263": "파비콘",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "PNG 업로드",
+          "381b4844fd": "이미지 업로드",
           "7da623abcc": "기본적으로 사용됨 — GitHub는 소유자가 사용자 정의 이미지를 설정하지 않은 경우에도 항상 하나를 제공합니다.",
           "39da8a10bf": "GitHub 아바타 사용",
           "c490787d24": "이모티콘",
@@ -7909,7 +7909,8 @@
           "868c5c9b56": "repo 아이콘을 가져오지 못했습니다.",
           "emojiTooLongForRepoIcon": "이 이모티콘은 repo 아이콘으로 사용할 수 없습니다.",
           "currentEmojiSelection": "현재: {{value0}}",
-          "searchEmojiPlaceholder": "이모티콘 검색"
+          "searchEmojiPlaceholder": "이모티콘 검색",
+          "imageTooLarge": "이미지가 10MB 또는 3,200만 화소 제한을 초과합니다."
         },
         "RepositoryPane": {
           "15a99d9b9f": "상대 경로는 이 프로젝트 루트에서 확인됩니다.",

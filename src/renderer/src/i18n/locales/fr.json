@@ -8449,10 +8449,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Utiliser la couleur de dépôt {{value0}}",
           "useRepoIcon": "Utiliser l'icône de dépôt {{value0}}",
-          "fde066a63b": "Les PNG téléversés doivent peser 256 Ko au maximum.",
+          "fde066a63b": "PNG, JPEG, SVG, WebP, GIF, BMP, ICO ou AVIF. Jusqu’à 10 Mo et 32 mégapixels.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "Téléverser un PNG",
+          "381b4844fd": "Téléverser une image",
           "7da623abcc": "Utilisé par défaut — GitHub en fournit toujours un, même quand le propriétaire n'a pas défini d'image personnalisée.",
           "39da8a10bf": "Utiliser l'avatar GitHub",
           "c490787d24": "Émoji",
@@ -8470,7 +8470,8 @@
           "868c5c9b56": "Échec de l'importation de l'icône du dépôt",
           "emojiTooLongForRepoIcon": "Cet émoji ne peut pas servir d'icône de dépôt.",
           "currentEmojiSelection": "Actuel : {{value0}}",
-          "searchEmojiPlaceholder": "Rechercher un émoji"
+          "searchEmojiPlaceholder": "Rechercher un émoji",
+          "imageTooLarge": "L’image dépasse la limite de 10 Mo ou de 32 mégapixels."
         },
         "RepositoryPane": {
           "15a99d9b9f": "Les chemins relatifs sont résolus depuis la racine de ce projet.",

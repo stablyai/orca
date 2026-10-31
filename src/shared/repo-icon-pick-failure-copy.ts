@@ -1,6 +1,8 @@
 // One English table for repo icon upload refusals: main builds the wire `error`, the renderer translates by code.
 export const REPO_ICON_PICK_FAILURE_COPY = {
   notPng: 'Repo icons must be PNG files.',
+  unsupportedImage: 'Choose a PNG, JPEG, SVG, WebP, GIF, BMP, ICO or AVIF image.',
+  sourceTooLarge: 'Repo icon image must be 10MB or smaller.',
   tooLarge: 'Repo icon image must be 256KB or smaller.'
 } as const
 

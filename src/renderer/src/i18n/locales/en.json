@@ -1010,7 +1010,9 @@
     "repository": {
       "iconPickErrors": {
         "notPng": "Repo icons must be PNG files.",
-        "tooLarge": "Repo icon image must be 256KB or smaller."
+        "tooLarge": "Repo icon image must be 256KB or smaller.",
+        "unsupportedImage": "Choose a PNG, JPEG, SVG, WebP, GIF, BMP, ICO or AVIF image.",
+        "sourceTooLarge": "Repo icon image must be 10MB or smaller."
       }
     }
   },
@@ -8660,10 +8662,10 @@
         "RepositoryIconPicker": {
           "2b7d27b93c": "Use {{value0}} repo color",
           "useRepoIcon": "Use {{value0}} repo icon",
-          "fde066a63b": "PNG uploads must be 256KB or smaller.",
+          "fde066a63b": "PNG, JPEG, SVG, WebP, GIF, BMP, ICO or AVIF. Up to 10MB and 32 megapixels.",
           "cc1286e263": "Favicon",
           "03ca1a4e9b": "example.com",
-          "381b4844fd": "Upload PNG",
+          "381b4844fd": "Upload image",
           "7da623abcc": "Used by default — GitHub always provides one, even when the owner hasn't set a custom image.",
           "39da8a10bf": "Use GitHub Avatar",
           "c490787d24": "Emoji",
@@ -8681,7 +8683,8 @@
           "868c5c9b56": "Failed to import repo icon",
           "emojiTooLongForRepoIcon": "This emoji can't be used as a repo icon.",
           "currentEmojiSelection": "Current: {{value0}}",
-          "searchEmojiPlaceholder": "Search emoji"
+          "searchEmojiPlaceholder": "Search emoji",
+          "imageTooLarge": "Image exceeds the 10MB or 32-megapixel limit."
         },
         "RepositoryPane": {
           "15a99d9b9f": "Relative paths resolve from this project root.",
