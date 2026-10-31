@@ -87,6 +87,9 @@ export function PluginInstallDialog({
         setError(pluginGitResolutionErrorMessage(resolution))
       }
     } catch (cause) {
+      if (version !== gitInputVersion.current) {
+        return
+      }
       console.warn('[plugins] Git source resolution failed:', cause)
       setError(pluginGitResolutionErrorMessage({ ok: false, reason: 'unreachable', error: '' }))
     } finally {
@@ -124,8 +127,17 @@ export function PluginInstallDialog({
       : install(source))
   }
 
+  // Why only installing blocks closing: a version check can wait on a slow remote for minutes.
+  const dismiss = (): void => {
+    if (busy === 'installing') {
+      return
+    }
+    gitInputVersion.current += 1
+    onOpenChange(false)
+  }
+
   return (
-    <Dialog open={open} onOpenChange={(nextOpen) => !busy && onOpenChange(nextOpen)}>
+    <Dialog open={open} onOpenChange={(nextOpen) => (nextOpen ? onOpenChange(true) : dismiss())}>
       <DialogContent surface="security" scrollable className="sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>
@@ -243,8 +255,8 @@ export function PluginInstallDialog({
               type="button"
               variant="ghost"
               size="sm"
-              disabled={busy !== null}
-              onClick={() => onOpenChange(false)}
+              disabled={busy === 'installing'}
+              onClick={dismiss}
             >
               {translate('auto.components.settings.PluginInstallDialog.cancel', 'Cancel')}
             </Button>

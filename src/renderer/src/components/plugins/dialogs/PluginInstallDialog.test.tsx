@@ -183,4 +183,36 @@ describe('PluginInstallDialog', () => {
     expect(document.body.textContent).toContain('Remove the username or token from the URL.')
     act(() => root.unmount())
   })
+
+  it('can be cancelled while the repository is still being checked', async () => {
+    const onOpenChange = vi.fn()
+    let finish: (value: PluginGitSourceResolution) => void = () => {}
+    const resolveGitSource = vi.fn<ResolveGitSource>(
+      () => new Promise((resolve) => (finish = resolve))
+    )
+    const container = document.createElement('div')
+    document.body.appendChild(container)
+    const root = createRoot(container)
+    await act(async () => {
+      root.render(
+        <PluginInstallDialog
+          open
+          onOpenChange={onOpenChange}
+          onInstall={vi.fn()}
+          initialKind="git"
+          resolveGitSource={resolveGitSource}
+        />
+      )
+    })
+    await enter(gitInput(), 'acme/notes')
+    await click('Continue')
+    await click('Cancel')
+    expect(onOpenChange).toHaveBeenCalledWith(false)
+
+    await act(async () => {
+      finish({ ok: false, reason: 'unreachable', error: 'timed out' })
+    })
+    expect(document.body.textContent).not.toContain("Couldn't read this repository")
+    act(() => root.unmount())
+  })
 })
