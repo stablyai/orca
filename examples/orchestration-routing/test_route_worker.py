@@ -94,10 +94,124 @@ def generic_policy() -> dict:
     return policy
 
 
-def receipt_process(argv: list[str], payload: dict, returncode: int = 0) -> subprocess.CompletedProcess[str]:
-    return subprocess.CompletedProcess(
-        argv, returncode, json.dumps(payload, ensure_ascii=False) + "\n", "mock stderr\n",
-    )
+RUN_ID = "prebound-run"
+LOCAL_ENV = {"ORCA_ENVIRONMENT": "", "ORCA_PAIRING_CODE": "", "ORCA_REMOTE_PAIRING": "", "ORCA_CLI_COMMAND": ""}
+SPEC_TEXT = "Target: t\nChange: c\nConstraints: none\nOwnership: o\nObservable acceptance: a\n"
+
+
+def worker_row(dispatch_id: str, verdict: str) -> dict:
+    return {
+        "dispatchId": dispatch_id, "taskId": f"task-{dispatch_id}", "runId": RUN_ID,
+        "workerState": "running", "dispatchStatus": "dispatched", "agentTerminalHandle": None,
+        "terminalState": "active", "resource": None,
+        "projection": {"host": {"id": "local"}, "stage": {"activity": "working"},
+                       "liveness": {"verdict": verdict}, "nextAction": {"argv": []}},
+    }
+
+
+def worker_page(rows: list[dict], next_cursor: str | None = None, **extra: object) -> dict:
+    return {
+        "workers": rows, "counts": {"active": len(rows)}, "scope": {"run": RUN_ID, "source": "flag"},
+        "page": {"hasMore": next_cursor is not None, "nextCursor": next_cursor, "total": len(rows)},
+        **extra,
+    }
+
+
+def start_receipt(state: str, dispatch_id: str, effective: bool = True, **extra: object) -> dict:
+    selection = {"agent": "codex", "model": "gpt-6-luna", "effort": None}
+    return {"ok": True, "result": {
+        "runId": RUN_ID, "taskId": f"task-{dispatch_id}", "dispatchId": dispatch_id, "state": state,
+        "effects": [], "residualResources": [],
+        "launch": {"requested": selection, "effective": dict(selection) if effective else None},
+        **extra,
+    }}
+
+
+def full_json(body: dict) -> str:
+    return json.dumps({"id": "req-1", **body, "_meta": {"runtimeId": "runtime-1"}},
+                      ensure_ascii=False, indent=2) + "\n"
+
+
+class FakeOrcaCli:
+    """subprocess.run boundary shaped like Orca's printers: concise JSON unless --full is passed."""
+
+    def __init__(self, pages: list[dict], start: dict | None = None, times_out: str | None = None,
+                 partial_output: tuple[object, object] = (None, None)) -> None:
+        self.pages, self.start, self.times_out = list(pages), start, times_out
+        self.partial_output = partial_output
+        self.calls: list[list[str]] = []
+
+    @staticmethod
+    def _write_output(handle: object, content: object) -> None:
+        if content is None:
+            return
+        data = content if isinstance(content, bytes) else str(content).encode("utf-8")
+        handle.write(data)
+        handle.flush()
+
+    def __call__(self, argv: list[str], **kwargs: object) -> subprocess.CompletedProcess[bytes]:
+        timeout = kwargs.get("timeout")
+        if not isinstance(timeout, (int, float)) or not 0 < timeout <= 600:
+            raise AssertionError(f"external command is not bounded: {argv}")
+        stdout_handle, stderr_handle = kwargs.get("stdout"), kwargs.get("stderr")
+        if (
+            kwargs.get("capture_output")
+            or kwargs.get("shell") is not False
+            or stdout_handle is subprocess.PIPE
+            or stderr_handle is subprocess.PIPE
+            or not hasattr(stdout_handle, "write")
+            or not hasattr(stdout_handle, "fileno")
+            or not hasattr(stderr_handle, "write")
+            or not hasattr(stderr_handle, "fileno")
+        ):
+            raise AssertionError(f"external command must capture output via temporary files: {argv}")
+        self.calls.append(argv)
+        if self.times_out in argv:
+            stdout, stderr = self.partial_output
+            self._write_output(stdout_handle, stdout)
+            self._write_output(stderr_handle, stderr)
+            raise subprocess.TimeoutExpired(argv, timeout)
+        full = "--full" in argv
+        if "worker-list" in argv:
+            result = self.pages.pop(0)
+            complete = not result.get("partialHostErrors")
+            body = {"ok": True, "result": result}
+            concise = {"ok": complete, "result": {
+                "workers": [{"dispatchId": row["dispatchId"], "state": row["workerState"],
+                             "liveness": row["projection"]["liveness"]["verdict"]}
+                            for row in result["workers"]],
+                "scope": result["scope"],
+                **({"nextCursor": result["page"]["nextCursor"]} if result["page"]["hasMore"] else {}),
+            }}
+            returncode = 0 if full or complete else 1
+        elif "worker-start" in argv and self.start is not None:
+            body, receipt = self.start, self.start.get("result")
+            returncode = 0 if receipt and receipt["state"] == "ready" else 1
+            concise = body if receipt is None else {"ok": returncode == 0, "result": {
+                "dispatchId": receipt["dispatchId"], "taskId": receipt["taskId"],
+                "runId": receipt["runId"], "state": receipt["state"],
+                "agent": receipt["launch"]["requested"]["agent"],
+                "model": receipt["launch"]["requested"]["model"],
+            }}
+        else:
+            raise AssertionError(f"unexpected external command: {argv}")
+        stdout = full_json(body) if full else json.dumps(concise, ensure_ascii=False) + "\n"
+        self._write_output(stdout_handle, stdout)
+        return subprocess.CompletedProcess(argv, returncode)
+
+
+def run_main(cli: FakeOrcaCli, state_dir: Path, spec_path: Path, *extra: str) -> tuple[int, dict]:
+    output = StringIO()
+    with mock.patch.dict(os.environ, LOCAL_ENV):
+        with mock.patch.object(router, "resolve_orca_command", return_value=["orca-test"]):
+            with mock.patch.object(router, "resolve_agy_executable", return_value="agy-test"):
+                with mock.patch.object(router.subprocess, "run", cli):
+                    with redirect_stdout(output):
+                        exit_code = router.main([
+                            "--tier", "simple", "--run", RUN_ID, "--spec-file", str(spec_path),
+                            "--state-dir", str(state_dir), *extra,
+                        ])
+    return exit_code, json.loads(output.getvalue())
 
 
 class PolicyTests(unittest.TestCase):
@@ -244,47 +358,29 @@ class SpecAndLivenessTests(unittest.TestCase):
         self.assertIn("--model", argv)
 
     def test_liveness_reads_every_remote_page_in_the_same_run(self) -> None:
-        pages = [
-            {"ok": True, "result": {
-                "workers": [{"dispatchId": "d1", "projection": {"liveness": {"verdict": "live"}}}],
-                "page": {"hasMore": True, "nextCursor": "cursor-2"},
-            }},
-            {"ok": True, "result": {
-                "workers": [{"dispatchId": "d2", "projection": {"liveness": {"verdict": "exited"}}}],
-                "page": {"hasMore": False},
-            }},
-        ]
-        calls: list[list[str]] = []
-
-        def invoke(argv: list[str]) -> subprocess.CompletedProcess[str]:
-            calls.append(argv)
-            return receipt_process(argv, pages[len(calls) - 1])
-
-        with mock.patch.object(router, "invoke", side_effect=invoke):
-            result = router.list_worker_liveness(["orca"], "bound-run", 3)
-        self.assertEqual(result["pages"], 2)
-        self.assertEqual(result["live_workers"], 1)
-        for argv in calls:
+        cli = FakeOrcaCli([
+            worker_page([worker_row("d1", "live")], next_cursor="cursor-2"),
+            worker_page([worker_row("d2", "exited")]),
+        ])
+        with mock.patch.object(router.subprocess, "run", cli):
+            result = router.list_worker_liveness(["orca"], RUN_ID, 3)
+        self.assertEqual(result, {"live_workers": 1, "rows_checked": 2, "pages": 2})
+        for argv in cli.calls:
             self.assertIn("--include-remote", argv)
-            self.assertEqual(argv[argv.index("--run") + 1], "bound-run")
-        self.assertEqual(calls[1][calls[1].index("--cursor") + 1], "cursor-2")
+            self.assertEqual(argv[argv.index("--run") + 1], RUN_ID)
+        self.assertEqual(cli.calls[1][cli.calls[1].index("--cursor") + 1], "cursor-2")
 
     def test_liveness_enforces_configured_limit_and_unknown_is_not_dead(self) -> None:
-        rows = [{"dispatchId": f"d{i}", "projection": {"liveness": {"verdict": "live"}}}
-                for i in range(3)]
-        at_limit = {"ok": True, "result": {"workers": rows, "page": {"hasMore": False}}}
-        with mock.patch.object(router, "invoke", return_value=receipt_process(["orca"], at_limit)):
+        at_limit = worker_page([worker_row(f"d{i}", "live") for i in range(3)])
+        with mock.patch.object(router.subprocess, "run", FakeOrcaCli([at_limit])):
             with self.assertRaises(router.GuardError) as raised:
-                router.list_worker_liveness(["orca"], "bound-run", 3)
+                router.list_worker_liveness(["orca"], RUN_ID, 3)
         self.assertEqual(raised.exception.code, "worker_limit_reached")
 
-        unknown = {"ok": True, "result": {
-            "workers": [{"dispatchId": "d?", "projection": {"liveness": {"verdict": "unknown"}}}],
-            "page": {"hasMore": False},
-        }}
-        with mock.patch.object(router, "invoke", return_value=receipt_process(["orca"], unknown)):
+        unknown = worker_page([worker_row("d?", "unknown")])
+        with mock.patch.object(router.subprocess, "run", FakeOrcaCli([unknown])):
             with self.assertRaises(router.GuardError) as unknown_error:
-                router.list_worker_liveness(["orca"], "bound-run", 3)
+                router.list_worker_liveness(["orca"], RUN_ID, 3)
         self.assertEqual(unknown_error.exception.code, "worker_liveness_unknown")
 
 
@@ -316,8 +412,8 @@ class ReceiptTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as temp_dir:
             state_dir = Path(temp_dir) / "unused-state"
             output = StringIO()
-            with mock.patch.dict(os.environ, {"ORCA_ENVIRONMENT": "", "ORCA_PAIRING_CODE": "", "ORCA_REMOTE_PAIRING": "", "ORCA_CLI_COMMAND": ""}):
-                with mock.patch.object(router, "invoke", side_effect=AssertionError("dry-run invoked external CLI")):
+            with mock.patch.dict(os.environ, LOCAL_ENV):
+                with mock.patch.object(router.subprocess, "run", side_effect=AssertionError("dry-run invoked external CLI")):
                     with redirect_stdout(output):
                         exit_code = router.main([
                             "--tier", "simple", "--provider", "codex", "--dry-run",
@@ -358,68 +454,70 @@ class ReceiptTests(unittest.TestCase):
             "Ownership: examples/orchestration-routing\n"
             "Observable acceptance: receipt 原樣保留\n"
         )
-        ready = {"ok": True, "result": {
-            "state": "ready", "dispatchId": "dispatch-ready", "taskId": "task-ready",
-            "launch": {
-                "requested": {"agent": "codex", "model": "gpt-6-luna"},
-                "effective": {"agent": "codex", "model": "gpt-6-luna"},
+        ready = start_receipt("ready", "dispatch-ready", extra={"opaque": "full receipt data"})
+        unknown = start_receipt("outcome_unknown", "dispatch-unknown", effective=False,
+                                failedStage="agent_ready", lastError="turn not observed")
+        failed = {"ok": False, "error": {"code": "agent_unconfigured", "message": "no resource created"}}
+        unknown_without_dispatch = {
+            "ok": False,
+            "error": {
+                "code": "runtime_timeout",
+                "message": "The orchestration mutation may already have taken effect; do not assume it failed.",
+                "data": {
+                    "orchestrationRequestId": "req-mutation-1",
+                    "recovery": {
+                        "orchestrationRequestId": "req-mutation-1",
+                        "queryCommand": [
+                            "orca", "orchestration", "request-show", "--request", "req-mutation-1", "--json",
+                        ],
+                        "retryCommand": [
+                            "orca", "orchestration", "worker-start", "--retry-request", "req-mutation-1",
+                        ],
+                        "recoveryBlocked": False,
+                        "disposition": "outcome_unknown",
+                        "workerDeathInferred": False,
+                    },
+                },
             },
-            "extra": {"opaque": "full receipt data"},
-        }}
-        unknown = {"ok": True, "result": {"state": "unknown", "dispatchId": "dispatch-unknown", "extra": "keep"}}
-        failed = {"ok": False, "result": {"state": "failed", "dispatchId": None, "error": "no resource created"}}
-        cases = ((ready, 0, "success"), (unknown, 0, "unknown"), (failed, 1, "failed"))
+        }
+        cases = (
+            ("ready", ready, 0, "success", "dispatch-ready"),
+            ("unknown-dispatch", unknown, 3, "unknown", "dispatch-unknown"),
+            ("unknown-no-dispatch", unknown_without_dispatch, 3, "unknown", None),
+            ("failed", failed, 1, "failed", None),
+        )
 
         with tempfile.TemporaryDirectory() as temp_dir:
             spec_path = Path(temp_dir) / "task spec.md"
             spec_path.write_bytes(b"\xef\xbb\xbf" + spec_text.encode("utf-8"))
-            for receipt, returncode, expected_outcome in cases:
-                with self.subTest(outcome=expected_outcome):
-                    state_dir = Path(temp_dir) / f"state-{expected_outcome}"
-                    captured = StringIO()
-                    calls: list[list[str]] = []
-
-                    def invoke(argv: list[str]) -> subprocess.CompletedProcess[str]:
-                        calls.append(argv)
-                        if "worker-list" in argv:
-                            return receipt_process(argv, {"ok": True, "result": {
-                                "workers": [], "page": {"hasMore": False},
-                            }})
-                        self.assertIn("Observable acceptance: receipt", argv[argv.index("--spec") + 1])
-                        self.assertIn("quoted 中文", argv[argv.index("--spec") + 1])
-                        return receipt_process(argv, receipt, returncode)
-
-                    with mock.patch.dict(os.environ, {"ORCA_ENVIRONMENT": "", "ORCA_PAIRING_CODE": "", "ORCA_REMOTE_PAIRING": "", "ORCA_CLI_COMMAND": ""}):
-                        with mock.patch.object(router, "resolve_orca_command", return_value=["orca-test"]):
-                            with mock.patch.object(router, "invoke", side_effect=invoke):
-                                with redirect_stdout(captured):
-                                    exit_code = router.main([
-                                        "--tier", "simple", "--provider", "codex", "--run", "prebound-run",
-                                        "--spec-file", str(spec_path), "--state-dir", str(state_dir),
-                                    ])
-                    response = json.loads(captured.getvalue())
-                    self.assertEqual(response["outcome"], expected_outcome)
-                    self.assertEqual(response["receipt"], receipt)
+            for label, start, expected_exit, expected_outcome, expected_dispatch in cases:
+                with self.subTest(case=label):
+                    state_dir = Path(temp_dir) / f"state-{label}"
+                    cli = FakeOrcaCli([worker_page([])], start=start)
+                    exit_code, response = run_main(cli, state_dir, spec_path, "--provider", "codex")
+                    self.assertEqual((exit_code, response["outcome"]), (expected_exit, expected_outcome))
+                    self.assertEqual(response["receipt"], json.loads(full_json(start)))
                     self.assertEqual(response["retry_attempts"], 0)
-                    self.assertEqual(len(calls), 2)
+                    self.assertEqual(len(cli.calls), 2)
+                    spec_argument = cli.calls[1][cli.calls[1].index("--spec") + 1]
+                    self.assertIn("Observable acceptance: receipt", spec_argument)
+                    self.assertIn("quoted 中文", spec_argument)
+                    state_path = state_dir / "routing-state.json"
+                    self.assertEqual(state_path.is_file(), expected_outcome != "failed")
+                    if expected_outcome != "failed":
+                        events = json.loads(state_path.read_text(encoding="utf-8"))["events"]
+                        self.assertEqual(
+                            [(event["outcome"], event["dispatch"], event["run"]) for event in events],
+                            [(expected_outcome, expected_dispatch, RUN_ID)],
+                        )
                     if expected_outcome == "success":
-                        self.assertEqual(exit_code, 0)
                         self.assertIn("full receipt data", response["raw_stdout"])
-                        self.assertTrue((state_dir / "routing-state.json").is_file())
-                    elif expected_outcome == "unknown":
-                        self.assertEqual(exit_code, 3)
+                    if expected_outcome == "unknown":
                         self.assertIn("do not retry", response["coordinator_action"])
-                        self.assertTrue((state_dir / "routing-state.json").is_file())
-                    else:
-                        self.assertEqual(exit_code, 1)
-                        self.assertFalse((state_dir / "routing-state.json").exists())
 
     def test_custom_policy_file_controls_provider_ids_and_worker_limit(self) -> None:
         policy = generic_policy()
         policy["max_live_workers"] = 2
-        rows = [{"dispatchId": f"d{i}", "projection": {"liveness": {"verdict": "live"}}}
-                for i in range(2)]
-        listing = {"ok": True, "result": {"workers": rows, "page": {"hasMore": False}}}
         spec_text = (
             "Target: custom provider\n"
             "Change: test configured maximum\n"
@@ -433,30 +531,69 @@ class ReceiptTests(unittest.TestCase):
             policy_path.write_text(json.dumps(policy), encoding="utf-8")
             spec_path = Path(temp_dir) / "task.md"
             spec_path.write_text(spec_text, encoding="utf-8")
-            output = StringIO()
-            calls: list[list[str]] = []
-
-            def invoke(argv: list[str]) -> subprocess.CompletedProcess[str]:
-                calls.append(argv)
-                return receipt_process(argv, listing)
-
-            with mock.patch.dict(os.environ, {"ORCA_ENVIRONMENT": "", "ORCA_PAIRING_CODE": "", "ORCA_REMOTE_PAIRING": "", "ORCA_CLI_COMMAND": ""}):
-                with mock.patch.object(router, "resolve_orca_command", return_value=["orca-test"]):
-                    with mock.patch.object(router, "invoke", side_effect=invoke):
-                        with redirect_stdout(output):
-                            exit_code = router.main([
-                                "--tier", "simple", "--provider", "alpha", "--run", "prebound-run",
-                                "--policy-file", str(policy_path), "--spec-file", str(spec_path),
-                                "--state-dir", str(Path(temp_dir) / "state"),
-                            ])
-            response = json.loads(output.getvalue())
+            cli = FakeOrcaCli([worker_page([worker_row(f"d{i}", "live") for i in range(2)])])
+            exit_code, response = run_main(cli, Path(temp_dir) / "state", spec_path,
+                                           "--provider", "alpha", "--policy-file", str(policy_path))
             self.assertEqual(exit_code, 2)
             self.assertEqual(response["error"]["code"], "worker_limit_reached")
             self.assertEqual(response["error"]["details"]["max_live_workers"], 2)
             self.assertEqual(response["error"]["details"]["live_workers"], 2)
-            self.assertEqual(len(calls), 1)
-            self.assertIn("--include-remote", calls[0])
-            self.assertEqual(calls[0][calls[0].index("--run") + 1], "prebound-run")
+            self.assertEqual(len(cli.calls), 1)
+            self.assertIn("--include-remote", cli.calls[0])
+            self.assertEqual(cli.calls[0][cli.calls[0].index("--run") + 1], RUN_ID)
+
+    def test_incomplete_inventory_and_read_only_timeouts_refuse_before_start(self) -> None:
+        partial_hosts = worker_page([], partialHostErrors=[{
+            "environmentId": "environment_windows", "name": "Windows host",
+            "code": "host_unavailable", "dispatchIds": ["ctx_remote"],
+        }])
+        cases = (
+            ("worker_inventory_incomplete", "codex", FakeOrcaCli([partial_hosts])),
+            ("worker_list_timeout", "codex", FakeOrcaCli([], times_out="worker-list")),
+            ("agy_models_timeout", "agy", FakeOrcaCli([], times_out="models")),
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "task.md"
+            spec_path.write_text(SPEC_TEXT, encoding="utf-8")
+            for code, provider, cli in cases:
+                with self.subTest(code=code):
+                    state_dir = Path(temp_dir) / code
+                    exit_code, response = run_main(cli, state_dir, spec_path, "--provider", provider)
+                    self.assertEqual((exit_code, response["error"]["code"]), (2, code))
+                    self.assertEqual(len(cli.calls), 1)
+                    self.assertNotIn("worker-start", cli.calls[0])
+                    self.assertFalse(state_dir.exists())
+                    if code.endswith("_timeout"):
+                        self.assertEqual(response["error"]["details"]["timeout_seconds"],
+                                         router.READ_ONLY_TIMEOUT_SECONDS)
+
+    def test_worker_start_timeout_is_unknown_keeps_partial_output_and_never_retries(self) -> None:
+        ready_text = full_json(start_receipt("ready", "dispatch-late", warning="工作已輸入"))
+        waiting = "仍在等待 worker…\n"
+        cases = (
+            ("posix-bytes", ready_text.encode("utf-8"), waiting.encode("utf-8"), "dispatch-late"),
+            ("windows-text", ready_text, waiting, "dispatch-late"),
+            ("no-output", None, None, None),
+        )
+        with tempfile.TemporaryDirectory() as temp_dir:
+            spec_path = Path(temp_dir) / "task.md"
+            spec_path.write_text(SPEC_TEXT, encoding="utf-8")
+            for name, stdout, stderr, dispatch_id in cases:
+                with self.subTest(name):
+                    state_dir = Path(temp_dir) / name
+                    cli = FakeOrcaCli([worker_page([])], times_out="worker-start",
+                                      partial_output=(stdout, stderr))
+                    exit_code, response = run_main(cli, state_dir, spec_path, "--provider", "codex")
+                    self.assertEqual((exit_code, response["outcome"], response["ok"]), (3, "unknown", False))
+                    self.assertEqual(response["timed_out_after_seconds"], router.WORKER_START_TIMEOUT_SECONDS)
+                    self.assertIsNone(response["returncode"])
+                    self.assertEqual(response["raw_stdout"], ready_text if stdout else "")
+                    self.assertEqual(response["raw_stderr"], waiting if stderr else "")
+                    self.assertIn("do not retry", response["coordinator_action"])
+                    self.assertEqual(sum("worker-start" in argv for argv in cli.calls), 1)
+                    events = json.loads((state_dir / "routing-state.json").read_text(encoding="utf-8"))["events"]
+                    self.assertEqual([(event["outcome"], event["dispatch"], event["run"]) for event in events],
+                                     [("unknown", dispatch_id, RUN_ID)])
 
 
 if __name__ == "__main__":

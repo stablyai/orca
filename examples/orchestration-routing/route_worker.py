@@ -21,6 +21,8 @@ from typing import Any
 
 DEFAULT_POLICY_PATH = Path(__file__).resolve().with_name("policy.example.json")
 MISSING = object()
+READ_ONLY_TIMEOUT_SECONDS = 90
+WORKER_START_TIMEOUT_SECONDS = 180
 REMOTE_ROUTING_FLAGS = frozenset((
     "-e", "--environment", "--environment-id", "--pairing-code",
     "--remote", "--remote-host", "--host", "--server", "--ssh", "--relay",
@@ -560,12 +562,50 @@ def resolve_agy_executable() -> str:
     raise GuardError("agy_not_found", "Official agy CLI was not found on PATH or the Windows install path")
 
 
-def invoke(argv: list[str]) -> subprocess.CompletedProcess[str]:
+def read_captured_output(handle: Any) -> str:
+    handle.flush()
+    # Bound the read to the observed file size so a still-writing descendant cannot stream forever.
+    size = os.fstat(handle.fileno()).st_size
+    handle.seek(0)
+    return handle.read(size).decode("utf-8", errors="replace")
+
+
+def invoke(argv: list[str], timeout: float) -> subprocess.CompletedProcess[str]:
+    # Avoid PIPE capture: on Windows, TimeoutExpired kills only the CLI and waits on inherited pipes.
     try:
-        return subprocess.run(argv, shell=False, capture_output=True, text=True,
-                              encoding="utf-8", errors="replace", check=False)
+        with tempfile.TemporaryFile() as stdout_file, tempfile.TemporaryFile() as stderr_file:
+            try:
+                completed = subprocess.run(
+                    argv, shell=False, stdout=stdout_file, stderr=stderr_file,
+                    check=False, timeout=timeout,
+                )
+            except subprocess.TimeoutExpired as exc:
+                exc.output = read_captured_output(stdout_file)
+                exc.stderr = read_captured_output(stderr_file)
+                raise
+            return subprocess.CompletedProcess(
+                completed.args, completed.returncode,
+                read_captured_output(stdout_file), read_captured_output(stderr_file),
+            )
     except OSError as exc:
         raise GuardError("command_cannot_run", f"Selected command cannot run: {exc}") from exc
+
+
+def partial_output(value: str | bytes | None) -> str:
+    """Normalize optional TimeoutExpired output to a UTF-8 string."""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return value or ""
+
+
+def invoke_read_only(argv: list[str], command_name: str) -> subprocess.CompletedProcess[str]:
+    try:
+        return invoke(argv, READ_ONLY_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired as exc:
+        raise GuardError(f"{command_name}_timeout",
+                         f"{command_name} did not finish within {exc.timeout} seconds; refusing to launch",
+                         {"timeout_seconds": exc.timeout, "stdout": partial_output(exc.stdout),
+                          "stderr": partial_output(exc.stderr)}) from exc
 
 
 def is_keepalive(obj: Any) -> bool:
@@ -614,8 +654,9 @@ def list_worker_liveness(
         argv.extend(["--run", run_id])
         if cursor:
             argv.extend(["--cursor", cursor])
-        argv.append("--json")
-        completed = invoke(argv)
+        # Concise JSON drops page and projection.
+        argv.extend(["--json", "--full"])
+        completed = invoke_read_only(argv, "worker_list")
         if completed.returncode != 0:
             raise GuardError("worker_list_failed", "Cannot confirm worker liveness; refusing to launch",
                              {"returncode": completed.returncode, "stdout": completed.stdout,
@@ -626,6 +667,11 @@ def list_worker_liveness(
         page = result.get("page") if isinstance(result, dict) else None
         if not isinstance(workers, list) or not isinstance(page, dict):
             raise GuardError("worker_list_unverifiable", "worker-list response lacks workers/page")
+        # The full printer still reports ok:true when a host did not answer.
+        if result.get("partialHostErrors"):
+            raise GuardError("worker_inventory_incomplete",
+                             "worker-list could not observe every host; refusing to launch",
+                             {"partialHostErrors": result["partialHostErrors"]})
         pages += 1
         for worker in workers:
             if not isinstance(worker, dict):
@@ -664,7 +710,7 @@ def list_worker_liveness(
 
 def agy_model_is_listed(model: str) -> dict[str, Any]:
     executable = resolve_agy_executable()
-    completed = invoke([executable, "models"])
+    completed = invoke_read_only([executable, "models"], "agy_models")
     if completed.returncode != 0:
         raise GuardError("agy_models_failed", "Official agy models could not confirm the model; refusing launch",
                          {"returncode": completed.returncode, "stdout": completed.stdout,
@@ -782,7 +828,8 @@ def build_worker_start_argv(
         argv.extend(["--effort", plan["effort"]])
     if run_id:
         argv.extend(["--run", run_id])
-    argv.append("--json")
+    # Concise JSON drops launch.requested/effective.
+    argv.extend(["--json", "--full"])
     return argv
 
 
@@ -792,7 +839,7 @@ def lifecycle_statuses(payload: Any) -> list[str]:
     def visit(value: Any) -> None:
         if isinstance(value, dict):
             for key, child in value.items():
-                if key.casefold() in {"outcome", "status", "stage", "state"} and isinstance(child, str):
+                if key.casefold() in {"outcome", "status", "stage", "state", "disposition"} and isinstance(child, str):
                     statuses.append(child.strip().casefold())
                 visit(child)
         elif isinstance(value, list):
@@ -969,7 +1016,15 @@ def main(argv: list[str] | None = None) -> int:
         worker_argv = build_worker_start_argv(
             orca_prefix, plan, wrap_task_spec(spec), args.worktree, args.run,
         )
-        completed = invoke(worker_argv)
+        timed_out_after = None
+        try:
+            completed = invoke(worker_argv, WORKER_START_TIMEOUT_SECONDS)
+        except subprocess.TimeoutExpired as exc:
+            # Only the local CLI was stopped; the worker may exist, so this is never preflight or success.
+            completed = subprocess.CompletedProcess(
+                worker_argv, None, partial_output(exc.stdout), partial_output(exc.stderr),
+            )
+            timed_out_after = exc.timeout
         parse_error = None
         try:
             payload = parse_cli_json(completed.stdout, "worker_start", reject_ok_false=False)
@@ -977,7 +1032,8 @@ def main(argv: list[str] | None = None) -> int:
             payload = {"unparsed_receipt": True}
             parse_error = str(exc)
         verification = verify_launch(payload, plan)
-        outcome = classify_worker_start_outcome(payload, parse_error, completed.returncode, verification)
+        outcome = "unknown" if timed_out_after is not None else classify_worker_start_outcome(
+            payload, parse_error, completed.returncode, verification)
 
         state_written = False
         state_error = None
@@ -999,6 +1055,8 @@ def main(argv: list[str] | None = None) -> int:
         }
         if parse_error:
             response["receipt_parse_error"] = parse_error
+        if timed_out_after is not None:
+            response["timed_out_after_seconds"] = timed_out_after
         if outcome == "unknown":
             response["coordinator_action"] = "Inspect the original worker and receipt; do not retry or clean up automatically."
             return emit(response, 3)
