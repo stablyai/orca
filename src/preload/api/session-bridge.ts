@@ -1,7 +1,14 @@
+import type { WorkspacePresentationDelta } from '../../shared/workspace-presentation'
 import { ipcRenderer } from 'electron'
 import type { PreloadApi } from '../api-types'
 
 export const sessionApi = {
+  onPresentationsChanged: (callback) => {
+    const listener = (_event: Electron.IpcRendererEvent, delta: WorkspacePresentationDelta) =>
+      callback(delta)
+    ipcRenderer.on('session:presentations-changed', listener)
+    return () => ipcRenderer.removeListener('session:presentations-changed', listener)
+  },
   getPresentations: () => ipcRenderer.invoke('session:get-presentations'),
   commitPresentation: (args) => ipcRenderer.invoke('session:commit-presentation', args),
   get: (hostId) => ipcRenderer.invoke('session:get', hostId),

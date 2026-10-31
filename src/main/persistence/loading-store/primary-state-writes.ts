@@ -91,6 +91,14 @@ export class PrimaryStateWriteOperations {
         await stopAfterFailedPrimaryStateMutation(runtime, error)
         throw error
       }
+      const presentationDomains = finishPresentation.changedKeys()
+      const publishPresentation = () => {
+        if (presentationDomains.length) {
+          for (const listener of runtime.stateWriteListeners) {
+            listener(presentationDomains)
+          }
+        }
+      }
       if (
         mutation.persist === false ||
         (mutation.persist === 'if-dirty' &&
@@ -120,8 +128,10 @@ export class PrimaryStateWriteOperations {
             }
           }
         }
+        publishPresentation()
         throw error
       }
+      publishPresentation()
       return mutation.value
     })
   }

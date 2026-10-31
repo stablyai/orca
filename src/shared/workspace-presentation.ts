@@ -257,3 +257,8 @@ export type WorkspacePresentationCommit = {
   removedPresentations?: WorkspacePresentationKey[]
   replacePresentations?: boolean
 }
+
+export type WorkspacePresentationDelta = {
+  changed: WorkspacePresentationDocuments
+  removed: readonly string[]
+}

@@ -20,6 +20,7 @@ export type PrimaryStateWriteOperationsRuntime = Pick<
   | 'protectedSecrets'
   | 'quitFlushStarted'
   | 'state'
+  | 'stateWriteListeners'
   | 'writeGeneration'
   | 'writeTimer'
   | 'writesFrozen'

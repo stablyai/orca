@@ -4,7 +4,8 @@ import type { ExecutionHostId } from '../../../shared/execution-host'
 import {
   isWorkspacePresentationKey,
   type WorkspacePresentationKey,
-  type WorkspacePresentation
+  type WorkspacePresentation,
+  type WorkspacePresentationDocuments
 } from '../../../shared/workspace-presentation'
 import {
   presentationSourceBaselines,
@@ -134,7 +135,10 @@ export function writeWorkspacePresentation(
   }
   updateIndex(index, key, document)
 }
-export function storedWorkspacePresentations(state: PersistedState, keys?: readonly string[]) {
+export function storedWorkspacePresentations(
+  state: PersistedState,
+  keys?: readonly string[]
+): WorkspacePresentationDocuments {
   const index = indexFor(state)
   return keys
     ? Object.fromEntries(
@@ -232,7 +236,7 @@ export function reconcileStoredWorkspacePresentations(
   return dirty
 }
 /** Conditional receipts restore only this mutation, leaving later owner edits intact. */
-export function presentationMutation(state: PersistedState): () => () => void {
+export function presentationMutation(state: PersistedState) {
   const before = new Map<WorkspacePresentationKey, WorkspacePresentation | undefined>()
   let active = journals.get(state)
   if (!active) {
@@ -240,7 +244,7 @@ export function presentationMutation(state: PersistedState): () => () => void {
     journals.set(state, active)
   }
   active.add(before)
-  return () => {
+  const finish = () => {
     active.delete(before)
     if (!active.size) {
       journals.delete(state)
@@ -254,4 +258,5 @@ export function presentationMutation(state: PersistedState): () => () => void {
       }
     }
   }
+  return Object.assign(finish, { changedKeys: () => [...before.keys()] })
 }

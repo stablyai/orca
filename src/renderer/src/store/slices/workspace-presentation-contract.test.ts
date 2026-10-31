@@ -1,3 +1,4 @@
+import { workspacePresentationMirror } from '../workspace-presentation-mirror'
 import { resetWebSessionCloseIntentForTests } from '../../runtime/web-session-close-intent'
 import { mergeFetchedWorktrees } from './worktrees/listing/fetched-worktree-merge'
 // @vitest-environment happy-dom
@@ -120,6 +121,32 @@ describe('source ownership through readers and commands', () => {
       customLabel: 'Saved name'
     })
     expect(edited.getState().layoutByWorktree[D]).toEqual(split)
+  })
+  it('buffers main placement until hydration completes and publishes it to unchanged workspace readers without changing raw membership', () => {
+    const store = seed()
+    let publish: Parameters<
+      NonNullable<Parameters<typeof workspacePresentationMirror>[1]>
+    >[0] = () => {}
+    const original = Object.entries(store.getState().workspacePresentations ?? {})[0]
+    const [key, saved] = original
+    expect(saved).toBeDefined()
+    if (!saved) {
+      throw new Error('fixture presentation missing')
+    }
+    // The explicit subscriber supplies the already-selected local owner; IPC never supplies members.
+    const mirror = workspacePresentationMirror(store, (listener) => {
+      publish = listener
+      return () => {}
+    })
+    const raw = rawWorkspaceState(store.getState())
+    const edited = { ...saved, layout: { ...split, ratio: 0.61 } }
+    publish({ changed: { [key]: edited }, removed: [] })
+    mirror.activate()
+    expect(store.getState().layoutByWorktree[D]).toEqual({ ...split, ratio: 0.61 })
+    expect(rawWorkspaceState(store.getState()).unifiedTabsByWorktree).toBe(
+      raw.unifiedTabsByWorktree
+    )
+    mirror.close()
   })
   it('keeps unchanged genuine sources when an ordinary view action edits another workspace', () => {
     const store = seed()

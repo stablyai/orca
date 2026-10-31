@@ -1,3 +1,7 @@
+import {
+  openTopologyStoreWithAuthority,
+  emptyTerminalSessionProfile
+} from '../persistence/terminal-topology/terminal-topology-profile-fixture'
 import { OrcaRuntimeService } from '../runtime/orca-runtime'
 import { applyWindowLayoutCommand } from '../runtime/runtime-layout-apply'
 import { registerRendererShutdownCheckpointHandler } from './renderer-shutdown-checkpoint'
@@ -149,6 +153,9 @@ describe('a window save in a layout-owner build', () => {
       sessions: [{ state: session }],
       presentations: { [key]: document }
     })
+    const published = vi.fn()
+    const reader = { send: published, isDestroyed: () => false, once: vi.fn() }
+    handlers.get('session:get-presentations')!({ sender: reader })
     const layout = document.layout
     const result = await applyWindowLayoutCommand(store, () => ['local'], {
       type: 'setGroupRatios',
@@ -156,6 +163,13 @@ describe('a window save in a layout-owner build', () => {
       ratios: [{ path: '', ratio: 0.61 }]
     })
     expect(result.ok).toBe(true)
+    expect(published).toHaveBeenCalledWith('session:presentations-changed', {
+      changed: {
+        [key]: expect.objectContaining({ layout: expect.objectContaining({ ratio: 0.61 }) })
+      },
+      removed: []
+    })
+
     expect(store.getWorkspacePresentations()[key]?.layout).toEqual({ ...layout, ratio: 0.61 })
     expect(store.getWorkspaceSession().unifiedTabs?.[O]?.map((tab) => tab.id)).toEqual(['one'])
     expect(store.getWorkspaceSession().unifiedTabs?.[D]?.map((tab) => tab.id)).toEqual(['two'])
@@ -201,6 +215,35 @@ describe('a window save in a layout-owner build', () => {
     ).toBe('right')
     expect(store.getWorkspaceSession().unifiedTabs?.[O]?.[0].groupId).toBe('left')
     expect(store.getWorkspaceSession().unifiedTabs?.[D]?.map((tab) => tab.id)).toEqual(['two'])
+    const failure = await openTopologyStoreWithAuthority(
+      join(testState.dir, 'presentation-failure'),
+      emptyTerminalSessionProfile()
+    )
+    try {
+      await failure.store.commitWorkspacePresentation({
+        mode: 'replace',
+        sessions: [{ state: session }],
+        presentations: { [key]: document }
+      })
+      registerSessionHandlers(failure.store, new OrcaRuntimeService(failure.store))
+      handlers.get('session:get-presentations')!({ sender: reader })
+      published.mockClear()
+      failure.authority.failNextWrite()
+      await expect(
+        applyWindowLayoutCommand(failure.store, () => ['local'], {
+          type: 'setGroupRatios',
+          workspace: D,
+          ratios: [{ path: '', ratio: 0.82 }]
+        })
+      ).rejects.toThrow('profile_state_write_failed')
+      expect(failure.store.getWorkspacePresentations()[key]?.layout).toEqual(layout)
+      expect(published.mock.calls.at(-1)).toEqual([
+        'session:presentations-changed',
+        { changed: { [key]: expect.objectContaining({ layout }) }, removed: [] }
+      ])
+    } finally {
+      await failure.store.freezeWritesAsync()
+    }
   })
 
   it('keeps main’s tabs and panes, and takes the window’s view and titles', async () => {

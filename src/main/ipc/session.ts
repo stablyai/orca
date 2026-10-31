@@ -1,3 +1,4 @@
+import { workspacePresentationPublication } from './workspace-presentation-publication'
 import { admittedWindowPresentationCommit } from './workspace-presentation-window-commit'
 import type { WorkspacePresentationCommit } from '../../shared/workspace-presentation'
 import { ipcMain } from 'electron'
@@ -28,7 +29,13 @@ export function registerSessionHandlers(store: Store, runtime: OrcaRuntimeServic
     return store.getWorkspaceSession(hostId)
   })
 
-  ipcMain.handle('session:get-presentations', () => store.getWorkspacePresentations())
+  const subscribePresentation = workspacePresentationPublication(store)
+  ipcMain.handle('session:get-presentations', (event) => {
+    if (event.sender) {
+      subscribePresentation(event.sender)
+    }
+    return store.getWorkspacePresentations()
+  })
   ipcMain.handle('session:commit-presentation', (_event, commit: WorkspacePresentationCommit) => {
     const sessions = commit.sessions
       .filter(({ hostId }) => !isFenced(hostId))

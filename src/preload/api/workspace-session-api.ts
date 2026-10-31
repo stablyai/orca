@@ -1,4 +1,5 @@
 import type {
+  WorkspacePresentationDelta,
   WorkspacePresentationCommit,
   WorkspacePresentationDocuments
 } from '../../shared/workspace-presentation'
@@ -12,6 +13,7 @@ import type { TerminalSurfaceCloseTarget } from '../../shared/terminal-surface-c
 
 export type WorkspaceSessionApi = {
   session: {
+    onPresentationsChanged: (listener: (delta: WorkspacePresentationDelta) => void) => () => void
     getPresentations: () => Promise<WorkspacePresentationDocuments>
     commitPresentation: (args: WorkspacePresentationCommit) => Promise<void>
     // Omitted hostId selects the local persistence partition.

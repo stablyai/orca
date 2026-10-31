@@ -1,3 +1,5 @@
+import { ORCA_LAYOUT_OWNER_IS_MAIN } from '../../../shared/layout-owner-switch'
+import { workspacePresentationMirror } from '../store/workspace-presentation-mirror'
 import { workspaceSourceWrite } from '../store/workspace-composition'
 import { restoreStructuredLaunchSurfaces } from '@/lib/structured-agent-session-launch-surface'
 import { useEffect, useRef } from 'react'
@@ -61,6 +63,10 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
   useEffect(() => {
     // Ask static capabilities before gated session sync; "not asked" reads unsupported and would turn early creates into bare terminals (#19154).
     void ensureLocalRuntimeCapabilities()
+    const presentationMirror = workspacePresentationMirror(
+      useAppStore,
+      ORCA_LAYOUT_OWNER_IS_MAIN ? window.api.session.onPresentationsChanged : undefined
+    )
     let cancelled = false
     // Cleanup must abort StrictMode’s discarded boot before it spawns more PTYs.
     const abortController = new AbortController()
@@ -205,6 +211,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
             )
           })
           useAppStore.setState(workspaceSourceWrite({ workspacePresentations: presentations }))
+          presentationMirror.activate()
           restoreStructuredLaunchSurfaces()
           // Discovery must not wait for terminal or SSH restoration.
           const startupWorktreeRefresh = refreshStartupWorktrees(actions, () => cancelled)
@@ -315,6 +322,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
     })()
 
     return () => {
+      presentationMirror.close()
       cancelled = true
       abortController.abort()
     }
