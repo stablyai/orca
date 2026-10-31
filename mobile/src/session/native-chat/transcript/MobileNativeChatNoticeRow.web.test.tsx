@@ -11,9 +11,15 @@ import type { NativeChatMessage } from '../../../../../src/shared/native-chat-ty
 
 vi.mock('react-native', () => vi.importActual<typeof ReactNative>('react-native-web'))
 // Use the same SVG web host selected by the page bundler, overriding the native setup stand-in.
-vi.mock('react-native-svg', () =>
-  vi.importActual<typeof ReactNativeSvg>('react-native-svg/lib/module/elements.web.js')
-)
+vi.mock('react-native-svg', async () => {
+  const { createRequire } = await import('node:module')
+  const { resolve } = await import('node:path')
+  // Anchor the mobile-only dependency here, even when the mocker runs from root dependencies.
+  const fromMobile = createRequire(resolve('package.json'))
+  return vi.importActual<typeof ReactNativeSvg>(
+    fromMobile.resolve('react-native-svg/lib/module/elements.web.js')
+  )
+})
 vi.mock('../../../components/MobileMarkdown', () => ({ MobileMarkdown: () => null }))
 vi.mock('../../../components/MobileSourceCopyButton', () => ({
   MobileSourceCopyButton: () => null
