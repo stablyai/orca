@@ -186,6 +186,11 @@
     },
     "cardProperties": {
       "agentModel": "代理程式模型"
+    },
+    "wslHostOffer": {
+      "title": "將 {{distro}} 作為主機執行（建議）",
+      "why": "Git、檔案和終端機將在 Linux 中原生執行，而不是透過 Windows 檔案共用。",
+      "accept": "作為主機執行"
     }
   },
   "app": {
@@ -6954,13 +6959,15 @@
           "distro": "發行版",
           "loading": "正在查詢 WSL 發行版…",
           "placeholder": "選擇發行版",
-          "none": "未找到 WSL 發行版。使用以下命令安裝：wsl --install",
           "stoppedHint": "{{value0}} 已停止。新增後會自動啟動。",
           "addingHint": "正在發行版中安裝並啟動 Orca 伺服器。首次可能需要一分鐘。",
           "adding": "正在設定…",
           "startAndAdd": "啟動並新增",
           "add": "新增主機",
-          "refresh": "重新整理"
+          "refresh": "重新整理",
+          "wsl1Reason": "WSL 1 無法執行 Orca 主機；請使用 {{command}} 轉換",
+          "noWsl2Title": "找不到 WSL 2 發行版",
+          "noWsl2Install": "在 Windows 終端機中使用 {{command}} 安裝一個，然後選擇「重新整理」。"
         },
         "wslHostRowStatus": {
           "connecting": "正在啟動",

@@ -55,9 +55,10 @@ An already-failed start can still own a live terminal; stop/abandon does not clo
 it. For reclaimable failed-start terminals you are replacing, use
 `ORCA orchestration worker-release --dispatch <dispatch_id>`; follow the
 receipt's exact recovery action for `release_pending` or `release_unknown`, never
-`terminal close`. Preserve the selected proven reusable agent with `worker-retain`
-by its Dispatch ID; preserve user-taken-over and unproven terminals. A fresh start
-without `--retry-of` does not clean up its predecessor's terminal.
+`terminal close`. Preserve the selected proven reusable agent with
+`worker-keep-open` by its Dispatch ID; preserve user-taken-over and unproven
+terminals. A fresh start without `--retry-of` does not clean up its
+predecessor's terminal.
 
 Reopen and start the same Task in its owning Run:
 

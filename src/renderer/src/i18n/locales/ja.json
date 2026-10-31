@@ -6509,13 +6509,15 @@
           "distro": "ディストリビューション",
           "loading": "WSL ディストリビューションを探しています…",
           "placeholder": "ディストリビューションを選択",
-          "none": "WSL ディストリビューションが見つかりません。次のコマンドでインストールできます: wsl --install",
           "stoppedHint": "{{value0}} は停止しています。追加すると起動します。",
           "addingHint": "ディストリビューション内に Orca サーバーをインストールして起動しています。初回は 1 分ほどかかることがあります。",
           "adding": "セットアップ中…",
           "startAndAdd": "起動して追加",
           "add": "ホストを追加",
-          "refresh": "更新"
+          "refresh": "更新",
+          "wsl1Reason": "WSL 1 では Orca ホストを実行できません。{{command}} で変換してください",
+          "noWsl2Title": "WSL 2 ディストリビューションが見つかりません",
+          "noWsl2Install": "Windows ターミナルで {{command}} を実行してインストールし、[更新] を選択してください。"
         },
         "wslHostRowStatus": {
           "connecting": "起動中",
@@ -20210,6 +20212,11 @@
     },
     "cardProperties": {
       "agentModel": "Agent のモデル"
+    },
+    "wslHostOffer": {
+      "title": "{{distro}} をホストとして実行（推奨）",
+      "why": "Git、ファイル、ターミナルが Windows のファイル共有を経由せず、Linux 上でネイティブに動作します。",
+      "accept": "ホストとして実行"
     }
   },
   "editor": {

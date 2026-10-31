@@ -68,6 +68,7 @@ import type { HostScopedWorktreeKey } from '../../../shared/worktree/host-qualif
 import { RuntimeConstructionServices } from './runtime-construction-services'
 
 export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServices {
+  protected abstract claimIdleShellPromptForPty(ptyId: string): Promise<boolean>
   protected readonly runtimeId = randomUUID()
 
   protected readonly startedAt = Date.now()
@@ -332,7 +333,8 @@ export abstract class OrcaRuntimeWithRuntimeId extends RuntimeConstructionServic
     (ptyId) => this.getPtyAgent(ptyId),
     (ptyId, data, inputKind) =>
       this.ptyController?.writeWithSettlement?.(ptyId, data, inputKind) ??
-      writeRefused('provider_cannot_settle')
+      writeRefused('provider_cannot_settle'),
+    (ptyId) => this.claimIdleShellPromptForPty(ptyId)
   )
 
   // Every tui-idle site must rank the same pane evidence identically.

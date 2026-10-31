@@ -42,7 +42,7 @@
 1 test-no-in-test-import-actual:src/main/runtime/orca-runtime-files-terminal-artifact-swap-detection.test.ts
 1 test-no-in-test-import-actual:src/main/runtime/structured-agent-cli-writers.test.ts
 1 test-no-in-test-import-actual:src/main/speech/openai-api-key-store.test.ts
-6 test-no-in-test-import-actual:src/main/ssh/config/ssh-config-loader-regression.test.ts
+5 test-no-in-test-import-actual:src/main/ssh/config/ssh-config-loader-regression.test.ts
 2 test-no-in-test-import-actual:src/main/ssh/connection/ssh-connection-auth-fallback.test.ts
 1 test-no-in-test-import-actual:src/main/ssh/orcad-snapshot-room.test.ts
 2 test-no-in-test-import-actual:src/main/window/dropped-path-preparation.test.ts
@@ -380,7 +380,7 @@
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-stop-aborts-start.test.ts
 1 test-no-real-time-wait:src/main/native-chat/agent-session-wire/structured-agent-session-target-reconcile.test.ts
 1 test-no-real-time-wait:src/main/native-chat/transcript-opencode2-sqlite.test.ts
-2 test-no-real-time-wait:src/main/native-chat/transcript-watch-error.test.ts
+1 test-no-real-time-wait:src/main/native-chat/transcript-watch-error.test.ts
 2 test-no-real-time-wait:src/main/native-chat/transcript-watch-liveness.test.ts
 11 test-no-real-time-wait:src/main/native-chat/transcript-watch.test.ts
 1 test-no-real-time-wait:src/main/node-runtime/managed-runtime-installation.test.ts
@@ -457,7 +457,6 @@
 2 test-no-real-time-wait:src/main/ssh/sftp-upload.test.ts
 1 test-no-real-time-wait:src/main/ssh/ssh-credential-prompt-login-grace-wire.test.ts
 2 test-no-real-time-wait:src/main/ssh/ssh-quit-abort-upload.test.ts
-1 test-no-real-time-wait:src/main/startup/codex-hook-startup-wiring.test.ts
 2 test-no-real-time-wait:src/main/startup/gpu-lifecycle-install-dir-acl-guard.test.ts
 1 test-no-real-time-wait:src/main/startup/main-process-ready-duplicate-pty-repair.test.ts
 3 test-no-real-time-wait:src/main/startup/run-electron-vite-dev-web.test.ts
@@ -1109,7 +1108,6 @@
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-agent-expansion-coupling.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/sidebar/WorktreeList.lineage-child-real-card.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/sidebar/use-workspace-reference-details.test.tsx
-3 test-no-wall-clock:src/renderer/src/components/sidebar/worktree-agent-rows-subscriptions.bench.test.tsx
 1 test-no-wall-clock:src/renderer/src/components/status-bar/RuntimeHostStatusRow.test.tsx
 5 test-no-wall-clock:src/renderer/src/components/status-bar/inline-usage-bars.test.tsx
 4 test-no-wall-clock:src/renderer/src/components/status-bar/provider-segment-balance.test.tsx
