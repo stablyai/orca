@@ -9,7 +9,8 @@ import {
   createTrackedJournalOpener,
   loadTestJournal,
   openTestJournalHostDatabase,
-  liveTestJournalRows
+  liveTestJournalRows,
+  insertTestJournalRow
 } from './journal-host-database-test-support'
 import {
   selectedStructuredSubmission,
@@ -252,3 +253,60 @@ it.each(['resume', 'accepted'] as const)(
     }
   }
 )
+
+it('keeps the receipt callback live after replacement of a legacy null-boundary card', async () => {
+  const root = await mkdtemp(join(tmpdir(), 'orca-input-replacement-'))
+  const journals = createTrackedJournalOpener()
+  const identity = {
+    sessionId: 'null-order',
+    workspaceId: 'folder',
+    hostId: 'ssh',
+    agent: 'claude' as const,
+    providerHandle: claudeProviderHandle('thread', null)
+  }
+  const body: AgentJournalMessageItem = {
+    kind: 'message',
+    role: 'user',
+    blocks: [{ type: 'text', text: '/compact' }],
+    command: { name: 'compact' }
+  }
+  let journal = await journals.open({ identity, stateDirectory: root })
+  try {
+    const cursor = journal.cursor()
+    await journal.close()
+    insertTestJournalRow(openTestJournalHostDatabase(root).db, identity.sessionId, {
+      v: 3,
+      epoch: cursor.epoch,
+      seq: cursor.sequence + 1,
+      fence: 0,
+      ts: 1,
+      kind: 'queue',
+      messageId: 'legacy-C',
+      change: { op: 'queued', body, position: 1, queuedAt: null }
+    })
+    journal = await journals.open({ identity, stateDirectory: root })
+    expect(journal.queuedMessages.get('legacy-C')?.queuedAt).toBeNull()
+    await journal.replaceEpochItems('unreconcilable_prefix', 0, [])
+    expect(journal.queuedMessages.get('legacy-C')?.queuedAt).toBeNull()
+    await expect(
+      journal.appendSubmission({
+        clientMessageId: 'M-after-replace',
+        body: { ...body, command: undefined },
+        payloadFingerprint: 'M-after-replace',
+        fence: 0,
+        handoverRecorded: true,
+        origin: 'client'
+      })
+    ).resolves.toMatchObject({ epoch: journal.epoch })
+    expect(journal.submission('M-after-replace')).toMatchObject({ dispatchState: 'pending' })
+    const replay = loadTestJournal(root, identity.sessionId)!
+    expect(replay.damage).toBeNull()
+    expect(replay.state.queue.cards.get('legacy-C')?.queuedAt).toBeNull()
+    expect(replay.state.inputOrder.prefix('M-after-replace')).toEqual(
+      journal.inputOrder.prefix('M-after-replace')
+    )
+  } finally {
+    await journals.closeAll()
+    await rm(root, { recursive: true, force: true })
+  }
+})

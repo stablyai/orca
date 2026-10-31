@@ -54,7 +54,7 @@ import type { JournalOperationReceipt } from './journal-row-writer'
 import type { JournalAttachmentClaim } from './journal-submission-hook'
 import { queuedChangeOf } from './journal-queue-retention'
 import type { QueuedMessageRow } from './queued-message-table'
-import { journalQueueRebase } from './journal-input-provenance'
+import { journalInputAcceptance, journalQueueRebase } from './journal-input-provenance'
 
 export type JournalReplacementItem = AgentJournalProducerLinkage & {
   echoOf?: JournalItemEcho['echoOf']
