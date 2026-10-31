@@ -15,7 +15,7 @@ export function cliConversationExitGuidance(
       )
     : translate(
         'components.native-chat.resumeInNewChat.exitUnconfirmed',
-        '{{agent}} is running this conversation in another terminal. Quit it there, then try again.',
+        '{{agent}} is running this conversation in another terminal. Quit it there or close that terminal, then try again.',
         values
       )
 }

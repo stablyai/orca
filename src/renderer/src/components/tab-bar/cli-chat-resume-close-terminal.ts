@@ -14,10 +14,18 @@ import type {
 } from '../../../../shared/runtime-types'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
 
+export type CliChatResumeCloseHooks = {
+  /** The host answered for every pane; what follows waits on the user or on the exits. */
+  prepared: () => void
+  closing: () => void
+  /** The user agreed to close, but the terminal changed first, so it stays open. */
+  refused: () => void
+}
+
 export async function closeCliChatResumeTerminal(
   source: CliChatResumeSource,
   isCurrent: () => boolean,
-  closing: () => void,
+  hooks: CliChatResumeCloseHooks,
   signal: AbortSignal
 ): Promise<boolean> {
   const target = structuredAgentSessionTargetForHost(source.executionHostId)
@@ -59,6 +67,7 @@ export async function closeCliChatResumeTerminal(
       return terminal
     })
   )
+  hooks.prepared()
   return await new Promise<boolean>((resolve, reject) => {
     let started = false
     const cancel = () => {
@@ -70,6 +79,10 @@ export async function closeCliChatResumeTerminal(
     }
     signal.addEventListener('abort', cancel, { once: true })
     closeTerminalTab(source.tabId, {
+      // Continuing is the user's consent to stop this pane's agent, so only other panes' work asks.
+      ...(bindings[leafId] ? { consentedPtyId: bindings[leafId] } : {}),
+      // The chat opens in this worktree, so emptying it must not leave it.
+      preserveWorktreeSelection: true,
       onCancel: cancel,
       beforeClose: () => {
         const current = useAppStore.getState()
@@ -93,6 +106,9 @@ export async function closeCliChatResumeTerminal(
             return !next || !isRetainedTerminalSurfaceIdentity(original, next)
           })
         ) {
+          if (!started) {
+            hooks.refused()
+          }
           return false
         }
         started = true
@@ -112,7 +128,7 @@ export async function closeCliChatResumeTerminal(
             )
           )
         )
-        closing()
+        hooks.closing()
         void exited
           .then((results) => {
             if (

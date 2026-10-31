@@ -36,6 +36,7 @@ const source = {
   providerSessionId: 'conversation',
   executionHostId: 'local'
 } as const
+const hooks = (closing = vi.fn()) => ({ prepared: vi.fn(), closing, refused: vi.fn() })
 function deferred<T>() {
   let resolve: (value: T) => void = () => {}
   const promise = new Promise<T>((done) => {
@@ -80,10 +81,11 @@ it.each(['local', 'runtime:paired'])(
       expect(mocks.call.mock.calls.filter((call) => call[1] === 'terminal.wait')).toHaveLength(2)
     )
     let finished = false
+    const closeHooks = hooks(closing)
     const run = closeCliChatResumeTerminal(
       { ...source, executionHostId },
       () => true,
-      closing,
+      closeHooks,
       new AbortController().signal
     ).then((value) => {
       finished = true
@@ -91,9 +93,15 @@ it.each(['local', 'runtime:paired'])(
     })
     await vi.waitFor(() => expect(closing).toHaveBeenCalledOnce())
     expect(finished).toBe(false)
+    expect(closeHooks.prepared).toHaveBeenCalledOnce()
+    // Only the split's other pane can ask about running work, and the chat keeps the worktree open.
     expect(mocks.close).toHaveBeenCalledWith(
       'tab',
-      expect.objectContaining({ onCancel: expect.any(Function) })
+      expect.objectContaining({
+        consentedPtyId: 'pty-a',
+        preserveWorktreeSelection: true,
+        onCancel: expect.any(Function)
+      })
     )
     exit.resolve({ wait: { satisfied: true, status: 'exited', exitCode: 0 } })
     await expect(run).resolves.toBe(true)
@@ -103,7 +111,7 @@ it('leaves the tab and opens nothing when the ordinary close confirmation is can
   mocks.close.mockImplementation((_tab, options) => options.onCancel())
   const closing = vi.fn()
   await expect(
-    closeCliChatResumeTerminal(source, () => true, closing, new AbortController().signal)
+    closeCliChatResumeTerminal(source, () => true, hooks(closing), new AbortController().signal)
   ).resolves.toBe(false)
   expect(closing).not.toHaveBeenCalled()
   expect(mocks.call.mock.calls.filter((call) => call[1] === 'terminal.wait')).toHaveLength(0)
@@ -126,17 +134,20 @@ it.each([
       : { wait }
   })
   await expect(
-    closeCliChatResumeTerminal(source, () => true, vi.fn(), new AbortController().signal)
+    closeCliChatResumeTerminal(source, () => true, hooks(), new AbortController().signal)
   ).rejects.toThrow('terminal exit unproven')
 })
-it('rechecks the source incarnation after an existing close dialog', async () => {
+it('rechecks the source incarnation after an existing close dialog and says the close was dropped', async () => {
   mocks.close.mockImplementation((_tab, options) => {
     mocks.state.terminalPtyIncarnationsByPaneKey['tab:a'] = 'replacement'
     expect(options.beforeClose()).toBe(false)
     options.onCancel()
   })
+  const closeHooks = hooks()
   await expect(
-    closeCliChatResumeTerminal(source, () => true, vi.fn(), new AbortController().signal)
+    closeCliChatResumeTerminal(source, () => true, closeHooks, new AbortController().signal)
   ).resolves.toBe(false)
+  expect(closeHooks.refused).toHaveBeenCalledOnce()
+  expect(closeHooks.closing).not.toHaveBeenCalled()
   expect(mocks.call.mock.calls.filter((call) => call[1] === 'terminal.wait')).toHaveLength(0)
 })

@@ -7,7 +7,36 @@ import { agentSessionWriteFailureText } from '../native-chat/agent-session-write
 import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 import type { RuntimeClientTarget } from '../../../../shared/runtime-client-target'
 import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
+import type { AgentSessionConversationOwner } from '../../../../shared/agent-session-refusal-details'
 import type { CliChatResumeSource } from './cli-chat-resume-source'
+
+/** Main's answer to a chat that already holds the conversation: the header opens it, the menu says so. */
+export async function reportCliChatResumeOwner(
+  owner: AgentSessionConversationOwner | undefined,
+  openOwner: boolean,
+  target: RuntimeClientTarget
+): Promise<void> {
+  if (openOwner && owner) {
+    await activateAiVaultStructuredSession({ structuredSession: owner }, undefined, target)
+    return
+  }
+  toast.error(
+    translate(
+      'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
+      'Another chat is already holding this conversation.'
+    )
+  )
+}
+
+export function reportCliChatResumeTerminalChanged(source: CliChatResumeSource): void {
+  toast.error(
+    translate(
+      'components.native-chat.resumeInNewChat.terminalChanged',
+      'The terminal running {{agent}} changed before it closed, so Orca left it open. Try again.',
+      { agent: agentLabel(source.agent) }
+    )
+  )
+}
 
 export async function reportCliChatResumeFailure(
   source: CliChatResumeSource,
@@ -20,29 +49,49 @@ export async function reportCliChatResumeFailure(
   const refusal = structuredLaunchFailure(error)
   const values = { agent: agentLabel(source.agent) }
   if (closed) {
+    const held =
+      refusal?.code === 'agent_session_conflict' ||
+      refusal?.code === 'agent_session_ownership_unknown'
+    if (held && openOwner && refusal?.owner) {
+      await reportCliChatResumeOwner(refusal.owner, openOwner, target)
+      return
+    }
     const reason = refusal?.details?.reason
+    // Nothing was written yet, so Session History has nothing to offer.
+    if (reason === 'transcriptNotFound') {
+      toast.error(
+        translate(
+          'components.native-chat.resumeInNewChat.notSavedAfterClose',
+          "{{agent}}'s terminal was closed, but {{agent}} hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead.",
+          values
+        )
+      )
+      return
+    }
     const plainReason =
-      reason === 'transcriptNotFound' || reason === 'transcriptUnreadable'
+      reason === 'transcriptUnreadable'
         ? translate(
             'components.native-chat.resumeInNewChat.historyUnavailable',
             "Orca couldn't read the conversation"
           )
-        : refusal?.code === 'agent_session_conflict' ||
-            refusal?.code === 'agent_session_ownership_unknown'
+        : held
           ? translate(
               'components.native-chat.resumeInNewChat.chatHeld',
               'another chat or terminal is using it'
             )
-          : translate(
-              'components.native-chat.resumeInNewChat.checkInstallation',
-              "check the agent's installation and sign-in"
-            )
+          : null
     toast.error(
-      translate(
-        'components.native-chat.resumeInNewChat.startFailedAfterClose',
-        "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
-        { ...values, reason: plainReason }
-      )
+      plainReason
+        ? translate(
+            'components.native-chat.resumeInNewChat.startFailedAfterClose',
+            "{{agent}}'s terminal was closed, but the chat couldn't open: {{reason}}. Your conversation is saved. Open it from Session History.",
+            { ...values, reason: plainReason }
+          )
+        : translate(
+            'components.native-chat.resumeInNewChat.chatFailedAfterClose',
+            "{{agent}}'s terminal was closed, but the chat couldn't open. Your conversation is saved. Open it from Session History.",
+            values
+          )
     )
     return
   }
@@ -50,7 +99,7 @@ export async function reportCliChatResumeFailure(
     toast.error(
       translate(
         'components.native-chat.resumeInNewChat.terminalExitUnproven',
-        "Orca couldn't confirm {{agent}}'s terminal closed. Check the terminal and host connection before trying again.",
+        "Orca closed {{agent}}'s terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History.",
         values
       )
     )
@@ -63,20 +112,15 @@ export async function reportCliChatResumeFailure(
     refusal?.code === 'agent_session_ownership_unknown'
   ) {
     const owner = refusal.owner
-    if (openOwner && owner) {
-      await activateAiVaultStructuredSession({ structuredSession: owner }, undefined, target)
+    if (
+      refusal.code === 'agent_session_conflict' &&
+      refusal.details?.reason === 'conversationHeldElsewhere' &&
+      !owner
+    ) {
+      toast.error(cliConversationExitGuidance(source.agent, inThisTerminal))
       return
     }
-    toast.error(
-      refusal.code === 'agent_session_conflict' &&
-        refusal.details?.reason === 'conversationHeldElsewhere' &&
-        !owner
-        ? cliConversationExitGuidance(source.agent, inThisTerminal)
-        : translate(
-            'auto.components.right.sidebar.AiVaultPanel.resumeInChatConflict',
-            'Another chat is already holding this conversation.'
-          )
-    )
+    await reportCliChatResumeOwner(owner, openOwner, target)
     return
   }
   // The chat's agent refused to start while the terminal may still write the conversation.

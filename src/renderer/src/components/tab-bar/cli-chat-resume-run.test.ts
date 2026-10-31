@@ -161,8 +161,9 @@ beforeEach(async () => {
   mocks.source = SOURCE
   mocks.frameDrawn = false
   mocks.closeCapability.mockResolvedValue(false)
-  mocks.closeTerminal.mockImplementation(async (_source, _current, closing) => {
-    closing()
+  mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
+    hooks.prepared()
+    hooks.closing()
     return true
   })
   mocks.sourceCapability.mockResolvedValue(true)
@@ -349,38 +350,6 @@ describe('CLI identity resume through the existing launch owner', () => {
     expect(tabs()).toHaveLength(1)
     expect(mocks.activate).not.toHaveBeenCalled()
     expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('keeps ordinary refusals hidden and distinguishes unsaved from unreadable content', async () => {
-    for (const reason of ['transcriptNotFound', 'transcriptUnreadable'] as const) {
-      mocks.call.mockResolvedValue({ ok: false, refusal: refuse(reason) })
-      await runCliChatResume(SOURCE)
-      expect(tabs()).toEqual([])
-      expect([...structuredLaunchStates()]).toEqual([])
-      expect(mocks.toast.mock.calls.at(-1)?.[0]).toMatch(
-        reason === 'transcriptUnreadable' ? /couldn't open.*history/i : /hasn't saved/
-      )
-    }
-  })
-
-  it('keeps the terminal and directs a refused terminal writer to Session History', async () => {
-    mocks.call.mockResolvedValue({
-      ok: false,
-      refusal: {
-        code: 'agent_session_conflict',
-        message: 'private host evidence',
-        details: { reason: 'conversationHeldElsewhere' },
-        createAttemptRefusedBeforeCommit: true
-      }
-    })
-    await runCliChatResume(SOURCE, true)
-    expect(mocks.toast).toHaveBeenCalledTimes(1)
-    expect(mocks.toast.mock.calls[0]?.[0]).toBe(
-      'Claude is running this conversation in another terminal. Quit it there, then try again.'
-    )
-    expect(mocks.activate).not.toHaveBeenCalled()
-    expect(tabs()).toEqual([])
-    expect([...structuredLaunchStates()]).toEqual([])
   })
 
   it('opens a proved owner only for the header, on the initiating host, without importing', async () => {
@@ -660,34 +629,28 @@ describe('CLI identity resume through the existing launch owner', () => {
 describe('close terminal then continue on capable hosts', () => {
   beforeEach(() => mocks.closeCapability.mockResolvedValue(true))
 
-  it('opens the same conversation in a new chat after the source closes, without sending a dead pane as CLI evidence', async () => {
-    await seedTabs()
-    mocks.closeTerminal.mockImplementation(async (_source, _current, closing) => {
-      closing()
+  it('shows the chat in the same worktree after its only terminal closes', async () => {
+    mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
+      hooks.prepared()
+      hooks.closing()
       mocks.source = null
-      useAppStore.setState({ activeWorktreeId: null })
       return true
     })
     await runCliChatResume(SOURCE)
-    expect(mocks.closeTerminal).toHaveBeenCalledOnce()
-    expect(mocks.call).toHaveBeenCalledOnce()
+    await main?.settle()
     expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({
       providerSessionId: SOURCE.providerSessionId
     })
-    expect(tabs().filter((tab) => tab.contentType === 'agent-session')).toHaveLength(1)
+    const state = useAppStore.getState()
+    expect(state.activeWorktreeId).toBe('wt-1')
+    expect(state.activeTabType).toBe('agent-session')
+    expect(tabs().map((tab) => tab.contentType)).toEqual(['agent-session'])
     expect(mocks.toast).not.toHaveBeenCalled()
   })
 
-  it('does not create a chat after Cancel', async () => {
-    mocks.closeTerminal.mockResolvedValue(false)
-    await runCliChatResume(SOURCE)
-    expect(mocks.call).not.toHaveBeenCalled()
-    expect(mocks.toast).not.toHaveBeenCalled()
-  })
-
-  it('reports an unverified stop once and opens no chat', async () => {
-    mocks.closeTerminal.mockImplementation(async (_source, _current, closing) => {
-      closing()
+  it('reports an unverified stop once, pointing to Session History, and opens no chat', async () => {
+    mocks.closeTerminal.mockImplementation(async (_source, _current, hooks) => {
+      hooks.closing()
       throw new Error('private negative stop sentinel')
     })
     await runCliChatResume(SOURCE)
@@ -695,44 +658,175 @@ describe('close terminal then continue on capable hosts', () => {
     expect(tabs()).toEqual([])
     expect(mocks.toast.mock.calls).toEqual([
       [
-        "Orca couldn't confirm Claude's terminal closed. Check the terminal and host connection before trying again."
+        "Orca closed Claude's terminal but couldn't confirm it stopped, so the chat didn't open. Check the host connection, then open the conversation from Session History."
       ]
     ])
   })
 
-  it('reports a post-close create refusal once with saved-conversation recovery', async () => {
-    mocks.call.mockResolvedValue({ ok: false, refusal: refuse('transcriptUnreadable') })
-    await runCliChatResume(SOURCE)
-    expect(mocks.closeTerminal).toHaveBeenCalledOnce()
-    expect(mocks.toast.mock.calls).toEqual([
-      [
+  it('stops counting preparation time once the close waits on the user', async () => {
+    vi.useFakeTimers()
+    try {
+      const consent = deferred<boolean>()
+      mocks.closeTerminal.mockImplementation(async (_source, _current, hooks, signal) => {
+        hooks.prepared()
+        const closed = await consent.promise
+        expect(signal.aborted).toBe(false)
+        hooks.closing()
+        return closed
+      })
+      const running = runCliChatResume(SOURCE)
+      await vi.waitFor(() => expect(mocks.closeTerminal).toHaveBeenCalledOnce())
+      await vi.advanceTimersByTimeAsync(60_000)
+      consent.resolve(true)
+      vi.useRealTimers()
+      await running
+      expect(mocks.call).toHaveBeenCalledOnce()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  const row = (paneKey: string, extra: Record<string, unknown> = {}) => ({
+    agentType: 'claude' as const,
+    paneKey,
+    worktreeId: 'wt-1',
+    providerSession: { key: 'session_id' as const, id: SOURCE.providerSessionId },
+    state: 'done' as const,
+    prompt: '',
+    updatedAt: Date.now(),
+    stateStartedAt: Date.now(),
+    stateHistory: [],
+    ...extra
+  })
+  it.each([
+    { name: 'another terminal', row: row('other:leaf'), closes: false, refuses: true },
+    {
+      name: 'another terminal restored after restart',
+      row: row('other:leaf', { restoredUnconfirmed: true }),
+      closes: false,
+      refuses: true
+    },
+    { name: 'a split pane of the closing tab', row: row(`tab-1:${HOST_LEAF}`), closes: true },
+    {
+      name: 'a relayed row the host skips',
+      row: row('other:leaf', { connectionId: 'wsl' }),
+      closes: true
+    },
+    {
+      name: 'an open chat',
+      row: row('chat-tab:leaf', { tabId: 'chat-tab', terminalResumeEligible: false }),
+      closes: false,
+      opensOwner: true
+    }
+  ])('pre-close holder check: $name', async ({ row: holder, closes, refuses, opensOwner }) => {
+    useAppStore.setState({ agentStatusByPaneKey: { [holder.paneKey]: holder } })
+    if (opensOwner) {
+      useAppStore.getState().createUnifiedTab('wt-1', 'agent-session', {
+        id: 'chat-tab',
+        entityId: 'owner-chat'
+      })
+    }
+    await runCliChatResume(SOURCE, true)
+    expect(mocks.closeTerminal).toHaveBeenCalledTimes(closes ? 1 : 0)
+    expect(mocks.call).toHaveBeenCalledTimes(closes ? 1 : 0)
+    expect(mocks.activate.mock.calls).toEqual(
+      opensOwner
+        ? [
+            [
+              { structuredSession: { sessionId: 'owner-chat', workspaceId: 'wt-1' } },
+              undefined,
+              { kind: 'local' }
+            ]
+          ]
+        : []
+    )
+    expect(mocks.toast.mock.calls).toEqual(
+      refuses
+        ? [
+            [
+              'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.'
+            ]
+          ]
+        : []
+    )
+  })
+})
+
+// The same host refusal on an older host (terminal kept, CLI source sent) and a capable one (closed first).
+describe.each([
+  { host: 'older', closeCapable: false },
+  { host: 'capable', closeCapable: true }
+])('the same refusal on an $host host', ({ closeCapable }) => {
+  beforeEach(() => mocks.closeCapability.mockResolvedValue(closeCapable))
+  const owner = { sessionId: 'owner-chat', workspaceId: 'owner-workspace' }
+  it.each([
+    {
+      name: 'a chat owns it',
+      refusal: {
+        code: 'agent_session_conflict',
+        message: 'owner',
+        details: { reason: 'conversationHeldElsewhere', owner },
+        createAttemptRefusedBeforeCommit: true
+      },
+      older: null,
+      capable: null,
+      activates: true
+    },
+    {
+      name: 'a terminal holds it',
+      refusal: {
+        code: 'agent_session_conflict',
+        message: 'private host evidence',
+        details: { reason: 'conversationHeldElsewhere' },
+        createAttemptRefusedBeforeCommit: true
+      },
+      older:
+        'Claude is running this conversation in another terminal. Quit it there or close that terminal, then try again.',
+      capable:
+        "Claude's terminal was closed, but the chat couldn't open: another chat or terminal is using it. Your conversation is saved. Open it from Session History."
+    },
+    {
+      name: 'nothing saved yet',
+      refusal: refuse('transcriptNotFound'),
+      older: "Claude hasn't saved this conversation yet. Try again after it replies.",
+      capable:
+        "Claude's terminal was closed, but Claude hadn't saved this conversation yet, so it can't continue in chat. Start a new chat instead."
+    },
+    {
+      name: 'saved but unreadable',
+      refusal: refuse('transcriptUnreadable'),
+      older: /couldn't open.*history/i,
+      capable:
         "Claude's terminal was closed, but the chat couldn't open: Orca couldn't read the conversation. Your conversation is saved. Open it from Session History."
-      ]
-    ])
-    expect(tabs()).toEqual([])
-  })
-
-  it('refuses before close when a mirrored live pane holds the same conversation', async () => {
-    const codexSource = { ...SOURCE, agent: 'codex' as const }
-    mocks.source = codexSource
-    useAppStore.setState({
-      agentStatusByPaneKey: {
-        'other:leaf': {
-          agentType: 'codex',
-          paneKey: 'other:leaf',
-          worktreeId: 'wt-1',
-          providerSession: { key: 'session_id', id: SOURCE.providerSessionId },
-          state: 'done',
-          prompt: '',
-          updatedAt: Date.now(),
-          stateStartedAt: Date.now(),
-          stateHistory: []
-        }
-      }
+    },
+    {
+      // Not an admission refusal, so the launch keeps its recovery tab on either path.
+      name: 'the agent says a terminal still has it',
+      refusal: {
+        code: 'agent_session_operation_invalid',
+        message: 'private',
+        details: { reason: 'conversationOpenInTerminal' },
+        createAttemptRefusedBeforeCommit: true
+      },
+      older: null,
+      capable: null,
+      recoveryTab: true
+    }
+  ])('$name', async ({ refusal, older, capable, activates, recoveryTab }) => {
+    mocks.call.mockResolvedValue({ ok: false, refusal })
+    await runCliChatResume(SOURCE, true)
+    expect(mocks.call.mock.calls[0][2].resumeFrom).toEqual({
+      providerSessionId: SOURCE.providerSessionId,
+      ...(closeCapable ? {} : { cliSource: { workspaceId: 'wt-1', paneKey: 'tab-1:leaf' } })
     })
-    await runCliChatResume(codexSource)
-    expect(mocks.closeTerminal).not.toHaveBeenCalled()
-    expect(mocks.call).not.toHaveBeenCalled()
-    expect(mocks.toast).toHaveBeenCalledOnce()
+    expect(mocks.closeTerminal).toHaveBeenCalledTimes(closeCapable ? 1 : 0)
+    expect(mocks.activate).toHaveBeenCalledTimes(activates ? 1 : 0)
+    const expected = closeCapable ? capable : older
+    expect(mocks.toast.mock.calls.map(([text]) => text)).toEqual(
+      expected === null
+        ? []
+        : [expected instanceof RegExp ? expect.stringMatching(expected) : expected]
+    )
+    expect(tabs()).toHaveLength(recoveryTab ? 1 : 0)
   })
 })

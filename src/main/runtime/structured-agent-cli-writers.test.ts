@@ -24,8 +24,7 @@ function check(rows: AgentStatusIpcPayload[], verdict: AgentProcessVerdict | nul
       rows: () => rows,
       observation: () => ({
         current: () => current,
-        presence: async () => verdict,
-        topology: 'shared'
+        presence: async () => verdict
       })
     },
     'claude',
@@ -35,7 +34,7 @@ function check(rows: AgentStatusIpcPayload[], verdict: AgentProcessVerdict | nul
 
 describe('canonical status store conversation admission', () => {
   it.each(Object.keys(CLI_CONVERSATION_ADOPTING_AGENTS))(
-    'refuses a verified live %s holder, including shared topology',
+    'refuses a verified live %s holder',
     async (agent) => {
       const chats = CLI_CONVERSATION_ADOPTING_AGENTS
       const entry = Object.entries(chats).find(([name]) => name === agent)
@@ -49,8 +48,7 @@ describe('canonical status store conversation admission', () => {
               rows: () => [{ ...row, agentType: agent }],
               observation: () => ({
                 current: () => true,
-                presence: async () => 'live',
-                topology: 'shared'
+                presence: async () => 'live'
               })
             },
             chat,
@@ -76,8 +74,7 @@ describe('canonical status store conversation admission', () => {
           rows: () => [{ ...codex, providerSessionOnly }],
           observation: () => ({
             current: () => true,
-            presence: async () => null,
-            topology: 'pane-owned'
+            presence: async () => null
           })
         },
         'codex',

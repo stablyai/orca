@@ -5,13 +5,10 @@ import { admitStructuredLaunchOnHost } from '@/lib/structured-agent-session-host
 import { toRuntimeWorktreeSelector } from '@/runtime/runtime-worktree-selector'
 import { holdEmptyWorkspaceDefaultSurfaceForLaunch } from '@/lib/empty-workspace-default-surface-claims'
 import { closeCliChatResumeTerminal } from './cli-chat-resume-close-terminal'
-import { agentLabel } from '../../../../shared/ai-vault-session-filters'
 import { toast } from 'sonner'
-import { translate } from '@/i18n/i18n'
-import {
-  chatAgentsShareConversations,
-  adoptsCliConversations
-} from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { namesCliConversation } from '../../../../shared/structured-agent-cli-conversation-adoption'
+import { cliConversationExitGuidance } from '@/lib/cli-conversation-exit-guidance'
+import { structuredChatUnavailableText } from '@/lib/structured-agent-session-launch-failure'
 import { STRUCTURED_AGENT_SESSION_CLOSE_TERMINAL_FOR_CHAT_RUNTIME_CAPABILITY } from '../../../../shared/structured-agent-session-surface-capabilities'
 import { readStructuredChatHostPermissionVerdict } from '@/runtime/structured-chat-host-permission'
 import { notifyHostPermissionRefused } from '@/lib/structured-agent-session-launch-permission-notice'
@@ -29,7 +26,11 @@ import { waitForPromiseWithSignal } from '../../../../shared/abort-signal-reason
 import { CLI_CONVERSATION_ADOPTING_AGENTS } from '../../../../shared/structured-agent-cli-conversation-adoption'
 import { toHostSessionPaneKey } from '../../../../shared/terminal-surface-id'
 import { resolveCliChatResumeSource, type CliChatResumeSource } from './cli-chat-resume-source'
-import { reportCliChatResumeFailure } from './cli-chat-resume-feedback'
+import {
+  reportCliChatResumeFailure,
+  reportCliChatResumeOwner,
+  reportCliChatResumeTerminalChanged
+} from './cli-chat-resume-feedback'
 import { adoptingAgentOnHost } from '../right-sidebar/ai-vault-session-resume-in-chat-launch'
 
 const pending = new Map<string, AbortController>()
@@ -147,11 +148,47 @@ export async function runCliChatResume(
       controller.signal
     )
     if (closeSupported) {
+      const state = useAppStore.getState()
+      // Chats and terminals that name this conversation on its host; the source tab's panes all close.
+      const holders = Object.values(state.agentStatusByPaneKey).filter((row) => {
+        const tabId = row.tabId ?? parsePaneKey(row.paneKey)?.tabId
+        const workspaceId =
+          row.worktreeId ??
+          Object.entries(state.tabsByWorktree).find(([, tabs]) =>
+            tabs.some((tab) => tab.id === tabId)
+          )?.[0]
+        return (
+          tabId !== source.tabId &&
+          !!workspaceId &&
+          getExecutionHostIdForWorktree(state, workspaceId) === source.executionHostId &&
+          namesCliConversation(row, agent, source.providerSessionId)
+        )
+      })
+      const ownerRow = holders.find((row) => row.terminalResumeEligible === false)
+      const ownerTab = ownerRow?.worktreeId
+        ? state.unifiedTabsByWorktree[ownerRow.worktreeId]?.find((tab) => tab.id === ownerRow.tabId)
+        : undefined
+      if (ownerRow?.worktreeId && ownerTab) {
+        await reportCliChatResumeOwner(
+          { sessionId: ownerTab.entityId, workspaceId: ownerRow.worktreeId },
+          openOwner,
+          target
+        )
+        return
+      }
+      if (holders.some((row) => row.terminalResumeEligible !== false)) {
+        toast.error(cliConversationExitGuidance(source.agent))
+        return
+      }
       const support = await waitForPromiseWithSignal(
         admitStructuredLaunchOnHost(target, toRuntimeWorktreeSelector(source.workspaceId), agent),
         controller.signal
       )
       if (!isCurrent()) {
+        return
+      }
+      if (support.kind === 'declined') {
+        toast.error(structuredChatUnavailableText(support.reason))
         return
       }
       if (support.kind !== 'admitted') {
@@ -162,46 +199,21 @@ export async function runCliChatResume(
         notifyHostPermissionRefused(agent, permission.kind)
         return
       }
-      const state = useAppStore.getState()
-      const other = Object.values(state.agentStatusByPaneKey).some((row) => {
-        const tabId = row.tabId ?? parsePaneKey(row.paneKey)?.tabId
-        const workspaceId =
-          row.worktreeId ??
-          Object.entries(state.tabsByWorktree).find(([, tabs]) =>
-            tabs.some((tab) => tab.id === tabId)
-          )?.[0]
-        return (
-          row.paneKey !== source.paneKey &&
-          !row.structuredHostOwned &&
-          row.terminalResumeEligible !== false &&
-          !row.restoredUnconfirmed &&
-          !!workspaceId &&
-          getExecutionHostIdForWorktree(state, workspaceId) === source.executionHostId &&
-          row.providerSession?.id === source.providerSessionId &&
-          adoptsCliConversations(row.agentType) &&
-          chatAgentsShareConversations(row.agentType, agent)
-        )
-      })
-      if (other) {
-        toast.error(
-          translate(
-            'components.native-chat.resumeInNewChat.otherTerminal',
-            '{{agent}} is running this conversation in another terminal. Quit it there, then try again.',
-            { agent: agentLabel(source.agent) }
-          )
-        )
-        return
-      }
       if (!isCurrent()) {
         return
       }
       closed = await closeCliChatResumeTerminal(
         source,
         isCurrent,
-        () => {
-          closing = true
-          stopSource()
-          releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(source.workspaceId)
+        {
+          // The close's own confirmations and exit waits have their own bounds.
+          prepared: () => clearTimeout(timer),
+          closing: () => {
+            closing = true
+            stopSource()
+            releaseHold = holdEmptyWorkspaceDefaultSurfaceForLaunch(source.workspaceId)
+          },
+          refused: () => reportCliChatResumeTerminalChanged(source)
         },
         controller.signal
       )
@@ -228,17 +240,14 @@ export async function runCliChatResume(
           : {})
       }
     })
-    const launch = closed
-      ? plan.begin({ beforeCreate: handoff }, { surfaceAddress })
-      : beginStructuredAgentSessionProvisionalLaunch({
-          plan,
-          hooks: { beforeCreate: handoff },
-          deferPublication: true
-        })
+    const launch = beginStructuredAgentSessionProvisionalLaunch({
+      plan,
+      hooks: { beforeCreate: handoff },
+      deferPublication: true,
+      // Captured at the click: a closed source no longer marks where its chat goes.
+      target: { surfaceAddress }
+    })
     if (!launch) {
-      if (closed) {
-        throw new Error('chat unavailable')
-      }
       return
     }
     const result = await waitForPromiseWithSignal(launch.settlement, controller.signal)

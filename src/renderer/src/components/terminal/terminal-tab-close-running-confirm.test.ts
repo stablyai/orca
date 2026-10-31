@@ -149,6 +149,30 @@ describe('closeTerminalTab running-process confirmation', () => {
     expect(closeTab).not.toHaveBeenCalled()
   })
 
+  it.each([
+    { panes: ['pty-busy'], asks: false },
+    { panes: ['pty-busy', 'pty-dev'], asks: true }
+  ])('asks about running work only outside the consented PTY: $panes', async ({ panes, asks }) => {
+    getStateMock.mockReturnValue(
+      busyTabState({
+        ptyIdsByTabId: { 'tab-busy': panes },
+        terminalLayoutsByTabId: {
+          'tab-busy': { ptyIdsByLeafId: Object.fromEntries(panes.map((id) => [id, id])) }
+        }
+      })
+    )
+    const beforeClose = vi.fn(() => true)
+    closeTerminalTab('tab-busy', { consentedPtyId: 'pty-busy', beforeClose })
+    await settleProbe()
+    expect(visibleRequest() ? visibleRequest()?.copyKind : null).toBe(asks ? 'command' : null)
+    expect(inspectRuntimeTerminalProcessMock).toHaveBeenCalledTimes(asks ? 1 : 0)
+    if (asks) {
+      useRunningTerminalCloseConfirmStore.getState().confirmRunningTerminalClose()
+    }
+    expect(beforeClose).toHaveBeenCalledOnce()
+    expect(closeTab).toHaveBeenCalledOnce()
+  })
+
   it('starts exit observation only after ordinary close consent and can veto a stale close', async () => {
     const beforeClose = vi.fn(() => false)
     const onCancel = vi.fn()
