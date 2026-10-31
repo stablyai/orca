@@ -1,11 +1,11 @@
-import type { Terminal } from '@xterm/xterm'
+import type { ILinkHandler, Terminal } from '@xterm/xterm'
 import { WebLinksAddon } from '@xterm/addon-web-links'
 import { installGuardedLinkProviderRegistration } from '@/lib/pane-manager/terminal-link-provider-guard'
 import { isTerminalHttpLinkActivation } from '@/components/terminal-pane/terminal-http-link-activation'
 import { TERMINAL_HTTP_URL_REGEX } from '../../../../shared/terminal-http-url-extraction'
 
 /** Use pane-style Mod+click but open externally because pop-outs have no workspace-scoped browser pane. */
-export function installPreviewTerminalLinks(terminal: Terminal): void {
+export function installPreviewTerminalLinks(terminal: Terminal, handlers?: ILinkHandler): void {
   const activate = (event: MouseEvent, uri: string): void => {
     if (!isTerminalHttpLinkActivation(event)) {
       return
@@ -24,8 +24,12 @@ export function installPreviewTerminalLinks(terminal: Terminal): void {
   // Guard providers before registration; xterm can throw on pathological wrapped lines and escape to window.onerror.
   installGuardedLinkProviderRegistration(terminal)
   terminal.loadAddon(
-    new WebLinksAddon(activate, { hover, leave, urlRegex: TERMINAL_HTTP_URL_REGEX })
+    new WebLinksAddon(handlers?.activate ?? activate, {
+      hover: handlers?.hover ?? hover,
+      leave: handlers?.leave ?? leave,
+      urlRegex: TERMINAL_HTTP_URL_REGEX
+    })
   )
   // Why: without a linkHandler xterm's OSC 8 default confirm()s and window.open()s, which Electron blocks (#34229).
-  terminal.options.linkHandler = { activate, hover, leave }
+  terminal.options.linkHandler = handlers ?? { activate, hover, leave }
 }

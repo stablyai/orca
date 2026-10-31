@@ -1,5 +1,10 @@
 /** Reuse pane Unicode/link/IME/shortcut and kitty policy outside panes; callers own transport and parse-completion backpressure. */
-import { Terminal, type ITerminalInitOnlyOptions, type ITerminalOptions } from '@xterm/xterm'
+import {
+  Terminal,
+  type ITerminalInitOnlyOptions,
+  type ITerminalOptions,
+  type ILinkHandler
+} from '@xterm/xterm'
 import '@xterm/xterm/css/xterm.css'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import type { DashboardCardTerminalInput } from '../../../../shared/dashboard-snapshot'
@@ -31,6 +36,7 @@ export type StandaloneTerminalArgs = {
   getSettings: () => GlobalSettings | null
   getMacOptionAsAlt: () => MacOptionAsAlt
   getTerminalInput: () => DashboardCardTerminalInput | null
+  linkHandlers?: ILinkHandler
   requestClose?: () => void
 }
 
@@ -55,7 +61,8 @@ export function openStandaloneTerminal(args: StandaloneTerminalArgs): Standalone
   let replayDepth = 0
 
   const disposeCompatibility = installPreviewTerminalCompatibility(terminal, {
-    getSettings: args.getSettings
+    getSettings: args.getSettings,
+    ...(args.linkHandlers ? { linkHandlers: args.linkHandlers } : {})
   })
   const disposeNativeCopyGutterTrim = installTerminalNativeCopyGutterTrim(terminal).dispose
 

@@ -1,4 +1,4 @@
-import type { Terminal } from '@xterm/xterm'
+import type { ILinkHandler, Terminal } from '@xterm/xterm'
 import { Unicode11Addon } from '@xterm/addon-unicode11'
 import type { GlobalSettings } from '../../../../shared/global-settings-types'
 import { activateOrcaTerminalUnicodeProvider } from '../../../../shared/terminal-unicode-provider'
@@ -13,13 +13,13 @@ import { syncPreviewTerminalLigatures } from './preview-terminal-ligatures'
 /** Match pane compatibility; dispose DOM bindings before replacing or disposing the terminal. */
 export function installPreviewTerminalCompatibility(
   terminal: Terminal,
-  deps: { getSettings: () => GlobalSettings | null }
+  deps: { getSettings: () => GlobalSettings | null; linkHandlers?: ILinkHandler }
 ): () => void {
   // Load Unicode 11 before its width shim and any replay; earlier writes bake wide characters into default v6 widths.
   terminal.loadAddon(new Unicode11Addon())
   activateOrcaTerminalUnicodeProvider(terminal)
   installWindowsCtrlAltChordRepair(terminal)
-  installPreviewTerminalLinks(terminal)
+  installPreviewTerminalLinks(terminal, deps.linkHandlers)
   syncPreviewTerminalLigatures(terminal, deps.getSettings())
   attachTerminalMouseWheelMultiplier(terminal, {
     getTuiMouseWheelMultiplier: () =>
