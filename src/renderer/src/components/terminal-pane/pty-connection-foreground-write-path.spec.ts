@@ -171,6 +171,23 @@ export function registerPtyConnectionForegroundWritePathTests(): void {
       expect(transport.sendInput).toHaveBeenCalledWith('a', 'query-reply')
     })
 
+    it('does not forward restored output mode controls to the PTY', async () => {
+      const { connectPanePty } = await import('./pty-connection')
+      const pane = createPane(1)
+      const transport = createMockTransport('pty-1')
+      transportFactoryQueue.push(transport)
+
+      connectPanePty(...mockPanePtyArgs(pane, createManager(1), createDeps()))
+      await flushAsyncTicks()
+      sendTerminalInputThroughPane(pane, '\x1b[?1002h\x1b[>4;2m')
+
+      expect(transport.sendInput).not.toHaveBeenCalled()
+
+      sendTerminalInputThroughPane(pane, '\x1b[A')
+
+      expect(transport.sendInput).toHaveBeenCalledWith('\x1b[A', 'query-reply')
+    })
+
     it('keeps large ANSI redraws after captured shortcut input on the immediate path', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const pane = createPane(1)

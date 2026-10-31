@@ -163,6 +163,81 @@ export function registerPtyConnectionHiddenOutputRestoreTests(): void {
       binding.dispose()
     })
 
+    it('does not forward mode controls surfaced after a hidden snapshot restore', async () => {
+      const visibilityChangeListeners: (() => void)[] = []
+      ;(globalThis as { document?: Document }).document = {
+        visibilityState: 'visible',
+        addEventListener: vi.fn((type: string, listener: EventListenerOrEventListenerObject) => {
+          if (type === 'visibilitychange') {
+            visibilityChangeListeners.push(listener as () => void)
+          }
+        }),
+        removeEventListener: vi.fn()
+      } as unknown as Document
+
+      const { connectPanePty } = await import('./pty-connection')
+      const transport = createMockTransport('pty-id')
+      const capturedDataCallback: { current: ConnectCallbacks['onData'] | null } = { current: null }
+      transport.connect.mockImplementation(
+        async ({ callbacks }: { callbacks: ConnectCallbacks }) => {
+          capturedDataCallback.current = callbacks.onData ?? null
+          return 'pty-id'
+        }
+      )
+      transportFactoryQueue.push(transport)
+      const getMainBufferSnapshot = window.api.pty.getMainBufferSnapshot as unknown as ReturnType<
+        typeof vi.fn
+      >
+      const restoredModes = '\x1b[?1002h\x1b[>4;2m'
+      getMainBufferSnapshot.mockResolvedValue({
+        data: `${restoredModes}restored snapshot`,
+        cols: 80,
+        rows: 8,
+        seq: 1
+      })
+
+      const pane = createPane(1)
+      pane.terminal.cols = 80
+      pane.terminal.rows = 8
+      let terminalInputHandler: ((data: string) => void) | null = null
+      const snapshotWrites: string[] = []
+      pane.terminal.write.mockImplementation((data: string | Uint8Array, callback?: () => void) => {
+        snapshotWrites.push(terminalWriteText(data))
+        callback?.()
+        if (terminalWriteText(data).includes(restoredModes)) {
+          queueMicrotask(() => terminalInputHandler?.(restoredModes))
+        }
+      })
+      const deps = createDeps({
+        isVisibleRef: { current: false },
+        startup: { command: 'claude' }
+      })
+      const binding = connectPanePty(pane as never, createManager(1) as never, deps as never)
+      await flushAsyncTicks(6)
+      const onDataMock = pane.terminal.onData as unknown as {
+        mock: { calls: [[(data: string) => void] | []] }
+      }
+      const registeredInputHandler = onDataMock.mock.calls[0]?.[0]
+      expect(registeredInputHandler).toBeTypeOf('function')
+      if (!registeredInputHandler) {
+        throw new Error('Expected terminal input handler')
+      }
+      terminalInputHandler = vi.fn(registeredInputHandler)
+
+      capturedDataCallback.current?.('hidden output', { seq: 1, rawLength: 13 })
+      ;(deps.isVisibleRef as { current: boolean }).current = true
+      for (const listener of visibilityChangeListeners) {
+        listener()
+      }
+      await flushAsyncTicks(20)
+
+      expect(getMainBufferSnapshot).toHaveBeenCalled()
+      expect(snapshotWrites.join('')).toContain(restoredModes)
+      expect(terminalInputHandler).toHaveBeenCalledWith(restoredModes)
+      expect(transport.sendInput).not.toHaveBeenCalled()
+      binding.dispose()
+    })
+
     it('restores hidden Codex output after a suppressed exit revives the same ptyId with a restarted seq counter', async () => {
       const { connectPanePty } = await import('./pty-connection')
       const transport = createMockTransport('pty-id')
