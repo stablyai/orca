@@ -20,12 +20,18 @@ export type OnboardingGate = ReturnType<typeof useOnboardingAndFeatureTips>
 /** Keep feature-tip education suppressed until onboarding state is known. */
 export function useOnboardingAndFeatureTips() {
   const [onboarding, setOnboarding] = useState<OnboardingState | null>(null)
-  const [onboardingLoaded, setOnboardingLoaded] = useState(false)
+  const [onboardingLoadStatus, setOnboardingLoadStatus] = useState<'pending' | 'loaded' | 'failed'>(
+    'pending'
+  )
+  const onboardingLoaded = onboardingLoadStatus === 'loaded'
+  const [startupTourEligibility, setStartupTourEligibility] = useState<boolean | null>(null)
   const [featureTipCliInstalled, setFeatureTipCliInstalled] = useState<boolean | null>(null)
+  const [startupDecisionResolved, setStartupDecisionResolved] = useState(false)
   const promptedThisSessionRef = useRef(false)
   const suppressedByOnboardingThisSessionRef = useRef(false)
 
   const activeModal = useAppStore((s) => s.activeModal)
+  const terminalStartupRestorationReady = useAppStore((s) => s.terminalStartupRestorationReady)
   const settings = useAppStore((s) => s.settings)
   const persistedUIReady = useAppStore((s) => s.persistedUIReady)
   const featureTipsSeenIds = useAppStore((s) => s.featureTipsSeenIds)
@@ -43,8 +49,15 @@ export function useOnboardingAndFeatureTips() {
   )
 
   const applyStartupOnboardingState = useCallback((state: OnboardingState): void => {
+    setStartupTourEligibility((initial) => initial ?? shouldShowOnboarding(state))
     setOnboarding(state)
-    setOnboardingLoaded(true)
+    setOnboardingLoadStatus('loaded')
+  }, [])
+
+  const applyStartupOnboardingFailure = useCallback((): void => {
+    // Skip startup education without inventing or persisting completed onboarding.
+    suppressedByOnboardingThisSessionRef.current = true
+    setOnboardingLoadStatus('failed')
   }, [])
 
   useEffect(() => {
@@ -58,12 +71,16 @@ export function useOnboardingAndFeatureTips() {
   }, [actions, onboarding, onboardingLoaded])
 
   useEffect(() => {
-    if (!persistedUIReady || !onboardingLoaded || contextualToursAutoEligible !== null) {
+    if (
+      !persistedUIReady ||
+      startupTourEligibility === null ||
+      contextualToursAutoEligible !== null
+    ) {
       return
     }
     // Classify existing profiles once; auto-tour only first-run onboarding users.
-    actions.setContextualToursAutoEligible(shouldShowOnboarding(onboarding))
-  }, [actions, contextualToursAutoEligible, onboarding, onboardingLoaded, persistedUIReady])
+    actions.setContextualToursAutoEligible(startupTourEligibility)
+  }, [actions, contextualToursAutoEligible, startupTourEligibility, persistedUIReady])
 
   useEffect(() => {
     if (!persistedUIReady) {
@@ -132,14 +149,20 @@ export function useOnboardingAndFeatureTips() {
 
     if (featureTipsDecision.kind === 'suppress-for-onboarding') {
       // Avoid a second education modal during first-run onboarding.
+      setStartupDecisionResolved(true)
       suppressedByOnboardingThisSessionRef.current = true
       return
     }
 
+    if (featureTipsDecision.kind === 'skip') {
+      setStartupDecisionResolved(true)
+      return
+    }
     if (featureTipsDecision.kind !== 'open') {
       return
     }
 
+    setStartupDecisionResolved(true)
     promptedThisSessionRef.current = true
     if (featureTipsDecision.tipId === 'orca-cli') {
       trackOrcaCliFeatureTipShown('app_open')
@@ -167,8 +190,27 @@ export function useOnboardingAndFeatureTips() {
   ])
 
   const shouldRender = onboarding !== null && shouldShowOnboarding(onboarding)
+  const startupPromptsFinished =
+    (onboardingLoadStatus === 'failed'
+      ? terminalStartupRestorationReady
+      : startupDecisionResolved && onboardingLoaded) &&
+    !shouldRender &&
+    activeModal === 'none'
   return useMemo(
-    () => ({ applyStartupOnboardingState, onboarding, setOnboarding, shouldRender }),
-    [applyStartupOnboardingState, onboarding, shouldRender]
+    () => ({
+      applyStartupOnboardingState,
+      applyStartupOnboardingFailure,
+      onboarding,
+      setOnboarding,
+      shouldRender,
+      startupPromptsFinished
+    }),
+    [
+      applyStartupOnboardingState,
+      applyStartupOnboardingFailure,
+      onboarding,
+      shouldRender,
+      startupPromptsFinished
+    ]
   )
 }

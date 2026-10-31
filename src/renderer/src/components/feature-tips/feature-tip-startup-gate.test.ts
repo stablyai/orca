@@ -197,7 +197,7 @@ describe('feature tip startup gate', () => {
         suppressedByOnboardingThisSession: false,
         webClient: false
       })
-    ).toEqual({ kind: 'skip' })
+    ).toEqual({ kind: 'waiting' })
   })
 
   it('does not open after the user already interacted with the feature', () => {
@@ -299,7 +299,7 @@ describe('feature tip startup gate', () => {
     expect(decide('none')).toEqual({ kind: 'open', tipId: 'orca-cli' })
     expect(decide('chat-ui-on', true)).toEqual({ kind: 'open', tipId: 'orca-cli' })
     // Waits for main's answer rather than showing a later tip first.
-    expect(decide(null)).toEqual({ kind: 'skip' })
+    expect(decide(null)).toEqual({ kind: 'waiting' })
   })
 
   it.each([

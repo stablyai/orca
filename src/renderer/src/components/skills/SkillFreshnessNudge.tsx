@@ -1,9 +1,10 @@
-import { useEffect, useRef } from 'react'
+import { useEffect, useRef, useSyncExternalStore } from 'react'
 import { RefreshCw } from 'lucide-react'
 import { toast } from 'sonner'
 import { useSkillFreshness } from '@/hooks/useSkillFreshness'
 import { useActiveProjectSkillRuntime } from '@/hooks/useActiveProjectSkillRuntime'
 import { bundledSkillTargetKey } from '@/lib/bundled-skill-target'
+import { hasBlockingBodyOverlay, subscribeBodyOverlayChanges } from '@/lib/body-overlay-attributes'
 import { translate } from '@/i18n/i18n'
 import { useAppStore } from '@/store'
 import {
@@ -21,7 +22,15 @@ type ActiveFreshnessNudge = {
   persistDismissal: boolean
 }
 
-export function SkillFreshnessNudge(): null {
+export function SkillFreshnessNudge({
+  startupPromptsFinished
+}: {
+  startupPromptsFinished: boolean
+}): null {
+  const blockingOverlayOpen = useSyncExternalStore(
+    subscribeBodyOverlayChanges,
+    hasBlockingBodyOverlay
+  )
   const target = useActiveProjectSkillRuntime().bundledSkillTarget
   const targetKey = target ? bundledSkillTargetKey(target) : null
   const state = useSkillFreshness(target)
@@ -35,6 +44,17 @@ export function SkillFreshnessNudge(): null {
   const activeNudgeRef = useRef<ActiveFreshnessNudge | null>(null)
 
   useEffect(() => {
+    // Portals can mount in this commit before the observer publishes their presence.
+    if (!startupPromptsFinished || blockingOverlayOpen || hasBlockingBodyOverlay()) {
+      const active = activeNudgeRef.current
+      if (active) {
+        active.persistDismissal = false
+        activeNudgeRef.current = null
+        shownFingerprints.current.delete(active.fingerprint)
+        toast.dismiss(active.id)
+      }
+      return
+    }
     if (!targetKey) {
       const active = activeNudgeRef.current
       if (active) {
@@ -161,7 +181,16 @@ export function SkillFreshnessNudge(): null {
       }
     )
     activeNudgeRef.current = nextActive
-  }, [targetKey, dismissed, settingsLoaded, state.error, state.plan, updateSettings])
+  }, [
+    targetKey,
+    blockingOverlayOpen,
+    dismissed,
+    settingsLoaded,
+    startupPromptsFinished,
+    state.error,
+    state.plan,
+    updateSettings
+  ])
 
   return null
 }

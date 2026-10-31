@@ -47,13 +47,16 @@ import {
 } from '../startup/startup-worktree-refresh'
 
 /** Hydrate settings/UI/catalog/session, reconnect and restore terminals before unlocking saves. Failure boots in degraded no-save mode to protect disk state. */
-export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingState) => void): void {
+export function useAppStartupHydration(
+  onOnboardingLoaded: (state: OnboardingState) => void,
+  onOnboardingFailed: () => void
+): void {
   const actions = useStartupActions()
   // Keep callback identity from restarting boot. Sync in the preceding effect so discarded renders cannot publish a callback.
-  const onOnboardingLoadedRef = useRef(onOnboardingLoaded)
+  const onboardingCallbacksRef = useRef({ onOnboardingLoaded, onOnboardingFailed })
   useEffect(() => {
-    onOnboardingLoadedRef.current = onOnboardingLoaded
-  }, [onOnboardingLoaded])
+    onboardingCallbacksRef.current = { onOnboardingLoaded, onOnboardingFailed }
+  }, [onOnboardingLoaded, onOnboardingFailed])
 
   useEffect(() => installCodexDetachedPaneRestartExecutor(), [])
 
@@ -71,6 +74,23 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
     void (async () => {
       const startupStartedAt = performance.now()
       logRendererStartupDiagnostic('startup-chain-start')
+      // Deliver onboarding even if unrelated session restoration enters degraded recovery.
+      const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
+        window.api.onboarding.get()
+      ).then(
+        (state) => {
+          if (!cancelled) {
+            onboardingCallbacksRef.current.onOnboardingLoaded(state)
+          }
+        },
+        (error) => {
+          if (!cancelled) {
+            onboardingCallbacksRef.current.onOnboardingFailed()
+          }
+          throw error
+        }
+      )
+      onboardingPromise.catch(() => {})
       try {
         // Profiles need no synchronous read here; overlap their IPC with settings.
         void actions.fetchOrcaProfiles()
@@ -81,15 +101,11 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
         // Publish composed terminal appearance before panes mount so hidden startup PTYs can answer queries.
         const settings = useAppStore.getState().settings
         publishTerminalViewAttributesAtAppStart(settings, getSystemPrefersDark())
-        // Overlap keybindings/onboarding with scans; mark rejections handled until their later awaits. Delay browser profiles until runtime connection, since failed reads clear them.
+        // Overlap keybindings with scans; mark rejection handled until its later await. Delay browser profiles until runtime connection, since failed reads clear them.
         const keybindingsPromise = timeRendererStartupStep('fetch-keybindings', () =>
           actions.fetchKeybindings()
         )
         keybindingsPromise.catch(() => {})
-        const onboardingPromise = timeRendererStartupStep('onboarding-get', () =>
-          window.api.onboarding.get()
-        )
-        onboardingPromise.catch(() => {})
         // Hydrate saved view settings before catalog/session work so first paint reflects them.
         const persistedUI = await timeRendererStartupStep('ui-get', () => window.api.ui.get())
         uiHydrated = timeRendererStartupSyncStep('hydrate-persisted-ui', () =>
@@ -222,10 +238,7 @@ export function useAppStartupHydration(onOnboardingLoaded: (state: OnboardingSta
           ).catch(() => {})
           // Why: local and SSH tabs use this desktop's profiles even when Settings shows a paired server.
           void actions.fetchBrowserSessionProfiles(LOCAL_EXECUTION_HOST_ID)
-          const onboardingState = await onboardingPromise
-          if (!cancelled) {
-            onOnboardingLoadedRef.current(onboardingState)
-          }
+          await onboardingPromise
 
           // Reconnect SSH before PTY attach; defer passphrase targets to focus. Never dial runtime-owned targets here: ssh.connect would dispose the runtime’s relay.
           const connectionIds = (sessionRead.session.activeConnectionIdsAtShutdown ?? []).filter(

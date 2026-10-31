@@ -54,7 +54,10 @@ function App(): React.JSX.Element {
   useEffect(() => void runWslMoveRendererStoreRewrites(), [])
   // A Windows-drive conversion's own stores, after the restart that converted the project.
   useEffect(() => void runWslDriveUncRendererStoreRewrites(), [])
-  useAppStartupHydration(onboardingGate.applyStartupOnboardingState)
+  useAppStartupHydration(
+    onboardingGate.applyStartupOnboardingState,
+    onboardingGate.applyStartupOnboardingFailure
+  )
   useAppSessionPersistence()
   useRuntimeGraphSync()
   usePersistedUIWriter()
@@ -121,7 +124,7 @@ function App(): React.JSX.Element {
         )}
         <PlainSshTerminalPanels />
       </TooltipProvider>
-      <SkillFreshnessNudge />
+      <SkillFreshnessNudge startupPromptsFinished={onboardingGate.startupPromptsFinished} />
       <WorktreeBaseFallbackDialog />
       <ClaudeAccountSwitchDialog />
       <PinnedTabCloseDialog />
