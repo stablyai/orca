@@ -1,6 +1,6 @@
 // @vitest-environment happy-dom
 
-import { act, cleanup, renderHook } from '@testing-library/react'
+import { act, cleanup, render, renderHook, screen } from '@testing-library/react'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { useAppStore } from '@/store'
 import { getHostedReviewCacheKey } from '@/store/slices/hosted-review-cache-identity'
@@ -10,6 +10,8 @@ import {
   type HostedReviewForBranchArgs,
   type HostedReviewInfo
 } from '../../../../../shared/hosted-review'
+import type { PRInfo } from '../../../../../shared/github/pull-request-types'
+import type { Worktree } from '../../../../../shared/worktree/types'
 import {
   __resetHostedReviewBranchCacheForTests,
   readHostedReviewBranchCache
@@ -19,6 +21,7 @@ vi.mock('@/components/confirmation-dialog-context', () => ({
   useConfirmationDialog: () => vi.fn()
 }))
 
+import HostedReviewActions from '../HostedReviewActions'
 import { useChecksPanelManualRefresh } from './use-checks-panel-manual-refresh'
 
 type RefreshInput = Parameters<typeof useChecksPanelManualRefresh>[0]
@@ -76,34 +79,34 @@ function poll(): Promise<HostedReviewInfo | null> {
   })
 }
 
-function renderPanel() {
-  const input: RefreshInput = {
+function baseInput(): RefreshInput {
+  return {
     activeConnectionId: null,
-    activeGitLabReview: openMR,
-    activeReview: openMR,
+    activeGitLabReview: null,
+    activeReview: null,
     activeWorktreeId: null,
     activeWorktreePath: null,
     activeWorktreePushTarget: null,
-    asyncResultKeyRef: { current: 'x' },
+    asyncResultKeyRef: { current: 'cache::main::42' },
     branch: 'main',
     expireGitHubPRRefreshState: vi.fn(),
     fallbackGitHubPRNumber: null,
     fetchGitLabDetails: vi.fn(),
-    fetchHostedReviewForBranch: useAppStore.getState().fetchHostedReviewForBranch,
-    fetchPRChecks: vi.fn(),
-    fetchPRComments: vi.fn(),
-    fetchPRForBranch: vi.fn(),
+    fetchHostedReviewForBranch: vi.fn(async () => null),
+    fetchPRChecks: vi.fn(async () => []),
+    fetchPRComments: vi.fn(async () => []),
+    fetchPRForBranch: vi.fn(async () => null),
     gitStatusSnapshot: null,
-    hostedReview: openMR,
-    hostedReviewCacheKey: cacheKey(),
-    hostedReviewCreateProvider: 'gitlab',
+    hostedReview: null,
+    hostedReviewCacheKey: 'hosted-review-key',
+    hostedReviewCreateProvider: 'github',
     isCurrentAsyncResult: () => true,
     isFolder: false,
-    isGitLabReviewContext: true,
+    isGitLabReviewContext: false,
     linkedAzureDevOpsPR: null,
     linkedBitbucketPR: null,
     linkedGiteaPR: null,
-    linkedGitLabMR: 7,
+    linkedGitLabMR: null,
     linkedPR: null,
     ownerCopyHostId: null,
     ownerTarget: { kind: 'local' },
@@ -112,7 +115,7 @@ function renderPanel() {
     pollIntervalRef: { current: 30_000 },
     pr: null,
     prCacheKey: 'cache',
-    prNumber: null,
+    prNumber: 42,
     prevChecksRef: { current: '' },
     refreshInFlightRef: { current: false },
     refreshRequestKeyRef: { current: '' },
@@ -126,13 +129,32 @@ function renderPanel() {
     setIsRefreshing: vi.fn(),
     updateWorktreeGitIdentity: vi.fn()
   }
+}
+
+// The selected GitLab MR's panel, reading through the real store and host cache.
+function gitLabInput(): RefreshInput {
+  return {
+    ...baseInput(),
+    activeGitLabReview: openMR,
+    activeReview: openMR,
+    fetchHostedReviewForBranch: useAppStore.getState().fetchHostedReviewForBranch,
+    hostedReview: openMR,
+    hostedReviewCacheKey: cacheKey(),
+    hostedReviewCreateProvider: 'gitlab',
+    isGitLabReviewContext: true,
+    linkedGitLabMR: 7,
+    prNumber: null
+  }
+}
+
+function renderPanel(input = gitLabInput()) {
   const shown: (string | null)[] = []
   const hook = renderHook(() => {
     const state = useChecksPanelManualRefresh(input)
     shown.push(state.manualRefreshError)
     return state
   })
-  return { ...hook, shown }
+  return { ...hook, shown, input }
 }
 
 // Seeds Open, then the provider goes down and the user's Refresh fails.
@@ -280,4 +302,179 @@ describe('a failed Checks refresh clears only on a real provider read', () => {
     await act(async () => panel.result.current.handleRefresh())
     expect(panel.result.current.manualRefreshError).toBeNull()
   })
+})
+
+describe('a Checks refresh click', () => {
+  const foundPR: PRInfo = {
+    number: 42,
+    title: 'Current review',
+    state: 'open',
+    url: 'https://github.com/orca/app/pull/42',
+    checksStatus: 'success',
+    updatedAt: '2026-10-30',
+    mergeable: 'MERGEABLE',
+    headSha: 'head-2',
+    prRepo: { owner: 'orca', repo: 'app', host: 'github.com' }
+  }
+
+  // Old path: every provider without a GitLab review went through the GitHub branch (PR lookup + lists cleared).
+  it.each([
+    ['unlinked Bitbucket', { hostedReviewCreateProvider: 'bitbucket' }, 'Bitbucket', false],
+    ['linked Bitbucket', { linkedBitbucketPR: 3 }, 'Bitbucket', false],
+    ['Azure DevOps', { linkedAzureDevOpsPR: 3 }, 'Azure DevOps', false],
+    ['unlinked Gitea', { hostedReviewCreateProvider: 'gitea' }, 'Gitea', false],
+    ['GitLab with no MR', { hostedReviewCreateProvider: 'gitlab' }, 'GitLab', false],
+    ['GitLab with an MR', { linkedGitLabMR: 7, isGitLabReviewContext: true }, 'GitLab', false],
+    ['GitHub', {}, null, true]
+  ] as const)(
+    '%s: routes the click to its provider and names it on a failure it owns',
+    async (_name, overrides, providerName, readsGitHubPR) => {
+      const input = Object.assign(baseInput(), overrides)
+      input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('unreachable'))
+      const { result } = renderPanel(input)
+      await act(async () => result.current.handleRefresh())
+      expect(input.fetchHostedReviewForBranch).toHaveBeenCalledWith(
+        '/workspace/repo',
+        'main',
+        expect.objectContaining({ force: true, userRefresh: true })
+      )
+      expect(vi.mocked(input.fetchPRForBranch).mock.calls.length > 0).toBe(readsGitHubPR)
+      expect(input.fetchGitLabDetails).not.toHaveBeenCalled()
+      // Only the GitHub path owns checks and comments; it clears them when no PR is found.
+      expect(vi.mocked(input.setChecks).mock.calls.length > 0).toBe(readsGitHubPR)
+      expect(vi.mocked(input.setComments).mock.calls.length > 0).toBe(readsGitHubPR)
+      // GitHub's refresh status comes from its PR read, not this card read.
+      expect(result.current.manualRefreshError).toBe(
+        providerName ? `Couldn't refresh from ${providerName}. Try again.` : null
+      )
+    }
+  )
+
+  it.each([
+    ['a PR', foundPR],
+    ['no PR', null]
+  ])(
+    'on GitHub, a failed review-card read with %s leaves the status to the PR read',
+    async (_name, found) => {
+      const input = baseInput()
+      input.pr = found
+      input.fetchPRForBranch = vi.fn(async () => found)
+      input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('raw provider text'))
+      const { result } = renderPanel(input)
+      await act(async () => result.current.handleRefresh())
+      expect(input.fetchPRChecks).toHaveBeenCalledTimes(found ? 1 : 0)
+      expect(input.fetchPRComments).toHaveBeenCalledTimes(found ? 1 : 0)
+      expect(result.current.manualRefreshError).toBeNull()
+    }
+  )
+
+  it('names GitLab without its raw text, clears on a context change, and ignores the old context’s late failure', async () => {
+    const input = baseInput()
+    input.isGitLabReviewContext = true
+    input.linkedGitLabMR = 7
+    input.fetchHostedReviewForBranch = vi
+      .fn()
+      .mockRejectedValueOnce(new Error('raw secret provider text'))
+    const { result, rerender } = renderPanel(input)
+    await act(async () => {
+      await expect(result.current.handleRefresh()).resolves.toBeUndefined()
+    })
+    expect(input.fetchHostedReviewForBranch).toHaveBeenCalledWith(
+      '/workspace/repo',
+      'main',
+      expect.objectContaining({ userRefresh: true, force: true })
+    )
+    expect(input.fetchGitLabDetails).not.toHaveBeenCalled()
+    expect(input.setChecks).not.toHaveBeenCalled()
+    expect(input.setComments).not.toHaveBeenCalled()
+    expect(input.refreshInFlightRef.current).toBe(false)
+    expect(result.current.manualRefreshError).toBe(FAILURE)
+    expect(JSON.stringify(result.current)).not.toContain('raw secret')
+
+    const late = Promise.withResolvers<HostedReviewInfo | null>()
+    input.fetchHostedReviewForBranch = vi.fn(() => late.promise)
+    rerender()
+    let old: Promise<void> = Promise.resolve()
+    act(() => {
+      old = result.current.handleRefresh()
+    })
+    expect(result.current.manualRefreshError).toBe(FAILURE)
+    input.panelContextKey = 'new-context'
+    input.panelContextKeyRef.current = 'new-context'
+    rerender()
+    expect(result.current.manualRefreshError).toBeNull()
+    await act(async () => {
+      late.reject(new Error('late failure'))
+      await old
+    })
+    expect(result.current.manualRefreshError).toBeNull()
+  })
+
+  // Issue #14377: Refresh after a merge on GitLab must surface the workspace's delete action.
+  it.each([false, true])(
+    'publishes refreshed merged GitLab state to the existing workspace action (main=%s)',
+    async (isMainWorktree) => {
+      const review: HostedReviewInfo & { provider: 'gitlab' } = {
+        ...openMR,
+        mergeable: 'MERGEABLE'
+      }
+      const forBranch = vi
+        .fn()
+        .mockResolvedValueOnce(review)
+        .mockResolvedValueOnce({ ...review, state: 'merged' })
+      vi.stubGlobal('api', { hostedReview: { forBranch } })
+      const input = baseInput()
+      input.fetchHostedReviewForBranch = useAppStore.getState().fetchHostedReviewForBranch
+      input.activeGitLabReview = review
+      input.activeReview = review
+      input.isGitLabReviewContext = true
+      input.isFolder = isMainWorktree
+      const worktree: Worktree = {
+        id: 'worktree-1',
+        repoId: repo.id,
+        path: '/workspace/worktree',
+        branch: 'main',
+        isMainWorktree,
+        head: 'head',
+        isBare: false,
+        displayName: 'workspace',
+        comment: '',
+        linkedIssue: null,
+        linkedPR: null,
+        linkedLinearIssue: null,
+        isArchived: false,
+        isUnread: false,
+        isPinned: false,
+        sortOrder: 0,
+        lastActivityAt: 0
+      }
+      await input.fetchHostedReviewForBranch(repo.path, 'main', { repoId: repo.id })
+      function Probe() {
+        const data = useAppStore((state) => Object.values(state.hostedReviewCache)[0]?.data)
+        const { handleRefresh } = useChecksPanelManualRefresh(input)
+        return (
+          <>
+            <button onClick={() => void handleRefresh()}>Refresh metadata</button>
+            {data && (
+              <HostedReviewActions
+                review={data}
+                repo={repo}
+                worktree={worktree}
+                onRefreshReview={handleRefresh}
+              />
+            )}
+          </>
+        )
+      }
+      render(<Probe />)
+      const label = isMainWorktree ? 'Remove Project' : 'Delete Workspace'
+      expect(screen.queryByRole('button', { name: label })).toBeNull()
+      await act(async () => screen.getByRole('button', { name: 'Refresh metadata' }).click())
+      expect(screen.getByRole('button', { name: label })).toBeTruthy()
+      expect(input.fetchGitLabDetails).toHaveBeenCalledWith(
+        expect.objectContaining({ mrNumberOverride: 7 })
+      )
+      expect(forBranch).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
+    }
+  )
 })
