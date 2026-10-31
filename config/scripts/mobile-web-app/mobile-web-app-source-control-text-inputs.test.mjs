@@ -52,11 +52,13 @@ describe('the production input role', () => {
       `data:text/javascript;base64,${Buffer.from(
         ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.ESNext } }).outputText
       ).toString('base64')}`
-    for (const [body, floor, expected] of [
+    /** @type {Array<[number, number, number[]]>} */
+    const cases = [
       [14, 16, [14, 16]],
       [20, 16, [20, 20]],
       [14, 20, [14, 20]]
-    ]) {
+    ]
+    for (const [body, floor, expected] of cases) {
       const sizes = []
       for (const suffix of ['.ts', '.web.ts']) {
         const leaf = readFileSync(
