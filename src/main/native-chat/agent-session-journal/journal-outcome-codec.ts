@@ -138,8 +138,9 @@ export class JournalOutcomeFold {
   /** Applies the latest values over `baseline` (the folded input prefix) or over the scalars alone:
    * a deletion removes, a prefix-ordinal value replaces in place, and every other value takes its
    * canonical place after the prefix. Each record was admitted as format 1 on read. A prefix-ordinal
-   * value the prefix no longer yields (a later fold reads the old rows differently) is still the
-   * key's newest value: it is appended, so only that key's place can change. */
+   * value the prefix does not hold is still the key's newest value and is appended rather than
+   * refusing the chat; that can only happen if the prefix is read differently from how it was
+   * written, which the marker's rule forbids (`JOURNAL_OUTCOME_MARKER_VERSION`). */
   finish(
     sessionId: string,
     epoch: string,

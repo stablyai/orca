@@ -7,7 +7,11 @@ import { JournalOutcomeDecodeError } from './journal-outcome-codec'
 /** The newest record format this build reads, and the one it writes. Each stored record carries its
  * own format; older formats keep their frozen decoders and are never rewritten. */
 export const JOURNAL_OUTCOME_FORMAT = JOURNAL_OUTCOME_FORMAT_1
-/** Builds before outcome records refuse a row of this version wherever it sits in the epoch. */
+/** Builds before outcome records refuse a row of this version wherever it sits in the epoch.
+ * Under this version, how the input rows before the marker fold into keys and values is frozen: the
+ * tail's records were written over that reading. A build that reads old rows into different keys or
+ * values must key the new reading off a new marker version; a prefix key read twice under two
+ * names, or a key the tail deleted coming back, is never intended behavior. */
 export const JOURNAL_OUTCOME_MARKER_VERSION = 5
 /** `prefix` counts the epoch's frozen input rows; the marker row sits right after them and outcome
  * records start at its sequence. `format` is the highest record format the epoch holds. */
