@@ -671,6 +671,21 @@
         "sharper": "Sharper",
         "terminalControlledHint": "Set by terminal interface.",
         "terminalControlledTooltip": "Matching your terminal interface. Turn off Match terminal interface to change this."
+      },
+      "editorTheme": {
+        "light": "Light editor theme",
+        "lightDescription": "Code editor, diff and notebook colors while the app is light.",
+        "dark": "Dark editor theme",
+        "darkDescription": "Code editor, diff and notebook colors while the app is dark.",
+        "followApp": "Same as app theme",
+        "title": "Editor theme",
+        "description": "Code editor, diff and notebook colors, apart from the app theme.",
+        "keyword": {
+          "editor": "editor",
+          "code": "code",
+          "monaco": "monaco",
+          "syntax": "syntax"
+        }
       }
     },
     "browser": {

@@ -44,6 +44,8 @@ export function buildDefaultSettings(args: {
     pluginAppTheme: null,
     pluginAppThemeLight: null,
     pluginAppThemeDark: null,
+    editorThemeLight: null,
+    editorThemeDark: null,
     pluginIconTheme: null,
     leftSidebarAppearanceMode: 'default',
     leftSidebarTintColor: DEFAULT_LEFT_SIDEBAR_TINT_COLOR,

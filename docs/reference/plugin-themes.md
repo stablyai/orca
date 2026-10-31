@@ -38,7 +38,11 @@ Each entry is `{ "id", "label", "path" }` pointing at a JSON file of at most 16 
 ### Code colors
 
 An app theme also colors the code editor: its background, text, line numbers, cursor and
-selection follow the theme's tokens. To color code itself, add `tokenColors` (Orca 1.4.245 and
+selection follow the theme's tokens. Users can also pick any app theme, of either base, as just
+their editor theme (Settings → Appearance → Light/Dark editor theme); the editor then takes its
+colors from `--editor-surface` (else `--background`), `--foreground`, `--muted-foreground`,
+`--accent`, `--ring`, `--popover`, `--border` and `tokenColors`, while the rest of Orca keeps the
+app theme. To color code itself, add `tokenColors` (Orca 1.4.245 and
 later) in the same shape as a VS Code theme's, so most VS Code theme lists paste in unchanged (`validate:plugin` flags entries without a `scope` and any setting other than these two):
 
 ```json

@@ -97,7 +97,7 @@ export default function MonacoCodeExcerpt({
 
   return (
     <div
-      className="overflow-x-auto py-1 text-[12px] leading-5"
+      className="code-editor-colors overflow-x-auto py-1 text-[12px] leading-5"
       style={{ fontFamily, fontSize: editorFontSize }}
     >
       {lines.map((codeLine, index) => {
