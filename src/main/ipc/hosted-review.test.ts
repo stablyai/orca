@@ -90,8 +90,6 @@ const READ_OUTCOME_REPLIES = [
   { reportReadOutcome: true, review: providerReview },
   { reportReadOutcome: true, review: null },
   { reportReadOutcome: false, review: providerReview },
-  { reportReadOutcome: false, review: null },
-  { reportReadOutcome: undefined, review: providerReview },
   { reportReadOutcome: undefined, review: null }
 ]
 

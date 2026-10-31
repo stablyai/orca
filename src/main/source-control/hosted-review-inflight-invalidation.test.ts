@@ -279,28 +279,21 @@ function stuckLookup() {
   }
 }
 describe('hosted review manual refresh invalidation', () => {
-  it.each(['github', 'gitlab', 'bitbucket', 'azure-devops', 'gitea'] as const)(
-    'starts a post-click %s read and fences the pre-click answer at the same clock time',
-    async (provider) => {
-      const old = stuckLookup()
-      const before = withHostedReviewBranchCache(
-        identity,
-        { headOid: null, force: true },
-        old.lookup
-      )
-      const merged = { ...mergedReview, provider }
-      const lookup = vi.fn(async () => merged)
-      const options = { headOid: null, force: true, userRefresh: true }
-      const click = withHostedReviewBranchCache(identity, options, lookup)
-      old.resolve({ ...openReview, provider })
-      await expect(before).resolves.toMatchObject({ state: 'open' })
-      await expect(click).resolves.toEqual(merged)
-      expect(lookup).toHaveBeenCalledOnce()
-      await expect(
-        withHostedReviewBranchCache(identity, { headOid: null }, lookup)
-      ).resolves.toEqual(merged)
-    }
-  )
+  // The branch cache never branches on the forge, so one stands for all of them.
+  it('starts a post-click read and fences the pre-click answer at the same clock time', async () => {
+    const old = stuckLookup()
+    const before = withHostedReviewBranchCache(identity, { headOid: null, force: true }, old.lookup)
+    const lookup = vi.fn(async () => mergedReview)
+    const options = { headOid: null, force: true, userRefresh: true }
+    const click = withHostedReviewBranchCache(identity, options, lookup)
+    old.resolve(openReview)
+    await expect(before).resolves.toMatchObject({ state: 'open' })
+    await expect(click).resolves.toEqual(mergedReview)
+    expect(lookup).toHaveBeenCalledOnce()
+    await expect(withHostedReviewBranchCache(identity, { headOid: null }, lookup)).resolves.toEqual(
+      mergedReview
+    )
+  })
 
   it('fences a pre-click answer that completes after the manual answer', async () => {
     const old = stuckLookup()

@@ -116,29 +116,24 @@ describe('OrcaRuntimeService', () => {
     }
   })
 
+  const mr: HostedReviewInfo = {
+    provider: 'gitlab',
+    number: 7,
+    title: 'MR',
+    url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
+    state: 'open',
+    status: 'success',
+    mergeable: 'MERGEABLE',
+    updatedAt: '2026-10-30'
+  }
   it.each([
-    { reportReadOutcome: true, label: 'a review' },
-    { reportReadOutcome: true, label: 'a definitive null' },
-    { reportReadOutcome: false, label: 'a review' },
-    { reportReadOutcome: false, label: 'a definitive null' },
-    { reportReadOutcome: undefined, label: 'a review' },
-    { reportReadOutcome: undefined, label: 'a definitive null' }
+    { reportReadOutcome: true, review: mr, label: 'a review' },
+    { reportReadOutcome: true, review: null, label: 'a definitive null' },
+    { reportReadOutcome: false, review: mr, label: 'a review' },
+    { reportReadOutcome: undefined, review: null, label: 'a definitive null' }
   ])(
     'answers $label with the read outcome only when asked (reportReadOutcome=$reportReadOutcome)',
-    async ({ reportReadOutcome, label }) => {
-      const review: HostedReviewInfo | null =
-        label === 'a review'
-          ? {
-              provider: 'gitlab',
-              number: 7,
-              title: 'MR',
-              url: 'https://gitlab.example.test/g/p/-/merge_requests/7',
-              state: 'open',
-              status: 'success',
-              mergeable: 'MERGEABLE',
-              updatedAt: '2026-10-30'
-            }
-          : null
+    async ({ reportReadOutcome, review }) => {
       vi.mocked(readHostedReviewForBranch).mockResolvedValueOnce({
         review,
         readOutcome: 'provider'

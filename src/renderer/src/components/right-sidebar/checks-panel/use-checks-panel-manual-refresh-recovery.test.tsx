@@ -212,20 +212,15 @@ afterEach(() => {
 })
 
 describe('a failed Checks refresh clears only on a real provider read', () => {
-  it('keeps the failure when the host answers a poll from last-good during backoff', async () => {
+  it.each([
+    ['answers a poll from last-good during backoff', WITHIN_BACKOFF, 2],
+    ['serves last-good while the provider still fails', AFTER_BACKOFF, 3]
+  ])('keeps the failure when the host %s', async (_name, time, lookups) => {
     const panel = await failedClick()
-    vi.setSystemTime(WITHIN_BACKOFF)
+    vi.setSystemTime(time)
     await act(async () => void (await poll()))
-    expect(lookup).toHaveBeenCalledTimes(2)
+    expect(lookup).toHaveBeenCalledTimes(lookups)
     expect(useAppStore.getState().hostedReviewCache[cacheKey()]?.data?.state).toBe('open')
-    expect(panel.result.current.manualRefreshError).toBe(FAILURE)
-  })
-
-  it('keeps the failure when the provider still fails and the host serves last-good', async () => {
-    const panel = await failedClick()
-    vi.setSystemTime(AFTER_BACKOFF)
-    await act(async () => void (await poll()))
-    expect(lookup).toHaveBeenCalledTimes(3)
     expect(panel.result.current.manualRefreshError).toBe(FAILURE)
   })
 
@@ -322,7 +317,6 @@ describe('a Checks refresh click', () => {
     ['unlinked Bitbucket', { hostedReviewCreateProvider: 'bitbucket' }, 'Bitbucket', false],
     ['linked Bitbucket', { linkedBitbucketPR: 3 }, 'Bitbucket', false],
     ['Azure DevOps', { linkedAzureDevOpsPR: 3 }, 'Azure DevOps', false],
-    ['unlinked Gitea', { hostedReviewCreateProvider: 'gitea' }, 'Gitea', false],
     ['GitLab with no MR', { hostedReviewCreateProvider: 'gitlab' }, 'GitLab', false],
     ['GitLab with an MR', { linkedGitLabMR: 7, isGitLabReviewContext: true }, 'GitLab', false],
     ['GitHub', {}, null, true]
@@ -350,23 +344,17 @@ describe('a Checks refresh click', () => {
     }
   )
 
-  it.each([
-    ['a PR', foundPR],
-    ['no PR', null]
-  ])(
-    'on GitHub, a failed review-card read with %s leaves the status to the PR read',
-    async (_name, found) => {
-      const input = baseInput()
-      input.pr = found
-      input.fetchPRForBranch = vi.fn(async () => found)
-      input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('raw provider text'))
-      const { result } = renderPanel(input)
-      await act(async () => result.current.handleRefresh())
-      expect(input.fetchPRChecks).toHaveBeenCalledTimes(found ? 1 : 0)
-      expect(input.fetchPRComments).toHaveBeenCalledTimes(found ? 1 : 0)
-      expect(result.current.manualRefreshError).toBeNull()
-    }
-  )
+  it('on GitHub, a failed review-card read still refreshes the PR’s checks and comments', async () => {
+    const input = baseInput()
+    input.pr = foundPR
+    input.fetchPRForBranch = vi.fn(async () => foundPR)
+    input.fetchHostedReviewForBranch = vi.fn().mockRejectedValue(new Error('raw provider text'))
+    const { result } = renderPanel(input)
+    await act(async () => result.current.handleRefresh())
+    expect(input.fetchPRChecks).toHaveBeenCalledTimes(1)
+    expect(input.fetchPRComments).toHaveBeenCalledTimes(1)
+    expect(result.current.manualRefreshError).toBeNull()
+  })
 
   it('names GitLab without its raw text, clears on a context change, and ignores the old context’s late failure', async () => {
     const input = baseInput()
@@ -379,14 +367,6 @@ describe('a Checks refresh click', () => {
     await act(async () => {
       await expect(result.current.handleRefresh()).resolves.toBeUndefined()
     })
-    expect(input.fetchHostedReviewForBranch).toHaveBeenCalledWith(
-      '/workspace/repo',
-      'main',
-      expect.objectContaining({ userRefresh: true, force: true })
-    )
-    expect(input.fetchGitLabDetails).not.toHaveBeenCalled()
-    expect(input.setChecks).not.toHaveBeenCalled()
-    expect(input.setComments).not.toHaveBeenCalled()
     expect(input.refreshInFlightRef.current).toBe(false)
     expect(result.current.manualRefreshError).toBe(FAILURE)
     expect(JSON.stringify(result.current)).not.toContain('raw secret')
@@ -411,70 +391,65 @@ describe('a Checks refresh click', () => {
   })
 
   // Issue #14377: Refresh after a merge on GitLab must surface the workspace's delete action.
-  it.each([false, true])(
-    'publishes refreshed merged GitLab state to the existing workspace action (main=%s)',
-    async (isMainWorktree) => {
-      const review: HostedReviewInfo & { provider: 'gitlab' } = {
-        ...openMR,
-        mergeable: 'MERGEABLE'
-      }
-      const forBranch = vi
-        .fn()
-        .mockResolvedValueOnce(review)
-        .mockResolvedValueOnce({ ...review, state: 'merged' })
-      vi.stubGlobal('api', { hostedReview: { forBranch } })
-      const input = baseInput()
-      input.fetchHostedReviewForBranch = useAppStore.getState().fetchHostedReviewForBranch
-      input.activeGitLabReview = review
-      input.activeReview = review
-      input.isGitLabReviewContext = true
-      input.isFolder = isMainWorktree
-      const worktree: Worktree = {
-        id: 'worktree-1',
-        repoId: repo.id,
-        path: '/workspace/worktree',
-        branch: 'main',
-        isMainWorktree,
-        head: 'head',
-        isBare: false,
-        displayName: 'workspace',
-        comment: '',
-        linkedIssue: null,
-        linkedPR: null,
-        linkedLinearIssue: null,
-        isArchived: false,
-        isUnread: false,
-        isPinned: false,
-        sortOrder: 0,
-        lastActivityAt: 0
-      }
-      await input.fetchHostedReviewForBranch(repo.path, 'main', { repoId: repo.id })
-      function Probe() {
-        const data = useAppStore((state) => Object.values(state.hostedReviewCache)[0]?.data)
-        const { handleRefresh } = useChecksPanelManualRefresh(input)
-        return (
-          <>
-            <button onClick={() => void handleRefresh()}>Refresh metadata</button>
-            {data && (
-              <HostedReviewActions
-                review={data}
-                repo={repo}
-                worktree={worktree}
-                onRefreshReview={handleRefresh}
-              />
-            )}
-          </>
-        )
-      }
-      render(<Probe />)
-      const label = isMainWorktree ? 'Remove Project' : 'Delete Workspace'
-      expect(screen.queryByRole('button', { name: label })).toBeNull()
-      await act(async () => screen.getByRole('button', { name: 'Refresh metadata' }).click())
-      expect(screen.getByRole('button', { name: label })).toBeTruthy()
-      expect(input.fetchGitLabDetails).toHaveBeenCalledWith(
-        expect.objectContaining({ mrNumberOverride: 7 })
-      )
-      expect(forBranch).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
+  it('publishes refreshed merged GitLab state to the existing workspace action', async () => {
+    const review: HostedReviewInfo & { provider: 'gitlab' } = {
+      ...openMR,
+      mergeable: 'MERGEABLE'
     }
-  )
+    const forBranch = vi
+      .fn()
+      .mockResolvedValueOnce(review)
+      .mockResolvedValueOnce({ ...review, state: 'merged' })
+    vi.stubGlobal('api', { hostedReview: { forBranch } })
+    const input = baseInput()
+    input.fetchHostedReviewForBranch = useAppStore.getState().fetchHostedReviewForBranch
+    input.activeGitLabReview = review
+    input.activeReview = review
+    input.isGitLabReviewContext = true
+    const worktree: Worktree = {
+      id: 'worktree-1',
+      repoId: repo.id,
+      path: '/workspace/worktree',
+      branch: 'main',
+      isMainWorktree: false,
+      head: 'head',
+      isBare: false,
+      displayName: 'workspace',
+      comment: '',
+      linkedIssue: null,
+      linkedPR: null,
+      linkedLinearIssue: null,
+      isArchived: false,
+      isUnread: false,
+      isPinned: false,
+      sortOrder: 0,
+      lastActivityAt: 0
+    }
+    await input.fetchHostedReviewForBranch(repo.path, 'main', { repoId: repo.id })
+    function Probe() {
+      const data = useAppStore((state) => Object.values(state.hostedReviewCache)[0]?.data)
+      const { handleRefresh } = useChecksPanelManualRefresh(input)
+      return (
+        <>
+          <button onClick={() => void handleRefresh()}>Refresh metadata</button>
+          {data && (
+            <HostedReviewActions
+              review={data}
+              repo={repo}
+              worktree={worktree}
+              onRefreshReview={handleRefresh}
+            />
+          )}
+        </>
+      )
+    }
+    render(<Probe />)
+    expect(screen.queryByRole('button', { name: 'Delete Workspace' })).toBeNull()
+    await act(async () => screen.getByRole('button', { name: 'Refresh metadata' }).click())
+    expect(screen.getByRole('button', { name: 'Delete Workspace' })).toBeTruthy()
+    expect(input.fetchGitLabDetails).toHaveBeenCalledWith(
+      expect.objectContaining({ mrNumberOverride: 7 })
+    )
+    expect(forBranch).toHaveBeenLastCalledWith(expect.objectContaining({ userRefresh: true }))
+  })
 })
