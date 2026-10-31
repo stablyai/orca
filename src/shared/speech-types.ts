@@ -53,6 +53,8 @@ export type SpeechLifecycleEvent = {
 export type SpeechErrorEvent = {
   error: string
   sessionId: string
+  /** The bounded input queue is draining; accepted audio can still produce finals. */
+  recoverable?: boolean
 }
 
 export type DictationState = 'idle' | 'starting' | 'listening' | 'stopping' | 'error'

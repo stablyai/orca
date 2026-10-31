@@ -1,0 +1,15 @@
+{
+  "historicalRef": "v1.4.198",
+  "sources": {
+    "src/main/speech/stt-service.ts": {
+      "historicalSha256": "464c6ca825277a6c834816ae4cd014c52f3a96d620f3146e65a6a7ed383c52ce",
+      "originalSha256": "464c6ca825277a6c834816ae4cd014c52f3a96d620f3146e65a6a7ed383c52ce",
+      "byteIdentical": true
+    },
+    "src/main/speech/stt-worker.ts": {
+      "historicalSha256": "4c94a138ed89373f5f8ed0da0375f3d5758aa24a58a0e1e52ae53d74cd7fe373",
+      "originalSha256": "4c94a138ed89373f5f8ed0da0375f3d5758aa24a58a0e1e52ae53d74cd7fe373",
+      "byteIdentical": true
+    }
+  }
+}
