@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, expect, it } from 'vitest'
+import { afterEach, beforeEach, expect, it, vi } from 'vitest'
 import {
   createRestTestRig,
   type RestTestRig
@@ -75,3 +75,21 @@ it.each([true, false])(
     }
   }
 )
+
+it('anchors the chat after the named tab for a window that owns the layout', async () => {
+  // Shipped builds: the window places the chat from the anchor on the published row.
+  const { runtime } = setupMainOwnedWorkspace({ split: false })
+  // oxlint-disable-next-line typescript/consistent-type-assertions -- SAFETY: the member is declared on OrcaRuntimeService's inheritance chain.
+  const windowHost = runtime as unknown as { getAvailableAuthoritativeWindow(): unknown }
+  vi.spyOn(windowHost, 'getAvailableAuthoritativeWindow').mockReturnValue({})
+  const answer = await executeStructuredSessionSwitch(
+    { sessionId: id, execution: { invocationId: 'uncaptured-window', sourceTabId: TAB_ID } },
+    { runtime },
+    'chat'
+  )
+  expect(answer).toEqual({ status: 'completed', sessionId: id })
+  const published = await runtime.listMobileSessionTabs(`id:${WORKTREE_ID}`)
+  expect(published.tabs.find((tab) => tab.id === `agent-session:${id}`)).toMatchObject({
+    after: { tabId: TAB_ID }
+  })
+})

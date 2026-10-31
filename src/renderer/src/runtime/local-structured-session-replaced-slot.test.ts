@@ -139,3 +139,68 @@ it.each([
     expect(state.activeGroupIdByWorktree[WORKTREE]).toBe(activeGroup)
   }
 )
+
+it('opens a chat with no replaced tab right after the tab its anchor names, keeping that tab', () => {
+  // A History or uncaptured-pane switch: nothing was stopped, so the source tab stays.
+  const terminal = (id: string) =>
+    makeUnifiedTab({
+      id,
+      entityId: id,
+      groupId: GROUP,
+      worktreeId: WORKTREE,
+      contentType: 'terminal'
+    })
+  seedStore(store, {
+    activeWorktreeId: WORKTREE,
+    worktreesByRepo: {
+      'repo-1': [makeWorktree({ id: WORKTREE, repoId: 'repo-1', path: '/tmp/wt-switch' })]
+    },
+    tabsByWorktree: {
+      [WORKTREE]: ['source', 'later'].map((id) => makeTab({ id, worktreeId: WORKTREE }))
+    },
+    unifiedTabsByWorktree: { [WORKTREE]: [terminal('source'), terminal('later')] },
+    groupsByWorktree: {
+      [WORKTREE]: [
+        makeTabGroup({
+          id: GROUP,
+          worktreeId: WORKTREE,
+          activeTabId: 'source',
+          tabOrder: ['source', 'later'],
+          recentTabIds: ['source']
+        })
+      ]
+    },
+    layoutByWorktree: { [WORKTREE]: { type: 'leaf', groupId: GROUP } },
+    activeGroupIdByWorktree: { [WORKTREE]: GROUP },
+    openFiles: [],
+    browserTabsByWorktree: {}
+  })
+  applyStructuredSessionTabSnapshots([
+    {
+      worktree: WORKTREE,
+      publicationEpoch: 'renderer:history-switch',
+      snapshotVersion: 1,
+      activeGroupId: GROUP,
+      activeTabId: 'agent-session:session-1',
+      activeTabType: 'agent-session',
+      tabs: [
+        {
+          type: 'agent-session',
+          id: 'agent-session:session-1',
+          title: 'Codex',
+          sessionId: 'session-1',
+          agent: 'codex',
+          isActive: true,
+          after: { tabId: 'source' }
+        }
+      ],
+      tabGroups: [{ id: GROUP, activeTabId: null, tabOrder: ['agent-session:session-1'] }]
+    }
+  ])
+  const state = store.getState()
+  const chat = state.unifiedTabsByWorktree[WORKTREE]?.find(
+    (tab) => tab.contentType === 'agent-session'
+  )
+  expect(state.groupsByWorktree[WORKTREE]?.[0]?.tabOrder).toEqual(['source', chat?.id, 'later'])
+  expect(state.tabsByWorktree[WORKTREE]?.some((tab) => tab.id === 'source')).toBe(true)
+})
